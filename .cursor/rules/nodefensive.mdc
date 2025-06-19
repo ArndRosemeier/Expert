@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Do not use defensive programming of any kind. No silent errors and avoid all purpose variable types. Programm for easy debuggability, errors need to be visible and loud.
+Also when using functions in a class, just use them without a fallback in case the function does not exist. Those fallbacks just lead to hard to debug code.
+Always use strong typing, avoid constructs like any.
+Always assume that functions are present, don't defensively code against functions not being present, this just leads to masking of errors.

@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Classes should always be made in a new file, with clear scope and well documented functions.
+
