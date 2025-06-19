@@ -4,32 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expert App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; margin: 0; background-color: #f0f2f5; }
-        #app-root { max-width: 1200px; margin: 2rem auto; padding: 2rem; background-color: white; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
-        #modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; }
-        #modal-content { background-color: white; padding: 2rem; border-radius: 8px; max-width: 80vw; max-height: 80vh; overflow-y: auto; }
+        body { font-family: 'Inter', sans-serif; margin: 0; background-color: #f7f8fa; color: #1a202c; }
+        #app-root { width: 100%; min-height: 100vh; padding: 0; background-color: transparent; }
+        #modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        #modal-content { background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
         button { cursor: pointer; }
+
+        .app-header {
+            background-color: white;
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
+        }
+        .app-header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .header-actions button {
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .header-actions button:hover {
+            background-color: #4338ca;
+        }
+        .header-actions button + button {
+            margin-left: 1rem;
+        }
     </style>
-  <script type="module" crossorigin src="/Expert/assets/index-DmXmQ1Gp.js"></script>
+  <script type="module" crossorigin src="/Expert/assets/index-Ysy29C8c.js"></script>
 </head>
 <body>
     <div id="app-root">
-        <h1>Chat Feedback Loop</h1>
-        <p>Configure your LLM agents and start a curated feedback loop.</p>
-        <div style="margin: 1rem 0;">
-            <button id="configure-models-btn">Configure Models</button>
-            <button id="configure-prompts-btn">Configure Prompts</button>
-        </div>
-        <hr>
-        
-        <div id="initial-setup">
-            <p><em>Please configure your models to get started.</em></p>
-        </div>
+        <header class="app-header">
+            <h1>Chat Feedback Loop</h1>
+            <div class="header-actions">
+                <button id="configure-models-btn">Configure Models</button>
+                <button id="configure-prompts-btn">Configure Prompts</button>
+            </div>
+        </header>
 
-        <div id="main-app" style="display: none;">
-            <!-- Main application UI will be rendered by main.ts -->
-        </div>
+        <main id="main-content" style="padding: 2rem;">
+            <div id="initial-setup">
+                <h2>Welcome!</h2>
+                <p>Please configure your models to get started with the application.</p>
+            </div>
+    
+            <div id="main-app" style="display: none;">
+                <!-- Main application UI will be rendered by main.ts -->
+            </div>
+        </main>
     </div>
 
     <div id="modal-container">
@@ -38,8 +75,8 @@
         </div>
     </div>
 
-    <div id="prompt-modal-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center;">
-        <div id="prompt-modal-content" style="background-color: white; padding: 2rem; border-radius: 8px; max-width: 80vw; max-height: 80vh; overflow-y: auto; width: 700px;">
+    <div id="prompt-modal-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;">
+        <div id="prompt-modal-content" style="background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); width: 700px;">
             <!-- PromptManager will be rendered here -->
         </div>
     </div>
