@@ -1,8 +1,21 @@
 import { ModelSelector } from './ModelSelector';
 import { OpenRouterClient } from './OpenRouterClient';
-import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, type ProgressCallback } from './LoopOrchestrator';
+import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, type ProgressCallback, type LoopHistoryItem } from './LoopOrchestrator';
 import { PromptManager, defaultPrompts, type OrchestratorPrompts } from './PromptManager';
 import { SettingsManager, type SettingsProfile } from './SettingsManager';
+
+// --- Payload Interfaces (Workaround) ---
+export interface CreatorPayload {
+    prompt: string;
+    response: string;
+}
+export interface RatingPayload {
+    ratings: Rating[];
+}
+export interface EditorPayload {
+    prompt:string;
+    advice: string;
+}
 
 // --- Type-Safe DOM Access ---
 function getElementById<T extends HTMLElement>(id: string): T {
@@ -34,6 +47,8 @@ let selectedModels: Record<string, string> = {};
 let orchestrator: LoopOrchestrator | null = null;
 let settingsManager: SettingsManager | null = null;
 let orchestratorPrompts: OrchestratorPrompts = { ...defaultPrompts };
+let loopHistory: LoopHistoryItem[] = [];
+let viewedIteration = 0;
 
 // --- Functions ---
 function openModal() {
@@ -205,6 +220,23 @@ function renderMainApp() {
             
             #final-result-container { margin-top: 1rem; }
 
+            #history-controls {
+                display: none; /* Hidden by default */
+                padding: 1rem;
+                background-color: var(--bg-subtle);
+                border-radius: 12px;
+                margin-top: 1rem;
+                border: 1px solid var(--border-color);
+            }
+            #history-controls label {
+                font-weight: 500;
+                margin-right: 1rem;
+            }
+            #history-controls input[type="range"] {
+                width: 200px;
+                vertical-align: middle;
+            }
+
             .progress-container {
                 margin-top: 1rem;
                 display: none; /* Hidden by default */
@@ -298,6 +330,11 @@ function renderMainApp() {
             </div>
             
             <div class="results-panel">
+                <div id="history-controls">
+                    <label for="iteration-slider">View Iteration:</label>
+                    <span id="iteration-label">1 / 1</span>
+                    <input type="range" id="iteration-slider" min="1" max="1" value="1">
+                </div>
                 <div id="results-container">
                     <div id="live-response-container" class="response-block response-creator" style="display: none;">
                         <h3>Live Response</h3>
@@ -351,6 +388,13 @@ function renderMainApp() {
             orchestrator.requestStop();
         }
     });
+
+    getElementById('iteration-slider')?.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        viewedIteration = parseInt(target.value, 10);
+        renderDataForIteration(viewedIteration);
+    });
+
     loadAndApplyLastUsedProfile();
 }
 
@@ -409,6 +453,75 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
     );
 }
 
+function findBestFailedIteration(history: LoopHistoryItem[]): number {
+    let bestIteration = -1;
+    let minDeviation = Infinity;
+
+    const iterations = [...new Set(history.map(h => h.iteration))];
+
+    for (const iter of iterations) {
+        const ratingHistoryItem = history.find(h => h.iteration === iter && h.type === 'rating');
+        if (!ratingHistoryItem) continue;
+
+        const ratings = (ratingHistoryItem.payload as RatingPayload).ratings;
+        const totalDeviation = ratings.reduce((acc, r) => {
+            const deviation = r.goal - r.score;
+            return acc + (deviation > 0 ? deviation : 0);
+        }, 0);
+
+        if (totalDeviation < minDeviation) {
+            minDeviation = totalDeviation;
+            bestIteration = iter;
+        }
+    }
+
+    return bestIteration > 0 ? bestIteration : (iterations.pop() || 1);
+}
+
+function renderDataForIteration(iteration: number) {
+    if (loopHistory.length === 0) return;
+
+    const historyForIter = loopHistory.filter(h => h.iteration === iteration);
+
+    const creatorUpdate = historyForIter.find(h => h.type === 'creator');
+    const ratingUpdate = historyForIter.find(h => h.type === 'rating');
+    const editorUpdate = historyForIter.find(h => h.type === 'editor');
+
+    const creatorContainer = getElementById<HTMLDivElement>('live-response-container');
+    const ratingsContainer = getElementById<HTMLDivElement>('ratings-container');
+    const editorContainer = getElementById<HTMLDivElement>('editor-advice-container');
+    
+    const creatorContent = getElementById<HTMLParagraphElement>('live-response');
+    const ratingsContent = getElementById<HTMLDivElement>('ratings');
+    const editorContent = getElementById<HTMLParagraphElement>('editor-advice');
+
+    if (creatorUpdate) {
+        creatorContainer.style.display = 'block';
+        creatorContent.innerHTML = (creatorUpdate.payload as CreatorPayload).response.replace(/\n/g, '<br>');
+    } else {
+        creatorContainer.style.display = 'none';
+    }
+
+    if (ratingUpdate) {
+        ratingsContainer.style.display = 'block';
+        ratingsContent.innerHTML = renderRatings((ratingUpdate.payload as RatingPayload).ratings);
+    } else {
+        ratingsContainer.style.display = 'none';
+    }
+
+    if (editorUpdate) {
+        editorContainer.style.display = 'block';
+        editorContent.innerHTML = (editorUpdate.payload as EditorPayload).advice.replace(/\n/g, '<br>');
+    } else {
+        editorContainer.style.display = 'none';
+    }
+    
+    // Update slider label
+    const iterLabel = getElementById<HTMLSpanElement>('iteration-label');
+    const iterSlider = getElementById<HTMLInputElement>('iteration-slider');
+    iterLabel.textContent = `${iteration} / ${iterSlider.max}`;
+}
+
 function onProgress(update: Parameters<ProgressCallback>[0]) {
     const { type, payload, iteration, maxIterations, step, totalStepsInIteration } = update;
 
@@ -450,8 +563,23 @@ async function handleStartLoop() {
         return;
     }
 
+    loopHistory = [];
+    viewedIteration = 0;
+    getElementById<HTMLDivElement>('history-controls').style.display = 'none';
+
     const promptEl = getElementById<HTMLTextAreaElement>('prompt');
     const criteria = getCriteriaFromUI();
+
+    if (!promptEl.value.trim()) {
+        alert('Please enter a prompt before starting the loop.');
+        return;
+    }
+
+    if (criteria.length === 0) {
+        alert('Please define at least one quality criterion before starting the loop.');
+        return;
+    }
+
     const maxIterationsEl = getElementById<HTMLInputElement>('max-iterations');
     
     const loopInput: LoopInput = {
@@ -488,24 +616,31 @@ async function handleStartLoop() {
 
     try {
         const result = await orchestrator.runLoop(loopInput, onProgress);
-        const successColor = result.success ? '#10b981' : '#f59e0b';
-        finalResultContainer.style.display = 'block';
-        finalResultContainer.innerHTML = `
-            <div class="response-block">
-                <h3 style="color: ${successColor};">Loop Finished (Success: ${result.success})</h3>
-                <p>Total Iterations: ${result.iterations}</p>
-            </div>
+        finalResultContainer.style.display = 'none'; // Hide the "Looping..." message
+        
+        loopHistory = result.history;
+        const totalIterations = result.iterations;
 
-            <div class="response-block response-creator">
-                <h3>Final Response:</h3>
-                <p>${result.finalResponse.replace(/\n/g, '<br>')}</p>
-            </div>
+        if (totalIterations > 0) {
+            let iterationToShow = totalIterations;
+            if (!result.success) {
+                iterationToShow = findBestFailedIteration(loopHistory);
+                console.log(`Loop failed. Showing best iteration: ${iterationToShow}`);
+            }
+
+            const historyControls = getElementById<HTMLDivElement>('history-controls');
+            const iterSlider = getElementById<HTMLInputElement>('iteration-slider');
             
-            <div class="response-block">
-                <h3>Full History:</h3>
-                <pre>${JSON.stringify(result.history, null, 2)}</pre>
-            </div>
-        `;
+            historyControls.style.display = 'block';
+            iterSlider.max = String(totalIterations);
+            iterSlider.value = String(iterationToShow);
+            viewedIteration = iterationToShow;
+            renderDataForIteration(viewedIteration);
+        } else {
+            finalResultContainer.style.display = 'block';
+            finalResultContainer.innerHTML = '<p>The loop did not run any iterations.</p>';
+        }
+
     } catch (error) {
         finalResultContainer.style.display = 'block';
         finalResultContainer.innerHTML = `<p style="color: red;">Error: ${error}</p>`;
@@ -606,10 +741,16 @@ function updateProfileDropdown() {
 function handleSaveProfile() {
     if (!settingsManager || !modelSelector) return;
     const nameInput = getElementById<HTMLInputElement>('settings-profile-name');
-    const name = nameInput.value;
+    let name = nameInput.value.trim();
+
     if (!name) {
-        alert('Please enter a name for the settings profile.');
-        return;
+        const select = getElementById<HTMLSelectElement>('settings-profile-select');
+        const selectedName = select.value;
+        if (selectedName && confirm(`No new profile name entered. Do you want to overwrite the selected profile "${selectedName}"?`)) {
+            name = selectedName;
+        } else {
+            return; // User cancelled or no profile was selected
+        }
     }
 
     const currentProfile: SettingsProfile = {
@@ -622,6 +763,9 @@ function handleSaveProfile() {
     settingsManager.saveProfile(name, currentProfile);
     nameInput.value = '';
     updateProfileDropdown();
+    // Ensure the potentially new/overwritten profile is selected
+    const select = getElementById<HTMLSelectElement>('settings-profile-select');
+    select.value = name;
 }
 
 function handleLoadProfile(event: Event) {

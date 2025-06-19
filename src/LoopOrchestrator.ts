@@ -178,7 +178,7 @@ export class LoopOrchestrator {
 
     private parseRatingResponse(response: string, criterion: QualityCriterion): Rating {
         let score = 1;
-        let justification = 'Could not parse rater response.';
+        let justification = `Could not parse rater response. Raw response: \n---\n${response}`;
 
         try {
             // First, try to find a JSON block within ```json ... ```
