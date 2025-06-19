@@ -48,6 +48,13 @@ export const defaultPrompts: OrchestratorPrompts = {
     `.trim(),
 };
 
+const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
+    creator_initial: ['prompt', 'criteria'],
+    creator: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
+    rater: ['originalPrompt', 'response', 'criterion', 'goal'],
+    editor: ['response', 'ratings'],
+};
+
 export class PromptManager {
     private prompts: OrchestratorPrompts;
     private onSave: (prompts: OrchestratorPrompts) => void;
@@ -89,11 +96,13 @@ export class PromptManager {
         this.root.innerHTML = `
             <style>
                 .prompt-editor { margin-bottom: 1.5rem; }
-                .prompt-editor label { font-weight: bold; display: block; margin-bottom: 0.5rem; }
+                .prompt-editor label { font-weight: bold; display: block; margin-bottom: 0.25rem; }
                 .prompt-editor textarea { width: 100%; min-height: 200px; font-family: monospace; }
+                .placeholders { font-size: 0.8rem; font-style: italic; margin-bottom: 0.5rem; color: #555; }
+                .placeholders code { background-color: #eee; padding: 2px 4px; border-radius: 3px; }
             </style>
             <h2>Configure Prompts</h2>
-            <p>Edit the templates used by the LLM agents. Use placeholders like {{prompt}}.</p>
+            <p>Edit the templates used by the LLM agents.</p>
         `;
 
         Object.keys(this.prompts).forEach(key => {
@@ -102,7 +111,11 @@ export class PromptManager {
             editorDiv.className = 'prompt-editor';
             
             const label = document.createElement('label');
-            label.textContent = `${k.charAt(0).toUpperCase() + k.slice(1)} Prompt Template`;
+            label.textContent = `${k.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} Prompt Template`;
+
+            const placeholderText = document.createElement('div');
+            placeholderText.className = 'placeholders';
+            placeholderText.innerHTML = `Available placeholders: ${placeholders[k].map(p => `<code>{{${p}}}</code>`).join(', ')}`;
             
             const textarea = document.createElement('textarea');
             textarea.value = this.prompts[k];
@@ -111,6 +124,7 @@ export class PromptManager {
             });
 
             editorDiv.appendChild(label);
+            editorDiv.appendChild(placeholderText);
             editorDiv.appendChild(textarea);
             this.root.appendChild(editorDiv);
         });

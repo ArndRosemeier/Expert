@@ -33,10 +33,16 @@ export interface EditorPayload {
     advice: string;
 }
 
-export type ProgressUpdate =
+export type ProgressUpdate = {
+    iteration: number;
+    maxIterations: number;
+    step: number;
+    totalStepsInIteration: number;
+} & (
     | { type: 'creator', payload: CreatorPayload }
     | { type: 'rating', payload: RatingPayload }
-    | { type: 'editor', payload: EditorPayload };
+    | { type: 'editor', payload: EditorPayload }
+);
 
 export interface LoopHistoryItem {
     iteration: number;
@@ -73,6 +79,7 @@ export class LoopOrchestrator {
         const history: LoopHistoryItem[] = [];
         let currentResponse = '';
         let success = false;
+        const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
 
         for (let i = 0; i < maxIterations; i++) {
             if (this.stopRequested) break;
@@ -82,7 +89,7 @@ export class LoopOrchestrator {
             currentResponse = await this.client.chat('creator', creatorPrompt);
             const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
             history.push({ iteration: i + 1, type: 'creator', payload: creatorPayload });
-            onProgress?.({ type: 'creator', payload: creatorPayload });
+            onProgress?.({ type: 'creator', payload: creatorPayload, iteration: i + 1, maxIterations, step: 1, totalStepsInIteration });
 
             if (this.stopRequested) break;
 
@@ -112,7 +119,7 @@ export class LoopOrchestrator {
 
             const ratingPayload: RatingPayload = { ratings: uiRatings };
             history.push({ iteration: i + 1, type: 'rating', payload: ratingPayload });
-            onProgress?.({ type: 'rating', payload: ratingPayload });
+            onProgress?.({ type: 'rating', payload: ratingPayload, iteration: i + 1, maxIterations, step: 2, totalStepsInIteration });
             
             // 3. Check for success
             if (allGoalsMet) {
@@ -123,11 +130,12 @@ export class LoopOrchestrator {
             if (this.stopRequested) break;
 
             // 4. If not success, call Editor
-            const editorPrompt = this.createEditorPrompt(currentResponse, ratingsFromAI);
+            const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
+            const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
             const editorAdvice = await this.client.chat('editor', editorPrompt);
             const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
             history.push({ iteration: i + 1, type: 'editor', payload: editorPayload });
-            onProgress?.({ type: 'editor', payload: editorPayload });
+            onProgress?.({ type: 'editor', payload: editorPayload, iteration: i + 1, maxIterations, step: 3, totalStepsInIteration });
         }
 
         return {

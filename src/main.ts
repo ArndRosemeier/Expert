@@ -205,6 +205,28 @@ function renderMainApp() {
             
             #final-result-container { margin-top: 1rem; }
 
+            .progress-container {
+                margin-top: 1rem;
+                display: none; /* Hidden by default */
+            }
+            .progress-bar-wrapper {
+                background-color: var(--bg-subtle);
+                border-radius: 8px;
+                padding: 3px;
+                margin-bottom: 0.5rem;
+            }
+            .progress-bar {
+                background-color: var(--primary-color);
+                height: 20px;
+                border-radius: 6px;
+                transition: width 0.3s ease-in-out;
+                text-align: center;
+                color: white;
+                font-size: 0.8rem;
+                line-height: 20px;
+                font-weight: 500;
+            }
+
             .rating-list { list-style: none; padding: 0; margin: 0; }
             .rating-item { padding: 1rem 0; border-bottom: 1px solid var(--border-color); }
             .rating-item:first-child { padding-top: 0; }
@@ -264,6 +286,15 @@ function renderMainApp() {
 
                 <button id="start-loop-btn" class="button button-primary" style="width: 100%;">Start Loop</button>
                 <button id="stop-loop-btn" class="button button-primary" style="display: none; width: 100%; background-color: #dc2626;">Stop Loop</button>
+                
+                <div id="progress-container" class="progress-container">
+                    <div class="progress-bar-wrapper">
+                        <div id="iteration-progress-bar" class="progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div id="step-progress-bar" class="progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
             </div>
             
             <div class="results-panel">
@@ -379,7 +410,20 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
 }
 
 function onProgress(update: Parameters<ProgressCallback>[0]) {
-    const { type, payload } = update;
+    const { type, payload, iteration, maxIterations, step, totalStepsInIteration } = update;
+
+    // Update progress bars
+    const iterationProgressBar = getElementById<HTMLDivElement>('iteration-progress-bar');
+    const stepProgressBar = getElementById<HTMLDivElement>('step-progress-bar');
+    const iterationProgress = (iteration / maxIterations) * 100;
+    const stepProgress = (step / totalStepsInIteration) * 100;
+    
+    iterationProgressBar.style.width = `${iterationProgress}%`;
+    iterationProgressBar.textContent = `Iteration: ${iteration} / ${maxIterations}`;
+    
+    const stepType = type.charAt(0).toUpperCase() + type.slice(1);
+    stepProgressBar.style.width = `${stepProgress}%`;
+    stepProgressBar.textContent = `Step: ${step} of ${totalStepsInIteration} (${stepType})`;
 
     if (type === 'creator') {
         const container = getElementById<HTMLElement>('live-response-container');
@@ -422,6 +466,16 @@ async function handleStartLoop() {
     startBtn.style.display = 'none';
     stopBtn.style.display = 'inline-block';
 
+    // Reset and show progress bars
+    const progressContainer = getElementById<HTMLDivElement>('progress-container');
+    const iterationProgressBar = getElementById<HTMLDivElement>('iteration-progress-bar');
+    const stepProgressBar = getElementById<HTMLDivElement>('step-progress-bar');
+    progressContainer.style.display = 'block';
+    iterationProgressBar.style.width = '0%';
+    iterationProgressBar.textContent = 'Starting...';
+    stepProgressBar.style.width = '0%';
+    stepProgressBar.textContent = '';
+
     // Clear previous results and show containers
     const resultsContainer = getElementById<HTMLElement>('results-container');
     const finalResultContainer = getElementById<HTMLElement>('final-result-container');
@@ -459,6 +513,7 @@ async function handleStartLoop() {
     } finally {
         startBtn.style.display = 'inline-block';
         stopBtn.style.display = 'none';
+        getElementById<HTMLDivElement>('progress-container').style.display = 'none';
     }
 }
 
