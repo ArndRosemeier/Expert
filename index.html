@@ -57,9 +57,15 @@
         </header>
 
         <main id="main-content" style="padding: 2rem;">
-            <div id="initial-setup">
-                <h2>Welcome!</h2>
-                <p>Please configure your models to get started with the application.</p>
+            <div id="initial-setup" class="initial-setup-container">
+                <h1>Welcome to Expert</h1>
+                <p>To get started, please configure your OpenRouter API key and select your models.</p>
+                <div class="api-key-setup">
+                    <input type="password" id="initial-api-key" placeholder="Enter OpenRouter API Key">
+                    <button id="initial-fetch-models-btn" class="button button-primary">Fetch Models</button>
+                </div>
+                <p>Alternatively, if you have already configured your models, you can open the configuration panel directly.</p>
+                <button id="configure-models-btn" class="button button-secondary">Configure Models</button>
             </div>
     
             <div id="main-app" style="display: none;">

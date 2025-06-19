@@ -42,14 +42,34 @@ export class ModelSelector {
   constructor(
     onSelect: (selectedModels: Record<string, string>) => void,
     closeModal: () => void,
-    initialApiKey?: string,
-    initialSelectedModels?: Record<string, string>
   ) {
     this.onSelect = onSelect;
     this.closeModal = closeModal;
-    if (initialApiKey) this.apiKey = initialApiKey;
-    if (initialSelectedModels) this.selectedModels = { ...initialSelectedModels };
     this.loadFromStorage();
+
+    // Handle the initial setup screen
+    const initialApiKeyInput = document.getElementById('initial-api-key') as HTMLInputElement | null;
+    const initialFetchBtn = document.getElementById('initial-fetch-models-btn') as HTMLButtonElement | null;
+    const openModalBtn = document.getElementById('configure-models-btn');
+
+    if (initialApiKeyInput && initialFetchBtn && openModalBtn) {
+        initialApiKeyInput.value = this.apiKey;
+        initialFetchBtn.disabled = !this.apiKey;
+
+        initialApiKeyInput.addEventListener('input', () => {
+            this.apiKey = initialApiKeyInput.value;
+            initialFetchBtn.disabled = !this.apiKey;
+            this.saveToStorage();
+        });
+
+        initialFetchBtn.addEventListener('click', () => {
+            if (this.apiKey) {
+                openModalBtn.click(); // Open the modal
+                this.fetchModels();   // Start fetching models
+            }
+        });
+    }
+
     if (this.apiKey && !this.fetched) {
       this.fetchModels();
     }
