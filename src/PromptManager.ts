@@ -25,6 +25,8 @@ export const defaultPrompts: OrchestratorPrompts = {
         - {{criteria}}
     `.trim(),
     rater: `
+        You are a rating agent. Your response MUST be a single, valid JSON object and nothing else. Do not include any text before or after the JSON.
+
         The user's original prompt was: "{{originalPrompt}}".
         
         Here is a response generated for that prompt: "{{response}}"
@@ -34,7 +36,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         
         Provide your response as a JSON object with two keys:
         - "score": A number from 1 to 10.
-        - "justification": A brief explanation for your score.
+        - "justification": A brief explanation for your score, written in a neutral, objective tone.
 
         Example: {"score": 8, "justification": "The response is clear and well-structured."}
     `.trim(),

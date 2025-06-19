@@ -147,7 +147,13 @@ export class LoopOrchestrator {
     }
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        const criteriaList = criteria.map(c => c.name).join('\\n- ');
+        // Helper to get the short name of a criterion
+        const getShortCriterionName = (fullName: string): string => {
+            const stopIndex = fullName.indexOf('.');
+            return stopIndex > 0 ? fullName.substring(0, stopIndex) : fullName;
+        };
+
+        const criteriaList = criteria.map(c => getShortCriterionName(c.name)).join('\\n- ');
 
         if (!history) {
             return this.prompts.creator_initial

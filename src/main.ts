@@ -50,6 +50,19 @@ let orchestratorPrompts: OrchestratorPrompts = { ...defaultPrompts };
 let loopHistory: LoopHistoryItem[] = [];
 let viewedIteration = 0;
 
+const defaultProseCriteria: QualityCriterion[] = [
+    { name: "Clarity & Conciseness. The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.", goal: 8 },
+    { name: "Natural & Authentic Tone. The language sounds human and authentic. It avoids being overly formal, academic, or robotic.", goal: 9 },
+    { name: "Engaging Flow. The text is interesting and holds the reader's attention. Sentences and paragraphs transition smoothly.", goal: 8 },
+    { name: "Varied Sentence Structure. The length and structure of sentences are varied to create a pleasing rhythm, avoiding monotony.", goal: 7 },
+    { name: "Subtlety (Show, Don't Tell). The writing implies emotions and ideas through description and action rather than stating them directly. It avoids being on-the-nose.", goal: 8 },
+    { name: "Avoids AI Clichés. The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' or 'tapestry of...'", goal: 9 },
+    { name: "Understated Language. The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.", goal: 9 },
+    { name: "Specificity & Concrete Detail. The writing uses specific, concrete details and examples rather than vague generalities.", goal: 8 },
+    { name: "Original Phrasing. The text avoids common idioms and clichés, opting for more original ways to express ideas.", goal: 7 },
+    { name: "Human-like Naming. When applicable, any names for people, places, or concepts are creative and feel natural. Avoid common AI-generated names like 'Elara' or 'Lyra.'", goal: 8 }
+];
+
 // --- Functions ---
 function openModal() {
     if (modalContainer) {
@@ -157,6 +170,7 @@ function renderMainApp() {
                 border-radius: 8px;
                 background-color: var(--input-bg);
                 transition: border-color 0.2s, box-shadow 0.2s;
+                box-sizing: border-box;
             }
             input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
                 outline: none;
@@ -167,9 +181,16 @@ function renderMainApp() {
                 min-height: 150px;
                 resize: vertical;
             }
+            .criterion textarea {
+                flex-grow: 1;
+                resize: none;
+                overflow-y: hidden;
+                line-height: 1.5;
+                padding-top: 0.6rem;
+                padding-bottom: 0.6rem;
+            }
 
-            .criterion { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: center; }
-            .criterion input[type="text"] { flex-grow: 1; }
+            .criterion { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: center !important; }
             .criterion input[type="number"] { max-width: 80px; }
 
             .button {
@@ -289,20 +310,10 @@ function renderMainApp() {
                 <hr>
 
                 <h3>Quality Criteria</h3>
-                <div id="criteria-list">
-                    <div class="criterion">
-                        <input type="text" value="Clarity" placeholder="Criterion Name">
-                        <input type="number" value="8" min="1" max="10" placeholder="Goal">
-                        <button class="remove-criterion-btn" title="Remove">&times;</button>
-                    </div>
-                    <div class="criterion">
-                        <input type="text" value="Friendliness" placeholder="Criterion Name">
-                        <input type="number" value="9" min="1" max="10" placeholder="Goal">
-                        <button class="remove-criterion-btn" title="Remove">&times;</button>
-                    </div>
-                </div>
+                <div id="criteria-list"></div>
                 <div class="criteria-actions">
                     <button id="add-criterion-btn" class="button button-secondary">Add Criterion</button>
+                    <button id="default-criteria-btn" class="button button-secondary">Load Defaults</button>
                     <button id="copy-criteria-btn" class="button button-secondary">Copy</button>
                     <button id="paste-criteria-btn" class="button button-secondary">Paste</button>
                 </div>
@@ -362,19 +373,18 @@ function renderMainApp() {
     // --- Other Listeners ---
     document.getElementById('add-criterion-btn')?.addEventListener('click', () => {
         const list = document.getElementById('criteria-list');
-        const newItem = document.createElement('div');
-        newItem.className = 'criterion';
-        newItem.innerHTML = `
-            <input type="text" placeholder="Criterion Name">
-            <input type="number" min="1" max="10" placeholder="Goal">
-            <button class="remove-criterion-btn" title="Remove">&times;</button>
-        `;
-        newItem.querySelector('.remove-criterion-btn')?.addEventListener('click', () => newItem.remove());
-        list?.appendChild(newItem);
+        if (!list) return;
+
+        const newItem = createCriterionElement();
+        list.appendChild(newItem);
+        
+        const textarea = newItem.querySelector('textarea') as HTMLTextAreaElement;
+        textarea?.focus();
     });
 
     document.getElementById('copy-criteria-btn')?.addEventListener('click', handleCopyCriteria);
     document.getElementById('paste-criteria-btn')?.addEventListener('click', handlePasteCriteria);
+    document.getElementById('default-criteria-btn')?.addEventListener('click', handleLoadDefaultCriteria);
 
     document.getElementById('criteria-list')?.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).classList.contains('remove-criterion-btn')) {
@@ -396,17 +406,43 @@ function renderMainApp() {
     });
 
     loadAndApplyLastUsedProfile();
+
+    if (getCriteriaFromUI().length === 0) {
+        renderCriteria(defaultProseCriteria);
+    }
+}
+
+function autoResizeTextarea(this: HTMLTextAreaElement) {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+}
+
+function getShortCriterionName(fullName: string): string {
+    const stopIndex = fullName.indexOf('.');
+    return stopIndex > 0 ? fullName.substring(0, stopIndex) : fullName;
 }
 
 function getCriteriaFromUI(): QualityCriterion[] {
     const criteriaNodes = document.querySelectorAll('#criteria-list .criterion');
     const criteria: QualityCriterion[] = [];
     criteriaNodes.forEach(node => {
-        const nameInput = node.querySelector('input[type="text"]') as HTMLInputElement;
+        const nameInput = node.querySelector('textarea') as HTMLTextAreaElement;
         const goalInput = node.querySelector('input[type="number"]') as HTMLInputElement;
-        if (nameInput?.value && goalInput?.value) {
+
+        let name = '';
+        const isActiveElement = document.activeElement === nameInput;
+
+        if (isActiveElement) {
+            // If the textarea is being edited, its value is the full text.
+            name = nameInput.value;
+        } else {
+            // Otherwise, the full text is in the dataset.
+            name = nameInput.dataset.fullText || nameInput.value;
+        }
+
+        if (name.trim() && goalInput?.value) {
             criteria.push({
-                name: nameInput.value,
+                name: name.trim(),
                 goal: parseInt(goalInput.value, 10)
             });
         }
@@ -426,7 +462,7 @@ function renderRatings(ratings: Rating[]): string {
             ${ratings.map(item => `
                 <li class="rating-item">
                     <div class="rating-header">
-                        <span class="rating-name">${item.criterion} (Goal: ${item.goal})</span>
+                        <span class="rating-name">${getShortCriterionName(item.criterion)} (Goal: ${item.goal})</span>
                         <span class="rating-score" style="color: ${getRatingColor(item.score)}">
                             ${item.score} / 10
                         </span>
@@ -657,15 +693,74 @@ function renderCriteria(criteria: QualityCriterion[]) {
     list.innerHTML = '';
     
     criteria.forEach(c => {
-        const newItem = document.createElement('div');
-        newItem.className = 'criterion';
-        newItem.innerHTML = `
-            <input type="text" value="${c.name}" placeholder="Criterion Name">
-            <input type="number" value="${c.goal}" min="1" max="10" placeholder="Goal (1-10)">
-            <button class="remove-criterion-btn" title="Remove">&times;</button>
-        `;
+        const newItem = createCriterionElement(c);
         list.appendChild(newItem);
     });
+}
+
+function createCriterionElement(criterion?: QualityCriterion): HTMLDivElement {
+    const newItem = document.createElement('div');
+    newItem.className = 'criterion';
+    newItem.innerHTML = `
+        <textarea placeholder="Criterion Name. Description..." rows="1"></textarea>
+        <input type="number" min="1" max="10" placeholder="Goal">
+        <button class="remove-criterion-btn" title="Remove">&times;</button>
+    `;
+
+    const textarea = newItem.querySelector('textarea') as HTMLTextAreaElement;
+    const goalInput = newItem.querySelector('input[type="number"]') as HTMLInputElement;
+
+    if (criterion) {
+        textarea.value = getShortCriterionName(criterion.name);
+        textarea.dataset.fullText = criterion.name;
+        goalInput.value = String(criterion.goal);
+    }
+    
+    textarea.addEventListener('focus', () => {
+        textarea.value = textarea.dataset.fullText || '';
+        autoResizeTextarea.call(textarea);
+    });
+
+    textarea.addEventListener('blur', () => {
+        const fullText = textarea.value.trim();
+        if (fullText) {
+            textarea.dataset.fullText = fullText;
+            textarea.value = getShortCriterionName(fullText);
+        } else {
+            delete textarea.dataset.fullText;
+            textarea.value = '';
+        }
+        textarea.style.height = 'auto';
+    });
+
+    textarea.addEventListener('input', autoResizeTextarea);
+
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            (e.target as HTMLElement).blur();
+        }
+    });
+
+    newItem.querySelector('.remove-criterion-btn')?.addEventListener('click', () => newItem.remove());
+    
+    return newItem;
+}
+
+function handleLoadDefaultCriteria() {
+    const currentCriteria = getCriteriaFromUI();
+    const criteriaMap = new Map<string, QualityCriterion>();
+
+    // Add current criteria to the map first to preserve them
+    currentCriteria.forEach(c => criteriaMap.set(c.name, c));
+    
+    // Add/overwrite with default criteria
+    defaultProseCriteria.forEach(c => criteriaMap.set(c.name, c));
+
+    const newCriteria = Array.from(criteriaMap.values());
+
+    renderCriteria(newCriteria);
+    alert('Default criteria loaded and merged!');
 }
 
 async function handleCopyCriteria() {
