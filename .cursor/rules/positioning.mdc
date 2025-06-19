@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+All positioning and sizes need to be done in relative units. No absolute position or size should ever be used.
+The whole available window space should be used.
+
