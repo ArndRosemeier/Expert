@@ -10,6 +10,26 @@ export interface SettingsProfile {
     selectedModels: Record<string, string>;
 }
 
+function areValidSettingsProfiles(data: any): data is Record<string, SettingsProfile> {
+    if (typeof data !== 'object' || data === null) return false;
+
+    return Object.values(data).every((profile: any) => {
+        return (
+            typeof profile === 'object' &&
+            profile !== null &&
+            'prompt' in profile &&
+            typeof profile.prompt === 'string' &&
+            'criteria' in profile &&
+            Array.isArray(profile.criteria) && // Basic array check, can be stricter
+            'maxIterations' in profile &&
+            typeof profile.maxIterations === 'number' &&
+            'selectedModels' in profile &&
+            typeof profile.selectedModels === 'object' &&
+            profile.selectedModels !== null
+        );
+    });
+}
+
 export class SettingsManager {
     private profiles: Record<string, SettingsProfile> = {};
     private lastUsedProfileName: string | null = null;
@@ -22,7 +42,18 @@ export class SettingsManager {
     private loadProfiles() {
         const saved = localStorage.getItem(SETTINGS_PROFILES_KEY);
         if (saved) {
-            this.profiles = JSON.parse(saved);
+            try {
+                const parsed = JSON.parse(saved);
+                if (areValidSettingsProfiles(parsed)) {
+                    this.profiles = parsed;
+                } else {
+                    console.warn('Invalid settings profiles found in localStorage. Ignoring.');
+                    this.profiles = {};
+                }
+            } catch (error) {
+                console.error('Failed to parse settings profiles from localStorage', error);
+                this.profiles = {};
+            }
         }
     }
 

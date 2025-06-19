@@ -14,14 +14,34 @@ export interface LoopInput {
 
 export interface Rating {
     criterion: string;
+    goal: number;
     score: number;
     justification: string;
 }
 
+export interface CreatorPayload {
+    prompt: string;
+    response: string;
+}
+
+export interface RatingPayload {
+    ratings: Rating[];
+}
+
+export interface EditorPayload {
+    prompt: string;
+    advice: string;
+}
+
+export type ProgressUpdate =
+    | { type: 'creator', payload: CreatorPayload }
+    | { type: 'rating', payload: RatingPayload }
+    | { type: 'editor', payload: EditorPayload };
+
 export interface LoopHistoryItem {
     iteration: number;
-    type: 'creator' | 'rating' | 'editor';
-    payload: any;
+    type: ProgressUpdate['type'];
+    payload: ProgressUpdate['payload'];
 }
 
 export interface LoopResult {
@@ -31,7 +51,7 @@ export interface LoopResult {
     success: boolean;
 }
 
-export type ProgressCallback = (update: { type: 'creator' | 'rating' | 'editor', payload: any }) => void;
+export type ProgressCallback = (update: ProgressUpdate) => void;
 
 export class LoopOrchestrator {
     private client: OpenRouterClient;
@@ -60,21 +80,21 @@ export class LoopOrchestrator {
             // 1. Call Creator
             const creatorPrompt = this.createCreatorPrompt(prompt, criteria, i > 0 ? history : undefined);
             currentResponse = await this.client.chat('creator', creatorPrompt);
-            const creatorPayload = { prompt: creatorPrompt, response: currentResponse };
+            const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
             history.push({ iteration: i + 1, type: 'creator', payload: creatorPayload });
             onProgress?.({ type: 'creator', payload: creatorPayload });
 
             if (this.stopRequested) break;
 
             // 2. Call Rater for each criterion
-            const ratings: Rating[] = [];
+            const ratingsFromAI: Rating[] = [];
             let allGoalsMet = true;
             for (const criterion of criteria) {
                 if (this.stopRequested) break;
                 const ratingPrompt = this.createRatingPrompt(currentResponse, criterion, prompt);
                 const ratingResponse = await this.client.chat('rating', ratingPrompt);
-                const parsedRating = this.parseRatingResponse(ratingResponse, criterion.name);
-                ratings.push(parsedRating);
+                const parsedRating = this.parseRatingResponse(ratingResponse, criterion);
+                ratingsFromAI.push(parsedRating);
 
                 if (parsedRating.score < criterion.goal) {
                     allGoalsMet = false;
@@ -82,8 +102,17 @@ export class LoopOrchestrator {
             }
             if (this.stopRequested) break;
             
-            history.push({ iteration: i + 1, type: 'rating', payload: { ratings } });
-            onProgress?.({ type: 'rating', payload: { ratings } });
+            // Sanitize payload for UI to ensure goal is always correct
+            const uiRatings = ratingsFromAI.map((r, i) => ({
+                criterion: criteria[i].name,
+                goal: criteria[i].goal,
+                score: r.score,
+                justification: r.justification,
+            }));
+
+            const ratingPayload: RatingPayload = { ratings: uiRatings };
+            history.push({ iteration: i + 1, type: 'rating', payload: ratingPayload });
+            onProgress?.({ type: 'rating', payload: ratingPayload });
             
             // 3. Check for success
             if (allGoalsMet) {
@@ -94,9 +123,9 @@ export class LoopOrchestrator {
             if (this.stopRequested) break;
 
             // 4. If not success, call Editor
-            const editorPrompt = this.createEditorPrompt(currentResponse, ratings);
+            const editorPrompt = this.createEditorPrompt(currentResponse, ratingsFromAI);
             const editorAdvice = await this.client.chat('editor', editorPrompt);
-            const editorPayload = { prompt: editorPrompt, advice: editorAdvice };
+            const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
             history.push({ iteration: i + 1, type: 'editor', payload: editorPayload });
             onProgress?.({ type: 'editor', payload: editorPayload });
         }
@@ -118,12 +147,15 @@ export class LoopOrchestrator {
                 .replace('{{criteria}}', criteriaList);
         }
         
-        const lastEditorAdvice = history.filter(h => h.type === 'editor').pop()?.payload.advice || 'No advice was given.';
-        const lastResponse = history.filter(h => h.type === 'creator').pop()?.payload.response;
+        const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
+        const lastCreatorResponseItem = history.filter(h => h.type === 'creator').pop();
+        
+        const lastEditorAdvice = (lastEditorAdviceItem?.payload as EditorPayload)?.advice || 'No advice was given.';
+        const lastResponse = (lastCreatorResponseItem?.payload as CreatorPayload)?.response;
 
         return this.prompts.creator
             .replace('{{prompt}}', originalPrompt)
-            .replace('{{lastResponse}}', lastResponse)
+            .replace('{{lastResponse}}', lastResponse || '')
             .replace('{{editorAdvice}}', lastEditorAdvice)
             .replace('{{criteria}}', criteriaList);
     }
@@ -136,7 +168,10 @@ export class LoopOrchestrator {
             .replace('{{goal}}', String(criterion.goal));
     }
 
-    private parseRatingResponse(response: string, criterionName: string): Rating {
+    private parseRatingResponse(response: string, criterion: QualityCriterion): Rating {
+        let score = 1;
+        let justification = 'Could not parse rater response.';
+
         try {
             // First, try to find a JSON block within ```json ... ```
             let jsonString: string | null = null;
@@ -155,15 +190,24 @@ export class LoopOrchestrator {
             
             if (jsonString) {
                 const parsed = JSON.parse(jsonString);
-                if (typeof parsed.score === 'number' && typeof parsed.justification === 'string') {
-                    return { criterion: criterionName, ...parsed };
+                if (typeof parsed.score === 'number') {
+                    score = parsed.score;
+                }
+                if (typeof parsed.justification === 'string') {
+                    justification = parsed.justification;
                 }
             }
         } catch (error) {
             console.warn('Could not parse rating response as JSON, using fallback.', { response, error });
         }
-        // Fallback if parsing fails
-        return { criterion: criterionName, score: 1, justification: 'Could not parse rater response.' };
+        
+        // Create a new, clean object to guarantee the structure.
+        return {
+            criterion: criterion.name,
+            goal: criterion.goal,
+            score: score,
+            justification: justification,
+        };
     }
 
     private createEditorPrompt(response: string, ratings: Rating[]): string {

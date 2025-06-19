@@ -173,7 +173,7 @@ export class ModelSelector {
       grid.style.gridTemplateRows = 'auto auto';
       grid.style.gridAutoRows = '1fr';
       grid.style.gridAutoFlow = 'row';
-      PURPOSES.forEach((purpose, idx) => {
+      PURPOSES.forEach((purpose) => {
         const section = document.createElement('div');
         section.style.background = '#f3f4f6';
         section.style.border = '1.5px solid #d1d5db';
