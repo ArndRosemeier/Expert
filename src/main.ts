@@ -1,6 +1,6 @@
 import { ModelSelector } from './ModelSelector';
 import { OpenRouterClient } from './OpenRouterClient';
-import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, type ProgressCallback, type LoopHistoryItem } from './LoopOrchestrator';
+import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, type LoopHistoryItem } from './LoopOrchestrator';
 import { PromptManager, defaultPrompts, type OrchestratorPrompts } from './PromptManager';
 import { SettingsManager, type SettingsProfile } from './SettingsManager';
 
@@ -112,6 +112,43 @@ function reconfigureCoreServices(models: Record<string, string>) {
     if (apiKey) {
         openRouterClient = new OpenRouterClient(apiKey, selectedModels);
         orchestrator = new LoopOrchestrator(openRouterClient, orchestratorPrompts);
+        
+        // Listen for progress updates from the orchestrator
+        orchestrator.on('progress', (update) => {
+            const { type, payload, iteration, maxIterations, step, totalStepsInIteration } = update;
+
+            // Update progress bars
+            const iterationProgressBar = getElementById<HTMLDivElement>('iteration-progress-bar');
+            const stepProgressBar = getElementById<HTMLDivElement>('step-progress-bar');
+            const iterationProgress = (iteration / maxIterations) * 100;
+            const stepProgress = (step / totalStepsInIteration) * 100;
+            
+            iterationProgressBar.style.width = `${iterationProgress}%`;
+            iterationProgressBar.textContent = `Iteration: ${iteration} / ${maxIterations}`;
+            
+            const stepType = type.charAt(0).toUpperCase() + type.slice(1);
+            stepProgressBar.style.width = `${stepProgress}%`;
+            stepProgressBar.textContent = `Step: ${step} of ${totalStepsInIteration} (${stepType})`;
+
+            if (type === 'creator') {
+                const container = getElementById<HTMLElement>('live-response-container');
+                const element = getElementById<HTMLParagraphElement>('live-response');
+                container.style.display = 'block';
+                element.innerHTML = payload.response.replace(/\n/g, '<br>');
+            } else if (type === 'rating') {
+                const container = getElementById<HTMLElement>('ratings-container');
+                const element = getElementById<HTMLElement>('ratings');
+                console.log('Received ratings payload for rendering:', JSON.stringify(payload.ratings, null, 2));
+                container.style.display = 'block';
+                element.innerHTML = renderRatings(payload.ratings);
+            } else if (type === 'editor') {
+                const container = getElementById<HTMLElement>('editor-advice-container');
+                const element = getElementById<HTMLParagraphElement>('editor-advice');
+                container.style.display = 'block';
+                element.innerHTML = payload.advice.replace(/\n/g, '<br>');
+            }
+        });
+
         console.log('OpenRouter client and Orchestrator configured.');
     }
 }
@@ -549,41 +586,6 @@ function renderDataForIteration(iteration: number) {
     iterLabel.textContent = `${iteration} / ${iterSlider.max}`;
 }
 
-function onProgress(update: Parameters<ProgressCallback>[0]) {
-    const { type, payload, iteration, maxIterations, step, totalStepsInIteration } = update;
-
-    // Update progress bars
-    const iterationProgressBar = getElementById<HTMLDivElement>('iteration-progress-bar');
-    const stepProgressBar = getElementById<HTMLDivElement>('step-progress-bar');
-    const iterationProgress = (iteration / maxIterations) * 100;
-    const stepProgress = (step / totalStepsInIteration) * 100;
-    
-    iterationProgressBar.style.width = `${iterationProgress}%`;
-    iterationProgressBar.textContent = `Iteration: ${iteration} / ${maxIterations}`;
-    
-    const stepType = type.charAt(0).toUpperCase() + type.slice(1);
-    stepProgressBar.style.width = `${stepProgress}%`;
-    stepProgressBar.textContent = `Step: ${step} of ${totalStepsInIteration} (${stepType})`;
-
-    if (type === 'creator') {
-        const container = getElementById<HTMLElement>('live-response-container');
-        const element = getElementById<HTMLParagraphElement>('live-response');
-        container.style.display = 'block';
-        element.innerHTML = payload.response.replace(/\n/g, '<br>');
-    } else if (type === 'rating') {
-        const container = getElementById<HTMLElement>('ratings-container');
-        const element = getElementById<HTMLElement>('ratings');
-        console.log('Received ratings payload for rendering:', JSON.stringify(payload.ratings, null, 2));
-        container.style.display = 'block';
-        element.innerHTML = renderRatings(payload.ratings);
-    } else if (type === 'editor') {
-        const container = getElementById<HTMLElement>('editor-advice-container');
-        const element = getElementById<HTMLParagraphElement>('editor-advice');
-        container.style.display = 'block';
-        element.innerHTML = payload.advice.replace(/\n/g, '<br>');
-    }
-}
-
 async function handleStartLoop() {
     if (!orchestrator) {
         alert('Please configure models first.');
@@ -642,7 +644,7 @@ async function handleStartLoop() {
     finalResultContainer.innerHTML = 'Looping...';
 
     try {
-        const result = await orchestrator.runLoop(loopInput, onProgress);
+        const result = await orchestrator.runLoop(loopInput);
         finalResultContainer.style.display = 'none'; // Hide the "Looping..." message
         
         loopHistory = result.history;

@@ -1,5 +1,6 @@
 import { OpenRouterClient } from './OpenRouterClient';
 import { type OrchestratorPrompts, defaultPrompts } from './PromptManager';
+import { EventEmitter } from './EventEmitter';
 
 export interface QualityCriterion {
     name: string;
@@ -57,14 +58,17 @@ export interface LoopResult {
     success: boolean;
 }
 
-export type ProgressCallback = (update: ProgressUpdate) => void;
+type OrchestratorEvents = {
+    'progress': [ProgressUpdate];
+};
 
-export class LoopOrchestrator {
+export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private client: OpenRouterClient;
     private prompts: OrchestratorPrompts;
     private stopRequested = false;
 
     constructor(client: OpenRouterClient, prompts?: OrchestratorPrompts) {
+        super();
         this.client = client;
         this.prompts = prompts || { ...defaultPrompts };
     }
@@ -73,7 +77,7 @@ export class LoopOrchestrator {
         this.stopRequested = true;
     }
 
-    public async runLoop(input: LoopInput, onProgress?: ProgressCallback): Promise<LoopResult> {
+    public async runLoop(input: LoopInput): Promise<LoopResult> {
         this.stopRequested = false; // Reset flag at the start of a run
         const { prompt, criteria, maxIterations } = input;
         const history: LoopHistoryItem[] = [];
@@ -89,7 +93,7 @@ export class LoopOrchestrator {
             currentResponse = await this.client.chat('creator', creatorPrompt);
             const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
             history.push({ iteration: i + 1, type: 'creator', payload: creatorPayload });
-            onProgress?.({ type: 'creator', payload: creatorPayload, iteration: i + 1, maxIterations, step: 1, totalStepsInIteration });
+            this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i + 1, maxIterations, step: 1, totalStepsInIteration });
 
             if (this.stopRequested) break;
 
@@ -119,7 +123,7 @@ export class LoopOrchestrator {
 
             const ratingPayload: RatingPayload = { ratings: uiRatings };
             history.push({ iteration: i + 1, type: 'rating', payload: ratingPayload });
-            onProgress?.({ type: 'rating', payload: ratingPayload, iteration: i + 1, maxIterations, step: 2, totalStepsInIteration });
+            this.emit('progress', { type: 'rating', payload: ratingPayload, iteration: i + 1, maxIterations, step: 2, totalStepsInIteration });
             
             // 3. Check for success
             if (allGoalsMet) {
@@ -135,7 +139,7 @@ export class LoopOrchestrator {
             const editorAdvice = await this.client.chat('editor', editorPrompt);
             const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
             history.push({ iteration: i + 1, type: 'editor', payload: editorPayload });
-            onProgress?.({ type: 'editor', payload: editorPayload, iteration: i + 1, maxIterations, step: 3, totalStepsInIteration });
+            this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i + 1, maxIterations, step: 3, totalStepsInIteration });
         }
 
         return {
