@@ -4,6 +4,20 @@ import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, t
 import { PromptManager, defaultPrompts, type OrchestratorPrompts } from './PromptManager';
 import { SettingsManager, type SettingsProfile } from './SettingsManager';
 
+// --- Fresh Start Debug Logic ---
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('clean') === 'true') {
+    console.log('Clean start requested. Clearing local storage...');
+    localStorage.removeItem('openrouter_api_key');
+    localStorage.removeItem('openrouter_model_purposes');
+    localStorage.removeItem('expert_app_prompts');
+    localStorage.removeItem('expert_app_settings_profiles');
+    localStorage.removeItem('expert_app_settings_last_profile');
+    
+    // Redirect to the same page without the query parameter
+    window.location.href = window.location.pathname;
+}
+
 // --- Payload Interfaces (Workaround) ---
 export interface CreatorPayload {
     prompt: string;
@@ -27,7 +41,6 @@ function getElementById<T extends HTMLElement>(id: string): T {
 }
 
 // --- DOM Elements ---
-const initialSetupContainer = getElementById<HTMLElement>('initial-setup');
 const mainAppContainer = getElementById<HTMLElement>('main-app');
 const configureModelsBtn = getElementById<HTMLButtonElement>('configure-models-btn');
 const configurePromptsBtn = getElementById<HTMLButtonElement>('configure-prompts-btn');
@@ -36,7 +49,7 @@ const modalContent = getElementById<HTMLElement>('modal-content');
 const promptModalContainer = getElementById<HTMLElement>('prompt-modal-container');
 const promptModalContent = getElementById<HTMLElement>('prompt-modal-content');
 
-if (!initialSetupContainer || !mainAppContainer || !configureModelsBtn || !modalContainer || !modalContent || !configurePromptsBtn || !promptModalContainer || !promptModalContent) {
+if (!mainAppContainer || !configureModelsBtn || !modalContainer || !modalContent || !configurePromptsBtn || !promptModalContainer || !promptModalContent) {
     throw new Error('Could not find required DOM elements');
 }
 
@@ -49,6 +62,7 @@ let settingsManager: SettingsManager | null = null;
 let orchestratorPrompts: OrchestratorPrompts = { ...defaultPrompts };
 let loopHistory: LoopHistoryItem[] = [];
 let viewedIteration = 0;
+let isAppRendered = false;
 
 const defaultProseCriteria: QualityCriterion[] = [
     { name: "Clarity & Conciseness. The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.", goal: 8 },
@@ -65,7 +79,9 @@ const defaultProseCriteria: QualityCriterion[] = [
 
 // --- Functions ---
 function openModal() {
-    if (modalContainer) {
+    if (modalContainer && modelSelector) {
+        modelSelector.loadFromStorage();
+        modelSelector.update();
         modalContainer.style.display = 'flex';
     }
 }
@@ -104,16 +120,15 @@ function onModelsSelected(models: Record<string, string>) {
     reconfigureCoreServices(models);
     
     closeModal();
-    if (initialSetupContainer.style.display !== 'none') {
+    if (!isAppRendered) {
         renderMainApp();
-        initialSetupContainer.style.display = 'none';
         mainAppContainer.style.display = 'block';
+        isAppRendered = true;
     }
 }
 
 function onPromptsSaved(prompts: OrchestratorPrompts) {
     orchestratorPrompts = prompts;
-    // Re-initialize orchestrator with new prompts if it exists
     if (openRouterClient) {
         orchestrator = new LoopOrchestrator(openRouterClient, orchestratorPrompts);
     }
@@ -123,15 +138,6 @@ function onPromptsSaved(prompts: OrchestratorPrompts) {
 function renderMainApp() {
     mainAppContainer.innerHTML = `
         <style>
-            :root {
-                --primary-color: #4f46e5;
-                --primary-hover: #4338ca;
-                --secondary-color: #6b7280;
-                --border-color: #d1d5db;
-                --input-bg: #fff;
-                --bg-subtle: #f9fafb;
-            }
-
             .grid-container {
                 display: grid;
                 grid-template-columns: 1fr 2fr;
@@ -192,21 +198,6 @@ function renderMainApp() {
 
             .criterion { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: center !important; }
             .criterion input[type="number"] { max-width: 80px; }
-
-            .button {
-                display: inline-block;
-                padding: 0.75rem 1.25rem;
-                border-radius: 8px;
-                font-weight: 500;
-                text-align: center;
-                border: 1px solid transparent;
-                transition: all 0.2s;
-            }
-            .button-primary { background-color: var(--primary-color); color: white; }
-            .button-primary:hover { background-color: var(--primary-hover); }
-            
-            .button-secondary { background-color: white; color: var(--secondary-color); border-color: var(--border-color); }
-            .button-secondary:hover { background-color: var(--bg-subtle); }
 
             .remove-criterion-btn {
                 background: none;
@@ -901,13 +892,6 @@ function loadAndApplyLastUsedProfile() {
 configureModelsBtn.addEventListener('click', openModal);
 configurePromptsBtn.addEventListener('click', openPromptModal);
 
-// Close modal if clicked outside of content
-modalContainer.addEventListener('click', (e) => {
-    if (e.target === modalContainer) {
-        closeModal();
-    }
-});
-
 promptModalContainer.addEventListener('click', (e) => {
     if (e.target === promptModalContainer) {
         closePromptModal();
@@ -932,12 +916,12 @@ if (apiKey && allModelsSet) {
     console.log('Models already configured, showing main app.');
     reconfigureCoreServices(modelSelector.getSelectedModels());
     renderMainApp();
-    initialSetupContainer.style.display = 'none';
     mainAppContainer.style.display = 'block';
+    isAppRendered = true;
 } else {
-    // Ensure main app is hidden if not configured
+    // For new users, open the configuration modal immediately.
     mainAppContainer.style.display = 'none';
-    initialSetupContainer.style.display = 'block';
+    openModal();
 }
 
 console.log('Application initialized.'); 

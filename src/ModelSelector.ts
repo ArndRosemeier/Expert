@@ -46,30 +46,6 @@ export class ModelSelector {
     this.onSelect = onSelect;
     this.closeModal = closeModal;
     this.loadFromStorage();
-
-    // Handle the initial setup screen
-    const initialApiKeyInput = document.getElementById('initial-api-key') as HTMLInputElement | null;
-    const initialFetchBtn = document.getElementById('initial-fetch-models-btn') as HTMLButtonElement | null;
-    const openModalBtn = document.getElementById('configure-models-btn');
-
-    if (initialApiKeyInput && initialFetchBtn && openModalBtn) {
-        initialApiKeyInput.value = this.apiKey;
-        initialFetchBtn.disabled = !this.apiKey;
-
-        initialApiKeyInput.addEventListener('input', () => {
-            this.apiKey = initialApiKeyInput.value;
-            initialFetchBtn.disabled = !this.apiKey;
-            this.saveToStorage();
-        });
-
-        initialFetchBtn.addEventListener('click', () => {
-            if (this.apiKey) {
-                openModalBtn.click(); // Open the modal
-                this.fetchModels();   // Start fetching models
-            }
-        });
-    }
-
     if (this.apiKey && !this.fetched) {
       this.fetchModels();
     }
@@ -80,7 +56,7 @@ export class ModelSelector {
     this.update();
   }
 
-  private update() {
+  update() {
     if (!this.root) return;
     this.root.innerHTML = '';
     const container = document.createElement('div');
@@ -131,6 +107,7 @@ export class ModelSelector {
     input.addEventListener('input', (e) => {
       this.apiKey = (e.target as HTMLInputElement).value;
       this.saveToStorage();
+      this.update();
     });
     inputDiv.appendChild(input);
     // Info
@@ -264,57 +241,61 @@ export class ModelSelector {
         }
         select.addEventListener('change', (e) => {
           this.selectedModels[purpose.key] = (e.target as HTMLSelectElement).value;
-          this.saveToStorage();
           const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
           desc.textContent = model ? model.description : '';
           // Update pricing
-          if (pricingUl) pricingUl.remove();
-          if (model && model.pricing) {
-            pricingUl = document.createElement('ul');
-            pricingUl.style.listStyle = 'disc inside';
-            pricingUl.style.marginLeft = '1.5rem';
-            pricingUl.style.marginTop = '0.5rem';
-            formatPromptCompletionPricing(model.pricing).forEach(line => {
-              const li = document.createElement('li');
-              li.textContent = line;
-              li.style.fontSize = '0.9rem';
-              li.style.color = '#2563eb';
-              if (pricingUl) {
-                pricingUl.appendChild(li);
-              }
-            });
-            section.appendChild(pricingUl);
+          if (pricingUl) {
+            pricingUl.innerHTML = ''; // Clear previous pricing
+            if (model && model.pricing) {
+              formatPromptCompletionPricing(model.pricing).forEach(line => {
+                const li = document.createElement('li');
+                li.textContent = line;
+                li.style.fontSize = '0.9rem';
+                li.style.color = '#2563eb';
+                pricingUl?.appendChild(li);
+              });
+            }
           }
+          this.update(); // Re-render to update button states
         });
         section.appendChild(select);
+        if (validModel && pricingUl) {
+          section.appendChild(pricingUl);
+        }
         grid.appendChild(section);
       });
       container.appendChild(grid);
-
       // Buttons
-      const btnDiv = document.createElement('div');
-      btnDiv.style.display = 'flex';
-      btnDiv.style.justifyContent = 'flex-end';
-      btnDiv.style.gap = '1rem';
-      btnDiv.style.marginTop = '1.5rem';
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.display = 'flex';
+      buttonContainer.style.justifyContent = 'flex-end';
+      buttonContainer.style.gap = '1rem';
+      buttonContainer.style.marginTop = '1.5rem';
 
-      const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Save and Close';
-      saveBtn.style.padding = '0.75rem 1.5rem';
-      saveBtn.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-      saveBtn.style.color = 'white';
-      saveBtn.style.fontWeight = 'bold';
-      saveBtn.style.border = 'none';
-      saveBtn.style.borderRadius = '0.75rem';
-      saveBtn.style.fontSize = '1rem';
-      saveBtn.style.cursor = 'pointer';
-      saveBtn.addEventListener('click', () => {
-        this.onSelect(this.selectedModels);
+      // Cancel button
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      // Only allow canceling if a valid configuration is already saved.
+      cancelBtn.disabled = !this.isSavedConfigValid();
+      cancelBtn.addEventListener('click', () => {
         this.closeModal();
       });
-      btnDiv.appendChild(saveBtn);
-
-      container.appendChild(btnDiv);
+      buttonContainer.appendChild(cancelBtn);
+      
+      // Save and Close button
+      const saveBtn = document.createElement('button');
+      const allSelected = this.areAllModelsSelected();
+      saveBtn.textContent = 'Save and Close';
+      saveBtn.disabled = !allSelected;
+      saveBtn.addEventListener('click', () => {
+        if (this.areAllModelsSelected()) {
+          this.saveToStorage();
+          this.onSelect(this.selectedModels);
+        }
+      });
+      buttonContainer.appendChild(saveBtn);
+      
+      container.appendChild(buttonContainer);
     }
     this.root.appendChild(container);
   }
@@ -343,18 +324,15 @@ export class ModelSelector {
     }
   }
 
-  private loadFromStorage() {
-    if (!this.apiKey) {
-      const savedKey = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedKey) this.apiKey = savedKey;
-    }
-    if (Object.keys(this.selectedModels).length === 0) {
-      const savedModels = localStorage.getItem(LOCAL_STORAGE_MODELS);
-      if (savedModels) {
-        try {
-          this.selectedModels = JSON.parse(savedModels);
-        } catch {}
-      }
+  loadFromStorage() {
+    const key = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (key) this.apiKey = key;
+
+    const models = localStorage.getItem(LOCAL_STORAGE_MODELS);
+    if (models) {
+      try {
+        this.selectedModels = JSON.parse(models);
+      } catch {}
     }
   }
 
@@ -379,5 +357,17 @@ export class ModelSelector {
 
   public getApiKey(): string {
     return this.apiKey;
+  }
+
+  private isSavedConfigValid(): boolean {
+    const savedModels = localStorage.getItem(LOCAL_STORAGE_MODELS);
+    if (!savedModels) return false;
+    
+    try {
+      const parsed = JSON.parse(savedModels);
+      return PURPOSES.every(p => parsed[p.key]);
+    } catch (e) {
+      return false;
+    }
   }
 } 

@@ -8,83 +8,78 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --secondary-color: #6b7280;
+            --border-color: #d1d5db;
+            --input-bg: #fff;
+            --bg-subtle: #f9fafb;
+        }
         body { font-family: 'Inter', sans-serif; margin: 0; background-color: #f7f8fa; color: #1a202c; }
-        #app-root { width: 100%; min-height: 100vh; padding: 0; background-color: transparent; }
-        #modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        #modal-content { background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
+        
+        /* Modal Styles */
+        .modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
+        
         button { cursor: pointer; }
 
-        .app-header {
+        /* Header Styles */
+        .main-header {
             background-color: white;
             padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
         }
-        .app-header h1 {
+        .main-header h1 {
             font-size: 1.5rem;
             font-weight: 600;
             margin: 0;
         }
-        .header-actions button {
-            background-color: #4f46e5;
-            color: white;
-            border: none;
+        .main-header div { display: flex; gap: 1rem; }
+        
+        /* Global Button Styles */
+        .button {
+            display: inline-block;
             padding: 0.75rem 1.25rem;
             border-radius: 8px;
-            font-size: 0.875rem;
             font-weight: 500;
-            transition: background-color 0.2s;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: all 0.2s;
         }
-        .header-actions button:hover {
-            background-color: #4338ca;
-        }
-        .header-actions button + button {
-            margin-left: 1rem;
-        }
+        .button-primary { background-color: var(--primary-color); color: white; }
+        .button-primary:hover { background-color: var(--primary-hover); }
+        
+        .button-secondary { background-color: white; color: var(--secondary-color); border-color: var(--border-color); }
+        .button-secondary:hover { background-color: var(--bg-subtle); }
+
     </style>
 </head>
 <body>
-    <div id="app-root">
-        <header class="app-header">
-            <h1>Chat Feedback Loop</h1>
-            <div class="header-actions">
-                <button id="configure-models-btn">Configure Models</button>
-                <button id="configure-prompts-btn">Configure Prompts</button>
-            </div>
-        </header>
+    <div id="modal-container" class="modal-container">
+        <div id="modal-content" class="modal-content"></div>
+    </div>
+    <div id="prompt-modal-container" class="modal-container">
+        <div id="prompt-modal-content" class="modal-content"></div>
+    </div>
 
-        <main id="main-content" style="padding: 2rem;">
-            <div id="initial-setup" class="initial-setup-container">
-                <h1>Welcome to Expert</h1>
-                <p>To get started, please configure your OpenRouter API key and select your models.</p>
-                <div class="api-key-setup">
-                    <input type="password" id="initial-api-key" placeholder="Enter OpenRouter API Key">
-                    <button id="initial-fetch-models-btn" class="button button-primary">Fetch Models</button>
-                </div>
-                <p>Alternatively, if you have already configured your models, you can open the configuration panel directly.</p>
-                <button id="configure-models-btn" class="button button-secondary">Configure Models</button>
-            </div>
+    <header class="main-header">
+        <h1>Expert</h1>
+        <div>
+            <button id="configure-prompts-btn" class="button button-secondary">Prompts</button>
+            <button id="configure-models-btn" class="button button-secondary">Models</button>
+        </div>
+    </header>
     
-            <div id="main-app" style="display: none;">
-                <!-- Main application UI will be rendered by main.ts -->
-            </div>
-        </main>
-    </div>
-
-    <div id="modal-container">
-        <div id="modal-content">
-            <!-- ModelSelector will be rendered here -->
+    <main id="main-content" style="padding: 2rem;">
+        <div id="main-app">
+            <!-- Main application content will be rendered here -->
         </div>
-    </div>
-
-    <div id="prompt-modal-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;">
-        <div id="prompt-modal-content" style="background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); width: 700px;">
-            <!-- PromptManager will be rendered here -->
-        </div>
-    </div>
+    </main>
 
     <script type="module" src="/src/main.ts"></script>
 </body>
