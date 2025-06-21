@@ -13,27 +13,50 @@ export class DocumentNode {
     parentId: string | null;
     children: DocumentNode[];
 
-    // --- Content and Context Properties (for future phases) ---
+    // --- Content and Context Properties ---
     content: string;
     summary: string;
-    inheritedContext: string;
-    prompt: string;
+    template: string[];
+    generationPrompt: string | null;
+    
+    // --- Legacy & Internal Properties ---
     generationHistory: LoopHistoryItem[];
     settingsProfileName: string;
 
-    constructor(level: number, title: string, parentId: string | null = null) {
+    constructor(level: number, title: string, parentId: string | null = null, template: string[] = []) {
         this.id = generateId();
         this.level = level;
         this.title = title;
         this.parentId = parentId;
         this.children = [];
+        this.template = template;
 
-        // Initialize future-phase properties to empty values
+        // Initialize properties to empty/default values
         this.content = '';
         this.summary = '';
-        this.inheritedContext = '';
-        this.prompt = '';
+        this.generationPrompt = null;
         this.generationHistory = [];
         this.settingsProfileName = 'default';
+    }
+
+    /**
+     * Checks if the node is a leaf node according to its template.
+     * A node is a leaf if its level is the last one defined in the template.
+     */
+    get isLeaf(): boolean {
+        // Level is 0-indexed, template length is 1-based.
+        return this.level >= this.template.length - 1;
+    }
+
+    /**
+     * Gets the name for the next level of children.
+     * e.g., if this node is an "Act" (level 1), it would return "Chapter" (level 2).
+     * Returns null if the node is a leaf.
+     */
+    get childLevelName(): string | null {
+        if (this.isLeaf) {
+            return null;
+        }
+        return this.template[this.level + 1] || null;
     }
 } 

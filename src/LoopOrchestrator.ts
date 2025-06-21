@@ -233,4 +233,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             .replace('{{response}}', response)
             .replace('{{ratings}}', JSON.stringify(ratings, null, 2));
     }
+
+    public on<K extends keyof OrchestratorEvents>(event: K, listener: (...args: OrchestratorEvents[K]) => void): void {
+        // ... existing code ...
+    }
 } 

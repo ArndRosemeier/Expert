@@ -1,6 +1,9 @@
 import { DocumentNode } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
 import { ProjectManager } from './ProjectManager';
+import { OpenRouterClient } from './OpenRouterClient';
+import { SettingsManager } from './SettingsManager';
+import { LoopOrchestrator } from './LoopOrchestrator';
 
 // Define a simple structure for a test result
 export interface TestResult {
@@ -9,8 +12,18 @@ export interface TestResult {
 }
 
 export class TestRunner {
-    
-    public runPhase1Tests(): TestResult[] {
+    private openRouterClient: OpenRouterClient;
+    private mockSettingsManager: SettingsManager;
+    private mockLoopOrchestrator: LoopOrchestrator;
+
+    constructor(openRouterClient: OpenRouterClient) {
+        this.openRouterClient = openRouterClient;
+        // Create mock instances for dependencies that are not under test
+        this.mockSettingsManager = new SettingsManager();
+        this.mockLoopOrchestrator = new LoopOrchestrator(this.openRouterClient, this.mockSettingsManager.getPrompts());
+    }
+
+    public async runPhase1Tests(): Promise<string> {
         const results: TestResult[] = [];
 
         results.push(this.testDocumentNodeCreation());
@@ -18,15 +31,47 @@ export class TestRunner {
         results.push(this.testProjectManagerCreation());
         results.push(this.testTreeManipulation());
         results.push(this.testPersistence());
+        results.push(await this.testApiConnection());
 
         // Future tests for Phase 1 will be added here...
 
-        return results;
+        return this.formatResultsAsHtml(results);
+    }
+
+    private formatResultsAsHtml(results: TestResult[]): string {
+        let html = '<h2>Test Results</h2>';
+        html += '<ul style="list-style-type: none; padding: 0;">';
+        results.forEach(result => {
+            const status = result.success 
+                ? '<span style="color: green; font-weight: bold;">✔ SUCCESS</span>' 
+                : '<span style="color: red; font-weight: bold;">✖ FAILED</span>';
+            html += `<li style="margin-bottom: 0.75rem; border-bottom: 1px solid #eee; padding-bottom: 0.75rem;">${status}: ${result.message}</li>`;
+        });
+        html += '</ul>';
+        return html;
+    }
+
+    private async testApiConnection(): Promise<TestResult> {
+        // The client is constructed with an API key, so we access it directly.
+        // There's no public getter, so this is a "white-box" test.
+        if (!this.openRouterClient['apiKey']) {
+            return { success: false, message: "API Test Aborted: OpenRouterClient was not initialized with an API key." };
+        }
+        try {
+            const models = await this.openRouterClient.fetchModels();
+            if (models.length > 0) {
+                return { success: true, message: `API Connection Test: Successfully fetched ${models.length} models from OpenRouter.` };
+            } else {
+                return { success: false, message: "API Connection Test: Fetched 0 models. Check API key and network." };
+            }
+        } catch (error: any) {
+            return { success: false, message: `API Connection Test Failed: ${error.message}` };
+        }
     }
 
     private testDocumentNodeCreation(): TestResult {
         try {
-            const book = new DocumentNode(0, "My Awesome Book");
+            const book = new DocumentNode(0, "My Awesome Book", null, ['Book', 'Chapter']);
             if (!book.id || book.level !== 0 || book.title !== "My Awesome Book") {
                 throw new Error("Node properties are not set correctly in the constructor.");
             }
@@ -82,7 +127,7 @@ export class TestRunner {
                 ['Book', 'Act', 'Chapter'],
                 ['Main Outline', 'Character Bios']
             );
-            const project = new ProjectManager("My Sci-Fi Novel", novelTemplate);
+            const project = new ProjectManager("My Sci-Fi Novel", novelTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
 
             if (project.projectTitle !== "My Sci-Fi Novel") {
                 throw new Error("Project title not set correctly.");
@@ -111,7 +156,7 @@ export class TestRunner {
     private testTreeManipulation(): TestResult {
         try {
             const novelTemplate = new ProjectTemplate("Novel", ['Book', 'Act', 'Chapter'], []);
-            const project = new ProjectManager("Test Project", novelTemplate);
+            const project = new ProjectManager("Test Project", novelTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
             // Add nodes
             const act1 = project.addNode("Act 1", project.rootNode.id);
@@ -149,11 +194,11 @@ export class TestRunner {
     private testPersistence(): TestResult {
         try {
             const template = new ProjectTemplate('Novel', ['Part', 'Chapter', 'Scene'], []);
-            const project = new ProjectManager('My Novel', template);
+            const project = new ProjectManager('My Novel', template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             project.addNode('Chapter 1', project.rootNode.id);
             
             const json = project.save();
-            const loadedProject = ProjectManager.load(json);
+            const loadedProject = ProjectManager.load(json, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
 
             // Basic property checks
             if (project.projectTitle !== loadedProject.projectTitle) {

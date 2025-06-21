@@ -1,4 +1,5 @@
 import { type QualityCriterion } from "./LoopOrchestrator";
+import { PROMPT_STORAGE_KEY, defaultPrompts, OrchestratorPrompts } from "./PromptManager";
 
 export const SETTINGS_PROFILES_KEY = 'expert_app_settings_profiles';
 export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
@@ -33,10 +34,12 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
 export class SettingsManager {
     private profiles: Record<string, SettingsProfile> = {};
     private lastUsedProfileName: string | null = null;
+    private prompts: OrchestratorPrompts;
 
     constructor() {
         this.loadProfiles();
         this.lastUsedProfileName = localStorage.getItem(LAST_USED_PROFILE_KEY);
+        this.prompts = this.loadPrompts();
     }
 
     private loadProfiles() {
@@ -55,6 +58,29 @@ export class SettingsManager {
                 this.profiles = {};
             }
         }
+    }
+
+    private loadPrompts(): OrchestratorPrompts {
+        const saved = localStorage.getItem(PROMPT_STORAGE_KEY);
+        if (saved) {
+            try {
+                // TODO: Add a type guard for prompts
+                return { ...defaultPrompts, ...JSON.parse(saved) };
+            } catch (error) {
+                console.error('Failed to parse prompts from localStorage', error);
+                return { ...defaultPrompts };
+            }
+        }
+        return { ...defaultPrompts };
+    }
+
+    public getPrompts(): OrchestratorPrompts {
+        return this.prompts;
+    }
+
+    public savePrompts(prompts: OrchestratorPrompts) {
+        this.prompts = prompts;
+        localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(this.prompts));
     }
 
     public getProfileNames(): string[] {

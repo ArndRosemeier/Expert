@@ -3,6 +3,7 @@ import { ProjectTemplate } from './ProjectTemplate';
 import { LoopOrchestrator, LoopInput, QualityCriterion } from './LoopOrchestrator';
 import { EventEmitter } from './EventEmitter';
 import { SettingsManager, SettingsProfile } from './SettingsManager';
+import { OpenRouterClient } from './OpenRouterClient';
 
 type ProjectManagerEvents = {
     'error': [message: string];
@@ -16,22 +17,25 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     rootNode: DocumentNode;
     private loopOrchestrator: LoopOrchestrator;
     private settingsManager: SettingsManager;
+    private openRouterClient: OpenRouterClient;
 
     constructor(
         projectTitle: string, 
         template: ProjectTemplate, 
         loopOrchestrator: LoopOrchestrator,
-        settingsManager: SettingsManager
+        settingsManager: SettingsManager,
+        openRouterClient: OpenRouterClient
     ) {
         super();
         this.projectTitle = projectTitle;
         this.template = template;
         this.loopOrchestrator = loopOrchestrator;
         this.settingsManager = settingsManager;
+        this.openRouterClient = openRouterClient;
 
         // The root node is always level 0 and has the first name from the hierarchy
-        const rootNodeTitle = template.hierarchyLevels[0] || 'Root';
-        this.rootNode = new DocumentNode(0, rootNodeTitle);
+        const rootNodeTitle = this.template.hierarchyLevels[0] || 'Root';
+        this.rootNode = new DocumentNode(0, rootNodeTitle, null, this.template.hierarchyLevels);
     }
 
     /**
@@ -68,7 +72,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         }
 
         const newLevel = parentNode.level + 1;
-        const newNode = new DocumentNode(newLevel, title, parentId);
+        const newNode = new DocumentNode(newLevel, title, parentId, parentNode.template);
         
         parentNode.children.push(newNode);
         
@@ -102,56 +106,152 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     }
 
     /**
-     * Gathers context for a specific node to guide content generation.
+     * Gathers rich, hierarchical context for a specific node to guide content generation.
+     * Traverses up the tree, collecting summaries of preceding "uncles" and "cousins",
+     * then collects summaries of preceding siblings.
      * @param nodeId The ID of the node to compile context for.
      * @returns A string containing the contextual information.
      */
     private compileNodeContext(nodeId: string): string {
-        const node = this.findNodeById(nodeId);
-        if (!node) {
-            return '';
+        const targetNode = this.findNodeById(nodeId);
+        if (!targetNode) return '';
+    
+        const contextParts: string[] = [];
+        let currentNode = targetNode;
+    
+        // 1. Add context from preceding siblings
+        if (currentNode.parentId) {
+            const parent = this.findNodeById(currentNode.parentId);
+            if (parent) {
+                const siblingIndex = parent.children.findIndex(child => child.id === currentNode.id);
+                for (let i = 0; i < siblingIndex; i++) {
+                    const sibling = parent.children[i];
+                    if (sibling.summary) {
+                        contextParts.unshift(`Summary of sibling "${sibling.title}":\n${sibling.summary}`);
+                    }
+                }
+            }
         }
-
-        const contextParts: string[] = [`Project: ${this.projectTitle}`];
+    
+        // 2. Traverse up the tree, gathering context from "uncles"
+        while (currentNode.parentId) {
+            const parent = this.findNodeById(currentNode.parentId);
+            if (!parent || !parent.parentId) break; // Stop if we are at the root's child
+    
+            const grandparent = this.findNodeById(parent.parentId);
+            if (!grandparent) break;
+    
+            const parentIndex = grandparent.children.findIndex(child => child.id === parent.id);
+            for (let i = 0; i < parentIndex; i++) {
+                const uncle = grandparent.children[i];
+                if (uncle.summary) {
+                    contextParts.unshift(`Summary of sibling "${uncle.title}":\n${uncle.summary}`);
+                }
+            }
+            currentNode = parent;
+        }
         
-        // Traverse up to the root to build the path
-        let current: DocumentNode | null = node;
-        const path: string[] = [];
-        while (current) {
-            const levelName = this.template.hierarchyLevels[current.level] || `Level ${current.level}`;
-            path.unshift(`${levelName}: ${current.title}`);
-            current = current.parentId ? this.findNodeById(current.parentId) : null;
-        }
-
-        return [...contextParts, ...path].join('\\n');
+        return contextParts.join('\n\n---\n\n');
     }
 
-    public async generateNodeContent(nodeId: string, prompt: string): Promise<void> {
+    private getNodePath(nodeId: string): string {
+        let path = [];
+        let currentNode = this.findNodeById(nodeId);
+        while(currentNode) {
+            const levelName = currentNode.template[currentNode.level] || `Level ${currentNode.level}`;
+            path.unshift(`${levelName}: ${currentNode.title}`);
+            currentNode = currentNode.parentId ? this.findNodeById(currentNode.parentId) : null;
+        }
+        return path.join(' => ');
+    }
+
+    public async expandNode(nodeId: string): Promise<void> {
+        const node = this.findNodeById(nodeId);
+        if (!node || node.isLeaf) {
+            this.emit('error', 'Cannot expand a leaf node or a non-existent node.');
+            return;
+        }
+
+        const context = this.compileNodeContext(nodeId);
+        const path = this.getNodePath(nodeId);
+        
+        const prompts = this.settingsManager.getPrompts();
+        const systemPrompt = prompts.expand_system;
+        const userPromptTemplate = prompts.expand_user;
+
+        const userPrompt = userPromptTemplate
+            .replace('{{path}}', path)
+            .replace('{{context}}', context)
+            .replace('{{child_level_name}}', node.childLevelName || '');
+
+        const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+        
+        node.generationPrompt = fullPrompt;
+
+        try {
+            const response = await this.openRouterClient.chat('creator', fullPrompt);
+            const titles = JSON.parse(response);
+
+            if (!Array.isArray(titles)) {
+                throw new Error("LLM did not return a valid JSON array.");
+            }
+
+            titles.forEach(title => {
+                if(typeof title === 'string') {
+                    this.addNode(title, nodeId);
+                }
+            });
+            
+            this.saveToLocalStorage();
+            this.emit('nodeGenerationComplete', { nodeId, success: true, node });
+
+        } catch(error) {
+            console.error("Failed to expand node:", error);
+            this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
+        }
+    }
+
+    public async generateNodeContent(nodeId: string): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) {
             this.emit('error', `Node with ID "${nodeId}" not found.`);
             return;
         }
 
-        // Get the generation profile for the node
         const profile = this.settingsManager.getProfile(node.settingsProfileName) || this.settingsManager.getLastUsedProfile();
         if (!profile) {
             this.emit('error', `Could not find a settings profile named "${node.settingsProfileName}" or a default profile.`);
             return;
         }
-
-        node.prompt = prompt;
-
+        
+        const path = this.getNodePath(nodeId);
         const context = this.compileNodeContext(nodeId);
-        const fullPrompt = `${context}\\n\\n${prompt}`;
 
+        const prompts = this.settingsManager.getPrompts();
+        const systemPromptTemplate = prompts.content_generation_initial;
+        const userPromptTemplate = prompts.content_generation_user;
+
+        const userPrompt = userPromptTemplate
+            .replace('{{path}}', path)
+            .replace('{{context}}', context)
+            .replace('{{title}}', node.title);
+
+        // The 'prompt' for the initial generation is the fully-formed user prompt
+        const systemPrompt = systemPromptTemplate
+            .replace('{{prompt}}', userPrompt)
+            .replace('{{criteria}}', profile.criteria.map(c => c.name).join(', '));
+        
+        // The full prompt sent to the loop doesn't need the system prompt, as the loop constructs it.
+        // We just need to send the user's core request.
         const loopInput: LoopInput = {
-            prompt: fullPrompt,
+            prompt: userPrompt,
             criteria: profile.criteria,
             maxIterations: profile.maxIterations,
         };
+
+        // Store the full prompt for debugging/transparency
+        node.generationPrompt = `${systemPrompt}\n\n${userPrompt}`;
         
-        // Use a temporary listener for this specific job
         const progressListener = (update: any) => {
             if (update.type === 'creator') {
                 node.content = update.payload.response;
@@ -165,12 +265,31 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             const result = await this.loopOrchestrator.runLoop(loopInput);
             node.content = result.finalResponse;
             node.generationHistory = result.history;
+
+            // Summarize the new content
+            node.summary = await this.summarizeContent(node.content);
+
+            this.saveToLocalStorage();
             this.emit('nodeGenerationComplete', { nodeId, success: true, node });
         } catch (error) {
-            this.emit('nodeGenerationComplete', { nodeId, success: false, error });
+            this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
         } finally {
-            // Clean up the listener after the job is done
             this.loopOrchestrator.off('progress', progressListener);
+        }
+    }
+
+    private async summarizeContent(content: string): Promise<string> {
+        console.log("Summarizing content...");
+        const prompts = this.settingsManager.getPrompts();
+        const systemPrompt = prompts.summarize_system;
+        const fullPrompt = systemPrompt.replace('{{content}}', content);
+        try {
+            const summary = await this.openRouterClient.chat('editor', fullPrompt);
+            console.log("Summarization complete.");
+            return summary;
+        } catch (error) {
+            console.error("Summarization failed:", error);
+            return `Error: Could not summarize content.`; // Return a non-empty error string
         }
     }
 
@@ -185,11 +304,28 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     }
 
     /**
+     * Saves the project's current state to localStorage.
+     */
+    public saveToLocalStorage(): void {
+        try {
+            const json = this.save();
+            localStorage.setItem('expert_app_current_project', json);
+        } catch (error) {
+            console.error("Failed to save project to localStorage:", error);
+        }
+    }
+
+    /**
      * Creates a ProjectManager instance from a JSON string.
      * @param json The JSON string representing a saved project.
      * @returns A new instance of ProjectManager.
      */
-    public static load(json: string, loopOrchestrator: LoopOrchestrator, settingsManager: SettingsManager): ProjectManager {
+    public static load(
+        json: string, 
+        loopOrchestrator: LoopOrchestrator, 
+        settingsManager: SettingsManager,
+        openRouterClient: OpenRouterClient
+    ): ProjectManager {
         const plainObject = JSON.parse(json);
         
         // Re-create the template instance
@@ -200,7 +336,13 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         );
         
         // Create the project manager instance
-        const project = new ProjectManager(plainObject.projectTitle, template, loopOrchestrator, settingsManager);
+        const project = new ProjectManager(
+            plainObject.projectTitle, 
+            template, 
+            loopOrchestrator, 
+            settingsManager, 
+            openRouterClient
+        );
         
         // The rootNode is created in the constructor, but we need to overwrite it
         // with the hydrated version of our saved node tree.
@@ -216,15 +358,14 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      */
     private static rehydrateNode(plainNode: any): DocumentNode {
         // Create a new node instance to get access to class methods
-        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId);
+        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, plainNode.template);
         
         // Overwrite the plain properties from the saved data
         Object.assign(node, {
             id: plainNode.id,
             content: plainNode.content || '',
             summary: plainNode.summary || '',
-            inheritedContext: plainNode.inheritedContext || '',
-            prompt: plainNode.prompt || '',
+            generationPrompt: plainNode.generationPrompt || null,
             generationHistory: plainNode.generationHistory || [],
             settingsProfileName: plainNode.settingsProfileName || 'default',
             children: [], // Reset children, as they will be rehydrated recursively

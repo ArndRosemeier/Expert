@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Never make assumptions for functions or fields to exist without explicitly checking the file. Always make sure functions and fields that you use exist.
