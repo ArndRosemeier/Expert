@@ -1,4 +1,5 @@
 import { initialize } from './event-handlers';
+import { setupEventListeners } from './ui/project-ui';
 
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -15,4 +16,7 @@ if (urlParams.get('clean') === 'true') {
     window.location.href = window.location.pathname;
 }
 
-document.addEventListener('DOMContentLoaded', initialize); 
+document.addEventListener('DOMContentLoaded', () => {
+    initialize();
+    setupEventListeners();
+}); 

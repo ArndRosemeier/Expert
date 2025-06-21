@@ -35,6 +35,7 @@ export class OpenRouterClient {
   private apiKey: string;
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
   private modelPurposeMap: Record<string, string> = {};
+  private models: Record<string, string> = {};
 
   constructor(apiKey: string, modelPurposeMap?: Record<string, string>) {
     this.apiKey = apiKey;
@@ -51,12 +52,24 @@ export class OpenRouterClient {
     return this.modelPurposeMap[purpose];
   }
 
+  public setSelectedModels(models: Record<string, string>): void {
+    console.log('[OpenRouterClient] setSelectedModels called with:', models);
+    this.models = models;
+  }
+
+  public getApiKey(): string {
+    return this.apiKey;
+  }
+
   /**
    * Send a chat message for a given purpose. Always uses role 'user'.
    * Returns just the model's answer string.
    */
   async chat(purpose: string, message: string): Promise<string> {
     const model = this.getModelForPurpose(purpose);
+    
+    console.log(`[OpenRouterClient] Chat request for purpose: "${purpose}". Current models:`, this.models);
+
     if (!model) {
       throw new Error(`No model configured for purpose: ${purpose}`);
     }

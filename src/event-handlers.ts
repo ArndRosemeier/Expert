@@ -4,7 +4,7 @@ import { TestRunner } from './TestRunner';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
 import { ProjectTemplate } from './ProjectTemplate';
-import { renderProjectUI } from './ui/project-ui';
+import { renderProjectUI, initializeProjectUI } from './ui/project-ui';
 import { renderLoopUI } from './ui/loop-ui';
 import { SettingsManager } from './SettingsManager';
 import { ModelSelector } from './ModelSelector';
@@ -12,6 +12,7 @@ import { OpenRouterClient } from './OpenRouterClient';
 import { LoopOrchestrator } from './LoopOrchestrator';
 import { OrchestratorPrompts } from './PromptManager';
 import { openTemplateEditor } from './ui/template-editor';
+import { TemplateManager } from './TemplateManager';
 
 function onModelsSelected(models: Record<string, string>) {
     const modelSelector = state.getModelSelector();
@@ -20,7 +21,7 @@ function onModelsSelected(models: Record<string, string>) {
     
     // The model selector now handles its own storage internally.
     // We just need to reconfigure services and save the updated models to the active settings profile.
-    reconfigureCoreServices(models);
+    recreateAndReconfigureServices();
     
     const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
     const activeProfile = settingsManager.getProfile(activeProfileName) || { prompt: '', criteria: [], maxIterations: 5, selectedModels: {} };
@@ -28,23 +29,19 @@ function onModelsSelected(models: Record<string, string>) {
     settingsManager.saveProfile(activeProfileName, activeProfile);
 
     closeModal();
-    
-    if (!state.getIsAppRendered()) {
-        renderLoopUI(); 
-        state.setIsAppRendered(true);
-    }
 }
 
-function reconfigureCoreServices(models: Record<string, string>) {
+function recreateAndReconfigureServices() {
     const modelSelector = state.getModelSelector();
-    const settingsManager = state.getSettingsManager();
-    if (!modelSelector || !settingsManager) return;
-    
-    const client = new OpenRouterClient(modelSelector.getApiKey(), models);
-    const orchestrator = new LoopOrchestrator(client, state.getOrchestratorPrompts());
+    if (!modelSelector) {
+        console.error("ModelSelector not available. Cannot configure services.");
+        return;
+    }
+    const client = new OpenRouterClient(modelSelector.getApiKey(), modelSelector.getSelectedModels());
+    const orchestrator = new LoopOrchestrator(client, state.getOrchestratorPrompts() || undefined);
     state.setOpenRouterClient(client);
     state.setOrchestrator(orchestrator);
-    console.log('Services reconfigured with new models.');
+    console.log('Services reconfigured.');
 }
 
 function handleCreateProject(title: string, template: ProjectTemplate) {
@@ -62,7 +59,7 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     project.saveToLocalStorage();
     
     closeNewProjectModal();
-    renderProjectUI(project);
+    initializeProjectUI(project);
 }
 
 function loadPersistedProject(): ProjectManager | null {
@@ -87,11 +84,20 @@ function loadPersistedProject(): ProjectManager | null {
 export function initialize() {
     const settingsManager = new SettingsManager();
     state.setSettingsManager(settingsManager);
+
+    const templateManager = new TemplateManager();
+    state.setTemplateManager(templateManager);
     
     const modelSelector = new ModelSelector(onModelsSelected, closeModal);
     state.setModelSelector(modelSelector);
 
-    reconfigureCoreServices(modelSelector.getSelectedModels());
+    recreateAndReconfigureServices();
+
+    const project = loadPersistedProject();
+    if (project) {
+        state.setCurrentProject(project);
+        initializeProjectUI(project);
+    }
 
     // Attach event listeners
     getElementById('settingsBtn').addEventListener('click', openModal);
@@ -122,15 +128,8 @@ export function initialize() {
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
         console.log('API key or models not set. Forcing settings modal.');
         openModal();
-    } else {
-        const project = loadPersistedProject();
-        if (project) {
-            state.setCurrentProject(project);
-            renderProjectUI(project);
-        } else {
-            openNewProjectModal(handleCreateProject);
-        }
-        state.setIsAppRendered(true);
+    } else if (!project) {
+        openNewProjectModal(handleCreateProject);
     }
     console.log('Application initialized.');
 } 

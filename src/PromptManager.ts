@@ -10,10 +10,12 @@ export interface OrchestratorPrompts {
     editor: string;
     
     // For single-shot actions
-    expand_system: string;
-    expand_user: string;
     summarize_system: string;
+    expand_list_user: string;
     content_generation_user: string;
+    branch_content_generation_user: string;
+    create_children_from_outline_user: string;
+    prompt_for_child_generation_prompt: string;
 }
 
 export const defaultPrompts: OrchestratorPrompts = {
@@ -59,17 +61,6 @@ export const defaultPrompts: OrchestratorPrompts = {
     `.trim(),
 
     // New prompts for template-based actions
-    expand_system: `
-        You are an expert author and structural outliner. Your task is to generate a list of titles for the children of a given document node, based on the provided context. Your output MUST be a valid JSON array of strings. Do not include any other text or explanations.
-    `.trim(),
-    expand_user: `
-        You are working on the document path: "{{path}}".
-
-        Here is the context of the document so far:
-        {{context}}
-
-        Based on this context, generate the titles for the '{{child_level_name}}' nodes that will follow.
-    `.trim(),
     summarize_system: `
         You are an expert at summarizing text for use as future context. Create a concise, factual summary of the following text, capturing the key points, main ideas, and any critical details.
 
@@ -77,14 +68,71 @@ export const defaultPrompts: OrchestratorPrompts = {
         
         {{content}}
     `.trim(),
+    expand_list_user: `
+        You are working on the document path: "{{path}}".
+
+        Here is the content of the document you are expanding:
+        ---
+        {{parent_content}}
+        ---
+
+        Here is the context of the document so far:
+        ---
+        {{context}}
+        ---
+
+        Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow. Each title must be on a new line and start with a single asterisk (*).
+    `.trim(),
     content_generation_user: `
         You are writing the content for the node at the following path: "{{path}}".
+        The title of this node is "{{title}}".
 
         Here is the context of the story so far:
+        ---
         {{context}}
+        ---
 
-        Now, write the full content for "{{title}}".
+        Now, write the full content for this node.
     `.trim(),
+    branch_content_generation_user: `
+        You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
+        This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
+
+        This content should be a prose outline or a summary of the key points, characters, and plot beats for the {{count}} '{{child_level_name}}' nodes that will logically follow. This text will be used to generate the titles of the child nodes later. Do NOT use bullet points or markdown. Write it as a single block of text.
+
+        Here is the context of the document so far:
+        ---
+        {{context}}
+        ---
+    `.trim(),
+    create_children_from_outline_user: `
+        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of titles for the '{{child_level_name}}' nodes that should be created from it.
+
+        Each title must be on a new line and start with a single asterisk (*). Do not include any other text or explanations.
+
+        Here is the context of the document so far:
+        ---
+        {{context}}
+        ---
+
+        Here is the outline to process:
+        ---
+        {{outline_content}}
+        ---
+    `.trim(),
+    prompt_for_child_generation_prompt: `You are an expert at creating generative prompts for a hierarchical document. The user is expanding a parent node. A new child node with the title "{{child_title}}" has just been created.
+
+The parent node's content is:
+---
+{{parent_content}}
+---
+
+The broader context of the document is:
+---
+{{context}}
+---
+
+Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -92,21 +140,25 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     content_generation_iterative: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
     rater: ['originalPrompt', 'response', 'criterion', 'goal'],
     editor: ['response', 'ratings'],
-    expand_system: [], 
-    expand_user: ['path', 'context', 'child_level_name'],
     summarize_system: ['content'],
+    expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content'],
     content_generation_user: ['path', 'context', 'title'],
+    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count'],
+    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context'],
+    prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     content_generation_initial: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process.",
     content_generation_iterative: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback.",
-    content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a node, using context from the document.",
+    content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document.",
+    branch_content_generation_user: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline.",
     rater: "The system prompt for the 'Rater' AI, which scores the generated content against a single criterion.",
     editor: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings.",
-    expand_system: "The system prompt for the 'Expand' action. It tells the AI its role and that it must return a JSON list of titles.",
-    expand_user: "The user prompt for the 'Expand' action. It asks the AI to generate child titles for a specific node.",
-    summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is."
+    summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
+    expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
+    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
+    prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child."
 };
 
 export class PromptManager {

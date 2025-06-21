@@ -3,41 +3,9 @@ import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 import { ModelSelector } from '../ModelSelector';
-import { SettingsProfile } from '../SettingsManager';
-import { QualityCriterion } from '../LoopOrchestrator';
+import { SettingsProfile, DEFAULT_CRITERIA } from '../SettingsManager';
+import { QualityCriterion } from '../types';
 import { PromptManager } from '../PromptManager';
-
-// --- Hardcoded Project Templates ---
-const novelTemplate = new ProjectTemplate(
-    "Standard Novel",
-    ['Book', 'Act', 'Chapter'],
-    ['Main Outline', 'Character Bios']
-);
-
-const manualTemplate = new ProjectTemplate(
-    "Technical Manual",
-    ['Manual', 'Section', 'Topic'],
-    ['Glossary']
-);
-
-const projectTemplates: Record<string, ProjectTemplate> = {
-    "novel": novelTemplate,
-    "manual": manualTemplate,
-};
-
-const defaultProseCriteria: QualityCriterion[] = [
-    { name: "Clarity & Conciseness. The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.", goal: 8 },
-    { name: "Natural & Authentic Tone. The language sounds human and authentic. It avoids being overly formal, academic, or robotic.", goal: 9 },
-    { name: "Engaging Flow. The text is interesting and holds the reader's attention. Sentences and paragraphs transition smoothly.", goal: 8 },
-    { name: "Varied Sentence Structure. The length and structure of sentences are varied to create a pleasing rhythm, avoiding monotony.", goal: 7 },
-    { name: "Subtlety (Show, Don't Tell). The writing implies emotions and ideas through description and action rather than stating them directly. It avoids being on-the-nose.", goal: 8 },
-    { name: "Avoids AI Clichés. The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' or 'tapestry of...'", goal: 9 },
-    { name: "Understated Language. The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.", goal: 9 },
-    { name: "Specificity & Concrete Detail. The writing uses specific, concrete details and examples rather than vague generalities.", goal: 8 },
-    { name: "Original Phrasing. The text avoids common idioms and clichés, opting for more original ways to express ideas.", goal: 7 },
-    { name: "Human-like Naming. When applicable, any names for people, places, or concepts are creative and feel natural. Avoid common AI-generated names like 'Elara' or 'Lyra.'", goal: 8 }
-];
-
 
 // --- Generic Modal Functions ---
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -196,6 +164,15 @@ export function renderSettingsModal() {
             <button id="close-settings-modal-btn" class="modal-close-btn">&times;</button>
         </div>
         <div class="modal-body">
+            <div id="settings-profile-container" class="settings-section">
+                <div class="settings-bar">
+                    <select id="modal-profile-select"></select>
+                    <button id="modal-load-profile-btn">Load</button>
+                    <input type="text" id="modal-new-profile-name" placeholder="New Profile Name...">
+                    <button id="modal-save-profile-btn">Save</button>
+                    <button id="modal-delete-profile-btn" class="button-danger">Delete</button>
+                </div>
+            </div>
             <div id="settings-models-container" class="settings-section">
                 <h3>Models</h3>
                 <!-- ModelSelector will be rendered here -->
@@ -240,14 +217,115 @@ export function renderSettingsModal() {
 
     // Criteria Editor
     const modalCriteriaList = getElementById('modal-criteria-list');
-    getElementById('modal-add-criterion-btn').addEventListener('click', () => {
-        const newItem = createCriterionElement();
-        modalCriteriaList.appendChild(newItem);
-        (newItem.querySelector('textarea') as HTMLTextAreaElement)?.focus();
+    const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
+    const modalDefaultCriteriaBtn = getElementById('modal-default-criteria-btn');
+
+    // --- Profile Management ---
+    const settingsManagerInstance = state.getSettingsManager();
+    const profileSelect = getElementById('modal-profile-select') as HTMLSelectElement;
+    const newProfileNameInput = getElementById('modal-new-profile-name') as HTMLInputElement;
+
+    const populateProfileSelector = () => {
+        if (!settingsManagerInstance) return;
+        const profiles = settingsManagerInstance.getProfileNames();
+        const lastUsed = settingsManagerInstance.getLastUsedProfileName();
+        profileSelect.innerHTML = profiles.map(p => `<option value="${p}" ${p === lastUsed ? 'selected' : ''}>${p}</option>`).join('');
+    };
+
+    const applyProfileToUI = (profile: SettingsProfile | null) => {
+        if (!profile || !modelSelector) return;
+        
+        // Apply models
+        if (profile.selectedModels) modelSelector.setSelectedModels(profile.selectedModels);
+        
+        // Apply criteria and iterations
+        renderCriteria(modalCriteriaList, profile.criteria);
+        modalMaxIterations.value = String(profile.maxIterations);
+
+        // Note: Prompts are handled by the PromptManager instance which is aware of the SettingsManager
+        // Re-rendering or a more direct update might be needed if prompts are to be swapped dynamically.
+        // For now, we assume the PromptManager reflects the correct state or is re-initialized.
+    };
+
+    getElementById('modal-load-profile-btn').addEventListener('click', () => {
+        if (!settingsManagerInstance) return;
+        const profileName = profileSelect.value;
+        const profile = settingsManagerInstance.getProfile(profileName);
+        applyProfileToUI(profile || null);
+        settingsManagerInstance.setLastUsedProfile(profileName);
+        alert(`Profile "${profileName}" loaded.`);
     });
-    getElementById('modal-default-criteria-btn').addEventListener('click', () => {
-        if (confirm('Are you sure you want to replace your current criteria with the defaults?')) {
-            renderCriteria(modalCriteriaList, defaultProseCriteria);
+
+    getElementById('modal-save-profile-btn').addEventListener('click', () => {
+        if (!settingsManagerInstance || !modelSelector) return;
+        let profileName = newProfileNameInput.value.trim();
+        if (!profileName) {
+            profileName = profileSelect.value;
+        }
+        if (!profileName) {
+            alert('Please enter a name for the new profile or select an existing one to overwrite.');
+            return;
+        }
+
+        const currentSettings: SettingsProfile = {
+            selectedModels: modelSelector.getSelectedModels(),
+            criteria: getCriteriaFromUI(modalCriteriaList),
+            maxIterations: parseInt(modalMaxIterations.value, 10),
+            prompt: '' // Prompt is managed separately, but the property is required.
+        };
+
+        settingsManagerInstance.saveProfile(profileName, currentSettings);
+        settingsManagerInstance.setLastUsedProfile(profileName);
+        newProfileNameInput.value = '';
+        populateProfileSelector();
+        profileSelect.value = profileName;
+        alert(`Profile "${profileName}" saved.`);
+    });
+
+    getElementById('modal-delete-profile-btn').addEventListener('click', () => {
+        const profileName = profileSelect.value;
+        if (!settingsManagerInstance || !profileName) return;
+
+        if (confirm(`Are you sure you want to delete the profile "${profileName}"?`)) {
+            settingsManagerInstance.deleteProfile(profileName);
+            populateProfileSelector();
+            // Load the default profile after deleting
+            const defaultProfile = settingsManagerInstance.getProfile('default');
+            applyProfileToUI(defaultProfile || null);
+            alert(`Profile "${profileName}" deleted.`);
+        }
+    });
+
+
+    // Initial Population
+    populateProfileSelector();
+    const lastUsedProfile = settingsManagerInstance?.getLastUsedProfile();
+    applyProfileToUI(lastUsedProfile || null);
+
+
+    // --- Old Criteria Editor Wiring ---
+    getElementById('modal-add-criterion-btn').addEventListener('click', () => {
+        const newCriterion: QualityCriterion = {
+            name: "New Criterion...",
+            goal: 8,
+            weight: 1.0,
+            description: ""
+        };
+        const newItem = createCriterionElement(newCriterion);
+        modalCriteriaList.appendChild(newItem);
+        
+        const textarea = newItem.querySelector('textarea');
+        if (textarea) {
+            textarea.style.display = 'block';
+            textarea.focus();
+            autoResizeTextarea.call(textarea);
+            const textDisplay = newItem.querySelector('.criterion-text-display');
+            if(textDisplay) (textDisplay as HTMLElement).style.display = 'none';
+        }
+    });
+    modalDefaultCriteriaBtn.addEventListener('click', () => {
+        if (confirm("This will replace your current criteria list with the application defaults. Are you sure?")) {
+            renderCriteria(modalCriteriaList, DEFAULT_CRITERIA);
         }
     });
     getElementById('modal-copy-criteria-btn').addEventListener('click', () => handleCopyCriteria(modalCriteriaList));
@@ -264,6 +342,15 @@ export function renderSettingsModal() {
 // --- Private Functions ---
 
 function renderNewProjectModal(onCreate: (title: string, template: ProjectTemplate) => void) {
+    const templateManager = state.getTemplateManager();
+    if (!templateManager) {
+        // This case should ideally not happen if initialization is correct.
+        newProjectModalContent.innerHTML = `<p>Error: Template Manager not found.</p>`;
+        return;
+    }
+    const templateNames = templateManager.getTemplateNames();
+    const optionsHtml = templateNames.map(name => `<option value="${name}">${name}</option>`).join('');
+
     newProjectModalContent.innerHTML = `
         <h2>Create New Project</h2>
         <div class="form-group" style="margin-bottom: 1.5rem;">
@@ -273,8 +360,7 @@ function renderNewProjectModal(onCreate: (title: string, template: ProjectTempla
         <div class="form-group" style="margin-bottom: 1.5rem;">
             <label for="project-template-select">Project Template</label>
             <select id="project-template-select">
-                <option value="novel">Standard Novel</option>
-                <option value="manual">Technical Manual</option>
+                ${optionsHtml}
             </select>
         </div>
         <div class="button-group" style="display: flex; justify-content: flex-end; gap: 1rem;">
@@ -285,8 +371,8 @@ function renderNewProjectModal(onCreate: (title: string, template: ProjectTempla
 
     getElementById('confirm-create-project-btn').addEventListener('click', () => {
         const title = getElementById<HTMLInputElement>('project-title-input').value;
-        const templateKey = getElementById<HTMLSelectElement>('project-template-select').value;
-        const template = projectTemplates[templateKey];
+        const templateName = getElementById<HTMLSelectElement>('project-template-select').value;
+        const template = templateManager.getTemplate(templateName);
 
         if (!title.trim() || !template) {
             alert('Project Title and a valid template are required.');
@@ -304,21 +390,30 @@ function autoResizeTextarea(this: HTMLTextAreaElement) {
     this.style.height = (this.scrollHeight) + 'px';
 }
 
-function createCriterionElement(criterion?: QualityCriterion): HTMLDivElement {
+function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     const div = document.createElement('div');
     div.className = 'criterion';
 
     const textarea = document.createElement('textarea');
     textarea.placeholder = "e.g., 'Clarity and conciseness'";
-    textarea.value = criterion?.name || '';
+    textarea.value = criterion.name;
     textarea.addEventListener('input', autoResizeTextarea);
     textarea.addEventListener('focus', function() { this.selectionStart = this.selectionEnd = this.value.length; });
 
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.min = '1';
-    input.max = '10';
-    input.value = criterion?.goal.toString() || '8';
+    const goalInput = document.createElement('input');
+    goalInput.type = 'number';
+    goalInput.min = '1';
+    goalInput.max = '10';
+    goalInput.value = criterion.goal.toString();
+    goalInput.title = 'Goal (1-10)';
+
+    const weightInput = document.createElement('input');
+    weightInput.type = 'number';
+    weightInput.min = '0.1';
+    weightInput.max = '2.0';
+    weightInput.step = '0.1';
+    weightInput.value = criterion.weight.toString();
+    weightInput.title = 'Weight (0.1-2.0)';
     
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-criterion-btn';
@@ -336,8 +431,8 @@ function createCriterionElement(criterion?: QualityCriterion): HTMLDivElement {
         textDisplay.textContent = text.split('.')[0] + (text.includes('.') && text.split('.')[0] !== text ? '.' : '');
     };
     
-    updateDisplay(criterion?.name || "New Criterion...");
-    textarea.value = criterion?.name || "New Criterion...";
+    updateDisplay(criterion.name);
+    textarea.value = criterion.name;
     textarea.style.display = 'none';
 
     textDisplay.addEventListener('click', () => {
@@ -357,7 +452,8 @@ function createCriterionElement(criterion?: QualityCriterion): HTMLDivElement {
     textareaContainer.appendChild(textarea);
     
     div.appendChild(textareaContainer);
-    div.appendChild(input);
+    div.appendChild(goalInput);
+    div.appendChild(weightInput);
     div.appendChild(removeBtn);
 
     return div;
@@ -368,12 +464,13 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
     const criterionElements = container.querySelectorAll('.criterion');
     criterionElements.forEach(el => {
         const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
-        const input = el.querySelector<HTMLInputElement>('input[type="number"]');
-        if (textarea && input) {
+        const inputs = el.querySelectorAll<HTMLInputElement>('input[type="number"]');
+        if (textarea && inputs.length === 2) {
             const name = textarea.value;
-            const goal = parseInt(input.value, 10);
-            if (name && !isNaN(goal)) {
-                criteria.push({ name, goal });
+            const goal = parseInt(inputs[0].value, 10);
+            const weight = parseFloat(inputs[1].value);
+            if (name && !isNaN(goal) && !isNaN(weight)) {
+                criteria.push({ name, goal, weight });
             }
         }
     });
@@ -386,8 +483,10 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
         item !== null &&
         'name' in item &&
         'goal' in item &&
+        'weight' in item &&
         typeof item.name === 'string' &&
-        typeof item.goal === 'number'
+        typeof item.goal === 'number' &&
+        typeof item.weight === 'number'
     );
 }
 

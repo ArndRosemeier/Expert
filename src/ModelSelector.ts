@@ -5,7 +5,7 @@ const LOCAL_STORAGE_KEY = 'openrouter_api_key';
 const LOCAL_STORAGE_MODELS = 'openrouter_model_purposes';
 const PURPOSES = [
   { key: 'creator', label: 'Creator' },
-  { key: 'rating', label: 'Rating' },
+  { key: 'rater', label: 'Rater' },
   { key: 'editor', label: 'Editor' },
 ];
 
@@ -318,6 +318,7 @@ export class ModelSelector {
       this.fetched = true;
     } catch (e: any) {
       this.error = e.message;
+      throw e; // Re-throw so the caller can be aware
     } finally {
       this.loading = false;
       this.update();
@@ -332,7 +333,10 @@ export class ModelSelector {
     if (models) {
       try {
         this.selectedModels = JSON.parse(models);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to parse corrupted model selections from localStorage. Resetting.", e);
+        this.selectedModels = {};
+      }
     }
   }
 

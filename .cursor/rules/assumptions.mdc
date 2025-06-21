@@ -4,3 +4,5 @@ globs:
 alwaysApply: true
 ---
 Never make assumptions for functions or fields to exist without explicitly checking the file. Always make sure functions and fields that you use exist.
+Whenever you edit a file, get the latest version before, dont rely on your memory.
+

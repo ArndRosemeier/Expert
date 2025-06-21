@@ -1,4 +1,5 @@
-import { LoopHistoryItem, QualityCriterion } from './LoopOrchestrator';
+import { LoopHistoryItem } from './LoopOrchestrator';
+import { v4 as uuidv4 } from 'uuid';
 
 // A simple utility for generating unique IDs.
 // In a real-world scenario, a more robust library like UUID would be used.
@@ -11,32 +12,44 @@ export class DocumentNode {
     level: number;
     title: string;
     parentId: string | null;
-    children: DocumentNode[];
+    children: DocumentNode[] = [];
 
     // --- Content and Context Properties ---
-    content: string;
-    summary: string;
+    private _content: string = '';
+    summary: string = '';
     template: string[];
-    generationPrompt: string | null;
+    generationPrompt: string | null = null;
+    isPromptGenerating: boolean = false;
     
     // --- Legacy & Internal Properties ---
-    generationHistory: LoopHistoryItem[];
-    settingsProfileName: string;
+    generationHistory: LoopHistoryItem[] = [];
+    settingsProfileName: string = 'default';
+    isGenerating: boolean = false;
 
     constructor(level: number, title: string, parentId: string | null = null, template: string[] = []) {
-        this.id = generateId();
+        this.id = uuidv4();
         this.level = level;
         this.title = title;
         this.parentId = parentId;
-        this.children = [];
         this.template = template;
 
         // Initialize properties to empty/default values
-        this.content = '';
-        this.summary = '';
         this.generationPrompt = null;
+        this.isPromptGenerating = false;
         this.generationHistory = [];
         this.settingsProfileName = 'default';
+        this.isGenerating = false;
+        this.content = '';
+        this.summary = '';
+    }
+
+    get content(): string {
+        return this._content;
+    }
+
+    set content(newContent: string) {
+        this._content = newContent;
+        this.summary = ''; // Automatically clear summary when content changes.
     }
 
     /**
@@ -58,5 +71,27 @@ export class DocumentNode {
             return null;
         }
         return this.template[this.level + 1] || null;
+    }
+
+    /**
+     * Custom serializer for JSON.stringify.
+     * Ensures private fields and getters are correctly serialized.
+     */
+    toJSON() {
+        return {
+            id: this.id,
+            level: this.level,
+            title: this.title,
+            parentId: this.parentId,
+            children: this.children,
+            content: this._content, // Serialize private _content as 'content'
+            summary: this.summary,
+            template: this.template,
+            generationPrompt: this.generationPrompt,
+            isPromptGenerating: this.isPromptGenerating,
+            generationHistory: this.generationHistory,
+            settingsProfileName: this.settingsProfileName,
+            isGenerating: this.isGenerating,
+        };
     }
 } 

@@ -1,54 +1,43 @@
 import { OpenRouterClient } from './OpenRouterClient';
-import { type OrchestratorPrompts, defaultPrompts } from './PromptManager';
+import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
+import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { EventEmitter } from './EventEmitter';
-
-export interface QualityCriterion {
-    name: string;
-    goal: number;
-}
 
 export interface LoopInput {
     prompt: string;
     criteria: QualityCriterion[];
     maxIterations: number;
+    initialContent?: string;
+    response: string;
 }
 
 export interface Rating {
     criterion: string;
-    goal: number;
     score: number;
     justification: string;
+    goal: number;
 }
 
-export interface CreatorPayload {
-    prompt: string;
-    response: string;
+export interface RaterProgressPayload {
+    criterion: string;
+    rating: Rating;
 }
 
-export interface RatingPayload {
-    ratings: Rating[];
-}
+export type LoopProgressPayload = CreatorPayload | RaterProgressPayload | EditorPayload;
 
-export interface EditorPayload {
-    prompt: string;
-    advice: string;
-}
-
-export type ProgressUpdate = {
+export interface LoopProgress {
+    type: 'creator' | 'rater' | 'editor';
+    payload: LoopProgressPayload;
     iteration: number;
     maxIterations: number;
     step: number;
     totalStepsInIteration: number;
-} & (
-    | { type: 'creator', payload: CreatorPayload }
-    | { type: 'rating', payload: RatingPayload }
-    | { type: 'editor', payload: EditorPayload }
-);
+}
 
 export interface LoopHistoryItem {
     iteration: number;
-    type: ProgressUpdate['type'];
-    payload: ProgressUpdate['payload'];
+    type: 'creator' | 'rater' | 'editor';
+    payload: any; // Simplified for history
 }
 
 export interface LoopResult {
@@ -59,7 +48,8 @@ export interface LoopResult {
 }
 
 type OrchestratorEvents = {
-    'progress': [ProgressUpdate];
+    'progress': [progress: LoopProgress];
+    'error': [message: string];
 };
 
 export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
@@ -85,61 +75,108 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         let success = false;
         const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
 
-        for (let i = 0; i < maxIterations; i++) {
+        // Determine the initial prompt and response
+        let initialPrompt: string;
+        if (input.initialContent) {
+            currentResponse = input.initialContent;
+            // The "initial prompt" for a refinement is the refinement instruction itself.
+            initialPrompt = input.prompt; 
+            // We don't need to call the LLM for the first response, but we record it in history.
+            const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
+            history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
+            this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 0, totalStepsInIteration });
+        } else {
+            // For generation from scratch, we build the initial prompt from the template.
+            initialPrompt = this.prompts.content_generation_initial
+                .replace('{{prompt}}', input.prompt)
+                .replace('{{criteria}}', input.criteria.map(c => c.name).join(', '));
+            
+            try {
+                currentResponse = await this.client.chat('creator', initialPrompt);
+            } catch (e) {
+                throw new Error("The AI Creator failed to respond. Please check your API key and network connection.");
+            }
+            const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
+            history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
+            this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
+        }
+
+        for (let i = 1; i <= maxIterations; i++) {
             if (this.stopRequested) break;
             
-            // 1. Call Creator
-            const creatorPrompt = this.createCreatorPrompt(prompt, criteria, i > 0 ? history : undefined);
-            currentResponse = await this.client.chat('creator', creatorPrompt);
-            const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
-            history.push({ iteration: i + 1, type: 'creator', payload: creatorPayload });
-            this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i + 1, maxIterations, step: 1, totalStepsInIteration });
-
-            if (this.stopRequested) break;
-
-            // 2. Call Rater for each criterion
+            // 1. Call Rater for each criterion on the current response
             const ratingsFromAI: Rating[] = [];
             let allGoalsMet = true;
+            
+            this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+
             for (const criterion of criteria) {
                 if (this.stopRequested) break;
-                const ratingPrompt = this.createRatingPrompt(currentResponse, criterion, prompt);
-                const ratingResponse = await this.client.chat('rating', ratingPrompt);
-                const parsedRating = this.parseRatingResponse(ratingResponse, criterion);
-                ratingsFromAI.push(parsedRating);
 
-                if (parsedRating.score < criterion.goal) {
+                let ratingFromAI: Rating | null = null;
+                const maxRetries = 3;
+
+                for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                    const raterPrompt = this.createRaterPrompt(prompt, currentResponse, criterion);
+                    try {
+                        const ratingString = await this.client.chat('rater', raterPrompt);
+                        ratingFromAI = this.parseRating(ratingString, criterion);
+
+                        if (ratingFromAI !== null) {
+                            break; // Success
+                        }
+                        
+                        console.warn(`Rater response parsing failed on attempt ${attempt + 1} for criterion "${criterion.name}". Retrying...`);
+
+                    } catch(e) {
+                        console.warn(`Rater API call failed on attempt ${attempt + 1} for criterion "${criterion.name}". Retrying...`, e);
+                    }
+                }
+
+                // If after all retries, we still couldn't get a rating, throw the final error.
+                if (ratingFromAI === null) {
+                    throw new Error(`The AI Rater failed to provide a valid response for criterion "${criterion.name}" after ${maxRetries} retries.`);
+                }
+                
+                ratingsFromAI.push(ratingFromAI);
+                const ratingPayload: RaterProgressPayload = { criterion: criterion.name, rating: ratingFromAI };
+                this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+
+                if (ratingFromAI.score < criterion.goal) {
                     allGoalsMet = false;
                 }
             }
-            if (this.stopRequested) break;
             
-            // Sanitize payload for UI to ensure goal is always correct
-            const uiRatings = ratingsFromAI.map((r, i) => ({
-                criterion: criteria[i].name,
-                goal: criteria[i].goal,
-                score: r.score,
-                justification: r.justification,
-            }));
+            if (!allGoalsMet && i < maxIterations) {
+                // 2. If not success, call Editor
+                const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
+                const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
+                let editorAdvice: string;
+                try {
+                    editorAdvice = await this.client.chat('editor', editorPrompt);
+                } catch(e) {
+                    throw new Error("The AI Editor failed to provide feedback.");
+                }
+                const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
+                history.push({ iteration: i, type: 'editor', payload: editorPayload });
+                this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i, maxIterations, step: 3, totalStepsInIteration });
 
-            const ratingPayload: RatingPayload = { ratings: uiRatings };
-            history.push({ iteration: i + 1, type: 'rating', payload: ratingPayload });
-            this.emit('progress', { type: 'rating', payload: ratingPayload, iteration: i + 1, maxIterations, step: 2, totalStepsInIteration });
-            
-            // 3. Check for success
-            if (allGoalsMet) {
-                success = true;
+                // 3. Call creator again to get the improved response
+                const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
+                try {
+                    currentResponse = await this.client.chat('creator', creatorPrompt);
+                } catch (e) {
+                    throw new Error("The AI Creator failed to respond during revision. Please check your API key and network connection.");
+                }
+                const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
+                history.push({ iteration: i, type: 'creator', payload: creatorPayload });
+                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i, maxIterations, step: 1, totalStepsInIteration });
+
+            } else {
+                // If goals are met or it's the last iteration, break the loop.
+                success = allGoalsMet;
                 break;
             }
-
-            if (this.stopRequested) break;
-
-            // 4. If not success, call Editor
-            const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
-            const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
-            const editorAdvice = await this.client.chat('editor', editorPrompt);
-            const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
-            history.push({ iteration: i + 1, type: 'editor', payload: editorPayload });
-            this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i + 1, maxIterations, step: 3, totalStepsInIteration });
         }
 
         return {
@@ -160,7 +197,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const criteriaList = criteria.map(c => getShortCriterionName(c.name)).join('\\n- ');
 
         if (!history) {
-            return this.prompts.creator_initial
+            return this.prompts.content_generation_initial
                 .replace('{{prompt}}', originalPrompt)
                 .replace('{{criteria}}', criteriaList);
         }
@@ -171,25 +208,22 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const lastEditorAdvice = (lastEditorAdviceItem?.payload as EditorPayload)?.advice || 'No advice was given.';
         const lastResponse = (lastCreatorResponseItem?.payload as CreatorPayload)?.response;
 
-        return this.prompts.creator
+        return this.prompts.content_generation_iterative
             .replace('{{prompt}}', originalPrompt)
             .replace('{{lastResponse}}', lastResponse || '')
             .replace('{{editorAdvice}}', lastEditorAdvice)
             .replace('{{criteria}}', criteriaList);
     }
 
-    private createRatingPrompt(response: string, criterion: QualityCriterion, originalPrompt: string): string {
+    private createRaterPrompt(prompt: string, response: string, criterion: QualityCriterion): string {
         return this.prompts.rater
-            .replace('{{originalPrompt}}', originalPrompt)
+            .replace('{{originalPrompt}}', prompt)
             .replace('{{response}}', response)
             .replace('{{criterion}}', criterion.name)
             .replace('{{goal}}', String(criterion.goal));
     }
 
-    private parseRatingResponse(response: string, criterion: QualityCriterion): Rating {
-        let score = 1;
-        let justification = `Could not parse rater response. Raw response: \n---\n${response}`;
-
+    private parseRating(response: string, criterion: QualityCriterion): Rating | null {
         try {
             // First, try to find a JSON block within ```json ... ```
             let jsonString: string | null = null;
@@ -208,24 +242,25 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             
             if (jsonString) {
                 const parsed = JSON.parse(jsonString);
-                if (typeof parsed.score === 'number') {
-                    score = parsed.score;
-                }
-                if (typeof parsed.justification === 'string') {
-                    justification = parsed.justification;
+                // Basic validation of the parsed object
+                if (typeof parsed.score === 'number' && typeof parsed.justification === 'string') {
+                    return {
+                        criterion: criterion.name,
+                        goal: criterion.goal,
+                        score: parsed.score,
+                        justification: parsed.justification,
+                    };
                 }
             }
+
+            // If we get here, parsing failed or validation was unsuccessful.
+            console.warn('Could not parse rating response as valid JSON.', { response });
+            return null;
+
         } catch (error) {
-            console.warn('Could not parse rating response as JSON, using fallback.', { response, error });
+            console.warn('Could not parse rating response as JSON, exception thrown.', { response, error });
+            return null;
         }
-        
-        // Create a new, clean object to guarantee the structure.
-        return {
-            criterion: criterion.name,
-            goal: criterion.goal,
-            score: score,
-            justification: justification,
-        };
     }
 
     private createEditorPrompt(response: string, ratings: Rating[]): string {

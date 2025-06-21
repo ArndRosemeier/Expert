@@ -43,13 +43,6 @@ The application will be updated to a two-column layout, with a header bar and a 
         *   **Content:** A large, editable text area displaying the full generated text for the node.
         *   **Action Button:** A `[Generate]` button to trigger the content generation.
     *   **On-Demand Prompt View:** For any node that has had content or children generated, a mechanism (e.g., a "Show Prompt" button) will allow the user to see the exact prompt that was used.
-
-**3. Template Editor Modal**
-*   Launched by the `[Manage Templates]` button.
-*   Features a list of editable text inputs, each representing a level in the hierarchy.
-*   Includes an `[Add Layer]` button to add new levels and "Remove" buttons for each existing level.
-*   Provides `[Save]` and `[Cancel]` buttons.
-
 ---
 
 ## 1. Template Editor UI
