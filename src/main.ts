@@ -1101,6 +1101,7 @@ function handleSaveProfile() {
     }
 
     const currentProfile: SettingsProfile = {
+        prompt: '',
         maxIterations: parseInt(getElementById<HTMLInputElement>('modal-max-iterations').value, 10),
         criteria: getCriteriaFromUI(getElementById('modal-criteria-list')),
         selectedModels: modelSelector.getSelectedModels(),
@@ -1156,11 +1157,11 @@ function handleRunTests() {
         resultsDiv.innerHTML = '<h2>Running Tests...</h2>';
         openTestModal();
 
-        const testResults = await testRunner.runAllTests();
+        const testResults = testRunner.runPhase1Tests();
 
         resultsDiv.innerHTML = '<h2>Test Results</h2>';
         resultsDiv.innerHTML += testResults
-            .map(result => `<div class="test-result ${result.success ? 'passed' : 'failed'}">${result.success ? '✓' : '✗'} ${result.message}</div>`)
+            .map((result: TestResult) => `<div class="test-result ${result.success ? 'passed' : 'failed'}">${result.success ? '✓' : '✗'} ${result.message}</div>`)
             .join('');
     };
 
