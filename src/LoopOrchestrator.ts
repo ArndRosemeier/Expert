@@ -104,45 +104,38 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         for (let i = 1; i <= maxIterations; i++) {
             if (this.stopRequested) break;
             
-            // 1. Call Rater for each criterion on the current response
-            const ratingsFromAI: Rating[] = [];
-            let allGoalsMet = true;
-            
             this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
 
-            for (const criterion of criteria) {
-                if (this.stopRequested) break;
+            let ratingsFromAI: Rating[] | null = null;
+            const maxRetries = 3;
 
-                let ratingFromAI: Rating | null = null;
-                const maxRetries = 3;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
+                try {
+                    const ratingString = await this.client.chat('rater', raterPrompt);
+                    ratingsFromAI = this.parseAllRatings(ratingString, criteria);
 
-                for (let attempt = 0; attempt <= maxRetries; attempt++) {
-                    const raterPrompt = this.createRaterPrompt(prompt, currentResponse, criterion);
-                    try {
-                        const ratingString = await this.client.chat('rater', raterPrompt);
-                        ratingFromAI = this.parseRating(ratingString, criterion);
-
-                        if (ratingFromAI !== null) {
-                            break; // Success
-                        }
-                        
-                        console.warn(`Rater response parsing failed on attempt ${attempt + 1} for criterion "${criterion.name}". Retrying...`);
-
-                    } catch(e) {
-                        console.warn(`Rater API call failed on attempt ${attempt + 1} for criterion "${criterion.name}". Retrying...`, e);
+                    if (ratingsFromAI) {
+                        break; // Success
                     }
-                }
+                    console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
 
-                // If after all retries, we still couldn't get a rating, throw the final error.
-                if (ratingFromAI === null) {
-                    throw new Error(`The AI Rater failed to provide a valid response for criterion "${criterion.name}" after ${maxRetries} retries.`);
+                } catch(e) {
+                    console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
                 }
-                
-                ratingsFromAI.push(ratingFromAI);
-                const ratingPayload: RaterProgressPayload = { criterion: criterion.name, rating: ratingFromAI };
+            }
+
+            if (!ratingsFromAI) {
+                throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
+            }
+
+            let allGoalsMet = true;
+            for (const rating of ratingsFromAI) {
+                const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
                 this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
 
-                if (ratingFromAI.score < criterion.goal) {
+                const originalCriterion = criteria.find(c => c.name === rating.criterion);
+                if (originalCriterion && rating.score < originalCriterion.goal) {
                     allGoalsMet = false;
                 }
             }
@@ -215,46 +208,65 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             .replace('{{criteria}}', criteriaList);
     }
 
-    private createRaterPrompt(prompt: string, response: string, criterion: QualityCriterion): string {
+    private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
+        const criteriaObject = criteria.reduce((obj, c) => {
+            obj[c.name] = c.goal;
+            return obj;
+        }, {} as Record<string, number>);
+        
         return this.prompts.rater
             .replace('{{originalPrompt}}', prompt)
             .replace('{{response}}', response)
-            .replace('{{criterion}}', criterion.name)
-            .replace('{{goal}}', String(criterion.goal));
+            .replace('{{criteria}}', JSON.stringify(criteriaObject, null, 2));
     }
 
-    private parseRating(response: string, criterion: QualityCriterion): Rating | null {
+    private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
         try {
-            // First, try to find a JSON block within ```json ... ```
             let jsonString: string | null = null;
-            const jsonBlockMatch = response.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-            
+            const jsonBlockMatch = response.match(/```json\s*(\[[\s\S]*?\])\s*```/s);
+
             if (jsonBlockMatch && jsonBlockMatch[1]) {
                 jsonString = jsonBlockMatch[1];
             } else {
-                // If not in a block, find the first '{' and last '}'
-                const startIndex = response.indexOf('{');
-                const endIndex = response.lastIndexOf('}');
+                const startIndex = response.indexOf('[');
+                const endIndex = response.lastIndexOf(']');
                 if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
                     jsonString = response.substring(startIndex, endIndex + 1);
                 }
             }
-            
+
             if (jsonString) {
                 const parsed = JSON.parse(jsonString);
-                // Basic validation of the parsed object
-                if (typeof parsed.score === 'number' && typeof parsed.justification === 'string') {
-                    return {
-                        criterion: criterion.name,
-                        goal: criterion.goal,
-                        score: parsed.score,
-                        justification: parsed.justification,
-                    };
+                
+                if (Array.isArray(parsed)) {
+                    const ratings: Rating[] = [];
+                    const criteriaMap = new Map(criteria.map(c => [c.name, c]));
+
+                    for (const item of parsed) {
+                        const originalCriterion = criteriaMap.get(item.criterion);
+                        if (originalCriterion && typeof item.score === 'number' && typeof item.justification === 'string') {
+                            ratings.push({
+                                criterion: item.criterion,
+                                score: item.score,
+                                justification: item.justification,
+                                goal: originalCriterion.goal,
+                            });
+                        } else {
+                            console.warn('Parsed rating item is invalid or does not match an original criterion.', { item });
+                            return null;
+                        }
+                    }
+                    
+                    if (ratings.length === criteria.length) {
+                        return ratings;
+                    } else {
+                        console.warn('The number of returned ratings does not match the number of original criteria.');
+                        return null;
+                    }
                 }
             }
 
-            // If we get here, parsing failed or validation was unsuccessful.
-            console.warn('Could not parse rating response as valid JSON.', { response });
+            console.warn('Could not parse rating response as a valid JSON array.', { response });
             return null;
 
         } catch (error) {

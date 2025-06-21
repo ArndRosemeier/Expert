@@ -36,20 +36,31 @@ export const defaultPrompts: OrchestratorPrompts = {
         - {{criteria}}
     `.trim(),
     rater: `
-        You are a rating agent. Your response MUST be a single, valid JSON object and nothing else. Do not include any text before or after the JSON.
+        You are a rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
 
         The user's original prompt was: "{{originalPrompt}}".
         
-        Here is a response generated for that prompt: "{{response}}"
+        Here is a response generated for that prompt:
+        ---
+        {{response}}
+        ---
         
-        Please rate this response on the single criterion of "{{criterion}}".
-        The goal is to score at least {{goal}} out of 10.
+        Please rate this response against all of the following criteria.
+        The criteria are provided as a JSON object where each key is the criterion name and the value is the goal score out of 10.
         
-        Provide your response as a JSON object with two keys:
+        Criteria & Goals:
+        {{criteria}}
+        
+        Provide your response as a JSON array of objects. Each object must have three keys:
+        - "criterion": The name of the criterion being rated.
         - "score": A number from 1 to 10.
         - "justification": A brief explanation for your score, written in a neutral, objective tone.
 
-        Example: {"score": 8, "justification": "The response is clear and well-structured."}
+        Example:
+        [
+            { "criterion": "Clarity & Conciseness", "score": 8, "justification": "The response is clear and well-structured." },
+            { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." }
+        ]
     `.trim(),
     editor: `
         A response was generated: "{{response}}"
@@ -138,7 +149,7 @@ Based on all of this information, please write a detailed, one-paragraph prompt 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     content_generation_initial: ['prompt', 'criteria'],
     content_generation_iterative: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
-    rater: ['originalPrompt', 'response', 'criterion', 'goal'],
+    rater: ['originalPrompt', 'response', 'criteria'],
     editor: ['response', 'ratings'],
     summarize_system: ['content'],
     expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content'],
@@ -153,7 +164,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     content_generation_iterative: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback.",
     content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document.",
     branch_content_generation_user: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline.",
-    rater: "The system prompt for the 'Rater' AI, which scores the generated content against a single criterion.",
+    rater: "The system prompt for the 'Rater' AI. It scores the generated content against ALL provided criteria in a single call.",
     editor: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings.",
     summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",

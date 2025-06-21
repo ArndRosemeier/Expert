@@ -10,7 +10,7 @@ export interface RatingPayload {
 export interface EditorPayload {
     prompt:string;
     advice: string;
-}
+} 
 
 export interface QualityCriterion {
     name: string;
