@@ -3,6 +3,10 @@ import { OpenRouterClient } from './OpenRouterClient';
 import { LoopOrchestrator, type LoopInput, type QualityCriterion, type Rating, type LoopHistoryItem } from './LoopOrchestrator';
 import { PromptManager, defaultPrompts, type OrchestratorPrompts } from './PromptManager';
 import { SettingsManager, type SettingsProfile } from './SettingsManager';
+import { DocumentNode } from './DocumentNode';
+import { TestRunner, type TestResult } from './TestRunner';
+import { ProjectManager } from './ProjectManager';
+import { ProjectTemplate } from './ProjectTemplate';
 
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -13,6 +17,7 @@ if (urlParams.get('clean') === 'true') {
     localStorage.removeItem('expert_app_prompts');
     localStorage.removeItem('expert_app_settings_profiles');
     localStorage.removeItem('expert_app_settings_last_profile');
+    localStorage.removeItem('expert_app_current_project');
     
     // Redirect to the same page without the query parameter
     window.location.href = window.location.pathname;
@@ -42,14 +47,18 @@ function getElementById<T extends HTMLElement>(id: string): T {
 
 // --- DOM Elements ---
 const mainAppContainer = getElementById<HTMLElement>('main-app');
-const configureModelsBtn = getElementById<HTMLButtonElement>('configure-models-btn');
-const configurePromptsBtn = getElementById<HTMLButtonElement>('configure-prompts-btn');
+const settingsBtn = getElementById<HTMLButtonElement>('settingsBtn');
 const modalContainer = getElementById<HTMLElement>('modal-container');
 const modalContent = getElementById<HTMLElement>('modal-content');
-const promptModalContainer = getElementById<HTMLElement>('prompt-modal-container');
-const promptModalContent = getElementById<HTMLElement>('prompt-modal-content');
+const testModalContainer = getElementById<HTMLElement>('test-modal-container');
+const testModalContent = getElementById<HTMLElement>('test-modal-content');
+const runTestsBtn = getElementById<HTMLButtonElement>('runTestsBtn');
+const newProjectBtn = getElementById<HTMLButtonElement>('newProjectBtn');
+const newProjectModalContainer = getElementById<HTMLElement>('new-project-modal-container');
+const newProjectModalContent = getElementById<HTMLElement>('new-project-modal-content');
 
-if (!mainAppContainer || !configureModelsBtn || !modalContainer || !modalContent || !configurePromptsBtn || !promptModalContainer || !promptModalContent) {
+
+if (!mainAppContainer || !settingsBtn || !modalContainer || !modalContent || !testModalContainer || !testModalContent || !runTestsBtn || !newProjectBtn || !newProjectModalContainer || !newProjectModalContent) {
     throw new Error('Could not find required DOM elements');
 }
 
@@ -63,6 +72,26 @@ let orchestratorPrompts: OrchestratorPrompts = { ...defaultPrompts };
 let loopHistory: LoopHistoryItem[] = [];
 let viewedIteration = 0;
 let isAppRendered = false;
+let currentProject: ProjectManager | null = null;
+
+// --- Hardcoded Project Templates ---
+const novelTemplate = new ProjectTemplate(
+    "Standard Novel",
+    ['Book', 'Act', 'Chapter'],
+    ['Main Outline', 'Character Bios']
+);
+
+const manualTemplate = new ProjectTemplate(
+    "Technical Manual",
+    ['Manual', 'Section', 'Topic'],
+    ['Glossary']
+);
+
+const projectTemplates: Record<string, ProjectTemplate> = {
+    "novel": novelTemplate,
+    "manual": manualTemplate,
+};
+
 
 const defaultProseCriteria: QualityCriterion[] = [
     { name: "Clarity & Conciseness. The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.", goal: 8 },
@@ -79,9 +108,8 @@ const defaultProseCriteria: QualityCriterion[] = [
 
 // --- Functions ---
 function openModal() {
-    if (modalContainer && modelSelector) {
-        modelSelector.loadFromStorage();
-        modelSelector.update();
+    if (modalContainer) {
+        renderSettingsModal();
         modalContainer.style.display = 'flex';
     }
 }
@@ -92,16 +120,86 @@ function closeModal() {
     }
 }
 
-function openPromptModal() {
-    if (promptModalContainer) {
-        promptModalContainer.style.display = 'flex';
+function openTestModal() {
+    if (testModalContainer) {
+        testModalContainer.style.display = 'flex';
     }
 }
 
-function closePromptModal() {
-    if (promptModalContainer) {
-        promptModalContainer.style.display = 'none';
+function closeTestModal() {
+    if (testModalContainer) {
+        testModalContainer.style.display = 'none';
     }
+}
+
+function openNewProjectModal() {
+    renderNewProjectModal();
+    if (newProjectModalContainer) {
+        newProjectModalContainer.style.display = 'flex';
+    }
+}
+
+function closeNewProjectModal() {
+    if (newProjectModalContainer) {
+        newProjectModalContainer.style.display = 'none';
+    }
+}
+
+function renderNewProjectModal() {
+    newProjectModalContent.innerHTML = `
+        <h2>Create New Project</h2>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="project-title-input">Project Title</label>
+            <input type="text" id="project-title-input" placeholder="e.g., 'My Sci-Fi Epic'">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="project-template-select">Project Template</label>
+            <select id="project-template-select">
+                <option value="novel">Standard Novel</option>
+                <option value="manual">Technical Manual</option>
+            </select>
+        </div>
+        <div class="button-group" style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button id="cancel-create-project-btn" class="button button-secondary">Cancel</button>
+            <button id="confirm-create-project-btn" class="button button-primary">Create</button>
+        </div>
+    `;
+
+    getElementById('confirm-create-project-btn').addEventListener('click', () => {
+        const title = getElementById<HTMLInputElement>('project-title-input').value;
+        const templateKey = getElementById<HTMLSelectElement>('project-template-select').value;
+        const template = projectTemplates[templateKey];
+
+        if (!title.trim()) {
+            alert('Project Title cannot be empty.');
+            return;
+        }
+
+        if (!template) {
+            alert('Invalid project template selected.');
+            return;
+        }
+
+        try {
+            if (!orchestrator || !settingsManager) {
+                alert("Core services not configured. Cannot create project.");
+                return;
+            }
+            const project = new ProjectManager(title, template, orchestrator, settingsManager);
+            const projectJson = project.save();
+            localStorage.setItem('expert_app_current_project', projectJson); 
+            console.log('Project saved:', project.projectTitle);
+            currentProject = project;
+            
+            closeNewProjectModal();
+            renderProjectUI(project);
+        } catch (error) {
+            console.error("Failed to create or save project:", error);
+            alert("An error occurred while creating the project. See console for details.");
+        }
+    });
+
+    getElementById('cancel-create-project-btn').addEventListener('click', closeNewProjectModal);
 }
 
 function reconfigureCoreServices(models: Record<string, string>) {
@@ -110,45 +208,8 @@ function reconfigureCoreServices(models: Record<string, string>) {
 
     const apiKey = modelSelector?.getApiKey();
     if (apiKey) {
-        openRouterClient = new OpenRouterClient(apiKey, selectedModels);
-        orchestrator = new LoopOrchestrator(openRouterClient, orchestratorPrompts);
-        
-        // Listen for progress updates from the orchestrator
-        orchestrator.on('progress', (update) => {
-            const { type, payload, iteration, maxIterations, step, totalStepsInIteration } = update;
-
-            // Update progress bars
-            const iterationProgressBar = getElementById<HTMLDivElement>('iteration-progress-bar');
-            const stepProgressBar = getElementById<HTMLDivElement>('step-progress-bar');
-            const iterationProgress = (iteration / maxIterations) * 100;
-            const stepProgress = (step / totalStepsInIteration) * 100;
-            
-            iterationProgressBar.style.width = `${iterationProgress}%`;
-            iterationProgressBar.textContent = `Iteration: ${iteration} / ${maxIterations}`;
-            
-            const stepType = type.charAt(0).toUpperCase() + type.slice(1);
-            stepProgressBar.style.width = `${stepProgress}%`;
-            stepProgressBar.textContent = `Step: ${step} of ${totalStepsInIteration} (${stepType})`;
-
-            if (type === 'creator') {
-                const container = getElementById<HTMLElement>('live-response-container');
-                const element = getElementById<HTMLParagraphElement>('live-response');
-                container.style.display = 'block';
-                element.innerHTML = payload.response.replace(/\n/g, '<br>');
-            } else if (type === 'rating') {
-                const container = getElementById<HTMLElement>('ratings-container');
-                const element = getElementById<HTMLElement>('ratings');
-                console.log('Received ratings payload for rendering:', JSON.stringify(payload.ratings, null, 2));
-                container.style.display = 'block';
-                element.innerHTML = renderRatings(payload.ratings);
-            } else if (type === 'editor') {
-                const container = getElementById<HTMLElement>('editor-advice-container');
-                const element = getElementById<HTMLParagraphElement>('editor-advice');
-                container.style.display = 'block';
-                element.innerHTML = payload.advice.replace(/\n/g, '<br>');
-            }
-        });
-
+        const client = new OpenRouterClient(apiKey, selectedModels);
+        orchestrator = new LoopOrchestrator(client, orchestratorPrompts);
         console.log('OpenRouter client and Orchestrator configured.');
     }
 }
@@ -158,8 +219,24 @@ function onModelsSelected(models: Record<string, string>) {
     
     closeModal();
     if (!isAppRendered) {
-        renderMainApp();
-        mainAppContainer.style.display = 'block';
+        // If settings are complete for the first time, decide what to render.
+        const savedProjectJson = localStorage.getItem('expert_app_current_project');
+        if (savedProjectJson) {
+            try {
+                if (!orchestrator || !settingsManager) {
+                    throw new Error("Orchestrator not available to load project.");
+                }
+                currentProject = ProjectManager.load(savedProjectJson, orchestrator, settingsManager);
+                console.log('Loaded project from storage:', currentProject.projectTitle);
+                renderProjectUI(currentProject);
+            } catch (e) {
+                console.error("Failed to load project, starting fresh.", e);
+                localStorage.removeItem('expert_app_current_project');
+                renderMainApp();
+            }
+        } else {
+            renderMainApp();
+        }
         isAppRendered = true;
     }
 }
@@ -169,7 +246,228 @@ function onPromptsSaved(prompts: OrchestratorPrompts) {
     if (openRouterClient) {
         orchestrator = new LoopOrchestrator(openRouterClient, orchestratorPrompts);
     }
-    closePromptModal();
+    // This function is no longer needed as the prompt modal is removed
+    // closePromptModal();
+}
+
+function renderProjectUI(project: ProjectManager) {
+    mainAppContainer.innerHTML = `
+        <style>
+            .project-grid {
+                display: grid;
+                grid-template-columns: 300px 1fr;
+                gap: 2rem;
+                height: calc(100vh - 120px); /* Adjust for header height */
+            }
+            .tree-panel, .detail-panel {
+                background-color: white;
+                padding: 1.5rem;
+                border-radius: 12px;
+                box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
+                overflow-y: auto;
+            }
+            .tree-panel h2, .detail-panel h2 {
+                margin-top: 0;
+                font-size: 1.25rem;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 0.75rem;
+                margin-bottom: 1rem;
+            }
+            .project-tree-list, .project-tree-list ul {
+                list-style: none;
+                padding-left: 1rem;
+            }
+            .project-tree-list li {
+                padding: 0.25rem 0.5rem;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .project-tree-list li:hover {
+                background-color: var(--bg-subtle);
+            }
+            .selected-node {
+                background-color: var(--primary-color) !important;
+                color: white;
+            }
+            .node-settings-bar {
+                display: flex;
+                gap: 1rem;
+                align-items: flex-end;
+                margin-bottom: 1rem;
+            }
+            .node-settings-bar .form-group {
+                flex-grow: 1;
+            }
+            .criterion > .criterion-text-display {
+                flex-grow: 1;
+                padding: 0.75rem 0.5rem;
+                cursor: text;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                border: 1px solid transparent;
+            }
+            .large-textarea {
+                width: 100%;
+                min-height: 120px;
+                resize: vertical;
+            }
+            .node-content {
+                background-color: var(--bg-subtle);
+                padding: 1rem;
+                border-radius: 8px;
+                min-height: 100px;
+                white-space: pre-wrap;
+            }
+        </style>
+        <div class="project-grid">
+            <div id="project-tree-container" class="tree-panel">
+                <h2>${project.projectTitle}</h2>
+                <div id="project-tree"></div>
+            </div>
+            <div id="project-detail-container" class="detail-panel">
+                <h2>Details</h2>
+                <div id="project-details">Select a node to see its details.</div>
+            </div>
+        </div>
+    `;
+
+    // Render the actual tree structure (will be implemented next)
+    const treeContainer = getElementById('project-tree');
+    renderProjectTree(project.rootNode, treeContainer);
+
+    treeContainer.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'LI') {
+            const nodeId = target.dataset.nodeId;
+            if (nodeId) {
+                // Clear previous selection
+                document.querySelectorAll('.project-tree-list .selected-node').forEach(el => {
+                    el.classList.remove('selected-node');
+                });
+                // Add new selection
+                target.classList.add('selected-node');
+                renderNodeDetails(project, nodeId);
+            }
+        }
+    });
+}
+
+function renderNodeDetails(project: ProjectManager, nodeId: string) {
+    const node = project.findNodeById(nodeId);
+    if (!node) {
+        getElementById('project-details').innerHTML = 'Node not found.';
+        return;
+    }
+
+    const detailsContainer = getElementById('project-details');
+    const profileNames = settingsManager?.getProfileNames() || [];
+    
+    // Create dropdown options
+    const profileOptions = profileNames.map(name => 
+        `<option value="${name}" ${name === node.settingsProfileName ? 'selected' : ''}>${name}</option>`
+    ).join('');
+
+    detailsContainer.innerHTML = `
+        <h3>${node.title}</h3>
+        <div class="node-settings-bar">
+            <div class="form-group">
+                <label for="node-profile-select">Generation Profile</label>
+                <select id="node-profile-select">
+                    ${profileOptions}
+                </select>
+            </div>
+            <button id="manage-profiles-btn" class="button button-secondary">Manage Profiles</button>
+        </div>
+        <div>
+            <label for="node-prompt">Generation Prompt:</label>
+            <textarea id="node-prompt" class="large-textarea" placeholder="Enter the prompt for generating this node's content...">${node.prompt}</textarea>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <button id="generate-node-btn" class="button button-primary">Generate</button>
+        </div>
+        <hr>
+        <h4>Generated Content:</h4>
+        <div id="node-content-display" class="node-content">${node.content.replace(/\\n/g, '<br>')}</div>
+    `;
+    
+    // --- Event Listeners for the new UI ---
+    
+    getElementById('manage-profiles-btn').addEventListener('click', openModal);
+
+    const profileSelect = getElementById<HTMLSelectElement>('node-profile-select');
+    profileSelect.addEventListener('change', () => {
+        node.settingsProfileName = profileSelect.value;
+        // Maybe save the project here implicitly? For now, it's just in memory.
+        console.log(`Node ${node.id} profile changed to: ${node.settingsProfileName}`);
+    });
+
+    getElementById('generate-node-btn').addEventListener('click', () => {
+        const promptText = getElementById<HTMLTextAreaElement>('node-prompt').value;
+        
+        if (!promptText) {
+            alert('Please enter a prompt.');
+            return;
+        }
+        
+        const generateBtn = getElementById<HTMLButtonElement>('generate-node-btn');
+        const contentDisplay = getElementById<HTMLDivElement>('node-content-display');
+
+        // --- Event-driven UI updates ---
+        const onProgress = (payload: { nodeId: string, content: string }) => {
+            if (payload.nodeId === nodeId) {
+                contentDisplay.innerHTML = payload.content.replace(/\\n/g, '<br>');
+            }
+        };
+
+        const onComplete = (payload: { nodeId: string, success: boolean, node?: DocumentNode, error?: any }) => {
+            if (payload.nodeId === nodeId) {
+                generateBtn.textContent = 'Generate';
+                generateBtn.removeAttribute('disabled');
+                
+                if (!payload.success) {
+                    console.error("Generation failed:", payload.error);
+                    alert(`Failed to generate content: ${payload.error}`);
+                }
+                
+                // Clean up listeners
+                project.off('nodeGenerationProgress', onProgress);
+                project.off('nodeGenerationComplete', onComplete);
+            }
+        };
+
+        project.on('nodeGenerationProgress', onProgress);
+        project.on('nodeGenerationComplete', onComplete);
+
+        generateBtn.textContent = 'Generating...';
+        generateBtn.setAttribute('disabled', 'true');
+        
+        // This now runs in the background and communicates via events
+        project.generateNodeContent(nodeId, promptText);
+    });
+}
+
+function renderProjectTree(rootNode: DocumentNode, container: HTMLElement) {
+    container.innerHTML = ''; // Clear previous tree
+    const tree = document.createElement('ul');
+    tree.className = 'project-tree-list';
+
+    function buildTree(node: DocumentNode, parentElement: HTMLElement) {
+        const listItem = document.createElement('li');
+        listItem.textContent = node.title;
+        listItem.dataset.nodeId = String(node.id);
+        
+        if (node.children.length > 0) {
+            const childrenList = document.createElement('ul');
+            node.children.forEach(child => buildTree(child, childrenList));
+            listItem.appendChild(childrenList);
+        }
+        
+        parentElement.appendChild(listItem);
+    }
+
+    buildTree(rootNode, tree);
+    container.appendChild(tree);
 }
 
 function renderMainApp() {
@@ -317,44 +615,64 @@ function renderMainApp() {
             .rating-score { font-weight: 700; font-size: 1.25rem; }
             .rating-reasoning { margin: 0; color: var(--secondary-color); font-size: 0.875rem; }
 
+            .settings-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            .settings-column {
+                display: flex;
+                flex-direction: column;
+                min-height: 300px; /* Ensure columns have some base height */
+            }
+            #modal-criteria-list {
+                flex-grow: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            .criterion > .criterion-text-display, 
+            .criterion > textarea {
+                flex-grow: 1;
+                padding: 0.75rem;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                background-color: var(--input-bg);
+                line-height: 1.5;
+                box-sizing: border-box;
+            }
+            .criterion > .criterion-text-display {
+                cursor: text;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .criterion > textarea {
+                display: none; /* Hidden by default */
+                resize: vertical;
+                min-height: 80px;
+            }
+            .modal-body {
+                padding: 1.5rem 2rem;
+            }
+            .modal-content {
+                width: 80vw;
+                max-width: 1200px;
+            }
+
         </style>
         
         <div class="grid-container">
             <div class="control-panel">
-                <h2>Settings & Controls</h2>
-
-                <div class="settings-bar">
-                    <select id="settings-profile-select"></select>
-                    <input type="text" id="settings-profile-name" placeholder="New Profile Name"/>
-                    <button id="settings-save-btn" class="button button-secondary">Save</button>
-                    <button id="settings-delete-btn" class="button button-secondary">Delete</button>
-                </div>
+                <h2>Controls</h2>
         
                 <div>
                     <label for="prompt">Your Prompt:</label>
-                    <textarea id="prompt"></textarea>
-                </div>
-                
-                <hr>
-
-                <h3>Quality Criteria</h3>
-                <div id="criteria-list"></div>
-                <div class="criteria-actions">
-                    <button id="add-criterion-btn" class="button button-secondary">Add Criterion</button>
-                    <button id="default-criteria-btn" class="button button-secondary">Load Defaults</button>
-                    <button id="copy-criteria-btn" class="button button-secondary">Copy</button>
-                    <button id="paste-criteria-btn" class="button button-secondary">Paste</button>
+                    <textarea id="prompt" placeholder="Enter the high-level goal for your text..."></textarea>
                 </div>
                 
                 <hr>
         
-                <div>
-                    <label for="max-iterations">Max Iterations:</label>
-                    <input type="number" id="max-iterations" min="1" max="20" value="5" style="max-width: 100px;">
-                </div>
-                
-                <hr>
-
                 <button id="start-loop-btn" class="button button-primary" style="width: 100%;">Start Loop</button>
                 <button id="stop-loop-btn" class="button button-primary" style="display: none; width: 100%; background-color: #dc2626;">Stop Loop</button>
                 
@@ -393,51 +711,12 @@ function renderMainApp() {
         </div>
     `;
 
-    // --- Settings Profile Event Listeners ---
-    document.getElementById('settings-save-btn')?.addEventListener('click', handleSaveProfile);
-    document.getElementById('settings-delete-btn')?.addEventListener('click', handleDeleteProfile);
-    document.getElementById('settings-profile-select')?.addEventListener('change', handleLoadProfile);
-    
-    // --- Other Listeners ---
-    document.getElementById('add-criterion-btn')?.addEventListener('click', () => {
-        const list = document.getElementById('criteria-list');
-        if (!list) return;
-
-        const newItem = createCriterionElement();
-        list.appendChild(newItem);
-        
-        const textarea = newItem.querySelector('textarea') as HTMLTextAreaElement;
-        textarea?.focus();
-    });
-
-    document.getElementById('copy-criteria-btn')?.addEventListener('click', handleCopyCriteria);
-    document.getElementById('paste-criteria-btn')?.addEventListener('click', handlePasteCriteria);
-    document.getElementById('default-criteria-btn')?.addEventListener('click', handleLoadDefaultCriteria);
-
-    document.getElementById('criteria-list')?.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).classList.contains('remove-criterion-btn')) {
-            (e.target as HTMLElement).closest('.criterion')?.remove();
-        }
-    });
-
     document.getElementById('start-loop-btn')?.addEventListener('click', handleStartLoop);
     document.getElementById('stop-loop-btn')?.addEventListener('click', () => {
         if (orchestrator) {
             orchestrator.requestStop();
         }
     });
-
-    getElementById('iteration-slider')?.addEventListener('input', (e) => {
-        const target = e.target as HTMLInputElement;
-        viewedIteration = parseInt(target.value, 10);
-        renderDataForIteration(viewedIteration);
-    });
-
-    loadAndApplyLastUsedProfile();
-
-    if (getCriteriaFromUI().length === 0) {
-        renderCriteria(defaultProseCriteria);
-    }
 }
 
 function autoResizeTextarea(this: HTMLTextAreaElement) {
@@ -446,56 +725,45 @@ function autoResizeTextarea(this: HTMLTextAreaElement) {
 }
 
 function getShortCriterionName(fullName: string): string {
-    const stopIndex = fullName.indexOf('.');
-    return stopIndex > 0 ? fullName.substring(0, stopIndex) : fullName;
+    return fullName.split('.')[0];
 }
 
-function getCriteriaFromUI(): QualityCriterion[] {
-    const criteriaNodes = document.querySelectorAll('#criteria-list .criterion');
+function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
     const criteria: QualityCriterion[] = [];
-    criteriaNodes.forEach(node => {
-        const nameInput = node.querySelector('textarea') as HTMLTextAreaElement;
-        const goalInput = node.querySelector('input[type="number"]') as HTMLInputElement;
-
-        let name = '';
-        const isActiveElement = document.activeElement === nameInput;
-
-        if (isActiveElement) {
-            // If the textarea is being edited, its value is the full text.
-            name = nameInput.value;
-        } else {
-            // Otherwise, the full text is in the dataset.
-            name = nameInput.dataset.fullText || nameInput.value;
-        }
-
-        if (name.trim() && goalInput?.value) {
-            criteria.push({
-                name: name.trim(),
-                goal: parseInt(goalInput.value, 10)
-            });
+    const criterionElements = container.querySelectorAll('.criterion');
+    criterionElements.forEach(el => {
+        const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
+        const input = el.querySelector<HTMLInputElement>('input[type="number"]');
+        if (textarea && input) {
+            const name = textarea.value;
+            const goal = parseInt(input.value, 10);
+            if (name && !isNaN(goal)) {
+                criteria.push({ name, goal });
+            }
         }
     });
     return criteria;
 }
 
 function getRatingColor(rating: number): string {
-    if (rating >= 8) return '#10b981'; // green-500
-    if (rating >= 5) return '#f59e0b'; // amber-500
-    return '#ef4444'; // red-500
+    const hue = (rating / 10) * 120; // 0=red, 10=green
+    return `hsl(${hue}, 70%, 50%)`;
 }
 
 function renderRatings(ratings: Rating[]): string {
+    if (!ratings) {
+        return '<p>No ratings available.</p>';
+    }
+
     return `
         <ul class="rating-list">
-            ${ratings.map(item => `
+            ${ratings.map(r => `
                 <li class="rating-item">
                     <div class="rating-header">
-                        <span class="rating-name">${getShortCriterionName(item.criterion)} (Goal: ${item.goal})</span>
-                        <span class="rating-score" style="color: ${getRatingColor(item.score)}">
-                            ${item.score} / 10
-                        </span>
+                        <span class="rating-name">${getShortCriterionName(r.criterion)} (Goal: ${r.goal})</span>
+                        <span class="rating-score" style="color: ${getRatingColor(r.score)}">${r.score}/10</span>
                     </div>
-                    <p class="rating-reasoning">${(item.justification || 'No reasoning provided.').replace(/\n/g, '<br>')}</p>
+                    <p class="rating-reasoning">${r.justification}</p>
                 </li>
             `).join('')}
         </ul>
@@ -503,43 +771,42 @@ function renderRatings(ratings: Rating[]): string {
 }
 
 function isCriteriaArray(data: any): data is QualityCriterion[] {
-    return (
-        Array.isArray(data) &&
-        data.every(
-            (item) =>
-                typeof item === 'object' &&
-                item !== null &&
-                'name' in item &&
-                typeof item.name === 'string' &&
-                'goal' in item &&
-                typeof item.goal === 'number'
-        )
+    return Array.isArray(data) && data.every(item =>
+        typeof item === 'object' &&
+        item !== null &&
+        'name' in item &&
+        'goal' in item &&
+        typeof item.name === 'string' &&
+        typeof item.goal === 'number'
     );
 }
 
 function findBestFailedIteration(history: LoopHistoryItem[]): number {
     let bestIteration = -1;
-    let minDeviation = Infinity;
+    let highestScore = -1;
 
-    const iterations = [...new Set(history.map(h => h.iteration))];
+    // Get unique iteration numbers that have ratings
+    const ratedIterations = [...new Set(history.filter(h => h.type === 'rating').map(h => h.iteration))];
 
-    for (const iter of iterations) {
-        const ratingHistoryItem = history.find(h => h.iteration === iter && h.type === 'rating');
-        if (!ratingHistoryItem) continue;
+    for (const iter of ratedIterations) {
+        // Find the rating payload for this iteration
+        const ratingItem = history.find(h => h.iteration === iter && h.type === 'rating');
+        if (!ratingItem) continue;
 
-        const ratings = (ratingHistoryItem.payload as RatingPayload).ratings;
-        const totalDeviation = ratings.reduce((acc, r) => {
-            const deviation = r.goal - r.score;
-            return acc + (deviation > 0 ? deviation : 0);
-        }, 0);
+        const ratings = (ratingItem.payload as RatingPayload).ratings;
+        const totalScore = ratings.reduce((acc, r) => acc + r.score, 0);
 
-        if (totalDeviation < minDeviation) {
-            minDeviation = totalDeviation;
+        // Check if any goal was missed in this iteration
+        const success = ratings.every(r => r.score >= r.goal);
+
+        if (!success && totalScore > highestScore) {
+            highestScore = totalScore;
             bestIteration = iter;
         }
     }
-
-    return bestIteration > 0 ? bestIteration : (iterations.pop() || 1);
+    
+    // Fallback to the last iteration if no failed one is clearly "best"
+    return bestIteration > 0 ? bestIteration : ratedIterations.pop() || 1;
 }
 
 function renderDataForIteration(iteration: number) {
@@ -597,7 +864,7 @@ async function handleStartLoop() {
     getElementById<HTMLDivElement>('history-controls').style.display = 'none';
 
     const promptEl = getElementById<HTMLTextAreaElement>('prompt');
-    const criteria = getCriteriaFromUI();
+    const criteria = getCriteriaFromUI(getElementById('criteria-list'));
 
     if (!promptEl.value.trim()) {
         alert('Please enter a prompt before starting the loop.');
@@ -609,17 +876,15 @@ async function handleStartLoop() {
         return;
     }
 
-    const maxIterationsEl = getElementById<HTMLInputElement>('max-iterations');
-    
     const loopInput: LoopInput = {
         prompt: promptEl.value,
         criteria: criteria,
-        maxIterations: parseInt(maxIterationsEl.value, 10) || 5,
+        maxIterations: parseInt((getElementById('max-iterations') as HTMLInputElement).value, 10) || 5,
     };
 
     const startBtn = getElementById<HTMLButtonElement>('start-loop-btn');
     const stopBtn = getElementById<HTMLButtonElement>('stop-loop-btn');
-    
+
     startBtn.style.display = 'none';
     stopBtn.style.display = 'inline-block';
 
@@ -642,7 +907,7 @@ async function handleStartLoop() {
     
     finalResultContainer.style.display = 'block';
     finalResultContainer.innerHTML = 'Looping...';
-
+    
     try {
         const result = await orchestrator.runLoop(loopInput);
         finalResultContainer.style.display = 'none'; // Hide the "Looping..." message
@@ -681,145 +946,139 @@ async function handleStartLoop() {
     }
 }
 
-function renderCriteria(criteria: QualityCriterion[]) {
-    const list = getElementById<HTMLElement>('criteria-list');
-    list.innerHTML = '';
-    
+function renderCriteria(container: HTMLElement, criteria: QualityCriterion[]) {
+    container.innerHTML = '';
     criteria.forEach(c => {
-        const newItem = createCriterionElement(c);
-        list.appendChild(newItem);
+        const criterionElement = createCriterionElement(c);
+        container.appendChild(criterionElement);
+        const textarea = criterionElement.querySelector('textarea');
+        if (textarea) {
+            autoResizeTextarea.call(textarea);
+        }
     });
 }
 
 function createCriterionElement(criterion?: QualityCriterion): HTMLDivElement {
-    const newItem = document.createElement('div');
-    newItem.className = 'criterion';
-    newItem.innerHTML = `
-        <textarea placeholder="Criterion Name. Description..." rows="1"></textarea>
-        <input type="number" min="1" max="10" placeholder="Goal">
-        <button class="remove-criterion-btn" title="Remove">&times;</button>
-    `;
+    const div = document.createElement('div');
+    div.className = 'criterion';
 
-    const textarea = newItem.querySelector('textarea') as HTMLTextAreaElement;
-    const goalInput = newItem.querySelector('input[type="number"]') as HTMLInputElement;
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = "e.g., 'Clarity and conciseness'";
+    textarea.value = criterion?.name || '';
+    textarea.addEventListener('input', autoResizeTextarea);
+    textarea.addEventListener('focus', function() { this.selectionStart = this.selectionEnd = this.value.length; });
 
-    if (criterion) {
-        textarea.value = getShortCriterionName(criterion.name);
-        textarea.dataset.fullText = criterion.name;
-        goalInput.value = String(criterion.goal);
-    }
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = '10';
+    input.value = criterion?.goal.toString() || '8';
     
-    textarea.addEventListener('focus', () => {
-        textarea.value = textarea.dataset.fullText || '';
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-criterion-btn';
+    removeBtn.innerHTML = '&times;';
+    removeBtn.title = 'Remove criterion';
+
+    const textDisplay = document.createElement('div');
+    textDisplay.className = 'criterion-text-display';
+
+    const textareaContainer = document.createElement('div');
+    textareaContainer.style.flexGrow = '1';
+    textareaContainer.style.position = 'relative';
+
+    const updateDisplay = (text: string) => {
+        textDisplay.textContent = text.split('.')[0] + (text.includes('.') && text.split('.')[0] !== text ? '.' : '');
+    };
+    
+    updateDisplay(criterion?.name || "New Criterion...");
+    textarea.value = criterion?.name || "New Criterion...";
+    textarea.style.display = 'none';
+
+    textDisplay.addEventListener('click', () => {
+        textDisplay.style.display = 'none';
+        textarea.style.display = 'block';
+        textarea.focus();
         autoResizeTextarea.call(textarea);
     });
 
     textarea.addEventListener('blur', () => {
-        const fullText = textarea.value.trim();
-        if (fullText) {
-            textarea.dataset.fullText = fullText;
-            textarea.value = getShortCriterionName(fullText);
-        } else {
-            delete textarea.dataset.fullText;
-            textarea.value = '';
-        }
-        textarea.style.height = 'auto';
+        textarea.style.display = 'none';
+        textDisplay.style.display = 'block';
+        updateDisplay(textarea.value);
     });
-
-    textarea.addEventListener('input', autoResizeTextarea);
-
-    textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            (e.target as HTMLElement).blur();
-        }
-    });
-
-    newItem.querySelector('.remove-criterion-btn')?.addEventListener('click', () => newItem.remove());
     
-    return newItem;
+    textareaContainer.appendChild(textDisplay);
+    textareaContainer.appendChild(textarea);
+    
+    div.appendChild(textareaContainer);
+    div.appendChild(input);
+    div.appendChild(removeBtn);
+
+    return div;
 }
 
 function handleLoadDefaultCriteria() {
-    const currentCriteria = getCriteriaFromUI();
-    const criteriaMap = new Map<string, QualityCriterion>();
-
-    // Add current criteria to the map first to preserve them
-    currentCriteria.forEach(c => criteriaMap.set(c.name, c));
-    
-    // Add/overwrite with default criteria
-    defaultProseCriteria.forEach(c => criteriaMap.set(c.name, c));
-
-    const newCriteria = Array.from(criteriaMap.values());
-
-    renderCriteria(newCriteria);
-    alert('Default criteria loaded and merged!');
+    if (confirm('Are you sure you want to replace your current criteria with the defaults?')) {
+        renderCriteria(getElementById('criteria-list'), defaultProseCriteria);
+    }
 }
 
-async function handleCopyCriteria() {
-    const criteria = getCriteriaFromUI();
-    if (criteria.length === 0) {
+async function handleCopyCriteria(container: HTMLElement) {
+    const criteria = getCriteriaFromUI(container);
+    if (criteria.length > 0) {
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(criteria, null, 2));
+            alert('Criteria copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy criteria: ', err);
+            alert('Failed to copy criteria. See console for details.');
+        }
+    } else {
         alert('No criteria to copy.');
-        return;
-    }
-    try {
-        await navigator.clipboard.writeText(JSON.stringify(criteria, null, 2));
-        alert('Criteria copied to clipboard!');
-    } catch (err) {
-        console.error('Failed to copy criteria: ', err);
-        alert('Failed to copy criteria to clipboard.');
     }
 }
 
-async function handlePasteCriteria() {
+async function handlePasteCriteria(container: HTMLElement) {
     try {
         const text = await navigator.clipboard.readText();
-        const pastedData = JSON.parse(text);
-
-        if (!isCriteriaArray(pastedData)) {
-            throw new Error('Clipboard does not contain a valid criteria array.');
+        const parsed = JSON.parse(text);
+        if (isCriteriaArray(parsed)) {
+            if (confirm('Are you sure you want to replace your current criteria with the content from your clipboard?')) {
+                renderCriteria(container, parsed);
+            }
+        } else {
+            alert('Clipboard content is not valid criteria data.');
         }
-
-        const currentCriteria = getCriteriaFromUI();
-        const criteriaMap = new Map<string, QualityCriterion>();
-
-        currentCriteria.forEach(c => criteriaMap.set(c.name, c));
-        pastedData.forEach((c: QualityCriterion) => criteriaMap.set(c.name, c));
-
-        const newCriteria = Array.from(criteriaMap.values());
-
-        renderCriteria(newCriteria);
-        alert('Criteria pasted and merged!');
-
     } catch (err) {
         console.error('Failed to paste criteria: ', err);
-        alert('Failed to paste criteria. Please make sure the clipboard contains a valid JSON array of criteria.');
+        alert('Failed to read from clipboard or parse data. See console for details.');
     }
 }
 
 function updateSettingsUI(profile: SettingsProfile) {
-    getElementById<HTMLTextAreaElement>('prompt').value = profile.prompt;
-    getElementById<HTMLInputElement>('max-iterations').value = String(profile.maxIterations);
-    renderCriteria(profile.criteria);
+    getElementById<HTMLInputElement>('modal-max-iterations').value = String(profile.maxIterations);
+    renderCriteria(getElementById('modal-criteria-list'), profile.criteria);
 }
 
 function updateProfileDropdown() {
-    if (!settingsManager) return;
     const select = getElementById<HTMLSelectElement>('settings-profile-select');
-    const currentProfileName = settingsManager.getLastUsedProfileName();
-    select.innerHTML = '';
-    
-    const names = settingsManager.getProfileNames();
-    if (names.length === 0) {
-        select.innerHTML = '<option disabled>No profiles saved</option>';
-        return;
-    }
+    if (!settingsManager) return;
 
-    names.forEach(name => {
+    const profiles = settingsManager.getProfileNames();
+    const lastUsed = settingsManager.getLastUsedProfileName();
+
+    select.innerHTML = ''; // Clear existing options
+    
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a profile...';
+    select.appendChild(defaultOption);
+    
+    profiles.forEach(name => {
         const option = document.createElement('option');
         option.value = name;
         option.textContent = name;
-        if (name === currentProfileName) {
+        if (name === lastUsed) {
             option.selected = true;
         }
         select.appendChild(option);
@@ -842,9 +1101,8 @@ function handleSaveProfile() {
     }
 
     const currentProfile: SettingsProfile = {
-        prompt: getElementById<HTMLTextAreaElement>('prompt').value,
-        maxIterations: parseInt(getElementById<HTMLInputElement>('max-iterations').value, 10),
-        criteria: getCriteriaFromUI(),
+        maxIterations: parseInt(getElementById<HTMLInputElement>('modal-max-iterations').value, 10),
+        criteria: getCriteriaFromUI(getElementById('modal-criteria-list')),
         selectedModels: modelSelector.getSelectedModels(),
     };
     
@@ -866,7 +1124,6 @@ function handleLoadProfile(event: Event) {
     if (profile) {
         updateSettingsUI(profile);
         modelSelector.setSelectedModels(profile.selectedModels);
-        reconfigureCoreServices(profile.selectedModels);
         settingsManager.setLastUsedProfile(profileName);
     }
 }
@@ -882,48 +1139,245 @@ function handleDeleteProfile() {
 }
 
 function loadAndApplyLastUsedProfile() {
-    if (!settingsManager) return;
+    if (!settingsManager || !modelSelector) return;
     const lastProfile = settingsManager.getLastUsedProfile();
     if (lastProfile) {
         updateSettingsUI(lastProfile);
+        modelSelector.setSelectedModels(lastProfile.selectedModels);
     }
     updateProfileDropdown();
 }
 
-// --- Initialization ---
-configureModelsBtn.addEventListener('click', openModal);
-configurePromptsBtn.addEventListener('click', openPromptModal);
+function handleRunTests() {
+    const testRunner = new TestRunner();
+    const resultsDiv = getElementById<HTMLDivElement>('test-modal-content');
+    
+    const runTests = async () => {
+        resultsDiv.innerHTML = '<h2>Running Tests...</h2>';
+        openTestModal();
 
-promptModalContainer.addEventListener('click', (e) => {
-    if (e.target === promptModalContainer) {
-        closePromptModal();
-    }
-});
+        const testResults = await testRunner.runAllTests();
 
-// Initialize ModelSelector
-modelSelector = new ModelSelector(onModelsSelected, closeModal);
-modelSelector.render(modalContent);
+        resultsDiv.innerHTML = '<h2>Test Results</h2>';
+        resultsDiv.innerHTML += testResults
+            .map(result => `<div class="test-result ${result.success ? 'passed' : 'failed'}">${result.success ? '✓' : '✗'} ${result.message}</div>`)
+            .join('');
+    };
 
-// Initialize PromptManager
-new PromptManager(promptModalContent, onPromptsSaved);
-
-// Initialize SettingsManager
-settingsManager = new SettingsManager();
-
-// Check if we can show the main app right away
-const apiKey = modelSelector.getApiKey();
-const allModelsSet = modelSelector.areAllModelsSelected();
-
-if (apiKey && allModelsSet) {
-    console.log('Models already configured, showing main app.');
-    reconfigureCoreServices(modelSelector.getSelectedModels());
-    renderMainApp();
-    mainAppContainer.style.display = 'block';
-    isAppRendered = true;
-} else {
-    // For new users, open the configuration modal immediately.
-    mainAppContainer.style.display = 'none';
-    openModal();
+    runTests();
 }
 
-console.log('Application initialized.'); 
+function renderSettingsModal() {
+    if (!modalContent || !modelSelector) return;
+
+    modalContent.innerHTML = `
+        <style>
+            .modal-content {
+                width: 80vw;
+                max-width: 1200px;
+            }
+            .modal-body {
+                padding: 1.5rem 2rem;
+            }
+            .settings-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            .settings-column {
+                display: flex;
+                flex-direction: column;
+                min-height: 300px; /* Ensure columns have some base height */
+            }
+            #modal-criteria-list {
+                flex-grow: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            .criterion {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            }
+            .criterion > .criterion-text-display, 
+            .criterion > textarea {
+                flex-grow: 1;
+                padding: 0.75rem;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                background-color: var(--input-bg);
+                line-height: 1.5;
+                box-sizing: border-box;
+            }
+            .criterion > .criterion-text-display {
+                cursor: text;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .criterion > textarea {
+                display: none; /* Hidden by default */
+                resize: vertical;
+                min-height: 80px;
+            }
+            .settings-section {
+                background-color: var(--bg-subtle);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                padding: 1.5rem;
+            }
+            .criteria-actions { 
+                display: flex; 
+                gap: 0.75rem; 
+                margin-top: 1.5rem; 
+            }
+        </style>
+        <div class="modal-header">
+            <h2>Generation Settings</h2>
+            <button id="close-settings-modal-btn" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="settings-grid">
+                <div class="settings-section">
+                    <div class="settings-bar">
+                        <select id="settings-profile-select"></select>
+                        <input type="text" id="settings-profile-name" placeholder="New or existing profile name"/>
+                        <button id="settings-save-btn" class="button button-secondary">Save</button>
+                        <button id="settings-delete-btn" class="button button-secondary">Delete</button>
+                    </div>
+                </div>
+
+                <div id="settings-models-container" class="settings-column settings-section">
+                    <h3>Models</h3>
+                    <!-- ModelSelector will be rendered here -->
+                </div>
+                
+                <div id="settings-criteria-container" class="settings-column settings-section">
+                    <h3>Quality Criteria</h3>
+                    <div id="modal-criteria-list"></div>
+                    <div style="margin-top: 1.5rem;">
+                        <label for="modal-max-iterations">Max Iterations:</label>
+                        <input type="number" id="modal-max-iterations" min="1" max="20" value="5" style="max-width: 100px;">
+                    </div>
+                    <div class="criteria-actions">
+                        <button id="modal-add-criterion-btn" class="button button-secondary">Add</button>
+                        <button id="modal-default-criteria-btn" class="button button-secondary">Defaults</button>
+                        <button id="modal-copy-criteria-btn" class="button button-secondary">Copy</button>
+                        <button id="modal-paste-criteria-btn" class="button button-secondary">Paste</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // --- Render and Wire-Up Components ---
+
+    // Model Selector
+    const modelsContainer = getElementById('settings-models-container');
+    modelSelector.render(modelsContainer);
+
+    // Criteria Editor
+    const modalCriteriaList = getElementById('modal-criteria-list');
+    getElementById('modal-add-criterion-btn').addEventListener('click', () => {
+        const newItem = createCriterionElement();
+        modalCriteriaList.appendChild(newItem);
+        (newItem.querySelector('textarea') as HTMLTextAreaElement)?.focus();
+    });
+    getElementById('modal-default-criteria-btn').addEventListener('click', () => {
+        if (confirm('Are you sure you want to replace your current criteria with the defaults?')) {
+            renderCriteria(modalCriteriaList, defaultProseCriteria);
+        }
+    });
+    getElementById('modal-copy-criteria-btn').addEventListener('click', () => handleCopyCriteria(modalCriteriaList));
+    getElementById('modal-paste-criteria-btn').addEventListener('click', () => handlePasteCriteria(modalCriteriaList));
+     modalCriteriaList.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).classList.contains('remove-criterion-btn')) {
+            (e.target as HTMLElement).closest('.criterion')?.remove();
+        }
+    });
+
+    // Profile Management
+    document.getElementById('settings-save-btn')?.addEventListener('click', handleSaveProfile);
+    document.getElementById('settings-delete-btn')?.addEventListener('click', handleDeleteProfile);
+    document.getElementById('settings-profile-select')?.addEventListener('change', handleLoadProfile);
+    getElementById('close-settings-modal-btn').addEventListener('click', closeModal);
+    
+    // Initial Load
+    loadAndApplyLastUsedProfile();
+}
+
+// --- Init ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Button bindings
+    settingsBtn.addEventListener('click', openModal);
+    runTestsBtn.addEventListener('click', handleRunTests);
+    newProjectBtn.addEventListener('click', openNewProjectModal);
+
+    // Modal close-on-click-outside behavior
+    modalContainer.addEventListener('click', (e) => {
+        if (e.target === modalContainer) {
+            closeModal();
+        }
+    });
+    testModalContainer.addEventListener('click', (e) => {
+        if (e.target === testModalContainer) {
+            closeTestModal();
+        }
+    });
+    newProjectModalContainer.addEventListener('click', (e) => {
+        if (e.target === newProjectModalContainer) {
+            closeNewProjectModal();
+        }
+    });
+
+    // Initialize ModelSelector
+    modelSelector = new ModelSelector(onModelsSelected, closeModal);
+    modelSelector.render(modalContent);
+
+    // Initialize SettingsManager
+    settingsManager = new SettingsManager();
+
+    // Check if we can show the main app right away
+    const apiKey = modelSelector.getApiKey();
+    const allModelsSet = modelSelector.areAllModelsSelected();
+
+    if (!apiKey || !allModelsSet) {
+        console.log('API key or models not set. Forcing settings modal.');
+        // Make the modal non-closable until setup is complete
+        openModal();
+        (modalContainer.querySelector('.modal-content') as HTMLElement).style.pointerEvents = 'auto';
+        modalContainer.style.pointerEvents = 'auto';
+        // Temporarily disable closing by clicking outside
+        const modalClickHandler = (e: MouseEvent) => {
+            if (e.target === modalContainer) {
+                e.stopPropagation();
+            }
+        };
+        modalContainer.addEventListener('click', modalClickHandler);
+        // We will remove this listener in onModelsSelected when setup is complete
+    } else {
+        // If settings are okay, configure services and render the appropriate view
+        reconfigureCoreServices(modelSelector.getSelectedModels());
+        
+        const savedProjectJson = localStorage.getItem('expert_app_current_project');
+        if (savedProjectJson) {
+            try {
+                if (!orchestrator || !settingsManager) {
+                    throw new Error("Orchestrator not available to load project.");
+                }
+                currentProject = ProjectManager.load(savedProjectJson, orchestrator, settingsManager);
+                console.log('Loaded project from storage:', currentProject.projectTitle);
+                renderProjectUI(currentProject);
+            } catch (error) {
+                console.error('Failed to load project from storage, showing main app instead.', error);
+                renderMainApp();
+            }
+        } else {
+            renderMainApp();
+        }
+        isAppRendered = true;
+    }
+
+    console.log('Application initialized.');
+}); 
