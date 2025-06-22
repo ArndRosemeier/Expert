@@ -212,9 +212,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getRawGenerationPrompt(node: DocumentNode): string {
         const prompts = this.settingsManager.getPrompts();
         
-        // Special handling for root node (concept expansion)
+        // Special handling for root node (text expansion)
         if (!node.parentId) {
-            return prompts.expand_concept_user;
+            return prompts.expand_text_user;
         }
         
         return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
@@ -237,11 +237,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             .replace(/\{\{title\}\}/g, node.title)
             .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '');
         
-        // Special handling for concept expansion prompt placeholders
+        // Special handling for text expansion prompt placeholders
         if (!node.parentId) {
-            // For root nodes, the concept is the project title
+            // For root nodes, the text to expand is the project title
             filledPrompt = filledPrompt
-                .replace(/\{\{concept\}\}/g, this.projectTitle);
+                .replace(/\{\{text\}\}/g, this.projectTitle);
         }
         
         if (!node.isLeaf && count) {

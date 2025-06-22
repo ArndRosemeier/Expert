@@ -17,8 +17,8 @@ export interface OrchestratorPrompts {
     create_children_from_outline_user: string;
     prompt_for_child_generation_prompt: string;
     
-    // For concept expansion (generic)
-    expand_concept_user: string;
+    // For text expansion (generic)
+    expand_text_user: string;
 }
 
 export const defaultPrompts: OrchestratorPrompts = {
@@ -149,18 +149,9 @@ The broader context of the document is:
 
 Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
 
-    expand_concept_user: `Your task is to take the given concept and expand it into a comprehensive, detailed exploration. Think deeply about all aspects, implications, and dimensions of this concept.
+    expand_text_user: `Take the following text and flesh it out with more detail and depth. Keep the same general structure and flow, just expand on what's already there.
 
-Focus on:
-- Core elements and underlying principles
-- Key themes, ideas, and nuances
-- Important aspects and characteristics
-- Creative possibilities and potential directions
-- Rich details that bring the concept to life
-
-Write this as flowing, descriptive prose - do NOT create lists, outlines, or structured sections. Simply explore and flesh out the concept in an organic, narrative way that captures its essence and possibilities.
-
-The concept to expand is: {{concept}}`,
+{{text}}`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -174,7 +165,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count'],
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title'],
-    expand_concept_user: ['concept'],
+    expand_text_user: ['text'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
@@ -188,7 +179,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
     create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
-    expand_concept_user: "Generic prompt for expanding any concept into a comprehensive, detailed exploration. Takes a concept and fleshes it out without bias about what it's for - can be used for project roots or any other concept expansion needs."
+    expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
 };
 
 export class PromptManager {
