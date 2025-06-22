@@ -151,14 +151,16 @@ Based on all of this information, please write a detailed, one-paragraph prompt 
 
     project_generation_user: `You are creating the foundation for a new {{template_name}} project titled "{{project_title}}".
 
-Your task is to generate a comprehensive, high-level outline that establishes the overall structure and main elements of this {{template_name}}. This outline will serve as the foundation for the entire project, so focus on:
+Your task is to write a comprehensive, unstructured overview that captures the essence and scope of this {{template_name}}. Think of this as brainstorming the core elements, themes, and direction without worrying about organization or structure.
 
-- The major structural components and their logical flow
-- Key themes, concepts, or elements that should be developed
-- The overall scope and direction of the project
-- How the different parts should relate to each other
+Focus on:
+- The main themes, concepts, or ideas you want to explore
+- Key elements that should be present in this {{template_name}}
+- The overall tone, style, and approach
+- Important aspects that define this particular project
+- Any creative vision or unique elements that make it distinctive
 
-Write this as a detailed outline in prose form (not bullet points). This content will be used to guide the creation of more detailed sub-sections later, so provide enough substance to give clear direction while leaving room for creative development in the individual sections.
+Write this as flowing, descriptive prose - do NOT create lists, outlines, or structured sections. This unstructured content will later be organized into the proper {{template_name}} structure. Just focus on capturing the creative vision and essential elements in an organic, narrative way.
 
 Template structure: {{hierarchy_levels}}`,
 };
@@ -188,7 +190,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
     create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
-    project_generation_user: "Special prompt for generating content for the root node of a project. Creates a high-level outline based on the template type and project title."
+    project_generation_user: "Special prompt for generating content for the root node of a project. Creates an unstructured overview that captures the essence and themes without imposing structure - structure will be added later through child generation."
 };
 
 export class PromptManager {
