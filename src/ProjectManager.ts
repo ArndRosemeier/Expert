@@ -47,11 +47,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.settingsManager = settingsManager;
         this.openRouterClient = openRouterClient;
 
-        // The root node's title should be the first hierarchy level name from the template.
+        // The root node's title should be the project title.
         if (!this.template.hierarchyLevels || this.template.hierarchyLevels.length === 0) {
             throw new Error(`Invalid template: "${this.template.name}" has no hierarchy levels defined.`);
         }
-        this.rootNode = new DocumentNode(0, this.template.hierarchyLevels[0], null, this.template.hierarchyLevels);
+        this.rootNode = new DocumentNode(0, this.projectTitle, null, this.template.hierarchyLevels);
 
         // Ensure we have a valid default profile set globally
         const defaultProfile = this.settingsManager.getProfile('default');

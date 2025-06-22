@@ -160,8 +160,8 @@ export class TestRunner {
                 throw new Error("Project title not set correctly.");
             }
 
-            if (project.rootNode.level !== 0 || project.rootNode.title !== "Book") {
-                throw new Error("Root node not initialized correctly from the template.");
+            if (project.rootNode.level !== 0 || project.rootNode.title !== "My Sci-Fi Novel") {
+                throw new Error("Root node not initialized correctly - should use project title.");
             }
 
             const foundNode = project.findNodeById(project.rootNode.id);
