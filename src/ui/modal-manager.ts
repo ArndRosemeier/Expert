@@ -427,6 +427,9 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     textareaContainer.style.flexGrow = '1';
     textareaContainer.style.position = 'relative';
 
+    // Store the full text in a data attribute to ensure we never lose it
+    div.setAttribute('data-full-name', criterion.name);
+
     const updateDisplay = (text: string) => {
         textDisplay.textContent = text.split('.')[0] + (text.includes('.') && text.split('.')[0] !== text ? '.' : '');
     };
@@ -436,6 +439,9 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     textarea.style.display = 'none';
 
     textDisplay.addEventListener('click', () => {
+        // When editing starts, ensure textarea has the full text
+        const fullName = div.getAttribute('data-full-name') || criterion.name;
+        textarea.value = fullName;
         textDisplay.style.display = 'none';
         textarea.style.display = 'block';
         textarea.focus();
@@ -443,6 +449,8 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     });
 
     textarea.addEventListener('blur', () => {
+        // When editing ends, store the full text and update display
+        div.setAttribute('data-full-name', textarea.value);
         textarea.style.display = 'none';
         textDisplay.style.display = 'block';
         updateDisplay(textarea.value);
@@ -463,10 +471,12 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
     const criteria: QualityCriterion[] = [];
     const criterionElements = container.querySelectorAll('.criterion');
     criterionElements.forEach(el => {
+        const div = el as HTMLElement;
         const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
         const inputs = el.querySelectorAll<HTMLInputElement>('input[type="number"]');
         if (textarea && inputs.length === 2) {
-            const name = textarea.value;
+            // Use the full name from data attribute, fall back to textarea value
+            const name = div.getAttribute('data-full-name') || textarea.value;
             const goal = parseInt(inputs[0].value, 10);
             const weight = parseFloat(inputs[1].value);
             if (name && !isNaN(goal) && !isNaN(weight)) {
