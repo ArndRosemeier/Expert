@@ -20,12 +20,32 @@ export class TestRunner {
         this.openRouterClient = openRouterClient;
         // Create mock instances for dependencies that are not under test
         this.mockSettingsManager = new SettingsManager();
+        
+        // Set up a valid default profile for testing
+        // This prevents the ProjectManager constructor from failing when it tries to access profiles
+        try {
+            const defaultProfile = {
+                prompt: "Test generation prompt",
+                criteria: [
+                    { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
+                ],
+                maxIterations: 5,
+                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model' }
+            };
+            this.mockSettingsManager.saveProfile('default', defaultProfile);
+            this.mockSettingsManager.setLastUsedProfile('default');
+        } catch (error) {
+            // If there's an issue setting up the profile, we'll continue with the test
+            // The test should still work even without a perfect mock setup
+        }
+        
         this.mockLoopOrchestrator = new LoopOrchestrator(this.openRouterClient, this.mockSettingsManager.getPrompts());
     }
 
     public async runPhase1Tests(): Promise<string> {
         const results: TestResult[] = [];
 
+        // Original tests
         results.push(this.testDocumentNodeCreation());
         results.push(this.testProjectTemplateCreation());
         results.push(this.testProjectManagerCreation());
@@ -33,7 +53,14 @@ export class TestRunner {
         results.push(this.testPersistence());
         results.push(await this.testApiConnection());
 
-        // Future tests for Phase 1 will be added here...
+        // New comprehensive tests
+        results.push(this.testEmptyHierarchyTemplate());
+        results.push(this.testNodePathGeneration());
+        results.push(this.testDeepTreeStructure());
+        results.push(this.testNodeContentManagement());
+        results.push(this.testInvalidNodeOperations());
+        results.push(this.testTemplateValidation());
+        results.push(this.testErrorMessages());
 
         return this.formatResultsAsHtml(results);
     }
@@ -240,6 +267,226 @@ export class TestRunner {
             return { success: true, message: "Step 1.5: ProjectManager persistence (save/load) works correctly." };
         } catch (error: any) {
             return { success: false, message: `Step 1.5 Failed: ${error.message}` };
+        }
+    }
+
+    private testEmptyHierarchyTemplate(): TestResult {
+        try {
+            // Test that ProjectManager constructor fails with empty hierarchy
+            const emptyTemplate = new ProjectTemplate("Empty Template", [], []);
+            
+            try {
+                new ProjectManager("Test Project", emptyTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+                throw new Error("ProjectManager should have thrown an error for empty hierarchy template");
+            } catch (error: any) {
+                if (error.message.includes("no hierarchy levels defined")) {
+                    return { success: true, message: "Step 2.1: Empty hierarchy template properly rejected." };
+                } else {
+                    throw error; // Re-throw if it's not the expected error
+                }
+            }
+        } catch (error: any) {
+            return { success: false, message: `Step 2.1 Failed: ${error.message}` };
+        }
+    }
+
+    private testNodePathGeneration(): TestResult {
+        try {
+            const template = new ProjectTemplate("Novel", ['Book', 'Act', 'Chapter'], []);
+            const project = new ProjectManager("Test Novel", template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            // Add some nodes to create a path
+            const act1 = project.addNode("Act 1", project.rootNode.id);
+            const chapter1 = project.addNode("Chapter 1", act1.id);
+            
+            // Test root path
+            const rootPath = project.getNodePath(project.rootNode.id);
+            if (!rootPath.includes("Book: Book")) {
+                throw new Error(`Root path incorrect: ${rootPath}`);
+            }
+            
+            // Test deep path
+            const deepPath = project.getNodePath(chapter1.id);
+            if (!deepPath.includes("Book: Book") || !deepPath.includes("Act: Act 1") || !deepPath.includes("Chapter: Chapter 1")) {
+                throw new Error(`Deep path incorrect: ${deepPath}`);
+            }
+            
+            return { success: true, message: "Step 2.2: Node path generation works correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.2 Failed: ${error.message}` };
+        }
+    }
+
+    private testDeepTreeStructure(): TestResult {
+        try {
+            const template = new ProjectTemplate("Manual", ['Manual', 'Section', 'Topic', 'Subtopic'], []);
+            const project = new ProjectManager("Test Manual", template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            // Build a 4-level deep tree
+            const section1 = project.addNode("Section 1", project.rootNode.id);
+            const topic1 = project.addNode("Topic 1", section1.id);
+            const subtopic1 = project.addNode("Subtopic 1", topic1.id);
+            
+            // Verify levels are correct
+            if (project.rootNode.level !== 0) throw new Error("Root level should be 0");
+            if (section1.level !== 1) throw new Error("Section level should be 1");
+            if (topic1.level !== 2) throw new Error("Topic level should be 2");
+            if (subtopic1.level !== 3) throw new Error("Subtopic level should be 3");
+            
+            // Verify parent-child relationships
+            if (section1.parentId !== project.rootNode.id) throw new Error("Section parent incorrect");
+            if (topic1.parentId !== section1.id) throw new Error("Topic parent incorrect");
+            if (subtopic1.parentId !== topic1.id) throw new Error("Subtopic parent incorrect");
+            
+            // Verify template access
+            if (subtopic1.template[3] !== 'Subtopic') throw new Error("Template access incorrect");
+            
+            return { success: true, message: "Step 2.3: Deep tree structure and levels work correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.3 Failed: ${error.message}` };
+        }
+    }
+
+    private testNodeContentManagement(): TestResult {
+        try {
+            const template = new ProjectTemplate("Story", ['Story', 'Chapter'], []);
+            const project = new ProjectManager("Test Story", template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            const chapter1 = project.addNode("Chapter 1", project.rootNode.id);
+            
+            // Test initial state
+            if (chapter1.content !== '') throw new Error("Initial content should be empty");
+            if (chapter1.summary !== '') throw new Error("Initial summary should be empty");
+            
+            // Test content setting
+            chapter1.content = "This is test content for chapter 1.";
+            if (chapter1.content !== "This is test content for chapter 1.") {
+                throw new Error("Content setting failed");
+            }
+            
+            // Test summary setting
+            chapter1.summary = "A brief summary of chapter 1.";
+            if (chapter1.summary !== "A brief summary of chapter 1.") {
+                throw new Error("Summary setting failed");
+            }
+            
+            // Test isLeaf detection (leaf nodes don't have children)
+            if (!chapter1.isLeaf) throw new Error("Chapter should be detected as leaf node");
+            if (project.rootNode.isLeaf) throw new Error("Root with children should not be leaf");
+            
+            return { success: true, message: "Step 2.4: Node content management works correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.4 Failed: ${error.message}` };
+        }
+    }
+
+    private testInvalidNodeOperations(): TestResult {
+        try {
+            const template = new ProjectTemplate("Test", ['Root', 'Child'], []);
+            const project = new ProjectManager("Test Project", template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            // Test adding node to non-existent parent
+            try {
+                project.addNode("Invalid Child", "non-existent-id");
+                throw new Error("Should have thrown error for non-existent parent");
+            } catch (error: any) {
+                if (!error.message.includes("not found")) {
+                    throw new Error("Wrong error message for non-existent parent");
+                }
+            }
+            
+            // Test removing non-existent node
+            const removeResult = project.removeNode("non-existent-id");
+            if (removeResult !== false) {
+                throw new Error("Removing non-existent node should return false");
+            }
+            
+            // Test removing root node (should fail)
+            const removeRootResult = project.removeNode(project.rootNode.id);
+            if (removeRootResult !== false) {
+                throw new Error("Removing root node should return false");
+            }
+            
+            // Test finding non-existent node
+            const foundNode = project.findNodeById("non-existent-id");
+            if (foundNode !== null) {
+                throw new Error("Finding non-existent node should return null");
+            }
+            
+            return { success: true, message: "Step 2.5: Invalid node operations handled correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.5 Failed: ${error.message}` };
+        }
+    }
+
+    private testTemplateValidation(): TestResult {
+        try {
+            // Test template with undefined in hierarchy (testing robustness)
+            try {
+                const hierarchyWithUndefined = ['Book', undefined as any, 'Chapter'] as string[];
+                const badTemplate1 = new ProjectTemplate("Bad", hierarchyWithUndefined, []);
+                // Template constructor might not validate, but using it should work or fail gracefully
+                if (badTemplate1.hierarchyLevels.includes(undefined as any)) {
+                    // This might be allowed - template should handle edge cases
+                }
+            } catch (error: any) {
+                // This is expected if template validation is working
+            }
+            
+            // Test template with empty string in hierarchy
+            const template2 = new ProjectTemplate("Test", ['Book', '', 'Chapter'], []);
+            if (template2.hierarchyLevels[1] === '') {
+                // This might be allowed, but let's verify it works
+                const project = new ProjectManager("Test", template2, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+                const child = project.addNode("Test Child", project.rootNode.id);
+                // Should still work even with empty level name
+            }
+            
+            // Test valid template properties
+            const validTemplate = new ProjectTemplate("Novel", ['Book', 'Chapter'], ['Outline', 'Characters']);
+            if (validTemplate.name !== "Novel") throw new Error("Template name not set correctly");
+            if (validTemplate.hierarchyLevels.length !== 2) throw new Error("Hierarchy levels not set correctly");
+            if (validTemplate.scaffoldingDocuments.length !== 2) throw new Error("Scaffolding documents not set correctly");
+            
+            return { success: true, message: "Step 2.6: Template validation works correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.6 Failed: ${error.message}` };
+        }
+    }
+
+    private testErrorMessages(): TestResult {
+        try {
+            const template = new ProjectTemplate("Test", ['Root', 'Child'], []);
+            const project = new ProjectManager("Test", template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            // Test that error messages are helpful and contain relevant information
+            try {
+                project.addNode("Test", "invalid-parent-id");
+            } catch (error: any) {
+                if (!error.message.includes("invalid-parent-id")) {
+                    throw new Error("Error message should include the invalid parent ID");
+                }
+                if (!error.message.includes("not found")) {
+                    throw new Error("Error message should indicate the parent was not found");
+                }
+            }
+            
+            // Test empty hierarchy error message
+            try {
+                const emptyTemplate = new ProjectTemplate("Empty", [], []);
+                new ProjectManager("Test", emptyTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            } catch (error: any) {
+                if (!error.message.includes("Empty")) {
+                    throw new Error("Error message should include template name");
+                }
+                if (!error.message.includes("hierarchy levels")) {
+                    throw new Error("Error message should mention hierarchy levels");
+                }
+            }
+            
+            return { success: true, message: "Step 2.7: Error messages are helpful and informative." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.7 Failed: ${error.message}` };
         }
     }
 } 

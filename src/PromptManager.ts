@@ -16,6 +16,9 @@ export interface OrchestratorPrompts {
     branch_content_generation_user: string;
     create_children_from_outline_user: string;
     prompt_for_child_generation_prompt: string;
+    
+    // For project root node generation
+    project_generation_user: string;
 }
 
 export const defaultPrompts: OrchestratorPrompts = {
@@ -145,6 +148,19 @@ The broader context of the document is:
 ---
 
 Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
+
+    project_generation_user: `You are creating the foundation for a new {{template_name}} project titled "{{project_title}}".
+
+Your task is to generate a comprehensive, high-level outline that establishes the overall structure and main elements of this {{template_name}}. This outline will serve as the foundation for the entire project, so focus on:
+
+- The major structural components and their logical flow
+- Key themes, concepts, or elements that should be developed
+- The overall scope and direction of the project
+- How the different parts should relate to each other
+
+Write this as a detailed outline in prose form (not bullet points). This content will be used to guide the creation of more detailed sub-sections later, so provide enough substance to give clear direction while leaving room for creative development in the individual sections.
+
+Template structure: {{hierarchy_levels}}`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -158,6 +174,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count'],
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title'],
+    project_generation_user: ['template_name', 'project_title', 'hierarchy_levels'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
@@ -170,7 +187,8 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
     create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
-    prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child."
+    prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
+    project_generation_user: "Special prompt for generating content for the root node of a project. Creates a high-level outline based on the template type and project title."
 };
 
 export class PromptManager {

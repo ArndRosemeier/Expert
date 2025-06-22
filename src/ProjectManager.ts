@@ -47,8 +47,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.settingsManager = settingsManager;
         this.openRouterClient = openRouterClient;
 
-        // The root node's title should be the project title.
-        this.rootNode = new DocumentNode(0, this.projectTitle, null, this.template.hierarchyLevels);
+        // The root node's title should be the first hierarchy level name from the template.
+        if (!this.template.hierarchyLevels || this.template.hierarchyLevels.length === 0) {
+            throw new Error(`Invalid template: "${this.template.name}" has no hierarchy levels defined.`);
+        }
+        this.rootNode = new DocumentNode(0, this.template.hierarchyLevels[0], null, this.template.hierarchyLevels);
 
         // Ensure we have a valid default profile set globally
         const defaultProfile = this.settingsManager.getProfile('default');
@@ -208,6 +211,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      */
     public getRawGenerationPrompt(node: DocumentNode): string {
         const prompts = this.settingsManager.getPrompts();
+        
+        // Special handling for root node (project generation)
+        if (!node.parentId) {
+            return prompts.project_generation_user;
+        }
+        
         return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
     }
 
@@ -227,6 +236,14 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             .replace(/\{\{context\}\}/g, context)
             .replace(/\{\{title\}\}/g, node.title)
             .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '');
+        
+        // Special handling for project generation prompt placeholders
+        if (!node.parentId) {
+            filledPrompt = filledPrompt
+                .replace(/\{\{template_name\}\}/g, this.template.name)
+                .replace(/\{\{project_title\}\}/g, this.projectTitle)
+                .replace(/\{\{hierarchy_levels\}\}/g, this.template.hierarchyLevels.join(' → '));
+        }
         
         if (!node.isLeaf && count) {
             filledPrompt = filledPrompt.replace(/\{\{count\}\}/g, String(count));
