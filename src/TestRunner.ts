@@ -233,8 +233,7 @@ export class TestRunner {
 
             if (JSON.stringify(originalObject) !== JSON.stringify(loadedObject)) {
                 console.error("Re-saved JSON does not match original.");
-                console.log("Original:", JSON.stringify(originalObject, null, 2));
-                console.log("Loaded:", JSON.stringify(loadedObject, null, 2));
+                
                 throw new Error("Project state is not the same after saving and loading.");
             }
             

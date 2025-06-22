@@ -4,7 +4,7 @@ import { setupEventListeners } from './ui/project-ui';
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('clean') === 'true') {
-    console.log('Clean start requested. Clearing local storage...');
+
     localStorage.removeItem('openrouter_api_key');
     localStorage.removeItem('openrouter_model_purposes');
     localStorage.removeItem('expert_app_prompts');

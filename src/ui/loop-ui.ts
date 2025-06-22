@@ -67,7 +67,7 @@ function handleStartLoop() {
             let iterationToShow = totalIterations;
             if (!result.success) {
                 iterationToShow = findBestFailedIteration(state.getLoopHistory());
-                console.log(`Loop failed. Showing best iteration: ${iterationToShow}`);
+        
             }
 
             const historyControls = getElementById<HTMLDivElement>('history-controls');

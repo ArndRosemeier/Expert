@@ -45,16 +45,17 @@ export const defaultPrompts: OrchestratorPrompts = {
         {{response}}
         ---
         
-        Please rate this response against all of the following criteria.
-        The criteria are provided as a JSON object where each key is the criterion name and the value is the goal score out of 10.
+        Please rate this response objectively against all of the following criteria. Use your best judgment to assess the quality on a scale of 1-10.
         
-        Criteria & Goals:
-        {{criteria}}
+        Criteria to evaluate:
+        - {{criteria}}
         
         Provide your response as a JSON array of objects. Each object must have three keys:
-        - "criterion": The name of the criterion being rated.
-        - "score": A number from 1 to 10.
+        - "criterion": The exact name of the criterion being rated (use the full original name).
+        - "score": A number from 1 to 10 based on your objective assessment.
         - "justification": A brief explanation for your score, written in a neutral, objective tone.
+
+        Be honest and objective in your ratings. Don't aim for any particular score - just evaluate the quality as you see it.
 
         Example:
         [
@@ -193,7 +194,7 @@ export class PromptManager {
     private saveToStorage() {
         this.settingsManager.savePrompts(this.prompts);
         this.onSave(this.prompts);
-        console.log('Prompts saved.');
+
     }
 
     private revertToDefaults() {

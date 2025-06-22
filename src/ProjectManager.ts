@@ -1,10 +1,11 @@
 import { DocumentNode } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
-import { LoopOrchestrator, LoopInput, LoopProgress } from './LoopOrchestrator';
+import { LoopOrchestrator, LoopInput, LoopProgress, Rating, RaterProgressPayload } from './LoopOrchestrator';
 import { EventEmitter } from './EventEmitter';
 import { SettingsManager, SettingsProfile } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { QualityCriterion, CreatorPayload } from './types';
+import * as state from './state';
 
 type ProjectManagerEvents = {
     'project-loaded': [];
@@ -19,6 +20,8 @@ type ProjectManagerEvents = {
 
 export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private static readonly LOCAL_STORAGE_KEY = 'expert_app_current_project';
+    private static readonly MULTI_PROJECT_STORAGE_KEY = 'expert_app_projects';
+    private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
 
     projectTitle: string;
     template: ProjectTemplate;
@@ -28,6 +31,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private openRouterClient: OpenRouterClient;
     private selectedNodeId: string | null = null;
     private isGeneratingAllChildren = false;
+    public _listenersSetup: boolean = false;
 
     constructor(
         projectTitle: string, 
@@ -46,10 +50,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // The root node's title should be the project title.
         this.rootNode = new DocumentNode(0, this.projectTitle, null, this.template.hierarchyLevels);
 
-        // Ensure the root node has a valid generation profile from the start.
+        // Ensure we have a valid default profile set globally
         const defaultProfile = this.settingsManager.getProfile('default');
         if (defaultProfile && defaultProfile.criteria && defaultProfile.criteria.length > 0) {
-            this.rootNode.settingsProfileName = 'default';
+            this.settingsManager.setLastUsedProfile('default');
         } else {
             const availableProfiles = this.settingsManager.getProfileNames();
             const firstValidProfile = availableProfiles.find(name => {
@@ -58,13 +62,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             });
             
             if (firstValidProfile) {
-                this.rootNode.settingsProfileName = firstValidProfile;
-            } else {
-                // This case should ideally not be hit if settings are configured,
-                // but as a last resort, we leave it as default. The loud error
-                // will still trigger if generation is attempted.
-                this.rootNode.settingsProfileName = 'default';
+                this.settingsManager.setLastUsedProfile(firstValidProfile);
             }
+            // If no valid profile exists, the error will be caught during generation
         }
     }
 
@@ -103,7 +103,6 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
         const newLevel = parent.level + 1;
         const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
-        newNode.settingsProfileName = parent.settingsProfileName;
         
         parent.children.push(newNode);
         
@@ -202,48 +201,60 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         return path.join(' => ');
     }
 
-    public constructGenerationPrompt(nodeId: string): string {
-        const node = this.findNodeById(nodeId);
-        if (!node) return '';
-
-        const profile = this.settingsManager.getProfile(node.settingsProfileName) || this.settingsManager.getLastUsedProfile();
-        if (!profile) return 'Error: Could not find a settings profile.';
-
-        const path = this.getNodePath(nodeId);
-        const context = this.compileNodeContext(nodeId);
+    /**
+     * Gets the raw, unprocessed generation prompt for a node, which includes placeholders.
+     * @param node The node for which to get the prompt template.
+     * @returns The raw prompt template string.
+     */
+    public getRawGenerationPrompt(node: DocumentNode): string {
         const prompts = this.settingsManager.getPrompts();
-        
-        const template = node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
+        return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
+    }
 
-        const userPrompt = template
-            .replace('{{path}}', path)
-            .replace('{{context}}', context)
-            .replace('{{title}}', node.title)
-            .replace('{{child_level_name}}', node.childLevelName || '');
+    /**
+     * Fills a raw prompt template with the specific details of a node (context, path, etc.).
+     * @param promptTemplate The raw string template with placeholders.
+     * @param node The node providing the data.
+     * @param count Optional count for list generation.
+     * @returns The final, filled prompt ready for an LLM.
+     */
+    private fillGenerationPrompt(promptTemplate: string, node: DocumentNode, count?: number): string {
+        const path = this.getNodePath(node.id);
+        const context = this.compileNodeContext(node.id);
+
+        let filledPrompt = promptTemplate
+            .replace(/\{\{path\}\}/g, path)
+            .replace(/\{\{context\}\}/g, context)
+            .replace(/\{\{title\}\}/g, node.title)
+            .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '');
         
-        return userPrompt;
+        if (!node.isLeaf && count) {
+            filledPrompt = filledPrompt.replace(/\{\{count\}\}/g, String(count));
+        }
+
+        return filledPrompt;
     }
 
     public async generateNodeContent(nodeId: string, count: number = 5, isChildGeneration: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) { throw new Error(`Node not found: ${nodeId}`); }
 
-        const profile = this.settingsManager.getProfile(node.settingsProfileName) || this.settingsManager.getLastUsedProfile();
+        const profile = this.settingsManager.getLastUsedProfile();
         
         // Fail loudly if the node is in an invalid state for generation.
         if (!profile || !profile.criteria || profile.criteria.length === 0) {
-            throw new Error(`Cannot generate content for node "${node.title}" (ID: ${nodeId}). The settings profile "${node.settingsProfileName}" is either missing, has no criteria defined, or could not be loaded.`);
+            throw new Error(`Cannot generate content for node "${node.title}" (ID: ${nodeId}). The active profile is either missing, has no criteria defined, or could not be loaded.`);
         }
 
-        // Use the prompt from the node if it exists, otherwise construct one.
-        let promptText = node.generationPrompt || this.constructGenerationPrompt(nodeId);
+        // Get the raw prompt from the node, or get the default raw prompt if it's not set.
+        const rawPrompt = node.generationPrompt || this.getRawGenerationPrompt(node);
 
-        if (!node.isLeaf) {
-            promptText = promptText.replace('{{count}}', String(count));
-        }
+        // Fill the placeholders just-in-time for generation.
+        // When generating children as part of a larger job, the count is not used.
+        const filledPrompt = this.fillGenerationPrompt(rawPrompt, node, isChildGeneration ? undefined : count);
 
         const loopInput: LoopInput = {
-            prompt: promptText,
+            prompt: filledPrompt,
             criteria: profile.criteria,
             maxIterations: profile.maxIterations,
             response: '' // Initial response is empty
@@ -260,13 +271,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             return;
         }
 
-        const profile = this.settingsManager.getProfile(node.settingsProfileName) || this.settingsManager.getLastUsedProfile();
+        const profile = this.settingsManager.getLastUsedProfile();
         if (profile && profile.selectedModels) {
-            console.log(`[ProjectManager] Found profile "${node.settingsProfileName}" for node "${node.title}". Configuring client with models:`, profile.selectedModels);
             this.openRouterClient.setSelectedModels(profile.selectedModels);
         } else {
             // This case should be prevented by the check in generateNodeContent, but as a safeguard:
-            const errorMessage = `Could not find a valid profile with models for node ${node.title}. Cannot run content loop.`;
+            const errorMessage = `Could not find a valid active profile with models for node ${node.title}. Cannot run content loop.`;
             this.emit('error', errorMessage);
             console.error(errorMessage);
             return;
@@ -275,16 +285,52 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         node.isGenerating = true;
         this.emit('nodeGenerationComplete', { nodeId, success: false, node: node }); // Update UI to show spinner
         
+        // Start a new generation session
+        const sessionId = node.startGenerationSession(loopInput.prompt);
+        let currentIterationContent: string | null = null;
+        let currentIterationRatings: Rating[] = [];
+        
         // Subscribe to progress updates from the orchestrator
         const onProgress = (progress: LoopProgress) => {
+            
             if (progress.type === 'creator') {
                 const payload = progress.payload as CreatorPayload;
-                // Live-update the content text area as the creator works
-                const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                if (contentTextArea && document.activeElement !== contentTextArea) {
-                    contentTextArea.value = payload.response;
+                currentIterationContent = payload.response;
+                
+                // Live-update the content text area as the creator works, but only if not in bulk mode
+                // During bulk operations, we don't want to interfere with the selected node's display
+                if (!this.isGeneratingAllChildren) {
+                    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+                    if (contentTextArea && document.activeElement !== contentTextArea) {
+                        contentTextArea.value = payload.response;
+                    }
+                }
+            } else if (progress.type === 'rater') {
+                const payload = progress.payload as RaterProgressPayload;
+                if (payload.rating && payload.rating.criterion) {
+                    // Collect ratings for this iteration
+                    const existingRatingIndex = currentIterationRatings.findIndex(
+                        r => r.criterion === payload.rating.criterion
+                    );
+                    if (existingRatingIndex >= 0) {
+                        currentIterationRatings[existingRatingIndex] = payload.rating;
+                    } else {
+                        currentIterationRatings.push(payload.rating);
+                    }
+                    
+                    // If we have all ratings for this iteration, save it
+                    if (currentIterationRatings.length === loopInput.criteria.length && currentIterationContent) {
+                        node.addGenerationIteration(
+                            progress.iteration, 
+                            currentIterationContent, 
+                            [...currentIterationRatings]
+                        );
+                        // Reset for next iteration
+                        currentIterationRatings = [];
+                    }
                 }
             }
+            
             // When running a loop on a child node as part of "Generate All",
             // we want to emit the progress under the parent's ID so the UI can display it.
             this.emit('loop-progress', { nodeId: contextNodeId || nodeId, progress });
@@ -293,17 +339,31 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
         try {
             const result = await this.loopOrchestrator.runLoop(loopInput);
-            node.content = result.finalResponse;
+            
+            // End the generation session
+            node.endGenerationSession(result.success, result.finalResponse);
+            
+            // Set the final content using the special method that doesn't clear generation history
+            node.setContentFromGeneration(result.finalResponse);
             node.generationHistory = result.history;
 
             this.emit('nodeGenerationComplete', { nodeId, success: true, node });
 
-            // Automatically summarize the content after generating it.
-            await this.summarizeNodeContent(nodeId);
+            // Automatically summarize the content after generating it, but skip if we're in bulk mode
+            // (bulk operations handle summarization explicitly with proper progress suppression)
+            if (!this.isGeneratingAllChildren) {
+                await this.summarizeNodeContent(nodeId);
+            }
 
         } catch (error: any) {
             console.error(`Error running content loop for node ${nodeId}:`, error);
             const errorMessage = error.message || "An unexpected error occurred during content generation.";
+            
+            // End the generation session with failure
+            if (node.currentGenerationSession) {
+                node.endGenerationSession(false, currentIterationContent || '');
+            }
+            
             this.emit('error', errorMessage);
             this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
         } finally {
@@ -365,9 +425,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     }
 
     /**
-     * Iterates through all children of a given node and generates content for them sequentially.
-     * After each child's content is generated, it's summarized, and that summary is
-     * added to the context for the next sibling's generation.
+     * Creates children from outline (if needed) and generates content for all children.
+     * This combines the functionality of createChildrenFromOutline and generateAllChildrenContent.
      * @param nodeId The ID of the parent node.
      */
     public async generateAllChildrenContent(nodeId: string): Promise<void> {
@@ -377,13 +436,55 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             return;
         }
 
-        const children = node.children;
-        const total = children.length;
-
-        if (total === 0) {
-            this.emit('error', `Node "${node.title}" has no children to generate content for.`);
+        if (!node.content || node.content.trim() === '') {
+            this.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first.`);
             return;
         }
+
+        this.isGeneratingAllChildren = true; // Flag to prevent progress clearing
+
+        // Step 1: Create children from outline if they don't exist
+        if (node.children.length === 0) {
+            this.emit('high-level-progress', { nodeId, message: 'Reading outline and generating titles...', current: 0, total: 1 });
+
+            const prompts = this.settingsManager.getPrompts();
+            const context = this.compileNodeContext(nodeId);
+            const childLevelName = node.childLevelName || 'item';
+
+            const prompt = prompts.create_children_from_outline_user
+                .replace('{{outline_content}}', node.content)
+                .replace('{{child_level_name}}', childLevelName)
+                .replace('{{context}}', context);
+
+            try {
+                // Using the 'creator' model as it's for generating new content/structure
+                const response = await this.openRouterClient.chat('creator', prompt);
+                const titles = this.parseBulletedList(response);
+
+                if (titles.length === 0) {
+                    this.emit('error', `The AI did not return a valid list of titles from the outline.`);
+                    this.isGeneratingAllChildren = false;
+                    return;
+                }
+
+                titles.forEach(title => {
+                    if (typeof title === 'string') {
+                        this.addNode(title, nodeId);
+                    }
+                });
+
+                this.saveToLocalStorage();
+            } catch(error) {
+                console.error('Failed to create children from outline via LLM:', error);
+                this.emit('error', 'The AI failed to process the outline. Please try again.');
+                this.isGeneratingAllChildren = false;
+                return;
+            }
+        }
+
+        // Step 2: Generate content for all children
+        const children = node.children;
+        const total = children.length;
 
         for (let i = 0; i < total; i++) {
             const child = children[i];
@@ -392,18 +493,29 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             // No need to pass count here, as these should be leaf or sub-branch nodes
             // where the content is prose or a more detailed outline.
             await this.generateNodeContent(child.id, 5, true);
-            await this.summarizeNodeContent(child.id);
+            await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
         }
 
-        this.emit('project-loaded');
-        console.log(`Finished generating content for all children of "${node.title}".`);
+        this.isGeneratingAllChildren = false; // Reset flag
+        
+        // Clear progress bars and emit completion event
+        this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+        this.emit('nodeGenerationComplete', { nodeId, success: true, node });
+        
+        // Small delay to ensure all async operations complete, then trigger UI cleanup
+        setTimeout(() => {
+            this.emit('project-loaded');
+        }, 100);
+        
+
     }
     
     /**
      * Generates a summary for a given node's content using an LLM call.
      * @param nodeId The ID of the node to summarize.
+     * @param suppressProgressClearing Optional flag to suppress progress clearing (used during bulk operations).
      */
-    public async summarizeNodeContent(nodeId: string): Promise<void> {
+    public async summarizeNodeContent(nodeId: string, suppressProgressClearing: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) {
             this.emit('error', `Could not find node with ID ${nodeId} to summarize.`);
@@ -415,7 +527,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             return;
         }
 
-        this.emit('high-level-progress', { nodeId, message: 'Summarizing content...', current: 0, total: 1 });
+        // Only emit progress events if not suppressed (not during bulk operations)
+        if (!suppressProgressClearing) {
+            this.emit('high-level-progress', { nodeId, message: 'Summarizing content...', current: 0, total: 1 });
+        }
 
         const prompts = this.settingsManager.getPrompts();
         const systemPrompt = prompts.summarize_system.replace('{{content}}', node.content);
@@ -425,13 +540,17 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             node.summary = summary;
             this.emit('nodeSummaryGenerated', { nodeId, summary });
             this.saveToLocalStorage();
-            // Explicitly clear the progress bar on success
-            this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            // Only clear the progress bar if not suppressed (not during bulk operations)
+            if (!suppressProgressClearing) {
+                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            }
         } catch(error) {
             console.error(`Failed to summarize node ${nodeId}:`, error);
             this.emit('error', `An error occurred while summarizing. Please check the console for details.`);
-            // Explicitly clear the progress bar on error
-            this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            // Only clear the progress bar if not suppressed (not during bulk operations)
+            if (!suppressProgressClearing) {
+                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            }
         }
     }
 
@@ -459,11 +578,65 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      */
     public saveToLocalStorage(): void {
         try {
-            const json = this.save();
-            localStorage.setItem('expert_app_current_project', json);
+            this.saveAllProjectsToLocalStorage();
         } catch (error) {
             console.error("Failed to save project to localStorage:", error);
             this.emit('error', `Failed to save project to your browser's local storage. Some changes may not be persisted.`);
+        }
+    }
+
+    /**
+     * Saves all projects and active project ID to localStorage.
+     */
+    private saveAllProjectsToLocalStorage(): void {
+        const projects = state.getProjects();
+        const activeProject = state.getActiveProject();
+        
+        const projectsData = projects.map((project: ProjectManager) => project.save());
+        localStorage.setItem(ProjectManager.MULTI_PROJECT_STORAGE_KEY, JSON.stringify(projectsData));
+        
+        if (activeProject) {
+            localStorage.setItem(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
+        }
+        
+        // Keep legacy storage for backward compatibility
+        if (activeProject) {
+            localStorage.setItem(ProjectManager.LOCAL_STORAGE_KEY, activeProject.save());
+        }
+    }
+
+    /**
+     * Loads all projects from localStorage.
+     */
+    public static loadAllProjectsFromLocalStorage(
+        loopOrchestrator: LoopOrchestrator,
+        settingsManager: SettingsManager,
+        openRouterClient: OpenRouterClient
+    ): { projects: ProjectManager[], activeProjectId: string | null } {
+        try {
+            // Try new multi-project storage first
+            const projectsJson = localStorage.getItem(ProjectManager.MULTI_PROJECT_STORAGE_KEY);
+            const activeProjectId = localStorage.getItem(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+            
+            if (projectsJson) {
+                const projectsData = JSON.parse(projectsJson);
+                const projects = projectsData.map((data: string) => 
+                    ProjectManager.load(data, loopOrchestrator, settingsManager, openRouterClient)
+                );
+                return { projects, activeProjectId };
+            }
+            
+            // Fall back to legacy single project storage
+            const legacyProjectJson = localStorage.getItem(ProjectManager.LOCAL_STORAGE_KEY);
+            if (legacyProjectJson) {
+                const project = ProjectManager.load(legacyProjectJson, loopOrchestrator, settingsManager, openRouterClient);
+                return { projects: [project], activeProjectId: project.rootNode.id };
+            }
+            
+            return { projects: [], activeProjectId: null };
+        } catch (error) {
+            console.error("Failed to load projects from localStorage:", error);
+            return { projects: [], activeProjectId: null };
         }
     }
 
@@ -500,39 +673,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // with the hydrated version of our saved node tree.
         project.rootNode = this.rehydrateNode(plainObject.rootNode);
         
-        // After loading, validate and repair the profile for every node in the tree.
-        project.validateAndRepairNodeProfiles(project.rootNode);
-
         return project;
-    }
-
-    /**
-     * Recursively traverses the node tree and ensures each node has a valid
-     * settings profile assigned. If a profile is invalid, it assigns a valid one.
-     * @param node The node to start validation from.
-     */
-    private validateAndRepairNodeProfiles(node: DocumentNode) {
-        const profile = this.settingsManager.getProfile(node.settingsProfileName);
-
-        if (!profile || !profile.criteria || profile.criteria.length === 0) {
-            // The current profile is invalid, find the first valid one and assign it.
-            const availableProfiles = this.settingsManager.getProfileNames();
-            const firstValidProfileName = availableProfiles.find(name => {
-                const p = this.settingsManager.getProfile(name);
-                return p && p.criteria && p.criteria.length > 0;
-            });
-
-            // If a valid profile is found, assign it. Otherwise, it keeps the old one
-            // and will throw the loud error on generation attempt.
-            if (firstValidProfileName) {
-                node.settingsProfileName = firstValidProfileName;
-            }
-        }
-
-        // Recurse for all children
-        for (const child of node.children) {
-            this.validateAndRepairNodeProfiles(child);
-        }
     }
 
     /**
@@ -554,7 +695,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             summary: plainNode.summary || '',
             generationPrompt: plainNode.generationPrompt || null,
             generationHistory: plainNode.generationHistory || [],
-            settingsProfileName: plainNode.settingsProfileName || 'default',
+            generationSessions: plainNode.generationSessions || [],
             children: [], // Reset children, as they will be rehydrated recursively
         });
 
@@ -570,5 +711,19 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.selectedNodeId = nodeId;
         const node = nodeId ? this.findNodeById(nodeId) : null;
         this.emit('node-selected', node);
+    }
+
+    /**
+     * Checks if any node in the project is currently generating content.
+     * This is used to prevent concurrent operations that could cause conflicts.
+     * @returns true if any node is currently generating, false otherwise
+     */
+    public isAnyNodeGenerating(): boolean {
+        const checkNode = (node: DocumentNode): boolean => {
+            if (node.isGenerating) return true;
+            return node.children.some(child => checkNode(child));
+        };
+        
+        return checkNode(this.rootNode);
     }
 } 

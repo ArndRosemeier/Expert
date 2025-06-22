@@ -53,7 +53,6 @@ export class OpenRouterClient {
   }
 
   public setSelectedModels(models: Record<string, string>): void {
-    console.log('[OpenRouterClient] setSelectedModels called with:', models);
     this.models = models;
   }
 
@@ -67,8 +66,6 @@ export class OpenRouterClient {
    */
   async chat(purpose: string, message: string): Promise<string> {
     const model = this.getModelForPurpose(purpose);
-    
-    console.log(`[OpenRouterClient] Chat request for purpose: "${purpose}". Current models:`, this.models);
 
     if (!model) {
       throw new Error(`No model configured for purpose: ${purpose}`);

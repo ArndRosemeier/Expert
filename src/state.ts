@@ -7,7 +7,8 @@ import { OrchestratorPrompts } from "./PromptManager";
 import { TemplateManager } from "./TemplateManager";
 
 let orchestrator: LoopOrchestrator | null = null;
-let currentProject: ProjectManager | null = null;
+let projects: ProjectManager[] = [];
+let activeProjectId: string | null = null;
 let openRouterClient: OpenRouterClient | null = null;
 let settingsManager: SettingsManager | null = null;
 let modelSelector: ModelSelector | null = null;
@@ -17,20 +18,57 @@ let orchestratorPrompts: OrchestratorPrompts | null = null;
 
 // --- Getters ---
 export const getOrchestrator = () => orchestrator;
-export const getCurrentProject = () => currentProject;
+export const getProjects = () => projects;
+export const getActiveProject = () => projects.find(p => p.rootNode.id === activeProjectId) || null;
 export const getOpenRouterClient = () => openRouterClient;
-export const getModelSelector = () => modelSelector;
 export const getSettingsManager = () => settingsManager;
+export const getModelSelector = () => modelSelector;
 export const getTemplateManager = () => templateManager;
 export const getIsAppRendered = () => isAppRendered;
 export const getOrchestratorPrompts = () => orchestratorPrompts;
 
 // --- Setters ---
-export const setOrchestrator = (newOrchestrator: LoopOrchestrator) => orchestrator = newOrchestrator;
-export const setCurrentProject = (project: ProjectManager | null) => currentProject = project;
-export const setOpenRouterClient = (client: OpenRouterClient) => openRouterClient = client;
-export const setModelSelector = (newModelSelector: ModelSelector) => modelSelector = newModelSelector;
-export const setSettingsManager = (newSettingsManager: SettingsManager) => settingsManager = newSettingsManager;
-export const setTemplateManager = (newTemplateManager: TemplateManager) => templateManager = newTemplateManager;
-export const setIsAppRendered = (value: boolean) => isAppRendered = value;
-export const setOrchestratorPrompts = (prompts: OrchestratorPrompts) => orchestratorPrompts = prompts; 
+export const setOrchestrator = (orch: LoopOrchestrator | null) => orchestrator = orch;
+export const addProject = (project: ProjectManager) => {
+    projects.push(project);
+    if (!activeProjectId) {
+        activeProjectId = project.rootNode.id;
+    }
+};
+export const setActiveProject = (projectId: string) => {
+    const project = projects.find(p => p.rootNode.id === projectId);
+    if (project) {
+        activeProjectId = projectId;
+    }
+};
+export const removeProject = (projectId: string) => {
+    const index = projects.findIndex(p => p.rootNode.id === projectId);
+    if (index >= 0) {
+        projects.splice(index, 1);
+        if (activeProjectId === projectId) {
+            activeProjectId = projects.length > 0 ? projects[0].rootNode.id : null;
+        }
+    }
+};
+export const setOpenRouterClient = (client: OpenRouterClient | null) => openRouterClient = client;
+export const setSettingsManager = (manager: SettingsManager | null) => settingsManager = manager;
+export const setModelSelector = (selector: ModelSelector | null) => modelSelector = selector;
+export const setTemplateManager = (manager: TemplateManager | null) => templateManager = manager;
+export const setIsAppRendered = (rendered: boolean) => isAppRendered = rendered;
+export const setOrchestratorPrompts = (prompts: OrchestratorPrompts | null) => orchestratorPrompts = prompts;
+
+// --- Legacy compatibility ---
+export const getCurrentProject = () => getActiveProject();
+export const setCurrentProject = (project: ProjectManager | null) => {
+    if (project) {
+        // If project already exists, just set it as active
+        const existing = projects.find(p => p.rootNode.id === project.rootNode.id);
+        if (existing) {
+            activeProjectId = project.rootNode.id;
+        } else {
+            addProject(project);
+        }
+    } else {
+        activeProjectId = null;
+    }
+}; 

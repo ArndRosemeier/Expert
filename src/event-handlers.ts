@@ -41,7 +41,7 @@ function recreateAndReconfigureServices() {
     const orchestrator = new LoopOrchestrator(client, state.getOrchestratorPrompts() || undefined);
     state.setOpenRouterClient(client);
     state.setOrchestrator(orchestrator);
-    console.log('Services reconfigured.');
+    
 }
 
 function handleCreateProject(title: string, template: ProjectTemplate) {
@@ -55,29 +55,33 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     }
     
     const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
-    state.setCurrentProject(project);
+    state.addProject(project);
     project.saveToLocalStorage();
     
     closeNewProjectModal();
-    initializeProjectUI(project);
+    initializeProjectUI();
 }
 
-function loadPersistedProject(): ProjectManager | null {
-    const savedProjectJson = localStorage.getItem('expert_app_current_project');
-    if (!savedProjectJson) return null;
-
+function loadPersistedProjects(): void {
     try {
         const orchestrator = state.getOrchestrator();
         const settingsManager = state.getSettingsManager();
         const client = state.getOpenRouterClient();
         if (!orchestrator || !settingsManager || !client) {
-            throw new Error("Cannot load project without core services.");
+            throw new Error("Cannot load projects without core services.");
         }
-        return ProjectManager.load(savedProjectJson, orchestrator, settingsManager, client);
+        
+        const { projects, activeProjectId } = ProjectManager.loadAllProjectsFromLocalStorage(orchestrator, settingsManager, client);
+        
+        projects.forEach(project => state.addProject(project));
+        if (activeProjectId) {
+            state.setActiveProject(activeProjectId);
+        }
     } catch (error) {
-        console.error("Failed to load project from storage:", error);
+        console.error("Failed to load projects from storage:", error);
         localStorage.removeItem('expert_app_current_project');
-        return null;
+        localStorage.removeItem('expert_app_projects');
+        localStorage.removeItem('expert_app_active_project');
     }
 }
 
@@ -93,11 +97,10 @@ export function initialize() {
 
     recreateAndReconfigureServices();
 
-    const project = loadPersistedProject();
-    if (project) {
-        state.setCurrentProject(project);
-        initializeProjectUI(project);
-    }
+    loadPersistedProjects();
+    
+    // Initialize the UI with projects (if any)
+    initializeProjectUI();
 
     // Attach event listeners
     getElementById('settingsBtn').addEventListener('click', openModal);
@@ -126,10 +129,10 @@ export function initialize() {
     });
 
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
-        console.log('API key or models not set. Forcing settings modal.');
+
         openModal();
-    } else if (!project) {
+    } else if (!state.getActiveProject()) {
         openNewProjectModal(handleCreateProject);
     }
-    console.log('Application initialized.');
+    
 } 

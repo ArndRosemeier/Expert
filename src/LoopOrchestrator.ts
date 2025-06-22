@@ -84,6 +84,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             // We don't need to call the LLM for the first response, but we record it in history.
             const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
             history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
+
             this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 0, totalStepsInIteration });
         } else {
             // For generation from scratch, we build the initial prompt from the template.
@@ -98,12 +99,14 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             }
             const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
             history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
+
             this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
         }
 
         for (let i = 1; i <= maxIterations; i++) {
             if (this.stopRequested) break;
             
+
             this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
 
             let ratingsFromAI: Rating[] | null = null;
@@ -130,6 +133,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             }
 
             let allGoalsMet = true;
+            const goalResults: string[] = [];
             for (const rating of ratingsFromAI) {
                 const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
                 this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
@@ -137,9 +141,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 const originalCriterion = criteria.find(c => c.name === rating.criterion);
                 if (originalCriterion && rating.score < originalCriterion.goal) {
                     allGoalsMet = false;
+                    goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (FAILED)`);
+                } else if (originalCriterion) {
+                    goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (PASSED)`);
                 }
             }
-            
             if (!allGoalsMet && i < maxIterations) {
                 // 2. If not success, call Editor
                 const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
@@ -152,6 +158,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 }
                 const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
                 history.push({ iteration: i, type: 'editor', payload: editorPayload });
+
                 this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i, maxIterations, step: 3, totalStepsInIteration });
 
                 // 3. Call creator again to get the improved response
@@ -167,6 +174,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
             } else {
                 // If goals are met or it's the last iteration, break the loop.
+
                 success = allGoalsMet;
                 break;
             }
@@ -209,15 +217,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
-        const criteriaObject = criteria.reduce((obj, c) => {
-            obj[c.name] = c.goal;
-            return obj;
-        }, {} as Record<string, number>);
+        // Only send criterion names and descriptions, NOT the goals
+        const criteriaList = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return c.description ? `${shortName}: ${c.description}` : shortName;
+        });
         
         return this.prompts.rater
             .replace('{{originalPrompt}}', prompt)
             .replace('{{response}}', response)
-            .replace('{{criteria}}', JSON.stringify(criteriaObject, null, 2));
+            .replace('{{criteria}}', criteriaList.join('\n- '));
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -281,7 +291,4 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             .replace('{{ratings}}', JSON.stringify(ratings, null, 2));
     }
 
-    public on<K extends keyof OrchestratorEvents>(event: K, listener: (...args: OrchestratorEvents[K]) => void): void {
-        // ... existing code ...
-    }
 } 
