@@ -394,9 +394,14 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     const div = document.createElement('div');
     div.className = 'criterion';
 
+    // Combine name and description for full text editing
+    const fullText = criterion.description 
+        ? `${criterion.name}. ${criterion.description}`
+        : criterion.name;
+
     const textarea = document.createElement('textarea');
     textarea.placeholder = "e.g., 'Clarity and conciseness'";
-    textarea.value = criterion.name;
+    textarea.value = fullText;
     textarea.addEventListener('input', autoResizeTextarea);
     textarea.addEventListener('focus', function() { this.selectionStart = this.selectionEnd = this.value.length; });
 
@@ -428,20 +433,20 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     textareaContainer.style.position = 'relative';
 
     // Store the full text in a data attribute to ensure we never lose it
-    div.setAttribute('data-full-name', criterion.name);
+    div.setAttribute('data-full-text', fullText);
 
     const updateDisplay = (text: string) => {
         textDisplay.textContent = text.split('.')[0] + (text.includes('.') && text.split('.')[0] !== text ? '.' : '');
     };
     
-    updateDisplay(criterion.name);
-    textarea.value = criterion.name;
+    updateDisplay(fullText);
+    textarea.value = fullText;
     textarea.style.display = 'none';
 
     textDisplay.addEventListener('click', () => {
-        // When editing starts, ensure textarea has the full text
-        const fullName = div.getAttribute('data-full-name') || criterion.name;
-        textarea.value = fullName;
+        // When editing starts, ensure textarea has the full text (name + description)
+        const storedFullText = div.getAttribute('data-full-text') || fullText;
+        textarea.value = storedFullText;
         textDisplay.style.display = 'none';
         textarea.style.display = 'block';
         textarea.focus();
@@ -450,7 +455,7 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
 
     textarea.addEventListener('blur', () => {
         // When editing ends, store the full text and update display
-        div.setAttribute('data-full-name', textarea.value);
+        div.setAttribute('data-full-text', textarea.value);
         textarea.style.display = 'none';
         textDisplay.style.display = 'block';
         updateDisplay(textarea.value);
@@ -475,12 +480,32 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
         const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
         const inputs = el.querySelectorAll<HTMLInputElement>('input[type="number"]');
         if (textarea && inputs.length === 2) {
-            // Use the full name from data attribute, fall back to textarea value
-            const name = div.getAttribute('data-full-name') || textarea.value;
+            // Use the full text from data attribute, fall back to textarea value
+            const fullText = div.getAttribute('data-full-text') || textarea.value;
             const goal = parseInt(inputs[0].value, 10);
             const weight = parseFloat(inputs[1].value);
-            if (name && !isNaN(goal) && !isNaN(weight)) {
-                criteria.push({ name, goal, weight });
+            
+            if (fullText && !isNaN(goal) && !isNaN(weight)) {
+                // Parse the full text to extract name and description
+                const firstDotIndex = fullText.indexOf('.');
+                let name: string;
+                let description: string | undefined;
+                
+                if (firstDotIndex !== -1 && firstDotIndex < fullText.length - 1) {
+                    // Has description after first period
+                    name = fullText.substring(0, firstDotIndex);
+                    description = fullText.substring(firstDotIndex + 1).trim();
+                } else {
+                    // No description, just the name
+                    name = fullText;
+                    description = undefined;
+                }
+                
+                const criterion: QualityCriterion = { name, goal, weight };
+                if (description) {
+                    criterion.description = description;
+                }
+                criteria.push(criterion);
             }
         }
     });
