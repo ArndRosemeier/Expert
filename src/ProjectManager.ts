@@ -239,9 +239,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         
         // Special handling for text expansion prompt placeholders
         if (!node.parentId) {
-            // For root nodes, the text to expand is the project title
+            // For root nodes, the text to expand is the node's content
             filledPrompt = filledPrompt
-                .replace(/\{\{text\}\}/g, this.projectTitle);
+                .replace(/\{\{text\}\}/g, node.content || '');
         }
         
         if (!node.isLeaf && count) {
