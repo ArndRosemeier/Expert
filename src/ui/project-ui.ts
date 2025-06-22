@@ -353,7 +353,7 @@ export function renderNodeDetails() {
 
         <div class="node-section generation-prompt-section">
             <div class="prompt-header">
-                <label for="node-generation-prompt">Generation Prompt</label>
+                <label for="node-generation-prompt">Generation Prompt (use {{content}} to reference current node content)</label>
                 <button id="default-prompt-btn" class="button button-secondary">Default</button>
             </div>
             <textarea id="node-generation-prompt" class="large-textarea" rows="8" placeholder="Enter a prompt here to generate content from scratch...">${node.generationPrompt || ''}</textarea>

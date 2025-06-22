@@ -149,9 +149,7 @@ The broader context of the document is:
 
 Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
 
-    expand_text_user: `Take the following text and flesh it out with more detail and depth. Keep the same general structure and flow, just expand on what's already there.
-
-{{text}}`,
+    expand_text_user: ``,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -160,12 +158,12 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     rater: ['originalPrompt', 'response', 'criteria'],
     editor: ['response', 'ratings'],
     summarize_system: ['content'],
-    expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content'],
-    content_generation_user: ['path', 'context', 'title'],
-    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count'],
-    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context'],
-    prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title'],
-    expand_text_user: ['text'],
+    expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
+    content_generation_user: ['path', 'context', 'title', 'content'],
+    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
+    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
+    prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
+    expand_text_user: ['content', 'path', 'context', 'title'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {

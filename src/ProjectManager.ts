@@ -235,13 +235,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             .replace(/\{\{path\}\}/g, path)
             .replace(/\{\{context\}\}/g, context)
             .replace(/\{\{title\}\}/g, node.title)
-            .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '');
+            .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '')
+            .replace(/\{\{content\}\}/g, node.content || '');
         
-        // Special handling for text expansion prompt placeholders
+        // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {
-            // For root nodes, the text to expand is the node's content
-            filledPrompt = filledPrompt
-                .replace(/\{\{text\}\}/g, node.content || '');
+            // Root nodes use the expand_text_user prompt which is now user-customizable
         }
         
         if (!node.isLeaf && count) {
