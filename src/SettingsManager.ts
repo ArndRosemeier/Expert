@@ -14,7 +14,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Natural & Authentic Tone",
         description: "The language sounds human and authentic. It avoids being overly formal, academic, or robotic.",
-        goal: 9,
+        goal: 8,
         weight: 1.0
     },
     {
@@ -38,13 +38,13 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Avoids AI Clichés",
         description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' or 'tapestry of...'",
-        goal: 9,
+        goal: 8,
         weight: 1.0
     },
     {
         name: "Understated Language",
         description: "The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.",
-        goal: 9,
+        goal: 8,
         weight: 1.0
     },
     {
@@ -61,7 +61,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     },
     {
         name: 'Human-like Naming',
-        goal: 9,
+        goal: 8,
         weight: 1.0,
         description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established."
     }
