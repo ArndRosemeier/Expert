@@ -241,8 +241,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         if (!node.parentId) {
             filledPrompt = filledPrompt
                 .replace(/\{\{template_name\}\}/g, this.template.name)
-                .replace(/\{\{project_title\}\}/g, this.projectTitle)
-                .replace(/\{\{hierarchy_levels\}\}/g, this.template.hierarchyLevels.join(' → '));
+                .replace(/\{\{project_title\}\}/g, this.projectTitle);
         }
         
         if (!node.isLeaf && count) {

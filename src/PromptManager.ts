@@ -162,7 +162,7 @@ Focus on:
 
 Write this as flowing, descriptive prose - do NOT create lists, outlines, or structured sections. This unstructured content will later be organized into the proper {{template_name}} structure. Just focus on capturing the creative vision and essential elements in an organic, narrative way.
 
-Template structure: {{hierarchy_levels}}`,
+The theme of the {{template_name}} should be this:`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -176,7 +176,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count'],
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title'],
-    project_generation_user: ['template_name', 'project_title', 'hierarchy_levels'],
+    project_generation_user: ['template_name', 'project_title'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
