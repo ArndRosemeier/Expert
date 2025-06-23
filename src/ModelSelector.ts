@@ -1,5 +1,6 @@
 import { OpenRouterClient } from './OpenRouterClient';
 import type { OpenRouterModel } from './OpenRouterClient';
+import { StorageService, IStorageService } from './StorageService';
 
 const LOCAL_STORAGE_KEY = 'openrouter_api_key';
 const LOCAL_STORAGE_MODELS = 'openrouter_model_purposes';
@@ -34,10 +35,13 @@ export class ModelSelector {
   private apiKey: string = '';
   private models: OpenRouterModel[] = [];
   private loading: boolean = false;
+  private testing: boolean = false;
   private error: string | null = null;
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
   private root: HTMLElement | null = null;
+  private storageService: Promise<IStorageService>;
+  private initializationPromise: Promise<void>;
 
   constructor(
     onSelect: (selectedModels: Record<string, string>) => void,
@@ -45,7 +49,16 @@ export class ModelSelector {
   ) {
     this.onSelect = onSelect;
     this.closeModal = closeModal;
-    this.loadFromStorage();
+    this.storageService = StorageService.getInstance();
+    this.initializationPromise = this.initializeAsync();
+  }
+
+  public async waitForInitialization(): Promise<void> {
+    return this.initializationPromise;
+  }
+
+  private async initializeAsync(): Promise<void> {
+    await this.loadFromStorage();
     if (this.apiKey && !this.fetched) {
       this.fetchModels();
     }
@@ -104,21 +117,50 @@ export class ModelSelector {
     input.style.transition = 'border-color 0.2s';
     input.addEventListener('focus', () => { input.style.borderColor = '#3b82f6'; });
     input.addEventListener('blur', () => { input.style.borderColor = '#d1d5db'; });
-    input.addEventListener('input', (e) => {
+    input.addEventListener('input', async (e) => {
       this.apiKey = (e.target as HTMLInputElement).value;
-      this.saveToStorage();
+      await this.saveToStorage();
       this.update();
     });
     inputDiv.appendChild(input);
     // Info
     const info = document.createElement('div');
-    info.innerHTML = '<strong>Info:</strong> Your API key and model selections are stored in your browser\'s localStorage. Anyone with access to this browser profile can view them.';
+                info.innerHTML = '<strong>Info:</strong> Your API key and model selections are stored in your browser\'s IndexedDB. Anyone with access to this browser profile can view them.';
     info.style.fontSize = '0.85rem';
     info.style.color = '#b45309';
     info.style.background = '#fef3c7';
     info.style.borderRadius = '0.5rem';
     info.style.padding = '0.5rem 0.75rem';
     inputDiv.appendChild(info);
+    // Button container for Fetch and Test buttons
+    const buttonRow = document.createElement('div');
+    buttonRow.style.display = 'flex';
+    buttonRow.style.gap = '0.75rem';
+    buttonRow.style.width = '100%';
+
+    // Test API Key button
+    const testBtn = document.createElement('button');
+    testBtn.textContent = this.testing ? 'Testing...' : 'Test API Key';
+    testBtn.disabled = this.testing || !this.apiKey;
+    testBtn.style.padding = '0.75rem 1rem';
+    testBtn.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
+    testBtn.style.color = 'white';
+    testBtn.style.fontWeight = 'bold';
+    testBtn.style.border = 'none';
+    testBtn.style.borderRadius = '0.75rem';
+    testBtn.style.fontSize = '1rem';
+    testBtn.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
+    testBtn.style.transition = 'background 0.2s';
+    testBtn.style.flex = '1';
+    testBtn.addEventListener('mouseenter', () => {
+      if (!testBtn.disabled) testBtn.style.background = '#059669';
+    });
+    testBtn.addEventListener('mouseleave', () => {
+      if (!testBtn.disabled) testBtn.style.background = '#10b981';
+    });
+    testBtn.addEventListener('click', () => this.testApiKey());
+    buttonRow.appendChild(testBtn);
+
     // Fetch button
     const fetchBtn = document.createElement('button');
     fetchBtn.textContent = this.loading ? 'Fetching...' : 'Fetch Models';
@@ -132,6 +174,7 @@ export class ModelSelector {
     fetchBtn.style.fontSize = '1rem';
     fetchBtn.style.cursor = this.loading || !this.apiKey ? 'not-allowed' : 'pointer';
     fetchBtn.style.transition = 'background 0.2s';
+    fetchBtn.style.flex = '1';
     fetchBtn.addEventListener('mouseenter', () => {
       if (!fetchBtn.disabled) fetchBtn.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
     });
@@ -139,7 +182,9 @@ export class ModelSelector {
       if (!fetchBtn.disabled) fetchBtn.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
     });
     fetchBtn.addEventListener('click', () => this.fetchModels());
-    inputDiv.appendChild(fetchBtn);
+    buttonRow.appendChild(fetchBtn);
+
+    inputDiv.appendChild(buttonRow);
     container.appendChild(inputDiv);
     // Error
     if (this.error) {
@@ -278,7 +323,10 @@ export class ModelSelector {
       const cancelBtn = document.createElement('button');
       cancelBtn.textContent = 'Cancel';
       // Only allow canceling if a valid configuration is already saved.
-      cancelBtn.disabled = !this.isSavedConfigValid();
+      cancelBtn.disabled = true; // Start disabled, will be enabled async
+      this.isSavedConfigValid().then(isValid => {
+        cancelBtn.disabled = !isValid;
+      });
       cancelBtn.addEventListener('click', () => {
         this.closeModal();
       });
@@ -289,9 +337,9 @@ export class ModelSelector {
       const allSelected = this.areAllModelsSelected();
       saveBtn.textContent = 'Save and Close';
       saveBtn.disabled = !allSelected;
-      saveBtn.addEventListener('click', () => {
+      saveBtn.addEventListener('click', async () => {
         if (this.areAllModelsSelected()) {
-          this.saveToStorage();
+          await this.saveToStorage();
           this.onSelect(this.selectedModels);
         }
       });
@@ -300,6 +348,31 @@ export class ModelSelector {
       container.appendChild(buttonContainer);
     }
     this.root.appendChild(container);
+  }
+
+  private async testApiKey() {
+    this.testing = true;
+    this.error = null;
+    this.update();
+    
+    try {
+      const client = new OpenRouterClient(this.apiKey);
+      // Test by fetching models - this is a simple GET request that validates the API key
+      const models = await client.fetchModels();
+      
+      if (models && models.length > 0) {
+        this.error = null;
+        alert(`✅ API Key is valid! Found ${models.length} available models. You can now fetch models and configure the service.`);
+      } else {
+        alert('⚠️ API Key appears to work, but no models were returned. You may want to check your account status.');
+      }
+    } catch (e: any) {
+      this.error = `API Key Test Failed: ${e.message}`;
+      alert(`❌ API Key Test Failed: ${e.message}`);
+    } finally {
+      this.testing = false;
+      this.update();
+    }
   }
 
   private async fetchModels() {
@@ -327,33 +400,41 @@ export class ModelSelector {
     }
   }
 
-  loadFromStorage() {
-    const key = localStorage.getItem(LOCAL_STORAGE_KEY);
+  async loadFromStorage(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      
+      const key = await storage.get<string>(LOCAL_STORAGE_KEY);
     if (key) this.apiKey = key;
 
-    const models = localStorage.getItem(LOCAL_STORAGE_MODELS);
+      const models = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
     if (models) {
-      try {
-        this.selectedModels = JSON.parse(models);
-      } catch (e) {
-        console.error("Failed to parse corrupted model selections from localStorage. Resetting.", e);
-        this.selectedModels = {};
+        this.selectedModels = models;
       }
+    } catch (error) {
+      console.error("Failed to load model configuration from storage", error);
+        this.selectedModels = {};
+      this.apiKey = '';
     }
   }
 
-  private saveToStorage() {
-    localStorage.setItem(LOCAL_STORAGE_KEY, this.apiKey);
-    localStorage.setItem(LOCAL_STORAGE_MODELS, JSON.stringify(this.selectedModels));
+  private async saveToStorage(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
+      await storage.set(LOCAL_STORAGE_MODELS, this.selectedModels);
+    } catch (error) {
+      console.error("Failed to save model configuration to storage", error);
+    }
   }
 
   public areAllModelsSelected(): boolean {
     return PURPOSES.every(p => this.selectedModels[p.key] && this.selectedModels[p.key] !== '');
   }
 
-  public setSelectedModels(models: Record<string, string>) {
+  public async setSelectedModels(models: Record<string, string>): Promise<void> {
     this.selectedModels = { ...models };
-    this.saveToStorage();
+    await this.saveToStorage();
     this.update(); // Re-render to show the new selections
   }
 
@@ -365,14 +446,15 @@ export class ModelSelector {
     return this.apiKey;
   }
 
-  private isSavedConfigValid(): boolean {
-    const savedModels = localStorage.getItem(LOCAL_STORAGE_MODELS);
+  private async isSavedConfigValid(): Promise<boolean> {
+    try {
+      const storage = await this.storageService;
+      const savedModels = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
     if (!savedModels) return false;
     
-    try {
-      const parsed = JSON.parse(savedModels);
-      return PURPOSES.every(p => parsed[p.key]);
-    } catch (e) {
+      return PURPOSES.every(p => savedModels[p.key]);
+    } catch (error) {
+      console.error("Failed to check saved config validity", error);
       return false;
     }
   }

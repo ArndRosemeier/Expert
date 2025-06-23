@@ -4,6 +4,9 @@ import { ProjectManager } from './ProjectManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { SettingsManager } from './SettingsManager';
 import { LoopOrchestrator } from './LoopOrchestrator';
+import { StorageService, IStorageService } from './StorageService';
+import { IndexedDBService } from './IndexedDBService';
+import { TemplateManager } from './TemplateManager';
 
 // Define a simple structure for a test result
 export interface TestResult {
@@ -62,11 +65,43 @@ export class TestRunner {
         results.push(this.testTemplateValidation());
         results.push(this.testErrorMessages());
 
-        return this.formatResultsAsHtml(results);
+        return this.formatResultsAsHtml(results, 'Phase 1: Core Functionality Tests');
     }
 
-    private formatResultsAsHtml(results: TestResult[]): string {
-        let html = '<h2>Test Results</h2>';
+    public async runStorageTests(): Promise<string> {
+        const results: TestResult[] = [];
+
+        // Storage abstraction tests
+        results.push(await this.testStorageServiceInitialization());
+        results.push(await this.testStorageServiceBasicOperations());
+        results.push(await this.testStorageServiceBulkOperations());
+                    results.push(await this.testStorageServiceMetadata());
+
+        // IndexedDB specific tests
+        results.push(await this.testIndexedDBServiceInitialization());
+        results.push(await this.testIndexedDBServiceOperations());
+        results.push(await this.testIndexedDBServiceTransactions());
+
+        // Service layer tests
+        results.push(await this.testTemplateManagerStorage());
+        results.push(await this.testSettingsManagerStorage());
+        results.push(await this.testProjectManagerStorage());
+        
+        // Export/Import functionality tests
+        results.push(await this.testSettingsExportImport());
+
+        // Performance and capacity tests
+        results.push(await this.testStorageCapacity());
+        results.push(await this.testStoragePerformance());
+
+        return this.formatResultsAsHtml(results, 'Storage System Tests');
+    }
+
+    private formatResultsAsHtml(results: TestResult[], title: string = 'Test Results'): string {
+        let html = `<h2>${title}</h2>`;
+        const passed = results.filter(r => r.success).length;
+        const total = results.length;
+        html += `<p><strong>Results: ${passed}/${total} tests passed</strong></p>`;
         html += '<ul style="list-style-type: none; padding: 0;">';
         results.forEach(result => {
             const status = result.success 
@@ -487,6 +522,541 @@ export class TestRunner {
             return { success: true, message: "Step 2.7: Error messages are helpful and informative." };
         } catch (error: any) {
             return { success: false, message: `Step 2.7 Failed: ${error.message}` };
+        }
+    }
+
+    // Storage System Tests
+
+    private async testStorageServiceInitialization(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            if (!storage) throw new Error("Storage service not initialized");
+            
+            const storageInfo = await StorageService.getStorageInfo();
+            if (!storageInfo.available) throw new Error("Storage not available");
+            
+            if (storageInfo.type !== 'indexedDB') {
+                throw new Error(`Unknown storage type: ${storageInfo.type}`);
+            }
+            
+            return { 
+                success: true, 
+                message: `Storage Test 1: StorageService initialized successfully (${storageInfo.type})` 
+            };
+        } catch (error: any) {
+            return { success: false, message: `Storage Test 1 Failed: ${error.message}` };
+        }
+    }
+
+    private async testStorageServiceBasicOperations(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            
+            // Test set and get
+            const testKey = 'test_storage_key_' + Date.now();
+            const testValue = { message: 'test value', timestamp: Date.now() };
+            
+            await storage.set(testKey, testValue);
+            const retrieved = await storage.get<typeof testValue>(testKey);
+            
+            if (!retrieved || retrieved.message !== testValue.message) {
+                throw new Error("Storage set/get failed");
+            }
+            
+            // Test delete
+            await storage.delete(testKey);
+            const afterDelete = await storage.get(testKey);
+            if (afterDelete !== undefined) {
+                throw new Error("Storage delete failed");
+            }
+            
+            return { success: true, message: "Storage Test 2: Basic storage operations work correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Storage Test 2 Failed: ${error.message}` };
+        }
+    }
+
+    private async testStorageServiceBulkOperations(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            
+            // Test multiple operations
+            const testPrefix = 'bulk_test_' + Date.now() + '_';
+            const testData = {
+                [testPrefix + '1']: { value: 'first' },
+                [testPrefix + '2']: { value: 'second' },
+                [testPrefix + '3']: { value: 'third' }
+            };
+            
+            // Set multiple values
+            for (const [key, value] of Object.entries(testData)) {
+                await storage.set(key, value);
+            }
+            
+            // Get all with prefix
+            const retrieved = await storage.getAll(testPrefix);
+            const retrievedKeys = Object.keys(retrieved);
+            
+            if (retrievedKeys.length < 3) {
+                throw new Error(`Expected 3 items with prefix, got ${retrievedKeys.length}`);
+            }
+            
+            // Cleanup
+            for (const key of retrievedKeys) {
+                await storage.delete(key);
+            }
+            
+            return { success: true, message: "Storage Test 3: Bulk operations work correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Storage Test 3 Failed: ${error.message}` };
+        }
+    }
+
+    private async testStorageServiceMetadata(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            const storageInfo = await StorageService.getStorageInfo();
+            
+            // Test that storage info provides useful information
+            if (typeof storageInfo.available !== 'boolean') {
+                throw new Error("Storage availability not reported correctly");
+            }
+            
+            // Verify it's IndexedDB
+            if (storageInfo.type !== 'indexedDB') {
+                throw new Error("Expected IndexedDB storage type");
+            }
+            
+            // Test usage information
+            const usage = await storage.getUsage();
+            if (typeof usage.quota !== 'number' || typeof usage.usage !== 'number') {
+                throw new Error("Storage usage information not provided correctly");
+            }
+            
+            // Test isIndexedDB flag consistency
+            const isIndexedDB = storage.isIndexedDB();
+            if (!isIndexedDB) {
+                throw new Error("Expected IndexedDB but got other storage type");
+            }
+            
+            return { success: true, message: "Storage Test 4: Storage metadata and type detection work correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Storage Test 4 Failed: ${error.message}` };
+        }
+    }
+
+    private async testIndexedDBServiceInitialization(): Promise<TestResult> {
+        try {
+            // Test if IndexedDB is supported
+            if (!window.indexedDB) {
+                return { success: true, message: "IndexedDB Test 1: Skipped (IndexedDB not supported in this browser)" };
+            }
+            
+            const storage = await StorageService.getInstance();
+            if (!storage.isIndexedDB()) {
+                return { success: false, message: "IndexedDB Test 1: Failed - IndexedDB is required but not available" };
+            }
+            
+            // If we're using IndexedDB, test direct access
+            const testDbConfig = {
+                name: 'TestDB_' + Date.now(),
+                version: 1,
+                stores: [
+                    {
+                        name: 'testStore',
+                        keyPath: 'id'
+                    }
+                ]
+            };
+            
+            const indexedDBService = new IndexedDBService(testDbConfig);
+            await indexedDBService.initialize();
+            
+            if (!indexedDBService.isInitialized()) {
+                throw new Error("IndexedDB service not initialized");
+            }
+            
+            indexedDBService.close();
+            
+            return { success: true, message: "IndexedDB Test 1: IndexedDB service initializes correctly" };
+        } catch (error: any) {
+            return { success: false, message: `IndexedDB Test 1 Failed: ${error.message}` };
+        }
+    }
+
+    private async testIndexedDBServiceOperations(): Promise<TestResult> {
+        try {
+            if (!window.indexedDB) {
+                return { success: true, message: "IndexedDB Test 2: Skipped (IndexedDB not supported)" };
+            }
+            
+            const storage = await StorageService.getInstance();
+            if (!storage.isIndexedDB()) {
+                return { success: false, message: "IndexedDB Test 2: Failed - IndexedDB is required but not available" };
+            }
+            
+            const testDbConfig = {
+                name: 'TestDBOps_' + Date.now(),
+                version: 1,
+                stores: [
+                    {
+                        name: 'testStore',
+                        keyPath: 'id'
+                    }
+                ]
+            };
+            
+            const indexedDBService = new IndexedDBService(testDbConfig);
+            await indexedDBService.initialize();
+            
+            // Test basic operations
+            const testData = { id: 'test1', value: 'test value', timestamp: Date.now() };
+            await indexedDBService.set('testStore', 'test1', testData);
+            
+            const retrieved = await indexedDBService.get('testStore', 'test1') as typeof testData;
+            if (!retrieved || retrieved.value !== testData.value) {
+                throw new Error("IndexedDB set/get failed");
+            }
+            
+            await indexedDBService.delete('testStore', 'test1');
+            const afterDelete = await indexedDBService.get('testStore', 'test1');
+            if (afterDelete !== undefined) {
+                throw new Error("IndexedDB delete failed");
+            }
+            
+            indexedDBService.close();
+            
+            return { success: true, message: "IndexedDB Test 2: IndexedDB operations work correctly" };
+        } catch (error: any) {
+            return { success: false, message: `IndexedDB Test 2 Failed: ${error.message}` };
+        }
+    }
+
+    private async testIndexedDBServiceTransactions(): Promise<TestResult> {
+        try {
+            if (!window.indexedDB) {
+                return { success: true, message: "IndexedDB Test 3: Skipped (IndexedDB not supported)" };
+            }
+            
+            const storage = await StorageService.getInstance();
+            if (!storage.isIndexedDB()) {
+                return { success: false, message: "IndexedDB Test 3: Failed - IndexedDB is required but not available" };
+            }
+            
+            const testDbConfig = {
+                name: 'TestDBTrans_' + Date.now(),
+                version: 1,
+                stores: [
+                    {
+                        name: 'testStore',
+                        keyPath: 'id'
+                    }
+                ]
+            };
+            
+            const indexedDBService = new IndexedDBService(testDbConfig);
+            await indexedDBService.initialize();
+            
+            // Test bulk operations (transactions)
+            const bulkData = [
+                { key: 'bulk1', value: { id: 'bulk1', data: 'first' } },
+                { key: 'bulk2', value: { id: 'bulk2', data: 'second' } },
+                { key: 'bulk3', value: { id: 'bulk3', data: 'third' } }
+            ];
+            
+            await indexedDBService.bulkSet('testStore', bulkData);
+            
+            const allData = await indexedDBService.getAll('testStore');
+            if (allData.length < 3) {
+                throw new Error(`Expected 3 items, got ${allData.length}`);
+            }
+            
+            await indexedDBService.clear('testStore');
+            const afterClear = await indexedDBService.getAll('testStore');
+            if (afterClear.length !== 0) {
+                throw new Error("Clear operation failed");
+            }
+            
+            indexedDBService.close();
+            
+            return { success: true, message: "IndexedDB Test 3: IndexedDB transactions work correctly" };
+        } catch (error: any) {
+            return { success: false, message: `IndexedDB Test 3 Failed: ${error.message}` };
+        }
+    }
+
+    private async testTemplateManagerStorage(): Promise<TestResult> {
+        try {
+            const templateManager = new TemplateManager();
+            
+            // Test template operations
+            const testTemplate = new ProjectTemplate('Test Template', ['Level1', 'Level2'], ['Doc1']);
+            await templateManager.saveTemplate('test_template', testTemplate);
+            
+            const retrieved = templateManager.getTemplate('test_template');
+            if (!retrieved || retrieved.name !== 'Test Template') {
+                throw new Error("Template save/get failed");
+            }
+            
+            await templateManager.deleteTemplate('test_template');
+            const afterDelete = templateManager.getTemplate('test_template');
+            if (afterDelete) {
+                throw new Error("Template delete failed");
+            }
+            
+            return { success: true, message: "Service Test 1: TemplateManager storage works correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Service Test 1 Failed: ${error.message}` };
+        }
+    }
+
+    private async testSettingsManagerStorage(): Promise<TestResult> {
+        try {
+            const settingsManager = new SettingsManager();
+            
+            // Give it time to initialize asynchronously
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Test settings operations
+            const testProfile = {
+                prompt: "Test prompt",
+                criteria: [{ name: 'Test', description: 'Test criterion', goal: 8, weight: 1.0 }],
+                maxIterations: 5,
+                selectedModels: { creator: 'test', rater: 'test', editor: 'test' }
+            };
+            
+            await settingsManager.saveProfile('test_profile', testProfile);
+            const retrieved = settingsManager.getProfile('test_profile');
+            if (!retrieved || retrieved.prompt !== 'Test prompt') {
+                throw new Error("Profile save/get failed");
+            }
+            
+            await settingsManager.deleteProfile('test_profile');
+            const afterDelete = settingsManager.getProfile('test_profile');
+            if (afterDelete) {
+                throw new Error("Profile delete failed");
+            }
+            
+            return { success: true, message: "Service Test 2: SettingsManager storage works correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Service Test 2 Failed: ${error.message}` };
+        }
+    }
+
+    private async testProjectManagerStorage(): Promise<TestResult> {
+        try {
+            const template = new ProjectTemplate('Test Project Template', ['Root', 'Child'], []);
+            const project = new ProjectManager('Test Project', template, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            // Add some content
+            project.addNode('Test Child', project.rootNode.id);
+            project.rootNode.content = 'Test root content';
+            
+            // Test save operation
+            await project.saveToStorage();
+            
+            // Test serialization (which is used in storage)
+            const json = project.save();
+            const loadedProject = ProjectManager.load(json, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            if (loadedProject.projectTitle !== project.projectTitle) {
+                throw new Error("Project title not preserved");
+            }
+            
+            if (loadedProject.rootNode.content !== project.rootNode.content) {
+                throw new Error("Project content not preserved");
+            }
+            
+            if (loadedProject.rootNode.children.length !== project.rootNode.children.length) {
+                throw new Error("Project structure not preserved");
+            }
+            
+            return { success: true, message: "Service Test 3: ProjectManager storage works correctly" };
+        } catch (error: any) {
+            return { success: false, message: `Service Test 3 Failed: ${error.message}` };
+        }
+    }
+
+    private async testStorageCapacity(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            const usage = await storage.getUsage();
+            
+            // Test with larger data to verify capacity improvements
+            const largeDataKey = 'capacity_test_' + Date.now();
+            const largeData = {
+                content: 'x'.repeat(1024 * 10), // 10KB of data
+                metadata: { size: '10KB', timestamp: Date.now() }
+            };
+            
+            await storage.set(largeDataKey, largeData);
+            const retrieved = await storage.get<typeof largeData>(largeDataKey);
+            
+            if (!retrieved || retrieved.content.length !== largeData.content.length) {
+                throw new Error("Large data storage failed");
+            }
+            
+            await storage.delete(largeDataKey);
+            
+            const newUsage = await storage.getUsage();
+            if (storage.isIndexedDB()) {
+                // With IndexedDB, we should have much higher capacity
+                if (newUsage.quota < 1024 * 1024 * 50) { // At least 50MB
+                    console.warn(`IndexedDB quota seems low: ${newUsage.quota} bytes`);
+                }
+            }
+            
+            return { 
+                success: true, 
+                message: `Performance Test 1: Storage capacity adequate (IndexedDB)` 
+            };
+        } catch (error: any) {
+            return { success: false, message: `Performance Test 1 Failed: ${error.message}` };
+        }
+    }
+
+    private async testStoragePerformance(): Promise<TestResult> {
+        try {
+            const storage = await StorageService.getInstance();
+            
+            // Test performance with multiple operations
+            const startTime = performance.now();
+            const operations = 10;
+            const testPrefix = 'perf_test_' + Date.now() + '_';
+            
+            // Perform multiple set operations
+            for (let i = 0; i < operations; i++) {
+                await storage.set(testPrefix + i, { 
+                    index: i, 
+                    data: 'test data for performance test',
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Perform multiple get operations
+            for (let i = 0; i < operations; i++) {
+                const result = await storage.get(testPrefix + i);
+                if (!result) {
+                    throw new Error(`Failed to retrieve item ${i}`);
+                }
+            }
+            
+            // Cleanup
+            for (let i = 0; i < operations; i++) {
+                await storage.delete(testPrefix + i);
+            }
+            
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+            
+            // Performance should be reasonable (less than 1 second for 10 operations)
+            if (duration > 1000) {
+                console.warn(`Storage operations took ${duration}ms, which seems slow`);
+            }
+            
+            return { 
+                success: true, 
+                message: `Performance Test 2: Storage operations completed in ${Math.round(duration)}ms (IndexedDB)` 
+            };
+        } catch (error: any) {
+            return { success: false, message: `Performance Test 2 Failed: ${error.message}` };
+        }
+    }
+
+    private async testSettingsExportImport(): Promise<TestResult> {
+        try {
+            const settingsManager = new SettingsManager();
+            
+            // Give it time to initialize asynchronously
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Create a test profile with comprehensive data
+            const testProfile = {
+                prompt: "Test export/import prompt",
+                criteria: [
+                    { name: 'Export Test', description: 'Test criterion for export', goal: 9, weight: 1.5 },
+                    { name: 'Import Test', description: 'Test criterion for import', goal: 7, weight: 0.8 }
+                ],
+                maxIterations: 8,
+                selectedModels: { creator: 'export-test', rater: 'import-test', editor: 'roundtrip-test' }
+            };
+            
+            const testProfileName = 'export_test_profile';
+            await settingsManager.saveProfile(testProfileName, testProfile);
+            
+            // Test export
+            const exportData = settingsManager.exportProfile(testProfileName);
+            if (!exportData) {
+                throw new Error("Export returned null for existing profile");
+            }
+            
+            // Verify export structure
+            if (!exportData.profileName || !exportData.profile || !exportData.prompts) {
+                throw new Error("Export data missing required fields");
+            }
+            
+            if (exportData.profileName !== testProfileName) {
+                throw new Error("Exported profile name doesn't match");
+            }
+            
+            if (exportData.profile.prompt !== testProfile.prompt) {
+                throw new Error("Exported profile prompt doesn't match");
+            }
+            
+            if (exportData.profile.criteria.length !== testProfile.criteria.length) {
+                throw new Error("Exported criteria count doesn't match");
+            }
+            
+            // Create a new settings manager instance to test import
+            const newSettingsManager = new SettingsManager();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Test import (should create new profile)
+            const importResult = await newSettingsManager.importProfile(exportData, false);
+            if (!importResult.success) {
+                throw new Error(`Import failed: ${importResult.message}`);
+            }
+            
+            // Verify imported profile
+            const importedProfile = newSettingsManager.getProfile(testProfileName);
+            if (!importedProfile) {
+                throw new Error("Imported profile not found");
+            }
+            
+            if (importedProfile.prompt !== testProfile.prompt) {
+                throw new Error("Imported profile prompt doesn't match original");
+            }
+            
+            if (importedProfile.maxIterations !== testProfile.maxIterations) {
+                throw new Error("Imported profile maxIterations doesn't match original");
+            }
+            
+            if (importedProfile.criteria.length !== testProfile.criteria.length) {
+                throw new Error("Imported profile criteria count doesn't match original");
+            }
+            
+            // Test overwrite protection
+            const overwriteResult = await newSettingsManager.importProfile(exportData, false);
+            if (overwriteResult.success || !overwriteResult.message.includes('already exists')) {
+                throw new Error("Import should have failed due to existing profile");
+            }
+            
+            // Test forced overwrite
+            const forceImportResult = await newSettingsManager.importProfile(exportData, true);
+            if (!forceImportResult.success) {
+                throw new Error(`Forced import failed: ${forceImportResult.message}`);
+            }
+            
+            // Cleanup
+            await settingsManager.deleteProfile(testProfileName);
+            await newSettingsManager.deleteProfile(testProfileName);
+            
+            return { 
+                success: true, 
+                message: "Export/Import Test: Settings profile export/import works correctly with overwrite protection" 
+            };
+        } catch (error: any) {
+            return { success: false, message: `Export/Import Test Failed: ${error.message}` };
         }
     }
 } 

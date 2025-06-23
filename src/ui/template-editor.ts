@@ -43,7 +43,7 @@ export function openTemplateEditor() {
                 <button id="add-layer-btn" class="button button-secondary" style="margin-top: 0.5rem;">+ Add Level</button>
             </div>
             <div class="template-actions">
-                <button id="cancel-templates-btn" class="button button-secondary">Cancel</button>
+                <button id="cancel-templates-btn" class="button button-secondary" style="background: #6b7280; color: white;">✕ Close</button>
                 <button id="save-template-btn" class="button button-primary">Save Changes</button>
             </div>
         </div>
@@ -105,13 +105,30 @@ function handleSave() {
     const template = getTemplateFromUI();
     
     try {
-        // If the name has changed, we need to delete the old one
+        // If the name has changed, check if we're creating a new template or renaming
         if (newName !== currentTemplateName) {
+            // Check if the new name already exists
+            if (templateManager.getTemplate(newName)) {
+                alert(`A template named '${newName}' already exists. Please choose a different name or use 'Save as New'.`);
+                return;
+            }
+            
+            // Only delete the old template if there are multiple templates
+            const templateNames = templateManager.getTemplateNames();
+            if (templateNames.length > 1) {
             templateManager.deleteTemplate(currentTemplateName);
+            }
         }
+        
         templateManager.saveTemplate(newName, template);
         isDirty = false;
         alert(`Template '${newName}' saved successfully.`);
+        
+        // Update current template name and refresh UI
+        currentTemplateName = newName;
+        populateTemplateSelector();
+        renderCurrentTemplateView();
+        
         closeGenericModal();
     } catch (error: any) {
         alert(`Error saving template: ${error.message}`);

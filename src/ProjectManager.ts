@@ -5,11 +5,14 @@ import { EventEmitter } from './EventEmitter';
 import { SettingsManager, SettingsProfile } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { QualityCriterion, CreatorPayload } from './types';
+import { StorageService, IStorageService } from './StorageService';
+import { IndexedDBService } from './IndexedDBService';
 import * as state from './state';
 
 type ProjectManagerEvents = {
     'project-loaded': [];
     'node-selected': [node: DocumentNode | null];
+    'nodeGenerationStarted': [e: { nodeId: string, node: DocumentNode }];
     'nodeGenerationComplete': [e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }];
     'loop-progress': [e: { nodeId: string, progress: LoopProgress }];
     'high-level-progress': [e: { nodeId: string, message: string, current: number, total: number }];
@@ -18,8 +21,16 @@ type ProjectManagerEvents = {
     'error': [message: string];
 };
 
+interface ProjectRecord {
+    id: string;
+    title: string;
+    templateName: string;
+    createdAt: Date;
+    lastModified: Date;
+    data: string; // serialized project data
+}
+
 export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
-    private static readonly LOCAL_STORAGE_KEY = 'expert_app_current_project';
     private static readonly MULTI_PROJECT_STORAGE_KEY = 'expert_app_projects';
     private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
 
@@ -32,6 +43,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private selectedNodeId: string | null = null;
     private isGeneratingAllChildren = false;
     public _listenersSetup: boolean = false;
+    private static storageService: Promise<IStorageService> | null = null;
 
     constructor(
         projectTitle: string, 
@@ -69,6 +81,32 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             }
             // If no valid profile exists, the error will be caught during generation
         }
+    }
+
+    /**
+     * Gets the storage service instance
+     */
+    private static async getStorageService(): Promise<IStorageService> {
+        if (!ProjectManager.storageService) {
+            ProjectManager.storageService = StorageService.getInstance();
+        }
+        return ProjectManager.storageService;
+    }
+
+    /**
+     * Gets the IndexedDB service if using IndexedDB, null otherwise
+     */
+    private static async getIndexedDBService(): Promise<IndexedDBService | null> {
+        const storage = await ProjectManager.getStorageService();
+        if (storage.isIndexedDB()) {
+            // Access the IndexedDB service from the storage instance
+            const service = await StorageService.getInstance();
+            if (service.isIndexedDB()) {
+                // Return the IndexedDB service for direct project operations
+                return (service as any).indexedDBService;
+            }
+        }
+        return null;
     }
 
     /**
@@ -298,7 +336,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         }
 
         node.isGenerating = true;
-        this.emit('nodeGenerationComplete', { nodeId, success: false, node: node }); // Update UI to show spinner
+        this.emit('nodeGenerationStarted', { nodeId, node: node }); // Update UI to show spinner
         
         // Start a new generation session
         const sessionId = node.startGenerationSession(loopInput.prompt);
@@ -384,7 +422,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         } finally {
             node.isGenerating = false;
             this.loopOrchestrator.off('progress', onProgress);
-            this.saveToLocalStorage();
+            await this.saveToStorage();
         }
     }
 
@@ -430,7 +468,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 }
             });
 
-            this.saveToLocalStorage();
+            await this.saveToStorage();
             // This event is listened to by the UI to trigger a full re-render.
             this.emit('nodeGenerationComplete', { nodeId, success: true, node: node });
         } catch(error) {
@@ -440,11 +478,13 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     }
 
     /**
-     * Creates children from outline (if needed) and generates content for all children.
+     * Creates children from outline (if needed) and optionally generates content for all children.
      * This combines the functionality of createChildrenFromOutline and generateAllChildrenContent.
      * @param nodeId The ID of the parent node.
+     * @param includeContent Whether to generate content for the children (default: true).
+     * @param recursive Whether to recursively generate children down to max expand level (default: false).
      */
-    public async generateAllChildrenContent(nodeId: string): Promise<void> {
+    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) {
             this.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
@@ -488,7 +528,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                     }
                 });
 
-                this.saveToLocalStorage();
+                await this.saveToStorage();
             } catch(error) {
                 console.error('Failed to create children from outline via LLM:', error);
                 this.emit('error', 'The AI failed to process the outline. Please try again.');
@@ -497,18 +537,44 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             }
         }
 
-        // Step 2: Generate content for all children
-        const children = node.children;
-        const total = children.length;
+        // Step 2: Generate content for all children (if requested)
+        if (includeContent) {
+            const children = node.children;
+            const total = children.length;
 
-        for (let i = 0; i < total; i++) {
-            const child = children[i];
-            this.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
+            for (let i = 0; i < total; i++) {
+                const child = children[i];
+                this.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
+                
+                // No need to pass count here, as these should be leaf or sub-branch nodes
+                // where the content is prose or a more detailed outline.
+                await this.generateNodeContent(child.id, 5, true);
+                await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
+            }
+        }
+
+        // Step 3: If recursive is enabled, recursively generate children for each child node
+        if (recursive) {
+            const children = node.children;
+            const maxExpandLevel = this.template.hierarchyLevels.length - 1; // Max level based on hierarchy
             
-            // No need to pass count here, as these should be leaf or sub-branch nodes
-            // where the content is prose or a more detailed outline.
-            await this.generateNodeContent(child.id, 5, true);
-            await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i];
+                
+                // Only recurse if we haven't reached the max expand level
+                if (child.level < maxExpandLevel) {
+                    this.emit('high-level-progress', { 
+                        nodeId, 
+                        message: `Recursively generating children for: ${child.title}`, 
+                        current: i + 1, 
+                        total: children.length 
+                    });
+                    
+                    // Recursively call generateAllChildrenContent on each child
+                    // Pass includeContent and recursive flags down
+                    await this.generateAllChildrenContent(child.id, includeContent, recursive);
+                }
+            }
         }
 
         this.isGeneratingAllChildren = false; // Reset flag
@@ -554,7 +620,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             const summary = await this.openRouterClient.chat('editor', systemPrompt);
             node.summary = summary;
             this.emit('nodeSummaryGenerated', { nodeId, summary });
-            this.saveToLocalStorage();
+            await this.saveToStorage();
             // Only clear the progress bar if not suppressed (not during bulk operations)
             if (!suppressProgressClearing) {
                 this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
@@ -589,71 +655,116 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     }
 
     /**
-     * Saves the project's current state to localStorage.
+     * Saves the project's current state to storage.
      */
-    public saveToLocalStorage(): void {
+    public async saveToStorage(): Promise<void> {
         try {
-            this.saveAllProjectsToLocalStorage();
+            await this.saveAllProjectsToStorage();
         } catch (error) {
-            console.error("Failed to save project to localStorage:", error);
-            this.emit('error', `Failed to save project to your browser's local storage. Some changes may not be persisted.`);
+            console.error("Failed to save project to storage:", error);
+            this.emit('error', `Failed to save project to storage. Some changes may not be persisted.`);
         }
     }
 
     /**
-     * Saves all projects and active project ID to localStorage.
+     * Clears all projects from storage.
      */
-    private saveAllProjectsToLocalStorage(): void {
+    public async clearAllProjectsFromStorage(): Promise<void> {
+        try {
+            const storage = await ProjectManager.getStorageService();
+            const indexedDB = await ProjectManager.getIndexedDBService();
+            
+            if (indexedDB) {
+                // Clear all projects from IndexedDB
+                await indexedDB.clear('projects');
+            } else {
+                // This should never happen with IndexedDB-only storage
+                throw new Error('IndexedDB service is not available but was expected');
+            }
+            
+            // Clear active project references
+            await storage.delete(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+        } catch (error) {
+            console.error('Failed to clear projects from storage:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Saves all projects and active project ID to storage.
+     */
+    private async saveAllProjectsToStorage(): Promise<void> {
         const projects = state.getProjects();
         const activeProject = state.getActiveProject();
         
-        const projectsData = projects.map((project: ProjectManager) => project.save());
-        localStorage.setItem(ProjectManager.MULTI_PROJECT_STORAGE_KEY, JSON.stringify(projectsData));
-        
-        if (activeProject) {
-            localStorage.setItem(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
-        }
-        
-        // Keep legacy storage for backward compatibility
-        if (activeProject) {
-            localStorage.setItem(ProjectManager.LOCAL_STORAGE_KEY, activeProject.save());
+        try {
+            const storage = await ProjectManager.getStorageService();
+            const indexedDB = await ProjectManager.getIndexedDBService();
+            
+            if (indexedDB) {
+                // Use IndexedDB for efficient project storage
+                for (const project of projects) {
+                    const projectRecord: ProjectRecord = {
+                        id: project.rootNode.id,
+                        title: project.projectTitle,
+                        templateName: project.template.name,
+                        createdAt: new Date(), // Could store actual creation date
+                        lastModified: new Date(),
+                        data: project.save()
+                    };
+                    await indexedDB.set('projects', project.rootNode.id, projectRecord);
+                }
+            } else {
+                // This should never happen with IndexedDB-only storage
+                throw new Error('IndexedDB service is not available but was expected');
+            }
+            
+            // Save active project ID
+            if (activeProject) {
+                await storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
+            }
+        } catch (error) {
+            console.error('Failed to save projects to storage:', error);
+            throw error;
         }
     }
 
     /**
-     * Loads all projects from localStorage.
+     * Loads all projects from IndexedDB storage.
      */
-    public static loadAllProjectsFromLocalStorage(
+    public static async loadAllProjectsFromStorage(
         loopOrchestrator: LoopOrchestrator,
         settingsManager: SettingsManager,
         openRouterClient: OpenRouterClient
-    ): { projects: ProjectManager[], activeProjectId: string | null } {
+    ): Promise<{ projects: ProjectManager[], activeProjectId: string | null }> {
         try {
-            // Try new multi-project storage first
-            const projectsJson = localStorage.getItem(ProjectManager.MULTI_PROJECT_STORAGE_KEY);
-            const activeProjectId = localStorage.getItem(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+            const storage = await ProjectManager.getStorageService();
+            const indexedDB = await ProjectManager.getIndexedDBService();
             
-            if (projectsJson) {
-                const projectsData = JSON.parse(projectsJson);
-                const projects = projectsData.map((data: string) => 
-                    ProjectManager.load(data, loopOrchestrator, settingsManager, openRouterClient)
-                );
-                return { projects, activeProjectId };
-            }
-            
-            // Fall back to legacy single project storage
-            const legacyProjectJson = localStorage.getItem(ProjectManager.LOCAL_STORAGE_KEY);
-            if (legacyProjectJson) {
-                const project = ProjectManager.load(legacyProjectJson, loopOrchestrator, settingsManager, openRouterClient);
-                return { projects: [project], activeProjectId: project.rootNode.id };
+            if (indexedDB) {
+                // Load from IndexedDB
+                const projectRecords = await indexedDB.getAll<ProjectRecord>('projects');
+                const activeProjectId = await storage.get<string>(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+                
+                if (projectRecords && Object.keys(projectRecords).length > 0) {
+                    const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
+                        ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
+                    );
+                    return { projects, activeProjectId: activeProjectId || null };
+                }
+            } else {
+                // This should never happen with IndexedDB-only storage
+                throw new Error('IndexedDB service is not available but was expected');
             }
             
             return { projects: [], activeProjectId: null };
         } catch (error) {
-            console.error("Failed to load projects from localStorage:", error);
+            console.error("Failed to load projects from storage:", error);
             return { projects: [], activeProjectId: null };
         }
     }
+
+
 
     /**
      * Creates a ProjectManager instance from a JSON string.

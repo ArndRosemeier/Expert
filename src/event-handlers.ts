@@ -56,13 +56,13 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     
     const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
     state.addProject(project);
-    project.saveToLocalStorage();
+    project.saveToStorage();
     
     closeNewProjectModal();
     initializeProjectUI();
 }
 
-function loadPersistedProjects(): void {
+async function loadPersistedProjects(): Promise<void> {
     try {
         const orchestrator = state.getOrchestrator();
         const settingsManager = state.getSettingsManager();
@@ -71,7 +71,7 @@ function loadPersistedProjects(): void {
             throw new Error("Cannot load projects without core services.");
         }
         
-        const { projects, activeProjectId } = ProjectManager.loadAllProjectsFromLocalStorage(orchestrator, settingsManager, client);
+        const { projects, activeProjectId } = await ProjectManager.loadAllProjectsFromStorage(orchestrator, settingsManager, client);
         
         projects.forEach(project => state.addProject(project));
         if (activeProjectId) {
@@ -79,13 +79,19 @@ function loadPersistedProjects(): void {
         }
     } catch (error) {
         console.error("Failed to load projects from storage:", error);
-        localStorage.removeItem('expert_app_current_project');
-        localStorage.removeItem('expert_app_projects');
-        localStorage.removeItem('expert_app_active_project');
+        // Try to clear any corrupted storage
+        try {
+            const storage = await import('./StorageService').then(m => m.StorageService.getInstance());
+            await storage.delete('expert_app_current_project');
+            await storage.delete('expert_app_projects');
+            await storage.delete('expert_app_active_project');
+        } catch (cleanupError) {
+            console.error("Failed to cleanup corrupted storage:", cleanupError);
+        }
     }
 }
 
-export function initialize() {
+export async function initialize() {
     const settingsManager = new SettingsManager();
     state.setSettingsManager(settingsManager);
 
@@ -95,9 +101,13 @@ export function initialize() {
     const modelSelector = new ModelSelector(onModelsSelected, closeModal);
     state.setModelSelector(modelSelector);
 
+    // Wait for async initialization to complete
+    await settingsManager.waitForInitialization();
+    await modelSelector.waitForInitialization();
+
     recreateAndReconfigureServices();
 
-    loadPersistedProjects();
+    await loadPersistedProjects();
     
     // Initialize the UI with projects (if any)
     initializeProjectUI();
@@ -110,17 +120,72 @@ export function initialize() {
             alert("API client not initialized. Cannot run tests.");
             return;
         }
+        
+        // Show test selection modal
+        const testSelectionHtml = `
+            <h2>Select Test Suite</h2>
+            <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
+                <button id="runCoreTestsBtn" class="button button-primary" style="padding: 1rem; font-size: 1rem;">
+                    Core Functionality Tests
+                    <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
+                        Document nodes, project management, templates, tree operations
+                    </div>
+                </button>
+                <button id="runStorageTestsBtn" class="button button-primary" style="padding: 1rem; font-size: 1rem;">
+                    Storage System Tests
+                    <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
+                        IndexedDB, storage abstraction, service layer storage
+                    </div>
+                </button>
+                <button id="runAllTestsBtn" class="button button-secondary" style="padding: 1rem; font-size: 1rem;">
+                    Run All Tests
+                    <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
+                        Complete test suite (may take longer)
+                    </div>
+                </button>
+            </div>
+        `;
+        
+        openTestModal(testSelectionHtml);
+        
+        // Add event listeners for test options
+        const runCoreTests = async () => {
         const testRunner = new TestRunner(client);
         const resultsHtml = await testRunner.runPhase1Tests();
         openTestModal(resultsHtml);
+        };
+        
+        const runStorageTests = async () => {
+            const testRunner = new TestRunner(client);
+            const resultsHtml = await testRunner.runStorageTests();
+            openTestModal(resultsHtml);
+        };
+        
+        const runAllTests = async () => {
+            const testRunner = new TestRunner(client);
+            const coreResults = await testRunner.runPhase1Tests();
+            const storageResults = await testRunner.runStorageTests();
+            const combinedResults = `
+                ${coreResults}
+                <hr style="margin: 2rem 0;">
+                ${storageResults}
+            `;
+            openTestModal(combinedResults);
+        };
+        
+        setTimeout(() => {
+            document.getElementById('runCoreTestsBtn')?.addEventListener('click', runCoreTests);
+            document.getElementById('runStorageTestsBtn')?.addEventListener('click', runStorageTests);
+            document.getElementById('runAllTestsBtn')?.addEventListener('click', runAllTests);
+        }, 100);
     });
     getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
     getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
 
-    // Add modal-closing listeners
-    modalContainer.addEventListener('click', (e) => {
-        if (e.target === modalContainer) closeModal();
-    });
+    // Add modal-closing listeners (disabled click-outside-to-close for settings and templates)
+    // modalContainer.addEventListener('click', (e) => {
+    //     if (e.target === modalContainer) closeModal();
+    // });
     testModalContainer.addEventListener('click', (e) => {
         if (e.target === testModalContainer) closeTestModal();
     });

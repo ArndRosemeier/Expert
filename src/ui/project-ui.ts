@@ -3,24 +3,29 @@ import { DocumentNode } from '../DocumentNode';
 import { getElementById } from './dom-elements';
 import * as state from '../state';
 import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
+import { openReaderView } from './reader-gui';
 
 let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
 let collapsedNodes: Set<string> = new Set();
 
-function saveCollapsedState() {
+async function saveCollapsedState() {
     try {
-        localStorage.setItem('expert_app_collapsed_nodes', JSON.stringify(Array.from(collapsedNodes)));
+        const { StorageService } = await import('../StorageService');
+        const storage = await StorageService.getInstance();
+        await storage.set('expert_app_collapsed_nodes', Array.from(collapsedNodes));
     } catch (error) {
         console.warn('Failed to save collapsed nodes state:', error);
     }
 }
 
-function loadCollapsedState() {
+async function loadCollapsedState() {
     try {
-        const saved = localStorage.getItem('expert_app_collapsed_nodes');
+        const { StorageService } = await import('../StorageService');
+        const storage = await StorageService.getInstance();
+        const saved = await storage.get<string[]>('expert_app_collapsed_nodes');
         if (saved) {
-            collapsedNodes = new Set(JSON.parse(saved));
+            collapsedNodes = new Set(saved);
         }
     } catch (error) {
         console.warn('Failed to load collapsed nodes state:', error);
@@ -61,11 +66,19 @@ export function renderProjectUI(proj: ProjectManager) {
 // --- Event Listener Setup ---
 
 function setupProjectManagerListeners(manager: ProjectManager) {
+    const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
+        // Just refresh the tree to show spinner for the generating node
+        renderMultiProjectTree();
+    };
+
     const handleCompletion = (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
-        // Only re-render if no other operations are in progress
-        if (!manager.isAnyNodeGenerating()) {
-            // Clear progress state when all operations complete
+        // Check if any operations are still in progress
+        const operationsInProgress = manager.isAnyNodeGenerating();
+        
+        if (!operationsInProgress) {
+            // Clear progress state and hide overlay when all operations complete
             updateProgressUI();
+            hideGenerationOverlay();
             renderProjectUI(manager);
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
@@ -81,19 +94,34 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 }
             }
         }
+        
+        // Clear progress bars and overlay if this operation failed
+        if (!e.success) {
+            updateProgressUI();
+            hideGenerationOverlay();
+        }
     };
 
     const handleError = (message: string) => {
+        // Clear progress bars and hide overlay when an error occurs
+        updateProgressUI();
+        hideGenerationOverlay();
         alert(`An error occurred: ${message}`);
         renderProjectUI(manager);
     };
     
     const handleHighLevelProgress = (e: { nodeId: string; message: string; current: number; total: number }) => {
-        // Always show progress bars during any generation, regardless of selected node
-        // This ensures consistency with the spinner behavior
-        updateProgressUI({
-            operations: { message: e.message, current: e.current, total: e.total }
-        });
+        // If message is empty, it means we should clear the progress
+        if (!e.message || e.message.trim() === '') {
+            updateProgressUI();
+            hideGenerationOverlay();
+        } else {
+            // Always show progress bars during any generation, regardless of selected node
+            // This ensures consistency with the spinner behavior
+            updateProgressUI({
+                operations: { message: e.message, current: e.current, total: e.total }
+            });
+        }
     };
 
     const handleLoopProgress = (e: { nodeId: string; progress: LoopProgress }) => {
@@ -148,6 +176,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     // @ts-ignore - attaching to the object for simplicity to ensure removal
     if (manager._completionListener) {
         // @ts-ignore
+        manager.off('nodeGenerationStarted', manager._generationStartedListener);
+        // @ts-ignore
         manager.off('nodeGenerationComplete', manager._completionListener);
         // @ts-ignore
         manager.off('error', manager._errorListener);
@@ -160,6 +190,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     }
 
     // @ts-ignore
+    manager._generationStartedListener = handleGenerationStarted;
+    // @ts-ignore
     manager._completionListener = handleCompletion;
     // @ts-ignore
     manager._errorListener = handleError;
@@ -170,6 +202,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     // @ts-ignore
     manager._summaryGeneratedListener = handleSummaryGenerated;
     
+    manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
     manager.on('error', handleError);
     manager.on('high-level-progress', handleHighLevelProgress);
@@ -226,7 +259,7 @@ function renderTree() {
                 } else {
                     collapsedNodes.add(nodeId);
                 }
-                saveCollapsedState(); // Persist the collapsed state
+                saveCollapsedState().catch(console.error); // Persist the collapsed state
                 renderTree(); // Re-render tree to update expand/collapse state
             }
         });
@@ -407,7 +440,7 @@ export function renderNodeDetails() {
 
     if (!node.generationPrompt) {
         node.generationPrompt = projectManager.getRawGenerationPrompt(node);
-        projectManager.saveToLocalStorage(); // Persist the default prompt immediately
+        projectManager.saveToStorage().catch(console.error); // Persist the default prompt immediately
     }
     generationPromptTextArea.value = node.generationPrompt;
 
@@ -479,7 +512,19 @@ export function renderNodeDetails() {
             
             <!-- Button on the right -->
             <div style="display: flex; flex-direction: column; min-width: 200px;">
-                ${!node.isLeaf ? '<button id="node-generate-all-btn" class="button" style="width: 100%;">Generate All Children</button>' : ''}
+                ${!node.isLeaf ? `
+                    <button id="node-generate-all-btn" class="button" style="width: 100%;">Generate All Children</button>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.9rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="include-content-checkbox" checked>
+                            <label for="include-content-checkbox" style="cursor: pointer; user-select: none;">Include content</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="recursive-checkbox">
+                            <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
             
             <style>
@@ -535,7 +580,7 @@ export function renderNodeDetails() {
             } else if (!node.content || node.content.trim() === '') {
                 generateAllBtn.title = "This node has no content. Clicking will show instructions.";
             } else {
-                generateAllBtn.title = "Creates children from outline (if needed) and generates content for all children.";
+                generateAllBtn.title = "Creates children from outline (if needed). Use 'Include content' to generate content and 'Recursive' to generate down to max hierarchy level.";
             }
         }
     }
@@ -710,17 +755,39 @@ export function setupEventListeners() {
                         const confirmMessage = `Are you sure you want to delete the entire project "${node.title}"?\n\nThis will permanently delete:\n- The project and all its content\n- All child nodes and their content\n- All generated summaries and history\n\nThis action cannot be undone.`;
                         
                         if (confirm(confirmMessage)) {
+                            // Store the project to delete for storage cleanup
+                            const projectToDelete = projectManager;
+                            
+                            // Remove from in-memory state
                             state.removeProject(node.id);
+                            
+                            // Handle storage cleanup
+                            (async () => {
+                                try {
+                                    // If this was the last project, clear all storage
+                                    const remainingProjects = state.getProjects();
+                                    if (remainingProjects.length === 0) {
+                                        // Clear all project storage
+                                        if (projectToDelete) {
+                                            await projectToDelete.clearAllProjectsFromStorage();
+                                        }
+                                    } else {
+                                        // Save the updated project list (this will exclude the deleted project)
+                                        const remainingProject = state.getActiveProject();
+                                        if (remainingProject) {
+                                            await remainingProject.saveToStorage();
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Failed to update storage after project deletion:', error);
+                                }
+                            })();
                             
                             // If this was the last project, clear selection and show empty state
                             const remainingProjects = state.getProjects();
                             if (remainingProjects.length === 0) {
                                 selectedNodeId = null;
                                 projectManager = null;
-                                
-                                // Clear localStorage completely for a clean slate
-                                localStorage.removeItem('expert_app_projects');
-                                localStorage.removeItem('expert_app_active_project');
                                 
                                 // Show empty state
                                 const nodeDetails = getElementById('node-details');
@@ -729,12 +796,6 @@ export function setupEventListeners() {
                                 // Render empty tree
                                 renderMultiProjectTree();
                             } else {
-                                // Save the updated project list
-                                const remainingProject = state.getActiveProject();
-                                if (remainingProject) {
-                                    remainingProject.saveToLocalStorage();
-                                }
-                                
                                 // Re-initialize the UI with the remaining projects
                                 initializeProjectUI();
                             }
@@ -749,7 +810,7 @@ export function setupEventListeners() {
                         if (confirm(confirmMessage)) {
                             const success = projectManager.removeNode(node.id);
                             if (success) {
-                                projectManager.saveToLocalStorage();
+                                projectManager.saveToStorage().catch(console.error);
                                 
                                 // Select the parent node or project root
                                 const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : projectManager.rootNode;
@@ -774,6 +835,13 @@ export function setupEventListeners() {
                 }
                 const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
                 node.generationPrompt = generationPromptTextArea.value;
+                
+                // Show overlay and progress bars immediately to provide instant feedback
+                showGenerationOverlay();
+                updateProgressUI({
+                    operations: { message: 'Preparing content generation...', current: 0, total: 1 }
+                });
+                
                 projectManager.generateNodeContent(node.id);
                 break;
             
@@ -790,7 +858,7 @@ export function setupEventListeners() {
                     if (promptTextarea) {
                         promptTextarea.value = rawPrompt;
                     }
-                    projectManager.saveToLocalStorage();
+                    projectManager.saveToStorage().catch(console.error);
                 }
                 break;
 
@@ -800,6 +868,13 @@ export function setupEventListeners() {
                     alert('Another generation operation is already in progress. Please wait for it to complete.');
                     return;
                 }
+                
+                // Show overlay and progress bars immediately to provide instant feedback
+                showGenerationOverlay();
+                updateProgressUI({
+                    operations: { message: 'Preparing summarization...', current: 0, total: 1 }
+                });
+                
                 projectManager.summarizeNodeContent(node.id);
                 break;
 
@@ -816,8 +891,30 @@ export function setupEventListeners() {
                     return;
                 }
                 
+                // Check if the "Include content" checkbox is checked
+                const includeContentCheckbox = document.getElementById('include-content-checkbox') as HTMLInputElement;
+                const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
+                
+                // Check if the "Recursive" checkbox is checked
+                const recursiveCheckbox = document.getElementById('recursive-checkbox') as HTMLInputElement;
+                const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
+                
+                // Don't show overlay for generate all children since parent node isn't changing
+                // Just show progress bars to indicate the operation is starting
+                let operationMessage = 'Preparing to create child structure...';
+                if (includeContent && recursive) {
+                    operationMessage = 'Preparing to recursively generate all content...';
+                } else if (includeContent) {
+                    operationMessage = 'Preparing to generate all children...';
+                } else if (recursive) {
+                    operationMessage = 'Preparing to recursively create structure...';
+                }
+                
+                updateProgressUI({
+                    operations: { message: operationMessage, current: 0, total: 1 }
+                });
         
-                projectManager.generateAllChildrenContent(node.id);
+                projectManager.generateAllChildrenContent(node.id, includeContent, recursive);
                 break;
         }
     });
@@ -838,6 +935,34 @@ export function setupEventListeners() {
         }
     });
 
+    mainContent.addEventListener('click', (e) => {
+        if (!e.target || !(e.target instanceof HTMLElement)) return;
+
+        if (e.target.id === 'open-reader-btn') {
+            if (!projectManager) {
+                alert('No project is currently loaded.');
+                return;
+            }
+            
+            // Open reader view with navigation callback
+            openReaderView(projectManager, (nodeId: string) => {
+                // Navigate to the node in the main editor
+                selectedNodeId = nodeId;
+                if (projectManager) {
+                    renderProjectUI(projectManager);
+                }
+                // Close reader view after navigation
+                const readerContainer = document.getElementById('reader-container');
+                if (readerContainer) {
+                    readerContainer.style.display = 'none';
+                }
+            }).catch(error => {
+                console.error('Failed to open reader view:', error);
+                alert('Failed to open reader view. Please try again.');
+            });
+        }
+    });
+
      mainContent.addEventListener('input', (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
         if (!projectManager || !selectedNodeId) return;
@@ -846,14 +971,14 @@ export function setupEventListeners() {
 
         if (e.target.id === 'node-generation-prompt') {
             node.generationPrompt = (e.target as HTMLTextAreaElement).value;
-            projectManager.saveToLocalStorage();
+            projectManager.saveToStorage().catch(console.error);
         } else if (e.target.id === 'node-content') {
             const textarea = e.target as HTMLTextAreaElement;
             node.content = textarea.value;
-            projectManager.saveToLocalStorage();
+            projectManager.saveToStorage().catch(console.error);
         } else if (e.target.id === 'node-summary') {
             node.summary = (e.target as HTMLTextAreaElement).value;
-            projectManager.saveToLocalStorage();
+            projectManager.saveToStorage().catch(console.error);
         }
     });
 
@@ -865,7 +990,7 @@ export function setupEventListeners() {
         
         if (e.target.id === 'node-title-display') {
             node.title = (e.target as HTMLElement).textContent || '';
-            projectManager.saveToLocalStorage();
+            projectManager.saveToStorage().catch(console.error);
             renderTree(); // Re-render tree to show new title
         }
     }, true); // Use capture phase to ensure it fires
@@ -879,7 +1004,7 @@ export function initializeProjectUI(manager?: ProjectManager) {
         selectedNodeId = activeProject.rootNode.id;
     }
     
-    loadCollapsedState(); // Load the collapsed state from localStorage
+    loadCollapsedState().catch(console.error); // Load the collapsed state from storage
 
     const mainContent = getElementById('main-content');
     
@@ -961,6 +1086,7 @@ export function initializeProjectUI(manager?: ProjectManager) {
             <label for="active-profile-selector">Active profile:</label>
             <select id="active-profile-selector">${profileOptions}</select>
             <span style="color: #6c757d; font-size: 0.9rem;">This profile will be used for all AI operations (Generate, Summarize, etc.)</span>
+            <button id="open-reader-btn" style="margin-left: auto; padding: 0.5rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--primary-color); color: white; cursor: pointer; font-size: 0.9rem;">📖 Reader View</button>
         </div>
         <div id="project-container">
             <div id="project-tree"></div>
@@ -1109,6 +1235,65 @@ function updateProgressUI(data?: ProgressUIData) {
     detailText.style.display = currentProgressState.detail ? 'block' : 'none';
 }
 
+function showGenerationOverlay() {
+    const contentDisplayArea = getElementById('content-display-area');
+    
+    if (!contentDisplayArea) {
+        console.warn('Content display area not found, cannot show overlay');
+        return;
+    }
+    
+    // Remove any existing overlay
+    const existingOverlay = document.getElementById('generation-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'generation-overlay';
+    overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(248, 249, 250, 0.95);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border-radius: 8px;
+        backdrop-filter: blur(2px);
+    `;
+    
+    overlay.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div class="spinner" style="width: 32px; height: 32px; border-width: 3px; margin-bottom: 1rem;"></div>
+            <h3 style="margin: 0 0 0.5rem 0; color: #495057;">Generation in Progress</h3>
+            <p style="margin: 0; color: #6c757d; font-size: 0.9rem;">Content is being generated and will appear here</p>
+        </div>
+    `;
+    
+    // Position the content display area relatively so overlay can be positioned absolutely
+    contentDisplayArea.style.position = 'relative';
+    contentDisplayArea.appendChild(overlay);
+}
+
+function hideGenerationOverlay() {
+    const overlay = document.getElementById('generation-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    
+    // Reset position if no overlay
+    const contentDisplayArea = getElementById('content-display-area');
+    if (contentDisplayArea) {
+        contentDisplayArea.style.position = '';
+    }
+}
+
 function renderMultiProjectTree() {
     const treeContainer = getElementById('project-tree');
     const projects = state.getProjects();
@@ -1168,7 +1353,7 @@ function renderMultiProjectTree() {
                 } else {
                     collapsedNodes.add(nodeId);
                 }
-                saveCollapsedState(); // Persist the collapsed state
+                saveCollapsedState().catch(console.error); // Persist the collapsed state
                 renderMultiProjectTree(); // Re-render tree to update expand/collapse state
             }
         });

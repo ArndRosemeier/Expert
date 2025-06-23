@@ -114,6 +114,20 @@ export function renderSettingsModal() {
             .settings-bar button:hover {
                 background-color: var(--button-bg-hover);
             }
+            .settings-bar .button-secondary {
+                background-color: #6b7280;
+                color: white;
+            }
+            .settings-bar .button-secondary:hover {
+                background-color: #4b5563;
+            }
+            .settings-bar .button-danger {
+                background-color: #ef4444;
+                color: white;
+            }
+            .settings-bar .button-danger:hover {
+                background-color: #dc2626;
+            }
             #modal-criteria-list {
                 flex-grow: 1;
                 display: flex;
@@ -159,9 +173,9 @@ export function renderSettingsModal() {
                 margin-top: 1.5rem; 
             }
         </style>
-        <div class="modal-header">
-            <h2>Generation Settings</h2>
-            <button id="close-settings-modal-btn" class="modal-close-btn">&times;</button>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
+            <h2 style="margin: 0;">Generation Settings</h2>
+            <button id="close-settings-modal-btn" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">&times;</button>
         </div>
         <div class="modal-body">
             <div id="settings-profile-container" class="settings-section">
@@ -171,6 +185,11 @@ export function renderSettingsModal() {
                     <input type="text" id="modal-new-profile-name" placeholder="New Profile Name...">
                     <button id="modal-save-profile-btn">Save</button>
                     <button id="modal-delete-profile-btn" class="button-danger">Delete</button>
+                </div>
+                <div class="settings-bar" style="margin-top: 0.5rem; border-top: 1px solid #e5e7eb; padding-top: 0.5rem;">
+                    <button id="modal-export-profile-btn" class="button-secondary">Export Profile</button>
+                    <button id="modal-import-profile-btn" class="button-secondary">Import Profile</button>
+                    <input type="file" id="modal-import-file-input" accept=".json" style="display: none;">
                 </div>
             </div>
             <div id="settings-models-container" class="settings-section">
@@ -294,6 +313,60 @@ export function renderSettingsModal() {
             applyProfileToUI(defaultProfile || null);
             alert(`Profile "${profileName}" deleted.`);
         }
+    });
+
+    // Export Profile functionality
+    getElementById('modal-export-profile-btn').addEventListener('click', () => {
+        if (!settingsManagerInstance) return;
+        const profileName = profileSelect.value;
+        if (!profileName) {
+            alert('Please select a profile to export.');
+            return;
+        }
+        
+        try {
+            settingsManagerInstance.downloadProfileExport(profileName);
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Failed to export profile. Please try again.');
+        }
+    });
+
+    // Import Profile functionality
+    const fileInput = getElementById('modal-import-file-input') as HTMLInputElement;
+    
+    getElementById('modal-import-profile-btn').addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file || !settingsManagerInstance) return;
+
+        try {
+            const result = await settingsManagerInstance.importProfileFromFile(
+                file,
+                async (profileName: string) => {
+                    return confirm(`Profile "${profileName}" already exists. Do you want to overwrite it?\n\nNote: Your existing OpenRouter API key will be preserved.`);
+                }
+            );
+
+            if (result.success) {
+                alert(result.message);
+                populateProfileSelector();
+                // Refresh the UI to show the imported profile
+                const lastUsedProfile = settingsManagerInstance.getLastUsedProfile();
+                applyProfileToUI(lastUsedProfile || null);
+            } else {
+                alert(`Import failed: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Import failed:', error);
+            alert('Failed to import profile. Please check the file format and try again.');
+        }
+
+        // Clear the file input for future use
+        fileInput.value = '';
     });
 
 

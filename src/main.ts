@@ -4,19 +4,23 @@ import { setupEventListeners } from './ui/project-ui';
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('clean') === 'true') {
-
-    localStorage.removeItem('openrouter_api_key');
-    localStorage.removeItem('openrouter_model_purposes');
-    localStorage.removeItem('expert_app_prompts');
-    localStorage.removeItem('expert_app_settings_profiles');
-    localStorage.removeItem('expert_app_settings_last_profile');
-    localStorage.removeItem('expert_app_current_project');
+    // Clear all storage using the new storage service
+    (async () => {
+        try {
+            const { StorageService } = await import('./StorageService');
+            const storage = await StorageService.getInstance();
+            await storage.clear();
     
     // Redirect to the same page without the query parameter
     window.location.href = window.location.pathname;
+        } catch (error) {
+            console.error('Failed to clear storage:', error);
+            alert('Failed to clear application data. Please try again or contact support.');
+        }
+    })();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initialize();
+document.addEventListener('DOMContentLoaded', async () => {
+    await initialize();
     setupEventListeners();
 }); 

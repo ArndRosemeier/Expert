@@ -1,0 +1,1218 @@
+import { ProjectManager } from '../ProjectManager';
+import { DocumentNode } from '../DocumentNode';
+import { getElementById } from './dom-elements';
+import { StorageService } from '../StorageService';
+
+// Storage key for reader configuration
+const READER_CONFIG_KEY = 'expert_app_reader_config';
+
+// Content node interface for reader display
+interface ContentNode {
+    id: string;
+    title: string;
+    content: string;
+    level: number;
+    isLeaf: boolean;
+    hasContent: boolean;
+    position: number;
+    wordCount: number;
+    estimatedReadingTime: number;
+}
+
+// Click mapping for navigation
+interface ClickMapping {
+    nodeId: string;
+    element: HTMLElement;
+    startOffset: number;
+    endOffset: number;
+}
+
+// Reader configuration
+interface ReaderConfig {
+    showTOC: boolean;
+    fontSize: number;
+    lineHeight: number;
+    maxWidth: number;
+    theme: 'light' | 'dark' | 'sepia';
+    separatorStyle: 'minimal' | 'standard' | 'bold';
+}
+
+// Hierarchy color system (6 levels)
+const HIERARCHY_COLORS = [
+    '#ffffff',  // Level 0: Pure white
+    '#fafafa',  // Level 1: Very light gray
+    '#f5f5f5',  // Level 2: Light gray
+    '#f0f0f0',  // Level 3: Medium light gray
+    '#ebebeb',  // Level 4: Slightly darker
+    '#e6e6e6'   // Level 5+: Darkest in series
+];
+
+// Typography scale configuration
+const TYPOGRAPHY_SCALE = [
+    { fontSize: '2.5rem', fontWeight: '700', marginTop: '0', marginBottom: '2rem' },      // Level 0
+    { fontSize: '2rem', fontWeight: '600', marginTop: '3rem', marginBottom: '1.5rem' },   // Level 1
+    { fontSize: '1.75rem', fontWeight: '600', marginTop: '2.5rem', marginBottom: '1.25rem' }, // Level 2
+    { fontSize: '1.5rem', fontWeight: '500', marginTop: '2rem', marginBottom: '1rem' },   // Level 3
+    { fontSize: '1.25rem', fontWeight: '500', marginTop: '1.5rem', marginBottom: '0.75rem' }, // Level 4
+    { fontSize: '1.1rem', fontWeight: '400', marginTop: '1rem', marginBottom: '0.5rem' }  // Level 5+
+];
+
+/**
+ * Main Reader GUI class - provides a clean reading interface for hierarchical content
+ */
+export class ReaderGUI {
+    private projectManager: ProjectManager;
+    private container: HTMLElement;
+    private contentNodes: ContentNode[] = [];
+    private clickMappings: ClickMapping[] = [];
+    private config: ReaderConfig;
+    private onNavigateToNode?: (nodeId: string) => void;
+
+    constructor(projectManager: ProjectManager, container: HTMLElement, onNavigateToNode?: (nodeId: string) => void) {
+        this.projectManager = projectManager;
+        this.container = container;
+        this.onNavigateToNode = onNavigateToNode;
+        
+        // Default configuration
+        this.config = {
+            showTOC: true,
+            fontSize: 16,
+            lineHeight: 1.6,
+            maxWidth: 800,
+            theme: 'light',
+            separatorStyle: 'standard'
+        };
+
+        this.setupEventListeners();
+        this.loadReaderConfig();
+    }
+
+    /**
+     * Render the complete reader interface
+     */
+    public render(): void {
+        this.contentNodes = this.analyzeProjectContent();
+        this.container.innerHTML = this.generateReaderHTML();
+        this.applyStyles();
+        this.buildClickMappings();
+    }
+
+    /**
+     * Refresh the reader content
+     */
+    public refresh(): void {
+        this.render();
+    }
+
+    /**
+     * Load reader configuration from storage
+     */
+    private async loadReaderConfig(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            const savedConfig = await storage.get<ReaderConfig>(READER_CONFIG_KEY);
+            
+            if (savedConfig) {
+                // Merge saved config with defaults to handle any missing properties
+                this.config = {
+                    ...this.config,
+                    ...savedConfig
+                };
+            }
+        } catch (error) {
+            console.warn('Failed to load reader configuration:', error);
+            // Continue with default config if loading fails
+        }
+    }
+
+    /**
+     * Save reader configuration to storage
+     */
+    private async saveReaderConfig(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(READER_CONFIG_KEY, this.config);
+        } catch (error) {
+            console.warn('Failed to save reader configuration:', error);
+            // Continue without saving if storage fails
+        }
+    }
+
+    /**
+     * Scroll to a specific node in the reader
+     */
+    public scrollToNode(nodeId: string): void {
+        const element = this.container.querySelector(`#node-${nodeId}`) as HTMLElement;
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Add a brief highlight effect to show which section was navigated to
+            element.style.transition = 'box-shadow 0.3s ease';
+            element.style.boxShadow = '0 0 20px rgba(66, 153, 225, 0.6)';
+            setTimeout(() => {
+                element.style.boxShadow = '';
+            }, 1500);
+        }
+    }
+
+    /**
+     * Analyze project content and determine what to display
+     */
+    private analyzeProjectContent(): ContentNode[] {
+        const nodes: ContentNode[] = [];
+        let position = 0;
+
+        const processNode = (node: DocumentNode): void => {
+            // Determine if this node should be displayed
+            const shouldDisplay = this.shouldDisplayNode(node);
+            
+            if (shouldDisplay) {
+                const wordCount = this.calculateWordCount(node.content);
+                const readingTime = Math.ceil(wordCount / 200); // Assume 200 WPM reading speed
+
+                nodes.push({
+                    id: node.id,
+                    title: node.title,
+                    content: node.content,
+                    level: node.level,
+                    isLeaf: node.children.length === 0,
+                    hasContent: !!(node.content && node.content.trim()),
+                    position: position++,
+                    wordCount,
+                    estimatedReadingTime: readingTime
+                });
+            }
+
+            // Process children if this node shouldn't be displayed or if we want to go deeper
+            if (!shouldDisplay || this.shouldProcessChildren(node)) {
+                node.children.forEach(child => processNode(child));
+            }
+        };
+
+        processNode(this.projectManager.rootNode);
+        return nodes;
+    }
+
+    /**
+     * Determine if a node should be displayed in the reader
+     */
+    private shouldDisplayNode(node: DocumentNode): boolean {
+        // Always show nodes with content
+        if (node.content && node.content.trim()) {
+            return true;
+        }
+
+        // For nodes without content, show if they have no children (leaf nodes)
+        return node.children.length === 0;
+    }
+
+    /**
+     * Determine if we should process children of a node
+     */
+    private shouldProcessChildren(node: DocumentNode): boolean {
+        // If the node has content and children, we might want both
+        // For now, always process children to get the deepest content
+        return node.children.length > 0;
+    }
+
+    /**
+     * Calculate word count for content
+     */
+    private calculateWordCount(content: string): number {
+        if (!content || !content.trim()) return 0;
+        return content.trim().split(/\s+/).length;
+    }
+
+    /**
+     * Generate the complete HTML for the reader
+     */
+    private generateReaderHTML(): string {
+        if (this.contentNodes.length === 0) {
+            return `
+                <div class="reader-container">
+                    <div class="reader-header">
+                        <h1>Reader View</h1>
+                        <button id="close-reader-btn" class="close-btn">&times;</button>
+                    </div>
+                    <div class="reader-content">
+                        <div class="no-content">
+                            <h2>No Content Available</h2>
+                            <p>This project doesn't have any readable content yet. Add some content to nodes and try again.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        let html = `
+            <div class="reader-container">
+                <div class="reader-header">
+                    <h1>${this.projectManager.projectTitle} - Reader View</h1>
+                    <div class="reader-controls">
+                        <button id="reader-toc-btn" class="control-btn">📋 TOC</button>
+                        <button id="reader-settings-btn" class="control-btn">⚙️ Settings</button>
+                        <button id="close-reader-btn" class="close-btn">&times;</button>
+                    </div>
+                </div>
+                <div class="reader-body">
+                    ${this.config.showTOC ? this.generateTOC() : ''}
+                    <div class="reader-content-area">
+                        ${this.generateContent()}
+                    </div>
+                    ${this.generateSettingsPanel()}
+                </div>
+            </div>
+        `;
+
+        return html;
+    }
+
+    /**
+     * Generate table of contents
+     */
+    private generateTOC(): string {
+        let tocHTML = `
+            <div class="reader-toc">
+                <h3>Table of Contents</h3>
+                <ul class="toc-list">
+        `;
+
+        this.contentNodes.forEach(node => {
+            const indent = node.level * 20;
+            tocHTML += `
+                <li class="toc-item" style="margin-left: ${indent}px;">
+                    <a href="#node-${node.id}" class="toc-link" data-node-id="${node.id}">
+                        ${node.title}
+                    </a>
+                    <span class="toc-info">${node.wordCount} words</span>
+                </li>
+            `;
+        });
+
+        tocHTML += `
+                </ul>
+            </div>
+        `;
+
+        return tocHTML;
+    }
+
+    /**
+     * Generate the main content area
+     */
+    private generateContent(): string {
+        let contentHTML = '<div class="reader-content">';
+        let lastLevel = -1;
+
+        this.contentNodes.forEach((node, index) => {
+            // Add separator if needed
+            if (index > 0) {
+                contentHTML += this.generateSeparator(lastLevel, node.level);
+            }
+
+            // Add the node content
+            contentHTML += this.generateNodeHTML(node);
+            lastLevel = node.level;
+        });
+
+        contentHTML += '</div>';
+        return contentHTML;
+    }
+
+    /**
+     * Generate HTML for a single content node
+     */
+    private generateNodeHTML(node: ContentNode): string {
+        const levelClass = Math.min(node.level, 5); // Cap at level 5
+        const backgroundColor = HIERARCHY_COLORS[levelClass];
+        const typography = TYPOGRAPHY_SCALE[levelClass];
+
+        let html = `
+            <div class="reader-node" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}" style="background-color: ${backgroundColor};">
+                <div class="node-header">
+                    <h${Math.min(node.level + 1, 6)} class="node-title" style="
+                        font-size: ${typography.fontSize};
+                        font-weight: ${typography.fontWeight};
+                        margin-top: ${typography.marginTop};
+                        margin-bottom: ${typography.marginBottom};
+                    ">
+                        ${node.title}
+                    </h${Math.min(node.level + 1, 6)}>
+                    <div class="node-meta">
+                        <span class="word-count">${node.wordCount} words</span>
+                        <span class="reading-time">${node.estimatedReadingTime} min read</span>
+                        <span class="level-indicator">Level ${node.level}</span>
+                    </div>
+                </div>
+        `;
+
+        if (node.hasContent) {
+            html += `
+                <div class="node-content" data-node-id="${node.id}">
+                    ${this.formatContent(node.content)}
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    /**
+     * Format content for display (convert line breaks, etc.)
+     */
+    private formatContent(content: string): string {
+        if (!content) return '';
+        
+        // Simple formatting: convert line breaks to paragraphs
+        return content
+            .split('\n\n')
+            .map(paragraph => paragraph.trim())
+            .filter(paragraph => paragraph.length > 0)
+            .map(paragraph => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+            .join('');
+    }
+
+    /**
+     * Generate separator between content sections
+     */
+    private generateSeparator(fromLevel: number, toLevel: number): string {
+        let separatorClass = 'section';
+        
+        if (Math.abs(fromLevel - toLevel) > 1) {
+            separatorClass = 'major';
+        } else if (fromLevel !== toLevel) {
+            separatorClass = 'minor';
+        }
+
+        return `<div class="reader-separator ${separatorClass}" data-from-level="${fromLevel}" data-to-level="${toLevel}"></div>`;
+    }
+
+    /**
+     * Apply CSS styles to the reader
+     */
+    private applyStyles(): void {
+        // Check if styles are already injected
+        if (document.getElementById('reader-styles')) return;
+
+        const styleElement = document.createElement('style');
+        styleElement.id = 'reader-styles';
+        styleElement.textContent = this.generateCSS();
+        document.head.appendChild(styleElement);
+    }
+
+    /**
+     * Generate CSS for the reader interface
+     */
+    private generateCSS(): string {
+        return `
+            .reader-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: white;
+                z-index: 10000;
+                display: flex;
+                flex-direction: column;
+                font-family: Georgia, 'Times New Roman', serif;
+            }
+
+            .reader-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1rem 2rem;
+                border-bottom: 1px solid #e5e7eb;
+                background: #fafafa;
+                flex-shrink: 0;
+            }
+
+            .reader-header h1 {
+                margin: 0;
+                font-size: 1.5rem;
+                color: #374151;
+            }
+
+            .reader-controls {
+                display: flex;
+                gap: 1rem;
+                align-items: center;
+            }
+
+            .control-btn {
+                padding: 0.5rem 1rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: white;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+
+            .control-btn:hover {
+                background: #f3f4f6;
+            }
+
+            .close-btn {
+                width: 32px;
+                height: 32px;
+                border: none;
+                border-radius: 50%;
+                background: #ef4444;
+                color: white;
+                cursor: pointer;
+                font-size: 1.2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .close-btn:hover {
+                background: #dc2626;
+            }
+
+            .reader-body {
+                display: flex;
+                flex: 1;
+                overflow: hidden;
+            }
+
+            .reader-toc {
+                width: 300px;
+                border-right: 1px solid #e5e7eb;
+                background: #f9fafb;
+                padding: 1.5rem;
+                overflow-y: auto;
+                flex-shrink: 0;
+            }
+
+            .reader-toc h3 {
+                margin: 0 0 1rem 0;
+                font-size: 1.1rem;
+                color: #374151;
+            }
+
+            .toc-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+
+            .toc-item {
+                margin-bottom: 0.5rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .toc-link {
+                color: #4338ca;
+                text-decoration: none;
+                font-size: 0.9rem;
+                flex: 1;
+            }
+
+            .toc-link:hover {
+                text-decoration: underline;
+            }
+
+            .toc-info {
+                font-size: 0.75rem;
+                color: #6b7280;
+                margin-left: 0.5rem;
+            }
+
+            .reader-content-area {
+                flex: 1;
+                overflow-y: auto;
+                padding: 0;
+            }
+
+            .reader-content {
+                max-width: ${this.config.maxWidth}px;
+                margin: 0 auto;
+                padding: 2rem;
+                line-height: ${this.config.lineHeight};
+                font-size: ${this.config.fontSize}px;
+            }
+
+            .reader-node {
+                margin-bottom: 2rem;
+                padding: 2rem;
+                border-radius: 8px;
+                transition: background-color 0.2s ease;
+                cursor: text;
+            }
+
+            .reader-node:hover {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+
+            .node-header {
+                margin-bottom: 1.5rem;
+            }
+
+            .node-title {
+                color: #1f2937;
+                line-height: 1.2;
+            }
+
+            .node-meta {
+                display: flex;
+                gap: 1rem;
+                margin-top: 0.5rem;
+                font-size: 0.8rem;
+                color: #6b7280;
+            }
+
+            .node-content {
+                color: #374151;
+                line-height: inherit;
+            }
+
+            .node-content p {
+                margin-bottom: 1rem;
+                text-align: justify;
+            }
+
+            .node-content p:last-child {
+                margin-bottom: 0;
+            }
+
+            .reader-separator.major {
+                border-top: 3px solid #d1d5db;
+                margin: 4rem 0;
+                position: relative;
+            }
+
+            .reader-separator.minor {
+                border-top: 1px solid #e5e7eb;
+                margin: 2rem 0;
+            }
+
+            .reader-separator.section {
+                margin: 1.5rem 0;
+                height: 1px;
+                background: transparent;
+            }
+
+            .no-content {
+                text-align: center;
+                padding: 4rem 2rem;
+                color: #6b7280;
+            }
+
+            .no-content h2 {
+                color: #374151;
+                margin-bottom: 1rem;
+            }
+
+            /* Responsive design */
+            @media (max-width: 768px) {
+                .reader-toc {
+                    display: none;
+                }
+                
+                .reader-header {
+                    padding: 1rem;
+                }
+                
+                .reader-header h1 {
+                    font-size: 1.2rem;
+                }
+                
+                .reader-content {
+                    padding: 1rem;
+                    max-width: 100%;
+                }
+                
+                .reader-controls {
+                    gap: 0.5rem;
+                }
+                
+                .control-btn {
+                    padding: 0.4rem 0.8rem;
+                    font-size: 0.8rem;
+                }
+            }
+
+            /* Settings Panel */
+            .reader-settings-panel {
+                position: fixed;
+                top: 0;
+                right: 0;
+                width: 350px;
+                height: 100vh;
+                background: white;
+                border-left: 1px solid #e5e7eb;
+                box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+                z-index: 10001;
+                overflow-y: auto;
+            }
+
+            .settings-panel-content {
+                padding: 2rem;
+            }
+
+            .settings-panel-content h3 {
+                margin: 0 0 1.5rem 0;
+                color: #374151;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 0.5rem;
+            }
+
+            .settings-group {
+                margin-bottom: 1.5rem;
+            }
+
+            .settings-group label {
+                display: block;
+                margin-bottom: 0.5rem;
+                font-weight: 500;
+                color: #4b5563;
+            }
+
+            .settings-group input[type="range"] {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            .settings-group select {
+                width: 100%;
+                padding: 0.5rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: white;
+            }
+
+            .setting-value {
+                font-size: 0.9rem;
+                color: #6b7280;
+                font-weight: 500;
+            }
+
+            .settings-buttons {
+                display: flex;
+                gap: 1rem;
+                margin-top: 2rem;
+                padding-top: 1rem;
+                border-top: 1px solid #e5e7eb;
+            }
+
+            .settings-buttons button {
+                flex: 1;
+                padding: 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: white;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+
+            .settings-buttons button:hover {
+                background: #f3f4f6;
+            }
+
+            #reader-settings-reset {
+                background: #ef4444 !important;
+                color: white !important;
+                border-color: #ef4444 !important;
+            }
+
+            #reader-settings-reset:hover {
+                background: #dc2626 !important;
+            }
+
+            /* Theme styles */
+            .reader-theme-dark {
+                background: #1f2937;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .reader-header {
+                background: #111827;
+                border-color: #374151;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .reader-header h1 {
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .reader-toc {
+                background: #111827;
+                border-color: #374151;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .reader-toc h3 {
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .toc-link {
+                color: #60a5fa;
+            }
+
+            .reader-theme-dark .toc-link:hover {
+                color: #93c5fd;
+            }
+
+            .reader-theme-dark .toc-info {
+                color: #9ca3af;
+            }
+
+            .reader-theme-dark .reader-node {
+                background: #374151 !important;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .node-title {
+                color: #f9fafb !important;
+            }
+
+            .reader-theme-dark .node-meta {
+                color: #9ca3af !important;
+            }
+
+            .reader-theme-dark .node-content {
+                color: #e5e7eb !important;
+            }
+
+            .reader-theme-dark .reader-separator.major {
+                border-color: #4b5563;
+            }
+
+            .reader-theme-dark .reader-separator.minor {
+                border-color: #374151;
+            }
+
+            .reader-theme-dark .no-content {
+                color: #9ca3af;
+            }
+
+            .reader-theme-dark .no-content h2 {
+                color: #f9fafb;
+            }
+
+            .reader-theme-sepia {
+                background: #f7f3e9;
+                color: #5c4b37;
+            }
+
+            .reader-theme-sepia .reader-header {
+                background: #f0e6d2;
+                border-color: #d6c7a1;
+            }
+
+            .reader-theme-sepia .reader-toc {
+                background: #f0e6d2;
+                border-color: #d6c7a1;
+            }
+
+            .reader-theme-sepia .reader-node {
+                background: #faf6ec !important;
+                color: #5c4b37;
+            }
+
+            /* Dark theme settings panel */
+            .reader-theme-dark .reader-settings-panel {
+                background: #1f2937;
+                border-color: #374151;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .settings-panel-content h3 {
+                color: #f9fafb;
+                border-color: #374151;
+            }
+
+            .reader-theme-dark .settings-group label {
+                color: #e5e7eb;
+            }
+
+            .reader-theme-dark .settings-group select {
+                background: #374151;
+                border-color: #4b5563;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .setting-value {
+                color: #9ca3af;
+            }
+
+            .reader-theme-dark .settings-buttons {
+                border-color: #374151;
+            }
+
+            .reader-theme-dark .settings-buttons button {
+                background: #374151;
+                border-color: #4b5563;
+                color: #f9fafb;
+            }
+
+            .reader-theme-dark .settings-buttons button:hover {
+                background: #4b5563;
+            }
+
+            /* Print styles */
+            @media print {
+                .reader-header,
+                .reader-toc,
+                .reader-settings-panel {
+                    display: none !important;
+                }
+                
+                .reader-container {
+                    position: static;
+                    width: auto;
+                    height: auto;
+                }
+                
+                .reader-body {
+                    display: block;
+                }
+                
+                .reader-content-area {
+                    overflow: visible;
+                }
+                
+                .reader-node {
+                    page-break-inside: avoid;
+                    margin-bottom: 1rem;
+                    padding: 1rem;
+                }
+                
+                .reader-separator.major {
+                    page-break-after: always;
+                }
+            }
+        `;
+    }
+
+    /**
+     * Set up event listeners for the reader interface
+     */
+    private setupEventListeners(): void {
+        // We'll set up event delegation on the container
+        this.container.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
+        this.container.addEventListener('click', (event) => this.handleClick(event));
+    }
+
+    /**
+     * Handle double-click events for navigation
+     */
+    private handleDoubleClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+        const nodeElement = target.closest('[data-node-id]') as HTMLElement;
+        
+        if (nodeElement && this.onNavigateToNode) {
+            const nodeId = nodeElement.dataset.nodeId;
+            if (nodeId) {
+                this.onNavigateToNode(nodeId);
+            }
+        }
+    }
+
+    /**
+     * Handle click events (for TOC and controls)
+     */
+    private handleClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+        
+        if (target.id === 'close-reader-btn') {
+            this.close();
+        } else if (target.id === 'reader-toc-btn') {
+            this.toggleTOC();
+        } else if (target.id === 'reader-settings-btn') {
+            this.toggleSettings();
+        } else if (target.classList.contains('toc-link')) {
+            event.preventDefault();
+            const nodeId = target.dataset.nodeId;
+            if (nodeId) {
+                this.scrollToNode(nodeId);
+            }
+        } else if (target.tagName === 'A' && target.getAttribute('href')?.startsWith('#node-')) {
+            // Handle TOC anchor links
+            event.preventDefault();
+            const nodeId = target.getAttribute('href')?.substring('#node-'.length);
+            if (nodeId) {
+                this.scrollToNode(nodeId);
+            }
+        } else if (target.id === 'reader-settings-close') {
+            this.toggleSettings();
+        } else if (target.id === 'reader-settings-reset') {
+            this.resetSettings();
+        }
+    }
+
+    /**
+     * Setup event listeners for the settings panel
+     */
+    private setupSettingsEventListeners(): void {
+        const panel = this.container.querySelector('#reader-settings-panel');
+        if (!panel) return;
+
+        // Font size slider
+        const fontSizeSlider = panel.querySelector('#reader-font-size') as HTMLInputElement;
+        if (fontSizeSlider) {
+            fontSizeSlider.addEventListener('input', (e) => {
+                const value = parseInt((e.target as HTMLInputElement).value);
+                this.config.fontSize = value;
+                this.updateFontSizeDisplay(value);
+                this.applySettings();
+            });
+        }
+
+        // Line height slider
+        const lineHeightSlider = panel.querySelector('#reader-line-height') as HTMLInputElement;
+        if (lineHeightSlider) {
+            lineHeightSlider.addEventListener('input', (e) => {
+                const value = parseFloat((e.target as HTMLInputElement).value);
+                this.config.lineHeight = value;
+                this.updateLineHeightDisplay(value);
+                this.applySettings();
+            });
+        }
+
+        // Max width slider
+        const maxWidthSlider = panel.querySelector('#reader-max-width') as HTMLInputElement;
+        if (maxWidthSlider) {
+            maxWidthSlider.addEventListener('input', (e) => {
+                const value = parseInt((e.target as HTMLInputElement).value);
+                this.config.maxWidth = value;
+                this.updateMaxWidthDisplay(value);
+                this.applySettings();
+            });
+        }
+
+        // Theme selector
+        const themeSelect = panel.querySelector('#reader-theme') as HTMLSelectElement;
+        if (themeSelect) {
+            themeSelect.addEventListener('change', (e) => {
+                this.config.theme = (e.target as HTMLSelectElement).value as 'light' | 'dark' | 'sepia';
+                this.applySettings();
+            });
+        }
+
+        // Separator style selector
+        const separatorSelect = panel.querySelector('#reader-separator-style') as HTMLSelectElement;
+        if (separatorSelect) {
+            separatorSelect.addEventListener('change', (e) => {
+                this.config.separatorStyle = (e.target as HTMLSelectElement).value as 'minimal' | 'standard' | 'bold';
+                this.applySettings();
+            });
+        }
+    }
+
+    /**
+     * Update font size display
+     */
+    private updateFontSizeDisplay(value: number): void {
+        const display = this.container.querySelector('#reader-font-size + .setting-value');
+        if (display) {
+            display.textContent = `${value}px`;
+        }
+    }
+
+    /**
+     * Update line height display
+     */
+    private updateLineHeightDisplay(value: number): void {
+        const display = this.container.querySelector('#reader-line-height + .setting-value');
+        if (display) {
+            display.textContent = value.toString();
+        }
+    }
+
+    /**
+     * Update max width display
+     */
+    private updateMaxWidthDisplay(value: number): void {
+        const display = this.container.querySelector('#reader-max-width + .setting-value');
+        if (display) {
+            display.textContent = `${value}px`;
+        }
+    }
+
+    /**
+     * Apply current settings to the reader interface
+     */
+    private applySettings(): void {
+        const content = this.container.querySelector('.reader-content') as HTMLElement;
+        if (content) {
+            content.style.fontSize = `${this.config.fontSize}px`;
+            content.style.lineHeight = this.config.lineHeight.toString();
+            content.style.maxWidth = `${this.config.maxWidth}px`;
+        }
+
+        // Apply theme
+        this.container.className = `reader-container reader-theme-${this.config.theme}`;
+        
+        // Save configuration to storage
+        this.saveReaderConfig();
+    }
+
+    /**
+     * Reset settings to defaults
+     */
+    private resetSettings(): void {
+        this.config = {
+            showTOC: true,
+            fontSize: 16,
+            lineHeight: 1.6,
+            maxWidth: 800,
+            theme: 'light',
+            separatorStyle: 'standard'
+        };
+        this.render();
+    }
+
+    /**
+     * Build click mappings for precise navigation
+     */
+    private buildClickMappings(): void {
+        this.clickMappings = [];
+        const nodeElements = this.container.querySelectorAll('[data-node-id]');
+        
+        nodeElements.forEach(element => {
+            const nodeId = (element as HTMLElement).dataset.nodeId;
+            if (nodeId) {
+                this.clickMappings.push({
+                    nodeId,
+                    element: element as HTMLElement,
+                    startOffset: 0, // Will be calculated when needed
+                    endOffset: 0    // Will be calculated when needed
+                });
+            }
+        });
+    }
+
+    /**
+     * Toggle table of contents visibility
+     */
+    private toggleTOC(): void {
+        this.config.showTOC = !this.config.showTOC;
+        this.render();
+        this.saveReaderConfig();
+    }
+
+    /**
+     * Generate the settings panel HTML
+     */
+    private generateSettingsPanel(): string {
+        return `
+            <div id="reader-settings-panel" class="reader-settings-panel" style="display: none;">
+                <div class="settings-panel-content">
+                    <h3>Reader Settings</h3>
+                    
+                    <div class="settings-group">
+                        <label for="reader-font-size">Font Size:</label>
+                        <input type="range" id="reader-font-size" min="12" max="24" step="1" value="${this.config.fontSize}">
+                        <span class="setting-value">${this.config.fontSize}px</span>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="reader-line-height">Line Height:</label>
+                        <input type="range" id="reader-line-height" min="1.2" max="2.0" step="0.1" value="${this.config.lineHeight}">
+                        <span class="setting-value">${this.config.lineHeight}</span>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="reader-max-width">Content Width:</label>
+                        <input type="range" id="reader-max-width" min="600" max="1200" step="50" value="${this.config.maxWidth}">
+                        <span class="setting-value">${this.config.maxWidth}px</span>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="reader-theme">Theme:</label>
+                        <select id="reader-theme" value="${this.config.theme}">
+                            <option value="light" ${this.config.theme === 'light' ? 'selected' : ''}>Light</option>
+                            <option value="dark" ${this.config.theme === 'dark' ? 'selected' : ''}>Dark</option>
+                            <option value="sepia" ${this.config.theme === 'sepia' ? 'selected' : ''}>Sepia</option>
+                        </select>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="reader-separator-style">Separator Style:</label>
+                        <select id="reader-separator-style" value="${this.config.separatorStyle}">
+                            <option value="minimal" ${this.config.separatorStyle === 'minimal' ? 'selected' : ''}>Minimal</option>
+                            <option value="standard" ${this.config.separatorStyle === 'standard' ? 'selected' : ''}>Standard</option>
+                            <option value="bold" ${this.config.separatorStyle === 'bold' ? 'selected' : ''}>Bold</option>
+                        </select>
+                    </div>
+                    
+                    <div class="settings-buttons">
+                        <button id="reader-settings-reset">Reset to Defaults</button>
+                        <button id="reader-settings-close">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Toggle settings panel visibility
+     */
+    private toggleSettings(): void {
+        const panel = this.container.querySelector('#reader-settings-panel') as HTMLElement;
+        if (panel) {
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'block';
+            
+            if (!isVisible) {
+                // Setup event listeners for the settings panel when opened
+                this.setupSettingsEventListeners();
+            }
+        }
+    }
+
+    /**
+     * Close the reader interface
+     */
+    private close(): void {
+        // Remove styles
+        const styleElement = document.getElementById('reader-styles');
+        if (styleElement) {
+            styleElement.remove();
+        }
+        
+        // Clear container
+        this.container.innerHTML = '';
+        this.container.style.display = 'none';
+    }
+
+    /**
+     * Show the reader interface
+     */
+    public async show(): Promise<void> {
+        this.container.style.display = 'block';
+        await this.loadReaderConfig();
+        this.render();
+        this.applySettings();
+    }
+
+    /**
+     * Hide the reader interface
+     */
+    public hide(): void {
+        this.container.style.display = 'none';
+    }
+}
+
+/**
+ * Utility function to create and show a reader for a project
+ */
+export async function openReaderView(projectManager: ProjectManager, onNavigateToNode?: (nodeId: string) => void): Promise<ReaderGUI> {
+    // Create a container for the reader
+    let readerContainer = document.getElementById('reader-container') as HTMLElement;
+    if (!readerContainer) {
+        readerContainer = document.createElement('div');
+        readerContainer.id = 'reader-container';
+        document.body.appendChild(readerContainer);
+    }
+
+    const reader = new ReaderGUI(projectManager, readerContainer, onNavigateToNode);
+    await reader.show();
+    return reader;
+} 

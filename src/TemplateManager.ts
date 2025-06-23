@@ -1,4 +1,5 @@
 import { ProjectTemplate } from './ProjectTemplate';
+import { StorageService, IStorageService } from './StorageService';
 
 export const TEMPLATE_STORAGE_KEY = 'expert_app_project_templates';
 
@@ -29,30 +30,39 @@ function areValidTemplates(data: any): data is Record<string, ProjectTemplate> {
 
 export class TemplateManager {
     private templates: Record<string, ProjectTemplate>;
+    private storageService: Promise<IStorageService>;
 
     constructor() {
-        this.templates = this.loadTemplates();
+        this.storageService = StorageService.getInstance();
+        this.templates = {};
+        this.loadTemplates();
     }
 
-    private loadTemplates(): Record<string, ProjectTemplate> {
-        const saved = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (areValidTemplates(parsed)) {
-                    return parsed;
-                }
-                console.warn('Invalid templates found in localStorage. Reverting to defaults.');
-            } catch (error) {
-                console.error('Failed to parse templates from localStorage', error);
+    private async loadTemplates(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            const saved = await storage.get<Record<string, ProjectTemplate>>(TEMPLATE_STORAGE_KEY);
+            
+            if (saved && areValidTemplates(saved)) {
+                this.templates = saved;
+            } else {
+                console.warn('Invalid templates found in storage. Reverting to defaults.');
+                this.templates = { ...defaultTemplates };
+                await this.saveAllTemplates();
             }
+            } catch (error) {
+            console.error('Failed to load templates from storage', error);
+            this.templates = { ...defaultTemplates };
         }
-        // If nothing is saved or parsing fails, return the default.
-        return { ...defaultTemplates };
     }
 
-    private saveAllTemplates() {
-        localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(this.templates));
+    private async saveAllTemplates(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            await storage.set(TEMPLATE_STORAGE_KEY, this.templates);
+        } catch (error) {
+            console.error('Failed to save templates to storage', error);
+        }
     }
 
     public getTemplate(name: string): ProjectTemplate | undefined {
@@ -63,21 +73,21 @@ export class TemplateManager {
         return Object.keys(this.templates);
     }
 
-    public saveTemplate(name: string, template: ProjectTemplate) {
+    public async saveTemplate(name: string, template: ProjectTemplate): Promise<void> {
         if (!name.trim()) {
             throw new Error("Template name cannot be empty.");
         }
         // Ensure the name property on the object matches the key
         template.name = name; 
         this.templates[name] = template;
-        this.saveAllTemplates();
+        await this.saveAllTemplates();
     }
 
-    public deleteTemplate(name: string) {
+    public async deleteTemplate(name: string): Promise<void> {
         if (Object.keys(this.templates).length <= 1) {
             throw new Error("Cannot delete the last remaining template.");
         }
         delete this.templates[name];
-        this.saveAllTemplates();
+        await this.saveAllTemplates();
     }
 } 
