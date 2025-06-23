@@ -758,10 +758,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         if (recursive) {
             const children = node.children;
             const maxExpandLevel = this.template.hierarchyLevels.length - 1; // Max level based on hierarchy
-            // Filter to only children that can be expanded (have content but no children, or within expand level)
+            // Filter to only children that can be expanded (have content and are within hierarchy limit)
             const childrenToExpand = children.filter(child => 
                 child.level < maxExpandLevel && 
-                (child.content && child.content.trim() !== '' || child.children.length === 0)
+                child.content && child.content.trim() !== ''
             );
             
             for (let i = 0; i < childrenToExpand.length; i++) {

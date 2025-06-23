@@ -9,6 +9,10 @@ let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
 let collapsedNodes: Set<string> = new Set();
 
+// Checkbox state persistence
+let includeContentState: boolean = true;
+let recursiveState: boolean = false;
+
 // Global abort button functions
 function showGlobalAbortButton() {
     const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
@@ -45,6 +49,33 @@ async function loadCollapsedState() {
     } catch (error) {
         console.warn('Failed to load collapsed nodes state:', error);
         collapsedNodes = new Set();
+    }
+}
+
+async function saveCheckboxStates() {
+    try {
+        const { StorageService } = await import('../StorageService');
+        const storage = await StorageService.getInstance();
+        await storage.set('expert_app_checkbox_states', {
+            includeContent: includeContentState,
+            recursive: recursiveState
+        });
+    } catch (error) {
+        console.warn('Failed to save checkbox states:', error);
+    }
+}
+
+async function loadCheckboxStates() {
+    try {
+        const { StorageService } = await import('../StorageService');
+        const storage = await StorageService.getInstance();
+        const saved = await storage.get<{includeContent: boolean, recursive: boolean}>('expert_app_checkbox_states');
+        if (saved) {
+            includeContentState = saved.includeContent;
+            recursiveState = saved.recursive;
+        }
+    } catch (error) {
+        console.warn('Failed to load checkbox states:', error);
     }
 }
 
@@ -580,11 +611,11 @@ export function renderNodeDetails() {
                     <button id="node-generate-all-btn" class="button" style="width: 100%;">Generate All Children</button>
                     <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.9rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="include-content-checkbox" checked>
+                            <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
                             <label for="include-content-checkbox" style="cursor: pointer; user-select: none;">Include content</label>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="recursive-checkbox">
+                            <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
                             <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
                         </div>
                     </div>
@@ -652,6 +683,24 @@ export function renderNodeDetails() {
                 } else {
                     generateAllBtn.title = "Smart fill: Creates children only if none exist, generates content only for empty nodes. Use 'Include content' and 'Recursive' to control behavior.";
                 }
+            }
+            
+            // Set up checkbox event listeners to save state
+            const includeContentCheckbox = actionsContainer.querySelector('#include-content-checkbox') as HTMLInputElement;
+            const recursiveCheckbox = actionsContainer.querySelector('#recursive-checkbox') as HTMLInputElement;
+            
+            if (includeContentCheckbox) {
+                includeContentCheckbox.addEventListener('change', () => {
+                    includeContentState = includeContentCheckbox.checked;
+                    saveCheckboxStates().catch(console.error);
+                });
+            }
+            
+            if (recursiveCheckbox) {
+                recursiveCheckbox.addEventListener('change', () => {
+                    recursiveState = recursiveCheckbox.checked;
+                    saveCheckboxStates().catch(console.error);
+                });
             }
         }
 }
@@ -1028,13 +1077,9 @@ export function setupEventListeners() {
                     return;
                 }
                 
-                // Check if the "Include content" checkbox is checked
-                const includeContentCheckbox = document.getElementById('include-content-checkbox') as HTMLInputElement;
-                const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
-                
-                // Check if the "Recursive" checkbox is checked
-                const recursiveCheckbox = document.getElementById('recursive-checkbox') as HTMLInputElement;
-                const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
+                // Use stored checkbox states instead of reading from DOM
+                const includeContent = includeContentState;
+                const recursive = recursiveState;
                 
                 // Don't show overlay for generate all children since parent node isn't changing
                 // Just show progress bars to indicate the operation is starting
@@ -1144,6 +1189,7 @@ export function initializeProjectUI(manager?: ProjectManager) {
     }
     
     loadCollapsedState().catch(console.error); // Load the collapsed state from storage
+    loadCheckboxStates().catch(console.error); // Load the checkbox states from storage
 
     const mainContent = getElementById('main-content');
     
