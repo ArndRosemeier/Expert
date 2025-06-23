@@ -201,7 +201,9 @@ export class ModelSelector {
         defaultOpt.disabled = true;
         defaultOpt.textContent = 'Select a model...';
         select.appendChild(defaultOpt);
-        this.models.forEach(model => {
+        // Sort models by name for better UX
+        const sortedModels = [...this.models].sort((a, b) => a.name.localeCompare(b.name));
+        sortedModels.forEach(model => {
           const opt = document.createElement('option');
           opt.value = model.id;
           opt.textContent = model.name;
