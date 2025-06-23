@@ -108,6 +108,8 @@ export const defaultPrompts: OrchestratorPrompts = {
         ---
 
         Now, write the full content for this node.
+
+        IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
     `.trim(),
     branch_content_generation_user: `
         You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
@@ -119,6 +121,8 @@ export const defaultPrompts: OrchestratorPrompts = {
         ---
         {{context}}
         ---
+
+        IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
     `.trim(),
     create_children_from_outline_user: `
         You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of titles for the '{{child_level_name}}' nodes that should be created from it.

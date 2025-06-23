@@ -181,6 +181,17 @@ export async function initialize() {
     });
     getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
     getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
+    
+    // Global abort button handler
+    getElementById('globalAbortBtn').addEventListener('click', () => {
+        const activeProject = state.getActiveProject();
+        if (activeProject && activeProject.canAbortGeneration()) {
+            const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
+            if (confirmed) {
+                activeProject.abortCurrentGeneration();
+            }
+        }
+    });
 
     // Add modal-closing listeners (disabled click-outside-to-close for settings and templates)
     // modalContainer.addEventListener('click', (e) => {

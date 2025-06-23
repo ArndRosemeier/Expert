@@ -14,6 +14,7 @@ type ProjectManagerEvents = {
     'node-selected': [node: DocumentNode | null];
     'nodeGenerationStarted': [e: { nodeId: string, node: DocumentNode }];
     'nodeGenerationComplete': [e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }];
+    'nodeGenerationAborted': [e: { nodeId: string, node: DocumentNode }];
     'loop-progress': [e: { nodeId: string, progress: LoopProgress }];
     'high-level-progress': [e: { nodeId: string, message: string, current: number, total: number }];
     'nodePromptGenerated': [e: { nodeId:string, prompt: string, isPromptGenerating: boolean }];
@@ -41,7 +42,13 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
     private selectedNodeId: string | null = null;
-    private isGeneratingAllChildren = false;
+    private isGeneratingAllChildren: boolean = false;
+    private abortRequested: boolean = false;
+    private currentGenerationContext: {
+        type: 'single' | 'summary' | 'bulk';
+        nodeIds: string[];
+        abortController: AbortController;
+    } | null = null;
     public _listenersSetup: boolean = false;
     private static storageService: Promise<IStorageService> | null = null;
 
@@ -288,14 +295,94 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         return filledPrompt;
     }
 
+    /**
+     * Abort any ongoing generation operations
+     */
+    public abortCurrentGeneration(): void {
+        this.abortRequested = true;
+        
+        if (this.currentGenerationContext) {
+            this.currentGenerationContext.abortController.abort();
+        }
+        
+        // Abort the loop orchestrator
+        this.loopOrchestrator.requestStop();
+        
+        // Mark all generating nodes as no longer generating
+        this.clearAllGeneratingFlags();
+        
+        // Emit appropriate events based on what was running
+        if (this.currentGenerationContext) {
+            for (const nodeId of this.currentGenerationContext.nodeIds) {
+                const node = this.findNodeById(nodeId);
+                if (node) {
+                    this.emit('nodeGenerationAborted', { nodeId, node });
+                }
+            }
+        }
+        
+        // Clear generation context
+        this.currentGenerationContext = null;
+        this.isGeneratingAllChildren = false;
+        
+        // Clear progress
+        this.emit('high-level-progress', { nodeId: '', message: '', current: 0, total: 0 });
+    }
+
+    /**
+     * Check if any generation is currently running and can be aborted
+     */
+    public canAbortGeneration(): boolean {
+        return this.currentGenerationContext !== null || this.isAnyNodeGenerating();
+    }
+
+    /**
+     * Get information about the current generation for UI display
+     */
+    public getCurrentGenerationInfo(): { type: string; nodeCount: number; canAbort: boolean } | null {
+        if (!this.currentGenerationContext) {
+            return null;
+        }
+        
+        return {
+            type: this.currentGenerationContext.type,
+            nodeCount: this.currentGenerationContext.nodeIds.length,
+            canAbort: true
+        };
+    }
+
+    private clearAllGeneratingFlags(): void {
+        const clearNode = (node: DocumentNode): void => {
+            node.isGenerating = false;
+            node.children.forEach(child => clearNode(child));
+        };
+        clearNode(this.rootNode);
+    }
+
     public async generateNodeContent(nodeId: string, count: number = 5, isChildGeneration: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) { throw new Error(`Node not found: ${nodeId}`); }
+
+        // Check if already generating (but allow during bulk operations)
+        if (!isChildGeneration && this.canAbortGeneration()) {
+            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
+        }
+
+        // Set up generation context only if not part of bulk operation
+        if (!isChildGeneration) {
+            this.abortRequested = false;
+            this.currentGenerationContext = {
+                type: 'single',
+                nodeIds: [nodeId],
+                abortController: new AbortController()
+            };
+        }
 
         const profile = this.settingsManager.getLastUsedProfile();
         
         // Fail loudly if the node is in an invalid state for generation.
         if (!profile || !profile.criteria || profile.criteria.length === 0) {
+            this.currentGenerationContext = null;
             throw new Error(`Cannot generate content for node "${node.title}" (ID: ${nodeId}). The active profile is either missing, has no criteria defined, or could not be loaded.`);
         }
 
@@ -314,10 +401,18 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         };
 
         const contextNodeId = isChildGeneration ? node.parentId : nodeId;
-        await this.runContentLoop(nodeId, loopInput, contextNodeId || undefined);
+        try {
+            await this.runContentLoop(nodeId, loopInput, contextNodeId || undefined, isChildGeneration);
+        } catch (error) {
+            // Only clear context if this was a single generation (not part of bulk)
+            if (!isChildGeneration) {
+                this.currentGenerationContext = null;
+            }
+            throw error;
+        }
     }
 
-    private async runContentLoop(nodeId: string, loopInput: LoopInput, contextNodeId?: string): Promise<void> {
+    private async runContentLoop(nodeId: string, loopInput: LoopInput, contextNodeId?: string, isChildGeneration: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) {
             console.error(`Node not found in runContentLoop: ${nodeId}`);
@@ -345,6 +440,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         
         // Subscribe to progress updates from the orchestrator
         const onProgress = (progress: LoopProgress) => {
+            // Check for abort before processing progress
+            if (this.abortRequested) {
+                return;
+            }
             
             if (progress.type === 'creator') {
                 const payload = progress.payload as CreatorPayload;
@@ -388,40 +487,62 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             // we want to emit the progress under the parent's ID so the UI can display it.
             this.emit('loop-progress', { nodeId: contextNodeId || nodeId, progress });
         };
+
+        // Handle abort events from orchestrator
+        const onAborted = (message: string) => {
+            console.log(`Generation aborted for node ${nodeId}: ${message}`);
+        };
+        
         this.loopOrchestrator.on('progress', onProgress);
+        this.loopOrchestrator.on('aborted', onAborted);
 
         try {
             const result = await this.loopOrchestrator.runLoop(loopInput);
             
-            // End the generation session
-            node.endGenerationSession(result.success, result.finalResponse);
-            
-            // Set the final content using the special method that doesn't clear generation history
-            node.setContentFromGeneration(result.finalResponse);
-            node.generationHistory = result.history;
+            if (result.aborted || this.abortRequested) {
+                // Handle aborted generation
+                node.endGenerationSession(false, currentIterationContent || '');
+                if (currentIterationContent) {
+                    node.setContentFromGeneration(currentIterationContent);
+                }
+                this.emit('nodeGenerationAborted', { nodeId, node });
+            } else {
+                // Handle successful completion
+                node.endGenerationSession(result.success, result.finalResponse);
+                node.setContentFromGeneration(result.finalResponse);
+                node.generationHistory = result.history;
+                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
 
-            this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-
-            // Automatically summarize the content after generating it, but skip if we're in bulk mode
-            // (bulk operations handle summarization explicitly with proper progress suppression)
-            if (!this.isGeneratingAllChildren) {
-                await this.summarizeNodeContent(nodeId);
+                // Automatically summarize the content after generating it, but skip if we're in bulk mode
+                // (bulk operations handle summarization explicitly with proper progress suppression)
+                if (!this.isGeneratingAllChildren && !this.abortRequested) {
+                    await this.summarizeNodeContent(nodeId);
+                }
             }
 
         } catch (error: any) {
             console.error(`Error running content loop for node ${nodeId}:`, error);
-            const errorMessage = error.message || "An unexpected error occurred during content generation.";
             
             // End the generation session with failure
             if (node.currentGenerationSession) {
                 node.endGenerationSession(false, currentIterationContent || '');
             }
             
-            this.emit('error', errorMessage);
-            this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
+            if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                this.emit('nodeGenerationAborted', { nodeId, node });
+            } else {
+                const errorMessage = error.message || "An unexpected error occurred during content generation.";
+                this.emit('error', errorMessage);
+                this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
+            }
         } finally {
             node.isGenerating = false;
             this.loopOrchestrator.off('progress', onProgress);
+            this.loopOrchestrator.off('aborted', onAborted);
+            // Only clear context if this was a single generation (not part of bulk)
+            if (!isChildGeneration) {
+                this.currentGenerationContext = null;
+            }
             await this.saveToStorage();
         }
     }
@@ -485,22 +606,74 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @param recursive Whether to recursively generate children down to max expand level (default: false).
      */
     public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false): Promise<void> {
-        const node = this.findNodeById(nodeId);
+        let node = this.findNodeById(nodeId);
         if (!node) {
             this.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
             return;
         }
 
-        if (!node.content || node.content.trim() === '') {
-            this.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first.`);
-            return;
+        // Check for existing generation FIRST, before any operations
+        if (this.canAbortGeneration()) {
+            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
         }
 
-        this.isGeneratingAllChildren = true; // Flag to prevent progress clearing
+        // If node has no content, offer to generate it first
+        if (!node.content || node.content.trim() === '') {
+            if (includeContent) {
+                // Auto-generate content for the parent node first
+                this.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
+                
+                try {
+                    await this.generateNodeContent(nodeId, 5, false);
+                    
+                    // Refresh node reference after content generation
+                    const updatedNode = this.findNodeById(nodeId);
+                    if (!updatedNode || !updatedNode.content || updatedNode.content.trim() === '') {
+                        this.emit('error', `Failed to generate content for "${node.title}". Cannot proceed with creating children.`);
+                        return;
+                    }
+                    // Update node reference for subsequent operations
+                    node = updatedNode;
+                } catch (error: any) {
+                    if (error.message === 'Generation aborted by user') {
+                        // This was aborted at the single generation level, just return
+                        return;
+                    }
+                    this.emit('error', `Failed to generate content for "${node.title}": ${error.message}`);
+                    return;
+                }
+            } else {
+                this.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first, or enable "Include content" to auto-generate it.`);
+                return;
+            }
+        }
+
+        // Set up bulk generation context
+        this.abortRequested = false;
+        this.isGeneratingAllChildren = true;
+        
+        // Collect all nodes that will be processed for abort tracking
+        const collectChildNodes = (node: DocumentNode): DocumentNode[] => {
+            const nodes: DocumentNode[] = [];
+            for (const child of node.children) {
+                nodes.push(child);
+                if (recursive) {
+                    nodes.push(...collectChildNodes(child));
+                }
+            }
+            return nodes;
+        };
+        
+        const nodesToProcess = collectChildNodes(node);
+        this.currentGenerationContext = {
+            type: 'bulk',
+            nodeIds: nodesToProcess.map(n => n.id),
+            abortController: new AbortController()
+        };
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
-            this.emit('high-level-progress', { nodeId, message: 'Reading outline and generating titles...', current: 0, total: 1 });
+            this.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles...', current: 0, total: 1 });
 
             const prompts = this.settingsManager.getPrompts();
             const context = this.compileNodeContext(nodeId);
@@ -535,21 +708,49 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 this.isGeneratingAllChildren = false;
                 return;
             }
+        } else {
+            this.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
         }
 
         // Step 2: Generate content for all children (if requested)
         if (includeContent) {
-            const children = node.children;
-            const total = children.length;
+        const children = node.children;
+            // Filter to only children that don't have content yet
+            const childrenNeedingContent = children.filter(child => !child.content || child.content.trim() === '');
+            const total = childrenNeedingContent.length;
 
-            for (let i = 0; i < total; i++) {
-                const child = children[i];
-                this.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
-                
-                // No need to pass count here, as these should be leaf or sub-branch nodes
-                // where the content is prose or a more detailed outline.
-                await this.generateNodeContent(child.id, 5, true);
-                await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
+            if (total > 0) {
+        for (let i = 0; i < total; i++) {
+                    const child = childrenNeedingContent[i];
+                    
+                    // Check for abort before processing each child
+                    if (this.abortRequested) {
+                        break;
+                    }
+                    
+            this.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
+            
+            try {
+                        // No need to pass count here, as these should be leaf or sub-branch nodes
+                        // where the content is prose or a more detailed outline.
+                        await this.generateNodeContent(child.id, 5, true);
+                        
+                        // Check for abort after generation
+                        if (this.abortRequested) {
+                            break;
+                        }
+                        
+                        await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
+                    } catch (error: any) {
+                        if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                            break;
+                        }
+                        console.error(`Failed to generate content for child ${child.title}:`, error);
+                        // Continue with next child instead of failing completely
+                    }
+                }
+            } else {
+                this.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
             }
         }
 
@@ -557,36 +758,58 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         if (recursive) {
             const children = node.children;
             const maxExpandLevel = this.template.hierarchyLevels.length - 1; // Max level based on hierarchy
+            // Filter to only children that can be expanded (have content but no children, or within expand level)
+            const childrenToExpand = children.filter(child => 
+                child.level < maxExpandLevel && 
+                (child.content && child.content.trim() !== '' || child.children.length === 0)
+            );
             
-            for (let i = 0; i < children.length; i++) {
-                const child = children[i];
+            for (let i = 0; i < childrenToExpand.length; i++) {
+                const child = childrenToExpand[i];
                 
-                // Only recurse if we haven't reached the max expand level
-                if (child.level < maxExpandLevel) {
-                    this.emit('high-level-progress', { 
-                        nodeId, 
-                        message: `Recursively generating children for: ${child.title}`, 
-                        current: i + 1, 
-                        total: children.length 
-                    });
-                    
+                // Check for abort before recursive processing
+                if (this.abortRequested) {
+                    break;
+                }
+                
+                this.emit('high-level-progress', { 
+                    nodeId, 
+                    message: `Recursively generating children for: ${child.title}`, 
+                    current: i + 1, 
+                    total: childrenToExpand.length 
+                });
+                
+                try {
                     // Recursively call generateAllChildrenContent on each child
                     // Pass includeContent and recursive flags down
                     await this.generateAllChildrenContent(child.id, includeContent, recursive);
+                } catch (error: any) {
+                    if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                        break;
+                    }
+                    console.error(`Failed to recursively generate children for ${child.title}:`, error);
+                    // Continue with next child
                 }
             }
         }
 
-        this.isGeneratingAllChildren = false; // Reset flag
-        
-        // Clear progress bars and emit completion event
-        this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-        this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-        
-        // Small delay to ensure all async operations complete, then trigger UI cleanup
-        setTimeout(() => {
-            this.emit('project-loaded');
-        }, 100);
+        try {
+            if (this.abortRequested) {
+                this.emit('nodeGenerationAborted', { nodeId, node });
+            } else {
+                // Clear progress bars and emit completion event
+                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
+                
+                // Small delay to ensure all async operations complete, then trigger UI cleanup
+                setTimeout(() => {
+                    this.emit('project-loaded');
+                }, 100);
+            }
+        } finally {
+            this.isGeneratingAllChildren = false; // Reset flag
+            this.currentGenerationContext = null;
+        }
         
 
     }
@@ -608,6 +831,21 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             return;
         }
 
+        // Check if already generating (unless this is a bulk operation)
+        if (!suppressProgressClearing && this.canAbortGeneration()) {
+            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
+        }
+
+        // Set up generation context for non-bulk operations
+        if (!suppressProgressClearing) {
+            this.abortRequested = false;
+            this.currentGenerationContext = {
+                type: 'summary',
+                nodeIds: [nodeId],
+                abortController: new AbortController()
+            };
+        }
+
         // Only emit progress events if not suppressed (not during bulk operations)
         if (!suppressProgressClearing) {
             this.emit('high-level-progress', { nodeId, message: 'Summarizing content...', current: 0, total: 1 });
@@ -617,20 +855,56 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         const systemPrompt = prompts.summarize_system.replace('{{content}}', node.content);
 
         try {
-            const summary = await this.openRouterClient.chat('editor', systemPrompt);
+            node.isGenerating = true;
+            if (!suppressProgressClearing) {
+                this.emit('nodeGenerationStarted', { nodeId, node });
+            }
+
+            if (this.abortRequested) {
+                throw new Error('Generation aborted by user');
+            }
+
+            const abortSignal = this.currentGenerationContext?.abortController.signal;
+            const summary = await this.openRouterClient.chat('editor', systemPrompt, abortSignal);
+            
+            if (this.abortRequested) {
+                throw new Error('Generation aborted by user');
+            }
+
             node.summary = summary;
             this.emit('nodeSummaryGenerated', { nodeId, summary });
             await this.saveToStorage();
+
+            if (!suppressProgressClearing) {
+                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
+            }
+
             // Only clear the progress bar if not suppressed (not during bulk operations)
             if (!suppressProgressClearing) {
                 this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
             }
-        } catch(error) {
+        } catch(error: any) {
             console.error(`Failed to summarize node ${nodeId}:`, error);
-            this.emit('error', `An error occurred while summarizing. Please check the console for details.`);
+            
+            if (error.message === 'Request was aborted' || error.message === 'Generation aborted by user' || this.abortRequested) {
+                if (!suppressProgressClearing) {
+                    this.emit('nodeGenerationAborted', { nodeId, node });
+                }
+            } else {
+                this.emit('error', `An error occurred while summarizing. Please check the console for details.`);
+                if (!suppressProgressClearing) {
+                    this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
+                }
+            }
+
             // Only clear the progress bar if not suppressed (not during bulk operations)
             if (!suppressProgressClearing) {
                 this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            }
+        } finally {
+            node.isGenerating = false;
+            if (!suppressProgressClearing) {
+                this.currentGenerationContext = null;
             }
         }
     }
@@ -713,14 +987,14 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                         data: project.save()
                     };
                     await indexedDB.set('projects', project.rootNode.id, projectRecord);
-                }
+        }
             } else {
                 // This should never happen with IndexedDB-only storage
                 throw new Error('IndexedDB service is not available but was expected');
             }
             
             // Save active project ID
-            if (activeProject) {
+        if (activeProject) {
                 await storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
             }
         } catch (error) {
@@ -745,11 +1019,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 // Load from IndexedDB
                 const projectRecords = await indexedDB.getAll<ProjectRecord>('projects');
                 const activeProjectId = await storage.get<string>(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
-                
+            
                 if (projectRecords && Object.keys(projectRecords).length > 0) {
                     const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
                         ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
-                    );
+                );
                     return { projects, activeProjectId: activeProjectId || null };
                 }
             } else {

@@ -30,6 +30,8 @@ interface ClickMapping {
 // Reader configuration
 interface ReaderConfig {
     showTOC: boolean;
+    showAllLevels: boolean;
+    showMetaInfo: boolean;
     fontSize: number;
     lineHeight: number;
     maxWidth: number;
@@ -70,15 +72,26 @@ export class ReaderGUI {
     private isListeningForUpdates: boolean = false;
     private lastScrollPosition: number = 0;
     private lastFocusedNodeId: string | null = null;
+    private isSettingsPanelOpen: boolean = false;
+    
+    // Bound method references for proper event listener removal
+    private boundHandleClick: (event: MouseEvent) => void;
+    private boundHandleDoubleClick: (event: MouseEvent) => void;
 
     constructor(projectManager: ProjectManager, container: HTMLElement, onNavigateToNode?: (nodeId: string) => void) {
         this.projectManager = projectManager;
         this.container = container;
         this.onNavigateToNode = onNavigateToNode;
         
+        // Bind event handler methods
+        this.boundHandleClick = this.handleClick.bind(this);
+        this.boundHandleDoubleClick = this.handleDoubleClick.bind(this);
+        
         // Default configuration
         this.config = {
             showTOC: true,
+            showAllLevels: false,
+            showMetaInfo: false,
             fontSize: 16,
             lineHeight: 1.6,
             maxWidth: 800,
@@ -98,6 +111,31 @@ export class ReaderGUI {
         this.container.innerHTML = this.generateReaderHTML();
         this.applyStyles();
         this.buildClickMappings();
+        this.setupAllEventListeners();
+    }
+
+    /**
+     * Setup all event listeners in one centralized place
+     */
+    private setupAllEventListeners(): void {
+        // Setup main event listeners (these are always needed)
+        this.setupEventListeners();
+        
+        // Setup settings panel event listeners if panel is open
+        if (this.isSettingsPanelOpen) {
+            this.restoreSettingsPanel();
+        }
+    }
+
+    /**
+     * Restore settings panel to open state and setup its event listeners
+     */
+    private restoreSettingsPanel(): void {
+        const panel = this.container.querySelector('#reader-settings-panel') as HTMLElement;
+        if (panel) {
+            panel.style.display = 'block';
+            this.setupSettingsEventListeners();
+        }
     }
 
     /**
@@ -200,22 +238,62 @@ export class ReaderGUI {
      * Determine if a node should be displayed in the reader
      */
     private shouldDisplayNode(node: DocumentNode): boolean {
-        // Always show nodes with content
-        if (node.content && node.content.trim()) {
-            return true;
+        if (this.config.showAllLevels) {
+            // Show all levels mode: show nodes with content or leaf nodes without content
+            if (node.content && node.content.trim()) {
+                return true;
+            }
+            // For nodes without content, show if they have no children (leaf nodes)
+            return node.children.length === 0;
+        } else {
+            // Deepest content mode: only show if this is the deepest available content
+            return this.isDeepestAvailableContent(node);
         }
-
-        // For nodes without content, show if they have no children (leaf nodes)
-        return node.children.length === 0;
     }
 
     /**
      * Determine if we should process children of a node
      */
     private shouldProcessChildren(node: DocumentNode): boolean {
-        // If the node has content and children, we might want both
-        // For now, always process children to get the deepest content
-        return node.children.length > 0;
+        if (this.config.showAllLevels) {
+            // Show all levels: always process children to show complete hierarchy
+            return node.children.length > 0;
+        } else {
+            // Deepest content mode: only process children if current node doesn't have content
+            // or if children might have deeper content
+            return node.children.length > 0 && (!node.content || !node.content.trim() || this.hasDeepContentInChildren(node));
+        }
+    }
+
+    /**
+     * Check if this node represents the deepest available content in its branch
+     */
+    private isDeepestAvailableContent(node: DocumentNode): boolean {
+        // If node has content and no children with content, it's the deepest
+        if (node.content && node.content.trim()) {
+            const hasChildrenWithContent = node.children.some(child => this.hasAnyContentInSubtree(child));
+            return !hasChildrenWithContent;
+        }
+        
+        // If node has no content but no children, it's a leaf (show as placeholder)
+        return node.children.length === 0;
+    }
+
+    /**
+     * Check if node or any of its descendants have content
+     */
+    private hasAnyContentInSubtree(node: DocumentNode): boolean {
+        if (node.content && node.content.trim()) {
+            return true;
+        }
+        return node.children.some(child => this.hasAnyContentInSubtree(child));
+    }
+
+    /**
+     * Check if any children have deeper content that should be shown instead
+     */
+    private hasDeepContentInChildren(node: DocumentNode): boolean {
+        return node.children.some(child => this.hasAnyContentInSubtree(child));
     }
 
     /**
@@ -224,6 +302,13 @@ export class ReaderGUI {
     private calculateWordCount(content: string): number {
         if (!content || !content.trim()) return 0;
         return content.trim().split(/\s+/).length;
+    }
+
+    /**
+     * Get the full path to a node for display
+     */
+    private getNodePath(nodeId: string): string {
+        return this.projectManager.getNodePath(nodeId);
     }
 
     /**
@@ -313,12 +398,12 @@ export class ReaderGUI {
      * Generate the main content area
      */
     private generateContent(): string {
-        let contentHTML = '<div class="reader-content">';
+        let contentHTML = `<div class="reader-content ${this.config.showMetaInfo ? 'reader-content-with-meta' : 'reader-content-minimal'}">`;
         let lastLevel = -1;
 
         this.contentNodes.forEach((node, index) => {
-            // Add separator if needed
-            if (index > 0) {
+            // Add separator if needed (only in meta info mode)
+            if (index > 0 && this.config.showMetaInfo) {
                 contentHTML += this.generateSeparator(lastLevel, node.level);
             }
 
@@ -337,37 +422,62 @@ export class ReaderGUI {
     private generateNodeHTML(node: ContentNode): string {
         const levelClass = Math.min(node.level, 5); // Cap at level 5
         const backgroundColor = HIERARCHY_COLORS[levelClass];
-        const typography = TYPOGRAPHY_SCALE[levelClass];
+        
+        if (this.config.showMetaInfo) {
+            // Full meta info mode - show everything with node path
+            const typography = TYPOGRAPHY_SCALE[levelClass];
+            const nodePath = this.getNodePath(node.id);
 
-        let html = `
-            <div class="reader-node" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}" style="background-color: ${backgroundColor};">
-                <div class="node-header">
-                    <h${Math.min(node.level + 1, 6)} class="node-title" style="
-                        font-size: ${typography.fontSize};
-                        font-weight: ${typography.fontWeight};
-                        margin-top: ${typography.marginTop};
-                        margin-bottom: ${typography.marginBottom};
-                    ">
-                        ${node.title}
-                    </h${Math.min(node.level + 1, 6)}>
-                    <div class="node-meta">
-                        <span class="word-count">${node.wordCount} words</span>
-                        <span class="reading-time">${node.estimatedReadingTime} min read</span>
-                        <span class="level-indicator">Level ${node.level}</span>
+            let html = `
+                <div class="reader-node reader-node-with-meta" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}" style="background-color: ${backgroundColor};">
+                    <div class="node-header">
+                        <div class="node-title-row">
+                            <h${Math.min(node.level + 1, 6)} class="node-title" style="
+                                font-size: ${typography.fontSize};
+                                font-weight: ${typography.fontWeight};
+                                margin-top: ${typography.marginTop};
+                                margin-bottom: ${typography.marginBottom};
+                            ">
+                                ${node.title}
+                            </h${Math.min(node.level + 1, 6)}>
+                            <div class="node-path">${nodePath}</div>
+                        </div>
+                        <div class="node-meta">
+                            <span class="word-count">${node.wordCount} words</span>
+                            <span class="reading-time">${node.estimatedReadingTime} min read</span>
+                            <span class="level-indicator">Level ${node.level}</span>
+                        </div>
                     </div>
-                </div>
-        `;
-
-        if (node.hasContent) {
-            html += `
-                <div class="node-content" data-node-id="${node.id}">
-                    ${this.formatContent(node.content)}
-                </div>
             `;
-        }
 
-        html += '</div>';
-        return html;
+            if (node.hasContent) {
+                html += `
+                    <div class="node-content" data-node-id="${node.id}">
+                        ${this.formatContent(node.content)}
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            return html;
+        } else {
+            // Minimal mode - small title, no meta info, continuous reading
+            let html = `
+                <div class="reader-node reader-node-minimal" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}">
+                    <div class="node-minimal-title">${node.title}</div>
+            `;
+
+            if (node.hasContent) {
+                html += `
+                    <div class="node-content node-content-minimal" data-node-id="${node.id}">
+                        ${this.formatContent(node.content)}
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            return html;
+        }
     }
 
     /**
@@ -867,6 +977,84 @@ export class ReaderGUI {
                 background: #4b5563;
             }
 
+            /* Minimal mode styles */
+            .reader-content-minimal {
+                padding: 1rem 2rem;
+            }
+
+            .reader-node-minimal {
+                margin-bottom: 1.5rem;
+                padding: 0;
+                background: transparent !important;
+                border-radius: 0;
+                transition: none;
+            }
+
+            .reader-node-minimal:last-child {
+                margin-bottom: 0;
+            }
+
+            .reader-node-minimal:hover {
+                box-shadow: none;
+            }
+
+            .node-minimal-title {
+                font-size: 0.7rem;
+                color: #6b7280;
+                margin-bottom: 0;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            .node-content-minimal {
+                color: #374151;
+                line-height: inherit;
+                margin-bottom: 0;
+            }
+
+
+
+            .node-content-minimal p {
+                margin-top: 0;
+                margin-bottom: 1rem;
+                text-align: justify;
+            }
+
+            .node-content-minimal p:first-child {
+                margin-top: 0;
+            }
+
+            .node-content-minimal p:last-child {
+                margin-bottom: 0;
+            }
+
+            /* Full meta mode styles */
+            .reader-content-with-meta {
+                padding: 2rem;
+            }
+
+            .reader-node-with-meta {
+                margin-bottom: 2rem;
+                padding: 2rem;
+            }
+
+            .node-title-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 0.5rem;
+            }
+
+            .node-path {
+                font-size: 0.75rem;
+                color: #6b7280;
+                font-weight: normal;
+                margin-left: 1rem;
+                flex-shrink: 0;
+                font-style: italic;
+            }
+
             /* Print styles */
             @media print {
                 .reader-header,
@@ -898,6 +1086,14 @@ export class ReaderGUI {
                 .reader-separator.major {
                     page-break-after: always;
                 }
+
+                .node-minimal-title {
+                    font-size: 0.6rem;
+                }
+
+                .reader-content-minimal {
+                    padding: 0.5rem;
+                }
             }
         `;
     }
@@ -906,9 +1102,13 @@ export class ReaderGUI {
      * Set up event listeners for the reader interface
      */
     private setupEventListeners(): void {
-        // We'll set up event delegation on the container
-        this.container.addEventListener('dblclick', (event) => this.handleDoubleClick(event));
-        this.container.addEventListener('click', (event) => this.handleClick(event));
+        // Remove existing event listeners to prevent duplicates
+        this.container.removeEventListener('dblclick', this.boundHandleDoubleClick);
+        this.container.removeEventListener('click', this.boundHandleClick);
+        
+        // Add fresh event listeners using bound methods for proper removal
+        this.container.addEventListener('dblclick', this.boundHandleDoubleClick);
+        this.container.addEventListener('click', this.boundHandleClick);
     }
 
     /**
@@ -1015,6 +1215,26 @@ export class ReaderGUI {
                 this.applySettings();
             });
         }
+
+        // Show all levels checkbox
+        const showAllLevelsCheckbox = panel.querySelector('#reader-show-all-levels') as HTMLInputElement;
+        if (showAllLevelsCheckbox) {
+            showAllLevelsCheckbox.addEventListener('change', (e) => {
+                this.config.showAllLevels = (e.target as HTMLInputElement).checked;
+                this.render(); // Re-render content with new display logic
+                this.saveReaderConfig();
+            });
+        }
+
+        // Show meta info checkbox
+        const showMetaInfoCheckbox = panel.querySelector('#reader-show-meta-info') as HTMLInputElement;
+        if (showMetaInfoCheckbox) {
+            showMetaInfoCheckbox.addEventListener('change', (e) => {
+                this.config.showMetaInfo = (e.target as HTMLInputElement).checked;
+                this.render(); // Re-render content with new display logic
+                this.saveReaderConfig();
+            });
+        }
     }
 
     /**
@@ -1071,6 +1291,8 @@ export class ReaderGUI {
     private resetSettings(): void {
         this.config = {
             showTOC: true,
+            showAllLevels: false,
+            showMetaInfo: false,
             fontSize: 16,
             lineHeight: 1.6,
             maxWidth: 800,
@@ -1154,6 +1376,26 @@ export class ReaderGUI {
                         </select>
                     </div>
                     
+                    <div class="settings-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="reader-show-all-levels" ${this.config.showAllLevels ? 'checked' : ''}>
+                            Show all hierarchy levels
+                        </label>
+                        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">
+                            When unchecked, shows only the deepest available content
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="reader-show-meta-info" ${this.config.showMetaInfo ? 'checked' : ''}>
+                            Show meta information
+                        </label>
+                        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">
+                            When unchecked, shows minimal title and continuous reading layout
+                        </div>
+                    </div>
+                    
                     <div class="settings-buttons">
                         <button id="reader-settings-reset">Reset to Defaults</button>
                         <button id="reader-settings-close">Close</button>
@@ -1170,9 +1412,10 @@ export class ReaderGUI {
         const panel = this.container.querySelector('#reader-settings-panel') as HTMLElement;
         if (panel) {
             const isVisible = panel.style.display !== 'none';
+            this.isSettingsPanelOpen = !isVisible;
             panel.style.display = isVisible ? 'none' : 'block';
             
-            if (!isVisible) {
+            if (this.isSettingsPanelOpen) {
                 // Setup event listeners for the settings panel when opened
                 this.setupSettingsEventListeners();
             }
@@ -1185,6 +1428,9 @@ export class ReaderGUI {
     private close(): void {
         // Stop listening for updates
         this.stopListeningForUpdates();
+        
+        // Reset settings panel state
+        this.isSettingsPanelOpen = false;
         
         // Remove styles
         const styleElement = document.getElementById('reader-styles');

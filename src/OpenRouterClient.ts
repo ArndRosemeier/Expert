@@ -36,6 +36,7 @@ export class OpenRouterClient {
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
   private modelPurposeMap: Record<string, string> = {};
   private models: Record<string, string> = {};
+  private currentAbortController: AbortController | null = null;
 
   constructor(apiKey: string, modelPurposeMap?: Record<string, string>) {
     this.apiKey = apiKey;
@@ -61,10 +62,27 @@ export class OpenRouterClient {
   }
 
   /**
+   * Cancel any ongoing API request
+   */
+  public abort(): void {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+  }
+
+  /**
+   * Check if there's an ongoing request that can be aborted
+   */
+  public canAbort(): boolean {
+    return this.currentAbortController !== null;
+  }
+
+  /**
    * Send a chat message for a given purpose. Always uses role 'user'.
    * Returns just the model's answer string.
    */
-  async chat(purpose: string, message: string): Promise<string> {
+  async chat(purpose: string, message: string, abortSignal?: AbortSignal): Promise<string> {
     const model = this.getModelForPurpose(purpose);
 
     if (!model) {
@@ -76,25 +94,50 @@ export class OpenRouterClient {
         { role: 'user', content: message }
       ],
     };
-    const response = await this.sendMessage(request);
+    const response = await this.sendMessage(request, abortSignal);
     // Return the first assistant message content, or empty string if not found
     const answer = response.choices?.[0]?.message?.content ?? '';
     return answer;
   }
 
-  async sendMessage(request: OpenRouterRequest): Promise<OpenRouterResponse> {
-    const response = await fetch(this.apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+  async sendMessage(request: OpenRouterRequest, externalAbortSignal?: AbortSignal): Promise<OpenRouterResponse> {
+    // Create abort controller for this request
+    this.currentAbortController = new AbortController();
+    
+    // If external abort signal is provided, listen to it and abort our controller
+    if (externalAbortSignal) {
+      externalAbortSignal.addEventListener('abort', () => {
+        if (this.currentAbortController) {
+          this.currentAbortController.abort();
+        }
+      });
     }
-    return response.json();
+
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(request),
+        signal: this.currentAbortController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request was aborted');
+      }
+      throw error;
+    } finally {
+      this.currentAbortController = null;
+    }
   }
 
   async fetchModels(): Promise<OpenRouterModel[]> {

@@ -9,6 +9,21 @@ let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
 let collapsedNodes: Set<string> = new Set();
 
+// Global abort button functions
+function showGlobalAbortButton() {
+    const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
+    if (globalAbortBtn) {
+        globalAbortBtn.style.display = 'inline-block';
+    }
+}
+
+function hideGlobalAbortButton() {
+    const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
+    if (globalAbortBtn) {
+        globalAbortBtn.style.display = 'none';
+    }
+}
+
 async function saveCollapsedState() {
     try {
         const { StorageService } = await import('../StorageService');
@@ -69,6 +84,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
         // Just refresh the tree to show spinner for the generating node
         renderMultiProjectTree();
+        // Show global abort button
+        showGlobalAbortButton();
+        // Always refresh UI to disable buttons during generation
+        renderNodeDetails();
     };
 
     const handleCompletion = (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
@@ -79,7 +98,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Clear progress state and hide overlay when all operations complete
             updateProgressUI();
             hideGenerationOverlay();
+            hideGlobalAbortButton();
             renderProjectUI(manager);
+            // Button states will be reset by renderProjectUI
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
             renderMultiProjectTree();
@@ -99,6 +120,23 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         if (!e.success) {
             updateProgressUI();
             hideGenerationOverlay();
+            hideGlobalAbortButton();
+            // Button states will be reset by renderProjectUI/renderMultiProjectTree
+        }
+    };
+
+    const handleAborted = (e: { nodeId: string, node: DocumentNode }) => {
+        // Handle aborted generation - similar to completion but with different messaging
+        const operationsInProgress = manager.isAnyNodeGenerating();
+        
+        if (!operationsInProgress) {
+            updateProgressUI();
+            hideGenerationOverlay();
+            hideGlobalAbortButton();
+            renderProjectUI(manager);
+            // Button states will be reset by renderProjectUI
+        } else {
+            renderMultiProjectTree();
         }
     };
 
@@ -106,6 +144,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Clear progress bars and hide overlay when an error occurs
         updateProgressUI();
         hideGenerationOverlay();
+        hideGlobalAbortButton();
+        // Button states will be reset by renderProjectUI
         alert(`An error occurred: ${message}`);
         renderProjectUI(manager);
     };
@@ -116,11 +156,11 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             updateProgressUI();
             hideGenerationOverlay();
         } else {
-            // Always show progress bars during any generation, regardless of selected node
-            // This ensures consistency with the spinner behavior
-            updateProgressUI({
-                operations: { message: e.message, current: e.current, total: e.total }
-            });
+        // Always show progress bars during any generation, regardless of selected node
+        // This ensures consistency with the spinner behavior
+        updateProgressUI({
+            operations: { message: e.message, current: e.current, total: e.total }
+        });
         }
     };
 
@@ -204,6 +244,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     
     manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
+    manager.on('nodeGenerationAborted', handleAborted);
     manager.on('error', handleError);
     manager.on('high-level-progress', handleHighLevelProgress);
     manager.on('loop-progress', handleLoopProgress);
@@ -386,6 +427,9 @@ export function renderNodeDetails() {
                         Delete All Subnodes
                     </button>
                 ` : ''}
+                <button id="export-node-btn" class="button button-secondary" style="background-color: #6366f1; color: white; border-color: #6366f1;">
+                    📤 Export
+                </button>
             </div>
         </div>
 
@@ -462,18 +506,33 @@ export function renderNodeDetails() {
         generationPromptTextArea.placeholder = "The prompt for generating content. You can edit it here.";
     }
 
-    // Disable buttons during any generation activity
-    generateBtn.disabled = shouldDisableButtons;
-    defaultPromptBtn.disabled = shouldDisableButtons;
-    summarizeBtn.disabled = shouldDisableButtons;
+    // Update button states based on generation status  
+    const isAnyOperationInProgress = projectManager.canAbortGeneration();
+    
+    // Normal button states (no more button transformations)
+    generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
+    generateBtn.className = 'btn btn-primary';
+    generateBtn.id = 'node-generate-btn';
+    
+    summarizeBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
+    summarizeBtn.className = 'btn btn-secondary btn-sm';
+    summarizeBtn.id = 'node-summarize-btn';
+    
+    defaultPromptBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
 
     // Update button text to show current state
     if (isThisNodeGenerating) {
         generateBtn.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...';
-    } else if (isAnyNodeGenerating) {
-        generateBtn.textContent = 'Generate (Another operation in progress)';
+    } else if (isAnyOperationInProgress) {
+        generateBtn.textContent = 'Generate (Operation in progress)';
     } else {
         generateBtn.textContent = 'Generate';
+    }
+    
+    if (isAnyOperationInProgress) {
+        summarizeBtn.textContent = 'Summarize (Operation in progress)';
+    } else {
+        summarizeBtn.textContent = 'Summarize';
     }
 
     // --- Add Branch-Specific Actions UI (Always include progress bars for consistency) ---
@@ -575,20 +634,26 @@ export function renderNodeDetails() {
     // Always add the actions container (with progress bars), regardless of node type
     detailsContainer.appendChild(actionsContainer);
 
-    // Set up button tooltips only if the button exists (non-leaf nodes)
-    if (!node.isLeaf) {
-        const generateAllBtn = actionsContainer.querySelector('#node-generate-all-btn') as HTMLButtonElement;
-        if (generateAllBtn) {
-            // Never disable the button, but update tooltip to reflect current state
-            if (shouldDisableButtons) {
-                generateAllBtn.title = "Another operation is in progress. Clicking will show a message.";
-            } else if (!node.content || node.content.trim() === '') {
-                generateAllBtn.title = "This node has no content. Clicking will show instructions.";
-            } else {
-                generateAllBtn.title = "Creates children from outline (if needed). Use 'Include content' to generate content and 'Recursive' to generate down to max hierarchy level.";
+            // Set up button tooltips for non-leaf nodes
+        if (!node.isLeaf) {
+            const generateAllBtn = actionsContainer.querySelector('#node-generate-all-btn') as HTMLButtonElement;
+            if (generateAllBtn) {
+                // Normal state (no more button transformations)
+                generateAllBtn.className = 'button';
+                generateAllBtn.innerHTML = 'Generate All Children';
+                generateAllBtn.id = 'node-generate-all-btn';
+                generateAllBtn.disabled = isAnyOperationInProgress;
+                
+                // Update tooltip to reflect current state
+                if (isAnyOperationInProgress) {
+                    generateAllBtn.title = "Operation in progress. Use the global abort button to cancel.";
+                } else if (!node.content || node.content.trim() === '') {
+                    generateAllBtn.title = "This node has no content. Clicking will show instructions.";
+                } else {
+                    generateAllBtn.title = "Smart fill: Creates children only if none exist, generates content only for empty nodes. Use 'Include content' and 'Recursive' to control behavior.";
+                }
             }
         }
-    }
 }
 
 function showButtonSpinner(button: HTMLButtonElement, text: string = 'Working...') {
@@ -876,6 +941,24 @@ export function setupEventListeners() {
                     }
                 }
                 break;
+
+            case 'export-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Import and open export modal
+                    import('./modal-manager').then(({ openExportModal }) => {
+                        if (projectManager) {
+                            openExportModal(projectManager, node);
+                        }
+                    }).catch(error => {
+                        console.error('Failed to load export modal:', error);
+                        alert('Failed to open export dialog. Please try again.');
+                    });
+                }
+                break;
                 
             case 'node-generate-btn':
                 // Prevent concurrent operations
@@ -894,6 +977,8 @@ export function setupEventListeners() {
                 
                 projectManager.generateNodeContent(node.id);
                 break;
+
+
             
             case 'default-prompt-btn':
                 {
@@ -927,6 +1012,8 @@ export function setupEventListeners() {
                 
                 projectManager.summarizeNodeContent(node.id);
                 break;
+
+
 
             case 'node-generate-all-btn':
                 // Check for concurrent operations
@@ -966,6 +1053,8 @@ export function setupEventListeners() {
         
                 projectManager.generateAllChildrenContent(node.id, includeContent, recursive);
                 break;
+
+
         }
     });
 
@@ -1146,6 +1235,9 @@ export function initializeProjectUI(manager?: ProjectManager) {
     
     // Render the multi-project tree (event listeners are set up once in main.ts)
     renderMultiProjectTree();
+    
+    // Ensure global abort button is hidden on initialization
+    hideGlobalAbortButton();
     
     // Render node details if we have a selected node
     if (selectedNodeId) {

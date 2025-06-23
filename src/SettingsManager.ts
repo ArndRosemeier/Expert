@@ -131,7 +131,7 @@ export class SettingsManager {
             
             if (saved && areValidSettingsProfiles(saved)) {
                 this.profiles = saved;
-            } else {
+                } else {
                 console.warn('Invalid settings profiles found in storage. Ignoring.');
                 this.profiles = {};
             }
@@ -159,17 +159,17 @@ export class SettingsManager {
             const storage = await this.storageService;
             const saved = await storage.get<OrchestratorPrompts>(PROMPT_STORAGE_KEY);
             
-            if (saved) {
+        if (saved) {
                 // TODO: Add a type guard for prompts
                 this.prompts = { ...defaultPrompts, ...saved };
             } else {
                 this.prompts = { ...defaultPrompts };
             }
-        } catch (error) {
+            } catch (error) {
             console.error('Failed to load prompts from storage', error);
             this.prompts = { ...defaultPrompts };
+            }
         }
-    }
 
     private async loadLastUsedProfile(): Promise<void> {
         try {
@@ -307,7 +307,7 @@ export class SettingsManager {
 
             if (!exportData.profileName || !exportData.profile || !exportData.prompts) {
                 return { success: false, message: 'Export data is missing required fields (profileName, profile, or prompts)' };
-            }
+    }
 
             const profileName = exportData.profileName;
             const profileData = exportData.profile;

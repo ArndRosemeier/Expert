@@ -6,6 +6,7 @@ import { ModelSelector } from '../ModelSelector';
 import { SettingsProfile, DEFAULT_CRITERIA } from '../SettingsManager';
 import { QualityCriterion } from '../types';
 import { PromptManager } from '../PromptManager';
+import { DocumentNode } from '../DocumentNode';
 
 // --- Generic Modal Functions ---
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -64,6 +65,457 @@ export function closeNewProjectModal() {
     if (newProjectModalContainer) {
         newProjectModalContainer.style.display = 'none';
     }
+}
+
+export function openExportModal(projectManager: ProjectManager, node: DocumentNode) {
+    renderExportModal(projectManager, node);
+    if (modalContainer) {
+        modalContainer.style.display = 'flex';
+    }
+}
+
+function renderExportModal(projectManager: ProjectManager, node: DocumentNode) {
+    if (!modalContent) return;
+
+    modalContent.innerHTML = `
+        <style>
+            .modal-content {
+                width: 60vw;
+                max-width: 800px;
+            }
+            .modal-body {
+                padding: 1.5rem 2rem;
+                display: flex;
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            .export-section {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 1.5rem;
+            }
+            .export-option {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+            }
+            .export-option:last-child {
+                margin-bottom: 0;
+            }
+            .export-option label {
+                font-weight: 500;
+                color: #374151;
+                cursor: pointer;
+                user-select: none;
+                min-width: 120px;
+            }
+            .export-option select {
+                flex-grow: 1;
+                padding: 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                background-color: white;
+                font-size: 0.875rem;
+            }
+            .export-option select:disabled {
+                background-color: #f3f4f6;
+                color: #6b7280;
+                cursor: not-allowed;
+            }
+            .export-actions {
+                display: flex;
+                gap: 0.75rem;
+                justify-content: flex-end;
+                margin-top: 1.5rem;
+            }
+            .export-actions button {
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 8px;
+                font-size: 0.875rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            .export-btn {
+                background-color: #3b82f6;
+                color: white;
+            }
+            .export-btn:hover {
+                background-color: #2563eb;
+            }
+            .export-btn:disabled {
+                background-color: #9ca3af;
+                cursor: not-allowed;
+            }
+            .cancel-btn {
+                background-color: #6b7280;
+                color: white;
+            }
+            .cancel-btn:hover {
+                background-color: #4b5563;
+            }
+        </style>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
+            <h2 style="margin: 0;">📤 Export Content</h2>
+            <button id="close-export-modal-btn" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="export-section">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; color: #1f2937;">Export Options</h3>
+                
+                <div class="export-option">
+                    <label for="export-scope-select">Scope:</label>
+                    <select id="export-scope-select">
+                        <option value="lowest">Lowest hierarchy layer (deepest content)</option>
+                        <option value="all">All layers (complete hierarchy)</option>
+                        <option value="reimport">For reimport (JSON format)</option>
+                    </select>
+                </div>
+                
+                <div class="export-option">
+                    <label for="export-format-select">Format:</label>
+                    <select id="export-format-select">
+                        <option value="html">HTML</option>
+                        <option value="plaintext">Plain Text</option>
+                        <option value="markdown">Markdown</option>
+                    </select>
+                </div>
+                
+                <div style="margin-top: 1rem; padding: 1rem; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
+                    <div style="font-size: 0.875rem; color: #1e40af;">
+                        <strong>Node:</strong> ${node.title}<br>
+                        <strong>Path:</strong> ${projectManager.getNodePath(node.id)}<br>
+                        <strong>Children:</strong> ${node.children.length} direct child nodes
+                    </div>
+                </div>
+            </div>
+            
+            <div class="export-actions">
+                <button id="export-cancel-btn" class="cancel-btn">Cancel</button>
+                <button id="export-execute-btn" class="export-btn">Export</button>
+            </div>
+        </div>
+    `;
+
+    // Wire up event handlers
+    const scopeSelect = getElementById('export-scope-select') as HTMLSelectElement;
+    const formatSelect = getElementById('export-format-select') as HTMLSelectElement;
+    const exportBtn = getElementById('export-execute-btn') as HTMLButtonElement;
+    const cancelBtn = getElementById('export-cancel-btn') as HTMLButtonElement;
+    const closeBtn = getElementById('close-export-modal-btn') as HTMLButtonElement;
+
+    // Handle scope change - disable format when scope is for reimport
+    const updateFormatState = () => {
+        const isReimport = scopeSelect.value === 'reimport';
+        formatSelect.disabled = isReimport;
+        if (isReimport) {
+            formatSelect.value = 'html'; // Default value when disabled
+        }
+    };
+
+    scopeSelect.addEventListener('change', updateFormatState);
+    updateFormatState(); // Initial state
+
+    // Handle export button
+    exportBtn.addEventListener('click', () => {
+        const scope = scopeSelect.value;
+        const format = formatSelect.value;
+        
+        try {
+            performExport(projectManager, node, scope, format);
+            closeGenericModal();
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        }
+    });
+
+    // Handle cancel and close buttons
+    const closeModal = () => closeGenericModal();
+    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+}
+
+function performExport(projectManager: ProjectManager, node: DocumentNode, scope: string, format: string) {
+    let exportData: any;
+    let filename: string;
+    let mimeType: string;
+
+    if (scope === 'reimport') {
+        // Export for reimport - JSON format with full node data
+        exportData = exportNodeForReimport(node);
+        filename = `${sanitizeFilename(node.title)}_export.json`;
+        mimeType = 'application/json';
+    } else {
+        // Export for reading - formatted content
+        const content = exportNodeContent(node, scope, format);
+        exportData = content;
+        const extension = format === 'html' ? 'html' : format === 'markdown' ? 'md' : 'txt';
+        filename = `${sanitizeFilename(node.title)}_${scope}.${extension}`;
+        mimeType = format === 'html' ? 'text/html' : 'text/plain';
+    }
+
+    // Create blob and download
+    const blob = new Blob([exportData], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Show success message
+    alert(`Successfully exported "${node.title}" as ${filename}`);
+}
+
+function exportNodeForReimport(node: DocumentNode): string {
+    // Create a clean export object without circular references and internal data
+    const exportObject = {
+        title: node.title,
+        content: node.content,
+        summary: node.summary,
+        generationPrompt: node.generationPrompt,
+        level: node.level,
+        children: node.children.map(child => exportNodeForReimportRecursive(child))
+    };
+    
+    return JSON.stringify(exportObject, null, 2);
+}
+
+function exportNodeForReimportRecursive(node: DocumentNode): any {
+    return {
+        title: node.title,
+        content: node.content,
+        summary: node.summary,
+        generationPrompt: node.generationPrompt,
+        level: node.level,
+        children: node.children.map(child => exportNodeForReimportRecursive(child))
+    };
+}
+
+function exportNodeContent(node: DocumentNode, scope: string, format: string): string {
+    if (scope === 'lowest') {
+        return exportLowestLayer(node, format);
+    } else {
+        return exportAllLayers(node, format);
+    }
+}
+
+function exportLowestLayer(node: DocumentNode, format: string): string {
+    const leafNodes = findLeafNodes(node);
+    
+    if (format === 'html') {
+        return generateHtmlContent(leafNodes, 'Lowest Layer Content');
+    } else if (format === 'markdown') {
+        return generateMarkdownContent(leafNodes);
+    } else {
+        return generatePlainTextContent(leafNodes);
+    }
+}
+
+function exportAllLayers(node: DocumentNode, format: string): string {
+    if (format === 'html') {
+        return generateHtmlHierarchy(node);
+    } else if (format === 'markdown') {
+        return generateMarkdownHierarchy(node);
+    } else {
+        return generatePlainTextHierarchy(node);
+    }
+}
+
+function findLeafNodes(node: DocumentNode): DocumentNode[] {
+    if (node.children.length === 0) {
+        return [node];
+    }
+    
+    const leafNodes: DocumentNode[] = [];
+    for (const child of node.children) {
+        leafNodes.push(...findLeafNodes(child));
+    }
+    return leafNodes;
+}
+
+function generateHtmlContent(nodes: DocumentNode[], title: string): string {
+    let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+        body { font-family: Georgia, serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 2rem; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+        h2 { color: #34495e; margin-top: 2rem; }
+        .content { margin-bottom: 2rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #007bff; }
+        .meta { font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+    <h1>${title}</h1>`;
+
+    for (const node of nodes) {
+        if (node.content && node.content.trim()) {
+            html += `
+    <h2>${escapeHtml(node.title)}</h2>
+    <div class="content">
+        <div class="meta">Level: ${node.level}</div>
+        ${formatContentAsHtml(node.content)}
+    </div>`;
+        }
+    }
+
+    html += `
+</body>
+</html>`;
+    return html;
+}
+
+function generateHtmlHierarchy(node: DocumentNode, level: number = 1): string {
+    if (level === 1) {
+        let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${escapeHtml(node.title)} - Complete Hierarchy</title>
+    <style>
+        body { font-family: Georgia, serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 2rem; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
+        h2, h3, h4, h5, h6 { color: #34495e; margin-top: 2rem; }
+        .content { margin-bottom: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #007bff; }
+        .summary { margin-bottom: 1rem; padding: 0.75rem; background-color: #e7f3ff; border-left: 4px solid #0056b3; font-style: italic; }
+        .level-${level} { margin-left: ${(level - 1) * 1.5}rem; }
+    </style>
+</head>
+<body>`;
+        
+        html += generateHtmlHierarchyRecursive(node, level);
+        html += `
+</body>
+</html>`;
+        return html;
+    } else {
+        return generateHtmlHierarchyRecursive(node, level);
+    }
+}
+
+function generateHtmlHierarchyRecursive(node: DocumentNode, level: number): string {
+    const headingTag = `h${Math.min(level + 1, 6)}`;
+    let html = `
+    <div class="level-${level}">
+        <${headingTag}>${escapeHtml(node.title)}</${headingTag}>`;
+
+    if (node.summary && node.summary.trim()) {
+        html += `
+        <div class="summary">${formatContentAsHtml(node.summary)}</div>`;
+    }
+
+    if (node.content && node.content.trim()) {
+        html += `
+        <div class="content">${formatContentAsHtml(node.content)}</div>`;
+    }
+
+    for (const child of node.children) {
+        html += generateHtmlHierarchyRecursive(child, level + 1);
+    }
+
+    html += `
+    </div>`;
+    return html;
+}
+
+function generateMarkdownContent(nodes: DocumentNode[]): string {
+    let markdown = `# Lowest Layer Content\n\n`;
+
+    for (const node of nodes) {
+        if (node.content && node.content.trim()) {
+            markdown += `## ${node.title}\n\n`;
+            markdown += `*Level: ${node.level}*\n\n`;
+            markdown += `${node.content}\n\n`;
+            markdown += `---\n\n`;
+        }
+    }
+
+    return markdown;
+}
+
+function generateMarkdownHierarchy(node: DocumentNode, level: number = 1): string {
+    const headingPrefix = '#'.repeat(level);
+    let markdown = `${headingPrefix} ${node.title}\n\n`;
+
+    if (node.summary && node.summary.trim()) {
+        markdown += `*${node.summary}*\n\n`;
+    }
+
+    if (node.content && node.content.trim()) {
+        markdown += `${node.content}\n\n`;
+    }
+
+    for (const child of node.children) {
+        markdown += generateMarkdownHierarchy(child, level + 1);
+    }
+
+    return markdown;
+}
+
+function generatePlainTextContent(nodes: DocumentNode[]): string {
+    let text = `LOWEST LAYER CONTENT\n${'='.repeat(20)}\n\n`;
+
+    for (const node of nodes) {
+        if (node.content && node.content.trim()) {
+            text += `${node.title.toUpperCase()}\n`;
+            text += `${'-'.repeat(node.title.length)}\n`;
+            text += `Level: ${node.level}\n\n`;
+            text += `${node.content}\n\n`;
+            text += `${'~'.repeat(50)}\n\n`;
+        }
+    }
+
+    return text;
+}
+
+function generatePlainTextHierarchy(node: DocumentNode, level: number = 0): string {
+    const indent = '  '.repeat(level);
+    let text = `${indent}${node.title}\n`;
+
+    if (node.summary && node.summary.trim()) {
+        text += `${indent}Summary: ${node.summary}\n`;
+    }
+
+    if (node.content && node.content.trim()) {
+        const contentLines = node.content.split('\n');
+        for (const line of contentLines) {
+            text += `${indent}  ${line}\n`;
+        }
+    }
+
+    text += '\n';
+
+    for (const child of node.children) {
+        text += generatePlainTextHierarchy(child, level + 1);
+    }
+
+    return text;
+}
+
+function formatContentAsHtml(content: string): string {
+    // Convert line breaks to HTML and escape special characters
+    return escapeHtml(content).replace(/\n/g, '<br>');
+}
+
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function sanitizeFilename(filename: string): string {
+    // Replace invalid filename characters with underscores
+    return filename.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
 }
 
 export function renderSettingsModal() {

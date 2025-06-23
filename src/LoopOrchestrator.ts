@@ -45,17 +45,22 @@ export interface LoopResult {
     history: LoopHistoryItem[];
     iterations: number;
     success: boolean;
+    aborted: boolean;
 }
 
 type OrchestratorEvents = {
     'progress': [progress: LoopProgress];
     'error': [message: string];
+    'aborted': [message: string];
 };
 
 export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private client: OpenRouterClient;
     private prompts: OrchestratorPrompts;
     private stopRequested = false;
+    private abortController: AbortController | null = null;
+    private currentIteration = 0;
+    private isRunning = false;
 
     constructor(client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
@@ -65,119 +70,197 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
     public requestStop() {
         this.stopRequested = true;
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        // Also abort any ongoing API requests in the client
+        this.client.abort();
+    }
+
+    public isLoopRunning(): boolean {
+        return this.isRunning;
+    }
+
+    public getCurrentIteration(): number {
+        return this.currentIteration;
     }
 
     public async runLoop(input: LoopInput): Promise<LoopResult> {
         this.stopRequested = false; // Reset flag at the start of a run
+        this.abortController = new AbortController();
+        this.isRunning = true;
+        this.currentIteration = 0;
+        
         const { prompt, criteria, maxIterations } = input;
         const history: LoopHistoryItem[] = [];
         let currentResponse = '';
         let success = false;
+        let aborted = false;
         const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
 
-        // Determine the initial prompt and response
-        let initialPrompt: string;
-        if (input.initialContent) {
-            currentResponse = input.initialContent;
-            // The "initial prompt" for a refinement is the refinement instruction itself.
-            initialPrompt = input.prompt; 
-            // We don't need to call the LLM for the first response, but we record it in history.
-            const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
-            history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
+        try {
+            // Determine the initial prompt and response
+            let initialPrompt: string;
+            if (input.initialContent) {
+                currentResponse = input.initialContent;
+                // The "initial prompt" for a refinement is the refinement instruction itself.
+                initialPrompt = input.prompt; 
+                // We don't need to call the LLM for the first response, but we record it in history.
+                const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
+                history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
 
-            this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 0, totalStepsInIteration });
-        } else {
-            // For generation from scratch, we build the initial prompt from the template.
-            initialPrompt = this.prompts.content_generation_initial
-                .replace('{{prompt}}', input.prompt)
-                .replace('{{criteria}}', input.criteria.map(c => c.name).join(', '));
-            
-            try {
-                currentResponse = await this.client.chat('creator', initialPrompt);
-            } catch (e) {
-                throw new Error("The AI Creator failed to respond. Please check your API key and network connection.");
-            }
-            const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
-            history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
-
-            this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
-        }
-
-        for (let i = 1; i <= maxIterations; i++) {
-            if (this.stopRequested) break;
-            
-
-            this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
-
-            let ratingsFromAI: Rating[] | null = null;
-            const maxRetries = 3;
-
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-                const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
-                try {
-                    const ratingString = await this.client.chat('rater', raterPrompt);
-                    ratingsFromAI = this.parseAllRatings(ratingString, criteria);
-
-                    if (ratingsFromAI) {
-                        break; // Success
-                    }
-                    console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
-
-                } catch(e) {
-                    console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
-                }
-            }
-
-            if (!ratingsFromAI) {
-                throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
-            }
-
-            let allGoalsMet = true;
-            const goalResults: string[] = [];
-            for (const rating of ratingsFromAI) {
-                const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
-                this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
-
-                const originalCriterion = criteria.find(c => c.name === rating.criterion);
-                if (originalCriterion && rating.score < originalCriterion.goal) {
-                    allGoalsMet = false;
-                    goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (FAILED)`);
-                } else if (originalCriterion) {
-                    goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (PASSED)`);
-                }
-            }
-            if (!allGoalsMet && i < maxIterations) {
-                // 2. If not success, call Editor
-                const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
-                const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
-                let editorAdvice: string;
-                try {
-                    editorAdvice = await this.client.chat('editor', editorPrompt);
-                } catch(e) {
-                    throw new Error("The AI Editor failed to provide feedback.");
-                }
-                const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
-                history.push({ iteration: i, type: 'editor', payload: editorPayload });
-
-                this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i, maxIterations, step: 3, totalStepsInIteration });
-
-                // 3. Call creator again to get the improved response
-                const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
-                try {
-                    currentResponse = await this.client.chat('creator', creatorPrompt);
-                } catch (e) {
-                    throw new Error("The AI Creator failed to respond during revision. Please check your API key and network connection.");
-                }
-                const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
-                history.push({ iteration: i, type: 'creator', payload: creatorPayload });
-                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i, maxIterations, step: 1, totalStepsInIteration });
-
+                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 0, totalStepsInIteration });
             } else {
-                // If goals are met or it's the last iteration, break the loop.
+                // For generation from scratch, we build the initial prompt from the template.
+                initialPrompt = this.prompts.content_generation_initial
+                    .replace('{{prompt}}', input.prompt)
+                    .replace('{{criteria}}', input.criteria.map(c => c.name).join(', '));
+                
+                if (this.stopRequested) {
+                    aborted = true;
+                    throw new Error('Generation aborted by user');
+                }
 
-                success = allGoalsMet;
-                break;
+                try {
+                    currentResponse = await this.client.chat('creator', initialPrompt, this.abortController.signal);
+                } catch (e: any) {
+                    if (e.message === 'Request was aborted' || this.stopRequested) {
+                        aborted = true;
+                        throw new Error('Generation aborted by user');
+                    }
+                    throw new Error("The AI Creator failed to respond. Please check your API key and network connection.");
+                }
+                const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
+                history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
+
+                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
             }
+
+            for (let i = 1; i <= maxIterations; i++) {
+                this.currentIteration = i;
+                
+                if (this.stopRequested) {
+                    aborted = true;
+                    break;
+                }
+
+                this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+
+                let ratingsFromAI: Rating[] | null = null;
+                const maxRetries = 3;
+
+                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                    if (this.stopRequested) {
+                        aborted = true;
+                        break;
+                    }
+
+                    const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
+                    try {
+                        const ratingString = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                        ratingsFromAI = this.parseAllRatings(ratingString, criteria);
+
+                        if (ratingsFromAI) {
+                            break; // Success
+                        }
+                        console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
+
+                    } catch(e: any) {
+                        if (e.message === 'Request was aborted' || this.stopRequested) {
+                            aborted = true;
+                            break;
+                        }
+                        console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
+                    }
+                }
+
+                if (aborted) break;
+
+                if (!ratingsFromAI) {
+                    throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
+                }
+
+                let allGoalsMet = true;
+                const goalResults: string[] = [];
+                for (const rating of ratingsFromAI) {
+                    if (this.stopRequested) {
+                        aborted = true;
+                        break;
+                    }
+
+                    const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
+                    this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+
+                    const originalCriterion = criteria.find(c => c.name === rating.criterion);
+                    if (originalCriterion && rating.score < originalCriterion.goal) {
+                        allGoalsMet = false;
+                        goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (FAILED)`);
+                    } else if (originalCriterion) {
+                        goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (PASSED)`);
+                    }
+                }
+
+                if (aborted) break;
+
+                if (!allGoalsMet && i < maxIterations) {
+                    // 2. If not success, call Editor
+                    const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
+                    const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
+                    let editorAdvice: string;
+                    
+                    try {
+                        editorAdvice = await this.client.chat('editor', editorPrompt, this.abortController.signal);
+                    } catch(e: any) {
+                        if (e.message === 'Request was aborted' || this.stopRequested) {
+                            aborted = true;
+                            break;
+                        }
+                        throw new Error("The AI Editor failed to provide feedback.");
+                    }
+                    
+                    const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
+                    history.push({ iteration: i, type: 'editor', payload: editorPayload });
+
+                    this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i, maxIterations, step: 3, totalStepsInIteration });
+
+                    if (this.stopRequested) {
+                        aborted = true;
+                        break;
+                    }
+
+                    // 3. Call creator again to get the improved response
+                    const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
+                    try {
+                        currentResponse = await this.client.chat('creator', creatorPrompt, this.abortController.signal);
+                    } catch (e: any) {
+                        if (e.message === 'Request was aborted' || this.stopRequested) {
+                            aborted = true;
+                            break;
+                        }
+                        throw new Error("The AI Creator failed to respond during revision. Please check your API key and network connection.");
+                    }
+                    const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
+                    history.push({ iteration: i, type: 'creator', payload: creatorPayload });
+                    this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i, maxIterations, step: 1, totalStepsInIteration });
+
+                } else {
+                    // If goals are met or it's the last iteration, break the loop.
+                    success = allGoalsMet;
+                    break;
+                }
+            }
+
+        } catch (error: any) {
+            if (error.message === 'Generation aborted by user' || this.stopRequested) {
+                aborted = true;
+                this.emit('aborted', 'Generation was aborted by user');
+            } else {
+                throw error;
+            }
+        } finally {
+            this.isRunning = false;
+            this.abortController = null;
+            this.currentIteration = 0;
         }
 
         return {
@@ -185,6 +268,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             history,
             iterations: history.filter(h => h.type === 'creator').length,
             success,
+            aborted
         };
     }
 
