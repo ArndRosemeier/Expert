@@ -6,6 +6,12 @@ export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
 
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
+        name: "Prompt Adherence",
+        description: "The response directly addresses the given prompt and stays on topic throughout. It fulfills the specific request without wandering off into tangential areas.",
+        goal: 9,
+        weight: 1.0
+    },
+    {
         name: "Clarity & Conciseness",
         description: "The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.",
         goal: 8,
