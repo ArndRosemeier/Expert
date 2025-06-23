@@ -613,7 +613,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         }
 
         // Check for existing generation FIRST, before any operations
-        if (this.canAbortGeneration()) {
+        // Allow recursive calls if we're already in a bulk operation
+        if (this.canAbortGeneration() && !this.isGeneratingAllChildren) {
             throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
         }
 
@@ -648,28 +649,30 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             }
         }
 
-        // Set up bulk generation context
-        this.abortRequested = false;
-        this.isGeneratingAllChildren = true;
-        
-        // Collect all nodes that will be processed for abort tracking
-        const collectChildNodes = (node: DocumentNode): DocumentNode[] => {
-            const nodes: DocumentNode[] = [];
-            for (const child of node.children) {
-                nodes.push(child);
-                if (recursive) {
-                    nodes.push(...collectChildNodes(child));
+        // Set up bulk generation context only for top-level call
+        if (!this.isGeneratingAllChildren) {
+            this.abortRequested = false;
+            this.isGeneratingAllChildren = true;
+            
+            // Collect all nodes that will be processed for abort tracking
+            const collectChildNodes = (node: DocumentNode): DocumentNode[] => {
+                const nodes: DocumentNode[] = [];
+                for (const child of node.children) {
+                    nodes.push(child);
+                    if (recursive) {
+                        nodes.push(...collectChildNodes(child));
+                    }
                 }
-            }
-            return nodes;
-        };
-        
-        const nodesToProcess = collectChildNodes(node);
-        this.currentGenerationContext = {
-            type: 'bulk',
-            nodeIds: nodesToProcess.map(n => n.id),
-            abortController: new AbortController()
-        };
+                return nodes;
+            };
+            
+            const nodesToProcess = collectChildNodes(node);
+            this.currentGenerationContext = {
+                type: 'bulk',
+                nodeIds: nodesToProcess.map(n => n.id),
+                abortController: new AbortController()
+            };
+        }
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
@@ -793,22 +796,25 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             }
         }
 
-        try {
-            if (this.abortRequested) {
-                this.emit('nodeGenerationAborted', { nodeId, node });
-            } else {
-                // Clear progress bars and emit completion event
-                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-                
-                // Small delay to ensure all async operations complete, then trigger UI cleanup
-                setTimeout(() => {
-                    this.emit('project-loaded');
-                }, 100);
+        // Only handle completion/cleanup for top-level call
+        if (this.currentGenerationContext?.type === 'bulk') {
+            try {
+                if (this.abortRequested) {
+                    this.emit('nodeGenerationAborted', { nodeId, node });
+                } else {
+                    // Clear progress bars and emit completion event
+                    this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+                    this.emit('nodeGenerationComplete', { nodeId, success: true, node });
+                    
+                    // Small delay to ensure all async operations complete, then trigger UI cleanup
+                    setTimeout(() => {
+                        this.emit('project-loaded');
+                    }, 100);
+                }
+            } finally {
+                this.isGeneratingAllChildren = false; // Reset flag
+                this.currentGenerationContext = null;
             }
-        } finally {
-            this.isGeneratingAllChildren = false; // Reset flag
-            this.currentGenerationContext = null;
         }
         
 
