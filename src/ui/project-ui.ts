@@ -377,10 +377,15 @@ export function renderNodeDetails() {
         <div class="node-details-header">
             <h2 id="node-title-display" contenteditable="true">${node.title}</h2>
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
                 <button id="delete-node-btn" class="button button-secondary" style="background-color: #dc3545; color: white; border-color: #dc3545;">
                     ${node.level === 0 ? 'Delete Project' : 'Delete Node'}
                 </button>
+                ${node.children.length > 0 ? `
+                    <button id="delete-subnodes-btn" class="button button-secondary" style="background-color: #fd7e14; color: white; border-color: #fd7e14;">
+                        Delete All Subnodes
+                    </button>
+                ` : ''}
             </div>
         </div>
 
@@ -822,6 +827,51 @@ export function setupEventListeners() {
                             } else {
                                 alert('Failed to delete the node. It may be a root node or have an invalid parent.');
                             }
+                        }
+                    }
+                }
+                break;
+
+            case 'delete-subnodes-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    if (node.children.length === 0) {
+                        alert('This node has no subnodes to delete.');
+                        return;
+                    }
+
+                    const childCount = node.children.length;
+                    const confirmMessage = `Are you sure you want to delete all ${childCount} subnode(s) of "${node.title}"?\n\nThis will permanently delete:\n- All ${childCount} child nodes and their content\n- All nested subnodes and their content\n- All generated summaries and history\n\nThe parent node "${node.title}" will remain intact.\n\nThis action cannot be undone.`;
+                    
+                    if (confirm(confirmMessage)) {
+                        // Create a copy of the children array since we'll be modifying the original
+                        const childrenToDelete = [...node.children];
+                        
+                        let deletedCount = 0;
+                        for (const child of childrenToDelete) {
+                            const success = projectManager.removeNode(child.id);
+                            if (success) {
+                                deletedCount++;
+                            }
+                        }
+                        
+                        if (deletedCount > 0) {
+                            projectManager.saveToStorage().catch(console.error);
+                            
+                            // Re-render the UI to reflect the changes
+                            renderMultiProjectTree();
+                            renderNodeDetails();
+                            
+                            if (deletedCount === childCount) {
+                                alert(`Successfully deleted all ${deletedCount} subnodes.`);
+                            } else {
+                                alert(`Deleted ${deletedCount} out of ${childCount} subnodes. Some nodes may have failed to delete.`);
+                            }
+                        } else {
+                            alert('Failed to delete any subnodes. Please try again.');
                         }
                     }
                 }

@@ -67,6 +67,9 @@ export class ReaderGUI {
     private clickMappings: ClickMapping[] = [];
     private config: ReaderConfig;
     private onNavigateToNode?: (nodeId: string) => void;
+    private isListeningForUpdates: boolean = false;
+    private lastScrollPosition: number = 0;
+    private lastFocusedNodeId: string | null = null;
 
     constructor(projectManager: ProjectManager, container: HTMLElement, onNavigateToNode?: (nodeId: string) => void) {
         this.projectManager = projectManager;
@@ -271,10 +274,20 @@ export class ReaderGUI {
      * Generate table of contents
      */
     private generateTOC(): string {
-        let tocHTML = `
+        return `
             <div class="reader-toc">
-                <h3>Table of Contents</h3>
-                <ul class="toc-list">
+                ${this.generateTOCContent()}
+            </div>
+        `;
+    }
+
+    /**
+     * Generate table of contents content (without wrapper div)
+     */
+    private generateTOCContent(): string {
+        let tocHTML = `
+            <h3>Table of Contents</h3>
+            <ul class="toc-list">
         `;
 
         this.contentNodes.forEach(node => {
@@ -290,8 +303,7 @@ export class ReaderGUI {
         });
 
         tocHTML += `
-                </ul>
-            </div>
+            </ul>
         `;
 
         return tocHTML;
@@ -1171,6 +1183,9 @@ export class ReaderGUI {
      * Close the reader interface
      */
     private close(): void {
+        // Stop listening for updates
+        this.stopListeningForUpdates();
+        
         // Remove styles
         const styleElement = document.getElementById('reader-styles');
         if (styleElement) {
@@ -1190,6 +1205,7 @@ export class ReaderGUI {
         await this.loadReaderConfig();
         this.render();
         this.applySettings();
+        this.startListeningForUpdates();
     }
 
     /**
@@ -1197,6 +1213,221 @@ export class ReaderGUI {
      */
     public hide(): void {
         this.container.style.display = 'none';
+        this.stopListeningForUpdates();
+    }
+
+    /**
+     * Start listening for project updates to refresh reader content
+     */
+    private startListeningForUpdates(): void {
+        if (this.isListeningForUpdates) return;
+        
+        this.isListeningForUpdates = true;
+        
+        // Listen for node generation completion
+        this.projectManager.on('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
+        
+        // Listen for summary generation
+        this.projectManager.on('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        
+        // Listen for overall project structure changes
+        this.projectManager.on('project-loaded', this.handleProjectUpdate.bind(this));
+    }
+
+    /**
+     * Stop listening for project updates
+     */
+    private stopListeningForUpdates(): void {
+        if (!this.isListeningForUpdates) return;
+        
+        this.isListeningForUpdates = false;
+        
+        // Remove event listeners
+        this.projectManager.off('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
+        this.projectManager.off('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        this.projectManager.off('project-loaded', this.handleProjectUpdate.bind(this));
+    }
+
+    /**
+     * Handle individual node updates
+     */
+    private handleNodeUpdate(event: any): void {
+        // Preserve current reading position
+        this.preserveReadingPosition();
+        
+        // Update the content
+        this.refreshContent();
+    }
+
+    /**
+     * Handle overall project updates
+     */
+    private handleProjectUpdate(): void {
+        // Preserve current reading position
+        this.preserveReadingPosition();
+        
+        // Update the content
+        this.refreshContent();
+    }
+
+    /**
+     * Preserve the current reading position before updating content
+     */
+    private preserveReadingPosition(): void {
+        const contentArea = this.container.querySelector('.reader-content-area') as HTMLElement;
+        if (contentArea) {
+            this.lastScrollPosition = contentArea.scrollTop;
+            
+            // Find the node currently in view
+            const nodeElements = contentArea.querySelectorAll('.reader-node');
+            const viewportTop = contentArea.scrollTop;
+            const viewportHeight = contentArea.clientHeight;
+            const viewportCenter = viewportTop + (viewportHeight / 2);
+            
+            for (let i = 0; i < nodeElements.length; i++) {
+                const element = nodeElements[i] as HTMLElement;
+                const rect = element.getBoundingClientRect();
+                const elementTop = rect.top + viewportTop - contentArea.getBoundingClientRect().top;
+                const elementBottom = elementTop + rect.height;
+                
+                if (elementTop <= viewportCenter && elementBottom >= viewportCenter) {
+                    this.lastFocusedNodeId = element.dataset.nodeId || null;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Restore the reading position after content update
+     */
+    private restoreReadingPosition(): void {
+        const contentArea = this.container.querySelector('.reader-content-area') as HTMLElement;
+        if (!contentArea) return;
+        
+        // Try to restore position based on the focused node
+        if (this.lastFocusedNodeId) {
+            const nodeElement = contentArea.querySelector(`#node-${this.lastFocusedNodeId}`) as HTMLElement;
+            if (nodeElement) {
+                nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+        }
+        
+        // Fallback to scroll position
+        if (this.lastScrollPosition > 0) {
+            contentArea.scrollTop = this.lastScrollPosition;
+        }
+    }
+
+    /**
+     * Refresh content while preserving reading position
+     */
+    private refreshContent(): void {
+        // Re-analyze content
+        const newContentNodes = this.analyzeProjectContent();
+        
+        // Check if content actually changed
+        if (this.hasContentChanged(newContentNodes)) {
+            this.contentNodes = newContentNodes;
+            
+            // Show update notification
+            this.showUpdateNotification();
+            
+            // Update TOC if it's visible
+            if (this.config.showTOC) {
+                const tocElement = this.container.querySelector('.reader-toc');
+                if (tocElement) {
+                    tocElement.innerHTML = this.generateTOCContent();
+                }
+            }
+            
+            // Update content area
+            const contentArea = this.container.querySelector('.reader-content-area');
+            if (contentArea) {
+                contentArea.innerHTML = this.generateContent();
+                this.buildClickMappings();
+                
+                // Restore reading position after a short delay
+                setTimeout(() => {
+                    this.restoreReadingPosition();
+                }, 100);
+            }
+        }
+    }
+
+    /**
+     * Check if content has actually changed to avoid unnecessary updates
+     */
+    private hasContentChanged(newContentNodes: ContentNode[]): boolean {
+        if (newContentNodes.length !== this.contentNodes.length) {
+            return true;
+        }
+        
+        for (let i = 0; i < newContentNodes.length; i++) {
+            const newNode = newContentNodes[i];
+            const oldNode = this.contentNodes[i];
+            
+            if (newNode.id !== oldNode.id || 
+                newNode.content !== oldNode.content || 
+                newNode.title !== oldNode.title ||
+                newNode.hasContent !== oldNode.hasContent) {
+                return true;
+            }
+        }
+        
+                 return false;
+    }
+
+    /**
+     * Show a brief notification that content has been updated
+     */
+    private showUpdateNotification(): void {
+        // Remove existing notification if present
+        const existingNotification = this.container.querySelector('.reader-update-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'reader-update-notification';
+        notification.textContent = 'Content updated';
+        notification.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10002;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+
+        // Add to container
+        this.container.appendChild(notification);
+
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 10);
+
+        // Remove after 2 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 300);
+        }, 2000);
     }
 }
 
