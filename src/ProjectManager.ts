@@ -359,6 +359,29 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         clearNode(this.rootNode);
     }
 
+    /**
+     * Filters criteria based on node type (leaf vs outline/branch)
+     * @param criteria The full list of criteria
+     * @param isLeafNode Whether the node is a leaf node
+     * @returns Filtered criteria appropriate for the node type
+     */
+    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
+        return criteria.filter(criterion => {
+            // If both outline and leaf are undefined or both are true, include the criterion
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                return true; // Legacy criteria - apply to all
+            }
+            
+            // For leaf nodes, include criteria where leaf is true
+            if (isLeafNode) {
+                return criterion.leaf === true;
+            }
+            
+            // For outline/branch nodes, include criteria where outline is true
+            return criterion.outline === true;
+        });
+    }
+
     public async generateNodeContent(nodeId: string, count: number = 5, isChildGeneration: boolean = false): Promise<void> {
         const node = this.findNodeById(nodeId);
         if (!node) { throw new Error(`Node not found: ${nodeId}`); }
@@ -395,7 +418,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
         const loopInput: LoopInput = {
             prompt: filledPrompt,
-            criteria: profile.criteria,
+            criteria: this.filterCriteriaForNodeType(profile.criteria, node.isLeaf),
             maxIterations: profile.maxIterations,
             response: '' // Initial response is empty
         };

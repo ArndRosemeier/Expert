@@ -614,6 +614,18 @@ export function renderSettingsModal() {
                 width: 65px;
                 flex-shrink: 0;
             }
+            .criterion input[type="checkbox"] {
+                width: 18px;
+                height: 18px;
+                flex-shrink: 0;
+                cursor: pointer;
+            }
+            .criterion .outline-checkbox {
+                accent-color: #3b82f6;
+            }
+            .criterion .leaf-checkbox {
+                accent-color: #10b981;
+            }
             .criterion textarea {
                 display: none; /* Hidden by default */
                 resize: vertical;
@@ -654,6 +666,14 @@ export function renderSettingsModal() {
             </div>
             <div id="settings-criteria-container" class="settings-section">
                 <h3>Quality Criteria</h3>
+                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #6b7280;">
+                    <span style="flex-grow: 1;">Criterion</span>
+                    <span style="width: 65px; text-align: center;">Goal</span>
+                    <span style="width: 65px; text-align: center;">Weight</span>
+                    <span style="width: 18px; text-align: center; color: #3b82f6;" title="Use for outline/branch nodes">O</span>
+                    <span style="width: 18px; text-align: center; color: #10b981;" title="Use for leaf nodes">L</span>
+                    <span style="width: 24px;"></span>
+                </div>
                 <div id="modal-criteria-list" style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.75rem;"></div>
                 <div style="margin-top: 1.5rem;">
                     <label for="modal-max-iterations">Max Iterations:</label>
@@ -834,7 +854,9 @@ export function renderSettingsModal() {
             name: "New Criterion...",
             goal: 8,
             weight: 1.0,
-            description: ""
+            description: "",
+            outline: true,
+            leaf: true
         };
         const newItem = createCriterionElement(newCriterion);
         modalCriteriaList.appendChild(newItem);
@@ -944,6 +966,19 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     weightInput.step = '0.1';
     weightInput.value = criterion.weight.toString();
     weightInput.title = 'Weight (0.1-2.0)';
+
+    // Create checkboxes for outline and leaf
+    const outlineCheckbox = document.createElement('input');
+    outlineCheckbox.type = 'checkbox';
+    outlineCheckbox.className = 'outline-checkbox';
+    outlineCheckbox.checked = criterion.outline !== false; // Default to true if undefined
+    outlineCheckbox.title = 'Use for outline/branch nodes';
+
+    const leafCheckbox = document.createElement('input');
+    leafCheckbox.type = 'checkbox';
+    leafCheckbox.className = 'leaf-checkbox';
+    leafCheckbox.checked = criterion.leaf !== false; // Default to true if undefined
+    leafCheckbox.title = 'Use for leaf nodes';
     
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-criterion-btn';
@@ -992,6 +1027,8 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     div.appendChild(textareaContainer);
     div.appendChild(goalInput);
     div.appendChild(weightInput);
+    div.appendChild(outlineCheckbox);
+    div.appendChild(leafCheckbox);
     div.appendChild(removeBtn);
 
     return div;
@@ -1004,11 +1041,16 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
         const div = el as HTMLElement;
         const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
         const inputs = el.querySelectorAll<HTMLInputElement>('input[type="number"]');
-        if (textarea && inputs.length === 2) {
+        const outlineCheckbox = el.querySelector<HTMLInputElement>('.outline-checkbox');
+        const leafCheckbox = el.querySelector<HTMLInputElement>('.leaf-checkbox');
+        
+        if (textarea && inputs.length === 2 && outlineCheckbox && leafCheckbox) {
             // Use the full text from data attribute, fall back to textarea value
             const fullText = div.getAttribute('data-full-text') || textarea.value;
             const goal = parseInt(inputs[0].value, 10);
             const weight = parseFloat(inputs[1].value);
+            const outline = outlineCheckbox.checked;
+            const leaf = leafCheckbox.checked;
             
             if (fullText && !isNaN(goal) && !isNaN(weight)) {
                 // Parse the full text to extract name and description
@@ -1026,7 +1068,7 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
                     description = undefined;
                 }
                 
-                const criterion: QualityCriterion = { name, goal, weight };
+                const criterion: QualityCriterion = { name, goal, weight, outline, leaf };
                 if (description) {
                     criterion.description = description;
                 }
@@ -1046,7 +1088,11 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
         'weight' in item &&
         typeof item.name === 'string' &&
         typeof item.goal === 'number' &&
-        typeof item.weight === 'number'
+        typeof item.weight === 'number' &&
+        // Optional properties - if present, must be boolean
+        (item.outline === undefined || typeof item.outline === 'boolean') &&
+        (item.leaf === undefined || typeof item.leaf === 'boolean') &&
+        (item.description === undefined || typeof item.description === 'string')
     );
 }
 

@@ -17,4 +17,6 @@ export interface QualityCriterion {
     goal: number;
     weight: number;
     description?: string;
+    outline?: boolean;
+    leaf?: boolean;
 } 

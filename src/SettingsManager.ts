@@ -10,67 +10,89 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Prompt Adherence",
         description: "The response directly addresses the given prompt and stays on topic throughout. It fulfills the specific request without wandering off into tangential areas.",
         goal: 9,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: "Clarity & Conciseness",
         description: "The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: "Natural & Authentic Tone",
         description: "The language sounds human and authentic. It avoids being overly formal, academic, or robotic.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: "Engaging Flow",
         description: "The text is interesting and holds the reader's attention. Sentences and paragraphs transition smoothly.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: false,
+        leaf: true
     },
     {
         name: "Varied Sentence Structure",
         description: "The length and structure of sentences are varied to create a pleasing rhythm, avoiding monotony.",
         goal: 7,
-        weight: 1.0
+        weight: 1.0,
+        outline: false,
+        leaf: true
     },
     {
         name: "Subtlety (Show, Don't Tell)",
         description: "The writing implies emotions and ideas through description and action rather than stating them directly. It avoids being on-the-nose.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: false,
+        leaf: true
     },
     {
         name: "Avoids AI Clichés",
         description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' or 'tapestry of...'",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: "Understated Language",
         description: "The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: "Specificity & Concrete Detail",
         description: "The writing uses specific, concrete details and examples rather than vague generalities.",
         goal: 8,
-        weight: 1.0
+        weight: 1.0,
+        outline: false,
+        leaf: true
     },
     {
         name: "Original Phrasing",
         description: "The text avoids common idioms and clichés, opting for more original ways to express ideas.",
         goal: 7,
-        weight: 1.0
+        weight: 1.0,
+        outline: true,
+        leaf: true
     },
     {
         name: 'Human-like Naming',
         goal: 8,
         weight: 1.0,
-        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established."
+        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established.",
+        outline: false,
+        leaf: true
     }
 ];
 
@@ -91,7 +113,21 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             'prompt' in profile &&
             typeof profile.prompt === 'string' &&
             'criteria' in profile &&
-            Array.isArray(profile.criteria) && // Basic array check, can be stricter
+            Array.isArray(profile.criteria) && 
+            profile.criteria.every((criterion: any) => 
+                typeof criterion === 'object' &&
+                criterion !== null &&
+                'name' in criterion &&
+                'goal' in criterion &&
+                'weight' in criterion &&
+                typeof criterion.name === 'string' &&
+                typeof criterion.goal === 'number' &&
+                typeof criterion.weight === 'number' &&
+                // Optional properties - if present, must be boolean
+                (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
+                (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
+                (criterion.description === undefined || typeof criterion.description === 'string')
+            ) &&
             'maxIterations' in profile &&
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
@@ -376,6 +412,20 @@ export class SettingsManager {
             typeof profile.prompt === 'string' &&
             'criteria' in profile &&
             Array.isArray(profile.criteria) &&
+            profile.criteria.every((criterion: any) => 
+                typeof criterion === 'object' &&
+                criterion !== null &&
+                'name' in criterion &&
+                'goal' in criterion &&
+                'weight' in criterion &&
+                typeof criterion.name === 'string' &&
+                typeof criterion.goal === 'number' &&
+                typeof criterion.weight === 'number' &&
+                // Optional properties - if present, must be boolean
+                (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
+                (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
+                (criterion.description === undefined || typeof criterion.description === 'string')
+            ) &&
             'maxIterations' in profile &&
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
