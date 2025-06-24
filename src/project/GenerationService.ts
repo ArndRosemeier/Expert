@@ -306,7 +306,8 @@ export class GenerationService {
         const prompt = prompts.create_children_from_outline_user
             .replace('{{outline_content}}', node.content)
             .replace('{{child_level_name}}', childLevelName)
-            .replace('{{context}}', context);
+            .replace('{{context}}', context)
+            .replace('{{count}}', String(node.generationChildrenCount));
 
         try {
             // Using the 'creator' model as it's for generating new content/structure
@@ -417,7 +418,8 @@ export class GenerationService {
             const prompt = prompts.create_children_from_outline_user
                 .replace('{{outline_content}}', node.content)
                 .replace('{{child_level_name}}', childLevelName)
-                .replace('{{context}}', context);
+                .replace('{{context}}', context)
+                .replace('{{count}}', String(node.generationChildrenCount));
 
             try {
                 // Using the 'creator' model as it's for generating new content/structure

@@ -125,9 +125,9 @@ export const defaultPrompts: OrchestratorPrompts = {
         IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
     `.trim(),
     create_children_from_outline_user: `
-        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of titles for the '{{child_level_name}}' nodes that should be created from it.
+        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of exactly {{count}} titles for the '{{child_level_name}}' nodes that should be created from it.
 
-        Each title must be on a new line and start with a single asterisk (*). Do not include any other text or explanations.
+        Generate exactly {{count}} titles - no more, no less. Each title must be on a new line and start with a single asterisk (*). Do not include any other text or explanations.
 
         Here is the context of the document so far:
         ---
@@ -165,7 +165,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
     content_generation_user: ['path', 'context', 'title', 'content'],
     branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
-    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
+    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content', 'count'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
     expand_text_user: ['content', 'path', 'context', 'title'],
 };
