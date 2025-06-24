@@ -309,6 +309,17 @@ export class GenerationService {
             .replace('{{context}}', context)
             .replace('{{count}}', String(node.generationChildrenCount));
 
+        // Debug logging to see the actual prompt sent to LLM
+        console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG (createChildrenFromOutline method) ===');
+        console.log('Node:', node.title, '(level', node.level, ')');
+        console.log('Template:', node.template);
+        console.log('Child level name:', childLevelName);
+        console.log('Generation count:', node.generationChildrenCount);
+        console.log('Prompt sent to LLM:');
+        console.log('---START PROMPT---');
+        console.log(prompt);
+        console.log('---END PROMPT---');
+
         try {
             // Using the 'creator' model as it's for generating new content/structure
             const response = await this.deps.openRouterClient.chat('creator', prompt);
@@ -420,6 +431,17 @@ export class GenerationService {
                 .replace('{{child_level_name}}', childLevelName)
                 .replace('{{context}}', context)
                 .replace('{{count}}', String(node.generationChildrenCount));
+
+            // Debug logging to see the actual prompt sent to LLM
+            console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG ===');
+            console.log('Node:', node.title, '(level', node.level, ')');
+            console.log('Template:', node.template);
+            console.log('Child level name:', childLevelName);
+            console.log('Generation count:', node.generationChildrenCount);
+            console.log('Prompt sent to LLM:');
+            console.log('---START PROMPT---');
+            console.log(prompt);
+            console.log('---END PROMPT---');
 
             try {
                 // Using the 'creator' model as it's for generating new content/structure
