@@ -15,7 +15,6 @@ export interface EditorPayload {
 export interface QualityCriterion {
     name: string;
     goal: number;
-    weight: number;
     description?: string;
     outline?: boolean;
     leaf?: boolean;

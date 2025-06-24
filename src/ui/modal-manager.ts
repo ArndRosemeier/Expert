@@ -669,7 +669,6 @@ export function renderSettingsModal() {
                 <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #6b7280;">
                     <span style="flex-grow: 1;">Criterion</span>
                     <span style="width: 65px; text-align: center;">Goal</span>
-                    <span style="width: 65px; text-align: center;">Weight</span>
                     <span style="width: 18px; text-align: center; color: #3b82f6;" title="Use for outline/branch nodes">O</span>
                     <span style="width: 18px; text-align: center; color: #10b981;" title="Use for leaf nodes">L</span>
                     <span style="width: 24px;"></span>
@@ -853,7 +852,6 @@ export function renderSettingsModal() {
         const newCriterion: QualityCriterion = {
             name: "New Criterion...",
             goal: 8,
-            weight: 1.0,
             description: "",
             outline: true,
             leaf: true
@@ -959,13 +957,7 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     goalInput.value = criterion.goal.toString();
     goalInput.title = 'Goal (1-10)';
 
-    const weightInput = document.createElement('input');
-    weightInput.type = 'number';
-    weightInput.min = '0.1';
-    weightInput.max = '2.0';
-    weightInput.step = '0.1';
-    weightInput.value = criterion.weight.toString();
-    weightInput.title = 'Weight (0.1-2.0)';
+
 
     // Create checkboxes for outline and leaf
     const outlineCheckbox = document.createElement('input');
@@ -1026,7 +1018,6 @@ function createCriterionElement(criterion: QualityCriterion): HTMLDivElement {
     
     div.appendChild(textareaContainer);
     div.appendChild(goalInput);
-    div.appendChild(weightInput);
     div.appendChild(outlineCheckbox);
     div.appendChild(leafCheckbox);
     div.appendChild(removeBtn);
@@ -1040,19 +1031,18 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
     criterionElements.forEach(el => {
         const div = el as HTMLElement;
         const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
-        const inputs = el.querySelectorAll<HTMLInputElement>('input[type="number"]');
+        const goalInput = el.querySelector<HTMLInputElement>('input[type="number"]');
         const outlineCheckbox = el.querySelector<HTMLInputElement>('.outline-checkbox');
         const leafCheckbox = el.querySelector<HTMLInputElement>('.leaf-checkbox');
         
-        if (textarea && inputs.length === 2 && outlineCheckbox && leafCheckbox) {
+        if (textarea && goalInput && outlineCheckbox && leafCheckbox) {
             // Use the full text from data attribute, fall back to textarea value
             const fullText = div.getAttribute('data-full-text') || textarea.value;
-            const goal = parseInt(inputs[0].value, 10);
-            const weight = parseFloat(inputs[1].value);
+            const goal = parseInt(goalInput.value, 10);
             const outline = outlineCheckbox.checked;
             const leaf = leafCheckbox.checked;
             
-            if (fullText && !isNaN(goal) && !isNaN(weight)) {
+            if (fullText && !isNaN(goal)) {
                 // Parse the full text to extract name and description
                 const firstDotIndex = fullText.indexOf('.');
                 let name: string;
@@ -1068,7 +1058,7 @@ function getCriteriaFromUI(container: HTMLElement): QualityCriterion[] {
                     description = undefined;
                 }
                 
-                const criterion: QualityCriterion = { name, goal, weight, outline, leaf };
+                const criterion: QualityCriterion = { name, goal, outline, leaf };
                 if (description) {
                     criterion.description = description;
                 }
@@ -1085,10 +1075,8 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
         item !== null &&
         'name' in item &&
         'goal' in item &&
-        'weight' in item &&
         typeof item.name === 'string' &&
         typeof item.goal === 'number' &&
-        typeof item.weight === 'number' &&
         // Optional properties - if present, must be boolean
         (item.outline === undefined || typeof item.outline === 'boolean') &&
         (item.leaf === undefined || typeof item.leaf === 'boolean') &&
