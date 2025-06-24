@@ -5,6 +5,17 @@ import * as state from '../state';
 
 let currentTemplateName: string | null = null;
 let isDirty = false;
+let isPopulating = false; // Semaphore to prevent dirty flag during UI population
+
+// Debug function to track when isDirty is set
+function setDirty(reason: string) {
+    if (!isPopulating) {
+        console.log(`Setting isDirty = true, reason: ${reason}`);
+        isDirty = true;
+    } else {
+        console.log(`Prevented setting isDirty = true (isPopulating), reason: ${reason}`);
+    }
+}
 
 // Main entry point
 export function openTemplateEditor() {
@@ -32,6 +43,7 @@ export function openTemplateEditor() {
             <div class="template-controls">
                 <select id="template-select"></select>
                 <button id="delete-template-btn" class="button button-danger">Delete</button>
+                <button id="restore-defaults-btn" class="button button-secondary" style="background-color: #fd7e14; color: white; border-color: #fd7e14;">Restore Defaults</button>
             </div>
             <div class="template-controls">
                 <input type="text" id="template-name-input" placeholder="Enter template name..."/>
@@ -65,6 +77,7 @@ function setupTemplateEditorListeners() {
     getElementById('save-template-btn').addEventListener('click', handleSave);
     getElementById('save-as-new-btn').addEventListener('click', handleSaveAsNew);
     getElementById('delete-template-btn').addEventListener('click', handleDelete);
+    getElementById('restore-defaults-btn').addEventListener('click', handleRestoreDefaults);
     getElementById('add-layer-btn').addEventListener('click', handleAddLayer);
     getElementById('cancel-templates-btn').addEventListener('click', handleCancel);
 
@@ -75,18 +88,27 @@ function setupTemplateEditorListeners() {
         }
     });
 
-    // Listener for tracking changes
-    getElementById('template-editor-container').addEventListener('input', () => { isDirty = true; });
+    // Listener for tracking changes - only set dirty if not currently populating UI
+    // Exclude the template selector since changing templates is not a "dirty" operation
+    getElementById('template-editor-container').addEventListener('input', (e) => { 
+        const target = e.target as HTMLElement;
+        if (target.id === 'template-select') {
+            return; // Don't mark as dirty when changing template selection
+        }
+        setDirty(`input event on ${target.tagName}:${target.className}`);
+    });
 }
 
 // --- Event Handlers ---
 
 function handleTemplateSelect(event: Event) {
+    console.log(`handleTemplateSelect: isDirty = ${isDirty}, isPopulating = ${isPopulating}`);
     if (isDirty && !confirm("You have unsaved changes. Are you sure you want to switch?")) {
         (event.target as HTMLSelectElement).value = currentTemplateName || '';
         return;
     }
     currentTemplateName = (event.target as HTMLSelectElement).value;
+    console.log(`handleTemplateSelect: switching to ${currentTemplateName}, setting isDirty = false`);
     isDirty = false;
     renderCurrentTemplateView();
 }
@@ -186,12 +208,31 @@ function handleDelete() {
     }
 }
 
+function handleRestoreDefaults() {
+    const templateManager = state.getTemplateManager();
+    if (!templateManager) return;
+
+    if (confirm("Are you sure you want to restore all templates to defaults? This will remove any custom templates you have created.")) {
+        try {
+            templateManager.restoreDefaults();
+            const templateNames = templateManager.getTemplateNames();
+            currentTemplateName = templateNames[0] || null;
+            isDirty = false;
+            populateTemplateSelector();
+            renderCurrentTemplateView();
+            alert("Templates restored to defaults successfully.");
+        } catch (error: any) {
+            alert(`Error restoring defaults: ${error.message}`);
+        }
+    }
+}
+
 function handleAddLayer() {
     const editor = getElementById('hierarchy-editor');
     const newIndex = editor.children.length;
     const newLayer = createLayerElement('', newIndex);
     editor.appendChild(newLayer);
-    isDirty = true;
+    setDirty('handleAddLayer');
 }
 
 function handleRemoveLayer(button: HTMLElement) {
@@ -202,7 +243,7 @@ function handleRemoveLayer(button: HTMLElement) {
         const input = layer.querySelector('input');
         if (input) input.dataset.index = String(index);
     });
-    isDirty = true;
+    setDirty('handleRemoveLayer');
 }
 
 function handleCancel() {
@@ -219,23 +260,35 @@ function populateTemplateSelector() {
     const select = getElementById<HTMLSelectElement>('template-select');
     if (!templateManager || !select) return;
 
-    const names = templateManager.getTemplateNames();
+    // Set semaphore to prevent dirty flag during UI population
+    isPopulating = true;
+
+    const names = templateManager.getTemplateNames().sort();
     select.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join('');
     
     if (currentTemplateName) {
         select.value = currentTemplateName;
     }
+
+    // Clear semaphore after population
+    isPopulating = false;
 }
 
 function renderCurrentTemplateView() {
+    console.log(`renderCurrentTemplateView: starting, isDirty = ${isDirty}, isPopulating = ${isPopulating}`);
     const templateManager = state.getTemplateManager();
     const nameInput = getElementById<HTMLInputElement>('template-name-input');
     const editor = getElementById('hierarchy-editor');
     if (!templateManager || !nameInput || !editor) return;
 
+    // Set semaphore to prevent dirty flag during UI population
+    console.log(`renderCurrentTemplateView: setting isPopulating = true`);
+    isPopulating = true;
+
     if (!currentTemplateName) {
         nameInput.value = '';
         editor.innerHTML = 'No template selected.';
+        isPopulating = false;
         return;
     }
 
@@ -243,6 +296,7 @@ function renderCurrentTemplateView() {
     if (!template) {
         nameInput.value = '';
         editor.innerHTML = `Template '${currentTemplateName}' not found.`;
+        isPopulating = false;
         return;
     }
 
@@ -252,6 +306,11 @@ function renderCurrentTemplateView() {
         const layerElement = createLayerElement(level, index);
         editor.appendChild(layerElement);
     });
+    
+    // Clear semaphore and ensure dirty flag is false after population
+    console.log(`renderCurrentTemplateView: finished, setting isPopulating = false, isDirty = false`);
+    isPopulating = false;
+    isDirty = false;
 }
 
 function createLayerElement(level: string, index: number): HTMLElement {

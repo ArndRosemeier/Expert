@@ -64,6 +64,8 @@ export class TestRunner {
         results.push(this.testInvalidNodeOperations());
         results.push(this.testTemplateValidation());
         results.push(this.testErrorMessages());
+        results.push(this.testGenerationChildrenCount());
+        results.push(this.testComprehensiveTemplates());
 
         return this.formatResultsAsHtml(results, 'Phase 1: Core Functionality Tests');
     }
@@ -391,7 +393,7 @@ export class TestRunner {
             
             // Test initial state
             if (chapter1.content !== '') throw new Error("Initial content should be empty");
-            if (chapter1.summary !== '') throw new Error("Initial summary should be empty");
+            if (chapter1.context !== '') throw new Error("Initial context should be empty");
             
             // Test content setting
             chapter1.content = "This is test content for chapter 1.";
@@ -399,10 +401,10 @@ export class TestRunner {
                 throw new Error("Content setting failed");
             }
             
-            // Test summary setting
-            chapter1.summary = "A brief summary of chapter 1.";
-            if (chapter1.summary !== "A brief summary of chapter 1.") {
-                throw new Error("Summary setting failed");
+            // Test context setting
+            chapter1.context = "A brief context for chapter 1.";
+            if (chapter1.context !== "A brief context for chapter 1.") {
+                throw new Error("Context setting failed");
             }
             
             // Test isLeaf detection (leaf nodes don't have children)
@@ -522,6 +524,163 @@ export class TestRunner {
             return { success: true, message: "Step 2.7: Error messages are helpful and informative." };
         } catch (error: any) {
             return { success: false, message: `Step 2.7 Failed: ${error.message}` };
+        }
+    }
+
+    private testGenerationChildrenCount(): TestResult {
+        try {
+            // Test default count
+            const defaultTemplate = new ProjectTemplate("Default", ['Book', 'Chapter'], []);
+            const defaultProject = new ProjectManager("Test", defaultTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            
+            if (defaultProject.rootNode.generationChildrenCount !== 5) {
+                throw new Error(`Expected default count of 5, got ${defaultProject.rootNode.generationChildrenCount}`);
+            }
+
+            // Test parsing count from template with number
+            const numberedTemplate = new ProjectTemplate("Numbered", ['Book', 'Chapter 3', 'Scene'], []);
+            const numberedProject = new ProjectManager("Test", numberedTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const chapterNode = numberedProject.addNode("Test Chapter", numberedProject.rootNode.id);
+            
+            if (chapterNode.generationChildrenCount !== 3) {
+                throw new Error(`Expected parsed count of 3 from "Chapter 3", got ${chapterNode.generationChildrenCount}`);
+            }
+
+            // Test parsing count from different patterns
+            const variousTemplate = new ProjectTemplate("Various", ['Book', 'Act 7', 'Scene'], []);
+            const variousProject = new ProjectManager("Test", variousTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const actNode = variousProject.addNode("Test Act", variousProject.rootNode.id);
+            
+            if (actNode.generationChildrenCount !== 7) {
+                throw new Error(`Expected parsed count of 7 from "Act 7", got ${actNode.generationChildrenCount}`);
+            }
+
+            // Test edge cases - no number should default to 5
+            const nonNumberTemplate = new ProjectTemplate("NoNumber", ['Book', 'Chapter', 'Scene'], []);
+            const nonNumberProject = new ProjectManager("Test", nonNumberTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const normalChapterNode = nonNumberProject.addNode("Test Chapter", nonNumberProject.rootNode.id);
+            
+            if (normalChapterNode.generationChildrenCount !== 5) {
+                throw new Error(`Expected default count of 5 for template without number, got ${normalChapterNode.generationChildrenCount}`);
+            }
+
+            // Test boundary validation - number too high should default to 5
+            const highNumberTemplate = new ProjectTemplate("HighNumber", ['Book', 'Chapter 999', 'Scene'], []);
+            const highNumberProject = new ProjectManager("Test", highNumberTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const highChapterNode = highNumberProject.addNode("Test Chapter", highNumberProject.rootNode.id);
+            
+            if (highChapterNode.generationChildrenCount !== 5) {
+                throw new Error(`Expected default count of 5 for invalid high number, got ${highChapterNode.generationChildrenCount}`);
+            }
+
+            return { success: true, message: "Step 2.8: GenerationChildrenCount parsing from templates works correctly." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.8 Failed: ${error.message}` };
+        }
+    }
+
+    private testComprehensiveTemplates(): TestResult {
+        try {
+            const templateManager = new TemplateManager();
+            
+            // Test basic template availability (templates are loaded synchronously now)
+            const templateNames = templateManager.getTemplateNames();
+            
+            // Verify we have a good selection of templates
+            const expectedTemplates = [
+                'Standard Novel', 'Hero\'s Journey Novel', 'Save the Cat Novel',
+                'Short Story', 'Flash Fiction', 'Novella', 'Personal Essay',
+                'Technical Manual', 'Business Presentation', 'Academic Paper',
+                'TV Series', 'Feature Screenplay', 'Game Design Document'
+            ];
+            
+            for (const expectedTemplate of expectedTemplates) {
+                if (!templateNames.includes(expectedTemplate)) {
+                    throw new Error(`Expected template "${expectedTemplate}" not found`);
+                }
+            }
+            
+            // Test specific template structures and count parsing
+            const heroJourneyTemplate = templateManager.getTemplate('Hero\'s Journey Novel');
+            if (!heroJourneyTemplate) {
+                throw new Error('Hero\'s Journey Novel template not found');
+            }
+            
+            // Test Hero's Journey template with count parsing
+            const heroProject = new ProjectManager("Test Hero", heroJourneyTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const journeyStageNode = heroProject.addNode("Call to Adventure", heroProject.rootNode.id);
+            
+            if (journeyStageNode.generationChildrenCount !== 17) {
+                throw new Error(`Expected Journey Stage 17 to parse count as 17, got ${journeyStageNode.generationChildrenCount}`);
+            }
+            
+            // Test Save the Cat template
+            const saveTheCatTemplate = templateManager.getTemplate('Save the Cat Novel');
+            if (!saveTheCatTemplate) {
+                throw new Error('Save the Cat Novel template not found');
+            }
+            
+            const saveTheCatProject = new ProjectManager("Test STC", saveTheCatTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const beatSheetNode = saveTheCatProject.addNode("Opening Image", saveTheCatProject.rootNode.id);
+            
+            if (beatSheetNode.generationChildrenCount !== 15) {
+                throw new Error(`Expected Beat Sheet 15 to parse count as 15, got ${beatSheetNode.generationChildrenCount}`);
+            }
+            
+            // Test non-fiction template
+            const technicalTemplate = templateManager.getTemplate('Technical Manual');
+            if (!technicalTemplate) {
+                throw new Error('Technical Manual template not found');
+            }
+            
+            const techProject = new ProjectManager("Test Manual", technicalTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const sectionNode = techProject.addNode("Installation", techProject.rootNode.id);
+            
+            if (sectionNode.generationChildrenCount !== 8) {
+                throw new Error(`Expected Section 8 to parse count as 8, got ${sectionNode.generationChildrenCount}`);
+            }
+            
+            // Test short prose template
+            const flashFictionTemplate = templateManager.getTemplate('Flash Fiction');
+            if (!flashFictionTemplate) {
+                throw new Error('Flash Fiction template not found');
+            }
+            
+            const flashProject = new ProjectManager("Test Flash", flashFictionTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
+            const beatNode = flashProject.addNode("Opening Hook", flashProject.rootNode.id);
+            
+            if (beatNode.generationChildrenCount !== 5) {
+                throw new Error(`Expected Beat 5 to parse count as 5, got ${beatNode.generationChildrenCount}`);
+            }
+            
+            // Test template hierarchy depth variations
+            const fantasyTemplate = templateManager.getTemplate('Fantasy Epic');
+            if (!fantasyTemplate || fantasyTemplate.hierarchyLevels.length !== 4) {
+                throw new Error('Fantasy Epic template should have 4 hierarchy levels');
+            }
+            
+            const tvTemplate = templateManager.getTemplate('TV Series');
+            if (!tvTemplate || tvTemplate.hierarchyLevels.length !== 4) {
+                throw new Error('TV Series template should have 4 hierarchy levels');
+            }
+            
+            const shortFilmTemplate = templateManager.getTemplate('Short Film');
+            if (!shortFilmTemplate || shortFilmTemplate.hierarchyLevels.length !== 3) {
+                throw new Error('Short Film template should have 3 hierarchy levels');
+            }
+            
+            // Verify scaffolding documents are appropriate
+            if (!heroJourneyTemplate.scaffoldingDocuments.includes('Character Archetypes')) {
+                throw new Error('Hero\'s Journey template should include Character Archetypes in scaffolding');
+            }
+            
+            if (!technicalTemplate.scaffoldingDocuments.includes('Glossary')) {
+                throw new Error('Technical Manual template should include Glossary in scaffolding');
+            }
+            
+            return { success: true, message: "Step 2.9: Comprehensive template set works correctly with proper count parsing." };
+        } catch (error: any) {
+            return { success: false, message: `Step 2.9 Failed: ${error.message}` };
         }
     }
 

@@ -185,10 +185,10 @@ export async function initialize() {
     // Global abort button handler
     getElementById('globalAbortBtn').addEventListener('click', () => {
         const activeProject = state.getActiveProject();
-        if (activeProject && activeProject.canAbortGeneration()) {
+        if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
             const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
             if (confirmed) {
-                activeProject.abortCurrentGeneration();
+                activeProject.getGenerationService().abortCurrentGeneration();
             }
         }
     });

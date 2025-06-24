@@ -43,10 +43,11 @@ export class DocumentNode {
     // --- Content and Context Properties ---
     private _content: string = '';
     private _isSettingContentFromGeneration: boolean = false;
-    summary: string = '';
+    context: string = '';
     template: string[];
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
+    generationChildrenCount: number = 5; // Default count for child generation
     
     // --- Legacy & Internal Properties ---
     generationHistory: LoopHistoryItem[] = [];
@@ -69,9 +70,40 @@ export class DocumentNode {
         this.generationHistory = [];
         this.isGenerating = false;
         this.content = '';
-        this.summary = '';
+        this.context = '';
         this.generationSessions = [];
         this.currentGenerationSession = null;
+        
+        // Initialize generation count from template or default
+        this.generationChildrenCount = this.parseGenerationCountFromTemplate();
+    }
+
+    /**
+     * Parses generation count from template lines.
+     * Looks for patterns like "Chapter 4" to extract the number 4 as the count.
+     * @returns The extracted count or default value of 5.
+     */
+    private parseGenerationCountFromTemplate(): number {
+        if (!this.template || this.level >= this.template.length) {
+            return 5; // Default count
+        }
+        
+        const currentLevelName = this.template[this.level];
+        if (!currentLevelName) {
+            return 5; // Default count
+        }
+        
+        // Look for numbers in the current level name
+        // Pattern: "Chapter 4", "Act 3", "Section 7", etc.
+        const match = currentLevelName.match(/(\w+)\s+(\d+)/);
+        if (match && match[2]) {
+            const extractedCount = parseInt(match[2], 10);
+            if (!isNaN(extractedCount) && extractedCount > 0 && extractedCount <= 20) {
+                return extractedCount;
+            }
+        }
+        
+        return 5; // Default count if no valid number found
     }
 
     get content(): string {
@@ -80,7 +112,7 @@ export class DocumentNode {
 
     set content(newContent: string) {
         this._content = newContent;
-        this.summary = ''; // Clear summary when content changes (summaries are now optional)
+        this.context = ''; // Clear context when content changes
         
         // Clear generation history when content is manually changed (not during generation)
         if (!this._isSettingContentFromGeneration) {
@@ -237,13 +269,14 @@ export class DocumentNode {
             parentId: this.parentId,
             children: this.children,
             content: this._content, // Serialize private _content as 'content'
-            summary: this.summary,
+            context: this.context,
             template: this.template,
             generationPrompt: this.generationPrompt,
             isPromptGenerating: this.isPromptGenerating,
             generationHistory: this.generationHistory,
             isGenerating: this.isGenerating,
             generationSessions: this.generationSessions,
+            generationChildrenCount: this.generationChildrenCount,
         };
     }
 } 

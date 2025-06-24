@@ -140,9 +140,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 const node = manager.findNodeById(selectedNodeId);
                 if (node) {
                     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                    const summaryTextArea = document.getElementById('node-summary') as HTMLTextAreaElement;
-                    if (contentTextArea) contentTextArea.value = node.content;
-                    if (summaryTextArea) summaryTextArea.value = node.summary;
+                                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+                if (contentTextArea) contentTextArea.value = node.content;
+                if (contextTextArea) contextTextArea.value = node.context;
                 }
             }
         }
@@ -235,9 +235,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
     const handleSummaryGenerated = (e: { nodeId: string; summary: string }) => {
         if (e.nodeId === selectedNodeId) {
-            const summaryTextArea = getElementById('node-summary') as HTMLTextAreaElement;
-            if (summaryTextArea) {
-                summaryTextArea.value = e.summary;
+            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+            if (contextTextArea) {
+                contextTextArea.value = e.summary;
             }
         }
     };
@@ -461,16 +461,31 @@ export function renderNodeDetails() {
                 <button id="export-node-btn" class="button button-secondary" style="background-color: #6366f1; color: white; border-color: #6366f1;">
                     📤 Export
                 </button>
+                <button id="import-node-btn" class="button button-secondary" style="background-color: #10b981; color: white; border-color: #10b981;">
+                    📥 Import
+                </button>
             </div>
         </div>
 
         <div class="node-section generation-prompt-section">
             <div class="prompt-header">
-                <label for="node-generation-prompt">Generation Prompt (use {{content}} to reference current node content)</label>
-                <button id="default-prompt-btn" class="button button-secondary">Default</button>
+                <label for="node-generation-prompt">Generation prompt</label>
+                <div class="placeholder-buttons">
+                    <button class="placeholder-btn" data-placeholder="path" title="View path placeholder value">{{path}}</button>
+                    <button class="placeholder-btn" data-placeholder="context" title="View context placeholder value">{{context}}</button>
+                    <button class="placeholder-btn" data-placeholder="title" title="View title placeholder value">{{title}}</button>
+                    <button class="placeholder-btn" data-placeholder="content" title="View content placeholder value">{{content}}</button>
+                    ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="child_level_name" title="View child level name placeholder value">{{child_level_name}}</button>' : ''}
+                    ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="count" title="View count placeholder value">{{count}}</button>' : ''}
+                    <button id="default-prompt-btn" class="button button-secondary">Default</button>
+                </div>
             </div>
             <textarea id="node-generation-prompt" class="large-textarea" rows="8" placeholder="Enter a prompt here to generate content from scratch...">${node.generationPrompt || ''}</textarea>
-            <div class="node-actions">
+            <div class="node-actions" style="display: flex; align-items: center; gap: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
+                    <input type="number" id="generation-count-input" min="1" max="20" value="${node.generationChildrenCount}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                </div>
                 <button id="node-generate-btn" class="button button-primary">Generate</button>
             </div>
         </div>
@@ -489,14 +504,11 @@ export function renderNodeDetails() {
                     <!-- Ratings will be populated here -->
                 </div>
             </div>
-            <div class="node-actions">
-                 <button id="node-summarize-btn" class="button button-secondary">Summarize</button>
-            </div>
         </div>
         
         <div class="node-section">
-            <label for="node-summary">Summary</label>
-            <textarea id="node-summary" class="large-textarea" rows="5" placeholder="A summary of the content can be generated or written here.">${node.summary || ''}</textarea>
+            <label for="node-context">Context</label>
+            <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
         </div>
 
 
@@ -508,7 +520,6 @@ export function renderNodeDetails() {
     const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
     const generateBtn = getElementById('node-generate-btn') as HTMLButtonElement;
     const defaultPromptBtn = getElementById('default-prompt-btn') as HTMLButtonElement;
-    const summarizeBtn = getElementById('node-summarize-btn') as HTMLButtonElement;
     const showRatingsCheckbox = getElementById('show-ratings-checkbox') as HTMLInputElement;
 
     // Reset checkbox state when switching nodes
@@ -520,7 +531,7 @@ export function renderNodeDetails() {
 
     if (!node.generationPrompt) {
         node.generationPrompt = projectManager.getRawGenerationPrompt(node);
-        projectManager.saveToStorage().catch(console.error); // Persist the default prompt immediately
+        // Don't auto-save - only save when user explicitly changes something
     }
     generationPromptTextArea.value = node.generationPrompt;
 
@@ -538,16 +549,12 @@ export function renderNodeDetails() {
     }
 
     // Update button states based on generation status  
-    const isAnyOperationInProgress = projectManager.canAbortGeneration();
+    const isAnyOperationInProgress = projectManager.getGenerationService().canAbortGeneration();
     
     // Normal button states (no more button transformations)
     generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     generateBtn.className = 'btn btn-primary';
     generateBtn.id = 'node-generate-btn';
-    
-    summarizeBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
-    summarizeBtn.className = 'btn btn-secondary btn-sm';
-    summarizeBtn.id = 'node-summarize-btn';
     
     defaultPromptBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
 
@@ -558,12 +565,6 @@ export function renderNodeDetails() {
         generateBtn.textContent = 'Generate (Operation in progress)';
     } else {
         generateBtn.textContent = 'Generate';
-    }
-    
-    if (isAnyOperationInProgress) {
-        summarizeBtn.textContent = 'Summarize (Operation in progress)';
-    } else {
-        summarizeBtn.textContent = 'Summarize';
     }
 
     // --- Add Branch-Specific Actions UI (Always include progress bars for consistency) ---
@@ -847,6 +848,110 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     return html;
 }
 
+function showPlaceholderOverlay(placeholder: string, projectManager: ProjectManager, selectedNodeId: string) {
+    const node = projectManager.findNodeById(selectedNodeId);
+    if (!node) return;
+
+    // Get the generation prompt panel (section) to match its dimensions
+    const promptSection = document.querySelector('.generation-prompt-section') as HTMLElement;
+    if (!promptSection) return;
+
+    const sectionRect = promptSection.getBoundingClientRect();
+
+    // Get placeholder descriptions
+    const descriptions: { [key: string]: string } = {
+        'path': 'The hierarchical path from root to this node',
+        'context': 'Compiled contextual information from ancestors, siblings, and parent',
+        'title': 'The title of the current node',
+        'content': 'The current content of the node (if any)',
+        'child_level_name': 'The name of the child level (for branch nodes)',
+        'count': 'The number of items to generate (for list generation)'
+    };
+
+    // Get the actual placeholder value
+    let value: string;
+    switch (placeholder) {
+        case 'path':
+            value = projectManager.getTreeService().getNodePath(selectedNodeId, projectManager.rootNode);
+            break;
+        case 'context':
+            value = projectManager.getContextService().compileNodeContext(selectedNodeId, projectManager.rootNode);
+            break;
+        case 'title':
+            value = node.title;
+            break;
+        case 'content':
+            value = node.content || '';
+            break;
+        case 'child_level_name':
+            value = node.childLevelName || '';
+            break;
+        case 'count':
+            value = '5'; // Default count for demonstration
+            break;
+        default:
+            value = '';
+    }
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'placeholder-overlay';
+    overlay.innerHTML = `
+        <div class="placeholder-content" style="
+            width: ${sectionRect.width}px;
+            height: ${sectionRect.height}px;
+            max-width: none;
+            max-height: none;
+            position: absolute;
+            top: ${sectionRect.top + window.scrollY}px;
+            left: ${sectionRect.left + window.scrollX}px;
+        ">
+            <div class="placeholder-header">
+                <h3>{{${placeholder}}}</h3>
+                <button class="placeholder-close-btn" type="button">&times;</button>
+            </div>
+            <div class="placeholder-body">
+                <div class="placeholder-description">
+                    ${descriptions[placeholder] || 'Placeholder value'}
+                </div>
+                <div class="placeholder-value ${value ? '' : 'placeholder-empty'}">
+                    ${value || '(empty)'}
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add close functionality
+    const closeBtn = overlay.querySelector('.placeholder-close-btn');
+    
+    const closeOverlay = () => {
+        overlay.remove();
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeOverlay);
+    }
+
+    // Close on overlay background click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeOverlay();
+        }
+    });
+
+    // Close on Escape key
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            closeOverlay();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Add to DOM
+    document.body.appendChild(overlay);
+}
+
 export function setupEventListeners() {
     const mainContent = getElementById('main-content');
 
@@ -855,6 +960,15 @@ export function setupEventListeners() {
 
         const button = e.target.closest('button');
         if (!button) return;
+
+        // Handle placeholder buttons
+        if (button.classList.contains('placeholder-btn')) {
+            const placeholder = button.getAttribute('data-placeholder');
+            if (placeholder && projectManager && selectedNodeId) {
+                showPlaceholderOverlay(placeholder, projectManager, selectedNodeId);
+            }
+            return;
+        }
 
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
@@ -1008,6 +1122,58 @@ export function setupEventListeners() {
                     });
                 }
                 break;
+
+            case 'import-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Create file input element
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.json';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.addEventListener('change', (e) => {
+                        const target = e.target as HTMLInputElement;
+                        const file = target.files?.[0];
+                        if (!file) return;
+                        
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const content = event.target?.result as string;
+                                const importData = JSON.parse(content);
+                                
+                                // Import and merge the node data
+                                if (projectManager) {
+                                    importNodeData(projectManager, node.id, importData);
+                                    
+                                    // Refresh the UI
+                                    renderProjectUI(projectManager);
+                                }
+                                
+                                alert('Import completed successfully!');
+                            } catch (error) {
+                                console.error('Import failed:', error);
+                                alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                            }
+                        };
+                        
+                        reader.onerror = () => {
+                            alert('Failed to read file. Please try again.');
+                        };
+                        
+                        reader.readAsText(file);
+                    });
+                    
+                    // Trigger file selection
+                    document.body.appendChild(fileInput);
+                    fileInput.click();
+                    document.body.removeChild(fileInput);
+                }
+                break;
                 
             case 'node-generate-btn':
                 // Prevent concurrent operations
@@ -1024,7 +1190,12 @@ export function setupEventListeners() {
                     operations: { message: 'Preparing content generation...', current: 0, total: 1 }
                 });
                 
-                projectManager.generateNodeContent(node.id);
+                // Get the count from the input
+                const countInput = getElementById('generation-count-input') as HTMLInputElement;
+                const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
+                
+                // Use GenerationService directly
+                projectManager.getGenerationService().generateNodeContent(node.id, count);
                 break;
 
 
@@ -1046,21 +1217,7 @@ export function setupEventListeners() {
                 }
                 break;
 
-            case 'node-summarize-btn':
-                // Prevent concurrent operations
-                if (projectManager.isAnyNodeGenerating()) {
-                    alert('Another generation operation is already in progress. Please wait for it to complete.');
-                    return;
-                }
-                
-                // Show overlay and progress bars immediately to provide instant feedback
-                showGenerationOverlay();
-                updateProgressUI({
-                    operations: { message: 'Preparing summarization...', current: 0, total: 1 }
-                });
-                
-                projectManager.summarizeNodeContent(node.id);
-                break;
+
 
 
 
@@ -1096,7 +1253,8 @@ export function setupEventListeners() {
                     operations: { message: operationMessage, current: 0, total: 1 }
                 });
         
-                projectManager.generateAllChildrenContent(node.id, includeContent, recursive);
+                // Use GenerationService directly
+                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive);
                 break;
 
 
@@ -1160,9 +1318,16 @@ export function setupEventListeners() {
             const textarea = e.target as HTMLTextAreaElement;
             node.content = textarea.value;
             projectManager.saveToStorage().catch(console.error);
-        } else if (e.target.id === 'node-summary') {
-            node.summary = (e.target as HTMLTextAreaElement).value;
+        } else if (e.target.id === 'node-context') {
+            node.context = (e.target as HTMLTextAreaElement).value;
             projectManager.saveToStorage().catch(console.error);
+        } else if (e.target.id === 'generation-count-input') {
+            const countInput = e.target as HTMLInputElement;
+            const count = parseInt(countInput.value, 10);
+            if (!isNaN(count) && count >= 1 && count <= 20) {
+                node.generationChildrenCount = count;
+                projectManager.saveToStorage().catch(console.error);
+            }
         }
     });
 
@@ -1546,4 +1711,99 @@ function renderMultiProjectTree() {
             }
         });
     });
-} 
+}
+
+/**
+ * Import node data from JSON export and merge it into the specified target node
+ */
+function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
+    const targetNode = projectManager.findNodeById(targetNodeId);
+    if (!targetNode) {
+        throw new Error('Target node not found');
+    }
+
+    // Validate import data structure
+    if (!importData || typeof importData !== 'object') {
+        throw new Error('Invalid import data: Expected JSON object');
+    }
+
+    if (!importData.title) {
+        throw new Error('Invalid import data: Missing title field');
+    }
+
+    // Import the node content
+    if (importData.content !== undefined) {
+        targetNode.content = importData.content;
+    }
+
+    if (importData.context !== undefined) {
+        targetNode.context = importData.context;
+    }
+
+    if (importData.generationPrompt !== undefined) {
+        targetNode.generationPrompt = importData.generationPrompt;
+    }
+
+    // Option 1: Replace the current node's children (destructive)
+    // Option 2: Merge children (non-destructive)
+    // For now, let's ask the user what they want to do
+    if (importData.children && Array.isArray(importData.children) && importData.children.length > 0) {
+        const hasExistingChildren = targetNode.children.length > 0;
+        
+        if (hasExistingChildren) {
+            const userChoice = confirm(
+                `The target node "${targetNode.title}" already has ${targetNode.children.length} children.\n\n` +
+                `Click OK to REPLACE all existing children with imported ones.\n` +
+                `Click Cancel to APPEND imported children to existing ones.`
+            );
+            
+            if (userChoice) {
+                // Replace: Remove all existing children first
+                targetNode.children.forEach(child => {
+                    projectManager.removeNode(child.id);
+                });
+            }
+        }
+        
+        // Import children recursively
+        importData.children.forEach((childData: any, index: number) => {
+            importChildNode(projectManager, targetNode.id, childData, index);
+        });
+    }
+
+    // Save the project
+    projectManager.saveToStorage().catch(console.error);
+}
+
+/**
+ * Recursively import a child node and its descendants
+ */
+function importChildNode(projectManager: ProjectManager, parentId: string, childData: any, index: number): void {
+    if (!childData.title) {
+        console.warn(`Skipping child node at index ${index}: Missing title`);
+        return;
+    }
+
+    // Create the child node
+    const newNode = projectManager.addNode(childData.title, parentId);
+
+    // Set node properties
+    if (childData.content !== undefined) {
+        newNode.content = childData.content;
+    }
+
+    if (childData.context !== undefined) {
+        newNode.context = childData.context;
+    }
+
+    if (childData.generationPrompt !== undefined) {
+        newNode.generationPrompt = childData.generationPrompt;
+    }
+
+    // Recursively import children
+    if (childData.children && Array.isArray(childData.children)) {
+        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+            importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
+        });
+    }
+}

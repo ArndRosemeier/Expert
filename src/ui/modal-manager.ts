@@ -279,7 +279,7 @@ function exportNodeForReimport(node: DocumentNode): string {
     const exportObject = {
         title: node.title,
         content: node.content,
-        summary: node.summary,
+        context: node.context,
         generationPrompt: node.generationPrompt,
         level: node.level,
         children: node.children.map(child => exportNodeForReimportRecursive(child))
@@ -292,7 +292,7 @@ function exportNodeForReimportRecursive(node: DocumentNode): any {
     return {
         title: node.title,
         content: node.content,
-        summary: node.summary,
+        context: node.context,
         generationPrompt: node.generationPrompt,
         level: node.level,
         children: node.children.map(child => exportNodeForReimportRecursive(child))
@@ -409,9 +409,9 @@ function generateHtmlHierarchyRecursive(node: DocumentNode, level: number): stri
     <div class="level-${level}">
         <${headingTag}>${escapeHtml(node.title)}</${headingTag}>`;
 
-    if (node.summary && node.summary.trim()) {
+    if (node.context && node.context.trim()) {
         html += `
-        <div class="summary">${formatContentAsHtml(node.summary)}</div>`;
+        <div class="summary">${formatContentAsHtml(node.context)}</div>`;
     }
 
     if (node.content && node.content.trim()) {
@@ -447,8 +447,8 @@ function generateMarkdownHierarchy(node: DocumentNode, level: number = 1): strin
     const headingPrefix = '#'.repeat(level);
     let markdown = `${headingPrefix} ${node.title}\n\n`;
 
-    if (node.summary && node.summary.trim()) {
-        markdown += `*${node.summary}*\n\n`;
+    if (node.context && node.context.trim()) {
+        markdown += `*${node.context}*\n\n`;
     }
 
     if (node.content && node.content.trim()) {
@@ -482,8 +482,8 @@ function generatePlainTextHierarchy(node: DocumentNode, level: number = 0): stri
     const indent = '  '.repeat(level);
     let text = `${indent}${node.title}\n`;
 
-    if (node.summary && node.summary.trim()) {
-        text += `${indent}Summary: ${node.summary}\n`;
+    if (node.context && node.context.trim()) {
+        text += `${indent}Context: ${node.context}\n`;
     }
 
     if (node.content && node.content.trim()) {

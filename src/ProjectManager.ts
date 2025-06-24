@@ -8,6 +8,14 @@ import { QualityCriterion, CreatorPayload } from './types';
 import { StorageService, IStorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import * as state from './state';
+import { 
+    GenerationService, 
+    TreeService, 
+    ContextService, 
+    PromptService, 
+    GenerationController, 
+    ProjectPersistenceService 
+} from './project';
 
 type ProjectManagerEvents = {
     'project-loaded': [];
@@ -42,15 +50,23 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
     private selectedNodeId: string | null = null;
-    private isGeneratingAllChildren: boolean = false;
-    private abortRequested: boolean = false;
-    private currentGenerationContext: {
-        type: 'single' | 'summary' | 'bulk';
-        nodeIds: string[];
-        abortController: AbortController;
-    } | null = null;
+    // Legacy generation state removed - managed by GenerationService
     public _listenersSetup: boolean = false;
     private static storageService: Promise<IStorageService> | null = null;
+    
+    // Extracted services
+    private treeService: TreeService;
+    private contextService: ContextService;
+    private promptService: PromptService;
+    private generationController: GenerationController;
+    private generationService: GenerationService;
+    
+    // Service accessors for UI
+    public getGenerationService(): GenerationService { return this.generationService; }
+    public getTreeService(): TreeService { return this.treeService; }
+    public getContextService(): ContextService { return this.contextService; }
+    public getPromptService(): PromptService { return this.promptService; }
+    public getGenerationController(): GenerationController { return this.generationController; }
 
     constructor(
         projectTitle: string, 
@@ -71,6 +87,26 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             throw new Error(`Invalid template: "${this.template.name}" has no hierarchy levels defined.`);
         }
         this.rootNode = new DocumentNode(0, this.projectTitle, null, this.template.hierarchyLevels);
+
+        // Initialize extracted services
+        this.treeService = new TreeService();
+        this.contextService = new ContextService(this.treeService);
+        this.promptService = new PromptService(this.settingsManager);
+        this.generationController = new GenerationController(this.loopOrchestrator, this.treeService);
+        
+        // Initialize GenerationService with all dependencies
+        this.generationService = new GenerationService({
+            treeService: this.treeService,
+            contextService: this.contextService,
+            promptService: this.promptService,
+            generationController: this.generationController,
+            loopOrchestrator: this.loopOrchestrator,
+            settingsManager: this.settingsManager,
+            openRouterClient: this.openRouterClient,
+            eventEmitter: this,
+            saveToStorage: () => this.saveToStorage(),
+            rootNode: this.rootNode
+        });
 
         // Ensure we have a valid default profile set globally
         const defaultProfile = this.settingsManager.getProfile('default');
@@ -123,18 +159,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @returns The found DocumentNode, or null if not found.
      */
     public findNodeById(id: string, startNode: DocumentNode = this.rootNode): DocumentNode | null {
-        if (startNode.id === id) {
-            return startNode;
-        }
-
-        for (const child of startNode.children) {
-            const found = this.findNodeById(id, child);
-            if (found) {
-                return found;
-            }
-        }
-
-        return null;
+        // Delegate to TreeService
+        return this.treeService.findNodeById(id, startNode);
     }
 
     /**
@@ -144,17 +170,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @returns The newly created DocumentNode.
      */
     public addNode(title: string, parentId: string | null = null): DocumentNode {
-        const parent = parentId ? this.findNodeById(parentId) : this.rootNode;
-        if (!parent) {
-            throw new Error(`Parent node with ID "${parentId}" not found.`);
-        }
-
-        const newLevel = parent.level + 1;
-        const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
-        
-        parent.children.push(newNode);
-        
-        return newNode;
+        // Delegate to TreeService
+        return this.treeService.addNode(title, parentId, this.rootNode);
     }
 
     /**
@@ -163,24 +180,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @returns True if the node was found and removed, otherwise false.
      */
     public removeNode(id: string): boolean {
-        const nodeToRemove = this.findNodeById(id);
-        if (!nodeToRemove || !nodeToRemove.parentId) {
-            // Cannot remove the root node or a node without a parent
-            return false;
-        }
-
-        const parentNode = this.findNodeById(nodeToRemove.parentId);
-        if (!parentNode) {
-            return false; // Should not happen if parentId is valid
-        }
-
-        const index = parentNode.children.findIndex(child => child.id === id);
-        if (index > -1) {
-            parentNode.children.splice(index, 1);
-            return true;
-        }
-
-        return false;
+        // Delegate to TreeService
+        return this.treeService.removeNode(id, this.rootNode);
     }
 
     /**
@@ -193,32 +194,49 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private compileNodeContext(nodeId: string): string {
         const targetNode = this.findNodeById(nodeId);
 
-        // A node's context is primarily defined by its parent and preceding siblings.
-        if (!targetNode || !targetNode.parentId) {
-            return '';
-        }
-
-        const parent = this.findNodeById(targetNode.parentId);
-        if (!parent) {
+        if (!targetNode) {
             return '';
         }
 
         const contextParts: string[] = [];
 
-        // 1. Add the parent's content (the outline). This is the most critical context.
-        if (parent.content) {
-            const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
-            contextParts.push(`CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
+        // 1. Add inherited context from all ancestors (root to immediate parent)
+        const ancestralContext = this.collectAncestralContext(targetNode);
+        if (ancestralContext.length > 0) {
+            contextParts.push("ANCESTRAL CONTEXT (inherited from hierarchy):");
+            contextParts.push(ancestralContext.join('\n\n'));
         }
 
-        // 2. Add the list of all sibling titles to give a sense of scope.
+        // 2. Add the current node's own context if it exists
+        if (targetNode.context && targetNode.context.trim()) {
+            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
+            contextParts.push(`CURRENT NODE CONTEXT (${nodeLevelName}: "${targetNode.title}"):\n---\n${targetNode.context}\n---`);
+        }
+
+        // Only continue with parent/sibling context if node has a parent
+        if (!targetNode.parentId) {
+            return contextParts.join('\n\n====================\n\n');
+        }
+
+        const parent = this.findNodeById(targetNode.parentId);
+        if (!parent) {
+            return contextParts.join('\n\n====================\n\n');
+        }
+
+        // 3. Add the parent's content (the outline). This is the most critical structural context.
+        if (parent.content) {
+            const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
+            contextParts.push(`STRUCTURAL CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
+        }
+
+        // 4. Add the list of all sibling titles to give a sense of scope.
         if (parent.children.length > 1) {
             const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
             const siblingTitles = parent.children.map(child => `- ${child.title} ${child.id === nodeId ? '(This node)' : ''}`).join('\n');
-            contextParts.push(`The following "${nodeLevelName}" nodes exist at this level:\n${siblingTitles}`);
+            contextParts.push(`SIBLING SCOPE (${nodeLevelName} nodes at this level):\n${siblingTitles}`);
         }
 
-        // 3. Add full content of preceding siblings that have already been generated.
+        // 5. Add full content of preceding siblings that have already been generated.
         const precedingSiblingContent: string[] = [];
         const siblingIndex = parent.children.findIndex(child => child.id === targetNode.id);
 
@@ -239,15 +257,38 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         return contextParts.join('\n\n====================\n\n');
     }
 
-    public getNodePath(nodeId: string): string {
-        let path = [];
-        let currentNode = this.findNodeById(nodeId);
-        while(currentNode) {
-            const levelName = currentNode.template[currentNode.level] || `Level ${currentNode.level}`;
-            path.unshift(`${levelName}: ${currentNode.title}`);
+    /**
+     * Collects context from all ancestors of a node, from root down to immediate parent.
+     * This creates an inheritance chain where child nodes benefit from all ancestral context.
+     */
+    private collectAncestralContext(targetNode: DocumentNode): string[] {
+        const contextChain: string[] = [];
+        
+        // Build the path from root to parent (excluding the target node itself)
+        const ancestorPath: DocumentNode[] = [];
+        let currentNode = targetNode.parentId ? this.findNodeById(targetNode.parentId) : null;
+        
+        // Walk up to build the ancestor chain
+        while (currentNode) {
+            ancestorPath.unshift(currentNode); // Add to front to get root-to-parent order
             currentNode = currentNode.parentId ? this.findNodeById(currentNode.parentId) : null;
         }
-        return path.join(' => ');
+
+        // Process each ancestor's context
+        ancestorPath.forEach((ancestor, index) => {
+            if (ancestor.context && ancestor.context.trim()) {
+                const levelName = ancestor.template[ancestor.level] || `Level ${ancestor.level}`;
+                const depth = index === 0 ? 'ROOT' : `LEVEL ${index}`;
+                contextChain.push(`${depth} (${levelName}: "${ancestor.title}"):\n---\n${ancestor.context}\n---`);
+            }
+        });
+
+        return contextChain;
+    }
+
+    public getNodePath(nodeId: string): string {
+        // Delegate to TreeService
+        return this.treeService.getNodePath(nodeId, this.rootNode);
     }
 
     /**
@@ -296,61 +337,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         return filledPrompt;
     }
 
-    /**
-     * Abort any ongoing generation operations
-     */
-    public abortCurrentGeneration(): void {
-        this.abortRequested = true;
-        
-        if (this.currentGenerationContext) {
-            this.currentGenerationContext.abortController.abort();
-        }
-        
-        // Abort the loop orchestrator
-        this.loopOrchestrator.requestStop();
-        
-        // Mark all generating nodes as no longer generating
-        this.clearAllGeneratingFlags();
-        
-        // Emit appropriate events based on what was running
-        if (this.currentGenerationContext) {
-            for (const nodeId of this.currentGenerationContext.nodeIds) {
-                const node = this.findNodeById(nodeId);
-                if (node) {
-                    this.emit('nodeGenerationAborted', { nodeId, node });
-                }
-            }
-        }
-        
-        // Clear generation context
-        this.currentGenerationContext = null;
-        this.isGeneratingAllChildren = false;
-        
-        // Clear progress
-        this.emit('high-level-progress', { nodeId: '', message: '', current: 0, total: 0 });
-    }
+    // Method removed - use GenerationService directly
 
-    /**
-     * Check if any generation is currently running and can be aborted
-     */
-    public canAbortGeneration(): boolean {
-        return this.currentGenerationContext !== null || this.isAnyNodeGenerating();
-    }
+    // Method removed - use GenerationService directly
 
-    /**
-     * Get information about the current generation for UI display
-     */
-    public getCurrentGenerationInfo(): { type: string; nodeCount: number; canAbort: boolean } | null {
-        if (!this.currentGenerationContext) {
-            return null;
-        }
-        
-        return {
-            type: this.currentGenerationContext.type,
-            nodeCount: this.currentGenerationContext.nodeIds.length,
-            canAbort: true
-        };
-    }
+    // Method removed - use GenerationService directly
 
     private clearAllGeneratingFlags(): void {
         const clearNode = (node: DocumentNode): void => {
@@ -360,603 +351,39 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         clearNode(this.rootNode);
     }
 
-    /**
-     * Filters criteria based on node type (leaf vs outline/branch)
-     * @param criteria The full list of criteria
-     * @param isLeafNode Whether the node is a leaf node
-     * @returns Filtered criteria appropriate for the node type
-     */
-    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
-        return criteria.filter(criterion => {
-            // If both outline and leaf are undefined or both are true, include the criterion
-            if (criterion.outline === undefined && criterion.leaf === undefined) {
-                return true; // Legacy criteria - apply to all
-            }
-            
-            // For leaf nodes, include criteria where leaf is true
-            if (isLeafNode) {
-                return criterion.leaf === true;
-            }
-            
-            // For outline/branch nodes, include criteria where outline is true
-            return criterion.outline === true;
-        });
-    }
+    // filterCriteriaForNodeType method removed - available in GenerationService
 
-    public async generateNodeContent(nodeId: string, count: number = 5, isChildGeneration: boolean = false): Promise<void> {
-        const node = this.findNodeById(nodeId);
-        if (!node) { throw new Error(`Node not found: ${nodeId}`); }
+    // Method removed - use GenerationService directly
 
-        // Check if already generating (but allow during bulk operations)
-        if (!isChildGeneration && this.canAbortGeneration()) {
-            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
-        }
+    // Legacy runContentLoop method removed - functionality moved to GenerationService
 
-        // Set up generation context only if not part of bulk operation
-        if (!isChildGeneration) {
-            this.abortRequested = false;
-            this.currentGenerationContext = {
-                type: 'single',
-                nodeIds: [nodeId],
-                abortController: new AbortController()
-            };
-        }
+    // Method removed - use GenerationService directly
 
-        const profile = this.settingsManager.getLastUsedProfile();
-        
-        // Fail loudly if the node is in an invalid state for generation.
-        if (!profile || !profile.criteria || profile.criteria.length === 0) {
-            this.currentGenerationContext = null;
-            throw new Error(`Cannot generate content for node "${node.title}" (ID: ${nodeId}). The active profile is either missing, has no criteria defined, or could not be loaded.`);
-        }
-
-        // Get the raw prompt from the node, or get the default raw prompt if it's not set.
-        const rawPrompt = node.generationPrompt || this.getRawGenerationPrompt(node);
-
-        // Fill the placeholders just-in-time for generation.
-        // When generating children as part of a larger job, the count is not used.
-        const filledPrompt = this.fillGenerationPrompt(rawPrompt, node, isChildGeneration ? undefined : count);
-
-        const loopInput: LoopInput = {
-            prompt: filledPrompt,
-            criteria: this.filterCriteriaForNodeType(profile.criteria, node.isLeaf),
-            maxIterations: profile.maxIterations,
-            response: '' // Initial response is empty
-        };
-
-        const contextNodeId = isChildGeneration ? node.parentId : nodeId;
-        try {
-            await this.runContentLoop(nodeId, loopInput, contextNodeId || undefined, isChildGeneration);
-        } catch (error) {
-            // Only clear context if this was a single generation (not part of bulk)
-            if (!isChildGeneration) {
-                this.currentGenerationContext = null;
-            }
-            throw error;
-        }
-    }
-
-    private async runContentLoop(nodeId: string, loopInput: LoopInput, contextNodeId?: string, isChildGeneration: boolean = false): Promise<void> {
-        const node = this.findNodeById(nodeId);
-        if (!node) {
-            console.error(`Node not found in runContentLoop: ${nodeId}`);
-            return;
-        }
-
-        const profile = this.settingsManager.getLastUsedProfile();
-        if (profile && profile.selectedModels) {
-            this.openRouterClient.setSelectedModels(profile.selectedModels);
-        } else {
-            // This case should be prevented by the check in generateNodeContent, but as a safeguard:
-            const errorMessage = `Could not find a valid active profile with models for node ${node.title}. Cannot run content loop.`;
-            this.emit('error', errorMessage);
-            console.error(errorMessage);
-            return;
-        }
-
-        node.isGenerating = true;
-        this.emit('nodeGenerationStarted', { nodeId, node: node }); // Update UI to show spinner
-        
-        // Start a new generation session
-        const sessionId = node.startGenerationSession(loopInput.prompt);
-        let currentIterationContent: string | null = null;
-        let currentIterationRatings: Rating[] = [];
-        
-        // Subscribe to progress updates from the orchestrator
-        const onProgress = (progress: LoopProgress) => {
-            // Check for abort before processing progress
-            if (this.abortRequested) {
-                return;
-            }
-            
-            if (progress.type === 'creator') {
-                const payload = progress.payload as CreatorPayload;
-                currentIterationContent = payload.response;
-                
-                // Live-update the content text area as the creator works, but only if not in bulk mode
-                // During bulk operations, we don't want to interfere with the selected node's display
-                if (!this.isGeneratingAllChildren) {
-                    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                    if (contentTextArea && document.activeElement !== contentTextArea) {
-                        contentTextArea.value = payload.response;
-                    }
-                }
-            } else if (progress.type === 'rater') {
-                const payload = progress.payload as RaterProgressPayload;
-                if (payload.rating && payload.rating.criterion) {
-                    // Collect ratings for this iteration
-                    const existingRatingIndex = currentIterationRatings.findIndex(
-                        r => r.criterion === payload.rating.criterion
-                    );
-                    if (existingRatingIndex >= 0) {
-                        currentIterationRatings[existingRatingIndex] = payload.rating;
-                    } else {
-                        currentIterationRatings.push(payload.rating);
-                    }
-                    
-                    // If we have all ratings for this iteration, save it
-                    if (currentIterationRatings.length === loopInput.criteria.length && currentIterationContent) {
-                        node.addGenerationIteration(
-                            progress.iteration, 
-                            currentIterationContent, 
-                            [...currentIterationRatings]
-                        );
-                        // Reset for next iteration
-                        currentIterationRatings = [];
-                    }
-                }
-            }
-            
-            // When running a loop on a child node as part of "Generate All",
-            // we want to emit the progress under the parent's ID so the UI can display it.
-            this.emit('loop-progress', { nodeId: contextNodeId || nodeId, progress });
-        };
-
-        // Handle abort events from orchestrator
-        const onAborted = (message: string) => {
-            console.log(`Generation aborted for node ${nodeId}: ${message}`);
-        };
-        
-        this.loopOrchestrator.on('progress', onProgress);
-        this.loopOrchestrator.on('aborted', onAborted);
-
-        try {
-            const result = await this.loopOrchestrator.runLoop(loopInput);
-            
-            if (result.aborted || this.abortRequested) {
-                // Handle aborted generation
-                node.endGenerationSession(false, currentIterationContent || '');
-                if (currentIterationContent) {
-                    node.setContentFromGeneration(currentIterationContent);
-                }
-                this.emit('nodeGenerationAborted', { nodeId, node });
-            } else {
-                // Handle successful completion
-                node.endGenerationSession(result.success, result.finalResponse);
-                node.setContentFromGeneration(result.finalResponse);
-                node.generationHistory = result.history;
-                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-
-                // Automatic summarization disabled since we now use direct content for context
-                // Summaries can still be generated manually via the UI if needed for export/review
-                // if (!this.isGeneratingAllChildren && !this.abortRequested) {
-                //     await this.summarizeNodeContent(nodeId);
-                // }
-            }
-
-        } catch (error: any) {
-            console.error(`Error running content loop for node ${nodeId}:`, error);
-            
-            // End the generation session with failure
-            if (node.currentGenerationSession) {
-                node.endGenerationSession(false, currentIterationContent || '');
-            }
-            
-            if (error.message === 'Generation aborted by user' || this.abortRequested) {
-                this.emit('nodeGenerationAborted', { nodeId, node });
-            } else {
-                const errorMessage = error.message || "An unexpected error occurred during content generation.";
-                this.emit('error', errorMessage);
-                this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
-            }
-        } finally {
-            node.isGenerating = false;
-            this.loopOrchestrator.off('progress', onProgress);
-            this.loopOrchestrator.off('aborted', onAborted);
-            // Only clear context if this was a single generation (not part of bulk)
-            if (!isChildGeneration) {
-                this.currentGenerationContext = null;
-            }
-            await this.saveToStorage();
-        }
-    }
-
-    /**
-     * Parses the content of a node (expected to be a bulleted list)
-     * and creates child nodes for each item.
-     * @param nodeId The ID of the parent node containing the outline.
-     */
-    public async createChildrenFromOutline(nodeId: string): Promise<void> {
-        const node = this.findNodeById(nodeId);
-        if (!node || !node.content) {
-            this.emit('error', `Cannot create children for node ${nodeId}: No content found.`);
-            return;
-        }
-
-        this.emit('high-level-progress', { nodeId, message: 'Reading outline and generating titles...', current: 0, total: 1 });
-
-        // Clear existing children to allow for regeneration
-        node.children = [];
-
-        const prompts = this.settingsManager.getPrompts();
-        const context = this.compileNodeContext(nodeId);
-        const childLevelName = node.childLevelName || 'item';
-
-        const prompt = prompts.create_children_from_outline_user
-            .replace('{{outline_content}}', node.content)
-            .replace('{{child_level_name}}', childLevelName)
-            .replace('{{context}}', context);
-
-        try {
-            // Using the 'creator' model as it's for generating new content/structure
-            const response = await this.openRouterClient.chat('creator', prompt);
-            const titles = this.parseBulletedList(response);
-
-            if (titles.length === 0) {
-                this.emit('error', `The AI did not return a valid list of titles from the outline.`);
-                return;
-            }
-
-            titles.forEach(title => {
-                if (typeof title === 'string') {
-                    this.addNode(title, nodeId);
-                }
-            });
-
-            await this.saveToStorage();
-            // This event is listened to by the UI to trigger a full re-render.
-            this.emit('nodeGenerationComplete', { nodeId, success: true, node: node });
-        } catch(error) {
-            console.error('Failed to create children from outline via LLM:', error);
-            this.emit('error', 'The AI failed to process the outline. Please try again.');
-        }
-    }
-
-    /**
-     * Creates children from outline (if needed) and optionally generates content for all children.
-     * This combines the functionality of createChildrenFromOutline and generateAllChildrenContent.
-     * @param nodeId The ID of the parent node.
-     * @param includeContent Whether to generate content for the children (default: true).
-     * @param recursive Whether to recursively generate children down to max expand level (default: false).
-     */
-    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false): Promise<void> {
-        let node = this.findNodeById(nodeId);
-        if (!node) {
-            this.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
-            return;
-        }
-
-        // Check for existing generation FIRST, before any operations
-        // Allow recursive calls if we're already in a bulk operation
-        if (this.canAbortGeneration() && !this.isGeneratingAllChildren) {
-            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
-        }
-
-        // If node has no content, offer to generate it first
-        if (!node.content || node.content.trim() === '') {
-            if (includeContent) {
-                // Auto-generate content for the parent node first
-                this.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
-                
-                try {
-                    await this.generateNodeContent(nodeId, 5, false);
-                    
-                    // Refresh node reference after content generation
-                    const updatedNode = this.findNodeById(nodeId);
-                    if (!updatedNode || !updatedNode.content || updatedNode.content.trim() === '') {
-                        this.emit('error', `Failed to generate content for "${node.title}". Cannot proceed with creating children.`);
-                        return;
-                    }
-                    // Update node reference for subsequent operations
-                    node = updatedNode;
-                } catch (error: any) {
-                    if (error.message === 'Generation aborted by user') {
-                        // This was aborted at the single generation level, just return
-                        return;
-                    }
-                    this.emit('error', `Failed to generate content for "${node.title}": ${error.message}`);
-                    return;
-                }
-            } else {
-                this.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first, or enable "Include content" to auto-generate it.`);
-                return;
-            }
-        }
-
-        // Set up bulk generation context only for top-level call
-        if (!this.isGeneratingAllChildren) {
-            this.abortRequested = false;
-            this.isGeneratingAllChildren = true;
-            
-            // Collect all nodes that will be processed for abort tracking
-            const collectChildNodes = (node: DocumentNode): DocumentNode[] => {
-                const nodes: DocumentNode[] = [];
-                for (const child of node.children) {
-                    nodes.push(child);
-                    if (recursive) {
-                        nodes.push(...collectChildNodes(child));
-                    }
-                }
-                return nodes;
-            };
-            
-            const nodesToProcess = collectChildNodes(node);
-            this.currentGenerationContext = {
-                type: 'bulk',
-                nodeIds: nodesToProcess.map(n => n.id),
-                abortController: new AbortController()
-            };
-        }
-
-        // Step 1: Create children from outline if they don't exist
-        if (node.children.length === 0) {
-            this.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles...', current: 0, total: 1 });
-
-            const prompts = this.settingsManager.getPrompts();
-            const context = this.compileNodeContext(nodeId);
-            const childLevelName = node.childLevelName || 'item';
-
-            const prompt = prompts.create_children_from_outline_user
-                .replace('{{outline_content}}', node.content)
-                .replace('{{child_level_name}}', childLevelName)
-                .replace('{{context}}', context);
-
-            try {
-                // Using the 'creator' model as it's for generating new content/structure
-                const response = await this.openRouterClient.chat('creator', prompt);
-                const titles = this.parseBulletedList(response);
-
-                if (titles.length === 0) {
-                    this.emit('error', `The AI did not return a valid list of titles from the outline.`);
-                    this.isGeneratingAllChildren = false;
-                    return;
-                }
-
-                titles.forEach(title => {
-                    if (typeof title === 'string') {
-                        this.addNode(title, nodeId);
-                    }
-                });
-
-                await this.saveToStorage();
-            } catch(error) {
-                console.error('Failed to create children from outline via LLM:', error);
-                this.emit('error', 'The AI failed to process the outline. Please try again.');
-                this.isGeneratingAllChildren = false;
-                return;
-            }
-        } else {
-            this.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
-        }
-
-        // Step 2: Generate content for all children (if requested)
-        if (includeContent) {
-        const children = node.children;
-            // Filter to only children that don't have content yet
-            const childrenNeedingContent = children.filter(child => !child.content || child.content.trim() === '');
-            const total = childrenNeedingContent.length;
-
-            if (total > 0) {
-        for (let i = 0; i < total; i++) {
-                    const child = childrenNeedingContent[i];
-                    
-                    // Check for abort before processing each child
-                    if (this.abortRequested) {
-                        break;
-                    }
-                    
-            this.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
-            
-            try {
-                        // No need to pass count here, as these should be leaf or sub-branch nodes
-                        // where the content is prose or a more detailed outline.
-                        await this.generateNodeContent(child.id, 5, true);
-                        
-                        // Check for abort after generation
-                        if (this.abortRequested) {
-                            break;
-                        }
-                        
-                        // Automatic summarization disabled since we now use direct content for context
-                        // await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
-                    } catch (error: any) {
-                        if (error.message === 'Generation aborted by user' || this.abortRequested) {
-                            break;
-                        }
-                        console.error(`Failed to generate content for child ${child.title}:`, error);
-                        // Continue with next child instead of failing completely
-                    }
-                }
-            } else {
-                this.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
-            }
-        }
-
-        // Step 3: If recursive is enabled, recursively generate children for each child node
-        if (recursive) {
-            const children = node.children;
-            const maxExpandLevel = this.template.hierarchyLevels.length - 1; // Max level based on hierarchy
-            // Filter to only children that can be expanded (within hierarchy limit)
-            // Don't require content here - the generateAllChildrenContent call will handle content logic
-            const childrenToExpand = children.filter(child => 
-                child.level < maxExpandLevel
-            );
-            
-            for (let i = 0; i < childrenToExpand.length; i++) {
-                const child = childrenToExpand[i];
-                
-                // Check for abort before recursive processing
-                if (this.abortRequested) {
-                    break;
-                }
-                
-                this.emit('high-level-progress', { 
-                    nodeId, 
-                    message: `Recursively generating children for: ${child.title}`, 
-                    current: i + 1, 
-                    total: childrenToExpand.length 
-                });
-                
-                try {
-                    // Recursively call generateAllChildrenContent on each child
-                    // Pass includeContent and recursive flags down
-                    await this.generateAllChildrenContent(child.id, includeContent, recursive);
-                } catch (error: any) {
-                    if (error.message === 'Generation aborted by user' || this.abortRequested) {
-                        break;
-                    }
-                    console.error(`Failed to recursively generate children for ${child.title}:`, error);
-                    // Continue with next child
-                }
-            }
-        }
-
-        // Only handle completion/cleanup for top-level call
-        if (this.currentGenerationContext?.type === 'bulk') {
-            try {
-                if (this.abortRequested) {
-                    this.emit('nodeGenerationAborted', { nodeId, node });
-                } else {
-                    // Clear progress bars and emit completion event
-                    this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-                    this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-                    
-                    // Small delay to ensure all async operations complete, then trigger UI cleanup
-                    setTimeout(() => {
-                        this.emit('project-loaded');
-                    }, 100);
-                }
-            } finally {
-                this.isGeneratingAllChildren = false; // Reset flag
-                this.currentGenerationContext = null;
-            }
-        }
-        
-
-    }
+    // Method removed - use GenerationService directly
     
-    /**
-     * Generates a summary for a given node's content using an LLM call.
-     * @param nodeId The ID of the node to summarize.
-     * @param suppressProgressClearing Optional flag to suppress progress clearing (used during bulk operations).
-     */
-    public async summarizeNodeContent(nodeId: string, suppressProgressClearing: boolean = false): Promise<void> {
-        const node = this.findNodeById(nodeId);
-        if (!node) {
-            this.emit('error', `Could not find node with ID ${nodeId} to summarize.`);
-            return;
-        }
+    // Method removed - use GenerationService directly
 
-        if (!node.content || node.content.trim() === '') {
-            this.emit('error', 'There is no content to summarize. Please generate or write content first.');
-            return;
-        }
-
-        // Check if already generating (unless this is a bulk operation)
-        if (!suppressProgressClearing && this.canAbortGeneration()) {
-            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
-        }
-
-        // Set up generation context for non-bulk operations
-        if (!suppressProgressClearing) {
-            this.abortRequested = false;
-            this.currentGenerationContext = {
-                type: 'summary',
-                nodeIds: [nodeId],
-                abortController: new AbortController()
-            };
-        }
-
-        // Only emit progress events if not suppressed (not during bulk operations)
-        if (!suppressProgressClearing) {
-            this.emit('high-level-progress', { nodeId, message: 'Summarizing content...', current: 0, total: 1 });
-        }
-
-        const prompts = this.settingsManager.getPrompts();
-        const systemPrompt = prompts.summarize_system.replace('{{content}}', node.content);
-
-        try {
-            node.isGenerating = true;
-            if (!suppressProgressClearing) {
-                this.emit('nodeGenerationStarted', { nodeId, node });
-            }
-
-            if (this.abortRequested) {
-                throw new Error('Generation aborted by user');
-            }
-
-            const abortSignal = this.currentGenerationContext?.abortController.signal;
-            const summary = await this.openRouterClient.chat('editor', systemPrompt, abortSignal);
-            
-            if (this.abortRequested) {
-                throw new Error('Generation aborted by user');
-            }
-
-            node.summary = summary;
-            this.emit('nodeSummaryGenerated', { nodeId, summary });
-            await this.saveToStorage();
-
-            if (!suppressProgressClearing) {
-                this.emit('nodeGenerationComplete', { nodeId, success: true, node });
-            }
-
-            // Only clear the progress bar if not suppressed (not during bulk operations)
-            if (!suppressProgressClearing) {
-                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-            }
-        } catch(error: any) {
-            console.error(`Failed to summarize node ${nodeId}:`, error);
-            
-            if (error.message === 'Request was aborted' || error.message === 'Generation aborted by user' || this.abortRequested) {
-                if (!suppressProgressClearing) {
-                    this.emit('nodeGenerationAborted', { nodeId, node });
-                }
-            } else {
-                this.emit('error', `An error occurred while summarizing. Please check the console for details.`);
-                if (!suppressProgressClearing) {
-                    this.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
-                }
-            }
-
-            // Only clear the progress bar if not suppressed (not during bulk operations)
-            if (!suppressProgressClearing) {
-                this.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-            }
-        } finally {
-            node.isGenerating = false;
-            if (!suppressProgressClearing) {
-                this.currentGenerationContext = null;
-            }
-        }
-    }
-
-    private parseBulletedList(text: string): string[] {
-        return text
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('*') || line.startsWith('-'))
-            .map(line => line.substring(1).trim())
-            .filter(line => line.length > 0);
-    }
+    // parseBulletedList method removed - available in GenerationService
 
     /**
-     * Serializes the entire project state to a JSON string.
+     * Serializes the project state to a JSON string.
+     * Only serializes the persistent data, not the services or dependencies.
      * @returns A JSON string representing the project.
      */
     public save(): string {
-        // A custom replacer can be used if we need to handle complex objects,
-        // but for now, the default serialization should be sufficient.
-        return JSON.stringify(this, null, 2);
+        // Create a plain object with only the serializable properties
+        const serializableData = {
+            projectTitle: this.projectTitle,
+            template: {
+                name: this.template.name,
+                hierarchyLevels: this.template.hierarchyLevels,
+                scaffoldingDocuments: this.template.scaffoldingDocuments
+            },
+            rootNode: this.rootNode,
+            selectedNodeId: this.selectedNodeId
+        };
+        
+        return JSON.stringify(serializableData, null, 2);
     }
 
     /**
@@ -1104,6 +531,25 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // with the hydrated version of our saved node tree.
         project.rootNode = this.rehydrateNode(plainObject.rootNode);
         
+        // Update the GenerationService with the new rootNode reference
+        project.generationService = new GenerationService({
+            treeService: project.treeService,
+            contextService: project.contextService,
+            promptService: project.promptService,
+            generationController: project.generationController,
+            loopOrchestrator: project.loopOrchestrator,
+            settingsManager: project.settingsManager,
+            openRouterClient: project.openRouterClient,
+            eventEmitter: project,
+            saveToStorage: () => project.saveToStorage(),
+            rootNode: project.rootNode // Use the updated rootNode
+        });
+        
+        // Restore selectedNodeId if it was saved
+        if (plainObject.selectedNodeId) {
+            project.selectedNodeId = plainObject.selectedNodeId;
+        }
+        
         return project;
     }
 
@@ -1123,7 +569,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Overwrite the other plain properties from the saved data
         Object.assign(node, {
             id: plainNode.id,
-            summary: plainNode.summary || '',
+            context: plainNode.context || plainNode.summary || '', // Handle legacy summary field
             generationPrompt: plainNode.generationPrompt || null,
             generationHistory: plainNode.generationHistory || [],
             generationSessions: plainNode.generationSessions || [],
@@ -1150,11 +596,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @returns true if any node is currently generating, false otherwise
      */
     public isAnyNodeGenerating(): boolean {
-        const checkNode = (node: DocumentNode): boolean => {
-            if (node.isGenerating) return true;
-            return node.children.some(child => checkNode(child));
-        };
-        
-        return checkNode(this.rootNode);
+        // Delegate to TreeService
+        return this.treeService.isAnyNodeGenerating(this.rootNode);
     }
 } 

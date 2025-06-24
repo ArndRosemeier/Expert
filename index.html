@@ -63,6 +63,134 @@
             background-color: #d1d5db;
         }
 
+        /* Placeholder Button Styles */
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+            gap: 1rem;
+        }
+        
+        .prompt-header label {
+            flex-shrink: 0;
+            align-self: center;
+        }
+        
+        .placeholder-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        
+        .placeholder-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background-color: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .placeholder-btn:hover {
+            background-color: #e5e7eb;
+            border-color: #9ca3af;
+        }
+        
+        /* Placeholder Overlay Styles */
+        .placeholder-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+        }
+        
+        .placeholder-content {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid #4f46e5;
+        }
+        
+        .placeholder-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .placeholder-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        
+        .placeholder-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #6b7280;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+            line-height: 1;
+        }
+        
+        .placeholder-close-btn:hover {
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+        
+        .placeholder-body {
+            padding: 1rem;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .placeholder-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+            flex-shrink: 0;
+        }
+        
+        .placeholder-value {
+            background-color: #f9fafb;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            line-height: 1.5;
+            flex: 1;
+        }
+        
+        .placeholder-empty {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
     </style>
 </head>
 <body>
