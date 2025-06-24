@@ -115,7 +115,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
         This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
 
-        This content should be a detailed prose outline or comprehensive summary that thoroughly describes the {{count}} '{{child_level_name}}' nodes that will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points or markdown formatting.
+        This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points or markdown formatting.
 
         Here is the context of the document so far:
         ---
