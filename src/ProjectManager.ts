@@ -185,7 +185,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
     /**
      * Gathers rich, hierarchical context for a specific node to guide content generation.
-     * This method compiles the direct parent's content and summaries of preceding siblings.
+     * This method compiles the direct parent's content and full content of preceding siblings.
+     * Modern LLMs have large context windows, so we use direct content for maximum precision.
      * @param nodeId The ID of the node to compile context for.
      * @returns A string containing the contextual information.
      */
@@ -217,22 +218,22 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             contextParts.push(`The following "${nodeLevelName}" nodes exist at this level:\n${siblingTitles}`);
         }
 
-        // 3. Add summaries of preceding siblings that have already been generated.
-        const precedingSiblingSummaries: string[] = [];
+        // 3. Add full content of preceding siblings that have already been generated.
+        const precedingSiblingContent: string[] = [];
         const siblingIndex = parent.children.findIndex(child => child.id === targetNode.id);
 
         if (siblingIndex > 0) {
-            precedingSiblingSummaries.push("SUMMARIES OF PRECEDING SIBLINGS:");
+            precedingSiblingContent.push("CONTENT FROM PRECEDING SIBLINGS:");
             for (let i = 0; i < siblingIndex; i++) {
                 const sibling = parent.children[i];
-                if (sibling.summary) {
-                    precedingSiblingSummaries.push(`Summary for "${sibling.title}":\n${sibling.summary}`);
+                if (sibling.content) {
+                    precedingSiblingContent.push(`Content for "${sibling.title}":\n---\n${sibling.content}\n---`);
                 }
             }
         }
         
-        if (precedingSiblingSummaries.length > 1) { // more than just the header
-             contextParts.push(precedingSiblingSummaries.join('\n\n'));
+        if (precedingSiblingContent.length > 1) { // more than just the header
+             contextParts.push(precedingSiblingContent.join('\n\n'));
         }
 
         return contextParts.join('\n\n====================\n\n');
@@ -536,11 +537,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 node.generationHistory = result.history;
                 this.emit('nodeGenerationComplete', { nodeId, success: true, node });
 
-                // Automatically summarize the content after generating it, but skip if we're in bulk mode
-                // (bulk operations handle summarization explicitly with proper progress suppression)
-                if (!this.isGeneratingAllChildren && !this.abortRequested) {
-                    await this.summarizeNodeContent(nodeId);
-                }
+                // Automatic summarization disabled since we now use direct content for context
+                // Summaries can still be generated manually via the UI if needed for export/review
+                // if (!this.isGeneratingAllChildren && !this.abortRequested) {
+                //     await this.summarizeNodeContent(nodeId);
+                // }
             }
 
         } catch (error: any) {
@@ -766,7 +767,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                             break;
                         }
                         
-                        await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
+                        // Automatic summarization disabled since we now use direct content for context
+                        // await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
                     } catch (error: any) {
                         if (error.message === 'Generation aborted by user' || this.abortRequested) {
                             break;

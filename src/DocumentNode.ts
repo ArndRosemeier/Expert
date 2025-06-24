@@ -80,7 +80,7 @@ export class DocumentNode {
 
     set content(newContent: string) {
         this._content = newContent;
-        this.summary = ''; // Automatically clear summary when content changes.
+        this.summary = ''; // Clear summary when content changes (summaries are now optional)
         
         // Clear generation history when content is manually changed (not during generation)
         if (!this._isSettingContentFromGeneration) {
