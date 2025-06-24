@@ -91,8 +91,8 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         goal: 8,
         weight: 1.0,
         description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established.",
-        outline: false,
-        leaf: true
+        outline: true,
+        leaf: false
     }
 ];
 
