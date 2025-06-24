@@ -449,6 +449,7 @@ export function renderNodeDetails() {
         <div class="node-details-header">
             <h2 id="node-title-display" contenteditable="true">${node.title}</h2>
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
+            ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
                 <button id="delete-node-btn" class="button button-secondary" style="background-color: #dc3545; color: white; border-color: #dc3545;">
                     ${node.level === 0 ? 'Delete Project' : 'Delete Node'}
