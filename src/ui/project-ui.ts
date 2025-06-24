@@ -285,7 +285,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
 // --- Component Renders ---
 
-function refreshGlobalProfileSelector() {
+export function refreshGlobalProfileSelector() {
     const selector = document.getElementById('active-profile-selector') as HTMLSelectElement;
     if (!selector) return;
 
@@ -507,7 +507,10 @@ export function renderNodeDetails() {
         </div>
         
         <div class="node-section">
-            <label for="node-context">Context</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <label for="node-context">Context</label>
+                <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
+            </div>
             <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
         </div>
 
@@ -553,10 +556,16 @@ export function renderNodeDetails() {
     
     // Normal button states (no more button transformations)
     generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
-    generateBtn.className = 'btn btn-primary';
+    generateBtn.className = 'button button-primary';
     generateBtn.id = 'node-generate-btn';
     
     defaultPromptBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
+    
+    // Handle extract context button state
+    const extractContextBtn = getElementById('node-extract-context-btn') as HTMLButtonElement;
+    if (extractContextBtn) {
+        extractContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
+    }
 
     // Update button text to show current state
     if (isThisNodeGenerating) {
@@ -1198,7 +1207,32 @@ export function setupEventListeners() {
                 projectManager.getGenerationService().generateNodeContent(node.id, count);
                 break;
 
+            case 'node-extract-context-btn':
+                {
+                    console.log('Extract context button clicked!'); // Debug log
+                    if (!projectManager || !selectedNodeId) {
+                        console.log('Missing projectManager or selectedNodeId:', { projectManager: !!projectManager, selectedNodeId });
+                        return;
+                    }
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) {
+                        console.log('Node not found for ID:', selectedNodeId);
+                        return;
+                    }
 
+                    console.log('Opening extract context modal for node:', node.title);
+                    // Import and open extract context modal
+                    import('./modal-manager').then(({ openExtractContextModal }) => {
+                        console.log('Modal manager imported successfully');
+                        if (projectManager) {
+                            openExtractContextModal(projectManager, node);
+                        }
+                    }).catch(error => {
+                        console.error('Failed to load extract context modal:', error);
+                        alert('Failed to open extract context dialog. Please try again.');
+                    });
+                }
+                break;
             
             case 'default-prompt-btn':
                 {

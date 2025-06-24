@@ -7,6 +7,7 @@ import { SettingsProfile, DEFAULT_CRITERIA } from '../SettingsManager';
 import { QualityCriterion } from '../types';
 import { PromptManager } from '../PromptManager';
 import { DocumentNode } from '../DocumentNode';
+import { refreshGlobalProfileSelector } from './project-ui';
 
 // --- Generic Modal Functions ---
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -769,6 +770,10 @@ export function renderSettingsModal() {
         newProfileNameInput.value = '';
         populateProfileSelector();
         profileSelect.value = profileName;
+        
+        // Refresh the global profile selector in the main UI
+        refreshGlobalProfileSelector();
+        
         alert(`Profile "${profileName}" saved.`);
     });
 
@@ -782,6 +787,10 @@ export function renderSettingsModal() {
             // Load the default profile after deleting
             const defaultProfile = settingsManagerInstance.getProfile('default');
             applyProfileToUI(defaultProfile || null);
+            
+            // Refresh the global profile selector in the main UI
+            refreshGlobalProfileSelector();
+            
             alert(`Profile "${profileName}" deleted.`);
         }
     });
@@ -828,6 +837,9 @@ export function renderSettingsModal() {
                 // Refresh the UI to show the imported profile
                 const lastUsedProfile = settingsManagerInstance.getLastUsedProfile();
                 applyProfileToUI(lastUsedProfile || null);
+                
+                // Refresh the global profile selector in the main UI
+                refreshGlobalProfileSelector();
             } else {
                 alert(`Import failed: ${result.message}`);
             }
@@ -1146,4 +1158,230 @@ async function handlePasteCriteria(container: HTMLElement) {
         console.error('Failed to paste criteria: ', err);
         alert('Failed to read from clipboard or parse data. See console for details.');
     }
-} 
+}
+
+export function openExtractContextModal(projectManager: ProjectManager, node: DocumentNode) {
+    const content = `
+        <style>
+            .modal-content { max-width: 700px; }
+            .extract-section { margin-bottom: 1.5rem; }
+            .extract-section label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
+            .extract-section input, .extract-section select, .extract-section textarea { 
+                width: 100%; 
+                padding: 0.75rem; 
+                border: 1px solid var(--border-color); 
+                border-radius: 8px;
+                box-sizing: border-box;
+            }
+            .extract-section textarea { 
+                resize: vertical; 
+                min-height: 120px; 
+                font-family: inherit; 
+            }
+            .depth-controls { display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; }
+            .depth-controls label { margin: 0; font-weight: normal; font-size: 0.9rem; }
+            .depth-controls input { width: 80px; }
+            .preview-section { 
+                background-color: #f8f9fa; 
+                border: 1px solid #e9ecef; 
+                border-radius: 8px; 
+                padding: 1rem; 
+                margin-top: 1rem;
+            }
+            .button-row { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
+            .button { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; }
+            .button-primary { background-color: #007bff; color: white; }
+            .button-secondary { background-color: #6c757d; color: white; }
+            .button:disabled { opacity: 0.6; cursor: not-allowed; }
+        </style>
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
+            <h2 style="margin: 0;">Extract Context</h2>
+            <button id="close-extract-modal-btn" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+        
+        <div class="extract-section">
+            <label for="extract-prompt">What to extract:</label>
+            <input type="text" id="extract-prompt" placeholder="e.g., characters, places, themes, plot points, conflicts..." />
+            <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                Describe what specific information you want to extract from the content.
+            </small>
+        </div>
+        
+        <div class="extract-section">
+            <label for="extract-depth">Analysis Depth:</label>
+            <select id="extract-depth">
+                <option value="0">This node only</option>
+                <option value="1">Include direct children</option>
+                <option value="2">Include grandchildren (2 levels)</option>
+                <option value="3">Include 3 levels deep</option>
+                <option value="4">Include 4 levels deep</option>
+                <option value="5">Include 5 levels deep</option>
+            </select>
+            <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                Choose how deep in the hierarchy to analyze content.
+            </small>
+        </div>
+        
+        <div class="extract-section">
+            <button id="preview-btn" class="button button-secondary" style="width: auto;">Preview Content Scope</button>
+            <div id="preview-container" class="preview-section" style="display: none;">
+                <h4 style="margin: 0 0 0.5rem 0;">Content Analysis Preview:</h4>
+                <div id="preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
+            </div>
+        </div>
+        
+        <div class="button-row">
+            <button id="cancel-extract-btn" class="button button-secondary">Cancel</button>
+            <button id="extract-btn" class="button button-primary">Extract Context</button>
+        </div>
+        
+        <div id="result-section" class="extract-section" style="display: none;">
+            <label for="extract-result">Extracted Information:</label>
+            <textarea id="extract-result" readonly></textarea>
+            <div style="margin-top: 0.5rem;">
+                <button id="copy-result-btn" class="button button-secondary">Copy to Clipboard</button>
+                <button id="add-to-context-btn" class="button button-primary">Add to Node Context</button>
+            </div>
+        </div>
+    `;
+    
+    openGenericModal(content, () => setupExtractContextModal(projectManager, node));
+}
+
+function setupExtractContextModal(projectManager: ProjectManager, node: DocumentNode) {
+    const extractPrompt = getElementById<HTMLInputElement>('extract-prompt');
+    const extractDepth = getElementById<HTMLSelectElement>('extract-depth');
+    const previewBtn = getElementById<HTMLButtonElement>('preview-btn');
+    const previewContainer = getElementById('preview-container');
+    const previewContent = getElementById('preview-content');
+    const extractBtn = getElementById<HTMLButtonElement>('extract-btn');
+    const cancelBtn = getElementById<HTMLButtonElement>('cancel-extract-btn');
+    const closeBtn = getElementById<HTMLButtonElement>('close-extract-modal-btn');
+    const resultSection = getElementById('result-section');
+    const extractResult = getElementById<HTMLTextAreaElement>('extract-result');
+    const copyResultBtn = getElementById<HTMLButtonElement>('copy-result-btn');
+    const addToContextBtn = getElementById<HTMLButtonElement>('add-to-context-btn');
+    
+    // Set focus to the extract prompt input
+    extractPrompt.focus();
+    
+    // Preview functionality
+    previewBtn.addEventListener('click', () => {
+        const depth = parseInt(extractDepth.value);
+        const contextService = projectManager.getContextExtractionService();
+        const preview = contextService.getContentPreview(node, depth);
+        
+        previewContent.textContent = preview.summary;
+        previewContainer.style.display = 'block';
+    });
+    
+    // Extract functionality
+    extractBtn.addEventListener('click', async () => {
+        const prompt = extractPrompt.value.trim();
+        const depth = parseInt(extractDepth.value);
+        
+        if (!prompt) {
+            alert('Please enter what you want to extract.');
+            extractPrompt.focus();
+            return;
+        }
+        
+        const contextService = projectManager.getContextExtractionService();
+        const validation = contextService.validateExtractionParameters(node, prompt, depth);
+        
+        if (validation.errors.length > 0) {
+            alert('Validation errors:\n\n' + validation.errors.join('\n'));
+            return;
+        }
+        
+        // Show warnings and ask for confirmation
+        if (validation.warnings.length > 0) {
+            const warningMessage = 'Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?';
+            if (!confirm(warningMessage)) {
+                return;
+            }
+        }
+        
+        // Disable controls during extraction
+        extractBtn.disabled = true;
+        extractBtn.textContent = 'Extracting...';
+        extractPrompt.disabled = true;
+        extractDepth.disabled = true;
+        previewBtn.disabled = true;
+        
+        try {
+            const result = await contextService.extractContext(node, prompt, depth);
+            
+            // Show result
+            extractResult.value = result;
+            resultSection.style.display = 'block';
+            
+            // Re-enable controls
+            extractBtn.disabled = false;
+            extractBtn.textContent = 'Extract Again';
+            extractPrompt.disabled = false;
+            extractDepth.disabled = false;
+            previewBtn.disabled = false;
+            
+        } catch (error: any) {
+            alert('Error during extraction:\n\n' + error.message);
+            
+            // Re-enable controls
+            extractBtn.disabled = false;
+            extractBtn.textContent = 'Extract Context';
+            extractPrompt.disabled = false;
+            extractDepth.disabled = false;
+            previewBtn.disabled = false;
+        }
+    });
+    
+    // Copy result to clipboard
+    copyResultBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(extractResult.value);
+            copyResultBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                copyResultBtn.textContent = 'Copy to Clipboard';
+            }, 2000);
+        } catch (error) {
+            alert('Failed to copy to clipboard');
+        }
+    });
+    
+    // Add result to node context
+    addToContextBtn.addEventListener('click', () => {
+        const currentContext = node.context || '';
+        const newContext = currentContext + (currentContext ? '\n\n' : '') + extractResult.value;
+        node.context = newContext;
+        
+        // Update the context textarea in the UI immediately
+        const contextTextarea = document.getElementById('node-context') as HTMLTextAreaElement;
+        if (contextTextarea) {
+            contextTextarea.value = newContext;
+        }
+        
+        // Save project and refresh UI
+        projectManager.saveToStorage();
+        
+        addToContextBtn.textContent = 'Added!';
+        setTimeout(() => {
+            addToContextBtn.textContent = 'Add to Node Context';
+        }, 2000);
+        
+        // Close modal after a brief delay
+        setTimeout(() => {
+            closeGenericModal();
+        }, 1000);
+    });
+    
+    // Cancel and close handlers
+    cancelBtn.addEventListener('click', closeGenericModal);
+    closeBtn.addEventListener('click', closeGenericModal);
+    
+    // Enter key in prompt field triggers extract
+    extractPrompt.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !extractBtn.disabled) {
+            extractBtn.click();
+        }
+    });
+}

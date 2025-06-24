@@ -7,16 +7,6 @@ let currentTemplateName: string | null = null;
 let isDirty = false;
 let isPopulating = false; // Semaphore to prevent dirty flag during UI population
 
-// Debug function to track when isDirty is set
-function setDirty(reason: string) {
-    if (!isPopulating) {
-        console.log(`Setting isDirty = true, reason: ${reason}`);
-        isDirty = true;
-    } else {
-        console.log(`Prevented setting isDirty = true (isPopulating), reason: ${reason}`);
-    }
-}
-
 // Main entry point
 export function openTemplateEditor() {
     const templateManager = state.getTemplateManager();
@@ -95,20 +85,20 @@ function setupTemplateEditorListeners() {
         if (target.id === 'template-select') {
             return; // Don't mark as dirty when changing template selection
         }
-        setDirty(`input event on ${target.tagName}:${target.className}`);
+        if (!isPopulating) {
+            isDirty = true;
+        }
     });
 }
 
 // --- Event Handlers ---
 
 function handleTemplateSelect(event: Event) {
-    console.log(`handleTemplateSelect: isDirty = ${isDirty}, isPopulating = ${isPopulating}`);
     if (isDirty && !confirm("You have unsaved changes. Are you sure you want to switch?")) {
         (event.target as HTMLSelectElement).value = currentTemplateName || '';
         return;
     }
     currentTemplateName = (event.target as HTMLSelectElement).value;
-    console.log(`handleTemplateSelect: switching to ${currentTemplateName}, setting isDirty = false`);
     isDirty = false;
     renderCurrentTemplateView();
 }
@@ -232,7 +222,7 @@ function handleAddLayer() {
     const newIndex = editor.children.length;
     const newLayer = createLayerElement('', newIndex);
     editor.appendChild(newLayer);
-    setDirty('handleAddLayer');
+    isDirty = true;
 }
 
 function handleRemoveLayer(button: HTMLElement) {
@@ -243,7 +233,7 @@ function handleRemoveLayer(button: HTMLElement) {
         const input = layer.querySelector('input');
         if (input) input.dataset.index = String(index);
     });
-    setDirty('handleRemoveLayer');
+    isDirty = true;
 }
 
 function handleCancel() {
@@ -275,14 +265,12 @@ function populateTemplateSelector() {
 }
 
 function renderCurrentTemplateView() {
-    console.log(`renderCurrentTemplateView: starting, isDirty = ${isDirty}, isPopulating = ${isPopulating}`);
     const templateManager = state.getTemplateManager();
     const nameInput = getElementById<HTMLInputElement>('template-name-input');
     const editor = getElementById('hierarchy-editor');
     if (!templateManager || !nameInput || !editor) return;
 
     // Set semaphore to prevent dirty flag during UI population
-    console.log(`renderCurrentTemplateView: setting isPopulating = true`);
     isPopulating = true;
 
     if (!currentTemplateName) {
@@ -308,7 +296,6 @@ function renderCurrentTemplateView() {
     });
     
     // Clear semaphore and ensure dirty flag is false after population
-    console.log(`renderCurrentTemplateView: finished, setting isPopulating = false, isDirty = false`);
     isPopulating = false;
     isDirty = false;
 }

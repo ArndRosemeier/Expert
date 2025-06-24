@@ -14,7 +14,8 @@ import {
     ContextService, 
     PromptService, 
     GenerationController, 
-    ProjectPersistenceService 
+    ProjectPersistenceService,
+    ContextExtractionService
 } from './project';
 
 type ProjectManagerEvents = {
@@ -60,6 +61,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private promptService: PromptService;
     private generationController: GenerationController;
     private generationService: GenerationService;
+    private contextExtractionService: ContextExtractionService;
     
     // Service accessors for UI
     public getGenerationService(): GenerationService { return this.generationService; }
@@ -67,6 +69,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getContextService(): ContextService { return this.contextService; }
     public getPromptService(): PromptService { return this.promptService; }
     public getGenerationController(): GenerationController { return this.generationController; }
+    public getContextExtractionService(): ContextExtractionService { return this.contextExtractionService; }
 
     constructor(
         projectTitle: string, 
@@ -93,6 +96,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.contextService = new ContextService(this.treeService);
         this.promptService = new PromptService(this.settingsManager);
         this.generationController = new GenerationController(this.loopOrchestrator, this.treeService);
+        this.contextExtractionService = new ContextExtractionService(this.openRouterClient, this.settingsManager);
         
         // Initialize GenerationService with all dependencies
         this.generationService = new GenerationService({
