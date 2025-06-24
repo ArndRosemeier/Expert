@@ -84,18 +84,24 @@ export class DocumentNode {
      * @returns The extracted count or default value of 5.
      */
     private parseGenerationCountFromTemplate(): number {
-        if (!this.template || this.level >= this.template.length) {
+        if (!this.template || this.isLeaf) {
+            return 5; // Default count for leaf nodes or missing template
+        }
+        
+        // Look at the CHILD level name (the level this node will generate)
+        const childLevelIndex = this.level + 1;
+        if (childLevelIndex >= this.template.length) {
+            return 5; // Default count if no child level
+        }
+        
+        const childLevelName = this.template[childLevelIndex];
+        if (!childLevelName) {
             return 5; // Default count
         }
         
-        const currentLevelName = this.template[this.level];
-        if (!currentLevelName) {
-            return 5; // Default count
-        }
-        
-        // Look for numbers in the current level name
+        // Look for numbers in the child level name
         // Pattern: "Chapter 4", "Act 3", "Section 7", etc.
-        const match = currentLevelName.match(/(\w+)\s+(\d+)/);
+        const match = childLevelName.match(/(\w+)\s+(\d+)/);
         if (match && match[2]) {
             const extractedCount = parseInt(match[2], 10);
             if (!isNaN(extractedCount) && extractedCount > 0 && extractedCount <= 20) {
