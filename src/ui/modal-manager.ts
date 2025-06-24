@@ -868,7 +868,7 @@ export function renderSettingsModal() {
             if(textDisplay) (textDisplay as HTMLElement).style.display = 'none';
         }
     });
-    modalDefaultCriteriaBtn.addEventListener('click', () => {
+    getElementById('modal-default-criteria-btn').addEventListener('click', () => {
         if (confirm("This will replace your current criteria list with the application defaults. Are you sure?")) {
             renderCriteria(modalCriteriaList, DEFAULT_CRITERIA);
         }
@@ -1084,9 +1084,29 @@ function isCriteriaArray(data: any): data is QualityCriterion[] {
     );
 }
 
+function migrateCriteriaFormat(criteria: any[]): QualityCriterion[] {
+    return criteria.map(criterion => {
+        // Remove weight property if it exists and add outline/leaf defaults if missing
+        const migrated: QualityCriterion = {
+            name: criterion.name,
+            goal: criterion.goal,
+            outline: criterion.outline !== undefined ? criterion.outline : true,
+            leaf: criterion.leaf !== undefined ? criterion.leaf : true
+        };
+        
+        if (criterion.description) {
+            migrated.description = criterion.description;
+        }
+        
+        return migrated;
+    });
+}
+
 function renderCriteria(container: HTMLElement, criteria: QualityCriterion[]) {
     container.innerHTML = '';
-    criteria.forEach(c => {
+    // Migrate criteria format to ensure compatibility
+    const migratedCriteria = migrateCriteriaFormat(criteria);
+    migratedCriteria.forEach(c => {
         const criterionElement = createCriterionElement(c);
         container.appendChild(criterionElement);
         const textarea = criterionElement.querySelector('textarea');
