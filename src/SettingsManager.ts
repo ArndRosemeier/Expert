@@ -5,6 +5,20 @@ import { StorageService, IStorageService } from './StorageService';
 export const SETTINGS_PROFILES_KEY = 'expert_app_settings_profiles';
 export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
 
+// Default context extraction prompt template
+export const DEFAULT_CONTEXT_EXTRACTION_PROMPT = `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
+
+Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
+
+Content to analyze from "{{node_title}}":
+---
+{{content}}
+---
+
+Please extract and list all instances of: {{extraction_request}}
+
+Format your response as a clear, organized summary that would be useful for reference.`;
+
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Prompt Adherence",
@@ -90,6 +104,7 @@ export interface SettingsProfile {
     criteria: QualityCriterion[];
     maxIterations: number;
     selectedModels: Record<string, string>;
+    contextExtractionPrompt: string;
 }
 
 function areValidSettingsProfiles(data: any): data is Record<string, SettingsProfile> {
@@ -119,7 +134,9 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
             typeof profile.selectedModels === 'object' &&
-            profile.selectedModels !== null
+            profile.selectedModels !== null &&
+            // contextExtractionPrompt is optional for backward compatibility
+            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string')
         );
     });
 }
@@ -154,6 +171,14 @@ export class SettingsManager {
             
             if (saved && areValidSettingsProfiles(saved)) {
                 this.profiles = saved;
+                // Add default context extraction prompt to existing profiles that don't have it
+                Object.keys(this.profiles).forEach(profileName => {
+                    if (!this.profiles[profileName].contextExtractionPrompt) {
+                        this.profiles[profileName].contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
+                    }
+                });
+                // Save the updated profiles with the new field
+                await this.saveProfiles();
                 } else {
                 console.warn('Invalid settings profiles found in storage. Ignoring.');
                 this.profiles = {};
@@ -169,7 +194,8 @@ export class SettingsManager {
                 prompt: "",
                 criteria: DEFAULT_CRITERIA,
                 maxIterations: 5,
-                selectedModels: {}
+                selectedModels: {},
+                contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
             };
             this.profiles = { default: defaultProfile };
             await this.setLastUsedProfile('default');
@@ -306,7 +332,8 @@ export class SettingsManager {
                 prompt: profile.prompt,
                 criteria: profile.criteria,
                 maxIterations: profile.maxIterations,
-                selectedModels: profile.selectedModels
+                selectedModels: profile.selectedModels,
+                contextExtractionPrompt: profile.contextExtractionPrompt
             },
             prompts: this.prompts
         };
@@ -361,7 +388,8 @@ export class SettingsManager {
                 prompt: profileData.prompt,
                 criteria: profileData.criteria,
                 maxIterations: profileData.maxIterations,
-                selectedModels: finalSelectedModels
+                selectedModels: finalSelectedModels,
+                contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT
             };
 
             // Save the profile
@@ -415,7 +443,9 @@ export class SettingsManager {
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
             typeof profile.selectedModels === 'object' &&
-            profile.selectedModels !== null
+            profile.selectedModels !== null &&
+            // contextExtractionPrompt is optional for backward compatibility
+            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string')
         );
     }
 

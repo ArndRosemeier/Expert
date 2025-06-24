@@ -3,7 +3,7 @@ import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 import { ModelSelector } from '../ModelSelector';
-import { SettingsProfile, DEFAULT_CRITERIA } from '../SettingsManager';
+import { SettingsProfile, DEFAULT_CRITERIA, DEFAULT_CONTEXT_EXTRACTION_PROMPT } from '../SettingsManager';
 import { QualityCriterion } from '../types';
 import { PromptManager } from '../PromptManager';
 import { DocumentNode } from '../DocumentNode';
@@ -664,6 +664,15 @@ export function renderSettingsModal() {
             <div id="settings-prompts-container" class="settings-section">
                 <h3>Prompts</h3>
                 <!-- PromptManager will be rendered here -->
+                
+                <!-- Context Extraction Prompt (Profile Setting) -->
+                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+                    <h4>Context Extraction Prompt <span style="font-size: 0.8em; color: #6b7280; font-weight: normal;">(saved with profile)</span></h4>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="modal-context-extraction-prompt" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Template (use {{extraction_request}}, {{node_title}}, {{content}} as placeholders):</label>
+                        <textarea id="modal-context-extraction-prompt" rows="6" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; line-height: 1.4; resize: vertical;"></textarea>
+                    </div>
+                </div>
             </div>
             <div id="settings-criteria-container" class="settings-section">
                 <h3>Quality Criteria</h3>
@@ -710,6 +719,9 @@ export function renderSettingsModal() {
     const modalCriteriaList = getElementById('modal-criteria-list');
     const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
     const modalDefaultCriteriaBtn = getElementById('modal-default-criteria-btn');
+    
+    // Context Extraction Prompt Editor
+    const modalContextExtractionPrompt = getElementById('modal-context-extraction-prompt') as HTMLTextAreaElement;
 
     // --- Profile Management ---
     const settingsManagerInstance = state.getSettingsManager();
@@ -732,6 +744,9 @@ export function renderSettingsModal() {
         // Apply criteria and iterations
         renderCriteria(modalCriteriaList, profile.criteria);
         modalMaxIterations.value = String(profile.maxIterations);
+        
+        // Apply context extraction prompt
+        modalContextExtractionPrompt.value = profile.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT;
 
         // Note: Prompts are handled by the PromptManager instance which is aware of the SettingsManager
         // Re-rendering or a more direct update might be needed if prompts are to be swapped dynamically.
@@ -762,7 +777,8 @@ export function renderSettingsModal() {
             selectedModels: modelSelector.getSelectedModels(),
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
-            prompt: '' // Prompt is managed separately, but the property is required.
+            prompt: '', // Prompt is managed separately, but the property is required.
+            contextExtractionPrompt: modalContextExtractionPrompt.value
         };
 
         settingsManagerInstance.saveProfile(profileName, currentSettings);
@@ -892,6 +908,8 @@ export function renderSettingsModal() {
             (e.target as HTMLElement).closest('.criterion')?.remove();
         }
     });
+
+
 
     getElementById('close-settings-modal-btn').addEventListener('click', closeModal);
 }
