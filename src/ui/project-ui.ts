@@ -1167,7 +1167,16 @@ export function setupEventListeners() {
                                             await projectToDelete.clearAllProjectsFromStorage();
                                         }
                                     } else {
-                                        // Save the updated project list (this will exclude the deleted project)
+                                        // First, explicitly remove the deleted project from IndexedDB
+                                        const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
+                                        if (storage.isIndexedDB()) {
+                                            const indexedDBService = (storage as any).indexedDBService;
+                                            if (indexedDBService) {
+                                                await indexedDBService.delete('projects', node.id);
+                                            }
+                                        }
+                                        
+                                        // Then save the updated project list
                                         const remainingProject = state.getActiveProject();
                                         if (remainingProject) {
                                             await remainingProject.saveToStorage();
