@@ -113,8 +113,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
                 initialPrompt = this.prompts.content_generation_initial
-                    .replace('{{prompt}}', input.prompt)
-                    .replace('{{criteria}}', input.criteria.map(c => c.name).join(', '));
+                    .replace(/{{prompt}}/g, input.prompt)
+                    .replace(/{{criteria}}/g, input.criteria.map(c => c.name).join(', '));
                 
                 if (this.stopRequested) {
                     aborted = true;
@@ -283,8 +283,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
         if (!history) {
             return this.prompts.content_generation_initial
-                .replace('{{prompt}}', originalPrompt)
-                .replace('{{criteria}}', criteriaList);
+                .replace(/{{prompt}}/g, originalPrompt)
+                .replace(/{{criteria}}/g, criteriaList);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -294,10 +294,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const lastResponse = (lastCreatorResponseItem?.payload as CreatorPayload)?.response;
 
         return this.prompts.content_generation_iterative
-            .replace('{{prompt}}', originalPrompt)
-            .replace('{{lastResponse}}', lastResponse || '')
-            .replace('{{editorAdvice}}', lastEditorAdvice)
-            .replace('{{criteria}}', criteriaList);
+            .replace(/{{prompt}}/g, originalPrompt)
+            .replace(/{{lastResponse}}/g, lastResponse || '')
+            .replace(/{{editorAdvice}}/g, lastEditorAdvice)
+            .replace(/{{criteria}}/g, criteriaList);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
@@ -309,9 +309,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         });
         
         return this.prompts.rater
-            .replace('{{originalPrompt}}', prompt)
-            .replace('{{response}}', response)
-            .replace('{{criteria}}', criteriaList.join('\n- '));
+            .replace(/{{originalPrompt}}/g, prompt)
+            .replace(/{{response}}/g, response)
+            .replace(/{{criteria}}/g, criteriaList.join('\n- '));
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -371,8 +371,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
     private createEditorPrompt(response: string, ratings: Rating[]): string {
         return this.prompts.editor
-            .replace('{{response}}', response)
-            .replace('{{ratings}}', JSON.stringify(ratings, null, 2));
+            .replace(/{{response}}/g, response)
+            .replace(/{{ratings}}/g, JSON.stringify(ratings, null, 2));
     }
 
 } 

@@ -242,6 +242,11 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
+    const handleProjectLoaded = () => {
+        // Refresh the entire project UI when project structure changes (e.g., after bulk child generation)
+        renderProjectUI(manager);
+    };
+
     // We need to store the listeners so we can remove them correctly.
     // A more robust solution might use a map on the project instance itself.
     // @ts-ignore - attaching to the object for simplicity to ensure removal
@@ -258,6 +263,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         manager.off('loop-progress', manager._loopProgressListener);
         // @ts-ignore
         manager.off('nodeSummaryGenerated', manager._summaryGeneratedListener);
+        // @ts-ignore
+        manager.off('project-loaded', manager._projectLoadedListener);
     }
 
     // @ts-ignore
@@ -272,6 +279,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     manager._loopProgressListener = handleLoopProgress;
     // @ts-ignore
     manager._summaryGeneratedListener = handleSummaryGenerated;
+    // @ts-ignore
+    manager._projectLoadedListener = handleProjectLoaded;
     
     manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
@@ -280,6 +289,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     manager.on('high-level-progress', handleHighLevelProgress);
     manager.on('loop-progress', handleLoopProgress);
     manager.on('nodeSummaryGenerated', handleSummaryGenerated);
+    manager.on('project-loaded', handleProjectLoaded);
 }
 
 

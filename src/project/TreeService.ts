@@ -86,7 +86,13 @@ export class TreeService {
         let currentNode = this.findNodeById(nodeId, rootNode);
         
         while (currentNode) {
-            const levelName = currentNode.template[currentNode.level] || `Level ${currentNode.level}`;
+            const rawLevelName = currentNode.template[currentNode.level] || `Level ${currentNode.level}`;
+            
+            // Extract just the base name (remove numbers)
+            // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
+            const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+            const levelName = match ? match[1] : rawLevelName;
+            
             path.unshift(`${levelName}: ${currentNode.title}`);
             currentNode = currentNode.parentId ? this.findNodeById(currentNode.parentId, rootNode) : null;
         }

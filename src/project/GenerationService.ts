@@ -304,10 +304,10 @@ export class GenerationService {
         const childLevelName = node.childLevelName || 'item';
 
         const prompt = prompts.create_children_from_outline_user
-            .replace('{{outline_content}}', node.content)
-            .replace('{{child_level_name}}', childLevelName)
-            .replace('{{context}}', context)
-            .replace('{{count}}', String(node.generationChildrenCount));
+            .replace(/{{outline_content}}/g, node.content)
+            .replace(/{{child_level_name}}/g, childLevelName)
+            .replace(/{{context}}/g, context)
+            .replace(/{{count}}/g, String(node.generationChildrenCount));
 
         // Debug logging to see the actual prompt sent to LLM
         console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG (createChildrenFromOutline method) ===');
@@ -427,10 +427,10 @@ export class GenerationService {
             const childLevelName = node.childLevelName || 'item';
 
             const prompt = prompts.create_children_from_outline_user
-                .replace('{{outline_content}}', node.content)
-                .replace('{{child_level_name}}', childLevelName)
-                .replace('{{context}}', context)
-                .replace('{{count}}', String(node.generationChildrenCount));
+                .replace(/{{outline_content}}/g, node.content)
+                .replace(/{{child_level_name}}/g, childLevelName)
+                .replace(/{{context}}/g, context)
+                .replace(/{{count}}/g, String(node.generationChildrenCount));
 
             // Debug logging to see the actual prompt sent to LLM
             console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG ===');
@@ -608,7 +608,7 @@ export class GenerationService {
         }
 
         const prompts = this.deps.settingsManager.getPrompts();
-        const systemPrompt = prompts.summarize_system.replace('{{content}}', node.content);
+        const systemPrompt = prompts.summarize_system.replace(/{{content}}/g, node.content);
 
         try {
             node.isGenerating = true;

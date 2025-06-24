@@ -254,13 +254,22 @@ export class DocumentNode {
     /**
      * Gets the name for the next level of children.
      * e.g., if this node is an "Act" (level 1), it would return "Chapter" (level 2).
+     * Extracts just the base name, so "Part 3" becomes "Part".
      * Returns null if the node is a leaf.
      */
     get childLevelName(): string | null {
         if (this.isLeaf) {
             return null;
         }
-        return this.template[this.level + 1] || null;
+        const rawChildLevelName = this.template[this.level + 1] || null;
+        if (!rawChildLevelName) {
+            return null;
+        }
+        
+        // Extract just the base name (remove numbers)
+        // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
+        const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+        return match ? match[1] : rawChildLevelName;
     }
 
     /**
