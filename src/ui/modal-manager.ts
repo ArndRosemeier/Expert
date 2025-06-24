@@ -670,8 +670,19 @@ class PromptManagerAutoSave {
             this.root.appendChild(editorDiv);
         });
 
-        // Note: No action buttons needed - auto-save handles everything
-        // Reset functionality can be added to main criteria section if needed
+        // Add reset to defaults button
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'prompt-actions';
+        
+        const resetButton = document.createElement('button');
+        resetButton.className = 'btn-outline';
+        resetButton.textContent = 'Reset All Prompts to Defaults';
+        resetButton.addEventListener('click', () => {
+            this.revertToDefaults();
+        });
+        
+        actionsDiv.appendChild(resetButton);
+        this.root.appendChild(actionsDiv);
     }
 }
 
@@ -978,8 +989,7 @@ export function renderSettingsModal() {
             selectedModels: modelSelector.getSelectedModels(),
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
-            prompt: '', // Legacy field
-            prompts: settingsManagerInstance.getPrompts(),
+            prompt: '', // Legacy field - unused but required by interface
             contextExtractionPrompt: modalContextExtractionPrompt.value
         };
 
@@ -1083,8 +1093,7 @@ export function renderSettingsModal() {
             selectedModels: modelSelector.getSelectedModels(),
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
-            prompt: '', // Legacy field
-            prompts: settingsManagerInstance.getPrompts(),
+            prompt: '', // Legacy field - unused but required by interface
             contextExtractionPrompt: modalContextExtractionPrompt.value
         };
 
