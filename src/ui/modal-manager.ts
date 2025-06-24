@@ -3,9 +3,9 @@ import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 import { ModelSelector } from '../ModelSelector';
-import { SettingsProfile, DEFAULT_CRITERIA, DEFAULT_CONTEXT_EXTRACTION_PROMPT } from '../SettingsManager';
+import { SettingsProfile, DEFAULT_CRITERIA, DEFAULT_CONTEXT_EXTRACTION_PROMPT, SettingsManager } from '../SettingsManager';
 import { QualityCriterion } from '../types';
-import { PromptManager } from '../PromptManager';
+import { PromptManager, OrchestratorPrompts, defaultPrompts } from '../PromptManager';
 import { DocumentNode } from '../DocumentNode';
 import { refreshGlobalProfileSelector } from './project-ui';
 
@@ -519,6 +519,162 @@ function sanitizeFilename(filename: string): string {
     return filename.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
 }
 
+// Simplified PromptManager for auto-save settings modal
+class PromptManagerAutoSave {
+    private prompts: OrchestratorPrompts;
+    private onChange: () => void;
+    private root: HTMLElement;
+    private settingsManager: SettingsManager;
+
+    constructor(root: HTMLElement, onChange: () => void, settingsManager: SettingsManager) {
+        this.root = root;
+        this.onChange = onChange;
+        this.settingsManager = settingsManager;
+        this.prompts = this.settingsManager.getPrompts();
+        this.render();
+    }
+
+    private async saveToStorage() {
+        await this.settingsManager.savePrompts(this.prompts);
+        this.onChange();
+    }
+
+    private revertToDefaults() {
+        if (confirm('Are you sure you want to revert all prompts to their default values? Any unsaved changes will be lost.')) {
+            this.prompts = { ...defaultPrompts };
+            this.render();
+            this.saveToStorage();
+        }
+    }
+
+    render() {
+        this.root.innerHTML = `
+            <style>
+                .prompt-editor { margin-bottom: 1.5rem; }
+                .prompt-editor label { font-weight: 500; display: block; margin-bottom: 0.5rem; }
+                .prompt-editor textarea { 
+                    width: 100%; 
+                    min-height: 150px; 
+                    font-family: monospace;
+                    padding: 0.75rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 8px;
+                    resize: vertical;
+                    line-height: 1.4;
+                }
+                .placeholders { 
+                    font-size: 0.8rem; 
+                    font-style: italic; 
+                    margin-bottom: 0.5rem; 
+                    color: #6b7280; 
+                }
+                .placeholders code { 
+                    background-color: #f3f4f6; 
+                    padding: 2px 4px; 
+                    border-radius: 3px; 
+                    font-family: monospace;
+                }
+                .prompt-description { 
+                    font-size: 0.875rem; 
+                    margin-bottom: 0.75rem; 
+                    color: #4b5563; 
+                    line-height: 1.5;
+                }
+                .prompt-actions {
+                    margin-top: 1.5rem;
+                    padding-top: 1rem;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    gap: 0.75rem;
+                }
+                .btn-outline {
+                    padding: 0.5rem 1rem;
+                    border: 1px solid #d1d5db;
+                    background: transparent;
+                    color: #6b7280;
+                    border-radius: 6px;
+                    font-size: 0.875rem;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .btn-outline:hover {
+                    background-color: #f3f4f6;
+                    color: #374151;
+                }
+            </style>
+            <p style="color: #6b7280; font-size: 0.875rem; margin-bottom: 1rem;">Configure the templates used by AI agents. Changes are saved automatically.</p>
+        `;
+
+        const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
+            content_generation_initial: ['prompt', 'criteria'],
+            content_generation_iterative: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
+            rater: ['originalPrompt', 'response', 'criteria'],
+            editor: ['response', 'ratings'],
+            summarize_system: ['content'],
+            expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
+            content_generation_user: ['path', 'context', 'title', 'content'],
+            branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
+            create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
+            prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
+            expand_text_user: ['content', 'path', 'context', 'title'],
+        };
+
+        const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
+            content_generation_initial: "Main system prompt for the iterative generation loop.",
+            content_generation_iterative: "System prompt for subsequent iterations with feedback.",
+            content_generation_user: "Template for generating content in leaf nodes.",
+            branch_content_generation_user: "Template for generating content in branch nodes.",
+            rater: "System prompt for the AI that scores generated content.",
+            editor: "System prompt for the AI that provides improvement feedback.",
+            summarize_system: "System prompt for summarizing generated content.",
+            expand_list_user: "Prompt for generating bulleted lists of child titles.",
+            create_children_from_outline_user: "Reads free-form text and generates structured child titles.",
+            prompt_for_child_generation_prompt: "Creates generation prompts for new child nodes.",
+            expand_text_user: "Simple prompt for expanding text with more detail."
+        };
+
+        Object.keys(this.prompts).forEach(key => {
+            const k = key as keyof OrchestratorPrompts;
+            const editorDiv = document.createElement('div');
+            editorDiv.className = 'prompt-editor';
+            
+            const label = document.createElement('label');
+            label.textContent = `${k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
+
+            editorDiv.appendChild(label);
+
+            const description = promptDescriptions[k];
+            if (description) {
+                const descriptionEl = document.createElement('p');
+                descriptionEl.className = 'prompt-description';
+                descriptionEl.textContent = description;
+                editorDiv.appendChild(descriptionEl);
+            }
+
+            const availablePlaceholders = placeholders[k];
+            if (availablePlaceholders && availablePlaceholders.length > 0) {
+                const placeholderText = document.createElement('div');
+                placeholderText.className = 'placeholders';
+                placeholderText.innerHTML = `Available placeholders: ${availablePlaceholders.map(p => `<code>{{${p}}}</code>`).join(', ')}`;
+                editorDiv.appendChild(placeholderText);
+            }
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = this.prompts[k];
+            textarea.addEventListener('input', () => {
+                this.prompts[k] = textarea.value;
+                this.onChange();
+            });
+
+            editorDiv.appendChild(textarea);
+            this.root.appendChild(editorDiv);
+        });
+
+        // Note: No action buttons needed - auto-save handles everything
+        // Reset functionality can be added to main criteria section if needed
+    }
+}
+
 export function renderSettingsModal() {
     const modelSelector = state.getModelSelector();
     if (!modalContent || !modelSelector) return;
@@ -528,12 +684,59 @@ export function renderSettingsModal() {
             .modal-content {
                 width: 80vw;
                 max-width: 1200px;
+                display: flex;
+                flex-direction: column;
+                max-height: 90vh;
+            }
+            .modal-header {
+                padding: 1.5rem 2rem 1rem 2rem;
+                border-bottom: 1px solid #e5e7eb;
+                flex-shrink: 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
             }
             .modal-body {
                 padding: 1.5rem 2rem;
                 display: flex;
                 flex-direction: column;
                 gap: 1.5rem;
+                overflow-y: auto;
+                flex: 1;
+            }
+            .modal-footer {
+                padding: 1rem 2rem 1.5rem 2rem;
+                border-top: 1px solid #e5e7eb;
+                flex-shrink: 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1rem;
+            }
+            .footer-left {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                font-size: 0.875rem;
+                color: #6b7280;
+            }
+            .footer-right {
+                display: flex;
+                gap: 0.75rem;
+            }
+            .unsaved-indicator {
+                display: none;
+                color: #f59e0b;
+                font-weight: 500;
+            }
+            .unsaved-indicator.visible {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .unsaved-indicator::before {
+                content: "●";
+                font-size: 1.2em;
             }
             .settings-section {
                 background-color: #f9fafb;
@@ -541,13 +744,19 @@ export function renderSettingsModal() {
                 border-radius: 12px;
                 padding: 1.5rem;
             }
-            .settings-bar {
+            .settings-section h3, .settings-section h4 {
+                margin-top: 0;
+                margin-bottom: 1rem;
+                color: #111827;
+            }
+            .profile-bar {
                 display: flex;
                 align-items: center;
                 gap: 0.75rem;
+                margin-bottom: 1rem;
             }
-            .settings-bar select,
-            .settings-bar input[type="text"] {
+            .profile-bar select,
+            .profile-bar input[type="text"] {
                 flex-grow: 1;
                 padding: 0.75rem;
                 border: 1px solid var(--border-color);
@@ -556,31 +765,28 @@ export function renderSettingsModal() {
                 line-height: 1.5;
                 box-sizing: border-box;
             }
-            .settings-bar button {
-                padding: 0.75rem 1rem;
+            .profile-actions {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+            }
+            .profile-actions button {
+                padding: 0.5rem 1rem;
                 border: none;
-                border-radius: 8px;
-                background-color: var(--button-bg);
-                color: var(--button-text);
+                border-radius: 6px;
+                font-size: 0.875rem;
                 cursor: pointer;
+                transition: all 0.2s;
             }
-            .settings-bar button:hover {
-                background-color: var(--button-bg-hover);
-            }
-            .settings-bar .button-secondary {
-                background-color: #6b7280;
-                color: white;
-            }
-            .settings-bar .button-secondary:hover {
-                background-color: #4b5563;
-            }
-            .settings-bar .button-danger {
-                background-color: #ef4444;
-                color: white;
-            }
-            .settings-bar .button-danger:hover {
-                background-color: #dc2626;
-            }
+            .btn-primary { background-color: #4f46e5; color: white; }
+            .btn-primary:hover { background-color: #4338ca; }
+            .btn-secondary { background-color: #6b7280; color: white; }
+            .btn-secondary:hover { background-color: #4b5563; }
+            .btn-danger { background-color: #ef4444; color: white; }
+            .btn-danger:hover { background-color: #dc2626; }
+            .btn-outline { background-color: transparent; color: #6b7280; border: 1px solid #d1d5db; }
+            .btn-outline:hover { background-color: #f3f4f6; color: #374151; }
+            
             #modal-criteria-list {
                 flex-grow: 1;
                 display: flex;
@@ -628,7 +834,7 @@ export function renderSettingsModal() {
                 accent-color: #10b981;
             }
             .criterion textarea {
-                display: none; /* Hidden by default */
+                display: none;
                 resize: vertical;
                 min-height: 80px;
             }
@@ -637,43 +843,60 @@ export function renderSettingsModal() {
                 gap: 0.75rem; 
                 margin-top: 1.5rem; 
             }
+            .current-profile-info {
+                padding: 0.75rem 1rem;
+                background-color: #eff6ff;
+                border: 1px solid #bfdbfe;
+                border-radius: 8px;
+                font-size: 0.875rem;
+                color: #1e40af;
+                margin-bottom: 1rem;
+            }
         </style>
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
-            <h2 style="margin: 0;">Generation Settings</h2>
+        <div class="modal-header">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Settings</h2>
             <button id="close-settings-modal-btn" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">&times;</button>
         </div>
         <div class="modal-body">
             <div id="settings-profile-container" class="settings-section">
-                <div class="settings-bar">
-                    <select id="modal-profile-select"></select>
-                    <button id="modal-load-profile-btn">Load</button>
-                    <input type="text" id="modal-new-profile-name" placeholder="New Profile Name...">
-                    <button id="modal-save-profile-btn">Save</button>
-                    <button id="modal-delete-profile-btn" class="button-danger">Delete</button>
+                <h3>Profile Management</h3>
+                <div class="current-profile-info">
+                    <strong>Active Profile:</strong> <span id="current-profile-name">Loading...</span>
+                    <div style="margin-top: 0.25rem; font-size: 0.8em; opacity: 0.8;">Changes are automatically saved to this profile</div>
                 </div>
-                <div class="settings-bar" style="margin-top: 0.5rem; border-top: 1px solid #e5e7eb; padding-top: 0.5rem;">
-                    <button id="modal-export-profile-btn" class="button-secondary">Export Profile</button>
-                    <button id="modal-import-profile-btn" class="button-secondary">Import Profile</button>
+                <div class="profile-bar">
+                    <select id="modal-profile-select" title="Select profile"></select>
+                    <input type="text" id="modal-new-profile-name" placeholder="New profile name...">
+                    <button id="modal-create-profile-btn" title="Create new profile" style="background: #10b981; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">+</button>
+                </div>
+                <div class="profile-actions">
+                    <button id="modal-delete-profile-btn" class="btn-danger">Delete Profile</button>
+                    <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+                        <button id="modal-export-profile-btn" class="btn-outline">Export</button>
+                        <button id="modal-import-profile-btn" class="btn-outline">Import</button>
+                    </div>
                     <input type="file" id="modal-import-file-input" accept=".json" style="display: none;">
                 </div>
             </div>
+            
             <div id="settings-models-container" class="settings-section">
                 <h3>Models</h3>
                 <!-- ModelSelector will be rendered here -->
             </div>
+            
             <div id="settings-prompts-container" class="settings-section">
-                <h3>Prompts</h3>
+                <h3>Generation Prompts</h3>
                 <!-- PromptManager will be rendered here -->
-                
-                <!-- Context Extraction Prompt (Profile Setting) -->
-                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-                    <h4>Context Extraction Prompt <span style="font-size: 0.8em; color: #6b7280; font-weight: normal;">(saved with profile)</span></h4>
-                    <div style="margin-bottom: 1rem;">
-                        <label for="modal-context-extraction-prompt" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Template (use {{extraction_request}}, {{node_title}}, {{content}} as placeholders):</label>
-                        <textarea id="modal-context-extraction-prompt" rows="6" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; line-height: 1.4; resize: vertical;"></textarea>
-                    </div>
+            </div>
+            
+            <div id="settings-context-extraction-container" class="settings-section">
+                <h4>Context Extraction Prompt</h4>
+                <div style="margin-bottom: 1rem;">
+                    <label for="modal-context-extraction-prompt" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Template (use {{extraction_request}}, {{node_title}}, {{content}} as placeholders):</label>
+                    <textarea id="modal-context-extraction-prompt" rows="6" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; line-height: 1.4; resize: vertical;"></textarea>
                 </div>
             </div>
+            
             <div id="settings-criteria-container" class="settings-section">
                 <h3>Quality Criteria</h3>
                 <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #6b7280;">
@@ -683,60 +906,136 @@ export function renderSettingsModal() {
                     <span style="width: 18px; text-align: center; color: #10b981;" title="Use for leaf nodes">L</span>
                     <span style="width: 24px;"></span>
                 </div>
-                <div id="modal-criteria-list" style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+                <div id="modal-criteria-list"></div>
                 <div style="margin-top: 1.5rem;">
-                    <label for="modal-max-iterations">Max Iterations:</label>
-                    <input type="number" id="modal-max-iterations" min="1" max="20" value="5" style="max-width: 100px;">
+                    <label for="modal-max-iterations" style="font-weight: 500;">Max Iterations:</label>
+                    <input type="number" id="modal-max-iterations" min="1" max="20" value="5" style="margin-left: 0.5rem; max-width: 100px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
                 </div>
                 <div class="criteria-actions">
-                    <button id="modal-add-criterion-btn" class="button button-secondary">Add</button>
-                    <button id="modal-default-criteria-btn" class="button button-secondary">Defaults</button>
-                    <button id="modal-copy-criteria-btn" class="button button-secondary">Copy</button>
-                    <button id="modal-paste-criteria-btn" class="button button-secondary">Paste</button>
+                    <button id="modal-add-criterion-btn" class="btn-outline">Add Criterion</button>
+                    <button id="modal-default-criteria-btn" class="btn-outline">Reset to Defaults</button>
+                    <button id="modal-copy-criteria-btn" class="btn-outline">Copy</button>
+                    <button id="modal-paste-criteria-btn" class="btn-outline">Paste</button>
                 </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <div class="footer-left">
+                <div id="unsaved-indicator" class="unsaved-indicator">Unsaved changes</div>
+                <div id="save-status" style="color: #10b981; display: none;">All changes saved</div>
+            </div>
+            <div class="footer-right">
+                <button id="cancel-settings-btn" style="background: #6b7280; color: white; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#4b5563'" onmouseout="this.style.backgroundColor='#6b7280'">Cancel</button>
+                <button id="apply-settings-btn" style="background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#4338ca'" onmouseout="this.style.backgroundColor='#4f46e5'">Apply & Close</button>
             </div>
         </div>
     `;
 
-    // --- Render and Wire-Up Components ---
+    // --- Initialize Components ---
+    let hasUnsavedChanges = false;
+    let saveTimeout: number | null = null;
+    
+    const updateUnsavedIndicator = (show: boolean) => {
+        hasUnsavedChanges = show;
+        const indicator = getElementById('unsaved-indicator');
+        const saveStatus = getElementById('save-status');
+        
+        if (show) {
+            indicator.classList.add('visible');
+            saveStatus.style.display = 'none';
+        } else {
+            indicator.classList.remove('visible');
+            saveStatus.style.display = 'block';
+            setTimeout(() => {
+                saveStatus.style.display = 'none';
+            }, 2000);
+        }
+    };
+
+    const autoSave = () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        updateUnsavedIndicator(true);
+        
+        saveTimeout = window.setTimeout(async () => {
+            await saveCurrentSettingsToProfile();
+            updateUnsavedIndicator(false);
+        }, 1000); // Auto-save after 1 second of inactivity
+    };
+
+    const saveCurrentSettingsToProfile = async () => {
+        const settingsManagerInstance = state.getSettingsManager();
+        if (!settingsManagerInstance || !modelSelector) return;
+
+        const activeProfileName = settingsManagerInstance.getLastUsedProfileName();
+        if (!activeProfileName) return;
+
+        // Get all current values from UI
+        const modalContextExtractionPrompt = getElementById('modal-context-extraction-prompt') as HTMLTextAreaElement;
+        const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
+        const modalCriteriaList = getElementById('modal-criteria-list');
+
+        const currentSettings: SettingsProfile = {
+            selectedModels: modelSelector.getSelectedModels(),
+            criteria: getCriteriaFromUI(modalCriteriaList),
+            maxIterations: parseInt(modalMaxIterations.value, 10),
+            prompt: '', // Legacy field
+            prompts: settingsManagerInstance.getPrompts(),
+            contextExtractionPrompt: modalContextExtractionPrompt.value
+        };
+
+        await settingsManagerInstance.saveProfile(activeProfileName, currentSettings);
+    };
 
     // Model Selector
     const modelsContainer = getElementById('settings-models-container');
     modelSelector.render(modelsContainer);
+    
+    // Add auto-save for model changes by monitoring the container
+    modelsContainer.addEventListener('change', autoSave);
+    modelsContainer.addEventListener('input', autoSave);
 
-    // Prompt Manager
+    // Prompt Manager (modified to work with auto-save)
     const promptsContainer = getElementById('settings-prompts-container');
     const settingsManager = state.getSettingsManager();
     if (settingsManager) {
-        const promptManager = new PromptManager(promptsContainer, (prompts) => {
-            // Just save the prompts. The orchestrator will be re-created with new prompts
-            // the next time the models are selected, or on the next app load.
-            state.setOrchestratorPrompts(prompts);
-        }, settingsManager);
+        // Create a custom prompt manager without save buttons
+        const promptManager = new PromptManagerAutoSave(promptsContainer, autoSave, settingsManager);
     }
 
-    // Criteria Editor
+    // Wire up auto-save for all form elements
     const modalCriteriaList = getElementById('modal-criteria-list');
     const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
-    const modalDefaultCriteriaBtn = getElementById('modal-default-criteria-btn');
-    
-    // Context Extraction Prompt Editor
     const modalContextExtractionPrompt = getElementById('modal-context-extraction-prompt') as HTMLTextAreaElement;
+    
+    modalMaxIterations.addEventListener('input', autoSave);
+    modalContextExtractionPrompt.addEventListener('input', autoSave);
+    modalCriteriaList.addEventListener('input', autoSave);
+    modalCriteriaList.addEventListener('change', autoSave);
 
     // --- Profile Management ---
     const settingsManagerInstance = state.getSettingsManager();
     const profileSelect = getElementById('modal-profile-select') as HTMLSelectElement;
     const newProfileNameInput = getElementById('modal-new-profile-name') as HTMLInputElement;
+    const currentProfileName = getElementById('current-profile-name');
 
     const populateProfileSelector = () => {
         if (!settingsManagerInstance) return;
         const profiles = settingsManagerInstance.getProfileNames();
         const lastUsed = settingsManagerInstance.getLastUsedProfileName();
         profileSelect.innerHTML = profiles.map(p => `<option value="${p}" ${p === lastUsed ? 'selected' : ''}>${p}</option>`).join('');
+        if (currentProfileName && lastUsed) {
+            currentProfileName.textContent = lastUsed;
+        }
     };
 
     const applyProfileToUI = (profile: SettingsProfile | null) => {
         if (!profile || !modelSelector) return;
+        
+        // Clear any pending auto-save to prevent race conditions
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
         
         // Apply models
         if (profile.selectedModels) modelSelector.setSelectedModels(profile.selectedModels);
@@ -748,49 +1047,70 @@ export function renderSettingsModal() {
         // Apply context extraction prompt
         modalContextExtractionPrompt.value = profile.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT;
 
-        // Note: Prompts are handled by the PromptManager instance which is aware of the SettingsManager
-        // Re-rendering or a more direct update might be needed if prompts are to be swapped dynamically.
-        // For now, we assume the PromptManager reflects the correct state or is re-initialized.
+        // Update current profile display
+        populateProfileSelector();
+        updateUnsavedIndicator(false);
     };
 
-    getElementById('modal-load-profile-btn').addEventListener('click', () => {
+    // Immediately load profile when selection changes
+    profileSelect.addEventListener('change', () => {
         if (!settingsManagerInstance) return;
         const profileName = profileSelect.value;
         const profile = settingsManagerInstance.getProfile(profileName);
         applyProfileToUI(profile || null);
         settingsManagerInstance.setLastUsedProfile(profileName);
-        alert(`Profile "${profileName}" loaded.`);
+        
+        // Refresh the global profile selector in the main UI
+        refreshGlobalProfileSelector();
     });
 
-    getElementById('modal-save-profile-btn').addEventListener('click', () => {
+    getElementById('modal-create-profile-btn').addEventListener('click', () => {
         if (!settingsManagerInstance || !modelSelector) return;
-        let profileName = newProfileNameInput.value.trim();
+        const profileName = newProfileNameInput.value.trim();
         if (!profileName) {
-            profileName = profileSelect.value;
-        }
-        if (!profileName) {
-            alert('Please enter a name for the new profile or select an existing one to overwrite.');
+            alert('Please enter a name for the new profile.');
             return;
         }
 
+        // Check if profile already exists
+        if (settingsManagerInstance.getProfile(profileName)) {
+            alert(`A profile named "${profileName}" already exists.`);
+            return;
+        }
+
+        // Get current settings to copy
         const currentSettings: SettingsProfile = {
             selectedModels: modelSelector.getSelectedModels(),
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
-            prompt: '', // Prompt is managed separately, but the property is required.
+            prompt: '', // Legacy field
+            prompts: settingsManagerInstance.getPrompts(),
             contextExtractionPrompt: modalContextExtractionPrompt.value
         };
 
+        // Save the new profile
         settingsManagerInstance.saveProfile(profileName, currentSettings);
         settingsManagerInstance.setLastUsedProfile(profileName);
+        
+        // Clear the input field
         newProfileNameInput.value = '';
+        
+        // Update the profile selector and select the new profile
         populateProfileSelector();
         profileSelect.value = profileName;
         
         // Refresh the global profile selector in the main UI
         refreshGlobalProfileSelector();
         
-        alert(`Profile "${profileName}" saved.`);
+        alert(`Profile "${profileName}" created and activated.`);
+    });
+
+    // Allow pressing Enter in the new profile name input to create the profile
+    newProfileNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            getElementById('modal-create-profile-btn').click();
+        }
     });
 
     getElementById('modal-delete-profile-btn').addEventListener('click', () => {
@@ -895,23 +1215,57 @@ export function renderSettingsModal() {
             const textDisplay = newItem.querySelector('.criterion-text-display');
             if(textDisplay) (textDisplay as HTMLElement).style.display = 'none';
         }
+        autoSave();
     });
     getElementById('modal-default-criteria-btn').addEventListener('click', () => {
         if (confirm("This will replace your current criteria list with the application defaults. Are you sure?")) {
             renderCriteria(modalCriteriaList, DEFAULT_CRITERIA);
+            autoSave();
         }
     });
     getElementById('modal-copy-criteria-btn').addEventListener('click', () => handleCopyCriteria(modalCriteriaList));
-    getElementById('modal-paste-criteria-btn').addEventListener('click', () => handlePasteCriteria(modalCriteriaList));
+    getElementById('modal-paste-criteria-btn').addEventListener('click', async () => {
+        await handlePasteCriteria(modalCriteriaList);
+        autoSave();
+    });
     modalCriteriaList.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).classList.contains('remove-criterion-btn')) {
             (e.target as HTMLElement).closest('.criterion')?.remove();
+            autoSave();
         }
     });
 
 
 
-    getElementById('close-settings-modal-btn').addEventListener('click', closeModal);
+    // Footer button handlers
+    getElementById('cancel-settings-btn').addEventListener('click', () => {
+        if (hasUnsavedChanges) {
+            if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+                closeModal();
+            }
+        } else {
+            closeModal();
+        }
+    });
+
+    getElementById('apply-settings-btn').addEventListener('click', async () => {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+        }
+        await saveCurrentSettingsToProfile();
+        updateUnsavedIndicator(false);
+        closeModal();
+    });
+
+    getElementById('close-settings-modal-btn').addEventListener('click', () => {
+        if (hasUnsavedChanges) {
+            if (confirm('You have unsaved changes. Are you sure you want to close?')) {
+                closeModal();
+            }
+        } else {
+            closeModal();
+        }
+    });
 }
 
 // --- Private Functions ---
