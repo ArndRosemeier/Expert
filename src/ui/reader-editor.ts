@@ -144,12 +144,7 @@ export class ReaderEditor {
                     }
                 };
                 
-                console.log('🎯 Smart selection applied:', {
-                    original: context.selection.text,
-                    smart: smartText,
-                    originalBounds: [context.selection.startOffset, context.selection.endOffset],
-                    smartBounds: [smartBounds.startPos, smartBounds.endPos]
-                });
+
             }
             
             // Execute the action with processed context
@@ -199,7 +194,7 @@ export class ReaderEditor {
             );
         }
 
-        console.log('✅ Applied AI result with highlighting');
+
 
         // Mark as dirty and auto-save
         this.markDirty(editor);
@@ -428,6 +423,41 @@ export class ReaderEditor {
     }
 
     /**
+     * Get all actions (for configuration UI)
+     */
+    public getAllActions() {
+        return this.editManager.getAllActions();
+    }
+
+    /**
+     * Update an existing action
+     */
+    public updateAction(id: string, updates: any): boolean {
+        return this.editManager.updateAction(id, updates);
+    }
+
+    /**
+     * Delete an action
+     */
+    public deleteAction(id: string): boolean {
+        return this.editManager.deleteAction(id);
+    }
+
+    /**
+     * Add a new action
+     */
+    public addAction(action: any): string {
+        return this.editManager.addAction(action);
+    }
+
+    /**
+     * Reset actions to defaults
+     */
+    public async resetToDefaults(): Promise<void> {
+        return this.editManager.resetToDefaults();
+    }
+
+    /**
      * Set the selection mode for all editors
      */
     public setSelectionMode(mode: 'words' | 'sentences'): void {
@@ -451,7 +481,7 @@ export class ReaderEditor {
      * DISABLED: With HTML highlighting, DOM recreation is no longer needed
      */
     public onDOMRecreated(): void {
-        console.log('🔄 DOM RECREATED - onDOMRecreated called (DISABLED)');
+
         
         // DISABLED: With HTML-based highlighting that persists in the DOM,
         // we no longer need to recreate editor overlays when DOM changes.

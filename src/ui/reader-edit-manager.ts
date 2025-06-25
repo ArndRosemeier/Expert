@@ -33,7 +33,7 @@ export class ReaderEditManager {
      */
     private getDefaultConfig(): EditActionConfig {
         return {
-            version: 2,
+            version: 3,
             actions: [
                 {
                     id: 'expand-details',
@@ -70,6 +70,15 @@ export class ReaderEditManager {
                     enabled: true,
                     order: 4,
                     description: 'Add practical examples to the content'
+                },
+                {
+                    id: 'change',
+                    title: 'Change',
+                    prompt: 'Full context for reference:\nNode: {{title}}\nContent: {{content}}\n\nAn instruction follows that should be applied to a text.\nOnly return the result of that instruction, nothing more.\nInstruction: {{input "How should the text be changed?"}}\nText:\n{{selected}}',
+                    model: 'creator',
+                    enabled: true,
+                    order: 5,
+                    description: 'Change selected text according to custom instructions'
                 }
             ]
         };
@@ -84,7 +93,7 @@ export class ReaderEditManager {
             const savedConfig = await storage.get<EditActionConfig>(ReaderEditManager.CONFIG_STORAGE_KEY);
             
             // TEMPORARY: Force reset to fix prompt issues - increment version to invalidate old configs
-            const currentVersion = 2; // Incremented from 1 to force refresh
+            const currentVersion = 3; // Incremented to add Change action with input placeholder
             
             if (savedConfig && savedConfig.version === currentVersion) {
                 this.config = savedConfig;
@@ -92,7 +101,7 @@ export class ReaderEditManager {
                 // Version mismatch or no config - use defaults and save
                 this.config.version = currentVersion;
                 await this.saveConfig();
-                console.log('Reset reader actions to defaults due to version change');
+    
             }
         } catch (error) {
             console.warn('Failed to load reader edit actions config:', error);
@@ -198,6 +207,19 @@ export class ReaderEditManager {
     private async fillPrompt(promptTemplate: string, context: EditContext): Promise<string> {
         let filledPrompt = promptTemplate;
         
+        // Handle {{input "Title"}} placeholders first
+        const inputMatches = filledPrompt.match(/\{\{input\s+"([^"]+)"\}\}/g);
+        if (inputMatches) {
+            for (const match of inputMatches) {
+                const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
+                if (titleMatch) {
+                    const title = titleMatch[1];
+                    const userInput = await this.showInputModal(title);
+                    filledPrompt = filledPrompt.replace(match, userInput);
+                }
+            }
+        }
+        
         // Replace {{selected}} with selected text or empty if no selection
         const selectedText = context.selection?.text || '';
         filledPrompt = filledPrompt.replace(/\{\{selected\}\}/g, selectedText);
@@ -212,6 +234,165 @@ export class ReaderEditManager {
         }
         
         return filledPrompt;
+    }
+
+    /**
+     * Show an input modal and return the user's input
+     */
+    private async showInputModal(title: string): Promise<string> {
+        return new Promise((resolve) => {
+            // Import modal manager dynamically to avoid circular dependencies
+            import('./modal-manager').then(({ openGenericModal, closeGenericModal }) => {
+                const modalContent = `
+                    <style>
+                        .input-modal {
+                            width: 400px;
+                            max-width: 90vw;
+                        }
+                        .input-modal-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 1.5rem;
+                            padding-bottom: 1rem;
+                            border-bottom: 1px solid #e5e7eb;
+                        }
+                        .input-modal-title {
+                            margin: 0;
+                            color: #1f2937;
+                            font-size: 1.25rem;
+                            font-weight: 600;
+                        }
+                        .input-modal-close {
+                            background: #ef4444;
+                            color: white;
+                            border: none;
+                            border-radius: 50%;
+                            width: 32px;
+                            height: 32px;
+                            cursor: pointer;
+                            font-size: 1.2rem;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .input-modal-close:hover {
+                            background: #dc2626;
+                        }
+                        .input-modal-body {
+                            margin-bottom: 1.5rem;
+                        }
+                        .input-modal-field {
+                            margin-bottom: 1rem;
+                        }
+                        .input-modal-label {
+                            display: block;
+                            font-weight: 500;
+                            color: #374151;
+                            margin-bottom: 0.5rem;
+                        }
+                        .input-modal-input {
+                            width: 100%;
+                            padding: 0.75rem;
+                            border: 1px solid #d1d5db;
+                            border-radius: 8px;
+                            font-size: 0.875rem;
+                            transition: border-color 0.2s;
+                        }
+                        .input-modal-input:focus {
+                            outline: none;
+                            border-color: #3b82f6;
+                            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                        }
+                        .input-modal-actions {
+                            display: flex;
+                            gap: 0.75rem;
+                            justify-content: flex-end;
+                        }
+                        .input-modal-btn {
+                            padding: 0.75rem 1.5rem;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 0.875rem;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.2s;
+                        }
+                        .input-modal-btn-primary {
+                            background-color: #3b82f6;
+                            color: white;
+                        }
+                        .input-modal-btn-primary:hover {
+                            background-color: #2563eb;
+                        }
+                        .input-modal-btn-secondary {
+                            background-color: #6b7280;
+                            color: white;
+                        }
+                        .input-modal-btn-secondary:hover {
+                            background-color: #4b5563;
+                        }
+                    </style>
+                    <div class="input-modal">
+                        <div class="input-modal-header">
+                            <h3 class="input-modal-title">${title}</h3>
+                            <button id="input-modal-close" class="input-modal-close">&times;</button>
+                        </div>
+                        <div class="input-modal-body">
+                            <div class="input-modal-field">
+                                <label class="input-modal-label" for="user-input">Please provide your input:</label>
+                                <input type="text" id="user-input" class="input-modal-input" placeholder="Enter your instruction..." autofocus>
+                            </div>
+                        </div>
+                        <div class="input-modal-actions">
+                            <button id="input-modal-cancel" class="input-modal-btn input-modal-btn-secondary">Cancel</button>
+                            <button id="input-modal-submit" class="input-modal-btn input-modal-btn-primary">OK</button>
+                        </div>
+                    </div>
+                `;
+
+                openGenericModal(modalContent, () => {
+                    const input = document.getElementById('user-input') as HTMLInputElement;
+                    const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
+                    const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
+                    const closeBtn = document.getElementById('input-modal-close') as HTMLButtonElement;
+
+                    const handleSubmit = () => {
+                        const value = input.value.trim();
+                        if (value) {
+                            closeGenericModal();
+                            resolve(value);
+                        } else {
+                            input.focus();
+                        }
+                    };
+
+                    const handleCancel = () => {
+                        closeGenericModal();
+                        resolve(''); // Return empty string on cancel
+                    };
+
+                    // Event listeners
+                    submitBtn.addEventListener('click', handleSubmit);
+                    cancelBtn.addEventListener('click', handleCancel);
+                    closeBtn.addEventListener('click', handleCancel);
+
+                    // Enter key to submit
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSubmit();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCancel();
+                        }
+                    });
+
+                    // Focus the input
+                    setTimeout(() => input.focus(), 100);
+                });
+            });
+        });
     }
 
     /**

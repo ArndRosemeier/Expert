@@ -11,20 +11,71 @@ import { refreshGlobalProfileSelector } from './project-ui';
 
 // --- Generic Modal Functions ---
 export function openGenericModal(content: string, onOpen?: () => void) {
-    if (modalContainer && modalContent) {
-        modalContent.innerHTML = content;
-        modalContainer.style.display = 'flex';
+    console.log('🔍 openGenericModal called with content length:', content.length);
+    
+    // Try to get fresh references to modal elements
+    let container = document.getElementById('modal-container') as HTMLElement;
+    let contentDiv = document.getElementById('modal-content') as HTMLElement;
+    
+    console.log('🔍 Fresh container lookup:', !!container);
+    console.log('🔍 Fresh content lookup:', !!contentDiv);
+    
+    if (container && contentDiv) {
+        console.log('✅ Setting modal content and showing...');
+        contentDiv.innerHTML = content;
+        container.style.display = 'flex';
+        console.log('✅ Modal display set to flex');
         if (onOpen) {
+            console.log('🎯 Calling onOpen callback...');
+            onOpen();
+        }
+    } else {
+        console.error('❌ Modal container or content not found even with fresh lookup!');
+        
+        // Fallback: create modal dynamically
+        console.log('🔧 Creating modal container dynamically...');
+        container = document.createElement('div');
+        container.id = 'dynamic-modal-container';
+        container.className = 'modal-container';
+        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 15000;';
+        
+        contentDiv = document.createElement('div');
+        contentDiv.className = 'modal-content';
+        contentDiv.style.cssText = 'background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);';
+        contentDiv.innerHTML = content;
+        
+        container.appendChild(contentDiv);
+        document.body.appendChild(container);
+        
+        console.log('✅ Dynamic modal created and shown');
+        if (onOpen) {
+            console.log('🎯 Calling onOpen callback...');
             onOpen();
         }
     }
 }
 
 export function closeGenericModal() {
-    if (modalContainer && modalContent) {
-        modalContainer.style.display = 'none';
-        modalContent.innerHTML = ''; // Clear content on close
+    // Try original modal first
+    let container = document.getElementById('modal-container') as HTMLElement;
+    let contentDiv = document.getElementById('modal-content') as HTMLElement;
+    
+    if (container && contentDiv) {
+        container.style.display = 'none';
+        contentDiv.innerHTML = ''; // Clear content on close
+        console.log('✅ Original modal closed');
+        return;
     }
+    
+    // Try dynamic modal
+    const dynamicContainer = document.getElementById('dynamic-modal-container');
+    if (dynamicContainer) {
+        dynamicContainer.remove();
+        console.log('✅ Dynamic modal removed');
+        return;
+    }
+    
+    console.warn('⚠️ No modal found to close');
 }
 
 

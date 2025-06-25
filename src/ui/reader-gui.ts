@@ -1,6 +1,8 @@
 import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { ReaderEditor } from './reader-editor';
+import { ReaderEditAction } from '../types/ReaderEditingTypes';
+import { openGenericModal, closeGenericModal } from './modal-manager';
 
 import { StorageService } from '../StorageService';
 
@@ -1555,9 +1557,657 @@ export class ReaderGUI {
      * Open the actions configuration modal
      */
     private openActionsConfigModal(): void {
-        // TODO: Implement actions configuration modal
-        console.log('Actions configuration modal - to be implemented');
-        alert('Actions configuration modal will be implemented in the next phase!');
+        try {
+            const content = this.renderActionsConfigModal();
+            openGenericModal(content, () => {
+                this.setupActionsConfigEventListeners();
+            });
+        } catch (error) {
+            console.error('❌ Failed to open modal:', error);
+        }
+    }
+
+    /**
+     * Render the actions configuration modal content
+     */
+    private renderActionsConfigModal(): string {
+        const actions = this.readerEditor.getAllActions();
+
+        return `
+            <style>
+                .actions-config-modal {
+                    width: 90vw;
+                    max-width: 1200px;
+                    max-height: 90vh;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .actions-config-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1.5rem 2rem;
+                    border-bottom: 1px solid #e5e7eb;
+                    background-color: #f9fafb;
+                }
+                .actions-config-body {
+                    flex: 1;
+                    padding: 2rem;
+                    overflow-y: auto;
+                    display: flex;
+                    gap: 2rem;
+                }
+                .actions-list {
+                    flex: 1;
+                    min-width: 300px;
+                }
+                .action-item {
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    margin-bottom: 1rem;
+                    background-color: white;
+                    transition: all 0.2s;
+                }
+                .action-item:hover {
+                    border-color: #3b82f6;
+                    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+                }
+                .action-item.selected {
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                }
+                .action-header {
+                    padding: 1rem 1.5rem;
+                    border-bottom: 1px solid #f3f4f6;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: pointer;
+                }
+                .action-title {
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin: 0;
+                }
+                .action-meta {
+                    display: flex;
+                    gap: 0.5rem;
+                    align-items: center;
+                    font-size: 0.875rem;
+                    color: #6b7280;
+                }
+                .action-toggle {
+                    position: relative;
+                    width: 44px;
+                    height: 24px;
+                    background-color: #d1d5db;
+                    border-radius: 12px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                }
+                .action-toggle.enabled {
+                    background-color: #3b82f6;
+                }
+                .action-toggle::after {
+                    content: '';
+                    position: absolute;
+                    top: 2px;
+                    left: 2px;
+                    width: 20px;
+                    height: 20px;
+                    background-color: white;
+                    border-radius: 50%;
+                    transition: transform 0.2s;
+                }
+                .action-toggle.enabled::after {
+                    transform: translateX(20px);
+                }
+                .editor-panel {
+                    flex: 2;
+                    min-width: 500px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    background-color: white;
+                    height: fit-content;
+                }
+                .editor-header {
+                    padding: 1rem 1.5rem;
+                    border-bottom: 1px solid #f3f4f6;
+                    background-color: #f9fafb;
+                    border-radius: 12px 12px 0 0;
+                }
+                .editor-content {
+                    padding: 1.5rem;
+                }
+                .field-group {
+                    margin-bottom: 1.5rem;
+                }
+                .field-label {
+                    display: block;
+                    font-weight: 600;
+                    color: #374151;
+                    margin-bottom: 0.5rem;
+                    font-size: 0.875rem;
+                }
+                .field-input {
+                    width: 100%;
+                    padding: 0.75rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 8px;
+                    font-size: 0.875rem;
+                    transition: border-color 0.2s;
+                }
+                .field-input:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                }
+                .field-textarea {
+                    min-height: 200px;
+                    resize: vertical;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 0.8rem;
+                    line-height: 1.5;
+                }
+                .field-select {
+                    width: 100%;
+                    padding: 0.75rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 8px;
+                    background-color: white;
+                    font-size: 0.875rem;
+                }
+                .placeholders-help {
+                    background-color: #eff6ff;
+                    border: 1px solid #bfdbfe;
+                    border-radius: 8px;
+                    padding: 1rem;
+                    margin-top: 1rem;
+                }
+                .placeholders-title {
+                    font-weight: 600;
+                    color: #1e40af;
+                    margin-bottom: 0.5rem;
+                    font-size: 0.875rem;
+                }
+                .placeholders-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                    gap: 0.5rem;
+                }
+                .placeholder-item {
+                    background-color: #dbeafe;
+                    color: #1e40af;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 0.75rem;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                }
+                .placeholder-item:hover {
+                    background-color: #bfdbfe;
+                }
+                .action-buttons {
+                    display: flex;
+                    gap: 0.75rem;
+                    justify-content: flex-end;
+                    padding: 1.5rem 2rem;
+                    border-top: 1px solid #e5e7eb;
+                    background-color: #f9fafb;
+                }
+                .btn {
+                    padding: 0.75rem 1.5rem;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .btn-primary {
+                    background-color: #3b82f6;
+                    color: white;
+                }
+                .btn-primary:hover {
+                    background-color: #2563eb;
+                }
+                .btn-primary:disabled {
+                    background-color: #9ca3af;
+                    cursor: not-allowed;
+                }
+                .btn-secondary {
+                    background-color: #6b7280;
+                    color: white;
+                }
+                .btn-secondary:hover {
+                    background-color: #4b5563;
+                }
+                .btn-danger {
+                    background-color: #ef4444;
+                    color: white;
+                }
+                .btn-danger:hover {
+                    background-color: #dc2626;
+                }
+                .btn-success {
+                    background-color: #10b981;
+                    color: white;
+                }
+                .btn-success:hover {
+                    background-color: #059669;
+                }
+                .no-selection {
+                    text-align: center;
+                    color: #6b7280;
+                    padding: 2rem;
+                    font-style: italic;
+                }
+                .field-description {
+                    font-size: 0.75rem;
+                    color: #6b7280;
+                    margin-top: 0.25rem;
+                }
+                .order-controls {
+                    display: flex;
+                    gap: 0.5rem;
+                    margin-left: auto;
+                }
+                .order-btn {
+                    width: 24px;
+                    height: 24px;
+                    border: 1px solid #d1d5db;
+                    background-color: white;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.75rem;
+                    color: #6b7280;
+                }
+                .order-btn:hover {
+                    background-color: #f3f4f6;
+                    border-color: #9ca3af;
+                }
+            </style>
+            <div class="actions-config-modal">
+                <div class="actions-config-header">
+                    <h2 style="margin: 0; color: #1f2937;">🔧 Configure AI Actions</h2>
+                    <button id="close-actions-config" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem;">&times;</button>
+                </div>
+                <div class="actions-config-body">
+                    <div class="actions-list">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="margin: 0; color: #374151;">Actions</h3>
+                            <button id="add-new-action" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.8rem;">+ Add New</button>
+                        </div>
+                        <div id="actions-list-container">
+                            ${actions.map(action => this.renderActionListItem(action)).join('')}
+                        </div>
+                    </div>
+                    <div class="editor-panel">
+                        <div class="editor-header">
+                            <h3 style="margin: 0; color: #374151;">Edit Action</h3>
+                        </div>
+                        <div class="editor-content">
+                            <div id="editor-content-area">
+                                <div class="no-selection">
+                                    Select an action to edit its configuration
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button id="reset-actions" class="btn btn-secondary">Reset to Defaults</button>
+                    <button id="save-actions" class="btn btn-primary">Save Changes</button>
+                    <button id="cancel-actions" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render a single action item in the list
+     */
+    private renderActionListItem(action: ReaderEditAction): string {
+        return `
+            <div class="action-item" data-action-id="${action.id}">
+                <div class="action-header" onclick="selectAction('${action.id}')">
+                    <div>
+                        <h4 class="action-title">${action.title}</h4>
+                        <div class="action-meta">
+                            <span>Model: ${action.model}</span>
+                            <span>•</span>
+                            <span>Order: ${action.order}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="order-controls">
+                            <button class="order-btn" onclick="moveActionUp('${action.id}')" title="Move up">↑</button>
+                            <button class="order-btn" onclick="moveActionDown('${action.id}')" title="Move down">↓</button>
+                        </div>
+                        <div class="action-toggle ${action.enabled ? 'enabled' : ''}" 
+                             onclick="toggleAction('${action.id}')" 
+                             data-enabled="${action.enabled}"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render the action editor form
+     */
+    private renderActionEditor(action: ReaderEditAction): string {
+        const availablePlaceholders = [
+            '{{selected}}', '{{content}}', '{{title}}', '{{node_path}}', 
+            '{{project_title}}', '{{level}}', '{{children_count}}', 
+            '{{children_summary}}', '{{word_count}}', '{{input "Title"}}'
+        ];
+
+        return `
+            <form id="action-editor-form" data-action-id="${action.id}">
+                <div class="field-group">
+                    <label class="field-label" for="action-title">Action Title</label>
+                    <input type="text" id="action-title" class="field-input" value="${action.title}" required>
+                    <div class="field-description">The text that appears on the action button</div>
+                </div>
+                
+                <div class="field-group">
+                    <label class="field-label" for="action-description">Description</label>
+                    <input type="text" id="action-description" class="field-input" value="${action.description || ''}" placeholder="Optional description for this action">
+                    <div class="field-description">Help text that appears when hovering over the button</div>
+                </div>
+                
+                <div class="field-group">
+                    <label class="field-label" for="action-model">AI Model</label>
+                    <select id="action-model" class="field-select">
+                        <option value="creator" ${action.model === 'creator' ? 'selected' : ''}>Creator (Creative, detailed responses)</option>
+                        <option value="editor" ${action.model === 'editor' ? 'selected' : ''}>Editor (Precise, concise editing)</option>
+                        <option value="rater" ${action.model === 'rater' ? 'selected' : ''}>Rater (Analysis and evaluation)</option>
+                    </select>
+                    <div class="field-description">Choose the AI model that best fits this action's purpose</div>
+                </div>
+                
+                <div class="field-group">
+                    <label class="field-label" for="action-order">Display Order</label>
+                    <input type="number" id="action-order" class="field-input" value="${action.order}" min="1" required>
+                    <div class="field-description">Controls the order of action buttons (1 = first)</div>
+                </div>
+                
+                <div class="field-group">
+                    <label class="field-label" for="action-prompt">Prompt Template</label>
+                    <textarea id="action-prompt" class="field-input field-textarea" required>${action.prompt}</textarea>
+                    <div class="field-description">Use placeholders like {{selected}} to insert dynamic content</div>
+                    
+                    <div class="placeholders-help">
+                        <div class="placeholders-title">Available Placeholders (click to insert):</div>
+                        <div class="placeholders-grid">
+                            ${availablePlaceholders.map(placeholder => 
+                                `<span class="placeholder-item" onclick="insertPlaceholder('${placeholder}')">${placeholder}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 0.75rem; margin-top: 2rem;">
+                    <button type="button" id="test-action" class="btn btn-secondary">Test Prompt</button>
+                    <button type="button" id="delete-action" class="btn btn-danger" ${action.id.startsWith('custom-') ? '' : 'disabled title="Default actions cannot be deleted"'}>Delete Action</button>
+                </div>
+            </form>
+        `;
+    }
+
+    /**
+     * Setup event listeners for the actions configuration modal
+     */
+    private setupActionsConfigEventListeners(): void {
+        // Store current selected action ID
+        let selectedActionId: string | null = null;
+        let unsavedChanges = false;
+
+        // Global functions for onclick handlers
+        (window as any).selectAction = (actionId: string) => {
+            if (unsavedChanges && !confirm('You have unsaved changes. Continue without saving?')) {
+                return;
+            }
+            selectedActionId = actionId;
+            this.selectActionInModal(actionId);
+            unsavedChanges = false;
+        };
+
+        (window as any).toggleAction = (actionId: string) => {
+            this.readerEditor.updateAction(actionId, { 
+                enabled: !this.readerEditor.getAllActions().find(a => a.id === actionId)?.enabled 
+            });
+            this.refreshActionsList();
+            unsavedChanges = true;
+        };
+
+        (window as any).moveActionUp = (actionId: string) => {
+            this.moveAction(actionId, -1);
+            this.refreshActionsList();
+            unsavedChanges = true;
+        };
+
+        (window as any).moveActionDown = (actionId: string) => {
+            this.moveAction(actionId, 1);
+            this.refreshActionsList();
+            unsavedChanges = true;
+        };
+
+        (window as any).insertPlaceholder = (placeholder: string) => {
+            const textarea = document.getElementById('action-prompt') as HTMLTextAreaElement;
+            if (textarea) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                textarea.value = text.substring(0, start) + placeholder + text.substring(end);
+                textarea.focus();
+                textarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
+                unsavedChanges = true;
+            }
+        };
+
+        // Close button
+        const closeBtn = document.getElementById('close-actions-config');
+        closeBtn?.addEventListener('click', () => {
+            if (unsavedChanges && !confirm('You have unsaved changes. Close without saving?')) {
+                return;
+            }
+            closeGenericModal();
+        });
+
+        // Add new action
+        const addBtn = document.getElementById('add-new-action');
+        addBtn?.addEventListener('click', () => {
+            this.addNewAction();
+            this.refreshActionsList();
+            unsavedChanges = true;
+        });
+
+        // Form change detection
+        document.addEventListener('input', (e) => {
+            if ((e.target as HTMLElement).closest('#action-editor-form')) {
+                unsavedChanges = true;
+            }
+        });
+
+        // Save current action
+        document.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            
+            if (target.id === 'save-current-action' && selectedActionId) {
+                this.saveCurrentAction(selectedActionId);
+                unsavedChanges = false;
+            }
+            
+            if (target.id === 'test-action' && selectedActionId) {
+                this.testAction(selectedActionId);
+            }
+            
+            if (target.id === 'delete-action' && selectedActionId) {
+                if (confirm('Are you sure you want to delete this action?')) {
+                    this.readerEditor.deleteAction(selectedActionId);
+                    this.refreshActionsList();
+                    selectedActionId = null;
+                    this.clearActionEditor();
+                    unsavedChanges = true;
+                }
+            }
+        });
+
+        // Reset to defaults
+        const resetBtn = document.getElementById('reset-actions');
+        resetBtn?.addEventListener('click', () => {
+            if (confirm('Reset all actions to defaults? This will remove any custom actions.')) {
+                this.readerEditor.resetToDefaults().then(() => {
+                    this.refreshActionsList();
+                    this.clearActionEditor();
+                    selectedActionId = null;
+                    unsavedChanges = false;
+                    alert('Actions reset to defaults successfully!');
+                });
+            }
+        });
+
+        // Save all changes
+        const saveBtn = document.getElementById('save-actions');
+        saveBtn?.addEventListener('click', () => {
+            if (selectedActionId) {
+                this.saveCurrentAction(selectedActionId);
+            }
+            this.updateActionButtons();
+            unsavedChanges = false;
+            alert('All changes saved successfully!');
+            closeGenericModal();
+        });
+
+        // Cancel
+        const cancelBtn = document.getElementById('cancel-actions');
+        cancelBtn?.addEventListener('click', () => {
+            if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
+                return;
+            }
+            closeGenericModal();
+        });
+    }
+
+    /**
+     * Select an action in the modal and show its editor
+     */
+    private selectActionInModal(actionId: string): void {
+        // Update visual selection
+        const items = document.querySelectorAll('.action-item');
+        items.forEach(item => item.classList.remove('selected'));
+        
+        const selectedItem = document.querySelector(`[data-action-id="${actionId}"]`);
+        selectedItem?.classList.add('selected');
+
+        // Load action into editor
+        const action = this.readerEditor.getAllActions().find(a => a.id === actionId);
+        if (action) {
+            const editorArea = document.getElementById('editor-content-area');
+            if (editorArea) {
+                editorArea.innerHTML = this.renderActionEditor(action);
+            }
+        }
+    }
+
+    /**
+     * Refresh the actions list in the modal
+     */
+    private refreshActionsList(): void {
+        const container = document.getElementById('actions-list-container');
+        if (container) {
+            const actions = this.readerEditor.getAllActions();
+            container.innerHTML = actions.map(action => this.renderActionListItem(action)).join('');
+        }
+    }
+
+    /**
+     * Clear the action editor panel
+     */
+    private clearActionEditor(): void {
+        const editorArea = document.getElementById('editor-content-area');
+        if (editorArea) {
+            editorArea.innerHTML = `
+                <div class="no-selection">
+                    Select an action to edit its configuration
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Save the current action being edited
+     */
+    private saveCurrentAction(actionId: string): void {
+        const form = document.getElementById('action-editor-form') as HTMLFormElement;
+        if (!form) return;
+
+        const formData = new FormData(form);
+        const updates = {
+            title: (document.getElementById('action-title') as HTMLInputElement).value,
+            description: (document.getElementById('action-description') as HTMLInputElement).value,
+            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater',
+            order: parseInt((document.getElementById('action-order') as HTMLInputElement).value),
+            prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
+        };
+
+        this.readerEditor.updateAction(actionId, updates);
+        this.refreshActionsList();
+    }
+
+    /**
+     * Add a new custom action
+     */
+    private addNewAction(): void {
+        const newAction = {
+            title: 'New Action',
+            prompt: 'Please modify the following text:\n\n{{selected}}\n\nModified text:',
+            model: 'editor' as const,
+            enabled: true,
+            order: this.readerEditor.getAllActions().length + 1,
+            description: 'Custom action'
+        };
+
+        const actionId = this.readerEditor.addAction(newAction);
+        
+        // Auto-select the new action
+        setTimeout(() => {
+            (window as any).selectAction(actionId);
+        }, 100);
+    }
+
+    /**
+     * Move an action up or down in order
+     */
+    private moveAction(actionId: string, direction: number): void {
+        const actions = this.readerEditor.getAllActions();
+        const action = actions.find(a => a.id === actionId);
+        if (!action) return;
+
+        const newOrder = action.order + direction;
+        if (newOrder < 1 || newOrder > actions.length) return;
+
+        // Find action at target position and swap
+        const targetAction = actions.find(a => a.order === newOrder);
+        if (targetAction) {
+            this.readerEditor.updateAction(targetAction.id, { order: action.order });
+        }
+        
+        this.readerEditor.updateAction(actionId, { order: newOrder });
+    }
+
+    /**
+     * Test an action with sample content
+     */
+    private testAction(actionId: string): void {
+        alert('Prompt testing feature will be implemented in a future update!');
+        // TODO: Implement prompt testing with sample content
     }
 
     /**
@@ -1626,7 +2276,7 @@ export class ReaderGUI {
         select.addEventListener('change', () => {
             const newMode = select.value as 'words' | 'sentences';
             this.readerEditor.setSelectionMode(newMode);
-            console.log(`🎯 Selection mode changed to: ${newMode}`);
+
         });
     }
 
