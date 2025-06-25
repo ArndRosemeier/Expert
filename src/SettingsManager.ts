@@ -114,7 +114,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: 'Human-like Naming',
         goal: 8,
-        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established.",
+        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Use varied, authentic names like Elara, Lyra, Chen, Kai, Marcus, Zara, Aria, Clive, Maximilian, Everett, Benedict, Oswald, Rupert, Magnus, Park, Johnson, Thorne, Alaric, Nyx, Orion, Cassian, Mira, Selene, Vale, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian. Avoid overly fantasy-themed names like Moonshadow, Stormrider, Dawnwalker, Shadowblade, Emberheart, or Snowsong unless the genre specifically calls for them. Do not change names that are already established.",
         outline: true,
         leaf: false
     }
