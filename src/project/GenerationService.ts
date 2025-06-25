@@ -228,6 +228,9 @@ export class GenerationService {
                 node.setContentFromGeneration(result.finalResponse);
                 node.generationHistory = result.history;
                 
+                // Synthesize context after content generation
+                await this.synthesizeNodeContext(nodeId, isChildGeneration);
+                
                 // Cleanup state before emitting events
                 this.cleanupGenerationState(nodeId, node, isChildGeneration);
                 
@@ -294,6 +297,9 @@ export class GenerationService {
             return;
         }
 
+        // Set generating flag and emit generation started event
+        node.isGenerating = true;
+        this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
         this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating titles...', current: 0, total: 1 });
 
         // Clear existing children to allow for regeneration
@@ -326,7 +332,10 @@ export class GenerationService {
             const titles = this.parseBulletedList(response);
 
             if (titles.length === 0) {
+                // Clear generating flag before emitting error
+                node.isGenerating = false;
                 this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
                 return;
             }
 
@@ -337,11 +346,19 @@ export class GenerationService {
             });
 
             await this.deps.saveToStorage();
-            // This event is listened to by the UI to trigger a full re-render.
+            
+            // Clear generating flag and emit completion event
+            node.isGenerating = false;
             this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node: node });
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 1, total: 1 });
         } catch(error) {
             console.error('Failed to create children from outline via LLM:', error);
+            
+            // Clear generating flag before emitting error
+            node.isGenerating = false;
             this.deps.eventEmitter.emit('error', 'The AI failed to process the outline. Please try again.');
+            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: false, error, node: node });
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
         }
     }
 
@@ -487,11 +504,20 @@ export class GenerationService {
                         break;
                     }
                     
+                    console.log(`Starting content generation for child ${i + 1}/${total}: "${child.title}" (${child.id})`);
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
                     
                     try {
                         // Use the child's own generation count setting
                         await this.generateNodeContent(child.id, child.generationChildrenCount, true);
+                        
+                        // Verify content was actually generated
+                        const updatedChild = this.deps.treeService.findNodeById(child.id, this.deps.rootNode);
+                        if (updatedChild && updatedChild.content && updatedChild.content.trim() !== '') {
+                            console.log(`✓ Content generation completed for "${child.title}": ${updatedChild.content.length} chars`);
+                        } else {
+                            console.error(`✗ Content generation failed for "${child.title}": No content found after generation`);
+                        }
                         
                         // Check for abort after generation
                         if (this.abortRequested) {
@@ -502,9 +528,11 @@ export class GenerationService {
                         // await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
                     } catch (error: any) {
                         if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                            console.log(`Content generation aborted for "${child.title}"`);
                             break;
                         }
-                        console.error(`Failed to generate content for child ${child.title}:`, error);
+                        console.error(`Failed to generate content for child "${child.title}" (${child.id}):`, error);
+                        this.deps.eventEmitter.emit('error', `Failed to generate content for "${child.title}": ${error.message}`);
                         // Continue with next child instead of failing completely
                     }
                 }
@@ -709,6 +737,88 @@ export class GenerationService {
             // For outline/branch nodes, include criteria where outline is true
             return criterion.outline === true;
         });
+    }
+
+    /**
+     * Synthesizes context for a node after content generation.
+     * This combines parent context with the newly generated content to create
+     * a focused context for potential child nodes.
+     * @param nodeId The ID of the node to synthesize context for.
+     * @param isChildGeneration Whether this is part of a bulk generation operation.
+     */
+    private async synthesizeNodeContext(nodeId: string, isChildGeneration: boolean): Promise<void> {
+        // Only synthesize context if not aborted
+        if (this.abortRequested) {
+            return;
+        }
+
+        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+        if (!node) {
+            console.warn(`Node ${nodeId} not found for context synthesis`);
+            return;
+        }
+
+        try {
+            const synthesizedContext = await this.deps.contextService.synthesizeContext(nodeId, this.deps.rootNode);
+            
+            if (synthesizedContext && synthesizedContext.trim() !== '') {
+                // Clean up the synthesized context by removing header lines
+                const cleanedContext = this.cleanSynthesizedContext(synthesizedContext);
+                
+                // Only update if we have actual cleaned content
+                if (cleanedContext && cleanedContext.trim() !== '') {
+                    node.context = cleanedContext;
+                    console.log(`✓ Context synthesized for node "${node.title}" (${nodeId}): ${cleanedContext.length} chars`);
+                } else {
+                    console.log(`Context synthesis produced empty result for node "${node.title}" (${nodeId})`);
+                }
+            } else {
+                // Context synthesis failed or returned null - this is not a critical error
+                console.log(`Context synthesis skipped for node "${node.title}" (${nodeId}) - no synthesized context returned`);
+            }
+        } catch (error) {
+            // Log the error but ensure it doesn't break content generation
+            console.error(`Context synthesis failed for node "${node.title}" (${nodeId}):`, error);
+            // Emit a non-critical warning instead of breaking the flow
+            if (!isChildGeneration) {
+                this.deps.eventEmitter.emit('error', `Warning: Context synthesis failed for "${node.title}" but content generation completed successfully.`);
+            }
+        }
+    }
+
+    /**
+     * Cleans synthesized context by removing header lines from the beginning.
+     * Removes lines from the start until it finds a line that is non-empty and doesn't contain "context" and ":".
+     * @param synthesizedContext The raw synthesized context from the AI.
+     * @returns The cleaned context without header lines.
+     */
+    private cleanSynthesizedContext(synthesizedContext: string): string {
+        const lines = synthesizedContext.split('\n');
+        let startIndex = 0;
+        
+        // Remove lines from the beginning until we find actual content
+        for (let i = 0; i < lines.length; i++) {
+            const trimmedLine = lines[i].trim();
+            
+            // If line is empty, keep removing
+            if (trimmedLine === '') {
+                startIndex = i + 1;
+                continue;
+            }
+            
+            // If line contains both "context" and ":" (case insensitive), keep removing
+            const lowerLine = trimmedLine.toLowerCase();
+            if (lowerLine.includes('context') && lowerLine.includes(':')) {
+                startIndex = i + 1;
+                continue;
+            }
+            
+            // Found a line that's non-empty and doesn't contain "context" + ":", stop here
+            break;
+        }
+        
+        // Return everything from the first content line onwards
+        return lines.slice(startIndex).join('\n').trim();
     }
 
     /**

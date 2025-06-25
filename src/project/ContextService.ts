@@ -1,5 +1,7 @@
 import { DocumentNode } from '../DocumentNode';
 import { TreeService } from './TreeService';
+import { OpenRouterClient } from '../OpenRouterClient';
+import { SettingsManager } from '../SettingsManager';
 
 /**
  * ContextService handles all context building and hierarchical inheritance.
@@ -8,12 +10,15 @@ import { TreeService } from './TreeService';
  */
 export class ContextService {
     
-    constructor(private treeService: TreeService) {}
+    constructor(
+        private treeService: TreeService,
+        private openRouterClient?: OpenRouterClient,
+        private settingsManager?: SettingsManager
+    ) {}
 
     /**
-     * Gathers rich, hierarchical context for a specific node to guide content generation.
-     * This method compiles the direct parent's content and full content of preceding siblings.
-     * Modern LLMs have large context windows, so we use direct content for maximum precision.
+     * Gathers context for a specific node to guide content generation.
+     * This method compiles only the immediate parent's content and context, plus sibling information.
      * @param nodeId The ID of the node to compile context for.
      * @param rootNode The root node of the tree.
      * @returns A string containing the contextual information.
@@ -27,14 +32,7 @@ export class ContextService {
 
         const contextParts: string[] = [];
 
-        // 1. Add inherited context from all ancestors (root to immediate parent)
-        const ancestralContext = this.collectAncestralContext(targetNode, rootNode);
-        if (ancestralContext.length > 0) {
-            contextParts.push("ANCESTRAL CONTEXT (inherited from hierarchy):");
-            contextParts.push(ancestralContext.join('\n\n'));
-        }
-
-        // 2. Add the current node's own context if it exists
+        // 1. Add the current node's own context if it exists
         if (targetNode.context && targetNode.context.trim()) {
             const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
             contextParts.push(`CURRENT NODE CONTEXT (${nodeLevelName}: "${targetNode.title}"):\n---\n${targetNode.context}\n---`);
@@ -48,6 +46,12 @@ export class ContextService {
         const parent = this.treeService.findNodeById(targetNode.parentId, rootNode);
         if (!parent) {
             return contextParts.join('\n\n====================\n\n');
+        }
+
+        // 2. Add the immediate parent's context if it exists
+        if (parent.context && parent.context.trim()) {
+            const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
+            contextParts.push(`PARENT CONTEXT (${parentLevelName}: "${parent.title}"):\n---\n${parent.context}\n---`);
         }
 
         // 3. Add the parent's content (the outline). This is the most critical structural context.
@@ -212,5 +216,62 @@ export class ContextService {
     public hasMinimalContext(nodeId: string, rootNode: DocumentNode): boolean {
         const context = this.compileNodeContext(nodeId, rootNode);
         return context.trim().length > 0;
+    }
+
+    /**
+     * Synthesizes context by combining parent context with node content.
+     * This distills the parent context to only what's relevant while incorporating
+     * new concepts introduced in the node's content.
+     * @param nodeId The ID of the node to synthesize context for.
+     * @param rootNode The root node of the tree.
+     * @returns The synthesized context string, or null if synthesis failed.
+     */
+    public async synthesizeContext(nodeId: string, rootNode: DocumentNode): Promise<string | null> {
+        if (!this.openRouterClient || !this.settingsManager) {
+            console.warn('ContextService: OpenRouterClient or SettingsManager not available for context synthesis');
+            return null;
+        }
+
+        const node = this.treeService.findNodeById(nodeId, rootNode);
+        if (!node) {
+            console.error(`ContextService: Node ${nodeId} not found`);
+            return null;
+        }
+
+        // Get parent context - use the full compiled context from parent's perspective
+        let parentContext = '';
+        if (node.parentId) {
+            const parent = this.treeService.findNodeById(node.parentId, rootNode);
+            if (parent) {
+                // Compile context as if we were the parent node
+                parentContext = this.compileNodeContext(node.parentId, rootNode);
+            }
+        }
+
+        // Node's content is required for synthesis
+        if (!node.content || node.content.trim() === '') {
+            console.warn(`ContextService: Node ${nodeId} has no content for synthesis`);
+            return null;
+        }
+
+        try {
+            const prompts = this.settingsManager.getPrompts();
+            const prompt = prompts.context_synthesis_user
+                .replace(/{{parent_context}}/g, parentContext || 'No parent context available.')
+                .replace(/{{node_content}}/g, node.content);
+
+            // Use the editor model for context synthesis as it's good at distilling and combining information
+            const synthesizedContext = await this.openRouterClient.chat('editor', prompt);
+            
+            if (synthesizedContext && synthesizedContext.trim() !== '') {
+                return synthesizedContext.trim();
+            } else {
+                console.warn(`ContextService: Empty response from context synthesis for node ${nodeId}`);
+                return null;
+            }
+        } catch (error) {
+            console.error(`ContextService: Failed to synthesize context for node ${nodeId}:`, error);
+            return null;
+        }
     }
 } 

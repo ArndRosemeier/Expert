@@ -93,7 +93,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
         // Initialize extracted services
         this.treeService = new TreeService();
-        this.contextService = new ContextService(this.treeService);
+        this.contextService = new ContextService(this.treeService, this.openRouterClient, this.settingsManager);
         this.promptService = new PromptService(this.settingsManager);
         this.generationController = new GenerationController(this.loopOrchestrator, this.treeService);
         this.contextExtractionService = new ContextExtractionService(this.openRouterClient, this.settingsManager);
