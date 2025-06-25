@@ -91,6 +91,27 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         leaf: true
     },
     {
+        name: "Stylistic Variation",
+        description: "Natural shifts in rhythm, tone, and phrasing that reflect a human voice.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Emotional Subtlety",
+        description: "Emotions are implied or layered rather than explicitly stated.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Lexical Character",
+        description: "Word choices feel personal, distinctive, or slightly idiosyncratic without being distracting.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
         name: 'Human-like Naming',
         goal: 8,
         description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Do not change names that are already established.",
