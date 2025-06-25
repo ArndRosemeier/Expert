@@ -636,18 +636,18 @@ export class GenerationService {
             }
         }
         
-        // Fallback: If we're still marked as generating children but not in a bulk context,
-        // ensure we clean up properly (this handles edge cases where context was cleared prematurely)
+        // Error detection: If we're still marked as generating children but not in a bulk context,
+        // this indicates a state inconsistency that should be fixed, not masked
         if (this.isGeneratingAllChildren && !this.deps.generationController.getCurrentGenerationInfo()) {
-            console.warn('Detected orphaned bulk generation state, cleaning up...');
-            this.isGeneratingAllChildren = false;
-            
-            // Force clear progress and emit completion to ensure UI updates
-            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
-            setTimeout(() => {
-                this.deps.eventEmitter.emit('project-loaded');
-            }, 150);
+            const errorMessage = `CRITICAL: Inconsistent generation state detected! isGeneratingAllChildren=true but no generation context exists. This indicates a race condition or logic error that needs to be fixed.`;
+            console.error(errorMessage);
+            console.error('Debug info:', {
+                nodeId,
+                isGeneratingAllChildren: this.isGeneratingAllChildren,
+                generationInfo: this.deps.generationController.getCurrentGenerationInfo(),
+                abortRequested: this.abortRequested
+            });
+            throw new Error(errorMessage);
         }
     }
 
