@@ -470,6 +470,11 @@ export class GenerationService {
                     const updatedNode = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
                     if (!updatedNode || !updatedNode.content || updatedNode.content.trim() === '') {
                         this.deps.eventEmitter.emit('error', `Failed to generate content for "${node.title}". Cannot proceed with creating children.`);
+                        // Clean up generation state before returning
+                        if (this.isGeneratingAllChildren) {
+                            this.isGeneratingAllChildren = false;
+                            this.deps.generationController.clearGenerationContext();
+                        }
                         return;
                     }
                     // Update node reference for subsequent operations
@@ -480,10 +485,20 @@ export class GenerationService {
                         return;
                     }
                     this.deps.eventEmitter.emit('error', `Failed to generate content for "${node.title}": ${error.message}`);
+                    // Clean up generation state before returning
+                    if (this.isGeneratingAllChildren) {
+                        this.isGeneratingAllChildren = false;
+                        this.deps.generationController.clearGenerationContext();
+                    }
                     return;
                 }
             } else {
                 this.deps.eventEmitter.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first, or enable "Include content" to auto-generate it.`);
+                // Clean up generation state before returning
+                if (this.isGeneratingAllChildren) {
+                    this.isGeneratingAllChildren = false;
+                    this.deps.generationController.clearGenerationContext();
+                }
                 return;
             }
         }
@@ -533,6 +548,7 @@ export class GenerationService {
                 if (nodeItems.length === 0) {
                     this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
                     this.isGeneratingAllChildren = false;
+                    this.deps.generationController.clearGenerationContext();
                     return;
                 }
 
@@ -549,6 +565,7 @@ export class GenerationService {
                 console.error('Failed to create children from outline via LLM:', error);
                 this.deps.eventEmitter.emit('error', 'The AI failed to process the outline. Please try again.');
                 this.isGeneratingAllChildren = false;
+                this.deps.generationController.clearGenerationContext();
                 return;
             }
         } else {
@@ -698,17 +715,18 @@ export class GenerationService {
         }
         
         // Error detection: If we're still marked as generating children but not in a bulk context,
-        // this indicates a state inconsistency that should be fixed, not masked
+        // this indicates a state inconsistency. Clean up the state instead of throwing an error.
         if (this.isGeneratingAllChildren && !this.deps.generationController.getCurrentGenerationInfo()) {
-            const errorMessage = `CRITICAL: Inconsistent generation state detected! isGeneratingAllChildren=true but no generation context exists. This indicates a race condition or logic error that needs to be fixed.`;
-            console.error(errorMessage);
-            console.error('Debug info:', {
+            console.warn(`State inconsistency detected - cleaning up: isGeneratingAllChildren=true but no generation context exists.`);
+            console.warn('Debug info:', {
                 nodeId,
                 isGeneratingAllChildren: this.isGeneratingAllChildren,
                 generationInfo: this.deps.generationController.getCurrentGenerationInfo(),
                 abortRequested: this.abortRequested
             });
-            throw new Error(errorMessage);
+            // Clean up the inconsistent state instead of crashing
+            this.isGeneratingAllChildren = false;
+            this.abortRequested = false;
         }
     }
 
