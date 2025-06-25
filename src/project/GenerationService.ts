@@ -340,9 +340,9 @@ export class GenerationService {
         try {
             // Using the 'creator' model as it's for generating new content/structure
             const response = await this.deps.openRouterClient.chat('creator', prompt);
-            const titles = this.parseBulletedList(response);
+            const nodeItems = this.parseEnhancedBulletedList(response);
 
-            if (titles.length === 0) {
+            if (nodeItems.length === 0) {
                 // Clear generating flag before emitting error
                 node.isGenerating = false;
                 this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
@@ -350,9 +350,11 @@ export class GenerationService {
                 return;
             }
 
-            titles.forEach(title => {
-                if (typeof title === 'string') {
-                    this.deps.treeService.addNode(title, nodeId, this.deps.rootNode);
+            nodeItems.forEach(item => {
+                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode);
+                // Set the content description as initial content if provided
+                if (item.description && item.description.trim()) {
+                    newNode.content = `Draft: ${item.description}`;
                 }
             });
 
@@ -465,17 +467,19 @@ export class GenerationService {
             try {
                 // Using the 'creator' model as it's for generating new content/structure
                 const response = await this.deps.openRouterClient.chat('creator', prompt);
-                const titles = this.parseBulletedList(response);
+                const nodeItems = this.parseEnhancedBulletedList(response);
 
-                if (titles.length === 0) {
+                if (nodeItems.length === 0) {
                     this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
                     this.isGeneratingAllChildren = false;
                     return;
                 }
 
-                titles.forEach(title => {
-                    if (typeof title === 'string') {
-                        this.deps.treeService.addNode(title, nodeId, this.deps.rootNode);
+                nodeItems.forEach(item => {
+                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode);
+                    // Set the content description as initial content if provided
+                    if (item.description && item.description.trim()) {
+                        newNode.content = `Draft: ${item.description}`;
                     }
                 });
 
@@ -849,6 +853,7 @@ export class GenerationService {
 
     /**
      * Parses a bulleted list from text.
+     * Handles both old format (just titles) and new format (Title: X, Content: Y).
      */
     private parseBulletedList(text: string): string[] {
         return text
@@ -857,5 +862,35 @@ export class GenerationService {
             .filter(line => line.startsWith('*') || line.startsWith('-'))
             .map(line => line.substring(1).trim())
             .filter(line => line.length > 0);
+    }
+
+    /**
+     * Parses a bulleted list from text with the new format "Title: X, Content: Y".
+     * Returns array of objects with title and content description.
+     */
+    private parseEnhancedBulletedList(text: string): Array<{title: string, description: string}> {
+        return text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.startsWith('*') || line.startsWith('-'))
+            .map(line => {
+                const content = line.substring(1).trim();
+                
+                // Check for new format: "Title: X, Content: Y"
+                const titleMatch = content.match(/^Title:\s*([^,]+),\s*Content:\s*(.*)$/i);
+                if (titleMatch) {
+                    return {
+                        title: titleMatch[1].trim(),
+                        description: titleMatch[2].trim()
+                    };
+                }
+                
+                // Fallback to old format (just the title)
+                return {
+                    title: content,
+                    description: ''
+                };
+            })
+            .filter(item => item.title.length > 0);
     }
 } 

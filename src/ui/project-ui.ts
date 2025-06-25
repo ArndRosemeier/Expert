@@ -471,6 +471,7 @@ export function renderNodeDetails() {
                     <button class="placeholder-btn" data-placeholder="context" title="View context placeholder value">{{context}}</button>
                     <button class="placeholder-btn" data-placeholder="title" title="View title placeholder value">{{title}}</button>
                     <button class="placeholder-btn" data-placeholder="content" title="View content placeholder value">{{content}}</button>
+                    <button class="placeholder-btn" data-placeholder="draftorfresh" title="View draftorfresh placeholder value">{{draftorfresh}}</button>
                     ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="child_level_name" title="View child level name placeholder value">{{child_level_name}}</button>' : ''}
                     ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="count" title="View count placeholder value">{{count}}</button>' : ''}
                     <button id="default-prompt-btn" class="button button-secondary">Default</button>
@@ -1022,6 +1023,7 @@ function showPlaceholderOverlay(placeholder: string, projectManager: ProjectMana
         'context': 'Compiled contextual information from ancestors, siblings, and parent',
         'title': 'The title of the current node',
         'content': 'The current content of the node (if any)',
+        'draftorfresh': 'Instructions for handling existing content (draft improvement or new generation)',
         'child_level_name': 'The name of the child level (for branch nodes)',
         'count': 'The number of items to generate (for list generation)'
     };
@@ -1040,6 +1042,28 @@ function showPlaceholderOverlay(placeholder: string, projectManager: ProjectMana
             break;
         case 'content':
             value = node.content || '';
+            break;
+        case 'draftorfresh':
+            // Show what the draftorfresh placeholder would actually expand to
+            if (node.content) {
+                if (node.content.startsWith('Draft:')) {
+                    value = `You have this existing draft to build upon:
+---
+${node.content}
+---
+
+Please expand this draft into full, detailed content. Use the draft as a guide for what should be covered, but write complete, polished content that goes well beyond the brief draft description.`;
+                } else {
+                    value = `You have this existing content to revise or expand:
+---
+${node.content}
+---
+
+Please improve and expand this content.`;
+                }
+            } else {
+                value = 'Now, write the full content for this node.';
+            }
             break;
         case 'child_level_name':
             value = node.childLevelName || '';

@@ -612,8 +612,8 @@ class PromptManagerAutoSave {
             editor: ['response', 'ratings'],
             summarize_system: ['content'],
             expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
-            content_generation_user: ['path', 'context', 'title', 'content'],
-            branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
+            content_generation_user: ['path', 'context', 'title', 'content', 'draftorfresh'],
+            branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
             create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
             prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
             context_synthesis_user: ['parent_context', 'node_content'],
@@ -886,6 +886,7 @@ export function renderSettingsModal() {
                 </div>
                 <div class="profile-actions">
                     <button id="modal-delete-profile-btn" class="btn-danger">Delete Profile</button>
+                    <button id="modal-reset-defaults-btn" class="btn-secondary">Reset Prompts and Criteria to Default</button>
                     <div style="margin-left: auto; display: flex; gap: 0.5rem;">
                         <button id="modal-export-profile-btn" class="btn-outline">Export</button>
                         <button id="modal-import-profile-btn" class="btn-outline">Import</button>
@@ -1190,6 +1191,23 @@ export function renderSettingsModal() {
         fileInput.value = '';
     });
 
+    // Reset Prompts and Criteria to Default
+    getElementById('modal-reset-defaults-btn').addEventListener('click', () => {
+        // Trigger the existing criteria reset button
+        const criteriaResetBtn = document.getElementById('modal-default-criteria-btn');
+        if (criteriaResetBtn) {
+            criteriaResetBtn.click();
+        }
+        
+        // Trigger the existing prompts reset button (it's created dynamically, so find it by text)
+        const promptsContainer = getElementById('settings-prompts-container');
+        if (promptsContainer) {
+            const promptResetBtn = promptsContainer.querySelector('button') as HTMLButtonElement;
+            if (promptResetBtn && promptResetBtn.textContent?.includes('Reset All Prompts')) {
+                promptResetBtn.click();
+            }
+        }
+    });
 
     // Initial Population
     populateProfileSelector();

@@ -42,12 +42,35 @@ export class PromptService {
         path: string, 
         count?: number
     ): string {
+        // Handle draftorfresh placeholder intelligently
+        let draftOrFresh = '';
+        if (node.content) {
+            if (node.content.startsWith('Draft:')) {
+                draftOrFresh = `You have this existing draft to build upon:
+---
+${node.content}
+---
+
+Please expand this draft into full, detailed content. Use the draft as a guide for what should be covered, but write complete, polished content that goes well beyond the brief draft description.`;
+            } else {
+                draftOrFresh = `You have this existing content to revise or expand:
+---
+${node.content}
+---
+
+Please improve and expand this content.`;
+            }
+        } else {
+            draftOrFresh = 'Now, write the full content for this node.';
+        }
+
         let filledPrompt = promptTemplate
             .replace(/\{\{path\}\}/g, path)
             .replace(/\{\{context\}\}/g, context)
             .replace(/\{\{title\}\}/g, node.title)
             .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '')
-            .replace(/\{\{content\}\}/g, node.content || '');
+            .replace(/\{\{content\}\}/g, node.content || '')
+            .replace(/\{\{draftorfresh\}\}/g, draftOrFresh);
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {

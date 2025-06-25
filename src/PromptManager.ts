@@ -113,7 +113,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         {{context}}
         ---
 
-        Now, write the full content for this node.
+        {{draftorfresh}}
 
         IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
     `.trim(),
@@ -128,12 +128,19 @@ export const defaultPrompts: OrchestratorPrompts = {
         {{context}}
         ---
 
+        {{draftorfresh}}
+
         IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
     `.trim(),
     create_children_from_outline_user: `
-        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of exactly {{count}} titles for the '{{child_level_name}}' nodes that should be created from it.
+        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of exactly {{count}} entries for the '{{child_level_name}}' nodes that should be created from it.
 
-        Generate exactly {{count}} titles - no more, no less. Each title must be on a new line and start with a single asterisk (*). Do not include any other text or explanations.
+        Generate exactly {{count}} entries - no more, no less. Each entry must be on a new line and start with a single asterisk (*). 
+
+        IMPORTANT: Each entry must follow this exact format:
+        * Title: (the title of the subnode), Content: (one sentence brief description of what should be covered in this subnode)
+
+        Do not include any other text or explanations. Only provide the bulleted list in the specified format.
 
         Here is the context of the document so far:
         ---
@@ -205,8 +212,8 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     editor: ['response', 'ratings'],
     summarize_system: ['content'],
     expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
-    content_generation_user: ['path', 'context', 'title', 'content'],
-    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
+    content_generation_user: ['path', 'context', 'title', 'content', 'draftorfresh'],
+    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content', 'count'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
     context_synthesis_user: ['parent_context', 'node_content'],
@@ -217,13 +224,13 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     content_generation_initial: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process.",
     content_generation_iterative: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback.",
-    content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document.",
+    content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content.",
     branch_content_generation_user: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline.",
     rater: "The system prompt for the 'Rater' AI. It scores the generated content against ALL provided criteria in a single call.",
     editor: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings.",
     summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
-    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
+    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles with brief content descriptions.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
     context_synthesis_user: "Combines parent context with node content to create a distilled, focused context for child node generation. Uses the editor model to synthesize relevant information.",
     context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",

@@ -230,43 +230,6 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         
         return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
     }
-
-    /**
-     * Fills a raw prompt template with the specific details of a node (context, path, etc.).
-     * @param promptTemplate The raw string template with placeholders.
-     * @param node The node providing the data.
-     * @param count Optional count for list generation.
-     * @returns The final, filled prompt ready for an LLM.
-     */
-    private fillGenerationPrompt(promptTemplate: string, node: DocumentNode, count?: number): string {
-        const path = this.getNodePath(node.id);
-        const context = this.contextService.compileNodeContext(node.id, this.rootNode);
-
-        let filledPrompt = promptTemplate
-            .replace(/\{\{path\}\}/g, path)
-            .replace(/\{\{context\}\}/g, context)
-            .replace(/\{\{title\}\}/g, node.title)
-            .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '')
-            .replace(/\{\{content\}\}/g, node.content || '');
-        
-        // Special handling for root node prompts (no additional placeholders needed)
-        if (!node.parentId) {
-            // Root nodes use the expand_text_user prompt which is now user-customizable
-        }
-        
-        if (!node.isLeaf && count) {
-            filledPrompt = filledPrompt.replace(/\{\{count\}\}/g, String(count));
-        }
-
-        return filledPrompt;
-    }
-
-    // Method removed - use GenerationService directly
-
-    // Method removed - use GenerationService directly
-
-    // Method removed - use GenerationService directly
-
     private clearAllGeneratingFlags(): void {
         const clearNode = (node: DocumentNode): void => {
             node.isGenerating = false;
@@ -274,20 +237,6 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         };
         clearNode(this.rootNode);
     }
-
-    // filterCriteriaForNodeType method removed - available in GenerationService
-
-    // Method removed - use GenerationService directly
-
-    // Legacy runContentLoop method removed - functionality moved to GenerationService
-
-    // Method removed - use GenerationService directly
-
-    // Method removed - use GenerationService directly
-    
-    // Method removed - use GenerationService directly
-
-    // parseBulletedList method removed - available in GenerationService
 
     /**
      * Serializes the project state to a JSON string.
