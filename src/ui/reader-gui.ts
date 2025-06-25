@@ -1,5 +1,6 @@
 import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
+import { ReaderEditor } from './reader-editor';
 
 import { StorageService } from '../StorageService';
 
@@ -73,6 +74,8 @@ export class ReaderGUI {
     private lastScrollPosition: number = 0;
     private lastFocusedNodeId: string | null = null;
     private isSettingsPanelOpen: boolean = false;
+    private readerEditor: ReaderEditor;
+    private hasBeenRendered: boolean = false; // Track if this instance has been rendered
     
     // Bound method references for proper event listener removal
     private boundHandleClick: (event: MouseEvent) => void;
@@ -86,6 +89,9 @@ export class ReaderGUI {
         // Bind event handler methods
         this.boundHandleClick = this.handleClick.bind(this);
         this.boundHandleDoubleClick = this.handleDoubleClick.bind(this);
+        
+        // Initialize reader editor
+        this.readerEditor = new ReaderEditor(this, projectManager);
         
         // Default configuration
         this.config = {
@@ -112,6 +118,12 @@ export class ReaderGUI {
         this.applyStyles();
         this.buildClickMappings();
         this.setupAllEventListeners();
+        
+        // Initialize the editor after DOM is ready
+        this.readerEditor.initialize();
+        
+        // Mark this instance as having been rendered
+        this.hasBeenRendered = true;
     }
 
     /**
@@ -125,6 +137,10 @@ export class ReaderGUI {
         if (this.isSettingsPanelOpen) {
             this.restoreSettingsPanel();
         }
+        
+        // Restore reader editor state after DOM recreation
+        // DISABLED: With HTML highlighting, DOM recreation is no longer needed
+        // this.readerEditor.onDOMRecreated();
     }
 
     /**
@@ -214,7 +230,7 @@ export class ReaderGUI {
                 nodes.push({
                     id: node.id,
                     title: node.title,
-                    content: node.content,
+                    content: '', // Always empty - content handled by textareas only
                     level: node.level,
                     isLeaf: node.children.length === 0,
                     hasContent: !!(node.content && node.content.trim()),
@@ -337,6 +353,7 @@ export class ReaderGUI {
                 <div class="reader-header">
                     <h1>${this.projectManager.projectTitle} - Reader View</h1>
                     <div class="reader-controls">
+                        <button id="reader-actions-config" class="control-btn">🔧 Configure Actions</button>
                         <button id="reader-toc-btn" class="control-btn">📋 TOC</button>
                         <button id="reader-settings-btn" class="control-btn">⚙️ Settings</button>
                         <button id="close-reader-btn" class="close-btn">&times;</button>
@@ -346,6 +363,12 @@ export class ReaderGUI {
                     ${this.config.showTOC ? this.generateTOC() : ''}
                     <div class="reader-content-area">
                         ${this.generateContent()}
+                    </div>
+                    <div id="reader-action-buttons" class="reader-action-buttons" style="display: none;">
+                        <div class="action-buttons-header">AI Actions</div>
+                        <div id="action-buttons-container" class="action-buttons-container">
+                            <!-- Action buttons will be dynamically inserted here -->
+                        </div>
                     </div>
                     ${this.generateSettingsPanel()}
                 </div>
@@ -453,7 +476,7 @@ export class ReaderGUI {
             if (node.hasContent) {
                 html += `
                     <div class="node-content" data-node-id="${node.id}">
-                        ${this.formatContent(node.content)}
+                        <!-- Content will be rendered by editor textareas -->
                     </div>
                 `;
             }
@@ -470,7 +493,7 @@ export class ReaderGUI {
             if (node.hasContent) {
                 html += `
                     <div class="node-content node-content-minimal" data-node-id="${node.id}">
-                        ${this.formatContent(node.content)}
+                        <!-- Content will be rendered by editor textareas -->
                     </div>
                 `;
             }
@@ -481,18 +504,11 @@ export class ReaderGUI {
     }
 
     /**
-     * Format content for display (convert line breaks, etc.)
+     * Format content for display - DISABLED in always-edit mode
      */
     private formatContent(content: string): string {
-        if (!content) return '';
-        
-        // Simple formatting: convert line breaks to paragraphs
-        return content
-            .split('\n\n')
-            .map(paragraph => paragraph.trim())
-            .filter(paragraph => paragraph.length > 0)
-            .map(paragraph => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
-            .join('');
+        // Always return empty - content is handled by textareas only
+        return '';
     }
 
     /**
@@ -1095,6 +1111,104 @@ export class ReaderGUI {
                     padding: 0.5rem;
                 }
             }
+
+            /* Legacy edit mode styles removed - always-edit mode now */
+
+            /* Reader Action Buttons */
+            .reader-action-buttons {
+                position: fixed;
+                right: 20px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                padding: 12px;
+                min-width: 160px;
+                max-width: 200px;
+                z-index: 10001;
+            }
+
+            .action-buttons-header {
+                font-weight: 600;
+                color: #374151;
+                margin-bottom: 8px;
+                font-size: 0.9rem;
+                text-align: center;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 8px;
+            }
+
+            .action-buttons-container {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .selection-mode-toggle {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem;
+                background-color: #f8f9fa;
+                border-radius: 4px;
+                font-size: 0.875rem;
+                width: 100%;
+                box-sizing: border-box;
+                margin-bottom: 0.25rem;
+            }
+
+            .selection-mode-label {
+                font-weight: 500;
+                color: #374151;
+                flex-shrink: 0;
+            }
+
+            .selection-mode-select {
+                padding: 0.25rem 0.5rem;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 0.875rem;
+                background: white;
+                flex: 1;
+            }
+
+            .action-buttons-separator {
+                width: 100%;
+                height: 1px;
+                background-color: #e5e7eb;
+                margin: 0.25rem 0;
+            }
+
+            .reader-action-btn {
+                padding: 8px 12px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                color: #475569;
+                transition: all 0.2s ease;
+                text-align: left;
+            }
+
+            .reader-action-btn:hover {
+                background: #e2e8f0;
+                border-color: #cbd5e1;
+                color: #334155;
+            }
+
+            .reader-action-btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+
+            .reader-action-btn.processing {
+                background: #dbeafe;
+                border-color: #93c5fd;
+                color: #1e40af;
+            }
         `;
     }
 
@@ -1134,6 +1248,13 @@ export class ReaderGUI {
         
         if (target.id === 'close-reader-btn') {
             this.close();
+        } else if (target.id === 'reader-actions-config') {
+            this.openActionsConfigModal();
+        } else if (target.classList.contains('reader-action-btn')) {
+            const actionId = target.getAttribute('data-action-id');
+            if (actionId) {
+                this.readerEditor.executeAction(actionId);
+            }
         } else if (target.id === 'reader-toc-btn') {
             this.toggleTOC();
         } else if (target.id === 'reader-settings-btn') {
@@ -1221,7 +1342,7 @@ export class ReaderGUI {
         if (showAllLevelsCheckbox) {
             showAllLevelsCheckbox.addEventListener('change', (e) => {
                 this.config.showAllLevels = (e.target as HTMLInputElement).checked;
-                this.render(); // Re-render content with new display logic
+                // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
                 this.saveReaderConfig();
             });
         }
@@ -1231,7 +1352,7 @@ export class ReaderGUI {
         if (showMetaInfoCheckbox) {
             showMetaInfoCheckbox.addEventListener('change', (e) => {
                 this.config.showMetaInfo = (e.target as HTMLInputElement).checked;
-                this.render(); // Re-render content with new display logic
+                // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
                 this.saveReaderConfig();
             });
         }
@@ -1299,7 +1420,8 @@ export class ReaderGUI {
             theme: 'light',
             separatorStyle: 'standard'
         };
-        this.render();
+        // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
+        this.applySettings(); // Apply the settings without re-rendering DOM
     }
 
     /**
@@ -1327,7 +1449,14 @@ export class ReaderGUI {
      */
     private toggleTOC(): void {
         this.config.showTOC = !this.config.showTOC;
-        this.render();
+        // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
+        
+        // Just show/hide the TOC without full re-render
+        const tocElement = this.container.querySelector('.reader-toc') as HTMLElement;
+        if (tocElement) {
+            tocElement.style.display = this.config.showTOC ? 'block' : 'none';
+        }
+        
         this.saveReaderConfig();
     }
 
@@ -1423,6 +1552,95 @@ export class ReaderGUI {
     }
 
     /**
+     * Open the actions configuration modal
+     */
+    private openActionsConfigModal(): void {
+        // TODO: Implement actions configuration modal
+        console.log('Actions configuration modal - to be implemented');
+        alert('Actions configuration modal will be implemented in the next phase!');
+    }
+
+    /**
+     * Update action buttons based on current edit state and selection
+     */
+    public updateActionButtons(): void {
+        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons') as HTMLElement;
+        const container = this.container.querySelector('#action-buttons-container') as HTMLElement;
+        
+        if (!actionButtonsContainer || !container) return;
+
+        // Get available actions
+        const actions = this.readerEditor.getEnabledActions();
+        
+        // Clear existing buttons
+        container.innerHTML = '';
+
+        // Add selection mode toggle at the top
+        const selectionModeDiv = document.createElement('div');
+        selectionModeDiv.className = 'selection-mode-toggle';
+        selectionModeDiv.innerHTML = `
+            <label class="selection-mode-label">AI Capture:</label>
+            <select id="selection-mode-select" class="selection-mode-select">
+                <option value="words">Words</option>
+                <option value="sentences" selected>Sentences</option>
+            </select>
+        `;
+        container.appendChild(selectionModeDiv);
+
+        // Add separator
+        const separator = document.createElement('div');
+        separator.className = 'action-buttons-separator';
+        container.appendChild(separator);
+        
+        // Create buttons for each action
+        actions.forEach(action => {
+            const button = document.createElement('button');
+            button.className = 'reader-action-btn';
+            button.textContent = action.title;
+            button.setAttribute('data-action-id', action.id);
+            button.setAttribute('data-original-text', action.title);
+            button.title = action.description || action.title;
+            
+            container.appendChild(button);
+        });
+
+        // Set up selection mode toggle event listener
+        this.setupSelectionModeToggle();
+
+        // Always show the action buttons panel since we're always editable
+        actionButtonsContainer.style.display = 'block';
+    }
+
+    /**
+     * Set up the selection mode toggle event listener
+     */
+    private setupSelectionModeToggle(): void {
+        const select = this.container.querySelector('#selection-mode-select') as HTMLSelectElement;
+        if (!select) return;
+
+        // Set current value
+        const currentMode = this.readerEditor.getCurrentSelectionMode();
+        select.value = currentMode;
+
+        // Add event listener for changes
+        select.addEventListener('change', () => {
+            const newMode = select.value as 'words' | 'sentences';
+            this.readerEditor.setSelectionMode(newMode);
+            console.log(`🎯 Selection mode changed to: ${newMode}`);
+        });
+    }
+
+    /**
+     * Hide action buttons
+     */
+    public hideActionButtons(): void {
+        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons') as HTMLElement;
+        if (actionButtonsContainer) {
+            actionButtonsContainer.style.display = 'none';
+        }
+    }
+
+    /**
      * Close the reader interface
      */
     private close(): void {
@@ -1441,6 +1659,14 @@ export class ReaderGUI {
         // Clear container
         this.container.innerHTML = '';
         this.container.style.display = 'none';
+        
+        // Reset render flag
+        this.hasBeenRendered = false;
+        
+        // Clear global instance
+        if (globalReaderInstance === this) {
+            globalReaderInstance = null;
+        }
     }
 
     /**
@@ -1449,7 +1675,12 @@ export class ReaderGUI {
     public async show(): Promise<void> {
         this.container.style.display = 'block';
         await this.loadReaderConfig();
-        this.render();
+        
+        // Only render if this instance has never been rendered before
+        if (!this.hasBeenRendered) {
+            this.render(); // Only render once per instance
+        }
+        
         this.applySettings();
         this.startListeningForUpdates();
     }
@@ -1460,23 +1691,36 @@ export class ReaderGUI {
     public hide(): void {
         this.container.style.display = 'none';
         this.stopListeningForUpdates();
+        
+        // Cleanup reader editor
+        if (this.readerEditor) {
+            this.readerEditor.destroy();
+        }
+    }
+
+    /**
+     * Get the reader container element for internal use
+     */
+    public getContainer(): HTMLElement {
+        return this.container;
     }
 
     /**
      * Start listening for project updates to refresh reader content
+     * Note: Disabled in always-edit mode to prevent DOM conflicts
      */
     private startListeningForUpdates(): void {
         if (this.isListeningForUpdates) return;
         
         this.isListeningForUpdates = true;
         
-        // Listen for node generation completion
-        this.projectManager.on('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
+        // Listen for node generation completion (but not in always-edit mode)
+        // this.projectManager.on('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
         
-        // Listen for summary generation
-        this.projectManager.on('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        // Listen for summary generation (but not in always-edit mode)
+        // this.projectManager.on('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
         
-        // Listen for overall project structure changes
+        // Listen for overall project structure changes only
         this.projectManager.on('project-loaded', this.handleProjectUpdate.bind(this));
     }
 
@@ -1488,9 +1732,9 @@ export class ReaderGUI {
         
         this.isListeningForUpdates = false;
         
-        // Remove event listeners
-        this.projectManager.off('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
-        this.projectManager.off('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        // Remove event listeners (matching what we actually listen for)
+        // this.projectManager.off('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
+        // this.projectManager.off('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
         this.projectManager.off('project-loaded', this.handleProjectUpdate.bind(this));
     }
 
@@ -1568,8 +1812,16 @@ export class ReaderGUI {
 
     /**
      * Refresh content while preserving reading position
+     * DISABLED in always-edit mode to prevent DOM conflicts
      */
     private refreshContent(): void {
+
+        // In always-edit mode, content is managed entirely by textareas
+        // No DOM refreshes needed since we disabled auto-update events
+        return;
+        
+        // Original code commented out to prevent textarea duplication issues:
+        /*
         // Re-analyze content
         const newContentNodes = this.analyzeProjectContent();
         
@@ -1594,12 +1846,16 @@ export class ReaderGUI {
                 contentArea.innerHTML = this.generateContent();
                 this.buildClickMappings();
                 
+                // Restore reader editor state after partial DOM update
+                this.readerEditor.onDOMRecreated();
+                
                 // Restore reading position after a short delay
                 setTimeout(() => {
                     this.restoreReadingPosition();
                 }, 100);
             }
         }
+        */
     }
 
     /**
@@ -1677,6 +1933,9 @@ export class ReaderGUI {
     }
 }
 
+// Global reader instance to prevent recreating the reader
+let globalReaderInstance: ReaderGUI | null = null;
+
 /**
  * Utility function to create and show a reader for a project
  */
@@ -1689,7 +1948,11 @@ export async function openReaderView(projectManager: ProjectManager, onNavigateT
         document.body.appendChild(readerContainer);
     }
 
-    const reader = new ReaderGUI(projectManager, readerContainer, onNavigateToNode);
-    await reader.show();
-    return reader;
+    // Reuse existing reader instance if it exists, otherwise create new one
+    if (!globalReaderInstance) {
+        globalReaderInstance = new ReaderGUI(projectManager, readerContainer, onNavigateToNode);
+    }
+    
+    await globalReaderInstance.show();
+    return globalReaderInstance;
 } 

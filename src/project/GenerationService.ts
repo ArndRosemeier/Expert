@@ -50,6 +50,13 @@ export class GenerationService {
     }
 
     /**
+     * Checks if generation should be aborted by consulting both local and controller state.
+     */
+    private isAbortRequested(): boolean {
+        return this.abortRequested || this.deps.generationController.isAbortRequested();
+    }
+
+    /**
      * Rates existing content for a node without generating new content.
      * Creates a generation session with the ratings and marks the current content as chosen.
      * @param nodeId The ID of the node to rate.
@@ -211,7 +218,7 @@ export class GenerationService {
         // Subscribe to progress updates from the orchestrator
         const onProgress = (progress: LoopProgress) => {
             // Check for abort before processing progress
-            if (this.abortRequested) {
+            if (this.isAbortRequested()) {
                 return;
             }
             
@@ -286,7 +293,7 @@ export class GenerationService {
         try {
             const result = await this.deps.loopOrchestrator.runLoop(loopInput);
             
-            if (result.aborted || this.abortRequested) {
+            if (result.aborted || this.isAbortRequested()) {
                 // Handle aborted generation
                 node.endGenerationSession(false, currentIterationContent || '');
                 if (currentIterationContent) {
@@ -339,7 +346,7 @@ export class GenerationService {
             // Cleanup state before emitting events
             this.cleanupGenerationState(nodeId, node, isChildGeneration);
             
-            if (error.message === 'Generation aborted by user' || this.abortRequested) {
+            if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                 this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
             } else {
                 const errorMessage = error.message || "An unexpected error occurred during content generation.";
@@ -584,7 +591,7 @@ export class GenerationService {
                     const child = childrenNeedingContent[i];
                     
                     // Check for abort before processing each child
-                    if (this.abortRequested) {
+                    if (this.isAbortRequested()) {
                         break;
                     }
                     
@@ -629,14 +636,14 @@ export class GenerationService {
                         }
                         
                         // Check for abort after generation
-                        if (this.abortRequested) {
+                        if (this.isAbortRequested()) {
                             break;
                         }
                         
                         // Automatic summarization disabled since we now use direct content for context
                         // await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
                     } catch (error: any) {
-                        if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                        if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                             // Content generation aborted
                             break;
                         }
@@ -664,7 +671,7 @@ export class GenerationService {
                 const child = childrenToExpand[i];
                 
                 // Check for abort before recursive processing
-                if (this.abortRequested) {
+                if (this.isAbortRequested()) {
                     break;
                 }
                 
@@ -680,7 +687,7 @@ export class GenerationService {
                     // Pass includeContent and recursive flags down
                     await this.generateAllChildrenContent(child.id, includeContent, recursive);
                 } catch (error: any) {
-                    if (error.message === 'Generation aborted by user' || this.abortRequested) {
+                    if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                         break;
                     }
                     console.error(`Failed to recursively generate children for ${child.title}:`, error);
@@ -696,7 +703,7 @@ export class GenerationService {
         
         if (isTopLevelBulkOperation) {
             try {
-                if (this.abortRequested) {
+                if (this.isAbortRequested()) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
                 } else {
                     // Clear progress bars and emit completion event
@@ -722,7 +729,7 @@ export class GenerationService {
                 nodeId,
                 isGeneratingAllChildren: this.isGeneratingAllChildren,
                 generationInfo: this.deps.generationController.getCurrentGenerationInfo(),
-                abortRequested: this.abortRequested
+                abortRequested: this.isAbortRequested()
             });
             // Clean up the inconsistent state instead of crashing
             this.isGeneratingAllChildren = false;
@@ -772,7 +779,7 @@ export class GenerationService {
                 this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
             }
 
-            if (this.abortRequested) {
+            if (this.isAbortRequested()) {
                 throw new Error('Generation aborted by user');
             }
 
@@ -780,7 +787,7 @@ export class GenerationService {
                 new AbortController().signal : undefined;
             const summary = await this.deps.openRouterClient.chat('editor', systemPrompt, abortSignal);
             
-            if (this.abortRequested) {
+            if (this.isAbortRequested()) {
                 throw new Error('Generation aborted by user');
             }
 
@@ -805,7 +812,7 @@ export class GenerationService {
             // Cleanup state before emitting events (treat suppressProgressClearing as isChildGeneration)
             this.cleanupGenerationState(nodeId, node, suppressProgressClearing);
             
-            if (error.message === 'Request was aborted' || error.message === 'Generation aborted by user' || this.abortRequested) {
+            if (error.message === 'Request was aborted' || error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                 if (!suppressProgressClearing) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
                 }
@@ -876,7 +883,7 @@ export class GenerationService {
      */
     private async synthesizeNodeContext(nodeId: string, isChildGeneration: boolean): Promise<void> {
         // Only synthesize context if not aborted
-        if (this.abortRequested) {
+        if (this.isAbortRequested()) {
             return;
         }
 
@@ -915,7 +922,7 @@ export class GenerationService {
 
     /**
      * Cleans synthesized context by removing header lines from the beginning.
-     * Removes lines from the start until it finds a line that is non-empty and doesn't contain "context" and ":".
+     * Removes lines from the start until it finds a line that's non-empty and doesn't contain "context" and ":".
      * @param synthesizedContext The raw synthesized context from the AI.
      * @returns The cleaned context without header lines.
      */
