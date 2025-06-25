@@ -1,16 +1,16 @@
-import { getElementById, modalContainer, newProjectModalContainer, testModalContainer } from './ui/dom-elements';
+import { getElementById, newProjectModalContainer, testModalContainer } from './ui/dom-elements';
 import { openModal, closeModal, openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
 import { ProjectTemplate } from './ProjectTemplate';
-import { renderProjectUI, initializeProjectUI } from './ui/project-ui';
-import { renderLoopUI } from './ui/loop-ui';
+import { initializeProjectUI } from './ui/project-ui';
+
 import { SettingsManager } from './SettingsManager';
 import { ModelSelector } from './ModelSelector';
 import { OpenRouterClient } from './OpenRouterClient';
 import { LoopOrchestrator } from './LoopOrchestrator';
-import { OrchestratorPrompts } from './PromptManager';
+
 import { openTemplateEditor } from './ui/template-editor';
 import { TemplateManager } from './TemplateManager';
 
@@ -24,7 +24,13 @@ function onModelsSelected(models: Record<string, string>) {
     recreateAndReconfigureServices();
     
     const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
-    const activeProfile = settingsManager.getProfile(activeProfileName) || { prompt: '', criteria: [], maxIterations: 5, selectedModels: {} };
+    const activeProfile = settingsManager.getProfile(activeProfileName) || { 
+        prompt: '', 
+        criteria: [], 
+        maxIterations: 5, 
+        selectedModels: {},
+        contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
+    };
     activeProfile.selectedModels = models;
     settingsManager.saveProfile(activeProfileName, activeProfile);
 

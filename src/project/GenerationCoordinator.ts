@@ -1,4 +1,4 @@
-import { DocumentNode } from '../DocumentNode';
+
 import { EventEmitter } from '../EventEmitter';
 
 export interface GenerationOperation {
@@ -17,10 +17,10 @@ export interface GenerationOperation {
 export class GenerationCoordinator {
     private operations = new Map<string, GenerationOperation>();
     private operationCounter = 1;
-    private eventEmitter: EventEmitter<any>;
 
-    constructor(eventEmitter: EventEmitter<any>) {
-        this.eventEmitter = eventEmitter;
+
+    constructor(_eventEmitter: EventEmitter<any>) {
+        // eventEmitter parameter accepted but not stored as it's not currently used
     }
 
     /**
@@ -174,7 +174,7 @@ export class GenerationCoordinator {
     /**
      * Update UI when operation completes.
      */
-    private updateUIForOperationComplete(operation: GenerationOperation, success: boolean, error?: any): void {
+    private updateUIForOperationComplete(_operation: GenerationOperation, success: boolean, error?: any): void {
         // Only clean up UI if no other operations are running
         if (!this.hasActiveOperations()) {
             // Re-enable buttons

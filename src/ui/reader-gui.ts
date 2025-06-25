@@ -1,6 +1,6 @@
 import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
-import { getElementById } from './dom-elements';
+
 import { StorageService } from '../StorageService';
 
 // Storage key for reader configuration
@@ -1497,7 +1497,7 @@ export class ReaderGUI {
     /**
      * Handle individual node updates
      */
-    private handleNodeUpdate(event: any): void {
+    private handleNodeUpdate(_event: any): void {
         // Preserve current reading position
         this.preserveReadingPosition();
         

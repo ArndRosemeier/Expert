@@ -14,7 +14,7 @@ class MockOpenRouterClient extends OpenRouterClient {
         super('test-key');
     }
 
-    async chat(purpose: string, message: string): Promise<string> {
+    async chat(_purpose: string, message: string): Promise<string> {
         // Simulate AI response based on the extraction prompt
         if (message.includes('characters')) {
             return `Characters found in the content:

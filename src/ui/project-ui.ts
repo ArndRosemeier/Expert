@@ -79,13 +79,7 @@ async function loadCheckboxStates() {
     }
 }
 
-function renderProjectTree() {
-    if (!projectManager) return;
-    const treeContainer = getElementById('project-tree');
-    treeContainer.innerHTML = '';
-    const rootUL = createNodeElement(projectManager.rootNode);
-    treeContainer.appendChild(rootUL);
-}
+
 
 // --- Main Render Function ---
 
@@ -112,7 +106,7 @@ export function renderProjectUI(proj: ProjectManager) {
 // --- Event Listener Setup ---
 
 function setupProjectManagerListeners(manager: ProjectManager) {
-    const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
+    const handleGenerationStarted = (_e: { nodeId: string, node: DocumentNode }) => {
         // Just refresh the tree to show spinner for the generating node
         renderMultiProjectTree();
         // Show global abort button
@@ -121,7 +115,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderNodeDetails();
     };
 
-    const handleCompletion = (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
+    const handleCompletion = (_e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
         // Check if any operations are still in progress
         const operationsInProgress = manager.isAnyNodeGenerating();
         
@@ -158,7 +152,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }, 200);
     };
 
-    const handleAborted = (e: { nodeId: string, node: DocumentNode }) => {
+    const handleAborted = (_e: { nodeId: string, node: DocumentNode }) => {
         // Handle aborted generation - similar to completion but with different messaging
         const operationsInProgress = manager.isAnyNodeGenerating();
         
@@ -377,7 +371,7 @@ export function renderNodeDetails() {
     }
     
     const settingsManager = state.getSettingsManager();
-    const profileNames = settingsManager?.getProfileNames() || [];
+    settingsManager?.getProfileNames() || [];
 
     const detailsContainer = document.createElement('div');
     detailsContainer.className = 'node-details-container';
@@ -484,9 +478,9 @@ export function renderNodeDetails() {
             </div>
         </div>
 
-        <div class="node-section generation-prompt-section">
+        <div class="node-section generation-section">
             <div class="prompt-header">
-                <label for="node-generation-prompt">Generation prompt</label>
+                <label for="node-generation-prompt">Generation</label>
                 <div class="placeholder-buttons">
                     <button class="placeholder-btn" data-placeholder="path" title="View path placeholder value">{{path}}</button>
                     <button class="placeholder-btn" data-placeholder="context" title="View context placeholder value">{{context}}</button>
@@ -499,12 +493,106 @@ export function renderNodeDetails() {
                 </div>
             </div>
             <textarea id="node-generation-prompt" class="large-textarea" rows="8" placeholder="Enter a prompt here to generate content from scratch...">${node.generationPrompt || ''}</textarea>
-            <div class="node-actions" style="display: flex; align-items: center; gap: 1rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
-                    <input type="number" id="generation-count-input" min="1" max="20" value="${node.generationChildrenCount}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+            
+            <!-- Generation Controls -->
+            <div style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 1rem;">
+                <!-- Left side: Single generation controls -->
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; min-width: 250px;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
+                            <input type="number" id="generation-count-input" min="1" max="20" value="${node.generationChildrenCount}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                        </div>
+                        <button id="node-generate-btn" class="button button-primary">Generate</button>
+                    </div>
+                    
+                    ${!node.isLeaf ? `
+                        <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
+                            <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem;">Generate All Children</button>
+                            <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
+                                    <label for="include-content-checkbox" style="cursor: pointer; user-select: none;">Include content</label>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
+                                    <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
-                <button id="node-generate-btn" class="button button-primary">Generate</button>
+                
+                <!-- Right side: Progress bars -->
+                <div id="generation-progress-container" style="flex: 1; display: none; min-width: 300px;">
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div class="progress-tier">
+                            <div id="progress-text-operations" style="font-size: 0.9rem; font-weight: 600; color: #495057; margin-bottom: 0.25rem;"></div>
+                            <div class="progress-bar-wrapper">
+                                <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Middle and Bottom Level: Iterations and Stages side by side -->
+                        <div style="display: flex; gap: 1rem;">
+                            <!-- Left: LoopOrchestrator iterations -->
+                            <div class="progress-tier" style="flex: 1;">
+                                <div id="progress-text-iterations" style="font-size: 0.85rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
+                                <div class="progress-bar-wrapper">
+                                    <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right: Stage within iteration -->
+                            <div class="progress-tier" style="flex: 1;">
+                                <div id="progress-text-stages" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
+                                <div class="progress-bar-wrapper">
+                                    <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="progress-text-detail" style="font-style: italic; color: #6c757d; font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                    </div>
+                </div>
+                
+                <style>
+                .progress-tier {
+                    margin-bottom: 0.25rem;
+                }
+                .progress-tier:last-of-type {
+                    margin-bottom: 0;
+                }
+                .progress-bar-wrapper {
+                    background-color: #e9ecef;
+                    border-radius: 6px;
+                    height: 16px;
+                    overflow: hidden;
+                    position: relative;
+                }
+                .progress-bar {
+                    background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+                    height: 100%;
+                    border-radius: 6px;
+                    transition: width 0.3s ease-in-out;
+                    position: relative;
+                    min-width: 0;
+                }
+                .progress-bar::after {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+                    animation: progress-shine 2s infinite;
+                }
+                @keyframes progress-shine {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(100%); }
+                }
+                </style>
             </div>
         </div>
 
@@ -604,152 +692,47 @@ export function renderNodeDetails() {
         generateBtn.textContent = 'Generate';
     }
 
-    // --- Add Branch-Specific Actions UI (Always include progress bars for consistency) ---
-    const actionsContainer = document.createElement('div');
-    actionsContainer.className = 'node-section';
-    actionsContainer.innerHTML = `
-        <div class="node-actions" style="display: flex; gap: 1rem; align-items: flex-start;">
-            <!-- Progress bars on the left (always present) -->
-            <div id="generation-progress-container" style="flex: 1; display: none; min-width: 300px;">
-                <!-- Top Level: High-level operations -->
-                <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-                    <div class="progress-tier">
-                        <div id="progress-text-operations" style="font-size: 0.9rem; font-weight: 600; color: #495057; margin-bottom: 0.25rem;"></div>
-                        <div class="progress-bar-wrapper">
-                            <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Middle and Bottom Level: Iterations and Stages side by side -->
-                    <div style="display: flex; gap: 1rem;">
-                        <!-- Left: LoopOrchestrator iterations -->
-                        <div class="progress-tier" style="flex: 1;">
-                            <div id="progress-text-iterations" style="font-size: 0.85rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
-                            <div class="progress-bar-wrapper">
-                                <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Right: Stage within iteration -->
-                        <div class="progress-tier" style="flex: 1;">
-                            <div id="progress-text-stages" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
-                            <div class="progress-bar-wrapper">
-                                <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div id="progress-text-detail" style="font-style: italic; color: #6c757d; font-size: 0.75rem; margin-top: 0.25rem;"></div>
-                </div>
-            </div>
+    // Set up button tooltips and event listeners for generate all children button (now inline)
+    if (!node.isLeaf) {
+        const generateAllBtn = getElementById('node-generate-all-btn') as HTMLButtonElement;
+        if (generateAllBtn) {
+            // Normal state (no more button transformations)
+            generateAllBtn.className = 'button';
+            generateAllBtn.innerHTML = 'Generate All Children';
+            generateAllBtn.id = 'node-generate-all-btn';
+            generateAllBtn.disabled = isAnyOperationInProgress;
             
-            <!-- Button on the right -->
-            <div style="display: flex; flex-direction: column; min-width: 200px;">
-                ${!node.isLeaf ? `
-                    <button id="node-generate-all-btn" class="button" style="width: 100%;">Generate All Children</button>
-                    <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.9rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
-                            <label for="include-content-checkbox" style="cursor: pointer; user-select: none;">Include content</label>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
-                            <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-            
-            <style>
-            .progress-tier {
-                margin-bottom: 0.25rem;
-            }
-            .progress-tier:last-of-type {
-                margin-bottom: 0;
-            }
-            .progress-bar-wrapper {
-                background-color: #e9ecef;
-                border-radius: 6px;
-                height: 16px;
-                overflow: hidden;
-                position: relative;
-            }
-            .progress-bar {
-                background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
-                height: 100%;
-                border-radius: 6px;
-                transition: width 0.3s ease-in-out;
-                position: relative;
-                min-width: 0;
-            }
-            .progress-bar::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
-                animation: progress-shine 2s infinite;
-            }
-            @keyframes progress-shine {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(100%); }
-            }
-            </style>
-        </div>
-    `;
-
-    // Always add the actions container (with progress bars), regardless of node type
-    detailsContainer.appendChild(actionsContainer);
-
-            // Set up button tooltips for non-leaf nodes
-        if (!node.isLeaf) {
-            const generateAllBtn = actionsContainer.querySelector('#node-generate-all-btn') as HTMLButtonElement;
-            if (generateAllBtn) {
-                // Normal state (no more button transformations)
-                generateAllBtn.className = 'button';
-                generateAllBtn.innerHTML = 'Generate All Children';
-                generateAllBtn.id = 'node-generate-all-btn';
-                generateAllBtn.disabled = isAnyOperationInProgress;
-                
-                // Update tooltip to reflect current state
-                if (isAnyOperationInProgress) {
-                    generateAllBtn.title = "Operation in progress. Use the global abort button to cancel.";
-                } else if (!node.content || node.content.trim() === '') {
-                    generateAllBtn.title = "This node has no content. Clicking will show instructions.";
-                } else {
-                    generateAllBtn.title = "Smart fill: Creates children only if none exist, generates content only for empty nodes. Use 'Include content' and 'Recursive' to control behavior.";
-                }
-            }
-            
-            // Set up checkbox event listeners to save state
-            const includeContentCheckbox = actionsContainer.querySelector('#include-content-checkbox') as HTMLInputElement;
-            const recursiveCheckbox = actionsContainer.querySelector('#recursive-checkbox') as HTMLInputElement;
-            
-            if (includeContentCheckbox) {
-                includeContentCheckbox.addEventListener('change', () => {
-                    includeContentState = includeContentCheckbox.checked;
-                    saveCheckboxStates().catch(console.error);
-                });
-            }
-            
-            if (recursiveCheckbox) {
-                recursiveCheckbox.addEventListener('change', () => {
-                    recursiveState = recursiveCheckbox.checked;
-                    saveCheckboxStates().catch(console.error);
-                });
+            // Update tooltip to reflect current state
+            if (isAnyOperationInProgress) {
+                generateAllBtn.title = "Operation in progress. Use the global abort button to cancel.";
+            } else if (node.getState() === 'Empty') {
+                generateAllBtn.title = "This node has no content. Clicking will show instructions.";
+            } else {
+                generateAllBtn.title = "Smart fill: Creates children only if none exist, generates content only for empty nodes. Use 'Include content' and 'Recursive' to control behavior.";
             }
         }
+        
+        // Set up checkbox event listeners to save state
+        const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+        const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+        
+        if (includeContentCheckbox) {
+            includeContentCheckbox.addEventListener('change', () => {
+                includeContentState = includeContentCheckbox.checked;
+                saveCheckboxStates().catch(console.error);
+            });
+        }
+        
+        if (recursiveCheckbox) {
+            recursiveCheckbox.addEventListener('change', () => {
+                recursiveState = recursiveCheckbox.checked;
+                saveCheckboxStates().catch(console.error);
+            });
+        }
+    }
 }
 
-function showButtonSpinner(button: HTMLButtonElement, text: string = 'Working...') {
-    button.disabled = true;
-    const originalWidth = button.offsetWidth;
-    // Lock the width to prevent the layout from shifting when the text changes.
-    button.style.width = `${originalWidth}px`; 
-    button.innerHTML = `<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> ${text}`;
-}
+
 
 function toggleRatingsView(showRatings: boolean) {
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
@@ -783,8 +766,15 @@ function renderRatingsView() {
     if (!chosenIteration || !chosenIteration.ratings || chosenIteration.ratings.length === 0) {
         ratingsDisplay.innerHTML = `
             <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-                <h4 style="margin: 0 0 0.5rem 0; color: #495057;">No Ratings Available</h4>
-                <p style="margin: 0; font-size: 0.9rem;">This content doesn't have any quality ratings yet. Ratings are created when content is generated through the AI system.</p>
+                <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
+                <p style="margin: 0 0 1rem 0; font-size: 0.9rem;">This content doesn't have any quality ratings yet.</p>
+                <p style="margin: 0 0 1.5rem 0; font-size: 0.85rem; color: #868e96;">
+                    Ratings are created when content is generated through the AI system. If you edited the content manually, 
+                    the previous ratings were cleared since they no longer apply to the modified text.
+                </p>
+                <button id="regenerate-ratings-btn" class="button button-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    Generate Ratings for Current Content
+                </button>
             </div>
         `;
         return;
@@ -890,7 +880,7 @@ function showInheritedContextOverlay(projectManager: ProjectManager, node: Docum
     const contextSection = document.querySelector('.node-section:has(#node-context)') as HTMLElement;
     if (!contextSection) return;
 
-    const sectionRect = contextSection.getBoundingClientRect();
+                contextSection.getBoundingClientRect();
 
     // Collect inherited contexts from parent chain
     const inheritedContexts: Array<{title: string, level: string, context: string}> = [];
@@ -1186,7 +1176,7 @@ export function setupEventListeners() {
 
                     if (node.level === 0) {
                         // This is a project root node - delete the entire project
-                        const projects = state.getProjects();
+                        state.getProjects();
                         
                         const confirmMessage = `Are you sure you want to delete the entire project "${node.title}"?\n\nThis will permanently delete:\n- The project and all its content\n- All child nodes and their content\n- All generated summaries and history\n\nThis action cannot be undone.`;
                         
@@ -1389,6 +1379,22 @@ export function setupEventListeners() {
                 
             case 'node-generate-btn':
                 {
+                    // Check if node state is Final and warn user
+                    if (node.getState() === 'Final') {
+                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
+                        const confirmMessage = `This node contains final content that will be replaced.
+
+Current content: "${contentPreview}"
+
+Are you sure you want to generate new content and replace the existing content?
+
+This action cannot be undone.`;
+                        
+                        if (!confirm(confirmMessage)) {
+                            return; // User cancelled
+                        }
+                    }
+                    
                     const coordinator = projectManager.getGenerationCoordinator();
                     
                     const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
@@ -1428,22 +1434,87 @@ export function setupEventListeners() {
 
             case 'node-extract-context-btn':
                 {
-                    if (!projectManager || !selectedNodeId) {
+                    // Enhanced debugging and defensive coding for extract context button
+                    console.log('Extract context button clicked', { 
+                        projectManager: !!projectManager, 
+                        selectedNodeId,
+                        buttonExists: !!document.getElementById('node-extract-context-btn'),
+                        buttonDisabled: document.getElementById('node-extract-context-btn')?.hasAttribute('disabled')
+                    });
+                    
+                    // Additional check: verify the button actually exists and is enabled
+                    const extractBtn = document.getElementById('node-extract-context-btn') as HTMLButtonElement;
+                    if (!extractBtn) {
+                        console.error('Extract context: Button not found in DOM');
+                        alert('Extract context button not found. Please try refreshing the page.');
                         return;
                     }
+                    
+                    if (extractBtn.disabled) {
+                        console.log('Extract context: Button is disabled, ignoring click');
+                        return;
+                    }
+                    
+                    if (!projectManager) {
+                        console.error('Extract context: No project manager available');
+                        alert('No project is currently loaded. Please try reloading the page.');
+                        return;
+                    }
+                    
+                    if (!selectedNodeId) {
+                        console.error('Extract context: No node selected');
+                        alert('No node is selected. Please select a node first.');
+                        return;
+                    }
+                    
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) {
+                        console.error('Extract context: Node not found', { selectedNodeId });
+                        alert('Selected node not found. Please try selecting the node again.');
+                        return;
+                    }
+
+                    // Verify that the context extraction service is available
+                    try {
+                        const contextService = projectManager.getContextExtractionService();
+                        if (!contextService) {
+                            console.error('Extract context: Context extraction service not available');
+                            alert('Context extraction service is not available. Please try reloading the page.');
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('Extract context: Error getting context service', error);
+                        alert('Error accessing context extraction service. Please try reloading the page.');
                         return;
                     }
 
                     // Import and open extract context modal
                     import('./modal-manager').then(({ openExtractContextModal }) => {
-                        if (projectManager) {
-                            openExtractContextModal(projectManager, node);
+                        // Double-check that projectManager is still valid
+                        if (!projectManager) {
+                            console.error('Extract context: Project manager became null during import');
+                            alert('Project manager became unavailable. Please try again.');
+                            return;
                         }
+                        
+                        // Re-verify node exists
+                        if (!selectedNodeId) {
+                            console.error('Extract context: Node selection lost during import');
+                            alert('Node selection was lost. Please select a node again.');
+                            return;
+                        }
+                        const currentNode = projectManager.findNodeById(selectedNodeId);
+                        if (!currentNode) {
+                            console.error('Extract context: Node became unavailable during import');
+                            alert('Node became unavailable. Please try selecting it again.');
+                            return;
+                        }
+                        
+                        console.log('Opening extract context modal for node:', currentNode.title);
+                        openExtractContextModal(projectManager, currentNode);
                     }).catch(error => {
                         console.error('Failed to load extract context modal:', error);
-                        alert('Failed to open extract context dialog. Please try again.');
+                        alert('Failed to open extract context dialog. Please try again.\n\nError: ' + error.message);
                     });
                 }
                 break;
@@ -1509,6 +1580,45 @@ export function setupEventListeners() {
                     projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
                         .then(() => {
                             coordinator.completeOperation(operationId, true);
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
+                }
+                break;
+
+            case 'regenerate-ratings-btn':
+                {
+                    // Check if node has content to rate
+                    if (!node.content || node.content.trim() === '') {
+                        alert('No content to rate. Please add content to this node first.');
+                        return;
+                    }
+                    
+                    const confirmMessage = `This will generate quality ratings for the current content.\n\nNote: This uses AI tokens and may take a moment to complete.\n\nDo you want to proceed?`;
+                    if (!confirm(confirmMessage)) {
+                        return;
+                    }
+                    
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+                    
+                    // Use the generation service to rate the content directly
+                    projectManager.getGenerationService().rateNodeContent(node.id)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                            // Switch back to content view and then to ratings view to show the new ratings
+                            const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
+                            if (showRatingsCheckbox) {
+                                showRatingsCheckbox.checked = true;
+                                toggleRatingsView(true);
+                            }
                         })
                         .catch((error) => {
                             coordinator.completeOperation(operationId, false, error);
@@ -1718,39 +1828,7 @@ export function initializeProjectUI(manager?: ProjectManager) {
     }
 }
 
-function createNodeElement(node: DocumentNode): HTMLLIElement {
-    const li = document.createElement('li');
-    const span = document.createElement('span');
-    span.textContent = node.title;
-    span.dataset.id = node.id;
 
-    if (node.id === selectedNodeId) {
-        span.classList.add('active');
-    }
-
-    span.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectedNodeId = node.id;
-        renderNodeDetails();
-        
-        // Update active class on all spans
-        document.querySelectorAll('#project-tree span').forEach(s => s.classList.remove('active'));
-        span.classList.add('active');
-    });
-
-    li.appendChild(span);
-
-    if (node.children && node.children.length > 0) {
-        const ul = document.createElement('ul');
-        node.children.forEach(child => {
-            const childLi = createNodeElement(child);
-            ul.appendChild(childLi);
-        });
-        li.appendChild(ul);
-    }
-
-    return li;
-}
 
 interface ProgressInfo {
     message: string;

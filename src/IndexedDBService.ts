@@ -248,7 +248,7 @@ export class IndexedDBService {
       const transaction = this.db!.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
       
-      let completed = 0;
+
       const total = items.length;
 
       if (total === 0) {

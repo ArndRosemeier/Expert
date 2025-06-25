@@ -1,10 +1,10 @@
 import { DocumentNode } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
-import { LoopOrchestrator, LoopInput, LoopProgress, Rating, RaterProgressPayload } from './LoopOrchestrator';
+import { LoopOrchestrator, LoopProgress } from './LoopOrchestrator';
 import { EventEmitter } from './EventEmitter';
-import { SettingsManager, SettingsProfile } from './SettingsManager';
+import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
-import { QualityCriterion, CreatorPayload } from './types';
+
 import { StorageService, IStorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import * as state from './state';
@@ -14,7 +14,7 @@ import {
     ContextService, 
     PromptService, 
     GenerationController, 
-    ProjectPersistenceService,
+
     ContextExtractionService
 } from './project';
 import { GenerationCoordinator } from './project/GenerationCoordinator';
@@ -43,7 +43,7 @@ interface ProjectRecord {
 }
 
 export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
-    private static readonly MULTI_PROJECT_STORAGE_KEY = 'expert_app_projects';
+
     private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
 
     projectTitle: string;
@@ -230,13 +230,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         
         return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
     }
-    private clearAllGeneratingFlags(): void {
-        const clearNode = (node: DocumentNode): void => {
-            node.isGenerating = false;
-            node.children.forEach(child => clearNode(child));
-        };
-        clearNode(this.rootNode);
-    }
+
 
     /**
      * Serializes the project state to a JSON string.

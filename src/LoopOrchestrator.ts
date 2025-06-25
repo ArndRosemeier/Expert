@@ -86,6 +86,54 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         return this.currentIteration;
     }
 
+    /**
+     * Rates existing content without generating new content or looping.
+     * This is a standalone rating function that doesn't modify the content.
+     */
+    public async rateContent(prompt: string, content: string, criteria: QualityCriterion[]): Promise<Rating[]> {
+        if (!content || content.trim() === '') {
+            throw new Error('No content provided for rating');
+        }
+
+        if (!criteria || criteria.length === 0) {
+            throw new Error('No criteria provided for rating');
+        }
+
+        this.abortController = new AbortController();
+        const maxRetries = 3;
+        let ratingsFromAI: Rating[] | null = null;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            if (this.stopRequested) {
+                throw new Error('Rating aborted by user');
+            }
+
+            const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, content, criteria);
+            try {
+                const ratingString = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                ratingsFromAI = this.parseAllRatings(ratingString, criteria);
+
+                if (ratingsFromAI) {
+                    break; // Success
+                }
+                console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
+
+            } catch(e: any) {
+                if (e.message === 'Request was aborted' || this.stopRequested) {
+                    throw new Error('Rating aborted by user');
+                }
+                console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
+            }
+        }
+
+        if (!ratingsFromAI) {
+            throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
+        }
+
+        this.abortController = null;
+        return ratingsFromAI;
+    }
+
     public async runLoop(input: LoopInput): Promise<LoopResult> {
         this.stopRequested = false; // Reset flag at the start of a run
         this.abortController = new AbortController();

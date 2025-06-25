@@ -2,10 +2,10 @@ import { getElementById, modalContainer, modalContent, testModalContainer, testM
 import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
-import { ModelSelector } from '../ModelSelector';
-import { SettingsProfile, DEFAULT_CRITERIA, DEFAULT_CONTEXT_EXTRACTION_PROMPT, SettingsManager } from '../SettingsManager';
+
+import { SettingsProfile, DEFAULT_CRITERIA, SettingsManager } from '../SettingsManager';
 import { QualityCriterion } from '../types';
-import { PromptManager, OrchestratorPrompts, defaultPrompts } from '../PromptManager';
+import { OrchestratorPrompts, defaultPrompts } from '../PromptManager';
 import { DocumentNode } from '../DocumentNode';
 import { refreshGlobalProfileSelector } from './project-ui';
 
@@ -240,7 +240,7 @@ function renderExportModal(projectManager: ProjectManager, node: DocumentNode) {
     closeBtn.addEventListener('click', closeModal);
 }
 
-function performExport(projectManager: ProjectManager, node: DocumentNode, scope: string, format: string) {
+function performExport(_projectManager: ProjectManager, node: DocumentNode, scope: string, format: string) {
     let exportData: any;
     let filename: string;
     let mimeType: string;
@@ -1006,7 +1006,7 @@ export function renderSettingsModal() {
     const settingsManager = state.getSettingsManager();
     if (settingsManager) {
         // Create a custom prompt manager without save buttons
-        const promptManager = new PromptManagerAutoSave(promptsContainer, autoSave, settingsManager);
+        new PromptManagerAutoSave(promptsContainer, autoSave, settingsManager);
     }
 
     // Wire up auto-save for all form elements

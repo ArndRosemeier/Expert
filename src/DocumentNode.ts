@@ -1,11 +1,7 @@
 import { LoopHistoryItem, Rating } from './LoopOrchestrator';
 import { v4 as uuidv4 } from 'uuid';
 
-// A simple utility for generating unique IDs.
-// In a real-world scenario, a more robust library like UUID would be used.
-function generateId(): string {
-    return Math.random().toString(36).substring(2, 15);
-}
+
 
 /**
  * Represents a single iteration attempt during content generation.
@@ -118,7 +114,6 @@ export class DocumentNode {
 
     set content(newContent: string) {
         this._content = newContent;
-        this.context = ''; // Clear context when content changes
         
         // Clear generation history when content is manually changed (not during generation)
         if (!this._isSettingContentFromGeneration) {

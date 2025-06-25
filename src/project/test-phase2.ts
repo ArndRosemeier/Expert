@@ -3,7 +3,7 @@ import { GenerationController } from './GenerationController';
 import { ProjectPersistenceService } from './ProjectPersistenceService';
 import { DocumentNode } from '../DocumentNode';
 import { LoopOrchestrator } from '../LoopOrchestrator';
-import { SettingsManager } from '../SettingsManager';
+
 import { OpenRouterClient } from '../OpenRouterClient';
 
 /**
@@ -17,7 +17,7 @@ export function testPhase2Services(): void {
     const rootNode = new DocumentNode(0, 'Test Book', null, template);
     const openRouterClient = new OpenRouterClient('test-api-key');
     const loopOrchestrator = new LoopOrchestrator(openRouterClient);
-    const settingsManager = new SettingsManager();
+
     
     // Test GenerationController
     console.log('🎮 Testing GenerationController...');
@@ -122,7 +122,7 @@ export function testServiceIntegration(): void {
     const generationController = new GenerationController(loopOrchestrator, treeService);
     
     // Simulate starting generation on a node
-    const nodeId = scene1.id;
+
     scene1.isGenerating = true;
     
     // Test that GenerationController can detect generating nodes

@@ -35,7 +35,7 @@ export class OpenRouterClient {
   private apiKey: string;
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
   private modelPurposeMap: Record<string, string> = {};
-  private models: Record<string, string> = {};
+
   private currentAbortController: AbortController | null = null;
 
   constructor(apiKey: string, modelPurposeMap?: Record<string, string>) {
@@ -54,7 +54,7 @@ export class OpenRouterClient {
   }
 
   public setSelectedModels(models: Record<string, string>): void {
-    this.models = models;
+    this.modelPurposeMap = models;
   }
 
   public getApiKey(): string {

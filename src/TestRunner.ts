@@ -4,7 +4,7 @@ import { ProjectManager } from './ProjectManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { SettingsManager } from './SettingsManager';
 import { LoopOrchestrator } from './LoopOrchestrator';
-import { StorageService, IStorageService } from './StorageService';
+import { StorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import { TemplateManager } from './TemplateManager';
 
@@ -33,7 +33,8 @@ export class TestRunner {
                     { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
                 ],
                 maxIterations: 5,
-                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model' }
+                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model' },
+                contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
             };
             this.mockSettingsManager.saveProfile('default', defaultProfile);
             this.mockSettingsManager.setLastUsedProfile('default');
@@ -475,7 +476,7 @@ export class TestRunner {
             if (template2.hierarchyLevels[1] === '') {
                 // This might be allowed, but let's verify it works
                 const project = new ProjectManager("Test", template2, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
-                const child = project.addNode("Test Child", project.rootNode.id);
+                project.addNode("Test Child", project.rootNode.id);
                 // Should still work even with empty level name
             }
             
@@ -981,7 +982,8 @@ export class TestRunner {
                 prompt: "Test prompt",
                 criteria: [{ name: 'Test', description: 'Test criterion', goal: 8, weight: 1.0 }],
                 maxIterations: 5,
-                selectedModels: { creator: 'test', rater: 'test', editor: 'test' }
+                selectedModels: { creator: 'test', rater: 'test', editor: 'test' },
+                contextExtractionPrompt: 'Test extraction prompt'
             };
             
             await settingsManager.saveProfile('test_profile', testProfile);
@@ -1039,7 +1041,7 @@ export class TestRunner {
     private async testStorageCapacity(): Promise<TestResult> {
         try {
             const storage = await StorageService.getInstance();
-            const usage = await storage.getUsage();
+            await storage.getUsage();
             
             // Test with larger data to verify capacity improvements
             const largeDataKey = 'capacity_test_' + Date.now();
@@ -1137,7 +1139,8 @@ export class TestRunner {
                     { name: 'Import Test', description: 'Test criterion for import', goal: 7, weight: 0.8 }
                 ],
                 maxIterations: 8,
-                selectedModels: { creator: 'export-test', rater: 'import-test', editor: 'roundtrip-test' }
+                selectedModels: { creator: 'export-test', rater: 'import-test', editor: 'roundtrip-test' },
+                contextExtractionPrompt: 'Test context extraction prompt'
             };
             
             const testProfileName = 'export_test_profile';

@@ -24,12 +24,7 @@ interface GenerationDependencies {
     getGenerationCoordinator?: () => any; // Optional for coordinator access
 }
 
-interface GenerationProgress {
-    nodeId: string;
-    message: string;
-    current: number;
-    total: number;
-}
+
 
 export class GenerationService {
     private deps: GenerationDependencies;
@@ -44,13 +39,79 @@ export class GenerationService {
      * Centralized cleanup method that handles all state clearing in the correct order.
      * This ensures UI consistency by clearing all state before emitting any events.
      */
-    private cleanupGenerationState(nodeId: string, node: DocumentNode, isChildGeneration: boolean = false): void {
+    private cleanupGenerationState(_nodeId: string, node: DocumentNode, isChildGeneration: boolean = false): void {
         // Clear node-level state first
         node.isGenerating = false;
         
         // Clear service-level state for single node operations
         if (!isChildGeneration) {
             this.deps.generationController.clearGenerationContext();
+        }
+    }
+
+    /**
+     * Rates existing content for a node without generating new content.
+     * Creates a generation session with the ratings and marks the current content as chosen.
+     * @param nodeId The ID of the node to rate.
+     */
+    public async rateNodeContent(nodeId: string): Promise<void> {
+        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+        if (!node) { 
+            throw new Error(`Node not found: ${nodeId}`); 
+        }
+
+        if (!node.content || node.content.trim() === '') {
+            throw new Error(`Node "${node.title}" has no content to rate`);
+        }
+
+        // Check if already generating
+        if (this.deps.generationController.canAbortGeneration(this.deps.rootNode)) {
+            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
+        }
+
+        const profile = this.deps.settingsManager.getLastUsedProfile();
+        
+        if (!profile || !profile.criteria || profile.criteria.length === 0) {
+            throw new Error(`Cannot rate content for node "${node.title}" (ID: ${nodeId}). The active profile is either missing, has no criteria defined, or could not be loaded.`);
+        }
+
+        // Set up generation context
+        this.abortRequested = false;
+        this.deps.generationController.setupSingleNodeGeneration(nodeId);
+        
+        // Get the raw prompt from the node for context
+        const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node);
+        const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+        const path = this.deps.treeService.getNodePath(nodeId, this.deps.rootNode);
+        const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
+
+        const filteredCriteria = this.filterCriteriaForNodeType(profile.criteria, node.isLeaf);
+
+        try {
+            node.isGenerating = true;
+            this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Rating content for "${node.title}"...`, current: 0, total: 1 });
+
+            // Use the loop orchestrator's rateContent method
+            const ratings = await this.deps.loopOrchestrator.rateContent(filledPrompt, node.content, filteredCriteria);
+
+            // Create a generation session with the rating results
+            node.startGenerationSession(filledPrompt);
+            node.addGenerationIteration(1, node.content, ratings);
+            node.endGenerationSession(true, node.content);
+
+            // Save to storage
+            await this.deps.saveToStorage();
+
+            // Clear progress and emit completion
+            this.cleanupGenerationState(nodeId, node, false);
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 1, total: 1 });
+            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
+
+        } catch (error) {
+            this.cleanupGenerationState(nodeId, node, false);
+            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: false, error, node });
+            throw error;
         }
     }
 
@@ -143,7 +204,7 @@ export class GenerationService {
         }
         
         // Start a new generation session
-        const sessionId = node.startGenerationSession(loopInput.prompt);
+        node.startGenerationSession(loopInput.prompt);
         let currentIterationContent: string | null = null;
         let currentIterationRatings: Rating[] = [];
         
@@ -198,7 +259,7 @@ export class GenerationService {
         };
 
         // Handle abort events from orchestrator
-        const onAborted = (message: string) => {
+        const onAborted = (_message: string) => {
             // Generation aborted - no logging needed as UI handles this
         };
 
@@ -869,18 +930,7 @@ export class GenerationService {
         return lines.slice(startIndex).join('\n').trim();
     }
 
-    /**
-     * Parses a bulleted list from text.
-     * Handles both old format (just titles) and new format (Title: X, Content: Y).
-     */
-    private parseBulletedList(text: string): string[] {
-        return text
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('*') || line.startsWith('-'))
-            .map(line => line.substring(1).trim())
-            .filter(line => line.length > 0);
-    }
+
 
     /**
      * Parses a bulleted list from text with the new format "Title: X, Content: Y".

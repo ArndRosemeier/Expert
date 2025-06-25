@@ -1,8 +1,6 @@
 import { DocumentNode } from '../DocumentNode';
 import { ProjectTemplate } from '../ProjectTemplate';
-import { LoopOrchestrator } from '../LoopOrchestrator';
-import { SettingsManager } from '../SettingsManager';
-import { OpenRouterClient } from '../OpenRouterClient';
+
 import { StorageService, IStorageService } from '../StorageService';
 import { IndexedDBService } from '../IndexedDBService';
 import { ProjectDependencies, LoadResult, ProjectRecord } from './types/ProjectTypes';
@@ -13,7 +11,7 @@ import * as state from '../state';
  * Manages the conversion between in-memory project data and persistent storage formats.
  */
 export class ProjectPersistenceService {
-    private static readonly MULTI_PROJECT_STORAGE_KEY = 'expert_app_projects';
+
     private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
     private static storageService: Promise<IStorageService> | null = null;
 
@@ -58,7 +56,7 @@ export class ProjectPersistenceService {
      * Saves a project's current state to storage.
      * @param project The project to save.
      */
-    public static async saveToStorage(project: any): Promise<void> {
+    public static async saveToStorage(_project: any): Promise<void> {
         try {
             await ProjectPersistenceService.saveAllProjectsToStorage();
         } catch (error) {
@@ -135,7 +133,7 @@ export class ProjectPersistenceService {
      * @param dependencies The dependencies needed to reconstruct projects.
      * @returns Promise containing projects and active project ID.
      */
-    public static async loadAllProjectsFromStorage(dependencies: ProjectDependencies): Promise<LoadResult> {
+    public static async loadAllProjectsFromStorage(_dependencies: ProjectDependencies): Promise<LoadResult> {
         
         try {
             const storage = await ProjectPersistenceService.getStorageService();
@@ -280,7 +278,7 @@ export class ProjectPersistenceService {
      */
     public static async restoreFromBackup(
         backup: { projects: ProjectRecord[], activeProjectId: string | null },
-        dependencies: ProjectDependencies
+        _dependencies: ProjectDependencies
     ): Promise<void> {
         try {
             // Clear existing data
