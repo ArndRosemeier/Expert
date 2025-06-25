@@ -64,7 +64,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     },
     {
         name: "Avoids AI Clichés",
-        description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' or 'tapestry of...'",
+        description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' 'tapestry of,' 'testament to,' 'in the realm of,' 'navigate the landscape,' 'meticulous examination of,' 'crucial,' 'pivotal,' 'essential,' 'underscores,' 'harness,' 'illuminate,' 'transformative,' 'fostering,' 'utilize,' 'thus,' 'furthermore,' or 'ostensibly'",
         goal: 8,
         outline: true,
         leaf: true
