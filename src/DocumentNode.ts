@@ -273,6 +273,22 @@ export class DocumentNode {
     }
 
     /**
+     * Gets the current state of the node based on its content.
+     * @returns 'Empty' if no content, 'Draft' if content starts with 'Draft:', 'Final' if has other content
+     */
+    getState(): 'Empty' | 'Draft' | 'Final' {
+        if (!this.content || this.content.trim() === '') {
+            return 'Empty';
+        }
+        
+        if (this.content.trim().startsWith('Draft:')) {
+            return 'Draft';
+        }
+        
+        return 'Final';
+    }
+
+    /**
      * Custom serializer for JSON.stringify.
      * Ensures private fields and getters are correctly serialized.
      */

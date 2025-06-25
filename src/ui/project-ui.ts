@@ -1452,8 +1452,8 @@ export function setupEventListeners() {
                 {
                     const coordinator = projectManager.getGenerationCoordinator();
                     
-                    // Check if node has content
-                    if (!node.content || node.content.trim() === '') {
+                    // Check if node has content (Draft or Final)
+                    if (node.getState() === 'Empty') {
                         alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
                         return;
                     }

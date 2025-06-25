@@ -397,7 +397,7 @@ export class GenerationService {
 
         // Only check for content if we need to create children from outline (children.length === 0)
         // For nodes that already have children, we should skip this check
-        if (node.children.length === 0 && (!node.content || node.content.trim() === '')) {
+        if (node.children.length === 0 && node.getState() === 'Empty') {
             if (includeContent) {
                 // Auto-generate content for the parent node first
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
@@ -497,8 +497,8 @@ export class GenerationService {
         // Step 2: Generate content for all children (if requested)
         if (includeContent) {
             const children = node.children;
-            // Filter to only children that don't have content yet
-            const childrenNeedingContent = children.filter(child => !child.content || child.content.trim() === '');
+            // Filter to only children that need content (Empty or Draft, but not Final)
+            const childrenNeedingContent = children.filter(child => child.getState() !== 'Final');
             const total = childrenNeedingContent.length;
 
             if (total > 0) {
