@@ -5,7 +5,15 @@ import './text-editor-highlighting.css';
  * A text editor component that supports both editing and highlighting of text ranges.
  * Uses contenteditable internally but provides a clean interface that only deals with plain text.
  */
-export type SelectionMode = 'words' | 'sentences';
+export type SelectionMode = 'words' | 'sentences' | 'paragraphs';
+
+export interface UndoState {
+    startPos: number;
+    endPos: number;
+    originalText: string;
+    replacedText: string;
+    nodeId?: string;
+}
 
 export class TextEditorWithHighlighting {
     private container: HTMLElement;
@@ -16,6 +24,8 @@ export class TextEditorWithHighlighting {
     private changeCallback?: (text: string) => void;
     private focusCallback?: () => void;
     private blurCallback?: () => void;
+    private lastReplacement: UndoState | null = null;
+    private highlightTimeouts: Map<string, number> = new Map();
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -62,6 +72,7 @@ export class TextEditorWithHighlighting {
             this.plainTextContent = this.editableDiv.textContent || '';
             // Clear all highlights when user edits manually
             this.clearAllHighlights();
+            // Note: We don't clear undo state here - let canUndo() check if replacement text is still intact
             if (this.changeCallback) {
                 this.changeCallback(this.getText());
             }
@@ -113,17 +124,39 @@ export class TextEditorWithHighlighting {
             return;
         }
 
+        // Clear any existing timeout for this highlight
+        const existingTimeout = this.highlightTimeouts.get(id);
+        if (existingTimeout) {
+            clearTimeout(existingTimeout);
+        }
+
         // Store highlight info
         this.highlights.set(id, {startPos, endPos, className});
 
         // Apply the highlight
         this.renderWithHighlights();
+
+        // Schedule automatic removal for AI result highlights after 5 seconds
+        if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
+            const timeoutId = setTimeout(() => {
+                this.removeHighlight(id);
+                this.highlightTimeouts.delete(id);
+            }, 5000);
+            this.highlightTimeouts.set(id, timeoutId);
+        }
     }
 
     /**
      * Remove a specific highlight
      */
     public removeHighlight(id: string): void {
+        // Clear any pending timeout for this highlight
+        const timeoutId = this.highlightTimeouts.get(id);
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            this.highlightTimeouts.delete(id);
+        }
+
         this.highlights.delete(id);
         this.renderWithHighlights();
     }
@@ -132,6 +165,10 @@ export class TextEditorWithHighlighting {
      * Clear all highlights
      */
     public clearAllHighlights(): void {
+        // Clear all pending timeouts
+        this.highlightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.highlightTimeouts.clear();
+
         this.highlights.clear();
         this.renderWithHighlights();
     }
@@ -142,6 +179,8 @@ export class TextEditorWithHighlighting {
     public expandToWordBoundaries(startPos: number, endPos: number): {startPos: number, endPos: number} {
         if (this.selectionMode === 'sentences') {
             return this.expandToSentenceBoundaries(startPos, endPos);
+        } else if (this.selectionMode === 'paragraphs') {
+            return this.expandToParagraphBoundaries(startPos, endPos);
         } else {
             return this.expandToWordBoundariesOnly(startPos, endPos);
         }
@@ -237,6 +276,60 @@ export class TextEditorWithHighlighting {
     }
 
     /**
+     * Expand selection to paragraph boundaries
+     */
+    private expandToParagraphBoundaries(startPos: number, endPos: number): {startPos: number, endPos: number} {
+        const text = this.getText();
+        let newStartPos = startPos;
+        let newEndPos = endPos;
+
+        // Expand start position to paragraph beginning
+        while (newStartPos > 0) {
+            const char = text[newStartPos - 1];
+            // Stop at double newline (paragraph break) or start of text
+            if (char === '\n') {
+                // Check if it's a double newline (paragraph break)
+                if (newStartPos > 1 && text[newStartPos - 2] === '\n') {
+                    break;
+                }
+                // Single newline - check if this starts a new paragraph (empty line before)
+                if (newStartPos === 1 || text[newStartPos - 2] === '\n') {
+                    break;
+                }
+            }
+            newStartPos--;
+        }
+
+        // Expand end position to paragraph end
+        while (newEndPos < text.length) {
+            const char = text[newEndPos];
+            // Stop at double newline (paragraph break)
+            if (char === '\n') {
+                // Check if next character is also newline (paragraph break)
+                if (newEndPos + 1 < text.length && text[newEndPos + 1] === '\n') {
+                    break;
+                }
+                // Single newline - check if this ends the paragraph (empty line after)
+                if (newEndPos + 1 === text.length || text[newEndPos + 1] === '\n') {
+                    newEndPos++; // Include the newline
+                    break;
+                }
+            }
+            newEndPos++;
+        }
+
+        // Trim leading and trailing whitespace within the paragraph
+        while (newStartPos < newEndPos && /\s/.test(text[newStartPos])) {
+            newStartPos++;
+        }
+        while (newEndPos > newStartPos && /\s/.test(text[newEndPos - 1])) {
+            newEndPos--;
+        }
+
+        return {startPos: newStartPos, endPos: newEndPos};
+    }
+
+    /**
      * Add a preview highlight to show what will be processed by AI
      */
     public addPreviewHighlight(startPos: number, endPos: number): void {
@@ -289,6 +382,15 @@ export class TextEditorWithHighlighting {
         const currentText = this.getText();
         const beforeText = currentText.substring(0, startPos);
         const afterText = currentText.substring(endPos);
+        const originalText = currentText.substring(startPos, endPos);
+        
+        // Store undo state before making the change
+        this.lastReplacement = {
+            startPos,
+            endPos,
+            originalText,
+            replacedText: newText
+        };
         
         const newFullText = beforeText + newText + afterText;
         const newEndPos = startPos + newText.length;
@@ -300,6 +402,61 @@ export class TextEditorWithHighlighting {
         this.addHighlight(highlightId, startPos, newEndPos);
         
         // No need to set selection - HTML highlighting provides visual feedback
+    }
+
+    /**
+     * Check if undo is possible for the last replacement
+     */
+    public canUndo(): boolean {
+        if (!this.lastReplacement) return false;
+        
+        const currentText = this.getText();
+        const { startPos, replacedText } = this.lastReplacement;
+        const newEndPos = startPos + replacedText.length;
+        
+        // Check if the replacement text is still at the expected position
+        if (newEndPos > currentText.length) return false;
+        
+        const currentTextAtPosition = currentText.substring(startPos, newEndPos);
+        return currentTextAtPosition === replacedText;
+    }
+
+    /**
+     * Undo the last replacement
+     */
+    public undoLastReplacement(): boolean {
+        if (!this.canUndo() || !this.lastReplacement) return false;
+        
+        const { startPos, originalText, replacedText } = this.lastReplacement;
+        const newEndPos = startPos + replacedText.length;
+        
+        // Replace the AI text back with the original text
+        const currentText = this.getText();
+        const beforeText = currentText.substring(0, startPos);
+        const afterText = currentText.substring(newEndPos);
+        const restoredText = beforeText + originalText + afterText;
+        
+        // Clear undo state before setting text to avoid creating new undo state
+        this.lastReplacement = null;
+        
+        // Set the restored text and clear highlights
+        this.setText(restoredText);
+        
+        return true;
+    }
+
+    /**
+     * Clear undo state (manual override - normally undo checks position automatically)
+     */
+    public clearUndo(): void {
+        this.lastReplacement = null;
+    }
+
+    /**
+     * Get undo state for external access
+     */
+    public getUndoState(): UndoState | null {
+        return this.lastReplacement;
     }
 
     /**
@@ -446,6 +603,10 @@ export class TextEditorWithHighlighting {
      * Destroy the editor and clean up
      */
     public destroy(): void {
+        // Clear all pending highlight timeouts
+        this.highlightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.highlightTimeouts.clear();
+        
         this.editableDiv.remove();
         this.highlights.clear();
     }

@@ -250,8 +250,10 @@ export class ReaderEditor {
         this.editState.editableNodes.set(nodeId, element);
         
         // Set up event handlers
-        textEditor.onTextChange((text) => {
+        textEditor.onTextChange((_text) => {
             this.markDirty(editor);
+            // Update undo button state when text changes (to check if undo is still valid)
+            (this.readerGUI as any).updateUndoButtonState();
         });
         
         textEditor.onFocus(() => {
@@ -288,6 +290,9 @@ export class ReaderEditor {
         
         // Update action buttons availability
         this.readerGUI.updateActionButtons();
+        
+        // Update undo button state (cast to access the private method)
+        (this.readerGUI as any).updateUndoButtonState();
     }
 
     /**
@@ -460,7 +465,7 @@ export class ReaderEditor {
     /**
      * Set the selection mode for all editors
      */
-    public setSelectionMode(mode: 'words' | 'sentences'): void {
+    public setSelectionMode(mode: 'words' | 'sentences' | 'paragraphs'): void {
         this.nodeEditors.forEach(editor => {
             editor.editor.setSelectionMode(mode);
         });
@@ -469,11 +474,33 @@ export class ReaderEditor {
     /**
      * Get the current selection mode (from the active editor or default)
      */
-    public getCurrentSelectionMode(): 'words' | 'sentences' {
+    public getCurrentSelectionMode(): 'words' | 'sentences' | 'paragraphs' {
         if (this.currentActiveEditor) {
             return this.currentActiveEditor.editor.getSelectionMode();
         }
         return 'sentences'; // Default
+    }
+
+    /**
+     * Check if undo is available for the current active editor
+     */
+    public canUndo(): boolean {
+        if (!this.currentActiveEditor) return false;
+        return this.currentActiveEditor.editor.canUndo();
+    }
+
+    /**
+     * Undo the last AI replacement in the current active editor
+     */
+    public undoLastReplacement(): boolean {
+        if (!this.currentActiveEditor) return false;
+        
+        const success = this.currentActiveEditor.editor.undoLastReplacement();
+        if (success) {
+            // Mark as dirty and auto-save after undo
+            this.markDirty(this.currentActiveEditor);
+        }
+        return success;
     }
 
     /**

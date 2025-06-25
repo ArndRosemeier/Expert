@@ -34,7 +34,6 @@ interface ClickMapping {
 interface ReaderConfig {
     showTOC: boolean;
     showAllLevels: boolean;
-    showMetaInfo: boolean;
     fontSize: number;
     lineHeight: number;
     maxWidth: number;
@@ -42,25 +41,7 @@ interface ReaderConfig {
     separatorStyle: 'minimal' | 'standard' | 'bold';
 }
 
-// Hierarchy color system (6 levels)
-const HIERARCHY_COLORS = [
-    '#ffffff',  // Level 0: Pure white
-    '#fafafa',  // Level 1: Very light gray
-    '#f5f5f5',  // Level 2: Light gray
-    '#f0f0f0',  // Level 3: Medium light gray
-    '#ebebeb',  // Level 4: Slightly darker
-    '#e6e6e6'   // Level 5+: Darkest in series
-];
 
-// Typography scale configuration
-const TYPOGRAPHY_SCALE = [
-    { fontSize: '2.5rem', fontWeight: '700', marginTop: '0', marginBottom: '2rem' },      // Level 0
-    { fontSize: '2rem', fontWeight: '600', marginTop: '3rem', marginBottom: '1.5rem' },   // Level 1
-    { fontSize: '1.75rem', fontWeight: '600', marginTop: '2.5rem', marginBottom: '1.25rem' }, // Level 2
-    { fontSize: '1.5rem', fontWeight: '500', marginTop: '2rem', marginBottom: '1rem' },   // Level 3
-    { fontSize: '1.25rem', fontWeight: '500', marginTop: '1.5rem', marginBottom: '0.75rem' }, // Level 4
-    { fontSize: '1.1rem', fontWeight: '400', marginTop: '1rem', marginBottom: '0.5rem' }  // Level 5+
-];
 
 /**
  * Main Reader GUI class - provides a clean reading interface for hierarchical content
@@ -73,8 +54,6 @@ export class ReaderGUI {
     private config: ReaderConfig;
     private onNavigateToNode?: (nodeId: string) => void;
     private isListeningForUpdates: boolean = false;
-    private lastScrollPosition: number = 0;
-    private lastFocusedNodeId: string | null = null;
     private isSettingsPanelOpen: boolean = false;
     private readerEditor: ReaderEditor;
     private hasBeenRendered: boolean = false; // Track if this instance has been rendered
@@ -99,7 +78,6 @@ export class ReaderGUI {
         this.config = {
             showTOC: true,
             showAllLevels: false,
-            showMetaInfo: false,
             fontSize: 16,
             lineHeight: 1.6,
             maxWidth: 800,
@@ -322,12 +300,7 @@ export class ReaderGUI {
         return content.trim().split(/\s+/).length;
     }
 
-    /**
-     * Get the full path to a node for display
-     */
-    private getNodePath(nodeId: string): string {
-        return this.projectManager.getNodePath(nodeId);
-    }
+
 
     /**
      * Generate the complete HTML for the reader
@@ -423,18 +396,11 @@ export class ReaderGUI {
      * Generate the main content area
      */
     private generateContent(): string {
-        let contentHTML = `<div class="reader-content ${this.config.showMetaInfo ? 'reader-content-with-meta' : 'reader-content-minimal'}">`;
-        let lastLevel = -1;
+        let contentHTML = `<div class="reader-content reader-content-minimal">`;
 
-        this.contentNodes.forEach((node, index) => {
-            // Add separator if needed (only in meta info mode)
-            if (index > 0 && this.config.showMetaInfo) {
-                contentHTML += this.generateSeparator(lastLevel, node.level);
-            }
-
+        this.contentNodes.forEach((node) => {
             // Add the node content
             contentHTML += this.generateNodeHTML(node);
-            lastLevel = node.level;
         });
 
         contentHTML += '</div>';
@@ -445,88 +411,30 @@ export class ReaderGUI {
      * Generate HTML for a single content node
      */
     private generateNodeHTML(node: ContentNode): string {
-        const levelClass = Math.min(node.level, 5); // Cap at level 5
-        const backgroundColor = HIERARCHY_COLORS[levelClass];
-        
-        if (this.config.showMetaInfo) {
-            // Full meta info mode - show everything with node path
-            const typography = TYPOGRAPHY_SCALE[levelClass];
-            const nodePath = this.getNodePath(node.id);
+        // Always use minimal mode - small title, no meta info, continuous reading
+        let html = `
+            <div class="reader-node reader-node-minimal" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}">
+                <div class="node-minimal-title">${node.title}</div>
+        `;
 
-            let html = `
-                <div class="reader-node reader-node-with-meta" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}" style="background-color: ${backgroundColor};">
-                    <div class="node-header">
-                        <div class="node-title-row">
-                            <h${Math.min(node.level + 1, 6)} class="node-title" style="
-                                font-size: ${typography.fontSize};
-                                font-weight: ${typography.fontWeight};
-                                margin-top: ${typography.marginTop};
-                                margin-bottom: ${typography.marginBottom};
-                            ">
-                                ${node.title}
-                            </h${Math.min(node.level + 1, 6)}>
-                            <div class="node-path">${nodePath}</div>
-                        </div>
-                        <div class="node-meta">
-                            <span class="word-count">${node.wordCount} words</span>
-                            <span class="reading-time">${node.estimatedReadingTime} min read</span>
-                            <span class="level-indicator">Level ${node.level}</span>
-                        </div>
-                    </div>
+        if (node.hasContent) {
+            html += `
+                <div class="node-content node-content-minimal" data-node-id="${node.id}">
+                    <!-- Content will be rendered by editor textareas -->
+                </div>
             `;
-
-            if (node.hasContent) {
-                html += `
-                    <div class="node-content" data-node-id="${node.id}">
-                        <!-- Content will be rendered by editor textareas -->
-                    </div>
-                `;
-            }
-
-            html += '</div>';
-            return html;
-        } else {
-            // Minimal mode - small title, no meta info, continuous reading
-            let html = `
-                <div class="reader-node reader-node-minimal" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}">
-                    <div class="node-minimal-title">${node.title}</div>
-            `;
-
-            if (node.hasContent) {
-                html += `
-                    <div class="node-content node-content-minimal" data-node-id="${node.id}">
-                        <!-- Content will be rendered by editor textareas -->
-                    </div>
-                `;
-            }
-
-            html += '</div>';
-            return html;
         }
+
+        html += '</div>';
+        return html;
     }
 
     /**
      * Format content for display - DISABLED in always-edit mode
      */
-    private formatContent(content: string): string {
-        // Always return empty - content is handled by textareas only
-        return '';
-    }
 
-    /**
-     * Generate separator between content sections
-     */
-    private generateSeparator(fromLevel: number, toLevel: number): string {
-        let separatorClass = 'section';
-        
-        if (Math.abs(fromLevel - toLevel) > 1) {
-            separatorClass = 'major';
-        } else if (fromLevel !== toLevel) {
-            separatorClass = 'minor';
-        }
 
-        return `<div class="reader-separator ${separatorClass}" data-from-level="${fromLevel}" data-to-level="${toLevel}"></div>`;
-    }
+
 
     /**
      * Apply CSS styles to the reader
@@ -1211,6 +1119,19 @@ export class ReaderGUI {
                 border-color: #93c5fd;
                 color: #1e40af;
             }
+
+            .reader-undo-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                background: #f1f5f9;
+                color: #94a3b8;
+            }
+
+            .reader-undo-btn:not(:disabled):hover {
+                background: #fef3c7;
+                border-color: #f59e0b;
+                color: #d97706;
+            }
         `;
     }
 
@@ -1254,8 +1175,19 @@ export class ReaderGUI {
             this.openActionsConfigModal();
         } else if (target.classList.contains('reader-action-btn')) {
             const actionId = target.getAttribute('data-action-id');
-            if (actionId) {
-                this.readerEditor.executeAction(actionId);
+            if (actionId === 'undo') {
+                // Handle undo button
+                const success = this.readerEditor.undoLastReplacement();
+                if (success) {
+                    // Update undo button state after successful undo
+                    this.updateUndoButtonState();
+                }
+            } else if (actionId) {
+                // Handle regular AI action buttons
+                this.readerEditor.executeAction(actionId).then(() => {
+                    // Update undo button state after AI action completes
+                    this.updateUndoButtonState();
+                });
             }
         } else if (target.id === 'reader-toc-btn') {
             this.toggleTOC();
@@ -1344,20 +1276,36 @@ export class ReaderGUI {
         if (showAllLevelsCheckbox) {
             showAllLevelsCheckbox.addEventListener('change', (e) => {
                 this.config.showAllLevels = (e.target as HTMLInputElement).checked;
-                // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
+                
+                // Re-analyze content with new setting
+                this.contentNodes = this.analyzeProjectContent();
+                
+                // Update the content area in always-edit mode
+                const contentArea = this.container.querySelector('.reader-content-area');
+                if (contentArea) {
+                    // Destroy existing editors before regenerating content
+                    this.readerEditor.destroy();
+                    
+                    // Regenerate content HTML
+                    contentArea.innerHTML = this.generateContent();
+                    
+                    // Recreate text editors for the new content
+                    this.readerEditor.initialize();
+                    
+                    // Update TOC if visible
+                    if (this.config.showTOC) {
+                        const tocElement = this.container.querySelector('.reader-toc');
+                        if (tocElement) {
+                            tocElement.innerHTML = this.generateTOCContent();
+                        }
+                    }
+                }
+                
                 this.saveReaderConfig();
             });
         }
 
-        // Show meta info checkbox
-        const showMetaInfoCheckbox = panel.querySelector('#reader-show-meta-info') as HTMLInputElement;
-        if (showMetaInfoCheckbox) {
-            showMetaInfoCheckbox.addEventListener('change', (e) => {
-                this.config.showMetaInfo = (e.target as HTMLInputElement).checked;
-                // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
-                this.saveReaderConfig();
-            });
-        }
+
     }
 
     /**
@@ -1415,7 +1363,6 @@ export class ReaderGUI {
         this.config = {
             showTOC: true,
             showAllLevels: false,
-            showMetaInfo: false,
             fontSize: 16,
             lineHeight: 1.6,
             maxWidth: 800,
@@ -1517,15 +1464,7 @@ export class ReaderGUI {
                         </div>
                     </div>
                     
-                    <div class="settings-group">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" id="reader-show-meta-info" ${this.config.showMetaInfo ? 'checked' : ''}>
-                            Show meta information
-                        </label>
-                        <div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem;">
-                            When unchecked, shows minimal title and continuous reading layout
-                        </div>
-                    </div>
+
                     
                     <div class="settings-buttons">
                         <button id="reader-settings-reset">Reset to Defaults</button>
@@ -1953,7 +1892,6 @@ export class ReaderGUI {
                 </div>
                 
                 <div style="display: flex; gap: 0.75rem; margin-top: 2rem;">
-                    <button type="button" id="test-action" class="btn btn-secondary">Test Prompt</button>
                     <button type="button" id="delete-action" class="btn btn-danger" ${action.id.startsWith('custom-') ? '' : 'disabled title="Default actions cannot be deleted"'}>Delete Action</button>
                 </div>
             </form>
@@ -2042,10 +1980,6 @@ export class ReaderGUI {
             if (target.id === 'save-current-action' && selectedActionId) {
                 this.saveCurrentAction(selectedActionId);
                 unsavedChanges = false;
-            }
-            
-            if (target.id === 'test-action' && selectedActionId) {
-                this.testAction(selectedActionId);
             }
             
             if (target.id === 'delete-action' && selectedActionId) {
@@ -2148,7 +2082,6 @@ export class ReaderGUI {
         const form = document.getElementById('action-editor-form') as HTMLFormElement;
         if (!form) return;
 
-        const formData = new FormData(form);
         const updates = {
             title: (document.getElementById('action-title') as HTMLInputElement).value,
             description: (document.getElementById('action-description') as HTMLInputElement).value,
@@ -2202,13 +2135,7 @@ export class ReaderGUI {
         this.readerEditor.updateAction(actionId, { order: newOrder });
     }
 
-    /**
-     * Test an action with sample content
-     */
-    private testAction(actionId: string): void {
-        alert('Prompt testing feature will be implemented in a future update!');
-        // TODO: Implement prompt testing with sample content
-    }
+
 
     /**
      * Update action buttons based on current edit state and selection
@@ -2233,6 +2160,7 @@ export class ReaderGUI {
             <select id="selection-mode-select" class="selection-mode-select">
                 <option value="words">Words</option>
                 <option value="sentences" selected>Sentences</option>
+                <option value="paragraphs">Paragraphs</option>
             </select>
         `;
         container.appendChild(selectionModeDiv);
@@ -2241,6 +2169,16 @@ export class ReaderGUI {
         const separator = document.createElement('div');
         separator.className = 'action-buttons-separator';
         container.appendChild(separator);
+        
+        // Add Undo button as the first action button
+        const undoButton = document.createElement('button');
+        undoButton.className = 'reader-action-btn reader-undo-btn';
+        undoButton.textContent = '↶ Undo';
+        undoButton.setAttribute('data-action-id', 'undo');
+        undoButton.setAttribute('data-original-text', '↶ Undo');
+        undoButton.title = 'Undo the last AI replacement';
+        undoButton.disabled = true; // Start disabled
+        container.appendChild(undoButton);
         
         // Create buttons for each action
         actions.forEach(action => {
@@ -2256,6 +2194,9 @@ export class ReaderGUI {
 
         // Set up selection mode toggle event listener
         this.setupSelectionModeToggle();
+
+        // Update undo button state
+        this.updateUndoButtonState();
 
         // Always show the action buttons panel since we're always editable
         actionButtonsContainer.style.display = 'block';
@@ -2274,10 +2215,30 @@ export class ReaderGUI {
 
         // Add event listener for changes
         select.addEventListener('change', () => {
-            const newMode = select.value as 'words' | 'sentences';
+            const newMode = select.value as 'words' | 'sentences' | 'paragraphs';
             this.readerEditor.setSelectionMode(newMode);
 
         });
+    }
+
+    /**
+     * Update the undo button state based on whether undo is available
+     */
+    private updateUndoButtonState(): void {
+        const undoButton = this.container.querySelector('[data-action-id="undo"]') as HTMLButtonElement;
+        if (!undoButton) return;
+
+        const canUndo = this.readerEditor.canUndo();
+        undoButton.disabled = !canUndo;
+        
+        // Visual feedback for disabled state
+        if (canUndo) {
+            undoButton.style.opacity = '1';
+            undoButton.style.cursor = 'pointer';
+        } else {
+            undoButton.style.opacity = '0.5';
+            undoButton.style.cursor = 'not-allowed';
+        }
     }
 
     /**
@@ -2388,16 +2349,7 @@ export class ReaderGUI {
         this.projectManager.off('project-loaded', this.handleProjectUpdate.bind(this));
     }
 
-    /**
-     * Handle individual node updates
-     */
-    private handleNodeUpdate(_event: any): void {
-        // Preserve current reading position
-        this.preserveReadingPosition();
-        
-        // Update the content
-        this.refreshContent();
-    }
+
 
     /**
      * Handle overall project updates
@@ -2414,51 +2366,11 @@ export class ReaderGUI {
      * Preserve the current reading position before updating content
      */
     private preserveReadingPosition(): void {
-        const contentArea = this.container.querySelector('.reader-content-area') as HTMLElement;
-        if (contentArea) {
-            this.lastScrollPosition = contentArea.scrollTop;
-            
-            // Find the node currently in view
-            const nodeElements = contentArea.querySelectorAll('.reader-node');
-            const viewportTop = contentArea.scrollTop;
-            const viewportHeight = contentArea.clientHeight;
-            const viewportCenter = viewportTop + (viewportHeight / 2);
-            
-            for (let i = 0; i < nodeElements.length; i++) {
-                const element = nodeElements[i] as HTMLElement;
-                const rect = element.getBoundingClientRect();
-                const elementTop = rect.top + viewportTop - contentArea.getBoundingClientRect().top;
-                const elementBottom = elementTop + rect.height;
-                
-                if (elementTop <= viewportCenter && elementBottom >= viewportCenter) {
-                    this.lastFocusedNodeId = element.dataset.nodeId || null;
-                    break;
-                }
-            }
-        }
+        // Position preservation disabled in always-edit mode
+        // Content state is managed by individual text editors
     }
 
-    /**
-     * Restore the reading position after content update
-     */
-    private restoreReadingPosition(): void {
-        const contentArea = this.container.querySelector('.reader-content-area') as HTMLElement;
-        if (!contentArea) return;
-        
-        // Try to restore position based on the focused node
-        if (this.lastFocusedNodeId) {
-            const nodeElement = contentArea.querySelector(`#node-${this.lastFocusedNodeId}`) as HTMLElement;
-            if (nodeElement) {
-                nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                return;
-            }
-        }
-        
-        // Fallback to scroll position
-        if (this.lastScrollPosition > 0) {
-            contentArea.scrollTop = this.lastScrollPosition;
-        }
-    }
+
 
     /**
      * Refresh content while preserving reading position
@@ -2508,79 +2420,9 @@ export class ReaderGUI {
         */
     }
 
-    /**
-     * Check if content has actually changed to avoid unnecessary updates
-     */
-    private hasContentChanged(newContentNodes: ContentNode[]): boolean {
-        if (newContentNodes.length !== this.contentNodes.length) {
-            return true;
-        }
-        
-        for (let i = 0; i < newContentNodes.length; i++) {
-            const newNode = newContentNodes[i];
-            const oldNode = this.contentNodes[i];
-            
-            if (newNode.id !== oldNode.id || 
-                newNode.content !== oldNode.content || 
-                newNode.title !== oldNode.title ||
-                newNode.hasContent !== oldNode.hasContent) {
-                return true;
-            }
-        }
-        
-                 return false;
-    }
 
-    /**
-     * Show a brief notification that content has been updated
-     */
-    private showUpdateNotification(): void {
-        // Remove existing notification if present
-        const existingNotification = this.container.querySelector('.reader-update-notification');
-        if (existingNotification) {
-            existingNotification.remove();
-        }
 
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = 'reader-update-notification';
-        notification.textContent = 'Content updated';
-        notification.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: #10b981;
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 10002;
-            opacity: 0;
-            transform: translateX(100%);
-            transition: all 0.3s ease;
-        `;
 
-        // Add to container
-        this.container.appendChild(notification);
-
-        // Animate in
-        setTimeout(() => {
-            notification.style.opacity = '1';
-            notification.style.transform = 'translateX(0)';
-        }, 10);
-
-        // Remove after 2 seconds
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateX(100%)';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
-                }
-            }, 300);
-        }, 2000);
-    }
 }
 
 // Global reader instance to prevent recreating the reader
