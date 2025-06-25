@@ -612,7 +612,11 @@ export class GenerationService {
         }
 
         // Only handle completion/cleanup for top-level call
-        if (this.deps.generationController.getCurrentGenerationInfo()?.type === 'bulk') {
+        // Check if this is the top-level bulk operation before clearing context
+        const isTopLevelBulkOperation = this.isGeneratingAllChildren && 
+                                       this.deps.generationController.getCurrentGenerationInfo()?.type === 'bulk';
+        
+        if (isTopLevelBulkOperation) {
             try {
                 if (this.abortRequested) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
@@ -630,6 +634,20 @@ export class GenerationService {
                 this.isGeneratingAllChildren = false; // Reset flag
                 this.deps.generationController.clearGenerationContext();
             }
+        }
+        
+        // Fallback: If we're still marked as generating children but not in a bulk context,
+        // ensure we clean up properly (this handles edge cases where context was cleared prematurely)
+        if (this.isGeneratingAllChildren && !this.deps.generationController.getCurrentGenerationInfo()) {
+            console.warn('Detected orphaned bulk generation state, cleaning up...');
+            this.isGeneratingAllChildren = false;
+            
+            // Force clear progress and emit completion to ensure UI updates
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
+            setTimeout(() => {
+                this.deps.eventEmitter.emit('project-loaded');
+            }, 150);
         }
     }
 

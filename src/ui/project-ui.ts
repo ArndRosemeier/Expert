@@ -129,6 +129,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Most UI cleanup is now handled by the coordinator
             // Just do the final project UI refresh
             renderProjectUI(manager);
+            
+            // Force clear progress UI as additional safety measure
+            updateProgressUI();
+            hideGenerationOverlay();
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
             renderMultiProjectTree();
@@ -144,7 +148,14 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             }
         }
         
-        // UI cleanup for failed operations is now handled by the coordinator
+        // Additional safety: Force clear progress after a delay if no operations are running
+        setTimeout(() => {
+            if (!manager.isAnyNodeGenerating()) {
+                updateProgressUI();
+                hideGenerationOverlay();
+                hideGlobalAbortButton();
+            }
+        }, 200);
     };
 
     const handleAborted = (e: { nodeId: string, node: DocumentNode }) => {
@@ -171,6 +182,16 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         if (!e.message || e.message.trim() === '') {
             updateProgressUI();
             hideGenerationOverlay();
+            
+            // Additional safety: check if any nodes are still generating
+            // If not, force clear everything after a short delay
+            setTimeout(() => {
+                if (!manager.isAnyNodeGenerating()) {
+                    updateProgressUI();
+                    hideGenerationOverlay();
+                    hideGlobalAbortButton();
+                }
+            }, 100);
         } else {
         // Always show progress bars during any generation, regardless of selected node
         // This ensures consistency with the spinner behavior
