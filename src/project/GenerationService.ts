@@ -9,6 +9,7 @@ import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
 
+
 interface GenerationDependencies {
     treeService: TreeService;
     contextService: ContextService;
@@ -20,6 +21,7 @@ interface GenerationDependencies {
     eventEmitter: EventEmitter<any>;
     saveToStorage: () => Promise<void>;
     rootNode: DocumentNode;
+    getGenerationCoordinator?: () => any; // Optional for coordinator access
 }
 
 interface GenerationProgress {
@@ -197,9 +199,26 @@ export class GenerationService {
 
         // Handle abort events from orchestrator
         const onAborted = (message: string) => {
-            console.log(`Generation aborted for node ${nodeId}: ${message}`);
+            // Generation aborted - no logging needed as UI handles this
+        };
+
+        // Handle started event from orchestrator to show immediate progress UI
+        const onStarted = (input: LoopInput) => {
+            // Emit immediate progress to show UI in zero state
+            this.deps.eventEmitter.emit('loop-progress', { 
+                nodeId: contextNodeId || nodeId, 
+                progress: {
+                    type: 'creator',
+                    payload: { prompt: 'Initializing generation...', response: '' },
+                    iteration: 0,
+                    maxIterations: input.maxIterations,
+                    step: 0,
+                    totalStepsInIteration: 3
+                }
+            });
         };
         
+        this.deps.loopOrchestrator.on('started', onStarted);
         this.deps.loopOrchestrator.on('progress', onProgress);
         this.deps.loopOrchestrator.on('aborted', onAborted);
 
@@ -272,6 +291,7 @@ export class GenerationService {
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
             }
         } finally {
+            this.deps.loopOrchestrator.off('started', onStarted);
             this.deps.loopOrchestrator.off('progress', onProgress);
             this.deps.loopOrchestrator.off('aborted', onAborted);
             
@@ -315,16 +335,7 @@ export class GenerationService {
             .replace(/{{context}}/g, context)
             .replace(/{{count}}/g, String(node.generationChildrenCount));
 
-        // Debug logging to see the actual prompt sent to LLM
-        console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG (createChildrenFromOutline method) ===');
-        console.log('Node:', node.title, '(level', node.level, ')');
-        console.log('Template:', node.template);
-        console.log('Child level name:', childLevelName);
-        console.log('Generation count:', node.generationChildrenCount);
-        console.log('Prompt sent to LLM:');
-        console.log('---START PROMPT---');
-        console.log(prompt);
-        console.log('---END PROMPT---');
+        // Prompt prepared for LLM
 
         try {
             // Using the 'creator' model as it's for generating new content/structure
@@ -449,16 +460,7 @@ export class GenerationService {
                 .replace(/{{context}}/g, context)
                 .replace(/{{count}}/g, String(node.generationChildrenCount));
 
-            // Debug logging to see the actual prompt sent to LLM
-            console.log('=== CREATE CHILDREN FROM OUTLINE PROMPT DEBUG ===');
-            console.log('Node:', node.title, '(level', node.level, ')');
-            console.log('Template:', node.template);
-            console.log('Child level name:', childLevelName);
-            console.log('Generation count:', node.generationChildrenCount);
-            console.log('Prompt sent to LLM:');
-            console.log('---START PROMPT---');
-            console.log(prompt);
-            console.log('---END PROMPT---');
+            // Prompt prepared for LLM
 
             try {
                 // Using the 'creator' model as it's for generating new content/structure
@@ -504,19 +506,44 @@ export class GenerationService {
                         break;
                     }
                     
-                    console.log(`Starting content generation for child ${i + 1}/${total}: "${child.title}" (${child.id})`);
+                    // Starting content generation for child
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
                     
                     try {
-                        // Use the child's own generation count setting
-                        await this.generateNodeContent(child.id, child.generationChildrenCount, true);
+                        // Use coordinator for child content generation if available
+                        const coordinator = this.deps.getGenerationCoordinator?.();
+                        let childOperationId: string | null = null;
                         
-                        // Verify content was actually generated
-                        const updatedChild = this.deps.treeService.findNodeById(child.id, this.deps.rootNode);
-                        if (updatedChild && updatedChild.content && updatedChild.content.trim() !== '') {
-                            console.log(`✓ Content generation completed for "${child.title}": ${updatedChild.content.length} chars`);
-                        } else {
-                            console.error(`✗ Content generation failed for "${child.title}": No content found after generation`);
+                        if (coordinator) {
+                            childOperationId = coordinator.startOperation('child-content', child.id, [child.id]);
+                            if (!childOperationId) {
+                                console.warn(`Skipping child "${child.title}" - conflicts with existing operation`);
+                                continue;
+                            }
+                        }
+                        
+                        try {
+                            // Use the child's own generation count setting
+                            await this.generateNodeContent(child.id, child.generationChildrenCount, true);
+                            
+                            // Verify content was actually generated
+                            const updatedChild = this.deps.treeService.findNodeById(child.id, this.deps.rootNode);
+                            if (updatedChild && updatedChild.content && updatedChild.content.trim() !== '') {
+                                // Content generation completed
+                            } else {
+                                console.error(`✗ Content generation failed for "${child.title}": No content found after generation`);
+                            }
+                            
+                            // Complete the child operation successfully
+                            if (coordinator && childOperationId) {
+                                coordinator.completeOperation(childOperationId, true);
+                            }
+                        } catch (error) {
+                            // Complete the child operation with failure
+                            if (coordinator && childOperationId) {
+                                coordinator.completeOperation(childOperationId, false, error);
+                            }
+                            throw error;
                         }
                         
                         // Check for abort after generation
@@ -528,7 +555,7 @@ export class GenerationService {
                         // await this.summarizeNodeContent(child.id, true); // Pass flag to suppress progress clearing
                     } catch (error: any) {
                         if (error.message === 'Generation aborted by user' || this.abortRequested) {
-                            console.log(`Content generation aborted for "${child.title}"`);
+                            // Content generation aborted
                             break;
                         }
                         console.error(`Failed to generate content for child "${child.title}" (${child.id}):`, error);
@@ -768,13 +795,12 @@ export class GenerationService {
                 // Only update if we have actual cleaned content
                 if (cleanedContext && cleanedContext.trim() !== '') {
                     node.context = cleanedContext;
-                    console.log(`✓ Context synthesized for node "${node.title}" (${nodeId}): ${cleanedContext.length} chars`);
+                    // Context synthesized successfully
                 } else {
-                    console.log(`Context synthesis produced empty result for node "${node.title}" (${nodeId})`);
+                    // Context synthesis produced empty result
                 }
             } else {
                 // Context synthesis failed or returned null - this is not a critical error
-                console.log(`Context synthesis skipped for node "${node.title}" (${nodeId}) - no synthesized context returned`);
             }
         } catch (error) {
             // Log the error but ensure it doesn't break content generation

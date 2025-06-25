@@ -77,33 +77,24 @@ export class ContextService {
     }
 
     /**
-     * Collects context from all ancestors of a node, from root down to immediate parent.
-     * This creates an inheritance chain where child nodes benefit from all ancestral context.
-     * @param targetNode The node to collect ancestral context for.
+     * Collects context from the immediate parent only.
+     * Used for UI context summaries to show inheritance information.
+     * @param targetNode The node to collect parent context for.
      * @param rootNode The root node of the tree.
-     * @returns Array of context strings from ancestors.
+     * @returns Array with parent context string (empty if no parent or parent has no context).
      */
-    public collectAncestralContext(targetNode: DocumentNode, rootNode: DocumentNode): string[] {
+    public collectParentContextForSummary(targetNode: DocumentNode, rootNode: DocumentNode): string[] {
         const contextChain: string[] = [];
         
-        // Build the path from root to parent (excluding the target node itself)
-        const ancestorPath: DocumentNode[] = [];
-        let currentNode = targetNode.parentId ? this.treeService.findNodeById(targetNode.parentId, rootNode) : null;
-        
-        // Walk up to build the ancestor chain
-        while (currentNode) {
-            ancestorPath.unshift(currentNode); // Add to front to get root-to-parent order
-            currentNode = currentNode.parentId ? this.treeService.findNodeById(currentNode.parentId, rootNode) : null;
+        if (!targetNode.parentId) {
+            return contextChain;
         }
-
-        // Process each ancestor's context
-        ancestorPath.forEach((ancestor, index) => {
-            if (ancestor.context && ancestor.context.trim()) {
-                const levelName = ancestor.template[ancestor.level] || `Level ${ancestor.level}`;
-                const depth = index === 0 ? 'ROOT' : `LEVEL ${index}`;
-                contextChain.push(`${depth} (${levelName}: "${ancestor.title}"):\n---\n${ancestor.context}\n---`);
-            }
-        });
+        
+        const parent = this.treeService.findNodeById(targetNode.parentId, rootNode);
+        if (parent && parent.context && parent.context.trim()) {
+            const levelName = parent.template[parent.level] || `Level ${parent.level}`;
+            contextChain.push(`PARENT (${levelName}: "${parent.title}"):\n---\n${parent.context}\n---`);
+        }
 
         return contextChain;
     }
@@ -190,10 +181,10 @@ export class ContextService {
             contextInfo.push(`Own context: ${node.context.length} chars`);
         }
 
-        // Ancestral context
-        const ancestralContext = this.collectAncestralContext(node, rootNode);
-        if (ancestralContext.length > 0) {
-            contextInfo.push(`Inherited from ${ancestralContext.length} ancestors`);
+        // Parent context
+        const parentContext = this.collectParentContextForSummary(node, rootNode);
+        if (parentContext.length > 0) {
+            contextInfo.push(`Inherited from parent`);
         }
 
         // Parent context
@@ -238,13 +229,12 @@ export class ContextService {
             return null;
         }
 
-        // Get parent context - use the full compiled context from parent's perspective
+        // Get parent context - use only the parent's own context field, not compiled context
         let parentContext = '';
         if (node.parentId) {
             const parent = this.treeService.findNodeById(node.parentId, rootNode);
-            if (parent) {
-                // Compile context as if we were the parent node
-                parentContext = this.compileNodeContext(node.parentId, rootNode);
+            if (parent && parent.context) {
+                parentContext = parent.context;
             }
         }
 

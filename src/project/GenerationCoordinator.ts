@@ -1,0 +1,239 @@
+import { DocumentNode } from '../DocumentNode';
+import { EventEmitter } from '../EventEmitter';
+
+export interface GenerationOperation {
+    id: string;
+    type: 'single-content' | 'bulk-children' | 'child-content';
+    primaryNodeId: string;
+    involvedNodeIds: Set<string>;
+    startTime: number;
+    isComplete: boolean;
+}
+
+/**
+ * Lightweight generation coordinator that provides centralized state management
+ * and UI updates for all generation operations without replacing existing logic.
+ */
+export class GenerationCoordinator {
+    private operations = new Map<string, GenerationOperation>();
+    private operationCounter = 1;
+    private eventEmitter: EventEmitter<any>;
+
+    constructor(eventEmitter: EventEmitter<any>) {
+        this.eventEmitter = eventEmitter;
+    }
+
+    /**
+     * Start a new generation operation and return its ID.
+     * Handles UI state updates and conflict checking.
+     */
+    public startOperation(
+        type: GenerationOperation['type'], 
+        primaryNodeId: string, 
+        involvedNodeIds: string[] = [primaryNodeId]
+    ): string | null {
+        // Check for conflicts
+        if (this.hasConflictingOperation(primaryNodeId, involvedNodeIds)) {
+            return null;
+        }
+
+        const operationId = `gen-${this.operationCounter++}`;
+        const operation: GenerationOperation = {
+            id: operationId,
+            type,
+            primaryNodeId,
+            involvedNodeIds: new Set(involvedNodeIds),
+            startTime: Date.now(),
+            isComplete: false
+        };
+
+        this.operations.set(operationId, operation);
+        
+        // Disable UI buttons immediately
+        this.updateUIForOperationStart(operation);
+        
+        return operationId;
+    }
+
+    /**
+     * Mark an operation as complete and handle cleanup.
+     */
+    public completeOperation(operationId: string, success: boolean, error?: any): void {
+        const operation = this.operations.get(operationId);
+        if (!operation) return;
+
+        operation.isComplete = true;
+        this.operations.delete(operationId);
+
+        // Handle UI updates
+        this.updateUIForOperationComplete(operation, success, error);
+    }
+
+    /**
+     * Check if there are any active operations.
+     */
+    public hasActiveOperations(): boolean {
+        return this.operations.size > 0;
+    }
+
+    /**
+     * Check if a specific node is involved in any operation.
+     */
+    public isNodeGenerating(nodeId: string): boolean {
+        for (const operation of this.operations.values()) {
+            if (operation.involvedNodeIds.has(nodeId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get all active operations.
+     */
+    public getActiveOperations(): GenerationOperation[] {
+        return Array.from(this.operations.values());
+    }
+
+    /**
+     * Abort all operations.
+     */
+    public abortAllOperations(): void {
+        const operationIds = Array.from(this.operations.keys());
+        for (const operationId of operationIds) {
+            this.completeOperation(operationId, false, new Error('Operation aborted'));
+        }
+    }
+
+    /**
+     * Check for conflicting operations.
+     */
+    private hasConflictingOperation(primaryNodeId: string, involvedNodeIds: string[]): boolean {
+        for (const operation of this.operations.values()) {
+            // Single content operations conflict with any operation on the same node
+            if (operation.involvedNodeIds.has(primaryNodeId)) {
+                return true;
+            }
+            
+            // Bulk operations conflict with any overlapping nodes
+            for (const nodeId of involvedNodeIds) {
+                if (operation.involvedNodeIds.has(nodeId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Update UI when operation starts.
+     */
+    private updateUIForOperationStart(operation: GenerationOperation): void {
+        // Disable generation buttons immediately
+        const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
+        const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+        
+        if (generateBtn) {
+            generateBtn.disabled = true;
+            if (operation.type === 'single-content') {
+                generateBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating...';
+            }
+        }
+        
+        if (generateAllBtn) {
+            generateAllBtn.disabled = true;
+            if (operation.type === 'bulk-children') {
+                generateAllBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating Children...';
+            }
+        }
+
+        // Show progress UI based on operation type
+        if (operation.type === 'single-content') {
+            this.showGenerationOverlay();
+            this.updateProgressUI({
+                operations: { message: 'Preparing content generation...', current: 0, total: 1 }
+            });
+        } else if (operation.type === 'bulk-children') {
+            this.updateProgressUI({
+                operations: { message: 'Preparing to generate children...', current: 0, total: 1 }
+            });
+        } else if (operation.type === 'child-content') {
+            // For child content, show detailed progress bars immediately
+            this.updateProgressUI({
+                operations: { message: `Generating content for child node...`, current: 0, total: 1 },
+                iterations: { message: 'Iteration: 0 / 1', current: 0, total: 1 },
+                stages: { message: 'Stage: Initializing...', current: 0, total: 3 },
+                detail: 'Preparing to generate content...'
+            });
+        }
+
+        // Show global abort button
+        this.showGlobalAbortButton();
+    }
+
+    /**
+     * Update UI when operation completes.
+     */
+    private updateUIForOperationComplete(operation: GenerationOperation, success: boolean, error?: any): void {
+        // Only clean up UI if no other operations are running
+        if (!this.hasActiveOperations()) {
+            // Re-enable buttons
+            const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
+            const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+            
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = 'Generate Content';
+            }
+            
+            if (generateAllBtn) {
+                generateAllBtn.disabled = false;
+                generateAllBtn.innerHTML = 'Generate All Children';
+            }
+
+            // Clear progress and overlays
+            this.updateProgressUI();
+            this.hideGenerationOverlay();
+            this.hideGlobalAbortButton();
+
+            // Handle errors
+            if (!success && error && !error.message?.includes('aborted')) {
+                console.error('Generation operation failed:', error);
+                alert(`Generation failed: ${error.message}`);
+            }
+        }
+    }
+
+    /**
+     * Helper methods for UI updates - these call existing functions
+     */
+    private updateProgressUI(data?: any): void {
+        if (typeof (window as any).updateProgressUI === 'function') {
+            (window as any).updateProgressUI(data);
+        }
+    }
+
+    private showGenerationOverlay(): void {
+        if (typeof (window as any).showGenerationOverlay === 'function') {
+            (window as any).showGenerationOverlay();
+        }
+    }
+
+    private hideGenerationOverlay(): void {
+        if (typeof (window as any).hideGenerationOverlay === 'function') {
+            (window as any).hideGenerationOverlay();
+        }
+    }
+
+    private showGlobalAbortButton(): void {
+        if (typeof (window as any).showGlobalAbortButton === 'function') {
+            (window as any).showGlobalAbortButton();
+        }
+    }
+
+    private hideGlobalAbortButton(): void {
+        if (typeof (window as any).hideGlobalAbortButton === 'function') {
+            (window as any).hideGlobalAbortButton();
+        }
+    }
+} 

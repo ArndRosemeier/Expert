@@ -174,7 +174,7 @@ export class StorageService {
       await indexedDBService.initialize();
     }
 
-    console.log('IndexedDB initialized successfully');
+            // IndexedDB initialized successfully
     return new IndexedDBStorageService(indexedDBService);
   }
 
@@ -208,7 +208,7 @@ export class StorageService {
       const deleteRequest = indexedDB.deleteDatabase(name);
       
       deleteRequest.onsuccess = () => {
-        console.log(`Database '${name}' deleted successfully`);
+                    // Database deleted successfully
         resolve();
       };
       

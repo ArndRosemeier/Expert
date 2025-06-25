@@ -20,6 +20,9 @@ export interface OrchestratorPrompts {
     // For context synthesis
     context_synthesis_user: string;
     
+    // For context extraction
+    context_extraction_user: string;
+    
     // For text expansion (generic)
     expand_text_user: string;
 }
@@ -179,6 +182,19 @@ NODE CONTENT:
 
 Please generate a concise but comprehensive context summary that combines the essential elements from the parent context with the newly established concepts from this node's content. Focus on what will be most useful for generating coherent child content.`,
 
+    context_extraction_user: `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
+
+Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
+
+Content to analyze from "{{node_title}}":
+---
+{{content}}
+---
+
+Please extract and list all instances of: {{extraction_request}}
+
+Format your response as a clear, organized summary that would be useful for reference.`,
+
     expand_text_user: ``,
 };
 
@@ -194,6 +210,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content', 'count'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
     context_synthesis_user: ['parent_context', 'node_content'],
+    context_extraction_user: ['extraction_request', 'node_title', 'content'],
     expand_text_user: ['content', 'path', 'context', 'title'],
 };
 
@@ -209,6 +226,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
     context_synthesis_user: "Combines parent context with node content to create a distilled, focused context for child node generation. Uses the editor model to synthesize relevant information.",
+    context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",
     expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
 };
 

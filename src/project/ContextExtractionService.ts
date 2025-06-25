@@ -78,21 +78,9 @@ export class ContextExtractionService {
      * @returns Formatted extraction prompt
      */
     private createExtractionPrompt(extractionPrompt: string, content: string, nodeTitle: string): string {
-        // Get the context extraction prompt template from settings
-        const activeProfile = this.settingsManager.getLastUsedProfile();
-        const promptTemplate = activeProfile?.contextExtractionPrompt || 
-            `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
-
-Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
-
-Content to analyze from "{{node_title}}":
----
-{{content}}
----
-
-Please extract and list all instances of: {{extraction_request}}
-
-Format your response as a clear, organized summary that would be useful for reference.`;
+        // Get the context extraction prompt template from prompts system
+        const prompts = this.settingsManager.getPrompts();
+        const promptTemplate = prompts.context_extraction_user;
 
         // Replace placeholders in the template
         return promptTemplate

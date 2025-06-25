@@ -17,6 +17,8 @@ import {
     ProjectPersistenceService,
     ContextExtractionService
 } from './project';
+import { GenerationCoordinator } from './project/GenerationCoordinator';
+
 
 type ProjectManagerEvents = {
     'project-loaded': [];
@@ -63,6 +65,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private generationService: GenerationService;
     private contextExtractionService: ContextExtractionService;
     
+    // Generation coordination
+    private generationCoordinator: GenerationCoordinator;
+    
+
+    
     // Service accessors for UI
     public getGenerationService(): GenerationService { return this.generationService; }
     public getTreeService(): TreeService { return this.treeService; }
@@ -70,6 +77,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getPromptService(): PromptService { return this.promptService; }
     public getGenerationController(): GenerationController { return this.generationController; }
     public getContextExtractionService(): ContextExtractionService { return this.contextExtractionService; }
+    public getGenerationCoordinator(): GenerationCoordinator { return this.generationCoordinator; }
+
 
     constructor(
         projectTitle: string, 
@@ -98,6 +107,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.generationController = new GenerationController(this.loopOrchestrator, this.treeService);
         this.contextExtractionService = new ContextExtractionService(this.openRouterClient, this.settingsManager);
         
+        // Initialize generation coordinator
+        this.generationCoordinator = new GenerationCoordinator(this);
+        
         // Initialize GenerationService with all dependencies
         this.generationService = new GenerationService({
             treeService: this.treeService,
@@ -109,7 +121,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             openRouterClient: this.openRouterClient,
             eventEmitter: this,
             saveToStorage: () => this.saveToStorage(),
-            rootNode: this.rootNode
+            rootNode: this.rootNode,
+            getGenerationCoordinator: () => this.generationCoordinator
         });
 
         // Ensure we have a valid default profile set globally
@@ -195,100 +208,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @param nodeId The ID of the node to compile context for.
      * @returns A string containing the contextual information.
      */
-    private compileNodeContext(nodeId: string): string {
-        const targetNode = this.findNodeById(nodeId);
-
-        if (!targetNode) {
-            return '';
-        }
-
-        const contextParts: string[] = [];
-
-        // 1. Add inherited context from all ancestors (root to immediate parent)
-        const ancestralContext = this.collectAncestralContext(targetNode);
-        if (ancestralContext.length > 0) {
-            contextParts.push("ANCESTRAL CONTEXT (inherited from hierarchy):");
-            contextParts.push(ancestralContext.join('\n\n'));
-        }
-
-        // 2. Add the current node's own context if it exists
-        if (targetNode.context && targetNode.context.trim()) {
-            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
-            contextParts.push(`CURRENT NODE CONTEXT (${nodeLevelName}: "${targetNode.title}"):\n---\n${targetNode.context}\n---`);
-        }
-
-        // Only continue with parent/sibling context if node has a parent
-        if (!targetNode.parentId) {
-            return contextParts.join('\n\n====================\n\n');
-        }
-
-        const parent = this.findNodeById(targetNode.parentId);
-        if (!parent) {
-            return contextParts.join('\n\n====================\n\n');
-        }
-
-        // 3. Add the parent's content (the outline). This is the most critical structural context.
-        if (parent.content) {
-            const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
-            contextParts.push(`STRUCTURAL CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
-        }
-
-        // 4. Add the list of all sibling titles to give a sense of scope.
-        if (parent.children.length > 1) {
-            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
-            const siblingTitles = parent.children.map(child => `- ${child.title} ${child.id === nodeId ? '(This node)' : ''}`).join('\n');
-            contextParts.push(`SIBLING SCOPE (${nodeLevelName} nodes at this level):\n${siblingTitles}`);
-        }
-
-        // 5. Add full content of preceding siblings that have already been generated.
-        const precedingSiblingContent: string[] = [];
-        const siblingIndex = parent.children.findIndex(child => child.id === targetNode.id);
-
-        if (siblingIndex > 0) {
-            precedingSiblingContent.push("CONTENT FROM PRECEDING SIBLINGS:");
-            for (let i = 0; i < siblingIndex; i++) {
-                const sibling = parent.children[i];
-                if (sibling.content) {
-                    precedingSiblingContent.push(`Content for "${sibling.title}":\n---\n${sibling.content}\n---`);
-                }
-            }
-        }
-        
-        if (precedingSiblingContent.length > 1) { // more than just the header
-             contextParts.push(precedingSiblingContent.join('\n\n'));
-        }
-
-        return contextParts.join('\n\n====================\n\n');
-    }
-
-    /**
-     * Collects context from all ancestors of a node, from root down to immediate parent.
-     * This creates an inheritance chain where child nodes benefit from all ancestral context.
-     */
-    private collectAncestralContext(targetNode: DocumentNode): string[] {
-        const contextChain: string[] = [];
-        
-        // Build the path from root to parent (excluding the target node itself)
-        const ancestorPath: DocumentNode[] = [];
-        let currentNode = targetNode.parentId ? this.findNodeById(targetNode.parentId) : null;
-        
-        // Walk up to build the ancestor chain
-        while (currentNode) {
-            ancestorPath.unshift(currentNode); // Add to front to get root-to-parent order
-            currentNode = currentNode.parentId ? this.findNodeById(currentNode.parentId) : null;
-        }
-
-        // Process each ancestor's context
-        ancestorPath.forEach((ancestor, index) => {
-            if (ancestor.context && ancestor.context.trim()) {
-                const levelName = ancestor.template[ancestor.level] || `Level ${ancestor.level}`;
-                const depth = index === 0 ? 'ROOT' : `LEVEL ${index}`;
-                contextChain.push(`${depth} (${levelName}: "${ancestor.title}"):\n---\n${ancestor.context}\n---`);
-            }
-        });
-
-        return contextChain;
-    }
+    // Legacy context compilation methods removed - now handled by ContextService
 
     public getNodePath(nodeId: string): string {
         // Delegate to TreeService
@@ -320,7 +240,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      */
     private fillGenerationPrompt(promptTemplate: string, node: DocumentNode, count?: number): string {
         const path = this.getNodePath(node.id);
-        const context = this.compileNodeContext(node.id);
+        const context = this.contextService.compileNodeContext(node.id, this.rootNode);
 
         let filledPrompt = promptTemplate
             .replace(/\{\{path\}\}/g, path)
@@ -600,7 +520,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @returns true if any node is currently generating, false otherwise
      */
     public isAnyNodeGenerating(): boolean {
-        // Delegate to TreeService
-        return this.treeService.isAnyNodeGenerating(this.rootNode);
+        // Use the generation coordinator for centralized state
+        return this.generationCoordinator.hasActiveOperations();
     }
 } 

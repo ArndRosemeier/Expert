@@ -126,12 +126,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         const operationsInProgress = manager.isAnyNodeGenerating();
         
         if (!operationsInProgress) {
-            // Clear progress state and hide overlay when all operations complete
-            updateProgressUI();
-            hideGenerationOverlay();
-            hideGlobalAbortButton();
+            // Most UI cleanup is now handled by the coordinator
+            // Just do the final project UI refresh
             renderProjectUI(manager);
-            // Button states will be reset by renderProjectUI
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
             renderMultiProjectTree();
@@ -140,20 +137,14 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 const node = manager.findNodeById(selectedNodeId);
                 if (node) {
                     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                if (contentTextArea) contentTextArea.value = node.content;
-                if (contextTextArea) contextTextArea.value = node.context;
+                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+                    if (contentTextArea) contentTextArea.value = node.content;
+                    if (contextTextArea) contextTextArea.value = node.context;
                 }
             }
         }
         
-        // Clear progress bars and overlay if this operation failed
-        if (!e.success) {
-            updateProgressUI();
-            hideGenerationOverlay();
-            hideGlobalAbortButton();
-            // Button states will be reset by renderProjectUI/renderMultiProjectTree
-        }
+        // UI cleanup for failed operations is now handled by the coordinator
     };
 
     const handleAborted = (e: { nodeId: string, node: DocumentNode }) => {
@@ -161,22 +152,16 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         const operationsInProgress = manager.isAnyNodeGenerating();
         
         if (!operationsInProgress) {
-            updateProgressUI();
-            hideGenerationOverlay();
-            hideGlobalAbortButton();
+            // UI cleanup is now handled by the coordinator
             renderProjectUI(manager);
-            // Button states will be reset by renderProjectUI
         } else {
             renderMultiProjectTree();
         }
     };
 
     const handleError = (message: string) => {
-        // Clear progress bars and hide overlay when an error occurs
-        updateProgressUI();
-        hideGenerationOverlay();
-        hideGlobalAbortButton();
-        // Button states will be reset by renderProjectUI
+        // UI cleanup is now handled by the coordinator for generation errors
+        // This handler mainly deals with non-generation errors
         alert(`An error occurred: ${message}`);
         renderProjectUI(manager);
     };
@@ -1358,26 +1343,32 @@ export function setupEventListeners() {
                 break;
                 
             case 'node-generate-btn':
-                // Prevent concurrent operations
-                if (projectManager.isAnyNodeGenerating()) {
-                    alert('Another generation operation is already in progress. Please wait for it to complete.');
-                    return;
+                {
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                    node.generationPrompt = generationPromptTextArea.value;
+                    
+                    // Get the count from the input
+                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
+                    const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+                    
+                    // Use GenerationService directly
+                    projectManager.getGenerationService().generateNodeContent(node.id, count)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
                 }
-                const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                node.generationPrompt = generationPromptTextArea.value;
-                
-                // Show overlay and progress bars immediately to provide instant feedback
-                showGenerationOverlay();
-                updateProgressUI({
-                    operations: { message: 'Preparing content generation...', current: 0, total: 1 }
-                });
-                
-                // Get the count from the input
-                const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
-                
-                // Use GenerationService directly
-                projectManager.getGenerationService().generateNodeContent(node.id, count);
                 break;
 
             case 'node-show-inherited-btn':
@@ -1392,21 +1383,16 @@ export function setupEventListeners() {
 
             case 'node-extract-context-btn':
                 {
-                    console.log('Extract context button clicked!'); // Debug log
                     if (!projectManager || !selectedNodeId) {
-                        console.log('Missing projectManager or selectedNodeId:', { projectManager: !!projectManager, selectedNodeId });
                         return;
                     }
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) {
-                        console.log('Node not found for ID:', selectedNodeId);
                         return;
                     }
 
-                    console.log('Opening extract context modal for node:', node.title);
                     // Import and open extract context modal
                     import('./modal-manager').then(({ openExtractContextModal }) => {
-                        console.log('Modal manager imported successfully');
                         if (projectManager) {
                             openExtractContextModal(projectManager, node);
                         }
@@ -1439,39 +1425,50 @@ export function setupEventListeners() {
 
 
             case 'node-generate-all-btn':
-                // Check for concurrent operations
-                if (projectManager.isAnyNodeGenerating()) {
-                    alert('Another generation operation is already in progress. Please wait for it to complete.');
-                    return;
+                {
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    // Check if node has content
+                    if (!node.content || node.content.trim() === '') {
+                        alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
+                        return;
+                    }
+                    
+                    // Use stored checkbox states instead of reading from DOM
+                    const includeContent = includeContentState;
+                    const recursive = recursiveState;
+                    
+                    // Collect all nodes that will be involved in this operation
+                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
+                        const nodeIds = [parentNode.id];
+                        for (const child of parentNode.children) {
+                            if (recursive) {
+                                nodeIds.push(...getAllInvolvedNodes(child));
+                            } else {
+                                nodeIds.push(child.id);
+                            }
+                        }
+                        return nodeIds;
+                    };
+                    
+                    const involvedNodeIds = getAllInvolvedNodes(node);
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodeIds);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+            
+                    // Use GenerationService directly
+                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
                 }
-                
-                // Check if node has content
-                if (!node.content || node.content.trim() === '') {
-                    alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
-                    return;
-                }
-                
-                // Use stored checkbox states instead of reading from DOM
-                const includeContent = includeContentState;
-                const recursive = recursiveState;
-                
-                // Don't show overlay for generate all children since parent node isn't changing
-                // Just show progress bars to indicate the operation is starting
-                let operationMessage = 'Preparing to create child structure...';
-                if (includeContent && recursive) {
-                    operationMessage = 'Preparing to recursively generate all content...';
-                } else if (includeContent) {
-                    operationMessage = 'Preparing to generate all children...';
-                } else if (recursive) {
-                    operationMessage = 'Preparing to recursively create structure...';
-                }
-                
-                updateProgressUI({
-                    operations: { message: operationMessage, current: 0, total: 1 }
-                });
-        
-                // Use GenerationService directly
-                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive);
                 break;
 
 
@@ -1804,6 +1801,15 @@ function updateProgressUI(data?: ProgressUIData) {
     detailText.textContent = currentProgressState.detail || '';
     detailText.style.display = currentProgressState.detail ? 'block' : 'none';
 }
+
+// Expose UI functions globally for the GenerationCoordinator
+(window as any).updateProgressUI = updateProgressUI;
+(window as any).showGenerationOverlay = showGenerationOverlay;
+(window as any).hideGenerationOverlay = hideGenerationOverlay;
+(window as any).showGlobalAbortButton = showGlobalAbortButton;
+(window as any).hideGlobalAbortButton = hideGlobalAbortButton;
+
+
 
 function showGenerationOverlay() {
     const contentDisplayArea = getElementById('content-display-area');

@@ -5,6 +5,7 @@ export { PromptService } from './PromptService';
 export { ProjectPersistenceService } from './ProjectPersistenceService';
 export { GenerationController } from './GenerationController';
 export { GenerationService } from './GenerationService';
+export { GenerationCoordinator } from './GenerationCoordinator';
 export { ContextExtractionService } from './ContextExtractionService';
 
 // Type exports

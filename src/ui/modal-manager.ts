@@ -616,6 +616,8 @@ class PromptManagerAutoSave {
             branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content'],
             create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
             prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
+            context_synthesis_user: ['parent_context', 'node_content'],
+            context_extraction_user: ['extraction_request', 'node_title', 'content'],
             expand_text_user: ['content', 'path', 'context', 'title'],
         };
 
@@ -630,6 +632,8 @@ class PromptManagerAutoSave {
             expand_list_user: "Prompt for generating bulleted lists of child titles.",
             create_children_from_outline_user: "Reads free-form text and generates structured child titles.",
             prompt_for_child_generation_prompt: "Creates generation prompts for new child nodes.",
+            context_synthesis_user: "Combines parent context with node content to create focused context for child generation.",
+            context_extraction_user: "Analyzes node content to extract specific information (characters, places, themes, etc.).",
             expand_text_user: "Simple prompt for expanding text with more detail."
         };
 
@@ -900,14 +904,7 @@ export function renderSettingsModal() {
                 <!-- PromptManager will be rendered here -->
             </div>
             
-            <div id="settings-context-extraction-container" class="settings-section">
-                <h4>Context Extraction Prompt</h4>
-                <div style="margin-bottom: 1rem;">
-                    <label for="modal-context-extraction-prompt" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Template (use {{extraction_request}}, {{node_title}}, {{content}} as placeholders):</label>
-                    <textarea id="modal-context-extraction-prompt" rows="6" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; line-height: 1.4; resize: vertical;"></textarea>
-                </div>
-            </div>
-            
+
             <div id="settings-criteria-container" class="settings-section">
                 <h3>Quality Criteria</h3>
                 <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #6b7280;">
@@ -981,7 +978,6 @@ export function renderSettingsModal() {
         if (!activeProfileName) return;
 
         // Get all current values from UI
-        const modalContextExtractionPrompt = getElementById('modal-context-extraction-prompt') as HTMLTextAreaElement;
         const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
         const modalCriteriaList = getElementById('modal-criteria-list');
 
@@ -990,7 +986,7 @@ export function renderSettingsModal() {
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
             prompt: '', // Legacy field - unused but required by interface
-            contextExtractionPrompt: modalContextExtractionPrompt.value
+            contextExtractionPrompt: '' // Legacy field - now part of prompts system
         };
 
         await settingsManagerInstance.saveProfile(activeProfileName, currentSettings);
@@ -1015,10 +1011,8 @@ export function renderSettingsModal() {
     // Wire up auto-save for all form elements
     const modalCriteriaList = getElementById('modal-criteria-list');
     const modalMaxIterations = getElementById('modal-max-iterations') as HTMLInputElement;
-    const modalContextExtractionPrompt = getElementById('modal-context-extraction-prompt') as HTMLTextAreaElement;
     
     modalMaxIterations.addEventListener('input', autoSave);
-    modalContextExtractionPrompt.addEventListener('input', autoSave);
     modalCriteriaList.addEventListener('input', autoSave);
     modalCriteriaList.addEventListener('change', autoSave);
 
@@ -1054,8 +1048,7 @@ export function renderSettingsModal() {
         renderCriteria(modalCriteriaList, profile.criteria);
         modalMaxIterations.value = String(profile.maxIterations);
         
-        // Apply context extraction prompt
-        modalContextExtractionPrompt.value = profile.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT;
+        // Context extraction prompt is now handled by the prompts system
 
         // Update current profile display
         populateProfileSelector();
@@ -1094,7 +1087,7 @@ export function renderSettingsModal() {
             criteria: getCriteriaFromUI(modalCriteriaList),
             maxIterations: parseInt(modalMaxIterations.value, 10),
             prompt: '', // Legacy field - unused but required by interface
-            contextExtractionPrompt: modalContextExtractionPrompt.value
+            contextExtractionPrompt: '' // Legacy field - now part of prompts system
         };
 
         // Save the new profile

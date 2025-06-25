@@ -49,6 +49,7 @@ export interface LoopResult {
 }
 
 type OrchestratorEvents = {
+    'started': [input: LoopInput];
     'progress': [progress: LoopProgress];
     'error': [message: string];
     'aborted': [message: string];
@@ -90,6 +91,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         this.abortController = new AbortController();
         this.isRunning = true;
         this.currentIteration = 0;
+        
+        // Emit started event immediately for UI to show initial state
+        this.emit('started', input);
         
         const { prompt, criteria, maxIterations } = input;
         const history: LoopHistoryItem[] = [];
