@@ -35,8 +35,7 @@ export class ExportModal extends BaseModal {
         super({
             ...config,
             title: '📤 Export Content',
-            id: 'export-modal',
-            size: 'medium'
+            id: 'export-modal'
         });
 
         this.projectManager = config.projectManager;
@@ -334,38 +333,44 @@ export class ExportModal extends BaseModal {
     private async handleExport(): Promise<void> {
         if (!this.scopeSelect || !this.formatSelect || !this.exportButton) return;
 
-        const scope = this.scopeSelect.value as ExportScope;
-        const format = this.formatSelect.value as ExportFormat;
+        let scope: string;
+        let format: string;
+
+        // Handle reimport case specially
+        if (this.scopeSelect.value === 'reimport') {
+            scope = 'single'; // Scope doesn't matter for reimport, but we need a valid value
+            format = 'reimport'; // This maps to ExportFormat.Reimport
+        } else {
+            // Map UI scope values to ExportService values
+            switch (this.scopeSelect.value) {
+                case 'leafOnly':
+                    scope = 'leaves';
+                    break;
+                case 'hierarchical':
+                    scope = 'hierarchy';
+                    break;
+                default:
+                    scope = 'single';
+            }
+            format = this.formatSelect.value;
+        }
 
         // Disable button during export
         this.exportButton.disabled = true;
         this.exportButton.textContent = 'Exporting...';
 
         try {
-            let filename: string;
-            
-            if (scope === 'reimport') {
-                // Export for reimport
-                filename = await this.exportService.exportForReimport(this.node);
-            } else {
-                // Export for reading
-                filename = await this.exportService.exportContent(
-                    this.node,
-                    scope,
-                    format,
-                    this.node.title
-                );
-            }
+            // Use the performExport method which handles the complete export process
+            await this.exportService.performExport(
+                this.projectManager,
+                this.node,
+                scope,
+                format
+            );
 
-            // Show success message
-            const message = `Successfully exported "${this.node.title}" as ${filename}`;
-            alert(message);
-
-            this.emit('exported', { filename, scope, format });
             this.close();
 
         } catch (error) {
-            console.error('Export failed:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             alert(`Export failed: ${errorMessage}`);
             
