@@ -1,5 +1,5 @@
 import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
-import { openNewProjectModal, closeNewProjectModal, openImportProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
@@ -132,6 +132,20 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
     }
 }
 
+function calculateImportDepth(data: any): number {
+    if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
+        return 0; // No children = 0 additional depth
+    }
+    
+    let maxChildDepth = 0;
+    for (const child of data.children) {
+        const childDepth = calculateImportDepth(child);
+        maxChildDepth = Math.max(maxChildDepth, childDepth);
+    }
+    
+    return 1 + maxChildDepth; // 1 for this level + max child depth
+}
+
 function importChildNodeForProject(project: ProjectManager, parentId: string, childData: any, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
@@ -193,7 +207,27 @@ async function loadPersistedProjects(): Promise<void> {
 
 export async function initialize() {
     // Validate DOM elements are available
-    validateDOMElements();
+    console.log('🔧 Starting DOM validation...');
+    try {
+        validateDOMElements();
+        console.log('✅ DOM validation passed');
+    } catch (error) {
+        console.error('❌ DOM validation failed:', error);
+        console.log('Available elements:', {
+            'main-app': !!document.getElementById('main-app'),
+            'settingsBtn': !!document.getElementById('settingsBtn'),
+            'modal-container': !!document.getElementById('modal-container'),
+            'modal-content': !!document.getElementById('modal-content'),
+            'test-modal-container': !!document.getElementById('test-modal-container'),
+            'test-modal-content': !!document.getElementById('test-modal-content'),
+            'runTestsBtn': !!document.getElementById('runTestsBtn'),
+            'newProjectBtn': !!document.getElementById('newProjectBtn'),
+            'importProjectBtn': !!document.getElementById('importProjectBtn'),
+            'new-project-modal-container': !!document.getElementById('new-project-modal-container'),
+            'new-project-modal-content': !!document.getElementById('new-project-modal-content')
+        });
+        // Continue execution even if validation fails
+    }
     
     const settingsManager = new SettingsManager();
     state.setSettingsManager(settingsManager);
@@ -226,10 +260,19 @@ export async function initialize() {
     initializeProjectUI();
 
     // Attach event listeners
-    getElementById('settingsBtn').addEventListener('click', () => {
-        openSettingsModal();
-    });
-    getElementById('runTestsBtn').addEventListener('click', async () => {
+    console.log('🔗 Attaching event listeners...');
+    
+    try {
+        getElementById('settingsBtn').addEventListener('click', () => {
+            openSettingsModal();
+        });
+        console.log('✅ Settings button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach settings button listener:', error);
+    }
+    
+    try {
+        getElementById('runTestsBtn').addEventListener('click', async () => {
         const client = state.getOpenRouterClient();
         if (!client) {
             alert("API client not initialized. Cannot run tests.");
@@ -293,21 +336,120 @@ export async function initialize() {
             document.getElementById('runStorageTestsBtn')?.addEventListener('click', runStorageTests);
             document.getElementById('runAllTestsBtn')?.addEventListener('click', runAllTests);
         }, 100);
-    });
-    getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
-    getElementById('importProjectBtn').addEventListener('click', () => openImportProjectModal(handleImportProject));
-    getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
+        });
+        console.log('✅ Run Tests button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach run tests button listener:', error);
+    }
+    
+    try {
+        getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
+        console.log('✅ New Project button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach new project button listener:', error);
+    }
+    
+    try {
+        getElementById('importProjectBtn').addEventListener('click', () => {
+            console.log('🚀 Import Project button clicked!');
+            
+            // Create file input element (same as node import)
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.json';
+            fileInput.style.display = 'none';
+            
+            fileInput.addEventListener('change', (e) => {
+                const target = e.target as HTMLInputElement;
+                const file = target.files?.[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const content = event.target?.result as string;
+                        const importData = JSON.parse(content);
+                        
+                        // Detect suitable template (same logic as modal)
+                        const templateManager = state.getTemplateManager();
+                        if (!templateManager) {
+                            throw new Error('Template manager not available');
+                        }
+                        
+                        // Calculate depth and find suitable template
+                        const depth = calculateImportDepth(importData);
+                        const templateNames = templateManager.getTemplateNames();
+                        let bestTemplate: ProjectTemplate | null = null;
+                        
+                        // Look for a template that has enough levels for the import
+                        for (const templateName of templateNames) {
+                            const template = templateManager.getTemplate(templateName);
+                            if (template && template.hierarchyLevels.length >= depth + 1) {
+                                bestTemplate = template;
+                                break;
+                            }
+                        }
+                        
+                        // If no template found, default to Standard Novel
+                        if (!bestTemplate) {
+                            const standardTemplate = templateManager.getTemplate('Standard Novel');
+                            if (standardTemplate) {
+                                bestTemplate = standardTemplate;
+                            }
+                        }
+                        
+                        if (!bestTemplate) {
+                            throw new Error('No suitable template found');
+                        }
+                        
+                        // Import project data
+                        handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
+                        
+                    } catch (error) {
+                        console.error('Import failed:', error);
+                        alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                    }
+                };
+                
+                reader.onerror = () => {
+                    alert('Failed to read file. Please try again.');
+                };
+                
+                reader.readAsText(file);
+            });
+            
+            // Trigger file selection
+            document.body.appendChild(fileInput);
+            fileInput.click();
+            document.body.removeChild(fileInput);
+        });
+        console.log('✅ Import Project button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach import project button listener:', error);
+    }
+    
+    try {
+        getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
+        console.log('✅ Manage Templates button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach manage templates button listener:', error);
+    }
     
     // Global abort button handler
-    getElementById('globalAbortBtn').addEventListener('click', () => {
-        const activeProject = state.getActiveProject();
-        if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
-            const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
-            if (confirmed) {
-                activeProject.getGenerationService().abortCurrentGeneration();
+    try {
+        getElementById('globalAbortBtn').addEventListener('click', () => {
+            const activeProject = state.getActiveProject();
+            if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
+                const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
+                if (confirmed) {
+                    activeProject.getGenerationService().abortCurrentGeneration();
+                }
             }
-        }
-    });
+        });
+        console.log('✅ Global Abort button listener attached');
+    } catch (error) {
+        console.error('❌ Failed to attach global abort button listener:', error);
+    }
 
     // Add modal-closing listeners (disabled click-outside-to-close for settings and templates)
     // modalContainer.addEventListener('click', (e) => {

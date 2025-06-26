@@ -18,72 +18,12 @@ import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseG
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
-    // Use new modal system
-    try {
-        newOpenGenericModal(content, onOpen);
-        return;
-    } catch (error) {
-        // Fallback to legacy implementation
-    }
-    
-    // Fallback to legacy implementation
-    // Try to get fresh references to modal elements
-    let container = document.getElementById('modal-container') as HTMLElement;
-    let contentDiv = document.getElementById('modal-content') as HTMLElement;
-    
-    if (container && contentDiv) {
-        contentDiv.innerHTML = content;
-        container.style.display = 'flex';
-        if (onOpen) {
-            onOpen();
-        }
-    } else {
-        // Fallback: create modal dynamically
-        container = document.createElement('div');
-        container.id = 'dynamic-modal-container';
-        container.className = 'modal-container';
-        container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 15000;';
-        
-        contentDiv = document.createElement('div');
-        contentDiv.className = 'modal-content';
-        contentDiv.style.cssText = 'background-color: white; padding: 2.5rem; border-radius: 12px; max-width: 80vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);';
-        contentDiv.innerHTML = content;
-        
-        container.appendChild(contentDiv);
-        document.body.appendChild(container);
-        
-        if (onOpen) {
-            onOpen();
-        }
-    }
+    console.log('🔓 openGenericModal - using new modal system only');
+    newOpenGenericModal(content, onOpen);
 }
 
 export function closeGenericModal() {
-    // Try new modal system first
-    try {
-        newCloseGenericModal();
-        return;
-    } catch (error) {
-        // Fallback to legacy implementation
-    }
-    
-    // Fallback to legacy implementation
-    // Try original modal first
-    let container = document.getElementById('modal-container') as HTMLElement;
-    let contentDiv = document.getElementById('modal-content') as HTMLElement;
-    
-    if (container && contentDiv) {
-        container.style.display = 'none';
-        contentDiv.innerHTML = ''; // Clear content on close
-        return;
-    }
-    
-    // Try dynamic modal
-    const dynamicContainer = document.getElementById('dynamic-modal-container');
-    if (dynamicContainer) {
-        dynamicContainer.remove();
-        return;
-    }
+    newCloseGenericModal();
 }
 
 
@@ -125,6 +65,7 @@ export function closeNewProjectModal() {
 }
 
 export function openImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+    console.log('📋 Opening Import Project modal...');
     const content = `
         <h2>Import Project from File</h2>
         <div class="form-group" style="margin-bottom: 1.5rem;">
@@ -148,7 +89,14 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
         </div>
     `;
     
-    openGenericModal(content, () => setupImportProjectModal(onImport));
+    console.log('📋 Using new modal system directly...');
+    try {
+        // Use the new modal system directly, same as openExtractContextModal
+        newOpenGenericModal(content, () => setupImportProjectModal(onImport));
+        console.log('📋 New modal system call completed');
+    } catch (error) {
+        console.error('❌ Error opening import modal:', error);
+    }
 }
 
 function calculateImportDepth(data: any): number {
@@ -166,6 +114,7 @@ function calculateImportDepth(data: any): number {
 }
 
 function setupImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+    console.log('🔧 Setting up import project modal...');
     const fileInput = getElementById<HTMLInputElement>('import-file-input');
     const preview = getElementById('import-preview');
     const previewTitle = getElementById('preview-title');
