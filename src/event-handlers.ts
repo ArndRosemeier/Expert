@@ -1,5 +1,5 @@
 import { getElementById, newProjectModalContainer, testModalContainer } from './ui/dom-elements';
-import { openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { openNewProjectModal, closeNewProjectModal, openImportProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
@@ -75,6 +75,91 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     
     closeNewProjectModal();
     initializeProjectUI();
+}
+
+function handleImportProject(title: string, template: ProjectTemplate, importData: any) {
+    const orchestrator = state.getOrchestrator();
+    const settingsManager = state.getSettingsManager();
+    const client = state.getOpenRouterClient();
+
+    if (!orchestrator || !settingsManager || !client) {
+        alert('Core services not initialized. Cannot import project.');
+        return;
+    }
+    
+    try {
+        // Create a new project with the imported title and detected template
+        const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
+        
+        // Import the data into the project's root node
+        const rootNode = project.rootNode;
+        
+        // Import node data (reusing the existing import logic)
+        if (importData.title !== undefined) {
+            rootNode.title = importData.title;
+            project.projectTitle = importData.title; // Keep project title in sync
+        }
+
+        if (importData.content !== undefined) {
+            rootNode.content = importData.content;
+        }
+
+        if (importData.context !== undefined) {
+            rootNode.context = importData.context;
+        }
+
+        if (importData.generationPrompt !== undefined) {
+            rootNode.generationPrompt = importData.generationPrompt;
+        }
+
+        // Import children recursively if they exist
+        if (importData.children && Array.isArray(importData.children)) {
+            importData.children.forEach((childData: any, index: number) => {
+                importChildNodeForProject(project, rootNode.id, childData, index);
+            });
+        }
+        
+        // Add to state and save
+        state.addProject(project);
+        project.saveToStorage();
+        
+        initializeProjectUI();
+        alert(`Project "${title}" imported successfully!`);
+        
+    } catch (error) {
+        console.error('Import project failed:', error);
+        alert('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+}
+
+function importChildNodeForProject(project: ProjectManager, parentId: string, childData: any, index: number): void {
+    if (!childData.title) {
+        console.warn(`Skipping child node at index ${index}: Missing title`);
+        return;
+    }
+
+    // Create the child node
+    const newNode = project.addNode(childData.title, parentId);
+
+    // Set node properties
+    if (childData.content !== undefined) {
+        newNode.content = childData.content;
+    }
+
+    if (childData.context !== undefined) {
+        newNode.context = childData.context;
+    }
+
+    if (childData.generationPrompt !== undefined) {
+        newNode.generationPrompt = childData.generationPrompt;
+    }
+
+    // Recursively import children
+    if (childData.children && Array.isArray(childData.children)) {
+        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+            importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
+        });
+    }
 }
 
 async function loadPersistedProjects(): Promise<void> {
@@ -207,6 +292,7 @@ export async function initialize() {
         }, 100);
     });
     getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
+    getElementById('importProjectBtn').addEventListener('click', () => openImportProjectModal(handleImportProject));
     getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
     
     // Global abort button handler

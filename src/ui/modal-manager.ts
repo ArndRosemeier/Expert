@@ -119,6 +119,146 @@ export function closeNewProjectModal() {
     }
 }
 
+export function openImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+    const content = `
+        <h2>Import Project from File</h2>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="import-file-input">Select Export File</label>
+            <input type="file" id="import-file-input" accept=".json" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;">
+            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                Choose a JSON file exported from Expert (must be "For reimport" format)
+            </small>
+        </div>
+        <div id="import-preview" style="display: none; margin-bottom: 1.5rem;">
+            <label>Preview:</label>
+            <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
+                <div><strong>Project Title:</strong> <span id="preview-title"></span></div>
+                <div><strong>Template:</strong> <span id="preview-template"></span></div>
+                <div><strong>Content Depth:</strong> <span id="preview-depth"></span> levels</div>
+            </div>
+        </div>
+        <div class="button-group" style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button id="cancel-import-project-btn" class="button button-secondary">Cancel</button>
+            <button id="confirm-import-project-btn" class="button button-primary" disabled>Import Project</button>
+        </div>
+    `;
+    
+    openGenericModal(content, () => setupImportProjectModal(onImport));
+}
+
+function calculateImportDepth(data: any): number {
+    if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
+        return 0; // No children = 0 additional depth
+    }
+    
+    let maxChildDepth = 0;
+    for (const child of data.children) {
+        const childDepth = calculateImportDepth(child);
+        maxChildDepth = Math.max(maxChildDepth, childDepth);
+    }
+    
+    return 1 + maxChildDepth; // 1 for this level + max child depth
+}
+
+function setupImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+    const fileInput = getElementById<HTMLInputElement>('import-file-input');
+    const preview = getElementById('import-preview');
+    const previewTitle = getElementById('preview-title');
+    const previewTemplate = getElementById('preview-template');
+    const previewDepth = getElementById('preview-depth');
+    const confirmBtn = getElementById<HTMLButtonElement>('confirm-import-project-btn');
+    const cancelBtn = getElementById<HTMLButtonElement>('cancel-import-project-btn');
+    
+    let importData: any = null;
+    let detectedTemplate: ProjectTemplate | null = null;
+    
+    fileInput.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const content = event.target?.result as string;
+                const data = JSON.parse(content);
+                
+                // Validate import data
+                if (!data || typeof data !== 'object' || !data.title) {
+                    throw new Error('Invalid import file: Missing required fields');
+                }
+                
+                // Calculate depth and try to determine template
+                const depth = calculateImportDepth(data);
+                const templateManager = state.getTemplateManager();
+                
+                if (!templateManager) {
+                    throw new Error('Template manager not available');
+                }
+                
+                // Try to find a suitable template based on the depth
+                const templateNames = templateManager.getTemplateNames();
+                let bestTemplate: ProjectTemplate | null = null;
+                
+                // Look for a template that has enough levels for the import
+                for (const templateName of templateNames) {
+                    const template = templateManager.getTemplate(templateName);
+                    if (template && template.hierarchyLevels.length >= depth + 1) { // +1 because depth is children, not total levels
+                        bestTemplate = template;
+                        break;
+                    }
+                }
+                
+                // If no template found, default to Standard Novel
+                if (!bestTemplate) {
+                    const standardTemplate = templateManager.getTemplate('Standard Novel');
+                    if (standardTemplate) {
+                        bestTemplate = standardTemplate;
+                    }
+                }
+                
+                if (!bestTemplate) {
+                    throw new Error('No suitable template found');
+                }
+                
+                // Store data and update preview
+                importData = data;
+                detectedTemplate = bestTemplate;
+                
+                previewTitle.textContent = data.title;
+                previewTemplate.textContent = bestTemplate.name;
+                previewDepth.textContent = depth.toString();
+                
+                preview.style.display = 'block';
+                confirmBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                preview.style.display = 'none';
+                confirmBtn.disabled = true;
+                importData = null;
+                detectedTemplate = null;
+            }
+        };
+        
+        reader.onerror = () => {
+            alert('Failed to read file. Please try again.');
+        };
+        
+        reader.readAsText(file);
+    });
+    
+    confirmBtn.addEventListener('click', () => {
+        if (importData && detectedTemplate) {
+            onImport(importData.title, detectedTemplate, importData);
+            closeGenericModal();
+        }
+    });
+    
+    cancelBtn.addEventListener('click', closeGenericModal);
+}
+
 export function openExportModal(projectManager: ProjectManager, node: DocumentNode) {
     // Use the new ExportModal implementation via ModalFactory
     import('./modals/ModalFactory').then(async ({ ModalFactory }) => {
