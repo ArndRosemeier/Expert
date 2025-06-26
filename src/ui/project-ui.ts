@@ -13,6 +13,10 @@ let collapsedNodes: Set<string> = new Set();
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
 
+// Version navigation state
+let currentVersionIndex: number = 0;
+let availableVersions: any[] = [];
+
 // Global abort button functions
 function showGlobalAbortButton() {
     const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
@@ -592,6 +596,32 @@ export function renderNodeDetails() {
                     0% { transform: translateX(-100%); }
                     100% { transform: translateX(100%); }
                 }
+                .version-nav-btn {
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    color: #495057;
+                    border-radius: 4px;
+                    width: 28px;
+                    height: 28px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1.1rem;
+                    font-weight: bold;
+                    transition: all 0.2s;
+                }
+                .version-nav-btn:hover:not(:disabled) {
+                    background: #e9ecef;
+                    border-color: #adb5bd;
+                    color: #343a40;
+                }
+                .version-nav-btn:disabled {
+                    background: #f8f9fa;
+                    border-color: #e9ecef;
+                    color: #adb5bd;
+                    cursor: not-allowed;
+                }
                 </style>
             </div>
         </div>
@@ -599,9 +629,17 @@ export function renderNodeDetails() {
         <div class="node-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <label for="node-content">Content</label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="checkbox" id="show-ratings-checkbox" style="margin: 0;">
-                    <label for="show-ratings-checkbox" style="font-weight: normal; font-size: 0.9rem; margin: 0;">Show ratings</label>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div id="version-navigation" style="display: none; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        <button id="version-prev-btn" class="version-nav-btn" title="Previous version">‹</button>
+                        <span id="version-indicator">Version 1 of 1</span>
+                        <button id="version-next-btn" class="version-nav-btn" title="Next version">›</button>
+                        <button id="use-this-version-btn" class="button button-primary" style="display: none; padding: 0.25rem 0.5rem; font-size: 0.8rem;">Use This Version</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="show-ratings-checkbox" style="margin: 0;">
+                        <label for="show-ratings-checkbox" style="font-weight: normal; font-size: 0.9rem; margin: 0;">Show ratings</label>
+                    </div>
                 </div>
             </div>
             <div id="content-display-area">
@@ -643,6 +681,9 @@ export function renderNodeDetails() {
         // Ensure content view is shown by default
         toggleRatingsView(false);
     }
+
+    // Initialize version navigation
+    initializeVersionNavigation(node);
 
     if (!node.generationPrompt) {
         node.generationPrompt = projectManager.getRawGenerationPrompt(node);
@@ -732,7 +773,145 @@ export function renderNodeDetails() {
     }
 }
 
+function initializeVersionNavigation(node: DocumentNode) {
+    // Get all available versions (current content + all iterations from latest session)
+    availableVersions = [];
+    currentVersionIndex = 0;
 
+    // Helper function to calculate total score
+    const calculateTotalScore = (ratings: any[]): number => {
+        if (!ratings || ratings.length === 0) return 0;
+        return ratings.reduce((sum, rating) => sum + rating.score, 0);
+    };
+
+    // Add current content as version (will be sorted by score)
+    const currentChosenIteration = node.getChosenIteration();
+    availableVersions.push({
+        content: node.content,
+        ratings: currentChosenIteration?.ratings || null,
+        isCurrent: true,
+        label: 'Current',
+        totalScore: currentChosenIteration?.ratings ? calculateTotalScore(currentChosenIteration.ratings) : 0
+    });
+
+    // Add iterations from the latest generation session
+    const latestSession = node.getLatestGenerationSession();
+    if (latestSession && latestSession.iterations.length > 0) {
+        latestSession.iterations.forEach((iteration) => {
+            // Skip the chosen iteration since it's already included as current content
+            if (!iteration.wasChosen) {
+                availableVersions.push({
+                    content: iteration.content,
+                    ratings: iteration.ratings,
+                    isCurrent: false,
+                    label: '', // Will be set after sorting
+                    timestamp: iteration.timestamp,
+                    totalScore: calculateTotalScore(iteration.ratings)
+                });
+            }
+        });
+    }
+
+    // Sort all versions by total score (highest first)
+    availableVersions.sort((a, b) => b.totalScore - a.totalScore);
+
+    // Assign clean labels based on score ranking
+    availableVersions.forEach((version, index) => {
+        if (version.isCurrent) {
+            version.label = `Current (Score: ${version.totalScore})`;
+        } else {
+            version.label = `Version ${index + 1} (Score: ${version.totalScore})`;
+        }
+    });
+
+    // Find the current content's new index after sorting
+    currentVersionIndex = availableVersions.findIndex(v => v.isCurrent);
+
+    // Update UI visibility and state
+    updateVersionNavigationUI();
+}
+
+function updateVersionNavigationUI() {
+    const versionNav = document.getElementById('version-navigation');
+    const versionIndicator = document.getElementById('version-indicator');
+    const prevBtn = document.getElementById('version-prev-btn') as HTMLButtonElement;
+    const nextBtn = document.getElementById('version-next-btn') as HTMLButtonElement;
+    const useVersionBtn = document.getElementById('use-this-version-btn') as HTMLButtonElement;
+
+    if (!versionNav || !versionIndicator || !prevBtn || !nextBtn || !useVersionBtn) return;
+
+    // Show/hide navigation based on whether there are multiple versions
+    if (availableVersions.length > 1) {
+        versionNav.style.display = 'flex';
+        
+        // Update indicator text - just show the version label
+        const currentVersion = availableVersions[currentVersionIndex];
+        versionIndicator.textContent = currentVersion.label;
+        
+        // Update button states
+        prevBtn.disabled = currentVersionIndex === 0;
+        nextBtn.disabled = currentVersionIndex === availableVersions.length - 1;
+        
+        // Show "Use This Version" button only if not on current version
+        useVersionBtn.style.display = currentVersion.isCurrent ? 'none' : 'inline-block';
+    } else {
+        versionNav.style.display = 'none';
+    }
+}
+
+function navigateToVersion(direction: 'prev' | 'next') {
+    if (direction === 'prev' && currentVersionIndex > 0) {
+        currentVersionIndex--;
+    } else if (direction === 'next' && currentVersionIndex < availableVersions.length - 1) {
+        currentVersionIndex++;
+    }
+    
+    displayCurrentVersion();
+    updateVersionNavigationUI();
+}
+
+function displayCurrentVersion() {
+    const currentVersion = availableVersions[currentVersionIndex];
+    if (!currentVersion) return;
+
+    // Update content display
+    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+    if (contentTextArea) {
+        contentTextArea.value = currentVersion.content;
+    }
+
+    // Update ratings display if currently showing ratings
+    const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
+    if (showRatingsCheckbox?.checked) {
+        renderRatingsView();
+    }
+}
+
+function useCurrentVersion() {
+    if (!projectManager || !selectedNodeId) return;
+    
+    const node = projectManager.findNodeById(selectedNodeId);
+    const currentVersion = availableVersions[currentVersionIndex];
+    
+    if (!node || !currentVersion || currentVersion.isCurrent) return;
+
+    // Update the node's content
+    node.content = currentVersion.content;
+    
+    // Save to storage
+    projectManager.saveToStorage().catch(console.error);
+    
+    // Reset to show current version
+    currentVersionIndex = 0;
+    availableVersions[0].content = currentVersion.content;
+    
+    // Update UI
+    displayCurrentVersion();
+    updateVersionNavigationUI();
+    
+    // Show success message
+    alert('Content updated to selected version!');
+}
 
 function toggleRatingsView(showRatings: boolean) {
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
@@ -761,35 +940,53 @@ function renderRatingsView() {
     const node = projectManager.findNodeById(selectedNodeId);
     if (!node) return;
     
-    const chosenIteration = node.getChosenIteration();
+    // Get ratings from the currently selected version
+    const currentVersion = availableVersions[currentVersionIndex];
+    let versionRatings: any[] = [];
+    let versionLabel = 'Current';
+    let timestampToShow: Date | null = null;
     
-    if (!chosenIteration || !chosenIteration.ratings || chosenIteration.ratings.length === 0) {
+    if (currentVersion && currentVersion.ratings) {
+        versionRatings = currentVersion.ratings;
+        versionLabel = currentVersion.label;
+        timestampToShow = currentVersion.timestamp;
+    } else if (currentVersion && currentVersion.isCurrent) {
+        // For current version, try to get ratings from chosen iteration
+        const chosenIteration = node.getChosenIteration();
+        if (chosenIteration && chosenIteration.ratings) {
+            versionRatings = chosenIteration.ratings;
+            timestampToShow = chosenIteration.timestamp;
+        }
+    }
+    
+    if (!versionRatings || versionRatings.length === 0) {
         ratingsDisplay.innerHTML = `
             <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
                 <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
-                <p style="margin: 0 0 1rem 0; font-size: 0.9rem;">This content doesn't have any quality ratings yet.</p>
+                <p style="margin: 0 0 1rem 0; font-size: 0.9rem;">This ${versionLabel.toLowerCase()} content doesn't have any quality ratings yet.</p>
                 <p style="margin: 0 0 1.5rem 0; font-size: 0.85rem; color: #868e96;">
                     Ratings are created when content is generated through the AI system. If you edited the content manually, 
                     the previous ratings were cleared since they no longer apply to the modified text.
                 </p>
-                <button id="regenerate-ratings-btn" class="button button-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                    Generate Ratings for Current Content
-                </button>
+                ${currentVersion && currentVersion.isCurrent ? `
+                    <button id="regenerate-ratings-btn" class="button button-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                        Generate Ratings for Current Content
+                    </button>
+                ` : ''}
             </div>
         `;
         return;
     }
     
-    const ratings = chosenIteration.ratings;
-    const maxScore = Math.max(...ratings.map(r => Math.max(r.score, r.goal)), 10); // Ensure minimum scale of 10
+    const maxScore = Math.max(...versionRatings.map((r: any) => Math.max(r.score, r.goal)), 10); // Ensure minimum scale of 10
     
     let ratingsHtml = `
         <div style="padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h4 style="margin: 0 0 1rem 0; color: #495057;">Quality Ratings for Final Content</h4>
+            <h4 style="margin: 0 0 1rem 0; color: #495057;">Quality Ratings for ${versionLabel} Content</h4>
             <div style="display: flex; flex-direction: column; gap: 1rem;">
     `;
     
-    ratings.forEach(rating => {
+    versionRatings.forEach((rating: any) => {
         const scorePercentage = (rating.score / maxScore) * 100;
         const goalPercentage = (rating.goal / maxScore) * 100;
         const metGoal = rating.score >= rating.goal;
@@ -830,7 +1027,7 @@ function renderRatingsView() {
                     <div style="width: 12px; height: 2px; background-color: #ffc107;"></div>
                     <span>Goal threshold</span>
                 </div>
-                Generated on: ${new Date(chosenIteration.timestamp).toLocaleString()}
+                ${timestampToShow ? `Generated on: ${new Date(timestampToShow).toLocaleString()}` : 'Timestamp not available'}
             </div>
         </div>
     `;
@@ -1624,6 +1821,18 @@ This action cannot be undone.`;
                             coordinator.completeOperation(operationId, false, error);
                         });
                 }
+                break;
+
+            case 'version-prev-btn':
+                navigateToVersion('prev');
+                break;
+
+            case 'version-next-btn':
+                navigateToVersion('next');
+                break;
+
+            case 'use-this-version-btn':
+                useCurrentVersion();
                 break;
 
 
