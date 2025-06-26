@@ -199,12 +199,10 @@ export abstract class BaseModal implements IModal {
                 }
             };
             
-            addEventListenerWithCleanup(
-                document,
-                'keydown',
-                escapeHandler,
-                this.cleanupHandlers
-            );
+            document.addEventListener('keydown', escapeHandler);
+            this.cleanupHandlers.push(() => {
+                document.removeEventListener('keydown', escapeHandler);
+            });
         }
     }
 
