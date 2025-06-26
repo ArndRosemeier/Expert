@@ -94,28 +94,33 @@ export function closeGenericModal() {
 // - ModalFactory.createSettingsModal() for easy access
 
 export function openTestModal(content: string) {
-    if (testModalContainer && testModalContent) {
-        testModalContent.innerHTML = content;
-        testModalContainer.style.display = 'flex';
+    const container = testModalContainer();
+    const content_elem = testModalContent();
+    if (container && content_elem) {
+        content_elem.innerHTML = content;
+        container.style.display = 'flex';
     }
 }
 
 export function closeTestModal() {
-    if (testModalContainer) {
-        testModalContainer.style.display = 'none';
+    const container = testModalContainer();
+    if (container) {
+        container.style.display = 'none';
     }
 }
 
 export function openNewProjectModal(onCreate: (title: string, template: ProjectTemplate) => void) {
     renderNewProjectModal(onCreate);
-    if (newProjectModalContainer) {
-        newProjectModalContainer.style.display = 'flex';
+    const container = newProjectModalContainer();
+    if (container) {
+        container.style.display = 'flex';
     }
 }
 
 export function closeNewProjectModal() {
-    if (newProjectModalContainer) {
-        newProjectModalContainer.style.display = 'none';
+    const container = newProjectModalContainer();
+    if (container) {
+        container.style.display = 'none';
     }
 }
 
@@ -299,15 +304,16 @@ function performExport(_projectManager: ProjectManager, node: DocumentNode, scop
 
 function renderNewProjectModal(onCreate: (title: string, template: ProjectTemplate) => void) {
     const templateManager = state.getTemplateManager();
+    const contentElement = newProjectModalContent();
     if (!templateManager) {
         // This case should ideally not happen if initialization is correct.
-        newProjectModalContent.innerHTML = `<p>Error: Template Manager not found.</p>`;
+        contentElement.innerHTML = `<p>Error: Template Manager not found.</p>`;
         return;
     }
     const templateNames = templateManager.getTemplateNames();
     const optionsHtml = templateNames.map(name => `<option value="${name}">${name}</option>`).join('');
 
-    newProjectModalContent.innerHTML = `
+    contentElement.innerHTML = `
         <h2>Create New Project</h2>
         <div class="form-group" style="margin-bottom: 1.5rem;">
             <label for="project-title-input">Project Title</label>
@@ -609,15 +615,17 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
  */
 export function openAILogModal() {
     renderAILogModal();
-    if (modalContainer) {
-        modalContainer.style.display = 'flex';
+    const container = modalContainer();
+    if (container) {
+        container.style.display = 'flex';
     }
 }
 
 function renderAILogModal() {
-    if (!modalContent) return;
+    const content = modalContent();
+    if (!content) return;
 
-    modalContent.innerHTML = `
+    content.innerHTML = `
         <style>
             .ai-log-modal {
                 width: 95vw;

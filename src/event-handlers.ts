@@ -1,4 +1,4 @@
-import { getElementById, newProjectModalContainer, testModalContainer } from './ui/dom-elements';
+import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
 import { openNewProjectModal, closeNewProjectModal, openImportProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
@@ -192,6 +192,9 @@ async function loadPersistedProjects(): Promise<void> {
 }
 
 export async function initialize() {
+    // Validate DOM elements are available
+    validateDOMElements();
+    
     const settingsManager = new SettingsManager();
     state.setSettingsManager(settingsManager);
 
@@ -310,11 +313,11 @@ export async function initialize() {
     // modalContainer.addEventListener('click', (e) => {
     //     if (e.target === modalContainer) closeModal();
     // });
-    testModalContainer.addEventListener('click', (e) => {
-        if (e.target === testModalContainer) closeTestModal();
+    testModalContainer().addEventListener('click', (e) => {
+        if (e.target === testModalContainer()) closeTestModal();
     });
-    newProjectModalContainer.addEventListener('click', (e) => {
-        if (e.target === newProjectModalContainer) closeNewProjectModal();
+    newProjectModalContainer().addEventListener('click', (e) => {
+        if (e.target === newProjectModalContainer()) closeNewProjectModal();
     });
 
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
