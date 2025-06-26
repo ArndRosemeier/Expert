@@ -157,8 +157,13 @@ export class IndexedDBService {
       const data = store.keyPath ? { [store.keyPath as string]: key, ...value } : value;
       const request = store.put(data, store.keyPath ? undefined : key);
 
-      request.onsuccess = () => {
+      // Wait for the transaction to complete, not just the request
+      transaction.oncomplete = () => {
         resolve();
+      };
+
+      transaction.onerror = () => {
+        reject(new Error(`Failed to set data: ${transaction.error?.message}`));
       };
 
       request.onerror = () => {

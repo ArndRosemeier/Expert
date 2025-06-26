@@ -1800,14 +1800,14 @@ This action cannot be undone.`;
     });
 
     // === NON-CLICK EVENT LISTENERS ===
-    mainContent.addEventListener('change', (e) => {
+    mainContent.addEventListener('change', async (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
         if (e.target.id === 'active-profile-selector') {
             const select = e.target as HTMLSelectElement;
             const settingsManager = state.getSettingsManager();
             if (settingsManager) {
-                settingsManager.setLastUsedProfile(select.value);
+                await settingsManager.setLastUsedProfile(select.value);
             }
         } else if (e.target.id === 'show-ratings-checkbox') {
             const checkbox = e.target as HTMLInputElement;
@@ -1833,6 +1833,9 @@ export function initializeProjectUI(manager?: ProjectManager) {
     const settingsManager = state.getSettingsManager();
     const profileNames = settingsManager?.getProfileNames() || [];
     const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
+    
+
+    
     const profileOptions = profileNames.map(name => 
         `<option value="${name}" ${activeProfileName === name ? 'selected' : ''}>${name}</option>`
     ).join('');

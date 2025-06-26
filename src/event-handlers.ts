@@ -233,7 +233,13 @@ export async function initialize() {
     // Initialize the modal factory with dependencies
     const modalFactory = createModalFactory({
         settingsManager,
-        modelSelector
+        modelSelector,
+        refreshGlobalProfileSelector: () => {
+            // Import the function dynamically to avoid circular dependencies
+            import('./ui/project-ui').then(({ refreshGlobalProfileSelector }) => {
+                refreshGlobalProfileSelector();
+            });
+        }
     });
     setDefaultModalFactory(modalFactory);
 

@@ -125,11 +125,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             getGenerationCoordinator: () => this.generationCoordinator
         });
 
-        // Ensure we have a valid default profile set globally
-        const defaultProfile = this.settingsManager.getProfile('default');
-        if (defaultProfile && defaultProfile.criteria && defaultProfile.criteria.length > 0) {
-            this.settingsManager.setLastUsedProfile('default');
-        } else {
+        // Ensure we have a valid profile set globally, but preserve user's choice
+        const currentProfile = this.settingsManager.getLastUsedProfileName();
+        const currentProfileData = currentProfile ? this.settingsManager.getProfile(currentProfile) : null;
+        
+        // Only change the profile if the current one is invalid
+        if (!currentProfileData || !currentProfileData.criteria || currentProfileData.criteria.length === 0) {
             const availableProfiles = this.settingsManager.getProfileNames();
             const firstValidProfile = availableProfiles.find(name => {
                 const p = this.settingsManager.getProfile(name);

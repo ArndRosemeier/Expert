@@ -53,8 +53,13 @@ export class ReaderEditor {
     /**
      * Initialize the always-on editing interface
      */
-    public initialize(): void {
-        this.createEditorOverlays();
+    public initialize(preservedContent?: Map<string, string>): void {
+        // If we have preserved content, we're doing a rebuild - clear existing editors first
+        if (preservedContent && preservedContent.size > 0) {
+            this.removeEditorOverlays();
+        }
+        
+        this.createEditorOverlays(preservedContent);
         this.setupEventListeners();
         this.updateEditModeUI();
         this.readerGUI.updateActionButtons();
@@ -201,9 +206,9 @@ export class ReaderEditor {
     }
 
     /**
-     * Create editor overlays for all content nodes
+     * Create editor overlays for all nodes
      */
-    private createEditorOverlays(): void {
+    private createEditorOverlays(preservedContent?: Map<string, string>): void {
         const container = this.readerGUI.getContainer();
         const nodeElements = container.querySelectorAll('.node-content[data-node-id]');
         
@@ -215,14 +220,16 @@ export class ReaderEditor {
             const node = this.projectManager.findNodeById(nodeId);
             if (!node) return;
 
-            this.createNodeEditor(nodeId, htmlElement, node.content || '');
+            // Use preserved content if available, otherwise use node content
+            const content = preservedContent?.get(nodeId) ?? node.content ?? '';
+            this.createNodeEditor(nodeId, htmlElement, content, preservedContent?.has(nodeId) ?? false);
         });
     }
 
     /**
      * Create a single node editor
      */
-    private createNodeEditor(nodeId: string, element: HTMLElement, content: string): void {
+    private createNodeEditor(nodeId: string, element: HTMLElement, content: string, isRestoredContent: boolean = false): void {
         // Check if editor already exists for this node
         if (this.nodeEditors.has(nodeId)) {
             return;
@@ -242,7 +249,7 @@ export class ReaderEditor {
             nodeId,
             element,
             editor: textEditor,
-            originalContent: content,
+            originalContent: isRestoredContent ? content : (content || ''),
             isDirty: false
         };
         
@@ -263,6 +270,8 @@ export class ReaderEditor {
         textEditor.onBlur(() => {
             this.handleEditorBlur(editor);
         });
+        
+
     }
 
     /**
@@ -547,5 +556,32 @@ export class ReaderEditor {
         if (this.autoSaveTimer) {
             clearTimeout(this.autoSaveTimer);
         }
+    }
+
+    /**
+     * Preserve current content from all editors before a DOM rebuild
+     */
+    public preserveAllContent(): Map<string, string> {
+        const preservedContent = new Map<string, string>();
+        this.nodeEditors.forEach((editor, nodeId) => {
+            const currentContent = editor.editor.getText();
+            preservedContent.set(nodeId, currentContent);
+        });
+        return preservedContent;
+    }
+
+    /**
+     * Restore preserved content to editors after a DOM rebuild
+     * @deprecated Use initialize(preservedContent) instead for better timing
+     */
+    public restoreAllContent(preservedContent: Map<string, string>): void {
+        preservedContent.forEach((content, nodeId) => {
+            const editor = this.nodeEditors.get(nodeId);
+            if (editor) {
+                editor.editor.setText(content);
+                editor.originalContent = content;
+                editor.isDirty = false;
+            }
+        });
     }
 } 

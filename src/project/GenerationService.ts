@@ -203,6 +203,7 @@ export class GenerationService {
         }
 
         node.isGenerating = true;
+        console.log(`🚀 Starting generation for: "${node.title}" (${nodeId})`);
         this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node }); // Update UI to show spinner
         
         // Emit high-level progress for single node generation (not during bulk operations)
@@ -321,6 +322,7 @@ export class GenerationService {
                 // Cleanup state before emitting events
                 this.cleanupGenerationState(nodeId, node, isChildGeneration);
                 
+                console.log(`✅ Node generation completed: "${node.title}" (${nodeId}) - Content length: ${node.content?.length || 0} characters`);
                 this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
 
                 // Clear high-level progress for single node generation (not during bulk operations)

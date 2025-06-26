@@ -47,7 +47,7 @@ interface ReaderConfig {
  * Main Reader GUI class - provides a clean reading interface for hierarchical content
  */
 export class ReaderGUI {
-    private projectManager: ProjectManager;
+    public projectManager: ProjectManager;
     private container: HTMLElement;
     private contentNodes: ContentNode[] = [];
     private clickMappings: ClickMapping[] = [];
@@ -61,6 +61,10 @@ export class ReaderGUI {
     // Bound method references for proper event listener removal
     private boundHandleClick: (event: MouseEvent) => void;
     private boundHandleDoubleClick: (event: MouseEvent) => void;
+    // Bound method references for project manager event listeners
+    private boundHandleNodeGenerationComplete: (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => void;
+    private boundHandleNodeSummaryGenerated: (e: { nodeId: string, summary: string }) => void;
+    private boundHandleProjectUpdate: () => void;
 
     constructor(projectManager: ProjectManager, container: HTMLElement, onNavigateToNode?: (nodeId: string) => void) {
         this.projectManager = projectManager;
@@ -70,6 +74,10 @@ export class ReaderGUI {
         // Bind event handler methods
         this.boundHandleClick = this.handleClick.bind(this);
         this.boundHandleDoubleClick = this.handleDoubleClick.bind(this);
+        // Bind project manager event handlers
+        this.boundHandleNodeGenerationComplete = this.handleNodeGenerationComplete.bind(this);
+        this.boundHandleNodeSummaryGenerated = this.handleNodeSummaryGenerated.bind(this);
+        this.boundHandleProjectUpdate = this.handleProjectUpdate.bind(this);
         
         // Initialize reader editor
         this.readerEditor = new ReaderEditor(this, projectManager);
@@ -2326,13 +2334,13 @@ export class ReaderGUI {
         this.isListeningForUpdates = true;
         
         // Listen for node generation completion to update reader content
-        this.projectManager.on('nodeGenerationComplete', this.handleNodeGenerationComplete.bind(this));
+        this.projectManager.on('nodeGenerationComplete', this.boundHandleNodeGenerationComplete);
         
         // Listen for summary generation
-        this.projectManager.on('nodeSummaryGenerated', this.handleNodeSummaryGenerated.bind(this));
+        this.projectManager.on('nodeSummaryGenerated', this.boundHandleNodeSummaryGenerated);
         
         // Listen for overall project structure changes only
-        this.projectManager.on('project-loaded', this.handleProjectUpdate.bind(this));
+        this.projectManager.on('project-loaded', this.boundHandleProjectUpdate);
     }
 
     /**
@@ -2344,9 +2352,9 @@ export class ReaderGUI {
         this.isListeningForUpdates = false;
         
         // Remove event listeners (matching what we actually listen for)
-        this.projectManager.off('nodeGenerationComplete', this.handleNodeGenerationComplete.bind(this));
-        this.projectManager.off('nodeSummaryGenerated', this.handleNodeSummaryGenerated.bind(this));
-        this.projectManager.off('project-loaded', this.handleProjectUpdate.bind(this));
+        this.projectManager.off('nodeGenerationComplete', this.boundHandleNodeGenerationComplete);
+        this.projectManager.off('nodeSummaryGenerated', this.boundHandleNodeSummaryGenerated);
+        this.projectManager.off('project-loaded', this.boundHandleProjectUpdate);
     }
 
 
@@ -2356,8 +2364,20 @@ export class ReaderGUI {
      */
     private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }): void {
         if (e.success) {
+            console.log(`📖 Reader auto-updating content for: "${e.node.title}" (${e.nodeId})`);
+            
+            // Check if this is a new node that wasn't in the reader when it was built
+            const existingContentNode = this.contentNodes.find(cn => cn.id === e.nodeId);
+            if (!existingContentNode) {
+                console.log(`🆕 New node detected: "${e.node.title}" - rebuilding reader content`);
+                this.refreshReaderForNewNodes();
+                return;
+            }
+            
             // Update the reader content for this specific node
             this.updateNodeContentInReader(e.nodeId, e.node.content);
+        } else {
+            console.log(`❌ Node generation failed for: "${e.node.title}" (${e.nodeId}) - Reader not updated`);
         }
     }
 
@@ -2373,16 +2393,100 @@ export class ReaderGUI {
      * Update content for a specific node in the reader without breaking the editor
      */
     private updateNodeContentInReader(nodeId: string, newContent: string): void {
-        // Find the textarea for this node and update it
-        const textarea = this.container.querySelector(`textarea[data-node-id="${nodeId}"]`) as HTMLTextAreaElement;
-        if (textarea) {
-            // Only update if not currently being edited by the user
-            if (document.activeElement !== textarea) {
-                textarea.value = newContent;
-                // Trigger the editor to update its internal state
-                const event = new Event('input', { bubbles: true });
-                textarea.dispatchEvent(event);
+        // Access the ReaderEditor to update the content directly
+        if (this.readerEditor) {
+            const nodeEditor = (this.readerEditor as any).nodeEditors?.get(nodeId);
+            if (nodeEditor) {
+                // Only update if not currently being edited by the user
+                const editorElement = nodeEditor.element.querySelector('.text-editor-with-highlighting') as HTMLElement;
+                if (editorElement && document.activeElement !== editorElement) {
+                    // Update the TextEditorWithHighlighting content
+                    nodeEditor.editor.setText(newContent);
+                    // Update the original content so it doesn't appear as dirty
+                    nodeEditor.originalContent = newContent;
+                    nodeEditor.isDirty = false;
+                    
+                    // Update the word count in contentNodes and refresh TOC
+                    this.updateNodeWordCount(nodeId, newContent);
+                    
+                    console.log(`📝 Reader content updated successfully for node: ${nodeId}`);
+                } else {
+                    console.log(`⏭️ Reader update skipped - node ${nodeId} is currently being edited by user`);
+                }
+            } else {
+                console.log(`⚠️ Reader update failed - no editor found for node: ${nodeId}`);
+                // Debug: Let's see what editors are actually available
+                const availableEditors = (this.readerEditor as any).nodeEditors ? 
+                    Array.from((this.readerEditor as any).nodeEditors.keys()) : [];
+                console.log(`🔍 Available editors in reader:`, availableEditors);
             }
+        } else {
+            console.log(`⚠️ Reader update failed - ReaderEditor not initialized`);
+        }
+    }
+
+    /**
+     * Update word count for a specific node and refresh TOC if visible
+     */
+    private updateNodeWordCount(nodeId: string, newContent: string): void {
+        // Find and update the contentNode
+        const contentNode = this.contentNodes.find(node => node.id === nodeId);
+        if (contentNode) {
+            const newWordCount = this.calculateWordCount(newContent);
+            contentNode.wordCount = newWordCount;
+            contentNode.estimatedReadingTime = Math.ceil(newWordCount / 200);
+            contentNode.hasContent = !!(newContent && newContent.trim());
+            
+            // Refresh TOC if it's visible
+            if (this.config.showTOC) {
+                this.refreshTOC();
+            }
+            
+            console.log(`📊 Updated word count for "${contentNode.title}": ${newWordCount} words`);
+        }
+    }
+
+    /**
+     * Refresh just the TOC content without rebuilding the entire reader
+     */
+    private refreshTOC(): void {
+        const tocElement = this.container.querySelector('.reader-toc');
+        if (tocElement) {
+            tocElement.innerHTML = this.generateTOCContent();
+            console.log(`🔄 TOC refreshed with updated word counts`);
+        }
+    }
+
+    /**
+     * Refresh the reader when new nodes are detected (e.g., after child node generation)
+     */
+    private refreshReaderForNewNodes(): void {
+        // Preserve content from existing editors before destroying them
+        let preservedContent = new Map<string, string>();
+        if (this.readerEditor) {
+            preservedContent = this.readerEditor.preserveAllContent();
+        }
+        
+        // Re-analyze the project content to pick up new nodes
+        this.contentNodes = this.analyzeProjectContent();
+        
+        // Rebuild the content area and TOC
+        const contentArea = this.container.querySelector('.reader-content-area');
+        if (contentArea) {
+            contentArea.innerHTML = this.generateContent();
+        }
+        
+        // Refresh TOC if visible
+        if (this.config.showTOC) {
+            this.refreshTOC();
+        }
+        
+        // Rebuild click mappings
+        this.buildClickMappings();
+        
+        // Reinitialize the editor with preserved content
+        if (this.readerEditor) {
+            this.readerEditor.initialize(preservedContent);
         }
     }
 
@@ -2390,11 +2494,23 @@ export class ReaderGUI {
      * Handle overall project updates
      */
     private handleProjectUpdate(): void {
-        // Preserve current reading position
-        this.preserveReadingPosition();
+        console.log(`📋 Project structure changed - checking for new nodes`);
         
-        // Update the content
-        this.refreshContent();
+        // Check if there are new nodes that need to be added to the reader
+        const currentNodeIds = new Set(this.contentNodes.map(cn => cn.id));
+        const newContentNodes = this.analyzeProjectContent();
+        const newNodeIds = new Set(newContentNodes.map(cn => cn.id));
+        
+        // Check if there are actually new nodes
+        const hasNewNodes = newContentNodes.some(cn => !currentNodeIds.has(cn.id));
+        const hasRemovedNodes = this.contentNodes.some(cn => !newNodeIds.has(cn.id));
+        
+        if (hasNewNodes || hasRemovedNodes) {
+            console.log(`🔄 Project structure changed: ${newContentNodes.length} total nodes (was ${this.contentNodes.length})`);
+            this.refreshReaderForNewNodes();
+        } else {
+            console.log(`✅ No structural changes detected`);
+        }
     }
 
     /**
@@ -2475,8 +2591,15 @@ export async function openReaderView(projectManager: ProjectManager, onNavigateT
         document.body.appendChild(readerContainer);
     }
 
-    // Reuse existing reader instance if it exists, otherwise create new one
-    if (!globalReaderInstance) {
+    // Check if we need to create a new reader instance or update the existing one
+    if (!globalReaderInstance || globalReaderInstance.projectManager !== projectManager) {
+        // Clean up existing instance if it exists
+        if (globalReaderInstance) {
+            globalReaderInstance.hide();
+            globalReaderInstance = null;
+        }
+        
+        // Create new reader instance for the new project
         globalReaderInstance = new ReaderGUI(projectManager, readerContainer, onNavigateToNode);
     }
     

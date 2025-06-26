@@ -254,7 +254,8 @@ export class SettingsManager {
     private async loadLastUsedProfile(): Promise<void> {
         try {
             const storage = await this.storageService;
-            this.lastUsedProfileName = await storage.get<string>(LAST_USED_PROFILE_KEY) || null;
+            const savedProfile = await storage.get<string>(LAST_USED_PROFILE_KEY);
+            this.lastUsedProfileName = savedProfile || null;
         } catch (error) {
             console.error('Failed to load last used profile from storage', error);
             this.lastUsedProfileName = null;
@@ -340,7 +341,7 @@ export class SettingsManager {
             const storage = await this.storageService;
             await storage.set(LAST_USED_PROFILE_KEY, name);
         } catch (error) {
-            console.error('Failed to save last used profile to storage', error);
+            console.error('❌ Failed to save last used profile to storage', error);
         }
     }
 
