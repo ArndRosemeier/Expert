@@ -155,7 +155,7 @@ export function openExportModal(projectManager: ProjectManager, node: DocumentNo
                 projectManager: projectManager
             });
             
-            const exportModal = modalFactory.createExportModal(node);
+            const exportModal = await modalFactory.createExportModal(node);
             // Modal opens automatically by default
             
         } catch (error) {

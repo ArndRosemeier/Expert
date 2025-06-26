@@ -86,7 +86,7 @@ export class ModalFactory {
     /**
      * Creates and optionally opens an Export modal
      */
-    public createExportModal(node: DocumentNode, options: ModalOptions = {}): ExportModal {
+    public async createExportModal(node: DocumentNode, options: ModalOptions = {}): Promise<ExportModal> {
         const { autoOpen = true, replaceExisting = true } = options;
 
         if (!this.dependencies.projectManager) {
@@ -97,7 +97,7 @@ export class ModalFactory {
         if (replaceExisting) {
             const existing = this.registry.get('export-modal');
             if (existing) {
-                existing.close();
+                await existing.close();
             }
         }
 
@@ -109,6 +109,9 @@ export class ModalFactory {
 
         const modal = new ExportModal(config);
         this.registry.register(modal);
+
+        // Set up automatic cleanup
+        this.setupModalCleanup(modal);
 
         if (autoOpen) {
             modal.open();
@@ -347,7 +350,7 @@ export function openSettingsModal(): SettingsModal {
 /**
  * Convenience function to open export modal using default factory
  */
-export function openExportModal(node: DocumentNode): ExportModal {
+export function openExportModal(node: DocumentNode): Promise<ExportModal> {
     return getDefaultModalFactory().createExportModal(node);
 }
 
