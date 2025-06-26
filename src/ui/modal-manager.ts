@@ -11,9 +11,24 @@ import { AILogService } from '../AILogService';
 import { refreshGlobalProfileSelector } from './project-ui';
 
 // --- Generic Modal Functions ---
+// TODO: Migrate to new modal system
+// These functions are maintained for backward compatibility during migration
+
+import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal } from './modals/index';
+
 export function openGenericModal(content: string, onOpen?: () => void) {
     console.log('🔍 openGenericModal called with content length:', content.length);
     
+    // Use new modal system
+    try {
+        newOpenGenericModal(content, onOpen);
+        console.log('✅ Using new modal system');
+        return;
+    } catch (error) {
+        console.warn('⚠️ New modal system failed, falling back to legacy:', error);
+    }
+    
+    // Fallback to legacy implementation
     // Try to get fresh references to modal elements
     let container = document.getElementById('modal-container') as HTMLElement;
     let contentDiv = document.getElementById('modal-content') as HTMLElement;
@@ -57,6 +72,16 @@ export function openGenericModal(content: string, onOpen?: () => void) {
 }
 
 export function closeGenericModal() {
+    // Try new modal system first
+    try {
+        newCloseGenericModal();
+        console.log('✅ Using new modal system for close');
+        return;
+    } catch (error) {
+        console.warn('⚠️ New modal system close failed, using legacy:', error);
+    }
+    
+    // Fallback to legacy implementation
     // Try original modal first
     let container = document.getElementById('modal-container') as HTMLElement;
     let contentDiv = document.getElementById('modal-content') as HTMLElement;
