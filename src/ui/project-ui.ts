@@ -2275,6 +2275,23 @@ function renderMultiProjectTree() {
 }
 
 /**
+ * Calculate the maximum depth of a hierarchy in import data
+ */
+function calculateImportDataDepth(data: any): number {
+    if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
+        return 0; // No children = 0 additional depth
+    }
+    
+    let maxChildDepth = 0;
+    for (const child of data.children) {
+        const childDepth = calculateImportDataDepth(child);
+        maxChildDepth = Math.max(maxChildDepth, childDepth);
+    }
+    
+    return 1 + maxChildDepth; // 1 for this level + max child depth
+}
+
+/**
  * Import node data from JSON export and merge it into the specified target node
  */
 function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
@@ -2290,6 +2307,23 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 
     if (!importData.title) {
         throw new Error('Invalid import data: Missing title field');
+    }
+
+    // Validate hierarchy depth compatibility
+    if (importData.children && Array.isArray(importData.children) && importData.children.length > 0) {
+        const importDepth = calculateImportDataDepth(importData);
+        const targetLevel = targetNode.level;
+        const templateLength = targetNode.template.length;
+        const availableDepth = templateLength - targetLevel - 1; // -1 because targetLevel is 0-indexed
+        
+        if (importDepth > availableDepth) {
+            throw new Error(
+                `Hierarchy mismatch: The imported data has ${importDepth} levels of children, ` +
+                `but the target node can only accommodate ${availableDepth} more levels.\n\n` +
+                `Target node is at level ${targetLevel} in a ${templateLength}-level template ` +
+                `(${targetNode.template.join(' → ')}).`
+            );
+        }
     }
 
     // Import the node data
