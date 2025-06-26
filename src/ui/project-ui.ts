@@ -657,7 +657,6 @@ export function renderNodeDetails() {
                     <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(propagates recursively to all children)</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
-                    <button id="node-show-inherited-btn" class="button button-secondary">Show inherited</button>
                     <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
                 </div>
             </div>
@@ -716,12 +715,8 @@ export function renderNodeDetails() {
     
     // Handle context buttons state
     const extractContextBtn = getElementById('node-extract-context-btn') as HTMLButtonElement;
-    const showInheritedBtn = getElementById('node-show-inherited-btn') as HTMLButtonElement;
     if (extractContextBtn) {
         extractContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
-    }
-    if (showInheritedBtn) {
-        showInheritedBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     }
 
     // Update button text to show current state
@@ -770,6 +765,83 @@ export function renderNodeDetails() {
                 saveCheckboxStates().catch(console.error);
             });
         }
+    }
+
+    // --- CRITICAL: Add missing event listeners for content and context textareas ---
+    // This must happen AFTER the DOM elements are created and appended above
+    const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
+    const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+    const nodeGenerationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+    const nodeTitleDisplay = getElementById('node-title-display') as HTMLElement;
+
+    // Content textarea - save content changes to node
+    if (contentTextArea) {
+        contentTextArea.addEventListener('input', () => {
+            if (projectManager && selectedNodeId) {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (node) {
+                    node.content = contentTextArea.value;
+                    // Save to storage with debounced approach
+                    clearTimeout((contentTextArea as any)._saveTimeout);
+                    (contentTextArea as any)._saveTimeout = setTimeout(() => {
+                        projectManager!.saveToStorage().catch(console.error);
+                    }, 1000); // Save after 1 second of no typing
+                }
+            }
+        });
+    }
+
+    // Context textarea - save context changes to node
+    if (contextTextArea) {
+        contextTextArea.addEventListener('input', () => {
+            if (projectManager && selectedNodeId) {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (node) {
+                    node.context = contextTextArea.value;
+                    // Save to storage with debounced approach
+                    clearTimeout((contextTextArea as any)._saveTimeout);
+                    (contextTextArea as any)._saveTimeout = setTimeout(() => {
+                        projectManager!.saveToStorage().catch(console.error);
+                    }, 1000); // Save after 1 second of no typing
+                }
+            }
+        });
+    }
+
+    // Generation prompt textarea - save prompt changes to node
+    if (nodeGenerationPromptTextArea) {
+        nodeGenerationPromptTextArea.addEventListener('input', () => {
+            if (projectManager && selectedNodeId) {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (node) {
+                    node.generationPrompt = nodeGenerationPromptTextArea.value;
+                    // Save to storage with debounced approach
+                    clearTimeout((nodeGenerationPromptTextArea as any)._saveTimeout);
+                    (nodeGenerationPromptTextArea as any)._saveTimeout = setTimeout(() => {
+                        projectManager!.saveToStorage().catch(console.error);
+                    }, 1000); // Save after 1 second of no typing
+                }
+            }
+        });
+    }
+
+    // Node title - save title changes to node
+    if (nodeTitleDisplay) {
+        nodeTitleDisplay.addEventListener('input', () => {
+            if (projectManager && selectedNodeId) {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (node) {
+                    node.title = nodeTitleDisplay.textContent || '';
+                    // Save to storage with debounced approach
+                    clearTimeout((nodeTitleDisplay as any)._saveTimeout);
+                    (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {
+                        projectManager!.saveToStorage().catch(console.error);
+                        // Re-render tree to show updated title
+                        renderMultiProjectTree();
+                    }, 1000); // Save after 1 second of no typing
+                }
+            }
+        });
     }
 }
 
@@ -1072,148 +1144,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     return html;
 }
 
-function showInheritedContextOverlay(projectManager: ProjectManager, node: DocumentNode) {
-    // Get the context panel to match its dimensions
-    const contextSection = document.querySelector('.node-section:has(#node-context)') as HTMLElement;
-    if (!contextSection) return;
 
-                contextSection.getBoundingClientRect();
-
-    // Collect inherited contexts from parent chain
-    const inheritedContexts: Array<{title: string, level: string, context: string}> = [];
-    
-    // Walk up the parent chain
-    let currentNode = node.parentId ? projectManager.findNodeById(node.parentId) : null;
-    let pathParts: Array<{title: string, level: string, context: string}> = [];
-    
-    while (currentNode) {
-        if (currentNode.context && currentNode.context.trim()) {
-            const levelName = currentNode.template[currentNode.level] || `Level ${currentNode.level}`;
-            pathParts.unshift({
-                title: currentNode.title,
-                level: levelName,
-                context: currentNode.context
-            });
-        }
-        currentNode = currentNode.parentId ? projectManager.findNodeById(currentNode.parentId) : null;
-    }
-    
-    inheritedContexts.push(...pathParts);
-
-    // Create overlay content
-    let contentHtml = '';
-    if (inheritedContexts.length === 0) {
-        contentHtml = '<div style="color: #6c757d; font-style: italic; text-align: center; padding: 2rem;">No inherited context found.<br>Add context to parent nodes to see inherited content here.</div>';
-    } else {
-        contentHtml = inheritedContexts.map((item, index) => `
-            <div style="margin-bottom: 1.5rem; padding-bottom: 1rem; ${index < inheritedContexts.length - 1 ? 'border-bottom: 1px solid #e9ecef;' : ''}">
-                <div style="font-weight: bold; font-size: 1rem; margin-bottom: 0.5rem; color: #495057;">
-                    ${item.level}: "${item.title}"
-                </div>
-                <div style="background-color: #f8f9fa; padding: 0.75rem; border-radius: 6px; border-left: 3px solid #007bff; white-space: pre-wrap; font-size: 0.9rem; line-height: 1.4;">
-                    ${item.context}
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Create overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'inherited-context-overlay';
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        box-sizing: border-box;
-    `;
-
-    overlay.innerHTML = `
-        <div class="inherited-context-content" style="
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
-            max-width: 800px;
-            max-height: 80vh;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-        ">
-            <div class="inherited-context-header" style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 1.5rem;
-                border-bottom: 1px solid #e5e7eb;
-                background-color: #f8f9fa;
-                border-radius: 12px 12px 0 0;
-            ">
-                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1f2937;">
-                    Inherited Context for "${node.title}"
-                </h3>
-                <button class="inherited-context-close-btn" type="button" style="
-                    background: #ef4444;
-                    color: white;
-                    border: none;
-                    border-radius: 50%;
-                    width: 32px;
-                    height: 32px;
-                    cursor: pointer;
-                    font-size: 1.2rem;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: background-color 0.2s;
-                " onmouseover="this.style.backgroundColor='#dc2626'" onmouseout="this.style.backgroundColor='#ef4444'">&times;</button>
-            </div>
-            <div class="inherited-context-body" style="
-                padding: 1.5rem;
-                overflow-y: auto;
-                flex: 1;
-                min-height: 0;
-            ">
-                ${contentHtml}
-            </div>
-        </div>
-    `;
-
-    // Add close functionality
-    const closeBtn = overlay.querySelector('.inherited-context-close-btn');
-    
-    const closeOverlay = () => {
-        overlay.remove();
-        document.removeEventListener('keydown', handleKeyDown);
-    };
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeOverlay);
-    }
-
-    // Close on overlay background click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            closeOverlay();
-        }
-    });
-
-    // Close on Escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            closeOverlay();
-        }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Add to DOM
-    document.body.appendChild(overlay);
-}
 
 function showPlaceholderOverlay(placeholder: string, projectManager: ProjectManager, selectedNodeId: string) {
     const node = projectManager.findNodeById(selectedNodeId);
@@ -1542,15 +1473,7 @@ This action cannot be undone.`;
                 }
                 break;
 
-            case 'node-show-inherited-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-                    
-                    showInheritedContextOverlay(projectManager, node);
-                }
-                break;
+
 
             // === NODE MANAGEMENT BUTTONS ===
             case 'delete-node-btn':
