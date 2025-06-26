@@ -246,15 +246,15 @@ export async function initialize() {
 
     // Attach event listeners
     try {
-        getElementById('settingsBtn').addEventListener('click', () => {
-            openSettingsModal();
-        });
+    getElementById('settingsBtn').addEventListener('click', () => {
+        openSettingsModal();
+    });
     } catch (error) {
         console.error('❌ Failed to attach settings button listener:', error);
     }
     
     try {
-        getElementById('runTestsBtn').addEventListener('click', async () => {
+    getElementById('runTestsBtn').addEventListener('click', async () => {
         const client = state.getOpenRouterClient();
         if (!client) {
             alert("API client not initialized. Cannot run tests.");
@@ -318,13 +318,13 @@ export async function initialize() {
             document.getElementById('runStorageTestsBtn')?.addEventListener('click', runStorageTests);
             document.getElementById('runAllTestsBtn')?.addEventListener('click', runAllTests);
         }, 100);
-        });
+    });
     } catch (error) {
         console.error('❌ Failed to attach run tests button listener:', error);
     }
     
     try {
-        getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
+    getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
     } catch (error) {
         console.error('❌ Failed to attach new project button listener:', error);
     }
@@ -407,22 +407,22 @@ export async function initialize() {
     }
     
     try {
-        getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
+    getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
     } catch (error) {
         console.error('❌ Failed to attach manage templates button listener:', error);
     }
     
     // Global abort button handler
     try {
-        getElementById('globalAbortBtn').addEventListener('click', () => {
-            const activeProject = state.getActiveProject();
-            if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
-                const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
-                if (confirmed) {
-                    activeProject.getGenerationService().abortCurrentGeneration();
-                }
+    getElementById('globalAbortBtn').addEventListener('click', () => {
+        const activeProject = state.getActiveProject();
+        if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
+            const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
+            if (confirmed) {
+                activeProject.getGenerationService().abortCurrentGeneration();
             }
-        });
+        }
+    });
     } catch (error) {
         console.error('❌ Failed to attach global abort button listener:', error);
     }
