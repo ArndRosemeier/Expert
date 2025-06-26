@@ -1220,7 +1220,7 @@ function showPlaceholderOverlay(placeholder: string, projectManager: ProjectMana
     if (!node) return;
 
     // Get the generation prompt panel (section) to match its dimensions
-    const promptSection = document.querySelector('.generation-prompt-section') as HTMLElement;
+    const promptSection = document.querySelector('.generation-section') as HTMLElement;
     if (!promptSection) return;
 
     const sectionRect = promptSection.getBoundingClientRect();
@@ -1342,16 +1342,23 @@ Please improve and expand this content.`;
     document.body.appendChild(overlay);
 }
 
+// The handleGenerationPanelButton function has been removed - all button handling is now unified in setupEventListeners
+
 export function setupEventListeners() {
     const mainContent = getElementById('main-content');
 
+    // === MAIN CONTENT EVENT DELEGATION ===
     mainContent.addEventListener('click', (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
         const button = e.target.closest('button');
         if (!button) return;
 
-        // Handle placeholder buttons
+
+
+        // === UNIFIED BUTTON HANDLER FOR ALL BUTTONS IN THE GUI ===
+        
+        // Handle placeholder buttons by data attribute
         if (button.classList.contains('placeholder-btn')) {
             const placeholder = button.getAttribute('data-placeholder');
             if (placeholder && projectManager && selectedNodeId) {
@@ -1360,11 +1367,192 @@ export function setupEventListeners() {
             return;
         }
 
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-
+        // Handle all other buttons by ID using the same pattern
         switch (button.id) {
+            // === GENERATION PANEL BUTTONS ===
+            case 'default-prompt-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                    const defaultPrompt = projectManager.getRawGenerationPrompt(node);
+                    generationPromptTextArea.value = defaultPrompt;
+                    node.generationPrompt = defaultPrompt;
+                }
+                break;
+
+            case 'node-generate-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Check if node state is Final and warn user
+                    if (node.getState() === 'Final') {
+                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
+                        const confirmMessage = `This node contains final content that will be replaced.
+
+Current content: "${contentPreview}"
+
+Are you sure you want to generate new content and replace the existing content?
+
+This action cannot be undone.`;
+                        
+                        if (!confirm(confirmMessage)) {
+                            return;
+                        }
+                    }
+                    
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                    node.generationPrompt = generationPromptTextArea.value;
+                    
+                    // Get the count from the input
+                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
+                    const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+                    
+                    // Use GenerationService directly
+                    projectManager.getGenerationService().generateNodeContent(node.id, count)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
+                }
+                break;
+
+            case 'node-generate-all-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    // Check if node has content (Draft or Final)
+                    if (node.getState() === 'Empty') {
+                        alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
+                        return;
+                    }
+                    
+                    // Use stored checkbox states instead of reading from DOM
+                    const includeContent = includeContentState;
+                    const recursive = recursiveState;
+                    
+                    // Collect all nodes that will be involved in this operation
+                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
+                        const nodeIds = [parentNode.id];
+                        for (const child of parentNode.children) {
+                            if (recursive) {
+                                nodeIds.push(...getAllInvolvedNodes(child));
+                            } else {
+                                nodeIds.push(child.id);
+                            }
+                        }
+                        return nodeIds;
+                    };
+                    
+                    const involvedNodeIds = getAllInvolvedNodes(node);
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodeIds);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+            
+                    // Use GenerationService directly
+                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
+                }
+                break;
+
+            case 'node-extract-context-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Import and open extract context modal
+                    import('./modal-manager').then(({ openExtractContextModal }) => {
+                        openExtractContextModal(projectManager!, node);
+                    }).catch((error: any) => {
+                        console.error('Failed to open extract context modal:', error);
+                        alert('Failed to open extract context dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'regenerate-ratings-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Check if node has content to rate
+                    if (!node.content || node.content.trim() === '') {
+                        alert('No content to rate. Please add content to this node first.');
+                        return;
+                    }
+                    
+                    const confirmMessage = `This will generate quality ratings for the current content.\n\nNote: This uses AI tokens and may take a moment to complete.\n\nDo you want to proceed?`;
+                    if (!confirm(confirmMessage)) {
+                        return;
+                    }
+                    
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+                    
+                    // Use the generation service to rate the content directly
+                    projectManager.getGenerationService().rateNodeContent(node.id)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                            // Switch back to content view and then to ratings view to show the new ratings
+                            const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
+                            if (showRatingsCheckbox) {
+                                showRatingsCheckbox.checked = true;
+                                toggleRatingsView(true);
+                            }
+                        })
+                        .catch((error) => {
+                            coordinator.completeOperation(operationId, false, error);
+                        });
+                }
+                break;
+
+            case 'node-show-inherited-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+                    
+                    showInheritedContextOverlay(projectManager, node);
+                }
+                break;
+
+            // === NODE MANAGEMENT BUTTONS ===
             case 'delete-node-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
@@ -1512,11 +1700,8 @@ export function setupEventListeners() {
 
                     // Import and open export modal
                     import('./modal-manager').then(({ openExportModal }) => {
-                        if (projectManager) {
-                            openExportModal(projectManager, node);
-                        }
+                        openExportModal(projectManager!, node);
                     }).catch(error => {
-        
                         alert('Failed to open export dialog. Please try again.');
                     });
                 }
@@ -1545,15 +1730,14 @@ export function setupEventListeners() {
                                 const content = event.target?.result as string;
                                 const importData = JSON.parse(content);
                                 
-                                // Import and merge the node data
+                                // Validate and import
                                 if (projectManager) {
                                     importNodeData(projectManager, node.id, importData);
                                     
-                                    // Refresh the UI
+                                    // Refresh the UI to show imported content
                                     renderProjectUI(projectManager);
                                 }
                                 
-                                alert('Import completed successfully!');
                             } catch (error) {
                                 console.error('Import failed:', error);
                                 alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
@@ -1573,256 +1757,8 @@ export function setupEventListeners() {
                     document.body.removeChild(fileInput);
                 }
                 break;
-                
-            case 'node-generate-btn':
-                {
-                    // Check if node state is Final and warn user
-                    if (node.getState() === 'Final') {
-                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
-                        const confirmMessage = `This node contains final content that will be replaced.
 
-Current content: "${contentPreview}"
-
-Are you sure you want to generate new content and replace the existing content?
-
-This action cannot be undone.`;
-                        
-                        if (!confirm(confirmMessage)) {
-                            return; // User cancelled
-                        }
-                    }
-                    
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    node.generationPrompt = generationPromptTextArea.value;
-                    
-                    // Get the count from the input
-                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                    const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-                    
-                    // Use GenerationService directly
-                    projectManager.getGenerationService().generateNodeContent(node.id, count)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                        })
-                        .catch((error) => {
-                            coordinator.completeOperation(operationId, false, error);
-                        });
-                }
-                break;
-
-            case 'node-show-inherited-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-                    
-                    showInheritedContextOverlay(projectManager, node);
-                }
-                break;
-
-            case 'node-extract-context-btn':
-                {
-                    // Enhanced debugging and defensive coding for extract context button
-                    console.log('Extract context button clicked', { 
-                        projectManager: !!projectManager, 
-                        selectedNodeId,
-                        buttonExists: !!document.getElementById('node-extract-context-btn'),
-                        buttonDisabled: document.getElementById('node-extract-context-btn')?.hasAttribute('disabled')
-                    });
-                    
-                    // Additional check: verify the button actually exists and is enabled
-                    const extractBtn = document.getElementById('node-extract-context-btn') as HTMLButtonElement;
-                    if (!extractBtn) {
-                        console.error('Extract context: Button not found in DOM');
-                        alert('Extract context button not found. Please try refreshing the page.');
-                        return;
-                    }
-                    
-                    if (extractBtn.disabled) {
-                        console.log('Extract context: Button is disabled, ignoring click');
-                        return;
-                    }
-                    
-                    if (!projectManager) {
-                        console.error('Extract context: No project manager available');
-                        alert('No project is currently loaded. Please try reloading the page.');
-                        return;
-                    }
-                    
-                    if (!selectedNodeId) {
-                        console.error('Extract context: No node selected');
-                        alert('No node is selected. Please select a node first.');
-                        return;
-                    }
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) {
-                        console.error('Extract context: Node not found', { selectedNodeId });
-                        alert('Selected node not found. Please try selecting the node again.');
-                        return;
-                    }
-
-                    // Verify that the context extraction service is available
-                    try {
-                        const contextService = projectManager.getContextExtractionService();
-                        if (!contextService) {
-                            console.error('Extract context: Context extraction service not available');
-                            alert('Context extraction service is not available. Please try reloading the page.');
-                            return;
-                        }
-                    } catch (error) {
-                        console.error('Extract context: Error getting context service', error);
-                        alert('Error accessing context extraction service. Please try reloading the page.');
-                        return;
-                    }
-
-                    // Import and open extract context modal
-                    import('./modal-manager').then(({ openExtractContextModal }) => {
-                        // Double-check that projectManager is still valid
-                        if (!projectManager) {
-                            console.error('Extract context: Project manager became null during import');
-                            alert('Project manager became unavailable. Please try again.');
-                            return;
-                        }
-                        
-                        // Re-verify node exists
-                        if (!selectedNodeId) {
-                            console.error('Extract context: Node selection lost during import');
-                            alert('Node selection was lost. Please select a node again.');
-                            return;
-                        }
-                        const currentNode = projectManager.findNodeById(selectedNodeId);
-                        if (!currentNode) {
-                            console.error('Extract context: Node became unavailable during import');
-                            alert('Node became unavailable. Please try selecting it again.');
-                            return;
-                        }
-                        
-                
-                        openExtractContextModal(projectManager, currentNode);
-                    }).catch(error => {
-        
-                        alert('Failed to open extract context dialog. Please try again.\n\nError: ' + error.message);
-                    });
-                }
-                break;
-            
-            case 'default-prompt-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    const rawPrompt = projectManager.getRawGenerationPrompt(node);
-                    const promptTextarea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    
-                    node.generationPrompt = rawPrompt;
-                    if (promptTextarea) {
-                        promptTextarea.value = rawPrompt;
-                    }
-                    projectManager.saveToStorage().catch(console.error);
-                }
-                break;
-
-
-
-
-
-            case 'node-generate-all-btn':
-                {
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    // Check if node has content (Draft or Final)
-                    if (node.getState() === 'Empty') {
-                        alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
-                        return;
-                    }
-                    
-                    // Use stored checkbox states instead of reading from DOM
-                    const includeContent = includeContentState;
-                    const recursive = recursiveState;
-                    
-                    // Collect all nodes that will be involved in this operation
-                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
-                        const nodeIds = [parentNode.id];
-                        for (const child of parentNode.children) {
-                            if (recursive) {
-                                nodeIds.push(...getAllInvolvedNodes(child));
-                            } else {
-                                nodeIds.push(child.id);
-                            }
-                        }
-                        return nodeIds;
-                    };
-                    
-                    const involvedNodeIds = getAllInvolvedNodes(node);
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodeIds);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-            
-                    // Use GenerationService directly
-                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                        })
-                        .catch((error) => {
-                            coordinator.completeOperation(operationId, false, error);
-                        });
-                }
-                break;
-
-            case 'regenerate-ratings-btn':
-                {
-                    // Check if node has content to rate
-                    if (!node.content || node.content.trim() === '') {
-                        alert('No content to rate. Please add content to this node first.');
-                        return;
-                    }
-                    
-                    const confirmMessage = `This will generate quality ratings for the current content.\n\nNote: This uses AI tokens and may take a moment to complete.\n\nDo you want to proceed?`;
-                    if (!confirm(confirmMessage)) {
-                        return;
-                    }
-                    
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-                    
-                    // Use the generation service to rate the content directly
-                    projectManager.getGenerationService().rateNodeContent(node.id)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                            // Switch back to content view and then to ratings view to show the new ratings
-                            const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
-                            if (showRatingsCheckbox) {
-                                showRatingsCheckbox.checked = true;
-                                toggleRatingsView(true);
-                            }
-                        })
-                        .catch((error) => {
-                            coordinator.completeOperation(operationId, false, error);
-                        });
-                }
-                break;
-
+            // === VERSION NAVIGATION BUTTONS ===
             case 'version-prev-btn':
                 navigateToVersion('prev');
                 break;
@@ -1835,10 +1771,35 @@ This action cannot be undone.`;
                 useCurrentVersion();
                 break;
 
+            // === READER VIEW BUTTON ===
+            case 'open-reader-btn':
+                {
+                    if (!projectManager) {
+                        alert('No project is currently active. Please create or select a project first.');
+                        return;
+                    }
+                    
+                    openReaderView(projectManager, (nodeId: string) => {
+                        // Optional callback when navigating to a node from reader
+                        selectedNodeId = nodeId;
+                        renderNodeDetails();
+                    }).catch((error) => {
+                        console.error('Failed to open reader view:', error);
+                        alert('Failed to open reader view. Please try again.');
+                    });
+                }
+                break;
 
+            // === MAIN APP BUTTONS (from event-handlers.ts) ===
+            // These could be moved here for true unification if desired
+            
+            default:
+                // No handler found - this is fine, not all buttons need handling
+                break;
         }
     });
 
+    // === NON-CLICK EVENT LISTENERS ===
     mainContent.addEventListener('change', (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
@@ -1847,86 +1808,12 @@ This action cannot be undone.`;
             const settingsManager = state.getSettingsManager();
             if (settingsManager) {
                 settingsManager.setLastUsedProfile(select.value);
-    
             }
         } else if (e.target.id === 'show-ratings-checkbox') {
             const checkbox = e.target as HTMLInputElement;
             toggleRatingsView(checkbox.checked);
         }
     });
-
-    mainContent.addEventListener('click', (e) => {
-        if (!e.target || !(e.target instanceof HTMLElement)) return;
-
-        if (e.target.id === 'open-reader-btn') {
-            if (!projectManager) {
-                alert('No project is currently loaded.');
-                return;
-            }
-            
-            // Open reader view with navigation callback
-            openReaderView(projectManager, (nodeId: string) => {
-                // Navigate to the node in the main editor
-                selectedNodeId = nodeId;
-                if (projectManager) {
-                    renderProjectUI(projectManager);
-                }
-                // Close reader view after navigation
-                const readerContainer = document.getElementById('reader-container');
-                if (readerContainer) {
-                    readerContainer.style.display = 'none';
-                }
-            }).catch(error => {
-                console.error('Failed to open reader view:', error);
-                alert('Failed to open reader view. Please try again.');
-            });
-        }
-    });
-
-     mainContent.addEventListener('input', (e) => {
-        if (!e.target || !(e.target instanceof HTMLElement)) return;
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-
-        if (e.target.id === 'node-generation-prompt') {
-            node.generationPrompt = (e.target as HTMLTextAreaElement).value;
-            projectManager.saveToStorage().catch(console.error);
-        } else if (e.target.id === 'node-content') {
-            const textarea = e.target as HTMLTextAreaElement;
-            node.content = textarea.value;
-            projectManager.saveToStorage().catch(console.error);
-        } else if (e.target.id === 'node-context') {
-            node.context = (e.target as HTMLTextAreaElement).value;
-            projectManager.saveToStorage().catch(console.error);
-        } else if (e.target.id === 'generation-count-input') {
-            const countInput = e.target as HTMLInputElement;
-            const count = parseInt(countInput.value, 10);
-            if (!isNaN(count) && count >= 1 && count <= 20) {
-                node.generationChildrenCount = count;
-                projectManager.saveToStorage().catch(console.error);
-            }
-        }
-    });
-
-    mainContent.addEventListener('blur', (e) => {
-        if (!e.target || !(e.target instanceof HTMLElement)) return;
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        if (e.target.id === 'node-title-display') {
-            node.title = (e.target as HTMLElement).textContent || '';
-            
-            // If this is the root node, also update the project title
-            if (node.id === projectManager.rootNode.id) {
-                projectManager.projectTitle = node.title;
-            }
-            
-            projectManager.saveToStorage().catch(console.error);
-            renderTree(); // Re-render tree to show new title
-        }
-    }, true); // Use capture phase to ensure it fires
 }
 
 export function initializeProjectUI(manager?: ProjectManager) {

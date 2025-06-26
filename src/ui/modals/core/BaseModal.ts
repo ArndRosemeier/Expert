@@ -39,11 +39,12 @@ export abstract class BaseModal implements IModal {
         this.state.isOpening = true;
         
         try {
-            // Call lifecycle hook
+            // Create and show modal first
+            await this.createModal();
+            
+            // Call lifecycle hook AFTER DOM is ready
             await this.hooks.onOpen?.();
             
-            // Create and show modal
-            await this.createModal();
             this.state.isOpen = true;
             this.state.isOpening = false;
             

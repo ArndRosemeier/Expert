@@ -18,8 +18,7 @@ import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseG
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
-    console.log('🔓 openGenericModal - using new modal system only');
-    newOpenGenericModal(content, onOpen);
+        newOpenGenericModal(content, onOpen);
 }
 
 export function closeGenericModal() {
@@ -148,8 +147,8 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                 
                 if (!templateManager) {
                     throw new Error('Template manager not available');
-                }
-                
+}
+
                 // Try to find a suitable template based on the depth
                 const templateNames = templateManager.getTemplateNames();
                 let bestTemplate: ProjectTemplate | null = null;

@@ -207,25 +207,10 @@ async function loadPersistedProjects(): Promise<void> {
 
 export async function initialize() {
     // Validate DOM elements are available
-    console.log('🔧 Starting DOM validation...');
     try {
         validateDOMElements();
-        console.log('✅ DOM validation passed');
     } catch (error) {
         console.error('❌ DOM validation failed:', error);
-        console.log('Available elements:', {
-            'main-app': !!document.getElementById('main-app'),
-            'settingsBtn': !!document.getElementById('settingsBtn'),
-            'modal-container': !!document.getElementById('modal-container'),
-            'modal-content': !!document.getElementById('modal-content'),
-            'test-modal-container': !!document.getElementById('test-modal-container'),
-            'test-modal-content': !!document.getElementById('test-modal-content'),
-            'runTestsBtn': !!document.getElementById('runTestsBtn'),
-            'newProjectBtn': !!document.getElementById('newProjectBtn'),
-            'importProjectBtn': !!document.getElementById('importProjectBtn'),
-            'new-project-modal-container': !!document.getElementById('new-project-modal-container'),
-            'new-project-modal-content': !!document.getElementById('new-project-modal-content')
-        });
         // Continue execution even if validation fails
     }
     
@@ -260,13 +245,10 @@ export async function initialize() {
     initializeProjectUI();
 
     // Attach event listeners
-    console.log('🔗 Attaching event listeners...');
-    
     try {
         getElementById('settingsBtn').addEventListener('click', () => {
             openSettingsModal();
         });
-        console.log('✅ Settings button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach settings button listener:', error);
     }
@@ -337,21 +319,18 @@ export async function initialize() {
             document.getElementById('runAllTestsBtn')?.addEventListener('click', runAllTests);
         }, 100);
         });
-        console.log('✅ Run Tests button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach run tests button listener:', error);
     }
     
     try {
         getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
-        console.log('✅ New Project button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach new project button listener:', error);
     }
     
     try {
         getElementById('importProjectBtn').addEventListener('click', () => {
-            console.log('🚀 Import Project button clicked!');
             
             // Create file input element (same as node import)
             const fileInput = document.createElement('input');
@@ -423,14 +402,12 @@ export async function initialize() {
             fileInput.click();
             document.body.removeChild(fileInput);
         });
-        console.log('✅ Import Project button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach import project button listener:', error);
     }
     
     try {
         getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);
-        console.log('✅ Manage Templates button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach manage templates button listener:', error);
     }
@@ -446,7 +423,6 @@ export async function initialize() {
                 }
             }
         });
-        console.log('✅ Global Abort button listener attached');
     } catch (error) {
         console.error('❌ Failed to attach global abort button listener:', error);
     }

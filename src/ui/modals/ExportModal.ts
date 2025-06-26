@@ -363,10 +363,10 @@ export class ExportModal extends BaseModal {
             // Use the performExport method which handles the complete export process
             await this.exportService.performExport(
                 this.projectManager,
-                this.node,
-                scope,
+                    this.node,
+                    scope,
                 format
-            );
+                );
 
             this.close();
 
