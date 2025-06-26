@@ -479,12 +479,12 @@ export class GenerationService {
                     const updatedNode = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
                     if (!updatedNode || !updatedNode.content || updatedNode.content.trim() === '') {
                         this.deps.eventEmitter.emit('error', `Failed to generate content for "${node.title}". Cannot proceed with creating children.`);
-                        // Clean up generation state before returning
+                        // Clean up generation state before throwing
                         if (this.isGeneratingAllChildren) {
                             this.isGeneratingAllChildren = false;
                             this.deps.generationController.clearGenerationContext();
                         }
-                        return;
+                        throw new Error(`Failed to generate content for "${node.title}". Cannot proceed with creating children.`);
                     }
                     // Update node reference for subsequent operations
                     node = updatedNode;
@@ -494,21 +494,21 @@ export class GenerationService {
                         return;
                     }
                     this.deps.eventEmitter.emit('error', `Failed to generate content for "${node.title}": ${error.message}`);
-                    // Clean up generation state before returning
+                    // Clean up generation state before throwing
                     if (this.isGeneratingAllChildren) {
                         this.isGeneratingAllChildren = false;
                         this.deps.generationController.clearGenerationContext();
                     }
-                    return;
+                    throw new Error(`Failed to generate content for "${node.title}": ${error.message}`);
                 }
             } else {
                 this.deps.eventEmitter.emit('error', `Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first, or enable "Include content" to auto-generate it.`);
-                // Clean up generation state before returning
+                // Clean up generation state before throwing
                 if (this.isGeneratingAllChildren) {
                     this.isGeneratingAllChildren = false;
                     this.deps.generationController.clearGenerationContext();
                 }
-                return;
+                throw new Error(`Cannot generate children for node "${node.title}": No content found. Please write or generate content for this node first, or enable "Include content" to auto-generate it.`);
             }
         }
 
@@ -558,7 +558,7 @@ export class GenerationService {
                     this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
                     this.isGeneratingAllChildren = false;
                     this.deps.generationController.clearGenerationContext();
-                    return;
+                    throw new Error(`The AI did not return a valid list of titles from the outline.`);
                 }
 
                 nodeItems.forEach(item => {
@@ -570,12 +570,12 @@ export class GenerationService {
                 });
 
                 await this.deps.saveToStorage();
-            } catch(error) {
+            } catch(error: any) {
                 console.error('Failed to create children from outline via LLM:', error);
                 this.deps.eventEmitter.emit('error', 'The AI failed to process the outline. Please try again.');
                 this.isGeneratingAllChildren = false;
                 this.deps.generationController.clearGenerationContext();
-                return;
+                throw new Error(`The AI failed to process the outline: ${error.message || error}`);
             }
         } else {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });

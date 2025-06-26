@@ -25,6 +25,9 @@ export interface OrchestratorPrompts {
     
     // For text expansion (generic)
     expand_text_user: string;
+    
+    // For node chat system prompt
+    node_chat_system: string;
 }
 
 export const defaultPrompts: OrchestratorPrompts = {
@@ -210,7 +213,28 @@ Please extract and list all instances of: {{extraction_request}}
 
 Format your response as a clear, organized summary that would be useful for reference.`,
 
-    expand_text_user: ``,
+    expand_text_user: `You are an expert at expanding and developing written content. Take the following text and create a more detailed, comprehensive version while maintaining the original meaning and tone.
+
+Original text:
+---
+{{content}}
+---
+
+Please expand this text to make it more detailed and complete. Focus on adding depth, examples, and clarity while preserving the core message and writing style.`,
+
+    node_chat_system: `You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
+
+{{node_data}}
+
+The user can ask you questions about this content, request edits, analysis, or suggestions for improvement. You should:
+
+1. Reference specific parts of the node hierarchy when relevant
+2. Provide helpful suggestions for content development
+3. Offer to help with editing, expansion, or restructuring
+4. Answer questions about the content structure and relationships
+5. Suggest improvements to writing quality, clarity, or organization
+
+You have full context about the document structure and content. Be helpful, specific, and actionable in your responses.`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -227,6 +251,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     context_synthesis_user: ['parent_context', 'node_content'],
     context_extraction_user: ['extraction_request', 'node_title', 'content'],
     expand_text_user: ['content', 'path', 'context', 'title'],
+    node_chat_system: ['node_data'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {

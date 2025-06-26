@@ -78,6 +78,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getGenerationController(): GenerationController { return this.generationController; }
     public getContextExtractionService(): ContextExtractionService { return this.contextExtractionService; }
     public getGenerationCoordinator(): GenerationCoordinator { return this.generationCoordinator; }
+    public getSettingsManager(): SettingsManager { return this.settingsManager; }
 
 
     constructor(

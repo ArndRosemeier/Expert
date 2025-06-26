@@ -179,4 +179,111 @@ export class ContextExtractionService {
         
         return { errors, warnings };
     }
+
+    /**
+     * Creates a structured representation of the node tree for chat context.
+     * @param node The root node to create tree data for
+     * @param rootNode The project root node for full hierarchy access
+     * @param depth How deep to traverse
+     * @returns Formatted tree data string for chat context
+     */
+    public createNodeTreeData(node: DocumentNode, _rootNode: DocumentNode, depth: number): string {
+        const nodeData = this.collectTreeDataAtDepth(node, depth);
+        
+        // Format the tree data for the chat prompt
+        let treeData = `Node Hierarchy (${depth + 1} levels deep):\n\n`;
+        treeData += nodeData;
+        
+        return treeData;
+    }
+
+    /**
+     * Collects tree data (title, content, structure) at the specified depth.
+     * @param node The root node
+     * @param depth Maximum depth to traverse
+     * @param currentDepth Current traversal depth
+     * @param prefix Indentation prefix for tree structure
+     * @returns Formatted tree structure
+     */
+    private collectTreeDataAtDepth(node: DocumentNode, depth: number, currentDepth: number = 0, prefix: string = ''): string {
+        const parts: string[] = [];
+        
+        // Add current node information
+        const levelName = node.template[node.level] || `Level ${node.level}`;
+        let nodeInfo = `${prefix}${levelName}: "${node.title}"`;
+        
+        if (node.content && node.content.trim()) {
+            // Include a summary or truncated content for context
+            const contentPreview = node.content.length > 200 
+                ? node.content.substring(0, 200) + '...' 
+                : node.content;
+            nodeInfo += `\n${prefix}  Content: ${contentPreview}`;
+        } else {
+            nodeInfo += `\n${prefix}  [No content]`;
+        }
+        
+        parts.push(nodeInfo);
+        
+        // If we haven't reached the depth limit, include children
+        if (currentDepth < depth && node.children.length > 0) {
+            for (const child of node.children) {
+                const childData = this.collectTreeDataAtDepth(child, depth, currentDepth + 1, prefix + '  ');
+                parts.push(childData);
+            }
+        }
+        
+        return parts.join('\n');
+    }
+
+    /**
+     * Gets a preview of what tree structure would be included in the chat.
+     * @param node The root node
+     * @param depth The depth to traverse
+     * @returns Preview summary for UI display
+     */
+    public getChatTreePreview(node: DocumentNode, depth: number): { nodeCount: number, summary: string } {
+        const nodes = this.collectNodesAtDepth(node, depth);
+        const nodesWithContent = nodes.filter(n => n.content && n.content.trim());
+        
+        let summary = `Tree Structure Preview:\n\n`;
+        summary += `Starting from: "${node.title}"\n`;
+        summary += `Depth: ${depth} levels\n`;
+        summary += `Total nodes: ${nodes.length}\n`;
+        summary += `Nodes with content: ${nodesWithContent.length}\n\n`;
+        
+        // Show a simplified tree structure
+        summary += this.createSimpleTreePreview(node, depth);
+        
+        return {
+            nodeCount: nodes.length,
+            summary
+        };
+    }
+
+    /**
+     * Creates a simple tree preview for UI display.
+     * @param node The root node
+     * @param depth Maximum depth
+     * @param currentDepth Current depth
+     * @param prefix Indentation prefix
+     * @returns Simple tree structure preview
+     */
+    private createSimpleTreePreview(node: DocumentNode, depth: number, currentDepth: number = 0, prefix: string = ''): string {
+        const parts: string[] = [];
+        
+        // Add current node
+        const hasContent = node.content && node.content.trim();
+        const levelName = node.template[node.level] || `Level ${node.level}`;
+        parts.push(`${prefix}${levelName}: "${node.title}" ${hasContent ? '✓' : '○'}`);
+        
+        // Add children if within depth
+        if (currentDepth < depth && node.children.length > 0) {
+            for (const child of node.children) {
+                const childPreview = this.createSimpleTreePreview(child, depth, currentDepth + 1, prefix + '  ');
+                parts.push(childPreview);
+            }
+        }
+        
+        return parts.join('\n');
+    }
 } 

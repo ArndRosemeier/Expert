@@ -326,7 +326,8 @@ export class PromptManagementService {
             prompt_for_child_generation_prompt: "Creates generation prompts for new child nodes.",
             context_synthesis_user: "Combines parent context with node content to create focused context for child generation.",
             context_extraction_user: "Analyzes node content to extract specific information (characters, places, themes, etc.).",
-            expand_text_user: "Simple prompt for expanding text with more detail."
+            expand_text_user: "Simple prompt for expanding text with more detail.",
+            node_chat_system: "System prompt for the chat interface when chatting about specific nodes."
         };
 
         return descriptions[key] || null;
@@ -350,6 +351,7 @@ export class PromptManagementService {
             context_synthesis_user: ['parent_context', 'node_content'],
             context_extraction_user: ['extraction_request', 'node_title', 'content'],
             expand_text_user: ['content', 'path', 'context', 'title'],
+            node_chat_system: ['node_data'],
         };
 
         return placeholders[key] || [];

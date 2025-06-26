@@ -479,6 +479,9 @@ export function renderNodeDetails() {
                 <button id="import-node-btn" class="button button-secondary" style="background-color: #10b981; color: white; border-color: #10b981;">
                     📥 Import
                 </button>
+                <button id="chat-node-btn" class="button button-secondary" style="background-color: #f59e0b; color: white; border-color: #f59e0b;">
+                    💬 Chat
+                </button>
             </div>
         </div>
 
@@ -1404,11 +1407,15 @@ This action cannot be undone.`;
                     }
             
                     // Use GenerationService directly
+                    console.log('🚀 Starting generateAllChildrenContent with:', { nodeId: node.id, includeContent, recursive });
                     projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
                         .then(() => {
+                            console.log('✅ generateAllChildrenContent completed successfully');
                             coordinator.completeOperation(operationId, true);
                         })
                         .catch((error) => {
+                            console.error('❌ generateAllChildrenContent failed:', error);
+                            console.error('Error details:', error);
                             coordinator.completeOperation(operationId, false, error);
                         });
                 }
@@ -1678,6 +1685,22 @@ This action cannot be undone.`;
                     document.body.appendChild(fileInput);
                     fileInput.click();
                     document.body.removeChild(fileInput);
+                }
+                break;
+
+            case 'chat-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Import and open chat modal
+                    import('./modal-manager').then(({ openNodeChatModal }) => {
+                        openNodeChatModal(projectManager!, node);
+                    }).catch(error => {
+                        console.error('Failed to open chat modal:', error);
+                        alert('Failed to open chat dialog. Please try again.');
+                    });
                 }
                 break;
 

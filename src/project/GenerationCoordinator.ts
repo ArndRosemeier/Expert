@@ -196,10 +196,11 @@ export class GenerationCoordinator {
             this.hideGenerationOverlay();
             this.hideGlobalAbortButton();
 
-            // Handle errors
-            if (!success && error && !error.message?.includes('aborted')) {
+            // Handle errors - ALWAYS show them for debugging
+            if (!success && error) {
                 console.error('Generation operation failed:', error);
-                alert(`Generation failed: ${error.message}`);
+                console.error('Full error details:', error);
+                alert(`Generation failed: ${error.message || error}`);
             }
         }
     }

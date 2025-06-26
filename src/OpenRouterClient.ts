@@ -6,6 +6,7 @@ export interface OpenRouterMessage {
 export interface OpenRouterRequest {
   model: string;
   messages: OpenRouterMessage[];
+  stream?: boolean;
 }
 
 export interface OpenRouterResponse {
@@ -33,6 +34,13 @@ export interface OpenRouterModelsResponse {
 
 import { AILogService } from './AILogService';
 import { SettingsManager } from './SettingsManager';
+
+export interface StreamingCallbacks {
+  onStart?: () => void;
+  onChunk?: (chunk: string) => void;
+  onComplete?: (fullContent: string) => void;
+  onError?: (error: Error) => void;
+}
 
 export class OpenRouterClient {
   private apiKey: string;
@@ -109,6 +117,7 @@ export class OpenRouterClient {
     
     try {
       const response = await this.sendMessage(request, abortSignal);
+      
       const answer = response.choices?.[0]?.message?.content ?? '';
       const duration = Date.now() - startTime;
 
@@ -175,7 +184,8 @@ export class OpenRouterClient {
       });
 
       if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -201,5 +211,162 @@ export class OpenRouterClient {
     }
     const data: OpenRouterModelsResponse = await response.json();
     return data.data;
+  }
+
+  /**
+   * Send a streaming chat message for a given purpose. Always uses role 'user'.
+   * Calls onContent for each chunk and onComplete when finished.
+   */
+  async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, abortSignal?: AbortSignal): Promise<void> {
+    const model = this.getModelForPurpose(purpose);
+
+    if (!model) {
+      const error = new Error(`No model configured for purpose: ${purpose}`);
+      callbacks.onError?.(error);
+      throw error;
+    }
+
+    const startTime = Date.now();
+    const request: OpenRouterRequest = {
+      model,
+      messages,
+      stream: true
+    };
+    
+    try {
+      // Create abort controller for this request
+      this.currentAbortController = new AbortController();
+      
+      // If external abort signal is provided, listen to it and abort our controller
+      if (abortSignal) {
+        abortSignal.addEventListener('abort', () => {
+          if (this.currentAbortController) {
+            this.currentAbortController.abort();
+          }
+        });
+      }
+
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(request),
+        signal: this.currentAbortController.signal
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const error = new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
+        callbacks.onError?.(error);
+        throw error;
+      }
+
+      if (!response.body) {
+        const error = new Error('Response body is null');
+        callbacks.onError?.(error);
+        throw error;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              if (data === '[DONE]') {
+                continue;
+              }
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                
+                if (content) {
+                  fullContent += content;
+                  callbacks.onChunk?.(content);
+                }
+              } catch (parseError) {
+                // Ignore JSON parse errors for partial chunks
+                continue;
+              }
+            }
+          }
+        }
+        
+        const duration = Date.now() - startTime;
+        
+        // Log the interaction if logging is enabled
+        if (this.settingsManager?.isAILoggingEnabled()) {
+          try {
+            await this.aiLogService.addLogEntry({
+              timestamp: new Date(),
+              purpose,
+              prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+              response: fullContent,
+              model,
+              requestDuration: duration
+            });
+          } catch (logError) {
+            console.error('Failed to log AI interaction:', logError);
+          }
+        }
+        
+        callbacks.onComplete?.(fullContent);
+        
+      } finally {
+        reader.releaseLock();
+      }
+      
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        const abortError = new Error('Request was aborted');
+        callbacks.onError?.(abortError);
+        throw abortError;
+      }
+      
+      // Log failed requests too if logging is enabled
+      if (this.settingsManager?.isAILoggingEnabled()) {
+        try {
+          const duration = Date.now() - startTime;
+          await this.aiLogService.addLogEntry({
+            timestamp: new Date(),
+            purpose,
+            prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+            response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            model,
+            requestDuration: duration
+          });
+        } catch (logError) {
+          console.error('Failed to log AI interaction error:', logError);
+        }
+      }
+      
+      callbacks.onError?.(error);
+      throw error;
+    } finally {
+      this.currentAbortController = null;
+    }
+  }
+
+  /**
+   * Stream a conversation with multiple messages for a given purpose.
+   * This is the method expected by the chat interface.
+   */
+  async chatStreamConversation(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, abortSignal?: AbortSignal): Promise<void> {
+    callbacks.onStart?.();
+    return this.streamingChat(purpose, messages, callbacks, abortSignal);
   }
 } 

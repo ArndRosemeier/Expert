@@ -14,7 +14,7 @@ import { refreshGlobalProfileSelector } from './project-ui';
 // TODO: Migrate to new modal system
 // These functions are maintained for backward compatibility during migration
 
-import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal, ExportModal } from './modals/index';
+import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal, showGenericModal, ExportModal } from './modals/index';
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -997,4 +997,229 @@ function formatTimestamp(timestamp: Date): string {
 function truncateText(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
+}
+
+export function openNodeChatModal(projectManager: ProjectManager, node: DocumentNode) {
+    // Store modal reference so action handlers can close it
+    let modalInstance: any = null;
+    
+    const content = {
+        content: `
+            <style>
+                .modal-content { max-width: 800px; }
+                .chat-section { margin-bottom: 1.5rem; }
+                .chat-section label { display: block; font-weight: bold; margin-bottom: 0.5rem; }
+                .chat-section select, .chat-section textarea { 
+                    width: 100%; 
+                    padding: 0.75rem; 
+                    border: 1px solid var(--border-color); 
+                    border-radius: 8px;
+                    box-sizing: border-box;
+                }
+                .preview-section { 
+                    background-color: #f8f9fa; 
+                    border: 1px solid #e9ecef; 
+                    border-radius: 8px; 
+                    padding: 1rem; 
+                    margin-top: 1rem;
+                }
+                .button { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; }
+                .button-primary { background-color: #007bff; color: white; }
+                .button-secondary { background-color: #6c757d; color: white; }
+                .button:disabled { opacity: 0.6; cursor: not-allowed; }
+            </style>
+            <div class="modal-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
+                <h2 style="margin: 0;">Chat with Node</h2>
+            </div>
+            
+            <div class="chat-section">
+                <label for="chat-depth">Scope Depth:</label>
+                <select id="chat-depth">
+                    <option value="0">This node only</option>
+                    <option value="1">Include direct children</option>
+                    <option value="2">Include grandchildren (2 levels)</option>
+                    <option value="3">Include 3 levels deep</option>
+                    <option value="4">Include 4 levels deep</option>
+                    <option value="5">Include 5 levels deep</option>
+                </select>
+                <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                    Choose how deep in the hierarchy to include in the chat context.
+                </small>
+            </div>
+            
+            <div class="chat-section">
+                <button id="preview-tree-btn" class="button button-secondary" style="width: auto;">Preview Tree Structure</button>
+                <div id="tree-preview-container" class="preview-section" style="display: none;">
+                    <h4 style="margin: 0 0 0.5rem 0;">Tree Structure Preview:</h4>
+                    <div id="tree-preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
+                </div>
+            </div>
+        `,
+        actions: [
+            {
+                id: 'cancel',
+                label: 'Cancel',
+                type: 'secondary' as const,
+                handler: async () => {
+                    // Explicitly close the modal
+                    if (modalInstance) {
+                        modalInstance.close();
+                    }
+                }
+            },
+            {
+                id: 'start-chat',
+                label: 'Start Chat',
+                type: 'primary' as const,
+                handler: async () => {
+                    const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
+                    if (chatDepth) {
+                        const depth = parseInt(chatDepth.value);
+                        
+                        try {
+                            const contextService = projectManager.getContextExtractionService();
+                            
+                            // Create the tree data structure
+                            const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
+                            
+                            // Get the node chat system prompt
+                            const prompts = projectManager.getSettingsManager().getPrompts();
+                            const systemPrompt = prompts.node_chat_system.replace('{{node_data}}', treeData);
+                            
+                            // Close the modal first
+                            if (modalInstance) {
+                                modalInstance.close();
+                            }
+                            
+                            // Open the chat interface
+                            openNodeChatInterface(projectManager, systemPrompt, node.title);
+                            
+                        } catch (error: any) {
+                            alert('Error preparing chat:\n\n' + error.message);
+                            throw error; // Re-throw to prevent modal closing on error
+                        }
+                    }
+                }
+            }
+        ]
+    };
+    
+    modalInstance = showGenericModal(content, {}, { 
+        onOpen: () => {
+            // Set focus to the depth selector
+            const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
+            if (chatDepth) {
+                chatDepth.focus();
+            }
+            
+            // Setup preview functionality
+            const previewTreeBtn = document.getElementById('preview-tree-btn') as HTMLButtonElement;
+            const treePreviewContainer = document.getElementById('tree-preview-container');
+            const treePreviewContent = document.getElementById('tree-preview-content');
+            
+            if (previewTreeBtn && treePreviewContainer && treePreviewContent) {
+                previewTreeBtn.addEventListener('click', () => {
+                    const depth = parseInt(chatDepth.value);
+                    const contextService = projectManager.getContextExtractionService();
+                    const preview = contextService.getChatTreePreview(node, depth);
+                    
+                    treePreviewContent.textContent = preview.summary;
+                    treePreviewContainer.style.display = 'block';
+                });
+            }
+        }
+    });
+}
+
+
+
+function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string): void {
+    // Import necessary modules
+    import('./chat-interface').then(({ ChatInterface }) => {
+        import('../OpenRouterClient').then(({ OpenRouterClient }) => {
+            import('../state').then((stateModule) => {
+                // Get required services using the correct exports
+                const settingsManager = stateModule.getSettingsManager();
+                const modelSelector = stateModule.getModelSelector();
+                
+                if (!settingsManager || !modelSelector) {
+                    alert('Settings or model selector not available.');
+                    return;
+                }
+                
+                // Get OpenRouter API key from model selector
+                const apiKey = modelSelector.getApiKey();
+                if (!apiKey) {
+                    alert('OpenRouter API key not configured. Please set it in the settings first.');
+                    return;
+                }
+
+                // Get selected models from model selector
+                const modelConfigs = modelSelector.getSelectedModels();
+                if (!modelSelector.areAllModelsSelected()) {
+                    alert('Please configure all required models in the settings first.');
+                    return;
+                }
+
+                // Create OpenRouter client with the configured models
+                const openRouterClient = new OpenRouterClient(apiKey, modelConfigs);
+                openRouterClient.setSettingsManager(settingsManager);
+                
+                // Create modal overlay
+                const modalOverlay = document.createElement('div');
+                modalOverlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    z-index: 1000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                `;
+                
+                const modalContainer = document.createElement('div');
+                modalContainer.style.cssText = `
+                    width: 90%;
+                    height: 90%;
+                    max-width: 1200px;
+                    max-height: 800px;
+                    background: white;
+                    border-radius: 12px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                `;
+                
+                modalOverlay.appendChild(modalContainer);
+                document.body.appendChild(modalOverlay);
+                
+                // Create chat interface with custom system prompt and title
+                const chatInterface = new ChatInterface(openRouterClient, settingsManager, systemPrompt, nodeTitle);
+                chatInterface.initialize(modalContainer);
+                
+                // Close modal functionality
+                const closeModal = () => {
+                    document.body.removeChild(modalOverlay);
+                };
+                
+                modalOverlay.addEventListener('click', (e) => {
+                    if (e.target === modalOverlay) {
+                        closeModal();
+                    }
+                });
+                
+                document.addEventListener('keydown', function escapeHandler(e) {
+                    if (e.key === 'Escape') {
+                        closeModal();
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                });
+                
+            }).catch(console.error);
+        }).catch(console.error);
+    }).catch(console.error);
 }
