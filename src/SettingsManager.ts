@@ -117,6 +117,13 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Avoid overused fantasy/AI-generated names like Elara, Lyra, Lyria, Chen, Kai, Raven, Yuki, Marcus, Zara, Voss, Aria, Moonshadow, Seraphina, Ashwood, Clive, Maximilian, Everett, Benedict, Oswald, Rupert, Magnus, Stormrider, Dawnwalker, Shadowblade, Emberheart, Snowsong, Park, Johnson, Thorne, Alaric, Nyx, Orion, Cassian, Mira, Selene, Vale, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian. Instead, use more natural, varied names that feel authentic and less predictable. Do not change names that are already established.",
         outline: true,
         leaf: false
+    },
+    {
+        name: "Avoids Dramatic Reframing",
+        description: "The text avoids the 'It wasn't X. It was Y' pattern and similar dramatic recontextualizations that artificially inflate the significance of ordinary actions or objects. Examples to avoid: 'It wasn't just food. It was fuel,' 'He wasn't waiting. He was strategizing,' 'It wasn't defeat. It was a lesson.' The writing presents things directly without unnecessary dramatic reframing.",
+        goal: 8,
+        outline: true,
+        leaf: true
     }
 ];
 
