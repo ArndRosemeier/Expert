@@ -1502,7 +1502,7 @@ export class ReaderGUI {
                 this.setupActionsConfigEventListeners();
             });
         } catch (error) {
-            console.error('❌ Failed to open modal:', error);
+
         }
     }
 

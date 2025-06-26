@@ -196,7 +196,7 @@ export function showGenericModal(
     
     // Auto-open the modal
     modal.open().catch(error => {
-        console.error('Failed to open generic modal:', error);
+        
     });
 
     return modal;

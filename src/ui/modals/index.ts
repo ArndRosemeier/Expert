@@ -28,6 +28,43 @@ export { GenericModal, showGenericModal, showAlert, showConfirm } from './Generi
 import { showGenericModal, showAlert, showConfirm } from './GenericModal';
 import { getModalRegistry } from './core/ModalRegistry';
 
+// Phase 2: Service Layer and Components
+export { PromptManagementService } from './services/PromptManagementService';
+export { SettingsService } from './services/SettingsService';
+export { CriteriaEditor } from './components/CriteriaEditor';
+export { ProfileSelector } from './components/ProfileSelector';
+
+// Additional Phase 2 type exports
+export type { 
+    PromptManagementConfig, 
+    PromptChangeEvent,
+    CriteriaChangeEvent,
+    ProfileSelectionEvent,
+    ProfileActionEvent,
+    SettingsChangeEvent,
+    IPromptManagementService,
+    ISettingsService,
+    ICriteriaEditor,
+    IProfileSelector,
+    ModalFactoryConfig,
+    ModalComponentConfig
+} from './types/ModalTypes';
+
+// Phase 3: Complete Modal Implementations
+export { SettingsModal } from './SettingsModal';
+export { ExportModal } from './ExportModal';
+export { 
+    ModalFactory, 
+    createModalFactory,
+    setDefaultModalFactory,
+    getDefaultModalFactory,
+    openSettingsModal,
+    openExportModal,
+    showAlert as factoryAlert,
+    showConfirm as factoryConfirm,
+    showPrompt
+} from './ModalFactory';
+
 /**
  * Legacy compatibility functions
  */
@@ -45,7 +82,7 @@ export function openGenericModal(content: string, onOpen?: () => void): void {
 export function closeGenericModal(): void {
     const registry = getModalRegistry();
     registry.closeAll().catch(error => {
-        console.error('Failed to close modals:', error);
+
     });
 }
 
@@ -70,4 +107,9 @@ export function confirm(message: string, title?: string): Promise<boolean> {
             () => resolve(false)
         );
     });
-} 
+}
+
+// Test functions (for development)
+export { runAllTests as runModalSystemTests } from './test-integration';
+export { runPhase2Tests } from './test-phase2-services';
+export { Phase3TestRunner } from './test-phase3'; 

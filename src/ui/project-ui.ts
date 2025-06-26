@@ -1516,7 +1516,7 @@ export function setupEventListeners() {
                             openExportModal(projectManager, node);
                         }
                     }).catch(error => {
-                        console.error('Failed to load export modal:', error);
+        
                         alert('Failed to open export dialog. Please try again.');
                     });
                 }
@@ -1707,10 +1707,10 @@ This action cannot be undone.`;
                             return;
                         }
                         
-                        console.log('Opening extract context modal for node:', currentNode.title);
+                
                         openExtractContextModal(projectManager, currentNode);
                     }).catch(error => {
-                        console.error('Failed to load extract context modal:', error);
+        
                         alert('Failed to open extract context dialog. Please try again.\n\nError: ' + error.message);
                     });
                 }
@@ -1917,6 +1917,12 @@ This action cannot be undone.`;
         
         if (e.target.id === 'node-title-display') {
             node.title = (e.target as HTMLElement).textContent || '';
+            
+            // If this is the root node, also update the project title
+            if (node.id === projectManager.rootNode.id) {
+                projectManager.projectTitle = node.title;
+            }
+            
             projectManager.saveToStorage().catch(console.error);
             renderTree(); // Re-render tree to show new title
         }

@@ -1,5 +1,6 @@
 import { getElementById, newProjectModalContainer, testModalContainer } from './ui/dom-elements';
-import { openModal, closeModal, openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
@@ -34,7 +35,8 @@ function onModelsSelected(models: Record<string, string>) {
     activeProfile.selectedModels = models;
     settingsManager.saveProfile(activeProfileName, activeProfile);
 
-    closeModal();
+    // Settings modal now closes automatically after saving
+    // No need to explicitly close since SettingsModal manages its own lifecycle
 }
 
 function recreateAndReconfigureServices() {
@@ -111,12 +113,22 @@ export async function initialize() {
     const templateManager = new TemplateManager();
     state.setTemplateManager(templateManager);
     
-    const modelSelector = new ModelSelector(onModelsSelected, closeModal);
+    const modelSelector = new ModelSelector(onModelsSelected, () => {
+        // Settings modal now handles its own closing
+        // This callback is kept for ModelSelector compatibility
+    });
     state.setModelSelector(modelSelector);
 
     // Wait for async initialization to complete
     await settingsManager.waitForInitialization();
     await modelSelector.waitForInitialization();
+
+    // Initialize the modal factory with dependencies
+    const modalFactory = createModalFactory({
+        settingsManager,
+        modelSelector
+    });
+    setDefaultModalFactory(modalFactory);
 
     recreateAndReconfigureServices();
 
@@ -126,7 +138,9 @@ export async function initialize() {
     initializeProjectUI();
 
     // Attach event listeners
-    getElementById('settingsBtn').addEventListener('click', openModal);
+    getElementById('settingsBtn').addEventListener('click', () => {
+        openSettingsModal();
+    });
     getElementById('runTestsBtn').addEventListener('click', async () => {
         const client = state.getOpenRouterClient();
         if (!client) {
@@ -218,8 +232,7 @@ export async function initialize() {
     });
 
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
-
-        openModal();
+        openSettingsModal();
     } else if (!state.getActiveProject()) {
         openNewProjectModal(handleCreateProject);
     }

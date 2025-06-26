@@ -18,15 +18,12 @@ import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseG
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
-    console.log('🔍 openGenericModal called with content length:', content.length);
-    
     // Use new modal system
     try {
         newOpenGenericModal(content, onOpen);
-        console.log('✅ Using new modal system');
         return;
     } catch (error) {
-        console.warn('⚠️ New modal system failed, falling back to legacy:', error);
+        // Fallback to legacy implementation
     }
     
     // Fallback to legacy implementation
@@ -34,23 +31,14 @@ export function openGenericModal(content: string, onOpen?: () => void) {
     let container = document.getElementById('modal-container') as HTMLElement;
     let contentDiv = document.getElementById('modal-content') as HTMLElement;
     
-    console.log('🔍 Fresh container lookup:', !!container);
-    console.log('🔍 Fresh content lookup:', !!contentDiv);
-    
     if (container && contentDiv) {
-        console.log('✅ Setting modal content and showing...');
         contentDiv.innerHTML = content;
         container.style.display = 'flex';
-        console.log('✅ Modal display set to flex');
         if (onOpen) {
-            console.log('🎯 Calling onOpen callback...');
             onOpen();
         }
     } else {
-        console.error('❌ Modal container or content not found even with fresh lookup!');
-        
         // Fallback: create modal dynamically
-        console.log('🔧 Creating modal container dynamically...');
         container = document.createElement('div');
         container.id = 'dynamic-modal-container';
         container.className = 'modal-container';
@@ -64,9 +52,7 @@ export function openGenericModal(content: string, onOpen?: () => void) {
         container.appendChild(contentDiv);
         document.body.appendChild(container);
         
-        console.log('✅ Dynamic modal created and shown');
         if (onOpen) {
-            console.log('🎯 Calling onOpen callback...');
             onOpen();
         }
     }
@@ -76,10 +62,9 @@ export function closeGenericModal() {
     // Try new modal system first
     try {
         newCloseGenericModal();
-        console.log('✅ Using new modal system for close');
         return;
     } catch (error) {
-        console.warn('⚠️ New modal system close failed, using legacy:', error);
+        // Fallback to legacy implementation
     }
     
     // Fallback to legacy implementation
@@ -90,7 +75,6 @@ export function closeGenericModal() {
     if (container && contentDiv) {
         container.style.display = 'none';
         contentDiv.innerHTML = ''; // Clear content on close
-        console.log('✅ Original modal closed');
         return;
     }
     
@@ -98,11 +82,8 @@ export function closeGenericModal() {
     const dynamicContainer = document.getElementById('dynamic-modal-container');
     if (dynamicContainer) {
         dynamicContainer.remove();
-        console.log('✅ Dynamic modal removed');
         return;
     }
-    
-    console.warn('⚠️ No modal found to close');
 }
 
 
@@ -159,11 +140,9 @@ export function openExportModal(projectManager: ProjectManager, node: DocumentNo
             // Modal opens automatically by default
             
         } catch (error) {
-            console.error('Failed to open export modal:', error);
             alert('Failed to open export dialog. Please try again.');
         }
     }).catch(error => {
-        console.error('Failed to load export modal:', error);
         alert('Failed to load export modal. Please try again.');
     });
 }

@@ -75,7 +75,7 @@ export class SettingsModal extends BaseModal {
 
     // Simple emit method for compatibility
     private emit(eventName: string, data?: any): void {
-        console.log(`Settings modal event: ${eventName}`, data);
+        // Silent event emitter stub
     }
 
     /**
