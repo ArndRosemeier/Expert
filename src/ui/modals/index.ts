@@ -109,7 +109,4 @@ export function confirm(message: string, title?: string): Promise<boolean> {
     });
 }
 
-// Test functions (for development)
-export { runAllTests as runModalSystemTests } from './test-integration';
-export { runPhase2Tests } from './test-phase2-services';
-export { Phase3TestRunner } from './test-phase3'; 
+// Test functions removed - modal system is production ready 
