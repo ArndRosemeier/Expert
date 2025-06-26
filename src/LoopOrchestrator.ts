@@ -161,7 +161,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
 
-                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 0, totalStepsInIteration });
+                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
                 initialPrompt = this.prompts.content_generation_initial
@@ -172,6 +172,16 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     aborted = true;
                     throw new Error('Generation aborted by user');
                 }
+
+                // Emit progress BEFORE starting the API call to show "Creator working..." state
+                this.emit('progress', { 
+                    type: 'creator', 
+                    payload: { prompt: initialPrompt, response: 'Creator is working...' }, 
+                    iteration: 0, 
+                    maxIterations: maxIterations, 
+                    step: 1, 
+                    totalStepsInIteration 
+                });
 
                 try {
                     currentResponse = await this.client.chat('creator', initialPrompt, this.abortController.signal);
@@ -185,6 +195,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
 
+                // Emit progress AFTER getting the response to show final result
                 this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
             }
 
@@ -282,6 +293,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                     // 3. Call creator again to get the improved response
                     const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
+                    
+                    // Emit progress BEFORE starting the API call to show "Creator working..." state
+                    this.emit('progress', { 
+                        type: 'creator', 
+                        payload: { prompt: creatorPrompt, response: 'Creator is working on revision...' }, 
+                        iteration: i, 
+                        maxIterations, 
+                        step: 1, 
+                        totalStepsInIteration 
+                    });
+                    
                     try {
                         currentResponse = await this.client.chat('creator', creatorPrompt, this.abortController.signal);
                     } catch (e: any) {
@@ -293,6 +315,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     }
                     const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
                     history.push({ iteration: i, type: 'creator', payload: creatorPayload });
+                    
+                    // Emit progress AFTER getting the response to show final result
                     this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i, maxIterations, step: 1, totalStepsInIteration });
 
                 } else {

@@ -2325,11 +2325,11 @@ export class ReaderGUI {
         
         this.isListeningForUpdates = true;
         
-        // Listen for node generation completion (but not in always-edit mode)
-        // this.projectManager.on('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
+        // Listen for node generation completion to update reader content
+        this.projectManager.on('nodeGenerationComplete', this.handleNodeGenerationComplete.bind(this));
         
-        // Listen for summary generation (but not in always-edit mode)
-        // this.projectManager.on('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        // Listen for summary generation
+        this.projectManager.on('nodeSummaryGenerated', this.handleNodeSummaryGenerated.bind(this));
         
         // Listen for overall project structure changes only
         this.projectManager.on('project-loaded', this.handleProjectUpdate.bind(this));
@@ -2344,12 +2344,47 @@ export class ReaderGUI {
         this.isListeningForUpdates = false;
         
         // Remove event listeners (matching what we actually listen for)
-        // this.projectManager.off('nodeGenerationComplete', this.handleNodeUpdate.bind(this));
-        // this.projectManager.off('nodeSummaryGenerated', this.handleNodeUpdate.bind(this));
+        this.projectManager.off('nodeGenerationComplete', this.handleNodeGenerationComplete.bind(this));
+        this.projectManager.off('nodeSummaryGenerated', this.handleNodeSummaryGenerated.bind(this));
         this.projectManager.off('project-loaded', this.handleProjectUpdate.bind(this));
     }
 
 
+
+    /**
+     * Handle node generation completion - update reader content without breaking editor
+     */
+    private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }): void {
+        if (e.success) {
+            // Update the reader content for this specific node
+            this.updateNodeContentInReader(e.nodeId, e.node.content);
+        }
+    }
+
+    /**
+     * Handle node summary generation - update reader content without breaking editor
+     */
+    private handleNodeSummaryGenerated(e: { nodeId: string, summary: string }): void {
+        // Summary updates don't affect reader content directly since we show content, not summaries
+        // But we could update any summary displays if needed in the future
+    }
+
+    /**
+     * Update content for a specific node in the reader without breaking the editor
+     */
+    private updateNodeContentInReader(nodeId: string, newContent: string): void {
+        // Find the textarea for this node and update it
+        const textarea = this.container.querySelector(`textarea[data-node-id="${nodeId}"]`) as HTMLTextAreaElement;
+        if (textarea) {
+            // Only update if not currently being edited by the user
+            if (document.activeElement !== textarea) {
+                textarea.value = newContent;
+                // Trigger the editor to update its internal state
+                const event = new Event('input', { bubbles: true });
+                textarea.dispatchEvent(event);
+            }
+        }
+    }
 
     /**
      * Handle overall project updates
