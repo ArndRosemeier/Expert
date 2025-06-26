@@ -1,5 +1,6 @@
 import { OpenRouterClient, OpenRouterMessage, StreamingCallbacks } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
+import { StorageService } from '../StorageService';
 
 export interface ChatMessage {
     id: string;
@@ -10,6 +11,8 @@ export interface ChatMessage {
 }
 
 export class ChatInterface {
+    private static readonly LAST_CHAT_MODEL_KEY = 'expert_app_last_chat_model';
+    
     private openRouterClient: OpenRouterClient;
     private settingsManager: SettingsManager;
     private messages: ChatMessage[] = [];
@@ -35,10 +38,41 @@ export class ChatInterface {
     }
 
     /**
+     * Load the last used chat model from storage
+     */
+    private async loadLastUsedModel(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            const lastModel = await storage.get<string>(ChatInterface.LAST_CHAT_MODEL_KEY);
+            if (lastModel && ['creator', 'editor', 'rater'].includes(lastModel)) {
+                this.selectedModelPurpose = lastModel;
+            }
+        } catch (error) {
+            console.warn('Failed to load last used chat model:', error);
+        }
+    }
+
+    /**
+     * Save the current chat model to storage
+     */
+    private async saveLastUsedModel(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(ChatInterface.LAST_CHAT_MODEL_KEY, this.selectedModelPurpose);
+        } catch (error) {
+            console.warn('Failed to save last used chat model:', error);
+        }
+    }
+
+    /**
      * Initialize and render the chat interface
      */
-    public initialize(containerElement: HTMLElement): void {
+    public async initialize(containerElement: HTMLElement): Promise<void> {
         this.chatContainer = containerElement;
+        
+        // Load the last used model before rendering
+        await this.loadLastUsedModel();
+        
         this.render();
         this.setupEventListeners();
     }
@@ -261,6 +295,11 @@ export class ChatInterface {
         this.sendButton = this.chatContainer.querySelector('#send-btn') as HTMLButtonElement;
         this.stopButton = this.chatContainer.querySelector('#stop-btn') as HTMLButtonElement;
         this.modelPurposeSelect = this.chatContainer.querySelector('#model-purpose-select') as HTMLSelectElement;
+        
+        // Set the selected model purpose
+        if (this.modelPurposeSelect) {
+            this.modelPurposeSelect.value = this.selectedModelPurpose;
+        }
     }
 
     /**
@@ -298,6 +337,7 @@ export class ChatInterface {
         // Model selection
         this.modelPurposeSelect.addEventListener('change', (e) => {
             this.selectedModelPurpose = (e.target as HTMLSelectElement).value;
+            this.saveLastUsedModel(); // Save the selection
         });
 
         // Clear chat button
@@ -571,10 +611,16 @@ export class ChatInterface {
     private updateMessageContent(messageElement: HTMLElement, content: string): void {
         const messageText = messageElement.querySelector('.message-text');
         if (messageText) {
-            // Preserve streaming cursor if present
+            // Get the message ID to check if it's still streaming
+            const messageId = messageElement.id.replace('message-', '');
+            const message = this.messages.find(m => m.id === messageId);
+            
+            // Only preserve streaming cursor if the message is still streaming
             const streamingCursor = messageText.querySelector('.streaming-cursor');
             messageText.textContent = content;
-            if (streamingCursor) {
+            
+            // Only re-add the cursor if the message is still actively streaming
+            if (streamingCursor && message?.isStreaming) {
                 messageText.appendChild(streamingCursor);
             }
         }

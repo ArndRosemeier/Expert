@@ -1133,93 +1133,96 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
 
 
 
-function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string): void {
-    // Import necessary modules
-    import('./chat-interface').then(({ ChatInterface }) => {
-        import('../OpenRouterClient').then(({ OpenRouterClient }) => {
-            import('../state').then((stateModule) => {
-                // Get required services using the correct exports
-                const settingsManager = stateModule.getSettingsManager();
-                const modelSelector = stateModule.getModelSelector();
-                
-                if (!settingsManager || !modelSelector) {
-                    alert('Settings or model selector not available.');
-                    return;
-                }
-                
-                // Get OpenRouter API key from model selector
-                const apiKey = modelSelector.getApiKey();
-                if (!apiKey) {
-                    alert('OpenRouter API key not configured. Please set it in the settings first.');
-                    return;
-                }
+async function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string): Promise<void> {
+    try {
+        // Import necessary modules
+        const { ChatInterface } = await import('./chat-interface');
+        const { OpenRouterClient } = await import('../OpenRouterClient');
+        const stateModule = await import('../state');
+        
+        // Get required services using the correct exports
+        const settingsManager = stateModule.getSettingsManager();
+        const modelSelector = stateModule.getModelSelector();
+        
+        if (!settingsManager || !modelSelector) {
+            alert('Settings or model selector not available.');
+            return;
+        }
+        
+        // Get OpenRouter API key from model selector
+        const apiKey = modelSelector.getApiKey();
+        if (!apiKey) {
+            alert('OpenRouter API key not configured. Please set it in the settings first.');
+            return;
+        }
 
-                // Get selected models from model selector
-                const modelConfigs = modelSelector.getSelectedModels();
-                if (!modelSelector.areAllModelsSelected()) {
-                    alert('Please configure all required models in the settings first.');
-                    return;
-                }
+        // Get selected models from model selector
+        const modelConfigs = modelSelector.getSelectedModels();
+        if (!modelSelector.areAllModelsSelected()) {
+            alert('Please configure all required models in the settings first.');
+            return;
+        }
 
-                // Create OpenRouter client with the configured models
-                const openRouterClient = new OpenRouterClient(apiKey, modelConfigs);
-                openRouterClient.setSettingsManager(settingsManager);
-                
-                // Create modal overlay
-                const modalOverlay = document.createElement('div');
-                modalOverlay.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-color: rgba(0, 0, 0, 0.5);
-                    z-index: 1000;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                `;
-                
-                const modalContainer = document.createElement('div');
-                modalContainer.style.cssText = `
-                    width: 90%;
-                    height: 90%;
-                    max-width: 1200px;
-                    max-height: 800px;
-                    background: white;
-                    border-radius: 12px;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                `;
-                
-                modalOverlay.appendChild(modalContainer);
-                document.body.appendChild(modalOverlay);
-                
-                // Create chat interface with custom system prompt and title
-                const chatInterface = new ChatInterface(openRouterClient, settingsManager, systemPrompt, nodeTitle);
-                chatInterface.initialize(modalContainer);
-                
-                // Close modal functionality
-                const closeModal = () => {
-                    document.body.removeChild(modalOverlay);
-                };
-                
-                modalOverlay.addEventListener('click', (e) => {
-                    if (e.target === modalOverlay) {
-                        closeModal();
-                    }
-                });
-                
-                document.addEventListener('keydown', function escapeHandler(e) {
-                    if (e.key === 'Escape') {
-                        closeModal();
-                        document.removeEventListener('keydown', escapeHandler);
-                    }
-                });
-                
-            }).catch(console.error);
-        }).catch(console.error);
-    }).catch(console.error);
+        // Create OpenRouter client with the configured models
+        const openRouterClient = new OpenRouterClient(apiKey, modelConfigs);
+        openRouterClient.setSettingsManager(settingsManager);
+        
+        // Create modal overlay
+        const modalOverlay = document.createElement('div');
+        modalOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        const modalContainer = document.createElement('div');
+        modalContainer.style.cssText = `
+            width: 90%;
+            height: 90%;
+            max-width: 1200px;
+            max-height: 800px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        `;
+        
+        modalOverlay.appendChild(modalContainer);
+        document.body.appendChild(modalOverlay);
+        
+        // Create chat interface with custom system prompt and title
+        const chatInterface = new ChatInterface(openRouterClient, settingsManager, systemPrompt, nodeTitle);
+        await chatInterface.initialize(modalContainer);
+        
+        // Close modal functionality
+        const closeModal = () => {
+            document.body.removeChild(modalOverlay);
+        };
+        
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeModal();
+            }
+        });
+        
+        document.addEventListener('keydown', function escapeHandler(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error opening chat interface:', error);
+        alert('Failed to open chat interface. Please try again.');
+    }
 }
