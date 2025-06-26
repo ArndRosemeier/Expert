@@ -2292,7 +2292,11 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         throw new Error('Invalid import data: Missing title field');
     }
 
-    // Import the node content
+    // Import the node data
+    if (importData.title !== undefined) {
+        targetNode.title = importData.title;
+    }
+
     if (importData.content !== undefined) {
         targetNode.content = importData.content;
     }
