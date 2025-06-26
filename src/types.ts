@@ -19,3 +19,13 @@ export interface QualityCriterion {
     outline?: boolean;
     leaf?: boolean;
 } 
+
+export interface AILogEntry {
+    id: string;
+    timestamp: Date;
+    purpose: string;
+    prompt: string;
+    response: string;
+    model: string;
+    requestDuration: number; // in milliseconds
+} 

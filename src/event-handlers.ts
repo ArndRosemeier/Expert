@@ -39,11 +39,18 @@ function onModelsSelected(models: Record<string, string>) {
 
 function recreateAndReconfigureServices() {
     const modelSelector = state.getModelSelector();
+    const settingsManager = state.getSettingsManager();
     if (!modelSelector) {
         console.error("ModelSelector not available. Cannot configure services.");
         return;
     }
     const client = new OpenRouterClient(modelSelector.getApiKey(), modelSelector.getSelectedModels());
+    
+    // Connect the OpenRouterClient to the SettingsManager for AI logging
+    if (settingsManager) {
+        client.setSettingsManager(settingsManager);
+    }
+    
     const orchestrator = new LoopOrchestrator(client, state.getOrchestratorPrompts() || undefined);
     state.setOpenRouterClient(client);
     state.setOrchestrator(orchestrator);

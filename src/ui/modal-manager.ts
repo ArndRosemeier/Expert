@@ -4,9 +4,10 @@ import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 
 import { SettingsProfile, DEFAULT_CRITERIA, SettingsManager } from '../SettingsManager';
-import { QualityCriterion } from '../types';
+import { QualityCriterion, AILogEntry } from '../types';
 import { OrchestratorPrompts, defaultPrompts } from '../PromptManager';
 import { DocumentNode } from '../DocumentNode';
+import { AILogService } from '../AILogService';
 import { refreshGlobalProfileSelector } from './project-ui';
 
 // --- Generic Modal Functions ---
@@ -565,6 +566,15 @@ function escapeHtml(text: string): string {
     return div.innerHTML;
 }
 
+function escapeHtmlAttribute(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function sanitizeFilename(filename: string): string {
     // Replace invalid filename characters with underscores
     return filename.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
@@ -956,6 +966,22 @@ export function renderSettingsModal() {
                 <!-- PromptManager will be rendered here -->
             </div>
             
+            <div id="settings-ai-logging-container" class="settings-section">
+                <h3>AI Request Logging</h3>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+                        <input type="checkbox" id="ai-logging-checkbox" style="width: 18px; height: 18px;">
+                        <span style="font-weight: 500;">Enable AI Request Logging</span>
+                    </label>
+                    <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                        When enabled, all AI requests and responses will be logged for debugging and analysis. 
+                        This can help troubleshoot generation issues and analyze AI behavior.
+                    </p>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button id="view-ai-logs-btn" class="btn-outline">View AI Logs</button>
+                    </div>
+                </div>
+            </div>
 
             <div id="settings-criteria-container" class="settings-section">
                 <h3>Quality Criteria</h3>
@@ -1306,7 +1332,29 @@ export function renderSettingsModal() {
         }
     });
 
+    // --- AI Logging Event Handlers ---
+    const aiLoggingCheckbox = getElementById('ai-logging-checkbox') as HTMLInputElement;
+    const viewLogsBtn = getElementById('view-ai-logs-btn');
 
+    // Initialize AI logging checkbox state
+    if (settingsManagerInstance) {
+        aiLoggingCheckbox.checked = settingsManagerInstance.isAILoggingEnabled();
+    }
+
+    // Handle AI logging checkbox changes
+    aiLoggingCheckbox.addEventListener('change', async () => {
+        if (settingsManagerInstance) {
+            await settingsManagerInstance.setAILoggingEnabled(aiLoggingCheckbox.checked);
+        }
+    });
+
+    // Handle view logs button click
+    viewLogsBtn.addEventListener('click', () => {
+        // Close the settings modal first
+        closeModal();
+        // Open the AI log modal
+        openAILogModal();
+    });
 
     // Footer button handlers
     getElementById('cancel-settings-btn').addEventListener('click', () => {
@@ -1827,4 +1875,443 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
             extractBtn.click();
         }
     });
+}
+
+/**
+ * Opens the AI Log Viewer modal
+ */
+export function openAILogModal() {
+    renderAILogModal();
+    if (modalContainer) {
+        modalContainer.style.display = 'flex';
+    }
+}
+
+function renderAILogModal() {
+    if (!modalContent) return;
+
+    modalContent.innerHTML = `
+        <style>
+            .ai-log-modal {
+                width: 95vw;
+                max-width: 1200px;
+                height: 85vh;
+                display: flex;
+                flex-direction: column;
+            }
+            .ai-log-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1.5rem 2rem;
+                border-bottom: 1px solid #e5e7eb;
+                background-color: #f9fafb;
+            }
+            .ai-log-title {
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: #1f2937;
+                margin: 0;
+            }
+            .ai-log-controls {
+                display: flex;
+                gap: 0.75rem;
+            }
+            .ai-log-body {
+                flex-grow: 1;
+                padding: 1.5rem 2rem;
+                overflow-y: auto;
+            }
+            .ai-log-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.875rem;
+                background-color: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .ai-log-table th {
+                background-color: #f3f4f6;
+                color: #374151;
+                font-weight: 600;
+                padding: 0.75rem;
+                text-align: left;
+                border-bottom: 1px solid #e5e7eb;
+                white-space: nowrap;
+            }
+            .ai-log-table td {
+                padding: 0.75rem;
+                border-bottom: 1px solid #f3f4f6;
+                vertical-align: top;
+            }
+            .ai-log-table tr:hover {
+                background-color: #f9fafb;
+            }
+            .log-timestamp {
+                width: 150px;
+                white-space: nowrap;
+                color: #6b7280;
+            }
+            .log-purpose {
+                width: 120px;
+                font-weight: 500;
+                color: #3b82f6;
+            }
+            .log-model {
+                width: 150px;
+                color: #6b7280;
+                font-family: monospace;
+                font-size: 0.8rem;
+            }
+            .log-duration {
+                width: 80px;
+                text-align: right;
+                color: #6b7280;
+            }
+            .log-prompt {
+                max-width: 300px;
+                word-wrap: break-word;
+                position: relative;
+            }
+            .log-response {
+                max-width: 300px;
+                word-wrap: break-word;
+                position: relative;
+            }
+            .log-text {
+                max-height: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                display: -webkit-box;
+                -webkit-line-clamp: 4;
+                -webkit-box-orient: vertical;
+                cursor: pointer;
+                color: #374151;
+                transition: background-color 0.2s;
+            }
+            .log-text:hover {
+                background-color: #f3f4f6;
+                border-radius: 4px;
+            }
+            .log-text.expanded {
+                max-height: none;
+                -webkit-line-clamp: none;
+            }
+            .log-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: rgba(0, 0, 0, 0.75);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 20000;
+            }
+            .log-overlay-content {
+                width: 95vw;
+                max-width: 1200px;
+                height: 85vh;
+                background-color: white;
+                border-radius: 12px;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            }
+            .log-overlay-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1.5rem 2rem;
+                border-bottom: 1px solid #e5e7eb;
+                background-color: #f9fafb;
+                border-radius: 12px 12px 0 0;
+            }
+            .log-overlay-title {
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: #1f2937;
+                margin: 0;
+            }
+            .log-overlay-close {
+                background: #ef4444;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 32px;
+                height: 32px;
+                cursor: pointer;
+                font-size: 1.2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background-color 0.2s;
+            }
+            .log-overlay-close:hover {
+                background-color: #dc2626;
+            }
+            .log-overlay-body {
+                flex: 1;
+                padding: 1.5rem 2rem;
+                overflow-y: auto;
+            }
+            .log-overlay-text {
+                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                font-size: 0.9rem;
+                line-height: 1.6;
+                color: #374151;
+                white-space: pre-wrap;
+                word-break: break-word;
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 1.5rem;
+            }
+            .empty-state {
+                text-align: center;
+                padding: 3rem 2rem;
+                color: #6b7280;
+            }
+            .empty-state h3 {
+                margin: 0 0 0.5rem 0;
+                color: #374151;
+            }
+            .loading-state {
+                text-align: center;
+                padding: 3rem 2rem;
+                color: #6b7280;
+            }
+            .error-response {
+                color: #ef4444;
+                font-style: italic;
+            }
+            .btn {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 6px;
+                font-size: 0.875rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            .btn-danger {
+                background-color: #ef4444;
+                color: white;
+            }
+            .btn-danger:hover {
+                background-color: #dc2626;
+            }
+            .btn-secondary {
+                background-color: #6b7280;
+                color: white;
+            }
+            .btn-secondary:hover {
+                background-color: #4b5563;
+            }
+        </style>
+        <div class="ai-log-modal">
+            <div class="ai-log-header">
+                <h2 class="ai-log-title">AI Request Log</h2>
+                <div class="ai-log-controls">
+                    <button id="clear-log-btn" class="btn btn-danger">Clear Log</button>
+                    <button id="close-log-modal-btn" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+            <div class="ai-log-body">
+                <div id="log-loading" class="loading-state">
+                    <p>Loading AI logs...</p>
+                </div>
+                <div id="log-content" style="display: none;"></div>
+            </div>
+        </div>
+    `;
+
+    setupAILogModal();
+}
+
+async function setupAILogModal() {
+    const loadingDiv = document.getElementById('log-loading')!;
+    const contentDiv = document.getElementById('log-content')!;
+    const clearBtn = document.getElementById('clear-log-btn')!;
+    const closeBtn = document.getElementById('close-log-modal-btn')!;
+
+    closeBtn.addEventListener('click', closeModal);
+
+    clearBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all AI logs? This action cannot be undone.')) {
+            try {
+                const aiLogService = AILogService.getInstance();
+                await aiLogService.clearAllLogs();
+                await loadLogs(); // Reload logs after clearing
+            } catch (error) {
+                console.error('Failed to clear AI logs:', error);
+                alert('Failed to clear logs. Please try again.');
+            }
+        }
+    });
+
+    const loadLogs = async () => {
+        try {
+            loadingDiv.style.display = 'block';
+            contentDiv.style.display = 'none';
+
+            const aiLogService = AILogService.getInstance();
+            const logs = await aiLogService.getAllLogs();
+
+            loadingDiv.style.display = 'none';
+            contentDiv.style.display = 'block';
+
+            if (logs.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No AI logs found</h3>
+                        <p>Enable AI logging in settings to start collecting request logs.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tableHTML = `
+                <table class="ai-log-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Purpose</th>
+                            <th>Model</th>
+                            <th>Duration</th>
+                            <th>Prompt</th>
+                            <th>Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map(log => `
+                            <tr>
+                                <td class="log-timestamp">${formatTimestamp(log.timestamp)}</td>
+                                <td class="log-purpose">${escapeHtml(log.purpose)}</td>
+                                <td class="log-model">${escapeHtml(log.model)}</td>
+                                <td class="log-duration">${log.requestDuration}ms</td>
+                                <td class="log-prompt">
+                                    <div class="log-text" data-full-content="${escapeHtmlAttribute(log.prompt)}" data-type="prompt">
+                                        ${escapeHtml(truncateText(log.prompt, 200))}
+                                    </div>
+                                </td>
+                                <td class="log-response">
+                                    <div class="log-text ${log.response.startsWith('ERROR:') ? 'error-response' : ''}" data-full-content="${escapeHtmlAttribute(log.response)}" data-type="response">
+                                        ${escapeHtml(truncateText(log.response, 200))}
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            contentDiv.innerHTML = tableHTML;
+
+            // Add click and double-click functionality
+            const logTexts = contentDiv.querySelectorAll('.log-text');
+            logTexts.forEach(element => {
+                // Single click for expand/collapse
+                element.addEventListener('click', function(this: HTMLElement) {
+                    this.classList.toggle('expanded');
+                });
+
+                // Double click for overlay
+                element.addEventListener('dblclick', function(this: HTMLElement, e: Event) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const fullContent = this.getAttribute('data-full-content') || '';
+                    const contentType = this.getAttribute('data-type') || 'content';
+                    showLogOverlay(fullContent, contentType);
+                });
+            });
+
+        } catch (error) {
+            console.error('Failed to load AI logs:', error);
+            loadingDiv.style.display = 'none';
+            contentDiv.style.display = 'block';
+            contentDiv.innerHTML = `
+                <div class="empty-state">
+                    <h3>Error loading logs</h3>
+                    <p>Failed to load AI logs. Please try again.</p>
+                </div>
+            `;
+        }
+    };
+
+    await loadLogs();
+}
+
+function showLogOverlay(content: string, contentType: string): void {
+    // Define close function first
+    const closeLogOverlay = () => {
+        const existingOverlay = document.querySelector('.log-overlay');
+        if (existingOverlay) {
+            (existingOverlay as any).cleanup?.();
+            existingOverlay.remove();
+        }
+        delete (window as any).closeLogOverlay;
+    };
+
+    // Make close function globally available
+    (window as any).closeLogOverlay = closeLogOverlay;
+
+    // Create overlay element
+    const overlay = document.createElement('div');
+    overlay.className = 'log-overlay';
+    
+    const capitalizedType = contentType.charAt(0).toUpperCase() + contentType.slice(1);
+    
+    overlay.innerHTML = `
+        <div class="log-overlay-content">
+            <div class="log-overlay-header">
+                <h3 class="log-overlay-title">${capitalizedType} Content</h3>
+                <button class="log-overlay-close" onclick="closeLogOverlay()">&times;</button>
+            </div>
+            <div class="log-overlay-body">
+                <div class="log-overlay-text">${content}</div>
+            </div>
+        </div>
+    `;
+
+    // Close on background click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeLogOverlay();
+        }
+    });
+
+    // Close on Escape key
+    const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            closeLogOverlay();
+        }
+    };
+    
+    document.addEventListener('keydown', handleKeydown);
+    
+    // Store cleanup function on the overlay element for later use
+    (overlay as any).cleanup = () => {
+        document.removeEventListener('keydown', handleKeydown);
+    };
+
+    document.body.appendChild(overlay);
+}
+
+function formatTimestamp(timestamp: Date): string {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
 }

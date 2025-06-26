@@ -166,7 +166,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 // For generation from scratch, we build the initial prompt from the template.
                 initialPrompt = this.prompts.content_generation_initial
                     .replace(/{{prompt}}/g, input.prompt)
-                    .replace(/{{criteria}}/g, input.criteria.map(c => c.name).join(', '));
+                    .replace(/{{criteria}}/g, this.formatCriteriaAsJson(input.criteria));
                 
                 if (this.stopRequested) {
                     aborted = true;
@@ -324,19 +324,29 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         };
     }
 
-    private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        // Helper to get the short name of a criterion
-        const getShortCriterionName = (fullName: string): string => {
-            const stopIndex = fullName.indexOf('.');
-            return stopIndex > 0 ? fullName.substring(0, stopIndex) : fullName;
-        };
+    /**
+     * Formats criteria as JSON for consistent presentation to AI models
+     */
+    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+        const formattedCriteria = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return {
+                name: shortName,
+                description: c.description || shortName
+            };
+        });
+        
+        return JSON.stringify(formattedCriteria, null, 2);
+    }
 
-        const criteriaList = criteria.map(c => getShortCriterionName(c.name)).join('\\n- ');
+    private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
+        const criteriaJson = this.formatCriteriaAsJson(criteria);
 
         if (!history) {
             return this.prompts.content_generation_initial
                 .replace(/{{prompt}}/g, originalPrompt)
-                .replace(/{{criteria}}/g, criteriaList);
+                .replace(/{{criteria}}/g, criteriaJson);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -349,21 +359,16 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             .replace(/{{prompt}}/g, originalPrompt)
             .replace(/{{lastResponse}}/g, lastResponse || '')
             .replace(/{{editorAdvice}}/g, lastEditorAdvice)
-            .replace(/{{criteria}}/g, criteriaList);
+            .replace(/{{criteria}}/g, criteriaJson);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
-        // Only send criterion names and descriptions, NOT the goals
-        const criteriaList = criteria.map(c => {
-            // Extract just the name part (before any period) for cleaner display
-            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
-            return c.description ? `${shortName}: ${c.description}` : shortName;
-        });
+        const criteriaJson = this.formatCriteriaAsJson(criteria);
         
         return this.prompts.rater
             .replace(/{{originalPrompt}}/g, prompt)
             .replace(/{{response}}/g, response)
-            .replace(/{{criteria}}/g, criteriaList.join('\n- '));
+            .replace(/{{criteria}}/g, criteriaJson);
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {

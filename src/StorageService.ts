@@ -133,7 +133,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 2, // Increment version to force schema upgrade
+      version: 3, // Increment version to force schema upgrade
       stores: [
         {
           name: 'keyValue',
@@ -150,6 +150,20 @@ export class StorageService {
             {
               name: 'by-template',
               keyPath: 'templateName'
+            }
+          ]
+        },
+        {
+          name: 'aiLogs',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-timestamp',
+              keyPath: 'timestamp'
+            },
+            {
+              name: 'by-purpose',
+              keyPath: 'purpose'
             }
           ]
         }

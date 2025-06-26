@@ -31,10 +31,15 @@ export interface OpenRouterModelsResponse {
   data: OpenRouterModel[];
 }
 
+import { AILogService } from './AILogService';
+import { SettingsManager } from './SettingsManager';
+
 export class OpenRouterClient {
   private apiKey: string;
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
   private modelPurposeMap: Record<string, string> = {};
+  private aiLogService: AILogService;
+  private settingsManager: SettingsManager | null = null;
 
   private currentAbortController: AbortController | null = null;
 
@@ -43,6 +48,11 @@ export class OpenRouterClient {
     if (modelPurposeMap) {
       this.modelPurposeMap = modelPurposeMap;
     }
+    this.aiLogService = AILogService.getInstance();
+  }
+
+  public setSettingsManager(settingsManager: SettingsManager): void {
+    this.settingsManager = settingsManager;
   }
 
   setModelPurpose(purpose: string, model: string) {
@@ -88,16 +98,56 @@ export class OpenRouterClient {
     if (!model) {
       throw new Error(`No model configured for purpose: ${purpose}`);
     }
+
+    const startTime = Date.now();
     const request: OpenRouterRequest = {
       model,
       messages: [
         { role: 'user', content: message }
       ],
     };
-    const response = await this.sendMessage(request, abortSignal);
-    // Return the first assistant message content, or empty string if not found
-    const answer = response.choices?.[0]?.message?.content ?? '';
-    return answer;
+    
+    try {
+      const response = await this.sendMessage(request, abortSignal);
+      const answer = response.choices?.[0]?.message?.content ?? '';
+      const duration = Date.now() - startTime;
+
+      // Log the interaction if logging is enabled
+      if (this.settingsManager?.isAILoggingEnabled()) {
+        try {
+          await this.aiLogService.addLogEntry({
+            timestamp: new Date(),
+            purpose,
+            prompt: message,
+            response: answer,
+            model,
+            requestDuration: duration
+          });
+        } catch (logError) {
+          console.error('Failed to log AI interaction:', logError);
+        }
+      }
+
+      return answer;
+    } catch (error) {
+      // Log failed requests too if logging is enabled
+      if (this.settingsManager?.isAILoggingEnabled()) {
+        try {
+          const duration = Date.now() - startTime;
+          await this.aiLogService.addLogEntry({
+            timestamp: new Date(),
+            purpose,
+            prompt: message,
+            response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            model,
+            requestDuration: duration
+          });
+        } catch (logError) {
+          console.error('Failed to log AI interaction error:', logError);
+        }
+      }
+      throw error;
+    }
   }
 
   async sendMessage(request: OpenRouterRequest, externalAbortSignal?: AbortSignal): Promise<OpenRouterResponse> {

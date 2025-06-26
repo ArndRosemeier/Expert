@@ -4,6 +4,7 @@ import { StorageService, IStorageService } from './StorageService';
 
 export const SETTINGS_PROFILES_KEY = 'expert_app_settings_profiles';
 export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
+export const AI_LOGGING_ENABLED_KEY = 'expert_app_ai_logging_enabled';
 
 // Default context extraction prompt template
 export const DEFAULT_CONTEXT_EXTRACTION_PROMPT = `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
@@ -119,8 +120,8 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         leaf: false
     },
     {
-        name: "Avoids Dramatic Reframing",
-        description: "The text avoids the 'It wasn't X. It was Y' pattern and similar dramatic recontextualizations that artificially inflate the significance of ordinary actions or objects. Examples to avoid: 'It wasn't just food. It was fuel,' 'He wasn't waiting. He was strategizing,' 'It wasn't defeat. It was a lesson.' The writing presents things directly without unnecessary dramatic reframing.",
+        name: "Avoids Dramatical Reframing",
+        description: "The text avoids artificially elevating the significance of ordinary actions, objects, or perceptions through dramatic recontextualization. This includes explicit patterns like \"It wasn't X. It was Y.\" as well as subtler forms of rhetorical inflation — where minor events are presented as symbolically profound, emotionally transformative, or mythically significant without narrative justification.\n\nExamples to avoid:\n• \"It wasn't just food. It was fuel.\"\n• \"He wasn't waiting. He was strategizing.\"\n• \"Fixing the cart wasn't a simple repair; it was the beginning of an unlikely alliance.\"\n\nStrong writing presents events and choices with clarity and restraint, allowing significance to emerge organically rather than through overt authorial framing.",
         goal: 8,
         outline: true,
         leaf: true
@@ -175,6 +176,7 @@ export class SettingsManager {
     private prompts: OrchestratorPrompts;
     private storageService: Promise<IStorageService>;
     private initializationPromise: Promise<void>;
+    private aiLoggingEnabled: boolean = false;
 
     constructor() {
         this.storageService = StorageService.getInstance();
@@ -190,6 +192,7 @@ export class SettingsManager {
         await this.loadProfiles();
         await this.loadLastUsedProfile();
         await this.loadPrompts();
+        await this.loadAILoggingSetting();
     }
 
     private async loadProfiles(): Promise<void> {
@@ -255,6 +258,16 @@ export class SettingsManager {
         } catch (error) {
             console.error('Failed to load last used profile from storage', error);
             this.lastUsedProfileName = null;
+        }
+    }
+
+    private async loadAILoggingSetting(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            this.aiLoggingEnabled = await storage.get<boolean>(AI_LOGGING_ENABLED_KEY) || false;
+        } catch (error) {
+            console.error('Failed to load AI logging setting from storage', error);
+            this.aiLoggingEnabled = false;
         }
     }
 
@@ -534,6 +547,20 @@ export class SettingsManager {
                 success: false, 
                 message: `Failed to parse import file: ${error instanceof Error ? error.message : 'Invalid JSON format'}` 
             };
+        }
+    }
+
+    public isAILoggingEnabled(): boolean {
+        return this.aiLoggingEnabled;
+    }
+
+    public async setAILoggingEnabled(enabled: boolean): Promise<void> {
+        this.aiLoggingEnabled = enabled;
+        try {
+            const storage = await this.storageService;
+            await storage.set(AI_LOGGING_ENABLED_KEY, enabled);
+        } catch (error) {
+            console.error('Failed to save AI logging setting to storage', error);
         }
     }
 } 
