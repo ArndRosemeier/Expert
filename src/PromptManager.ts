@@ -175,7 +175,8 @@ You have been given:
 Your task is to create a new, synthesized context by:
 - Distilling the parent context to only what remains relevant and important for child nodes of this level
 - Incorporating new concepts, themes, characters, and elements that were introduced in the node content
-- Creating a focused context that will guide generation of child nodes effectively
+- **PRESERVING STYLE INFORMATION**: Maintain details about writing style, tone, voice, narrative perspective, formatting preferences, and any stylistic patterns established in the content
+- Creating a focused context that will guide generation of child nodes effectively while maintaining consistency
 
 PARENT CONTEXT:
 ---
@@ -187,7 +188,14 @@ NODE CONTENT:
 {{node_content}}
 ---
 
-Please generate a concise but comprehensive context summary that combines the essential elements from the parent context with the newly established concepts from this node's content. Focus on what will be most useful for generating coherent child content.`,
+Please generate a concise but comprehensive context summary that combines the essential elements from the parent context with the newly established concepts from this node's content. **Pay special attention to preserving style information** such as:
+- Writing tone and voice
+- Narrative perspective (first-person, third-person, etc.)
+- Formatting patterns and structure
+- Genre conventions and stylistic choices
+- Any specific writing techniques or approaches used
+
+Focus on what will be most useful for generating coherent child content that maintains stylistic consistency.`,
 
     context_extraction_user: `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 
