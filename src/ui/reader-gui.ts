@@ -201,6 +201,54 @@ export class ReaderGUI {
     }
 
     /**
+     * Handle TOC navigation with intelligent targeting
+     */
+    private handleTOCNavigation(nodeId: string): void {
+        // If showAllLevels is true, navigate directly to the clicked node
+        if (this.config.showAllLevels) {
+            this.scrollToNode(nodeId);
+            return;
+        }
+
+        // If showAllLevels is false, check if the clicked node is displayed in content
+        const isNodeInContent = this.contentNodes.some(node => node.id === nodeId);
+        
+        if (isNodeInContent) {
+            // Node is displayed in content, navigate directly
+            this.scrollToNode(nodeId);
+        } else {
+            // Node is not displayed (parent node), find the first displayable descendant
+            const targetNodeId = this.findFirstDisplayableDescendant(nodeId);
+            if (targetNodeId) {
+                this.scrollToNode(targetNodeId);
+            }
+        }
+    }
+
+    /**
+     * Find the first displayable descendant of a node (when hierarchy levels are hidden)
+     */
+    private findFirstDisplayableDescendant(nodeId: string): string | null {
+        const node = this.projectManager.findNodeById(nodeId);
+        if (!node) return null;
+
+        // Check if this node itself would be displayed
+        if (this.isDeepestAvailableContent(node)) {
+            return node.id;
+        }
+
+        // Otherwise, check children in order
+        for (const child of node.children) {
+            const descendant = this.findFirstDisplayableDescendant(child.id);
+            if (descendant) {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Analyze project content and determine what to display
      */
     private analyzeProjectContent(): ContentNode[] {
@@ -376,12 +424,15 @@ export class ReaderGUI {
      * Generate table of contents content (without wrapper div)
      */
     private generateTOCContent(): string {
+        // Always show all hierarchy levels in TOC, regardless of showAllLevels setting
+        const tocNodes = this.analyzeTOCContent();
+        
         let tocHTML = `
             <h3>Table of Contents</h3>
             <ul class="toc-list">
         `;
 
-        this.contentNodes.forEach(node => {
+        tocNodes.forEach(node => {
             const indent = node.level * 20;
             tocHTML += `
                 <li class="toc-item" style="margin-left: ${indent}px;">
@@ -398,6 +449,43 @@ export class ReaderGUI {
         `;
 
         return tocHTML;
+    }
+
+    /**
+     * Analyze project content specifically for TOC - always shows all hierarchy levels
+     */
+    private analyzeTOCContent(): ContentNode[] {
+        const nodes: ContentNode[] = [];
+        let position = 0;
+
+        const processNode = (node: DocumentNode): void => {
+            // For TOC, always include all nodes with content or leaf nodes
+            const hasContent = !!(node.content && node.content.trim());
+            const isLeaf = node.children.length === 0;
+            
+            if (hasContent || isLeaf) {
+                const wordCount = this.calculateWordCount(node.content);
+                const readingTime = Math.ceil(wordCount / 200);
+
+                nodes.push({
+                    id: node.id,
+                    title: node.title,
+                    content: '',
+                    level: node.level,
+                    isLeaf: isLeaf,
+                    hasContent: hasContent,
+                    position: position++,
+                    wordCount,
+                    estimatedReadingTime: readingTime
+                });
+            }
+
+            // Always process children for complete TOC hierarchy
+            node.children.forEach(child => processNode(child));
+        };
+
+        processNode(this.projectManager.rootNode);
+        return nodes;
     }
 
     /**
@@ -1205,14 +1293,14 @@ export class ReaderGUI {
             event.preventDefault();
             const nodeId = target.dataset.nodeId;
             if (nodeId) {
-                this.scrollToNode(nodeId);
+                this.handleTOCNavigation(nodeId);
             }
         } else if (target.tagName === 'A' && target.getAttribute('href')?.startsWith('#node-')) {
             // Handle TOC anchor links
             event.preventDefault();
             const nodeId = target.getAttribute('href')?.substring('#node-'.length);
             if (nodeId) {
-                this.scrollToNode(nodeId);
+                this.handleTOCNavigation(nodeId);
             }
         } else if (target.id === 'reader-settings-close') {
             this.toggleSettings();
