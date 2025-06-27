@@ -289,13 +289,22 @@ export class ExportModal extends BaseModal {
             content: 'Cancel'
         });
 
+        const clipboardButton = createElement('button', {
+            classes: ['btn-outline'],
+            content: '📋 Copy to Clipboard'
+        }) as HTMLButtonElement;
+
         this.exportButton = createElement('button', {
             classes: ['btn-primary'],
-            content: 'Export'
+            content: '💾 Export File'
         }) as HTMLButtonElement;
 
         cancelButton.addEventListener('click', () => {
             this.close();
+        });
+
+        clipboardButton.addEventListener('click', () => {
+            this.handleClipboardExport();
         });
 
         this.exportButton.addEventListener('click', () => {
@@ -303,6 +312,7 @@ export class ExportModal extends BaseModal {
         });
 
         footer.appendChild(cancelButton);
+        footer.appendChild(clipboardButton);
         footer.appendChild(this.exportButton);
 
         return footer;
@@ -319,6 +329,54 @@ export class ExportModal extends BaseModal {
         
         if (isReimport) {
             this.formatSelect.value = 'html'; // Default value when disabled
+        }
+    }
+
+    /**
+     * Handles the clipboard export action
+     */
+    private async handleClipboardExport(): Promise<void> {
+        if (!this.scopeSelect || !this.formatSelect) return;
+
+        let scope: string;
+        let format: string;
+
+        // Handle reimport case specially (but reimport doesn't make sense for clipboard)
+        if (this.scopeSelect.value === 'reimport') {
+            alert('Reimport format is not supported for clipboard export. Please select a different scope.');
+            return;
+        }
+
+        // Map UI scope values to ExportService values
+        switch (this.scopeSelect.value) {
+            case 'leafOnly':
+                scope = 'leaves';
+                break;
+            case 'hierarchical':
+                scope = 'hierarchy';
+                break;
+            default:
+                scope = 'single';
+        }
+        format = this.formatSelect.value;
+
+        try {
+            // Generate the content using the export service
+            const result = await this.exportService.export(this.node, {
+                scope: scope as any,
+                format: format as any
+            });
+
+            // Copy to clipboard
+            await navigator.clipboard.writeText(result.content);
+            
+            // Show success message and close
+            alert(`Content successfully copied to clipboard!`);
+            this.close();
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Failed to copy to clipboard: ${errorMessage}`);
         }
     }
 
@@ -547,6 +605,17 @@ export class ExportModal extends BaseModal {
                 
                 .btn-secondary:hover {
                     background-color: #4b5563;
+                }
+                
+                .btn-outline {
+                    background-color: transparent;
+                    color: #3b82f6;
+                    border: 1px solid #3b82f6;
+                }
+                
+                .btn-outline:hover {
+                    background-color: #3b82f6;
+                    color: white;
                 }
             `
         });
