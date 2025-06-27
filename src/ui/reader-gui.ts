@@ -1659,7 +1659,7 @@ export class ReaderGUI {
                     
                     <div class="settings-group">
                         <label for="reader-max-width">Content Width:</label>
-                        <input type="range" id="reader-max-width" min="600" max="1200" step="50" value="${this.config.maxWidth}">
+                        <input type="range" id="reader-max-width" min="600" max="3200" step="50" value="${this.config.maxWidth}">
                         <span class="setting-value">${this.config.maxWidth}px</span>
                     </div>
                     
