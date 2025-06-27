@@ -119,6 +119,29 @@ export class ProfileSelector {
     }
 
     /**
+     * Resets all settings to defaults by programmatically clicking the reset buttons
+     */
+    public resetAllToDefaults(): void {
+        // Find and click the criteria reset button
+        const criteriaResetButtons = Array.from(document.querySelectorAll('.criteria-actions button'));
+        for (const button of criteriaResetButtons) {
+            if (button.textContent?.includes('Reset to Defaults')) {
+                (button as HTMLButtonElement).click();
+                break;
+            }
+        }
+
+        // Find and click the prompts reset button
+        const promptsResetButtons = Array.from(document.querySelectorAll('.prompt-actions button'));
+        for (const button of promptsResetButtons) {
+            if (button.textContent?.includes('Reset All Prompts to Defaults')) {
+                (button as HTMLButtonElement).click();
+                break;
+            }
+        }
+    }
+
+    /**
      * Validates profile name for creation
      */
     public validateProfileName(name: string): { valid: boolean; error?: string } {
@@ -262,18 +285,18 @@ export class ProfileSelector {
         });
         renameButton.addEventListener('click', () => this.renameProfile());
 
-        const statsButton = createElement('button', {
-            classes: ['btn-info'],
-            content: 'Stats'
+        const resetToDefaultsButton = createElement('button', {
+            classes: ['btn-secondary'],
+            content: 'Reset to Defaults'
         });
-        statsButton.addEventListener('click', () => this.showProfileStats(this.getSelectedProfileName()));
+        resetToDefaultsButton.addEventListener('click', () => this.resetAllToDefaults());
 
         actionsGroup.appendChild(deleteButton);
         actionsGroup.appendChild(exportButton);
         actionsGroup.appendChild(importButton);
         actionsGroup.appendChild(duplicateButton);
         actionsGroup.appendChild(renameButton);
-        actionsGroup.appendChild(statsButton);
+        actionsGroup.appendChild(resetToDefaultsButton);
 
         actionsSection.appendChild(actionsLabel);
         actionsSection.appendChild(actionsGroup);

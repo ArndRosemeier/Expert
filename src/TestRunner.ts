@@ -860,7 +860,7 @@ export class TestRunner {
                 throw new Error("No templates loaded - storage initialization failed after 2 seconds");
             }
             
-            // Test template operations  
+            // Test template operations
             const testTemplateName = 'test_template_' + Date.now();
             const testTemplate = new ProjectTemplate('Test Template', ['Level1', 'Level2'], ['Doc1']);
             await templateManager.saveTemplate(testTemplateName, testTemplate);

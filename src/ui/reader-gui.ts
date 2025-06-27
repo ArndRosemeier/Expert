@@ -2479,8 +2479,8 @@ export class ReaderGUI {
         // Refresh TOC if visible
         if (this.config.showTOC) {
             this.refreshTOC();
-        }
-        
+    }
+
         // Rebuild click mappings
         this.buildClickMappings();
         

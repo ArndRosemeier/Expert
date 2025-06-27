@@ -10,14 +10,14 @@ let isPopulating = false; // Semaphore to prevent dirty flag during UI populatio
 // Main entry point
 export function openTemplateEditor() {
     try {
-        const templateManager = state.getTemplateManager();
-        if (!templateManager) {
-            alert("Template manager is not initialized.");
-            return;
-        }
+    const templateManager = state.getTemplateManager();
+    if (!templateManager) {
+        alert("Template manager is not initialized.");
+        return;
+    }
 
-        const templateNames = templateManager.getTemplateNames();
-        currentTemplateName = templateNames[0] || null;
+    const templateNames = templateManager.getTemplateNames();
+    currentTemplateName = templateNames[0] || null;
 
     const content = `
         <style>
@@ -52,7 +52,7 @@ export function openTemplateEditor() {
         </div>
     `;
     
-        openGenericModal(content, setupTemplateEditorListeners);
+    openGenericModal(content, setupTemplateEditorListeners);
         
     } catch (error) {
         console.error('❌ Error in openTemplateEditor:', error);

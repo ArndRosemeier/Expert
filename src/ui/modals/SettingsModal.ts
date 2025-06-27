@@ -53,7 +53,8 @@ export class SettingsModal extends BaseModal {
         super({
             ...config,
             title: 'Settings',
-            id: 'settings-modal'
+            id: 'settings-modal',
+            closable: false // Disable BaseModal's automatic close button since we have our own
         });
 
         this.settingsManager = config.settingsManager;
