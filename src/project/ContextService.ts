@@ -213,6 +213,11 @@ export class ContextService {
      * Synthesizes context by combining parent context with node content.
      * This distills the parent context to only what's relevant while incorporating
      * new concepts introduced in the node's content.
+     * 
+     * Handles <persist></persist> tags by preserving their content through the synthesis process:
+     * - Extracts persist tags from parent context before sending to LLM
+     * - Appends persist data back to the synthesized context after LLM response
+     * 
      * @param nodeId The ID of the node to synthesize context for.
      * @param rootNode The root node of the tree.
      * @returns The synthesized context string, or null if synthesis failed.
@@ -245,16 +250,21 @@ export class ContextService {
         }
 
         try {
+            // Extract persist tags from parent context before sending to LLM
+            const { cleanedContext, persistData } = this.extractPersistTags(parentContext);
+            
             const prompts = this.settingsManager.getPrompts();
             const prompt = prompts.context_synthesis_user
-                .replace(/{{parent_context}}/g, parentContext || 'No parent context available.')
+                .replace(/{{parent_context}}/g, cleanedContext || 'No parent context available.')
                 .replace(/{{node_content}}/g, node.content);
 
             // Use the editor model for context synthesis as it's good at distilling and combining information
             const synthesizedContext = await this.openRouterClient.chat('editor', prompt);
             
             if (synthesizedContext && synthesizedContext.trim() !== '') {
-                return synthesizedContext.trim();
+                // Append persist data back to the synthesized context
+                const finalContext = this.appendPersistData(synthesizedContext.trim(), persistData);
+                return finalContext;
             } else {
                 console.warn(`ContextService: Empty response from context synthesis for node ${nodeId}`);
                 return null;
@@ -263,5 +273,46 @@ export class ContextService {
             console.error(`ContextService: Failed to synthesize context for node ${nodeId}:`, error);
             return null;
         }
+    }
+
+    /**
+     * Extracts <persist></persist> tags from context text.
+     * @param context The context text to extract persist tags from.
+     * @returns Object with cleaned context (without persist tags) and extracted persist data.
+     */
+    private extractPersistTags(context: string): { cleanedContext: string; persistData: string[] } {
+        const persistData: string[] = [];
+        
+        // Match <persist>...</persist> tags (including multiline content)
+        const persistRegex = /<persist>([\s\S]*?)<\/persist>/g;
+        
+        // Extract all persist content
+        let match;
+        while ((match = persistRegex.exec(context)) !== null) {
+            persistData.push(match[1]); // Content inside the tags
+        }
+        
+        // Remove persist tags from context
+        const cleanedContext = context.replace(persistRegex, '').trim();
+        
+        return { cleanedContext, persistData };
+    }
+
+    /**
+     * Appends persist data back to synthesized context.
+     * @param synthesizedContext The context returned by the LLM.
+     * @param persistData Array of persist content to append.
+     * @returns The final context with persist data appended.
+     */
+    private appendPersistData(synthesizedContext: string, persistData: string[]): string {
+        if (persistData.length === 0) {
+            return synthesizedContext;
+        }
+        
+        // Append each persist block back to the synthesized context
+        const persistBlocks = persistData.map(data => `<persist>${data}</persist>`);
+        
+        // Add persist blocks at the end, separated by newlines
+        return synthesizedContext + '\n\n' + persistBlocks.join('\n\n');
     }
 } 

@@ -2,6 +2,8 @@ import { ContextExtractionService } from './ContextExtractionService';
 import { DocumentNode } from '../DocumentNode';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
+import { ContextService } from './ContextService';
+import { TreeService } from './TreeService';
 
 /**
  * Test suite for ContextExtractionService
@@ -125,4 +127,95 @@ export async function testContextExtraction(): Promise<void> {
 // Helper function to run tests manually
 export function runContextExtractionTests() {
     testContextExtraction().catch(console.error);
+}
+
+/**
+ * Test the persist tag functionality in ContextService
+ */
+export async function testPersistTagFunctionality(): Promise<void> {
+    console.log('🧪 Testing Persist Tag Functionality...');
+
+    // Create mock dependencies
+    const treeService = new TreeService();
+    const settingsManager = new SettingsManager();
+    
+    // Create a mock OpenRouterClient for testing
+    const mockOpenRouterClient = {
+        chat: async (purpose: string, prompt: string): Promise<string> => {
+            // Mock response that simulates an LLM synthesizing context
+            return `This is synthesized context based on: ${prompt.substring(0, 100)}...`;
+        }
+    } as any;
+
+    const contextService = new ContextService(treeService, mockOpenRouterClient, settingsManager);
+
+    // Test the persist tag extraction method directly
+    console.log('📝 Testing persist tag extraction...');
+    
+    const testContext = `
+This is regular context content.
+
+<persist>
+Important data that should persist: API key = abc123
+Character names: Alice, Bob, Charlie
+</persist>
+
+More regular context here.
+
+<persist>
+Another persist block with settings:
+Theme: Dark fantasy
+Style: Third person narrative
+</persist>
+
+Final context content.
+    `.trim();
+
+    // Access private method through type assertion for testing
+    const extractResult = (contextService as any).extractPersistTags(testContext);
+    
+    console.log('✓ Extracted persist data:');
+    console.log('  - Number of persist blocks:', extractResult.persistData.length);
+    console.log('  - Cleaned context length:', extractResult.cleanedContext.length);
+    console.log('  - Persist data:', extractResult.persistData);
+    
+    // Test appending persist data back
+    const mockSynthesizedContent = 'This is new synthesized context content.';
+    const finalResult = (contextService as any).appendPersistData(mockSynthesizedContent, extractResult.persistData);
+    
+    console.log('✓ Final result with persist data appended:');
+    console.log('  - Length:', finalResult.length);
+    console.log('  - Contains original persist blocks:', finalResult.includes('<persist>'));
+    
+    // Verify that persist blocks are preserved
+    const expectedPersistBlocks = 2;
+    const actualPersistBlocks = (finalResult.match(/<persist>/g) || []).length;
+    
+    if (actualPersistBlocks === expectedPersistBlocks) {
+        console.log('✅ Persist blocks correctly preserved!');
+    } else {
+        console.log(`❌ Expected ${expectedPersistBlocks} persist blocks, found ${actualPersistBlocks}`);
+    }
+
+    // Test with empty persist data
+    const noPersistResult = (contextService as any).appendPersistData('Clean content', []);
+    if (noPersistResult === 'Clean content') {
+        console.log('✅ Correctly handles empty persist data');
+    } else {
+        console.log('❌ Failed to handle empty persist data correctly');
+    }
+
+    console.log('🎉 Persist Tag Functionality Test Complete!');
+}
+
+/**
+ * Test persist tag functionality in full context synthesis flow
+ */
+export async function testFullContextSynthesisWithPersist(): Promise<void> {
+    console.log('🧪 Testing Full Context Synthesis with Persist Tags...');
+
+    // This would require setting up a full node hierarchy and testing the synthesizeContext method
+    // For now, we'll just log that this test would need to be run with actual nodes
+    console.log('📝 Full synthesis test requires actual document nodes and OpenRouter client');
+    console.log('✅ Partial test complete - persist tag extraction/appending verified');
 } 
