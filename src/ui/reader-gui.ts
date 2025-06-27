@@ -1766,7 +1766,7 @@ export class ReaderGUI {
                                 type: 'primary',
                                 handler: async () => {
                                     if (selectedActionId) {
-                                        this.saveCurrentAction(selectedActionId);
+                                        await this.saveCurrentAction(selectedActionId);
                                     }
                                     this.updateActionButtons();
                                     unsavedChanges = false;
@@ -2209,22 +2209,22 @@ export class ReaderGUI {
             setUnsavedChanges(false);
         };
 
-        (window as any).toggleAction = (actionId: string) => {
-            this.readerEditor.updateAction(actionId, { 
+        (window as any).toggleAction = async (actionId: string) => {
+            await this.readerEditor.updateAction(actionId, { 
                 enabled: !this.readerEditor.getAllActions().find(a => a.id === actionId)?.enabled 
             });
             this.refreshActionsList();
             setUnsavedChanges(true);
         };
 
-        (window as any).moveActionUp = (actionId: string) => {
-            this.moveAction(actionId, -1);
+        (window as any).moveActionUp = async (actionId: string) => {
+            await this.moveAction(actionId, -1);
             this.refreshActionsList();
             setUnsavedChanges(true);
         };
 
-        (window as any).moveActionDown = (actionId: string) => {
-            this.moveAction(actionId, 1);
+        (window as any).moveActionDown = async (actionId: string) => {
+            await this.moveAction(actionId, 1);
             this.refreshActionsList();
             setUnsavedChanges(true);
         };
@@ -2246,8 +2246,8 @@ export class ReaderGUI {
 
         // Add new action
         const addBtn = document.getElementById('add-new-action');
-        addBtn?.addEventListener('click', () => {
-            this.addNewAction();
+        addBtn?.addEventListener('click', async () => {
+            await this.addNewAction();
             this.refreshActionsList();
             setUnsavedChanges(true);
         });
@@ -2264,17 +2264,19 @@ export class ReaderGUI {
             const target = e.target as HTMLElement;
             
             if (target.id === 'save-current-action' && selectedActionId) {
-                this.saveCurrentAction(selectedActionId);
-                setUnsavedChanges(false);
+                this.saveCurrentAction(selectedActionId).then(() => {
+                    setUnsavedChanges(false);
+                });
             }
             
             if (target.id === 'delete-action' && selectedActionId) {
                 if (confirm('Are you sure you want to delete this action?')) {
-                    this.readerEditor.deleteAction(selectedActionId);
-                    this.refreshActionsList();
-                    setSelectedActionId(null);
-                    this.clearActionEditor();
-                    setUnsavedChanges(true);
+                    this.readerEditor.deleteAction(selectedActionId).then(() => {
+                        this.refreshActionsList();
+                        setSelectedActionId(null);
+                        this.clearActionEditor();
+                        setUnsavedChanges(true);
+                    });
                 }
             }
         });
@@ -2331,7 +2333,7 @@ export class ReaderGUI {
     /**
      * Save the current action being edited
      */
-    private saveCurrentAction(actionId: string): void {
+    private async saveCurrentAction(actionId: string): Promise<void> {
         const form = document.getElementById('action-editor-form') as HTMLFormElement;
         if (!form) return;
 
@@ -2343,14 +2345,14 @@ export class ReaderGUI {
             prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
         };
 
-        this.readerEditor.updateAction(actionId, updates);
+        await this.readerEditor.updateAction(actionId, updates);
         this.refreshActionsList();
     }
 
     /**
      * Add a new custom action
      */
-    private addNewAction(): void {
+    private async addNewAction(): Promise<void> {
         const newAction = {
             title: 'New Action',
             prompt: 'Please modify the following text:\n\n{{selected}}\n\nModified text:',
@@ -2360,7 +2362,7 @@ export class ReaderGUI {
             description: 'Custom action'
         };
 
-        const actionId = this.readerEditor.addAction(newAction);
+        const actionId = await this.readerEditor.addAction(newAction);
         
         // Auto-select the new action
         setTimeout(() => {
@@ -2371,7 +2373,7 @@ export class ReaderGUI {
     /**
      * Move an action up or down in order
      */
-    private moveAction(actionId: string, direction: number): void {
+    private async moveAction(actionId: string, direction: number): Promise<void> {
         const actions = this.readerEditor.getAllActions();
         const action = actions.find(a => a.id === actionId);
         if (!action) return;
@@ -2382,10 +2384,10 @@ export class ReaderGUI {
         // Find action at target position and swap
         const targetAction = actions.find(a => a.order === newOrder);
         if (targetAction) {
-            this.readerEditor.updateAction(targetAction.id, { order: action.order });
+            await this.readerEditor.updateAction(targetAction.id, { order: action.order });
         }
         
-        this.readerEditor.updateAction(actionId, { order: newOrder });
+        await this.readerEditor.updateAction(actionId, { order: newOrder });
     }
 
 

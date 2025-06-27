@@ -97,14 +97,23 @@ export class ReaderEditManager {
             
             if (savedConfig && savedConfig.version === currentVersion) {
                 this.config = savedConfig;
+                console.log('✅ Reader edit actions config loaded from storage', {
+                    actionCount: this.config.actions.length,
+                    version: this.config.version
+                });
             } else {
                 // Version mismatch or no config - use defaults and save
+                console.log('📝 Using default reader edit actions config', {
+                    reason: savedConfig ? 'version mismatch' : 'no saved config',
+                    savedVersion: savedConfig?.version,
+                    currentVersion
+                });
                 this.config.version = currentVersion;
                 await this.saveConfig();
     
             }
         } catch (error) {
-            console.warn('Failed to load reader edit actions config:', error);
+            console.error('❌ Failed to load reader edit actions config:', error);
             // Continue with default config
         }
     }
@@ -116,8 +125,13 @@ export class ReaderEditManager {
         try {
             const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
             await storage.set(ReaderEditManager.CONFIG_STORAGE_KEY, this.config);
+            console.log('✅ Reader edit actions config saved successfully', {
+                actionCount: this.config.actions.length,
+                version: this.config.version
+            });
         } catch (error) {
-            console.warn('Failed to save reader edit actions config:', error);
+            console.error('❌ Failed to save reader edit actions config:', error);
+            throw error; // Re-throw to ensure callers are aware of the failure
         }
     }
 
@@ -140,7 +154,7 @@ export class ReaderEditManager {
     /**
      * Add a new action
      */
-    public addAction(action: Omit<ReaderEditAction, 'id'>): string {
+    public async addAction(action: Omit<ReaderEditAction, 'id'>): Promise<string> {
         const id = `custom-${Date.now()}`;
         const newAction: ReaderEditAction = {
             ...action,
@@ -148,7 +162,7 @@ export class ReaderEditManager {
         };
         
         this.config.actions.push(newAction);
-        this.saveConfig();
+        await this.saveConfig();
         
         return id;
     }
@@ -156,12 +170,12 @@ export class ReaderEditManager {
     /**
      * Update an existing action
      */
-    public updateAction(id: string, updates: Partial<ReaderEditAction>): boolean {
+    public async updateAction(id: string, updates: Partial<ReaderEditAction>): Promise<boolean> {
         const index = this.config.actions.findIndex(action => action.id === id);
         if (index === -1) return false;
         
         this.config.actions[index] = { ...this.config.actions[index], ...updates };
-        this.saveConfig();
+        await this.saveConfig();
         
         return true;
     }
@@ -169,12 +183,12 @@ export class ReaderEditManager {
     /**
      * Delete an action
      */
-    public deleteAction(id: string): boolean {
+    public async deleteAction(id: string): Promise<boolean> {
         const index = this.config.actions.findIndex(action => action.id === id);
         if (index === -1) return false;
         
         this.config.actions.splice(index, 1);
-        this.saveConfig();
+        await this.saveConfig();
         
         return true;
     }

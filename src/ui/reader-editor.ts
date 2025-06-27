@@ -446,21 +446,21 @@ export class ReaderEditor {
     /**
      * Update an existing action
      */
-    public updateAction(id: string, updates: any): boolean {
+    public async updateAction(id: string, updates: any): Promise<boolean> {
         return this.editManager.updateAction(id, updates);
     }
 
     /**
      * Delete an action
      */
-    public deleteAction(id: string): boolean {
+    public async deleteAction(id: string): Promise<boolean> {
         return this.editManager.deleteAction(id);
     }
 
     /**
      * Add a new action
      */
-    public addAction(action: any): string {
+    public async addAction(action: any): Promise<string> {
         return this.editManager.addAction(action);
     }
 
