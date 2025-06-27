@@ -627,6 +627,11 @@ export function renderNodeDetails() {
                 }
                 </style>
             </div>
+            
+            <!-- Generation Status Display -->
+            <div id="generation-status" style="display: none; margin-top: 0.75rem; padding: 0.5rem 0.75rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 6px; font-size: 0.9rem; color: #0c5460; font-style: italic;">
+                <!-- Status messages will appear here -->
+            </div>
         </div>
 
         <div class="node-section">

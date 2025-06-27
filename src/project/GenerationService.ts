@@ -226,18 +226,27 @@ export class GenerationService {
             if (progress.type === 'creator') {
                 const payload = progress.payload as CreatorPayload;
                 
-                // Only store actual content, not temporary "working" messages
-                if (!payload.response.includes('is working')) {
+                // Handle status messages vs actual content differently
+                if (payload.response.includes('is working')) {
+                    // Show status messages in the dedicated status area
+                    if (!this.isGeneratingAllChildren) {
+                        const statusElement = document.getElementById('generation-status');
+                        if (statusElement) {
+                            statusElement.textContent = payload.response;
+                            statusElement.style.display = 'block';
+                        }
+                    }
+                } else {
+                    // Only store actual content, not temporary "working" messages
                     currentIterationContent = payload.response;
-                }
-                
-                // Live-update the content text area as the creator works, but only if not in bulk mode
-                // During bulk operations, we don't want to interfere with the selected node's display
-                // Skip temporary "working" messages
-                if (!this.isGeneratingAllChildren && !payload.response.includes('is working')) {
-                    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                    if (contentTextArea && document.activeElement !== contentTextArea) {
-                        contentTextArea.value = payload.response;
+                    
+                    // Live-update the content text area as the creator works, but only if not in bulk mode
+                    // During bulk operations, we don't want to interfere with the selected node's display
+                    if (!this.isGeneratingAllChildren) {
+                        const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+                        if (contentTextArea && document.activeElement !== contentTextArea) {
+                            contentTextArea.value = payload.response;
+                        }
                     }
                 }
             } else if (progress.type === 'rater') {
@@ -369,6 +378,15 @@ export class GenerationService {
             this.deps.loopOrchestrator.off('started', onStarted);
             this.deps.loopOrchestrator.off('progress', onProgress);
             this.deps.loopOrchestrator.off('aborted', onAborted);
+            
+            // Clear generation status display
+            if (!isChildGeneration) {
+                const statusElement = document.getElementById('generation-status');
+                if (statusElement) {
+                    statusElement.style.display = 'none';
+                    statusElement.textContent = '';
+                }
+            }
             
             // Ensure high-level progress is always cleared for single node generation
             if (!isChildGeneration) {
