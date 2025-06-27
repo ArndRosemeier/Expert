@@ -126,9 +126,7 @@ export class ReaderGUI {
             this.restoreSettingsPanel();
         }
         
-        // Restore reader editor state after DOM recreation
-        // DISABLED: With HTML highlighting, DOM recreation is no longer needed
-        // this.readerEditor.onDOMRecreated();
+        // Reader editor state is maintained through always-edit mode
     }
 
     /**
@@ -507,9 +505,12 @@ export class ReaderGUI {
      * Generate HTML for a single content node
      */
     private generateNodeHTML(node: ContentNode): string {
+        // Calculate depth from leaf for hierarchy coloring
+        const depthFromLeaf = this.calculateDepthFromLeaf(node);
+        
         // Always use minimal mode - small title, no meta info, continuous reading
         let html = `
-            <div class="reader-node reader-node-minimal" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}">
+            <div class="reader-node reader-node-minimal" id="node-${node.id}" data-node-id="${node.id}" data-level="${node.level}" data-depth-from-leaf="${depthFromLeaf}">
                 <div class="node-minimal-title">${node.title}</div>
         `;
 
@@ -526,11 +527,31 @@ export class ReaderGUI {
     }
 
     /**
-     * Format content for display - DISABLED in always-edit mode
+     * Calculate depth from leaf for a content node (for hierarchy coloring)
+     * Based on template structure, not actual tree structure
      */
+    private calculateDepthFromLeaf(contentNode: ContentNode): number {
+        const documentNode = this.projectManager.findNodeById(contentNode.id);
+        if (!documentNode) return 0;
+        
+        return this.getDepthFromTemplateLeaf(documentNode);
+    }
 
-
-
+    /**
+     * Calculate how many levels this node is above the template's deepest level
+     * Uses the template's hierarchy levels, not the actual tree structure
+     */
+    private getDepthFromTemplateLeaf(node: DocumentNode): number {
+        const template = this.projectManager.template;
+        const maxTemplateLevel = template.hierarchyLevels.length - 1; // 0-indexed
+        const nodeLevel = node.level;
+        
+        // Calculate depth from template's deepest level
+        // If a node is at level 0 and template has 4 levels (0,1,2,3), depth is 3
+        // If a node is at level 2 and template has 4 levels (0,1,2,3), depth is 1
+        // If a node is at level 3 and template has 4 levels (0,1,2,3), depth is 0
+        return Math.max(0, maxTemplateLevel - nodeLevel);
+    }
 
     /**
      * Apply CSS styles to the reader
@@ -543,6 +564,20 @@ export class ReaderGUI {
         styleElement.id = 'reader-styles';
         styleElement.textContent = this.generateCSS();
         document.head.appendChild(styleElement);
+    }
+
+    /**
+     * Refresh CSS styles (used when settings change)
+     */
+    private refreshStyles(): void {
+        // Remove existing styles
+        const existingStyles = document.getElementById('reader-styles');
+        if (existingStyles) {
+            existingStyles.remove();
+        }
+
+        // Re-apply styles with current configuration
+        this.applyStyles();
     }
 
     /**
@@ -692,6 +727,44 @@ export class ReaderGUI {
             .reader-node:hover {
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             }
+
+            /* Hierarchy background colors based on depth from leaf when showing all levels */
+            ${this.config.showAllLevels ? `
+            /* Leafs (deepest content) - White background */
+            .reader-node[data-depth-from-leaf="0"] {
+                background-color: #ffffff;
+                border-left: 4px solid #e5e7eb;
+            }
+            /* 1 level above leafs - Light green */
+            .reader-node[data-depth-from-leaf="1"] {
+                background-color: #f0fdf4;
+                border-left: 4px solid #22c55e;
+            }
+            /* 2 levels above leafs - Light blue */
+            .reader-node[data-depth-from-leaf="2"] {
+                background-color: #eff6ff;
+                border-left: 4px solid #3b82f6;
+            }
+            /* 3 levels above leafs - Light red */
+            .reader-node[data-depth-from-leaf="3"] {
+                background-color: #fef2f2;
+                border-left: 4px solid #ef4444;
+            }
+            /* 4 levels above leafs - Light gray */
+            .reader-node[data-depth-from-leaf="4"] {
+                background-color: #f9fafb;
+                border-left: 4px solid #9ca3af;
+            }
+            /* 5+ levels above leafs - Darker gray */
+            .reader-node[data-depth-from-leaf="5"], 
+            .reader-node[data-depth-from-leaf="6"], 
+            .reader-node[data-depth-from-leaf="7"], 
+            .reader-node[data-depth-from-leaf="8"], 
+            .reader-node[data-depth-from-leaf="9"] {
+                background-color: #f3f4f6;
+                border-left: 4px solid #6b7280;
+            }
+            ` : ''}
 
             .node-header {
                 margin-bottom: 1.5rem;
@@ -1011,6 +1084,62 @@ export class ReaderGUI {
                 border-radius: 0;
                 transition: none;
             }
+
+            /* Hierarchy background colors override for minimal mode when showing all levels */
+            ${this.config.showAllLevels ? `
+            /* Leafs (deepest content) - White background */
+            .reader-node-minimal[data-depth-from-leaf="0"] {
+                background-color: #ffffff !important;
+                border-left: 4px solid #e5e7eb !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            /* 1 level above leafs - Light green */
+            .reader-node-minimal[data-depth-from-leaf="1"] {
+                background-color: #f0fdf4 !important;
+                border-left: 4px solid #22c55e !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            /* 2 levels above leafs - Light blue */
+            .reader-node-minimal[data-depth-from-leaf="2"] {
+                background-color: #eff6ff !important;
+                border-left: 4px solid #3b82f6 !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            /* 3 levels above leafs - Light red */
+            .reader-node-minimal[data-depth-from-leaf="3"] {
+                background-color: #fef2f2 !important;
+                border-left: 4px solid #ef4444 !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            /* 4 levels above leafs - Light gray */
+            .reader-node-minimal[data-depth-from-leaf="4"] {
+                background-color: #f9fafb !important;
+                border-left: 4px solid #9ca3af !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            /* 5+ levels above leafs - Darker gray */
+            .reader-node-minimal[data-depth-from-leaf="5"], 
+            .reader-node-minimal[data-depth-from-leaf="6"], 
+            .reader-node-minimal[data-depth-from-leaf="7"], 
+            .reader-node-minimal[data-depth-from-leaf="8"], 
+            .reader-node-minimal[data-depth-from-leaf="9"] {
+                background-color: #f3f4f6 !important;
+                border-left: 4px solid #6b7280 !important;
+                padding: 0.75rem !important;
+                border-radius: 4px !important;
+                margin-bottom: 1rem !important;
+            }
+            ` : ''}
 
             .reader-node-minimal:last-child {
                 margin-bottom: 0;
@@ -1397,6 +1526,9 @@ export class ReaderGUI {
                     }
                 }
                 
+                // Refresh styles to apply/remove hierarchy level backgrounds
+                this.refreshStyles();
+                
                 this.saveReaderConfig();
             });
         }
@@ -1494,9 +1626,8 @@ export class ReaderGUI {
      */
     private toggleTOC(): void {
         this.config.showTOC = !this.config.showTOC;
-        // this.render(); // DISABLED in always-edit mode to prevent textarea duplication
         
-        // Just show/hide the TOC without full re-render
+        // Show/hide the TOC without full re-render (preserves editor state)
         const tocElement = this.container.querySelector('.reader-toc') as HTMLElement;
         if (tocElement) {
             tocElement.style.display = this.config.showTOC ? 'block' : 'none';
@@ -2414,7 +2545,6 @@ export class ReaderGUI {
 
     /**
      * Start listening for project updates to refresh reader content
-     * Note: Disabled in always-edit mode to prevent DOM conflicts
      */
     private startListeningForUpdates(): void {
         if (this.isListeningForUpdates) return;
@@ -2605,58 +2735,19 @@ export class ReaderGUI {
      * Preserve the current reading position before updating content
      */
     private preserveReadingPosition(): void {
-        // Position preservation disabled in always-edit mode
-        // Content state is managed by individual text editors
+        // Content state is managed by individual text editors in always-edit mode
+        // No position preservation needed
     }
 
 
 
     /**
      * Refresh content while preserving reading position
-     * DISABLED in always-edit mode to prevent DOM conflicts
      */
     private refreshContent(): void {
-
-        // In always-edit mode, content is managed entirely by textareas
-        // No DOM refreshes needed since we disabled auto-update events
+        // In always-edit mode, content is managed entirely by individual text editors
+        // No full DOM refreshes needed - updates happen through ReaderEditor
         return;
-        
-        // Original code commented out to prevent textarea duplication issues:
-        /*
-        // Re-analyze content
-        const newContentNodes = this.analyzeProjectContent();
-        
-        // Check if content actually changed
-        if (this.hasContentChanged(newContentNodes)) {
-            this.contentNodes = newContentNodes;
-            
-            // Show update notification
-            this.showUpdateNotification();
-            
-            // Update TOC if it's visible
-            if (this.config.showTOC) {
-                const tocElement = this.container.querySelector('.reader-toc');
-                if (tocElement) {
-                    tocElement.innerHTML = this.generateTOCContent();
-                }
-            }
-            
-            // Update content area
-            const contentArea = this.container.querySelector('.reader-content-area');
-            if (contentArea) {
-                contentArea.innerHTML = this.generateContent();
-                this.buildClickMappings();
-                
-                // Restore reader editor state after partial DOM update
-                this.readerEditor.onDOMRecreated();
-                
-                // Restore reading position after a short delay
-                setTimeout(() => {
-                    this.restoreReadingPosition();
-                }, 100);
-            }
-        }
-        */
     }
 
 
