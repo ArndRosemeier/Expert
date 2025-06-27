@@ -1765,8 +1765,11 @@ export class ReaderGUI {
                                 label: 'Save Changes',
                                 type: 'primary',
                                 handler: async () => {
-                                    if (selectedActionId) {
-                                        await this.saveCurrentAction(selectedActionId);
+                                    // Get the current action ID from the form
+                                    const form = document.getElementById('action-editor-form') as HTMLFormElement;
+                                    const currentActionId = form?.getAttribute('data-action-id');
+                                    if (currentActionId) {
+                                        await this.saveCurrentAction(currentActionId);
                                     }
                                     this.updateActionButtons();
                                     unsavedChanges = false;
@@ -2259,24 +2262,34 @@ export class ReaderGUI {
             }
         });
 
-        // Save current action
+        // Save current action - need to get current selected action ID dynamically
         document.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
             
-            if (target.id === 'save-current-action' && selectedActionId) {
-                this.saveCurrentAction(selectedActionId).then(() => {
-                    setUnsavedChanges(false);
-                });
+            if (target.id === 'save-current-action') {
+                // Get the action ID from the form data attribute
+                const form = document.getElementById('action-editor-form') as HTMLFormElement;
+                const currentActionId = form?.getAttribute('data-action-id');
+                if (currentActionId) {
+                    this.saveCurrentAction(currentActionId).then(() => {
+                        setUnsavedChanges(false);
+                    });
+                }
             }
             
-            if (target.id === 'delete-action' && selectedActionId) {
-                if (confirm('Are you sure you want to delete this action?')) {
-                    this.readerEditor.deleteAction(selectedActionId).then(() => {
-                        this.refreshActionsList();
-                        setSelectedActionId(null);
-                        this.clearActionEditor();
-                        setUnsavedChanges(true);
-                    });
+            if (target.id === 'delete-action') {
+                // Get the action ID from the form data attribute
+                const form = document.getElementById('action-editor-form') as HTMLFormElement;
+                const currentActionId = form?.getAttribute('data-action-id');
+                if (currentActionId) {
+                    if (confirm('Are you sure you want to delete this action?')) {
+                        this.readerEditor.deleteAction(currentActionId).then(() => {
+                            this.refreshActionsList();
+                            setSelectedActionId(null);
+                            this.clearActionEditor();
+                            setUnsavedChanges(true);
+                        });
+                    }
                 }
             }
         });
