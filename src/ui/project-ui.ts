@@ -336,6 +336,7 @@ function renderTree() {
 
     // Attach event listeners for expand/collapse buttons
     treeContainer.querySelectorAll('.tree-expand-btn').forEach(el => {
+        // Single click for individual expand/collapse
         el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event bubbling
             const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
@@ -347,6 +348,42 @@ function renderTree() {
                 }
                 saveCollapsedState().catch(console.error); // Persist the collapsed state
                 renderTree(); // Re-render tree to update expand/collapse state
+            }
+        });
+
+        // Double click for expand/collapse all nodes at the same level
+        el.addEventListener('dblclick', (e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            if (nodeId && projectManager) {
+                const node = projectManager.findNodeById(nodeId);
+                
+                if (node) {
+                    // Get all nodes at the same hierarchy level
+                    const nodesAtSameLevel = projectManager.getTreeService().getNodesAtLevel(node.level, projectManager.rootNode);
+                    
+                    // Determine action based on current node's state
+                    const isCurrentNodeCollapsed = collapsedNodes.has(nodeId);
+                    
+                    if (isCurrentNodeCollapsed) {
+                        // Current node is collapsed, so expand all nodes at this level
+                        nodesAtSameLevel.forEach(levelNode => {
+                            if (levelNode.children.length > 0) { // Only nodes with children can be expanded
+                                collapsedNodes.delete(levelNode.id);
+                            }
+                        });
+                    } else {
+                        // Current node is expanded, so collapse all nodes at this level
+                        nodesAtSameLevel.forEach(levelNode => {
+                            if (levelNode.children.length > 0) { // Only nodes with children can be collapsed
+                                collapsedNodes.add(levelNode.id);
+                            }
+                        });
+                    }
+                    
+                    saveCollapsedState().catch(console.error); // Persist the collapsed state
+                    renderTree(); // Re-render tree to update expand/collapse state
+                }
             }
         });
     });
@@ -1128,7 +1165,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px;">${expandIcon}</span>`;
+        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
         html += `<span style="margin-right: 16px;"></span>`;
@@ -2099,6 +2136,7 @@ function renderMultiProjectTree() {
 
     // Attach event listeners for expand/collapse buttons
     treeContainer.querySelectorAll('.tree-expand-btn').forEach(el => {
+        // Single click for individual expand/collapse
         el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event bubbling
             const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
@@ -2110,6 +2148,52 @@ function renderMultiProjectTree() {
                 }
                 saveCollapsedState().catch(console.error); // Persist the collapsed state
                 renderMultiProjectTree(); // Re-render tree to update expand/collapse state
+            }
+        });
+
+        // Double click for expand/collapse all nodes at the same level
+        el.addEventListener('dblclick', (e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            if (nodeId) {
+                // Find which project this node belongs to
+                let nodeProject: ProjectManager | null = null;
+                let node: DocumentNode | null = null;
+                
+                for (const project of projects) {
+                    node = project.findNodeById(nodeId);
+                    if (node) {
+                        nodeProject = project;
+                        break;
+                    }
+                }
+                
+                if (node && nodeProject) {
+                    // Get all nodes at the same hierarchy level
+                    const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtLevel(node.level, nodeProject.rootNode);
+                    
+                    // Determine action based on current node's state
+                    const isCurrentNodeCollapsed = collapsedNodes.has(nodeId);
+                    
+                    if (isCurrentNodeCollapsed) {
+                        // Current node is collapsed, so expand all nodes at this level
+                        nodesAtSameLevel.forEach(levelNode => {
+                            if (levelNode.children.length > 0) { // Only nodes with children can be expanded
+                                collapsedNodes.delete(levelNode.id);
+                            }
+                        });
+                    } else {
+                        // Current node is expanded, so collapse all nodes at this level
+                        nodesAtSameLevel.forEach(levelNode => {
+                            if (levelNode.children.length > 0) { // Only nodes with children can be collapsed
+                                collapsedNodes.add(levelNode.id);
+                            }
+                        });
+                    }
+                    
+                    saveCollapsedState().catch(console.error); // Persist the collapsed state
+                    renderMultiProjectTree(); // Re-render tree to update expand/collapse state
+                }
             }
         });
     });
