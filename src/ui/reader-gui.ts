@@ -710,7 +710,7 @@ export class ReaderGUI {
 
             .reader-content {
                 max-width: ${this.config.maxWidth}px;
-                margin: 0 auto;
+                margin: 0;
                 padding: 2rem;
                 line-height: ${this.config.lineHeight};
                 font-size: ${this.config.fontSize}px;
@@ -841,7 +841,7 @@ export class ReaderGUI {
                 
                 .reader-content {
                     padding: 1rem;
-                    max-width: 100%;
+                    max-width: none;
                 }
                 
                 .reader-controls {
