@@ -293,7 +293,7 @@ export class ReaderEditManager {
                                     } else {
                                         // Don't close if empty, just refocus
                                         input?.focus();
-                                        throw new Error('Please enter a value'); // Prevent modal from closing
+                                        // Don't close modal if input is empty, but don't throw error
                                     }
                                 }
                             }
