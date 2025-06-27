@@ -402,6 +402,14 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         </div>
                     </div>
                     
+                    <div id="loading-section" class="extract-section" style="display: none;">
+                        <div style="text-align: center; padding: 2rem;">
+                            <div style="font-size: 2rem; margin-bottom: 1rem;">⏳</div>
+                            <div style="font-weight: bold; margin-bottom: 0.5rem;">Extracting Context...</div>
+                            <div style="color: #6c757d; font-size: 0.9rem;">This may take a moment depending on content size</div>
+                        </div>
+                    </div>
+                    
                     <div id="result-section" class="extract-section" style="display: none;">
                         <label for="extract-result">Extracted Information:</label>
                         <textarea id="extract-result" readonly></textarea>
@@ -453,21 +461,58 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                                 }
                             }
                             
+                            // Show loading indicators
+                            const extractBtn = document.querySelector('[data-action-id="extract"]') as HTMLButtonElement;
+                            const loadingSection = document.getElementById('loading-section');
+                            const resultSection = document.getElementById('result-section');
+                            const originalText = extractBtn?.textContent || 'Extract Context';
+                            
+                            if (extractBtn) {
+                                extractBtn.disabled = true;
+                                extractBtn.textContent = '⏳ Extracting...';
+                            }
+                            
+                            // Show loading section, hide result section
+                            if (loadingSection) {
+                                loadingSection.style.display = 'block';
+                            }
+                            if (resultSection) {
+                                resultSection.style.display = 'none';
+                            }
+                            
                             try {
                                 const result = await contextService.extractContext(node, prompt, depth);
                                 
-                                // Show result
+                                // Hide loading section and show result
+                                if (loadingSection) {
+                                    loadingSection.style.display = 'none';
+                                }
+                                
                                 const extractResult = document.getElementById('extract-result') as HTMLTextAreaElement;
-                                const resultSection = document.getElementById('result-section');
                                 if (extractResult && resultSection) {
                                     extractResult.value = result;
                                     resultSection.style.display = 'block';
+                                }
+                                
+                                // Re-enable button with new text
+                                if (extractBtn) {
+                                    extractBtn.disabled = false;
+                                    extractBtn.textContent = '🔄 Extract Again';
                                 }
                                 
                                 // Prevent modal from closing by throwing a specific error that gets caught silently
                                 throw new Error('__KEEP_MODAL_OPEN__');
                                 
                             } catch (error: any) {
+                                // Hide loading section and re-enable button on error
+                                if (loadingSection) {
+                                    loadingSection.style.display = 'none';
+                                }
+                                if (extractBtn) {
+                                    extractBtn.disabled = false;
+                                    extractBtn.textContent = originalText;
+                                }
+                                
                                 if (error.message === '__KEEP_MODAL_OPEN__') {
                                     throw error; // Keep modal open without logging error
                                 }
