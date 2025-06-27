@@ -191,6 +191,11 @@ export class ReaderEditManager {
         // Fill the prompt with context data
         const filledPrompt = await this.fillPrompt(action.prompt, context);
         
+        // Check if action was canceled during prompt filling
+        if (filledPrompt === '__CANCELED__') {
+            return ''; // Return empty result for canceled actions
+        }
+        
         // Execute the prompt using OpenRouterClient directly
         const openRouterClient = this.getOpenRouterClient();
         const result = await openRouterClient.chat(action.model, filledPrompt);
@@ -218,7 +223,7 @@ export class ReaderEditManager {
                     
                     // Check if user canceled the input
                     if (userInput === '__CANCELED__') {
-                        throw new Error('Action canceled by user');
+                        return '__CANCELED__'; // Return cancel signal instead of throwing
                     }
                     
                     filledPrompt = filledPrompt.replace(match, userInput);
