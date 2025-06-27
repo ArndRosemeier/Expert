@@ -464,12 +464,12 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                                     resultSection.style.display = 'block';
                                 }
                                 
-                                // Don't close modal so user can see result
-                                throw new Error('Extraction complete - modal stays open');
+                                // Prevent modal from closing by throwing a specific error that gets caught silently
+                                throw new Error('__KEEP_MODAL_OPEN__');
                                 
                             } catch (error: any) {
-                                if (error.message === 'Extraction complete - modal stays open') {
-                                    throw error; // Keep modal open
+                                if (error.message === '__KEEP_MODAL_OPEN__') {
+                                    throw error; // Keep modal open without logging error
                                 }
                                 alert('Error during extraction:\n\n' + error.message);
                                 throw error; // Prevent modal from closing on error

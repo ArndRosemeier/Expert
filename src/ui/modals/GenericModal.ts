@@ -129,7 +129,12 @@ export class GenericModal extends BaseModal {
             try {
                 await action.handler();
                 await this.handleAction(action.id);
-            } catch (error) {
+            } catch (error: any) {
+                // Special case: silent errors that are used to prevent modal from closing
+                if (error?.message === '__KEEP_MODAL_OPEN__') {
+                    // Do nothing - this is intentional to keep the modal open
+                    return;
+                }
                 console.error(`Error handling action ${action.id}:`, error);
             }
         });
