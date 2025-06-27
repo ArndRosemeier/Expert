@@ -225,11 +225,16 @@ export class GenerationService {
             
             if (progress.type === 'creator') {
                 const payload = progress.payload as CreatorPayload;
-                currentIterationContent = payload.response;
+                
+                // Only store actual content, not temporary "working" messages
+                if (!payload.response.includes('is working')) {
+                    currentIterationContent = payload.response;
+                }
                 
                 // Live-update the content text area as the creator works, but only if not in bulk mode
                 // During bulk operations, we don't want to interfere with the selected node's display
-                if (!this.isGeneratingAllChildren) {
+                // Skip temporary "working" messages
+                if (!this.isGeneratingAllChildren && !payload.response.includes('is working')) {
                     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
                     if (contentTextArea && document.activeElement !== contentTextArea) {
                         contentTextArea.value = payload.response;
