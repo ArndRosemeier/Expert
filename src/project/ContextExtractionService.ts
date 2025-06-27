@@ -188,7 +188,7 @@ export class ContextExtractionService {
      * @returns Formatted tree data string for chat context
      */
     public createNodeTreeData(node: DocumentNode, _rootNode: DocumentNode, depth: number): string {
-        const nodeData = this.collectTreeDataAtDepth(node, depth);
+        const nodeData = this.collectTreeDataAtDepth(node, depth, 0, '', true);
         
         // Format the tree data for the chat prompt
         let treeData = `Node Hierarchy (${depth + 1} levels deep):\n\n`;
@@ -203,23 +203,34 @@ export class ContextExtractionService {
      * @param depth Maximum depth to traverse
      * @param currentDepth Current traversal depth
      * @param prefix Indentation prefix for tree structure
+     * @param isRootNode Whether this is the root node that started the chat
      * @returns Formatted tree structure
      */
-    private collectTreeDataAtDepth(node: DocumentNode, depth: number, currentDepth: number = 0, prefix: string = ''): string {
+    private collectTreeDataAtDepth(node: DocumentNode, depth: number, currentDepth: number = 0, prefix: string = '', isRootNode: boolean = true): string {
         const parts: string[] = [];
         
         // Add current node information
         const levelName = node.template[node.level] || `Level ${node.level}`;
         let nodeInfo = `${prefix}${levelName}: "${node.title}"`;
         
-        if (node.content && node.content.trim()) {
-            // Include a summary or truncated content for context
-            const contentPreview = node.content.length > 200 
-                ? node.content.substring(0, 200) + '...' 
-                : node.content;
-            nodeInfo += `\n${prefix}  Content: ${contentPreview}`;
+        // For the root node (the one chat started with), include the full context if available
+        if (isRootNode && currentDepth === 0) {
+            if (node.context && node.context.trim()) {
+                nodeInfo += `\n${prefix}  Context: ${node.context}`;
+            }
+            
+            if (node.content && node.content.trim()) {
+                nodeInfo += `\n${prefix}  Content: ${node.content}`;
+            } else if (!node.context || !node.context.trim()) {
+                nodeInfo += `\n${prefix}  [No content or context]`;
+            }
         } else {
-            nodeInfo += `\n${prefix}  [No content]`;
+            // For child nodes, include full content
+            if (node.content && node.content.trim()) {
+                nodeInfo += `\n${prefix}  Content: ${node.content}`;
+            } else {
+                nodeInfo += `\n${prefix}  [No content]`;
+            }
         }
         
         parts.push(nodeInfo);
@@ -227,7 +238,7 @@ export class ContextExtractionService {
         // If we haven't reached the depth limit, include children
         if (currentDepth < depth && node.children.length > 0) {
             for (const child of node.children) {
-                const childData = this.collectTreeDataAtDepth(child, depth, currentDepth + 1, prefix + '  ');
+                const childData = this.collectTreeDataAtDepth(child, depth, currentDepth + 1, prefix + '  ', false);
                 parts.push(childData);
             }
         }
@@ -258,6 +269,107 @@ export class ContextExtractionService {
             nodeCount: nodes.length,
             summary
         };
+    }
+
+    /**
+     * Gets a content length preview for chat context including estimated size.
+     * @param node The root node
+     * @param depth The depth to traverse
+     * @returns Content length analysis for chat context
+     */
+    public getChatContentPreview(node: DocumentNode, depth: number): { nodeCount: number, contentLength: number, summary: string } {
+        const nodes = this.collectNodesAtDepth(node, depth);
+        
+        // Calculate total content length including root node's context and content
+        let totalContentLength = 0;
+        
+        // For root node, include both context and content
+        if (node.context && node.context.trim()) {
+            totalContentLength += node.context.length;
+        }
+        if (node.content && node.content.trim()) {
+            totalContentLength += node.content.length;
+        }
+        
+        // For child nodes, include only content
+        const childNodes = nodes.slice(1); // Skip root node as we already counted it
+        const childNodesWithContent = childNodes.filter(n => n.content && n.content.trim());
+        totalContentLength += childNodesWithContent.reduce((sum, n) => sum + (n.content?.length || 0), 0);
+        
+        // Total nodes with content (including root if it has context or content)
+        const rootHasContent = (node.context && node.context.trim()) || (node.content && node.content.trim());
+        const totalNodesWithContent = (rootHasContent ? 1 : 0) + childNodesWithContent.length;
+        
+        let summary = `Chat Context Analysis:\n\n`;
+        summary += `Starting from: "${node.title}"\n`;
+        summary += `Depth: ${depth} levels\n`;
+        summary += `Total nodes: ${nodes.length}\n`;
+        summary += `Nodes with content/context: ${totalNodesWithContent}\n`;
+        summary += `Total content length: ${totalContentLength.toLocaleString()} characters\n\n`;
+        
+        // Break down content by type
+        if (rootHasContent) {
+            summary += `Root node "${node.title}":\n`;
+            if (node.context && node.context.trim()) {
+                summary += `- Context: ${node.context.length.toLocaleString()} chars\n`;
+            }
+            if (node.content && node.content.trim()) {
+                summary += `- Content: ${node.content.length.toLocaleString()} chars\n`;
+            }
+            summary += `\n`;
+        }
+        
+        if (childNodesWithContent.length > 0) {
+            summary += `Child nodes content:\n`;
+            childNodesWithContent.forEach(n => {
+                const levelName = n.template[n.level] || `Level ${n.level}`;
+                summary += `- ${levelName}: "${n.title}" (${n.content?.length?.toLocaleString() || 0} chars)\n`;
+            });
+        }
+        
+        return {
+            nodeCount: totalNodesWithContent,
+            contentLength: totalContentLength,
+            summary
+        };
+    }
+
+    /**
+     * Validates chat context parameters for length and provides warnings.
+     * @param node The root node
+     * @param depth The depth parameter
+     * @returns Object with separate arrays for errors and warnings
+     */
+    public validateChatContextParameters(node: DocumentNode, depth: number): { errors: string[], warnings: string[] } {
+        const errors: string[] = [];
+        const warnings: string[] = [];
+        
+        if (depth < 0) {
+            errors.push('Depth cannot be negative');
+        }
+        
+        if (depth > 10) {
+            errors.push('Depth cannot exceed 10 levels (performance limitation)');
+        }
+        
+        const preview = this.getChatContentPreview(node, depth);
+        if (preview.nodeCount === 0) {
+            warnings.push('No content or context found at the specified depth. The chat will have minimal context.');
+        }
+        
+        if (preview.contentLength > 50000) {
+            warnings.push(`Large content size (${preview.contentLength.toLocaleString()} characters). This may exceed some model context limits and could result in higher costs. Consider reducing depth if you encounter errors.`);
+        }
+        
+        if (preview.contentLength > 100000) {
+            warnings.push('Very large content size may cause performance issues, longer response times, or significantly higher costs.');
+        }
+        
+        if (preview.contentLength > 200000) {
+            warnings.push('Extremely large content size. Many models have context limits around 200K tokens (~800K characters). This request may fail or be very expensive.');
+        }
+        
+        return { errors, warnings };
     }
 
     /**

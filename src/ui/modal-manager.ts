@@ -1048,10 +1048,10 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
             </div>
             
             <div class="chat-section">
-                <button id="preview-tree-btn" class="button button-secondary" style="width: auto;">Preview Tree Structure</button>
-                <div id="tree-preview-container" class="preview-section" style="display: none;">
-                    <h4 style="margin: 0 0 0.5rem 0;">Tree Structure Preview:</h4>
-                    <div id="tree-preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
+                <button id="preview-content-btn" class="button button-secondary" style="width: auto;">Preview Content Size</button>
+                <div id="content-preview-container" class="preview-section" style="display: none;">
+                    <h4 style="margin: 0 0 0.5rem 0;">Content Size Analysis:</h4>
+                    <div id="content-preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
                 </div>
             </div>
         `,
@@ -1078,6 +1078,22 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                         
                         try {
                             const contextService = projectManager.getContextExtractionService();
+                            
+                            // Validate chat context parameters and show warnings if needed
+                            const validation = contextService.validateChatContextParameters(node, depth);
+                            
+                            if (validation.errors.length > 0) {
+                                alert('Validation errors:\n\n' + validation.errors.join('\n'));
+                                return; // Don't close modal on validation errors
+                            }
+                            
+                            // Show warnings and ask for confirmation
+                            if (validation.warnings.length > 0) {
+                                const warningMessage = 'Content Size Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?\n\nNote: Large contexts may result in higher costs and slower responses.';
+                                if (!confirm(warningMessage)) {
+                                    return; // Don't close modal if user cancels
+                                }
+                            }
                             
                             // Create the tree data structure
                             const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
@@ -1112,19 +1128,35 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                 chatDepth.focus();
             }
             
-            // Setup preview functionality
-            const previewTreeBtn = document.getElementById('preview-tree-btn') as HTMLButtonElement;
-            const treePreviewContainer = document.getElementById('tree-preview-container');
-            const treePreviewContent = document.getElementById('tree-preview-content');
+            // Setup content preview functionality
+            const previewContentBtn = document.getElementById('preview-content-btn') as HTMLButtonElement;
+            const contentPreviewContainer = document.getElementById('content-preview-container');
+            const contentPreviewContent = document.getElementById('content-preview-content');
             
-            if (previewTreeBtn && treePreviewContainer && treePreviewContent) {
-                previewTreeBtn.addEventListener('click', () => {
-                    const depth = parseInt(chatDepth.value);
-                    const contextService = projectManager.getContextExtractionService();
-                    const preview = contextService.getChatTreePreview(node, depth);
-                    
-                    treePreviewContent.textContent = preview.summary;
-                    treePreviewContainer.style.display = 'block';
+            if (previewContentBtn && contentPreviewContainer && contentPreviewContent) {
+                previewContentBtn.addEventListener('click', () => {
+                    try {
+                        console.log('Content preview button clicked');
+                        const depth = parseInt(chatDepth.value);
+                        console.log('Depth:', depth);
+                        const contextService = projectManager.getContextExtractionService();
+                        console.log('Context service:', contextService);
+                        const preview = contextService.getChatContentPreview(node, depth);
+                        console.log('Preview result:', preview);
+                        
+                        contentPreviewContent.textContent = preview.summary;
+                        contentPreviewContainer.style.display = 'block';
+                        console.log('Content preview container displayed');
+                    } catch (error: any) {
+                        console.error('Error in content preview:', error);
+                        alert('Error generating content preview: ' + error.message);
+                    }
+                });
+            } else {
+                console.error('Content preview elements not found:', {
+                    previewContentBtn,
+                    contentPreviewContainer,
+                    contentPreviewContent
                 });
             }
         }
