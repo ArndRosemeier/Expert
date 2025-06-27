@@ -262,6 +262,16 @@ export async function initialize() {
 
     await loadPersistedProjects();
     
+    // Check for force streaming mode URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('forceStreaming') === 'true') {
+        console.log('🌊 Force streaming mode enabled via URL parameter');
+        const client = state.getOpenRouterClient();
+        if (client) {
+            client.setForceStreamingMode(true);
+        }
+    }
+    
     // Initialize the UI with projects (if any)
     initializeProjectUI();
 

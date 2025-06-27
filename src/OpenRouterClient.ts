@@ -48,6 +48,7 @@ export class OpenRouterClient {
   private modelPurposeMap: Record<string, string> = {};
   private aiLogService: AILogService;
   private settingsManager: SettingsManager | null = null;
+  private forceStreamingMode: boolean = false; // Force streaming for all requests
 
   private currentAbortController: AbortController | null = null;
 
@@ -80,6 +81,22 @@ export class OpenRouterClient {
   }
 
   /**
+   * Enable force streaming mode (use streaming for all requests)
+   * Useful workaround for systems where standard JSON requests fail
+   */
+  public setForceStreamingMode(enabled: boolean): void {
+    this.forceStreamingMode = enabled;
+    console.log(`🌊 Force streaming mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
+  }
+
+  /**
+   * Check if force streaming mode is enabled
+   */
+  public isForceStreamingMode(): boolean {
+    return this.forceStreamingMode;
+  }
+
+  /**
    * Cancel any ongoing API request
    */
   public abort(): void {
@@ -108,6 +125,13 @@ export class OpenRouterClient {
     }
 
     console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}`);
+    
+    // If force streaming mode is enabled, use streaming directly
+    if (this.forceStreamingMode) {
+      console.log(`🌊 Force streaming mode enabled - using streaming directly`);
+      return await this.chatWithStreamingFallback(purpose, message, abortSignal);
+    }
+
     const startTime = Date.now();
     const request: OpenRouterRequest = {
       model,
@@ -157,23 +181,68 @@ export class OpenRouterClient {
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // Log failed requests too if logging is enabled
-      if (this.settingsManager?.isAILoggingEnabled()) {
-        try {
-          await this.aiLogService.addLogEntry({
-            timestamp: new Date(),
-            purpose,
-            prompt: message,
-            response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            model,
-            requestDuration: duration
-          });
-        } catch (logError) {
-          console.error('Failed to log AI interaction error:', logError);
+      // Try fallback with streaming if standard request failed
+      console.log(`🔄 Attempting streaming fallback for failed standard request...`);
+      try {
+        return await this.chatWithStreamingFallback(purpose, message, abortSignal);
+      } catch (fallbackError) {
+        console.error(`❌ Streaming fallback also failed:`, fallbackError);
+        
+        // Log failed requests too if logging is enabled
+        if (this.settingsManager?.isAILoggingEnabled()) {
+          try {
+            await this.aiLogService.addLogEntry({
+              timestamp: new Date(),
+              purpose,
+              prompt: message,
+              response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              model,
+              requestDuration: duration
+            });
+          } catch (logError) {
+            console.error('Failed to log AI interaction error:', logError);
+          }
         }
+        
+        // Throw the original error, not the fallback error
+        throw error;
       }
-      throw error;
     }
+  }
+
+  /**
+   * Fallback method that uses streaming to get a complete response
+   * when standard JSON requests fail
+   */
+  private async chatWithStreamingFallback(purpose: string, message: string, abortSignal?: AbortSignal): Promise<string> {
+    console.log(`🌊 Using streaming fallback for purpose: ${purpose}`);
+    
+    return new Promise((resolve, reject) => {
+      let fullResponse = '';
+      let hasStarted = false;
+      
+      const callbacks: StreamingCallbacks = {
+        onStart: () => {
+          hasStarted = true;
+          console.log(`🌊 Streaming fallback started`);
+        },
+        onChunk: (chunk: string) => {
+          fullResponse += chunk;
+        },
+        onComplete: (finalResponse: string) => {
+          console.log(`🌊 Streaming fallback completed, response length: ${finalResponse.length}`);
+          resolve(finalResponse);
+        },
+        onError: (error: Error) => {
+          console.error(`🌊 Streaming fallback failed:`, error);
+          reject(error);
+        }
+      };
+
+      // Use streaming chat with single user message
+      this.streamingChat(purpose, [{ role: 'user', content: message }], callbacks, abortSignal)
+        .catch(reject);
+    });
   }
 
   async sendMessage(request: OpenRouterRequest, externalAbortSignal?: AbortSignal): Promise<OpenRouterResponse> {
