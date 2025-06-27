@@ -1136,27 +1136,16 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
             if (previewContentBtn && contentPreviewContainer && contentPreviewContent) {
                 previewContentBtn.addEventListener('click', () => {
                     try {
-                        console.log('Content preview button clicked');
                         const depth = parseInt(chatDepth.value);
-                        console.log('Depth:', depth);
                         const contextService = projectManager.getContextExtractionService();
-                        console.log('Context service:', contextService);
                         const preview = contextService.getChatContentPreview(node, depth);
-                        console.log('Preview result:', preview);
                         
                         contentPreviewContent.textContent = preview.summary;
                         contentPreviewContainer.style.display = 'block';
-                        console.log('Content preview container displayed');
                     } catch (error: any) {
                         console.error('Error in content preview:', error);
                         alert('Error generating content preview: ' + error.message);
                     }
-                });
-            } else {
-                console.error('Content preview elements not found:', {
-                    previewContentBtn,
-                    contentPreviewContainer,
-                    contentPreviewContent
                 });
             }
         }
