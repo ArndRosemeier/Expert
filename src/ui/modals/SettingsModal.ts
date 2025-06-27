@@ -422,6 +422,11 @@ export class SettingsModal extends BaseModal {
                 this.applyProfileToUI(event.profile);
                 this.updateCurrentProfileDisplay(event.profileName);
                 this.emit('profileChanged', event.profileName);
+                
+                // Refresh the global profile selector to maintain consistency
+                if (this.refreshGlobalProfileSelector) {
+                    this.refreshGlobalProfileSelector();
+                }
             });
 
             this.profileSelector.onAction((event) => {
