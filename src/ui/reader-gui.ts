@@ -1724,19 +1724,89 @@ export class ReaderGUI {
      */
     private openActionsConfigModal(): void {
         try {
-            const content = this.renderActionsConfigModal();
-            openGenericModal(content, () => {
-                this.setupActionsConfigEventListeners();
+            // Import the new modal system dynamically
+            import('./modals/index').then(({ showGenericModal }) => {
+                // Store state for the modal
+                let selectedActionId: string | null = null;
+                let unsavedChanges = false;
+                
+                const modal = showGenericModal(
+                    {
+                        content: this.renderActionsConfigModalContent(),
+                        actions: [
+                            {
+                                id: 'reset',
+                                label: 'Reset to Defaults',
+                                type: 'secondary',
+                                handler: async () => {
+                                    if (confirm('Reset all actions to defaults? This will remove any custom actions.')) {
+                                        await this.readerEditor.resetToDefaults();
+                                        this.refreshActionsList();
+                                        this.clearActionEditor();
+                                        selectedActionId = null;
+                                        unsavedChanges = false;
+                                        alert('Actions reset to defaults successfully!');
+                                    }
+                                }
+                            },
+                            {
+                                id: 'cancel',
+                                label: 'Cancel',
+                                type: 'secondary',
+                                handler: async () => {
+                                    if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
+                                        throw new Error('Cancel prevented'); // Prevent modal from closing
+                                    }
+                                    modal.close();
+                                }
+                            },
+                            {
+                                id: 'save',
+                                label: 'Save Changes',
+                                type: 'primary',
+                                handler: async () => {
+                                    if (selectedActionId) {
+                                        this.saveCurrentAction(selectedActionId);
+                                    }
+                                    this.updateActionButtons();
+                                    unsavedChanges = false;
+                                    alert('All changes saved successfully!');
+                                    modal.close();
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        title: '🔧 Configure AI Actions',
+                        maxWidth: '1200px',
+                        width: '90vw'
+                    },
+                    {
+                        onOpen: () => {
+                            this.setupActionsConfigEventListeners();
+                        },
+                        onClose: () => {
+                            // Clean up any event listeners if needed
+                        }
+                    }
+                );
             });
         } catch (error) {
-
+            console.error('Failed to open actions config modal:', error);
         }
     }
 
     /**
      * Render the actions configuration modal content
      */
-    private renderActionsConfigModal(): string {
+    private renderActionsConfigModalContent(): string {
+        return this.renderActionsConfigModalBody();
+    }
+
+    /**
+     * Render the actions configuration modal body (without header and buttons)
+     */
+    private renderActionsConfigModalBody(): string {
         const actions = this.readerEditor.getAllActions();
 
         return `
@@ -1998,10 +2068,6 @@ export class ReaderGUI {
                 }
             </style>
             <div class="actions-config-modal">
-                <div class="actions-config-header">
-                    <h2 style="margin: 0; color: #1f2937;">🔧 Configure AI Actions</h2>
-                    <button id="close-actions-config" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem;">&times;</button>
-                </div>
                 <div class="actions-config-body">
                     <div class="actions-list">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -2024,11 +2090,6 @@ export class ReaderGUI {
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="action-buttons">
-                    <button id="reset-actions" class="btn btn-secondary">Reset to Defaults</button>
-                    <button id="save-actions" class="btn btn-primary">Save Changes</button>
-                    <button id="cancel-actions" class="btn btn-secondary">Cancel</button>
                 </div>
             </div>
         `;
@@ -2176,14 +2237,7 @@ export class ReaderGUI {
             }
         };
 
-        // Close button
-        const closeBtn = document.getElementById('close-actions-config');
-        closeBtn?.addEventListener('click', () => {
-            if (unsavedChanges && !confirm('You have unsaved changes. Close without saving?')) {
-                return;
-            }
-            closeGenericModal();
-        });
+        // Close button - removed, now handled by base modal
 
         // Add new action
         const addBtn = document.getElementById('add-new-action');
@@ -2220,40 +2274,7 @@ export class ReaderGUI {
             }
         });
 
-        // Reset to defaults
-        const resetBtn = document.getElementById('reset-actions');
-        resetBtn?.addEventListener('click', () => {
-            if (confirm('Reset all actions to defaults? This will remove any custom actions.')) {
-                this.readerEditor.resetToDefaults().then(() => {
-                    this.refreshActionsList();
-                    this.clearActionEditor();
-                    selectedActionId = null;
-                    unsavedChanges = false;
-                    alert('Actions reset to defaults successfully!');
-                });
-            }
-        });
-
-        // Save all changes
-        const saveBtn = document.getElementById('save-actions');
-        saveBtn?.addEventListener('click', () => {
-            if (selectedActionId) {
-                this.saveCurrentAction(selectedActionId);
-            }
-            this.updateActionButtons();
-            unsavedChanges = false;
-            alert('All changes saved successfully!');
-            closeGenericModal();
-        });
-
-        // Cancel
-        const cancelBtn = document.getElementById('cancel-actions');
-        cancelBtn?.addEventListener('click', () => {
-            if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
-                return;
-            }
-            closeGenericModal();
-        });
+        // Reset, Save, and Cancel buttons - now handled by modal actions
     }
 
     /**
