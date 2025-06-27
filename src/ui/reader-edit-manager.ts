@@ -215,6 +215,12 @@ export class ReaderEditManager {
                 if (titleMatch) {
                     const title = titleMatch[1];
                     const userInput = await this.showInputModal(title);
+                    
+                    // Check if user canceled the input
+                    if (userInput === '__CANCELED__') {
+                        throw new Error('Action canceled by user');
+                    }
+                    
                     filledPrompt = filledPrompt.replace(match, userInput);
                 }
             }
@@ -349,43 +355,34 @@ export class ReaderEditManager {
                             const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
                             const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
                             
-                            console.log('Elements found:', { input: !!input, submitBtn: !!submitBtn, cancelBtn: !!cancelBtn }); // Debug log
+                            const handleSubmit = (e?: Event) => {
+                                if (e) e.preventDefault();
+                                const value = input.value.trim();
+                                if (value) {
+                                    resolveOnce(value);
+                                    resolveModal(); // Signal that we handled it
+                                    closeGenericModal();
+                                } else {
+                                    // Don't close if empty, just refocus
+                                    input.focus();
+                                }
+                            };
 
-                        const handleSubmit = (e?: Event) => {
-                            if (e) e.preventDefault();
-                            const value = input.value.trim();
-                            if (value) {
-                                resolveOnce(value);
+                            const handleCancel = (e?: Event) => {
+                                if (e) e.preventDefault();
+                                resolveOnce('__CANCELED__'); // Use special cancel value
                                 resolveModal(); // Signal that we handled it
                                 closeGenericModal();
-                            } else {
-                                // Don't close if empty, just refocus
-                                input.focus();
+                            };
+
+                            // Set up event listeners with proper error handling
+                            if (submitBtn) {
+                                submitBtn.addEventListener('click', handleSubmit);
                             }
-                        };
-
-                        const handleCancel = (e?: Event) => {
-                            console.log('Cancel handler called', e); // Debug log
-                            if (e) e.preventDefault();
-                            resolveOnce(''); // Return empty string on cancel
-                            resolveModal(); // Signal that we handled it
-                            closeGenericModal();
-                        };
-
-                        // Set up event listeners with proper error handling
-                        if (submitBtn) {
-                            console.log('Setting up submit button listener'); // Debug log
-                            submitBtn.addEventListener('click', handleSubmit);
-                        } else {
-                            console.log('Submit button not found!'); // Debug log
-                        }
-                        
-                        if (cancelBtn) {
-                            console.log('Setting up cancel button listener'); // Debug log
-                            cancelBtn.addEventListener('click', handleCancel);
-                        } else {
-                            console.log('Cancel button not found!'); // Debug log
-                        }
+                            
+                            if (cancelBtn) {
+                                cancelBtn.addEventListener('click', handleCancel);
+                            }
 
                         if (input) {
                             // Enter key to submit, Escape key to cancel
@@ -414,7 +411,7 @@ export class ReaderEditManager {
                                 if (!document.querySelector('[data-modal-id]')) {
                                     // Modal was closed externally (e.g., by base close button)
                                     if (!isResolved) {
-                                        resolveOnce(''); // Treat as cancel
+                                        resolveOnce('__CANCELED__'); // Treat as cancel
                                     }
                                     resolveModal();
                                 } else {
