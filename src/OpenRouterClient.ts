@@ -48,7 +48,7 @@ export class OpenRouterClient {
   private modelPurposeMap: Record<string, string> = {};
   private aiLogService: AILogService;
   private settingsManager: SettingsManager | null = null;
-  private forceStreamingMode: boolean = false; // Force streaming for all requests
+  private forceStreamingMode: boolean = true; // Use streaming for all requests by default
 
   private currentAbortController: AbortController | null = null;
 
@@ -81,16 +81,16 @@ export class OpenRouterClient {
   }
 
   /**
-   * Enable force streaming mode (use streaming for all requests)
-   * Useful workaround for systems where standard JSON requests fail
+   * Enable or disable streaming mode (streaming is used by default)
+   * Can be disabled to use standard JSON requests if needed
    */
   public setForceStreamingMode(enabled: boolean): void {
     this.forceStreamingMode = enabled;
-    console.log(`🌊 Force streaming mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`🌊 Streaming mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
   }
 
   /**
-   * Check if force streaming mode is enabled
+   * Check if streaming mode is enabled
    */
   public isForceStreamingMode(): boolean {
     return this.forceStreamingMode;
@@ -126,9 +126,9 @@ export class OpenRouterClient {
 
     console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}`);
     
-    // If force streaming mode is enabled, use streaming directly
+    // Use streaming by default (more reliable across different systems)
     if (this.forceStreamingMode) {
-      console.log(`🌊 Force streaming mode enabled - using streaming directly`);
+      console.log(`🌊 Using streaming mode for reliable communication`);
       return await this.chatWithStreamingFallback(purpose, message, abortSignal);
     }
 

@@ -1836,7 +1836,6 @@ export class ReaderGUI {
                 .actions-config-body {
                     flex: 1;
                     padding: 2rem;
-                    overflow-y: auto;
                     display: flex;
                     gap: 2rem;
                 }
