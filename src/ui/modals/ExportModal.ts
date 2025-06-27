@@ -290,7 +290,7 @@ export class ExportModal extends BaseModal {
         });
 
         const clipboardButton = createElement('button', {
-            classes: ['btn-outline'],
+            classes: ['btn-secondary'],
             content: '📋 Copy to Clipboard'
         }) as HTMLButtonElement;
 
@@ -605,17 +605,6 @@ export class ExportModal extends BaseModal {
                 
                 .btn-secondary:hover {
                     background-color: #4b5563;
-                }
-                
-                .btn-outline {
-                    background-color: transparent;
-                    color: #3b82f6;
-                    border: 1px solid #3b82f6;
-                }
-                
-                .btn-outline:hover {
-                    background-color: #3b82f6;
-                    color: white;
                 }
             `
         });
