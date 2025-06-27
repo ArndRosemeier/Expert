@@ -277,6 +277,7 @@ export class ReaderEditManager {
                                 type: 'secondary',
                                 handler: async () => {
                                     resolveOnce('__CANCELED__');
+                                    modal.close(); // Explicitly close the modal
                                 }
                             },
                             {
@@ -288,6 +289,7 @@ export class ReaderEditManager {
                                     const value = input?.value?.trim() || '';
                                     if (value) {
                                         resolveOnce(value);
+                                        modal.close(); // Explicitly close the modal
                                     } else {
                                         // Don't close if empty, just refocus
                                         input?.focus();
