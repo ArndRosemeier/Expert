@@ -341,79 +341,81 @@ export class ReaderEditManager {
                     </div>
                 `;
 
-                openGenericModal(modalContent, () => {
-                    const input = document.getElementById('user-input') as HTMLInputElement;
-                    const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
-                    const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
+                const modalPromise = new Promise<void>((resolveModal) => {
+                    openGenericModal(modalContent, () => {
+                        const input = document.getElementById('user-input') as HTMLInputElement;
+                        const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
+                        const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
 
-                    const handleSubmit = (e?: Event) => {
-                        if (e) e.preventDefault();
-                        const value = input.value.trim();
-                        if (value) {
-                            // Resolve first, then close modal to ensure proper order
-                            resolveOnce(value);
-                            // Use setTimeout to ensure the promise resolution happens first
-                            setTimeout(() => {
+                        const handleSubmit = (e?: Event) => {
+                            if (e) e.preventDefault();
+                            const value = input.value.trim();
+                            if (value) {
+                                resolveOnce(value);
+                                resolveModal(); // Signal that we handled it
                                 closeGenericModal();
-                            }, 10);
-                        } else {
-                            // Don't close if empty, just refocus
-                            input.focus();
-                        }
-                    };
-
-                    const handleCancel = (e?: Event) => {
-                        if (e) e.preventDefault();
-                        // Resolve first, then close modal to ensure proper order
-                        resolveOnce(''); // Return empty string on cancel
-                        setTimeout(() => {
-                            closeGenericModal();
-                        }, 10);
-                    };
-
-                    // Set up event listeners with proper error handling
-                    if (submitBtn) {
-                        submitBtn.addEventListener('click', handleSubmit);
-                    }
-                    
-                    if (cancelBtn) {
-                        cancelBtn.addEventListener('click', handleCancel);
-                    }
-
-                    if (input) {
-                        // Enter key to submit, Escape key to cancel
-                        input.addEventListener('keydown', (e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSubmit();
-                            } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                handleCancel();
-                            }
-                        });
-
-                        // Focus the input after a short delay
-                        setTimeout(() => {
-                            try {
+                            } else {
+                                // Don't close if empty, just refocus
                                 input.focus();
-                            } catch (error) {
-                                // Ignore focus errors
                             }
-                        }, 100);
-                    }
+                        };
 
-                    // Override the base modal's close behavior to act as cancel
-                    const modalElement = document.querySelector('[data-modal-id]');
-                    if (modalElement) {
-                        const baseCloseBtn = modalElement.querySelector('.modal-close');
-                        if (baseCloseBtn) {
-                            // Remove existing click handlers and add our cancel handler
-                            const newCloseBtn = baseCloseBtn.cloneNode(true);
-                            baseCloseBtn.parentNode?.replaceChild(newCloseBtn, baseCloseBtn);
-                            newCloseBtn.addEventListener('click', handleCancel);
+                        const handleCancel = (e?: Event) => {
+                            if (e) e.preventDefault();
+                            resolveOnce(''); // Return empty string on cancel
+                            resolveModal(); // Signal that we handled it
+                            closeGenericModal();
+                        };
+
+                        // Set up event listeners with proper error handling
+                        if (submitBtn) {
+                            submitBtn.addEventListener('click', handleSubmit);
                         }
-                    }
+                        
+                        if (cancelBtn) {
+                            cancelBtn.addEventListener('click', handleCancel);
+                        }
+
+                        if (input) {
+                            // Enter key to submit, Escape key to cancel
+                            input.addEventListener('keydown', (e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSubmit();
+                                } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    handleCancel();
+                                }
+                            });
+
+                            // Focus the input after a short delay
+                            setTimeout(() => {
+                                try {
+                                    input.focus();
+                                } catch (error) {
+                                    // Ignore focus errors
+                                }
+                            }, 100);
+                        }
+
+                        // Set up cleanup when modal is closed externally
+                        const checkForModalClose = () => {
+                            if (!document.querySelector('[data-modal-id]')) {
+                                // Modal was closed externally (e.g., by base close button)
+                                if (!isResolved) {
+                                    resolveOnce(''); // Treat as cancel
+                                }
+                                resolveModal();
+                            } else {
+                                // Check again in a bit
+                                setTimeout(checkForModalClose, 100);
+                            }
+                        };
+                        setTimeout(checkForModalClose, 100);
+                    });
                 });
+
+                // The modal will handle itself through the promise mechanism
             });
         });
     }
