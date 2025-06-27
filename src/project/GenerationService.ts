@@ -433,7 +433,7 @@ export class GenerationService {
         try {
             // Using the 'creator' model as it's for generating new content/structure
             const response = await this.deps.openRouterClient.chat('creator', prompt);
-            const nodeItems = this.parseEnhancedBulletedList(response);
+            const nodeItems = this.parseChildrenFromJSON(response);
 
             if (nodeItems.length === 0) {
                 // Clear generating flag before emitting error
@@ -575,7 +575,7 @@ export class GenerationService {
             try {
                 // Using the 'creator' model as it's for generating new content/structure
                 const response = await this.deps.openRouterClient.chat('creator', prompt);
-                const nodeItems = this.parseEnhancedBulletedList(response);
+                const nodeItems = this.parseChildrenFromJSON(response);
 
                 if (nodeItems.length === 0) {
                     this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
@@ -980,11 +980,63 @@ export class GenerationService {
         return lines.slice(startIndex).join('\n').trim();
     }
 
-
+    /**
+     * Parses a JSON array from text containing child node information.
+     * Returns array of objects with title and content description.
+     */
+    private parseChildrenFromJSON(text: string): Array<{title: string, description: string}> {
+        try {
+            // Clean the text - remove any leading/trailing whitespace and non-JSON content
+            const cleanedText = text.trim();
+            
+            // Try to find JSON array in the response (in case there's extra text)
+            let jsonText = cleanedText;
+            const arrayStart = cleanedText.indexOf('[');
+            const arrayEnd = cleanedText.lastIndexOf(']');
+            
+            if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+                jsonText = cleanedText.substring(arrayStart, arrayEnd + 1);
+            }
+            
+            // Parse the JSON
+            const parsed = JSON.parse(jsonText);
+            
+            // Validate that it's an array
+            if (!Array.isArray(parsed)) {
+                console.warn('Response is not a JSON array, falling back to bulleted list parsing');
+                return this.parseEnhancedBulletedList(text);
+            }
+            
+            // Validate and map each item
+            return parsed
+                .map((item, index) => {
+                    if (typeof item !== 'object' || item === null) {
+                        console.warn(`Item ${index} is not an object, skipping`);
+                        return null;
+                    }
+                    
+                    const title = typeof item.title === 'string' ? item.title.trim() : '';
+                    const description = typeof item.description === 'string' ? item.description.trim() : '';
+                    
+                    if (!title) {
+                        console.warn(`Item ${index} has no valid title, skipping`);
+                        return null;
+                    }
+                    
+                    return { title, description };
+                })
+                .filter((item): item is {title: string, description: string} => item !== null);
+                
+        } catch (error) {
+            console.warn('Failed to parse as JSON, falling back to bulleted list parsing:', error);
+            return this.parseEnhancedBulletedList(text);
+        }
+    }
 
     /**
      * Parses a bulleted list from text with the new format "Title: X, Content: Y".
      * Returns array of objects with title and content description.
+     * This is kept as a fallback for when JSON parsing fails.
      */
     private parseEnhancedBulletedList(text: string): Array<{title: string, description: string}> {
         return text

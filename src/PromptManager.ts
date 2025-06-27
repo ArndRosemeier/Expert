@@ -136,14 +136,27 @@ export const defaultPrompts: OrchestratorPrompts = {
         IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
     `.trim(),
     create_children_from_outline_user: `
-        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate a concise, bulleted list of exactly {{count}} entries for the '{{child_level_name}}' nodes that should be created from it.
+        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate exactly {{count}} entries for the '{{child_level_name}}' nodes that should be created from it.
 
-        Generate exactly {{count}} entries - no more, no less. Each entry must be on a new line and start with a single asterisk (*). 
+        Generate exactly {{count}} entries - no more, no less.
 
-        IMPORTANT: Each entry must follow this exact format:
-        * Title: (the title of the subnode), Content: (one sentence brief description of what should be covered in this subnode)
+        IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
+        - "title": the title of the subnode
+        - "description": one sentence brief description of what should be covered in this subnode
 
-        Do not include any other text or explanations. Only provide the bulleted list in the specified format.
+        Example format:
+        [
+          {
+            "title": "Introduction to the Topic",
+            "description": "Provides an overview and sets the foundation for understanding the main concepts."
+          },
+          {
+            "title": "Core Principles",
+            "description": "Explains the fundamental principles and key concepts that underpin the topic."
+          }
+        ]
+
+        Do not include any other text, explanations, or formatting. Only provide the JSON array.
 
         Here is the context of the document so far:
         ---
@@ -263,7 +276,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     editor: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings.",
     summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
-    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured, bulleted list of child titles with brief content descriptions.",
+    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured JSON array of child titles with brief content descriptions.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
     context_synthesis_user: "Combines parent context with node content to create a distilled, focused context for child node generation. Uses the editor model to synthesize relevant information.",
     context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",
