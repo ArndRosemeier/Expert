@@ -377,21 +377,11 @@ export class ReaderEditManager {
             'project_title': this.projectManager.projectTitle,
             'parent_content': node.parentId ? 
                 this.projectManager.findNodeById(node.parentId)?.content || '' : '',
-            'child_level_name': node.childLevelName || '',
-            'children_summary': this.getChildrenSummary(node)
+            'child_level_name': node.childLevelName || ''
         };
     }
 
-    /**
-     * Get a summary of child nodes
-     */
-    private getChildrenSummary(node: DocumentNode): string {
-        if (node.children.length === 0) return '';
-        
-        return node.children
-            .map(child => `- ${child.title}${child.content ? ': ' + child.content.substring(0, 100) + '...' : ''}`)
-            .join('\n');
-    }
+
 
     /**
      * Get available placeholders for prompt building UI
@@ -410,7 +400,7 @@ export class ReaderEditManager {
             placeholders['title'] = '[Current node title]';
             placeholders['project_title'] = '[Project title]';
             placeholders['parent_content'] = '[Parent node content]';
-            placeholders['children_summary'] = '[Summary of child nodes]';
+            placeholders['context'] = '[Node context and hierarchy]';
         }
         
         return placeholders;

@@ -1726,7 +1726,7 @@ export class ReaderGUI {
         try {
             // Import the new modal system dynamically
             import('./modals/index').then(({ showGenericModal }) => {
-                // Store state for the modal
+                // Store state for the modal - these will be shared with event listeners
                 let selectedActionId: string | null = null;
                 let unsavedChanges = false;
                 
@@ -1783,7 +1783,11 @@ export class ReaderGUI {
                     },
                     {
                         onOpen: () => {
-                            this.setupActionsConfigEventListeners();
+                            this.setupActionsConfigEventListeners(selectedActionId, unsavedChanges, (newSelectedId) => {
+                                selectedActionId = newSelectedId;
+                            }, (newUnsavedState) => {
+                                unsavedChanges = newUnsavedState;
+                            });
                         },
                         onClose: () => {
                             // Clean up any event listeners if needed
@@ -2131,7 +2135,7 @@ export class ReaderGUI {
         const availablePlaceholders = [
             '{{selected}}', '{{content}}', '{{title}}', '{{node_path}}', 
             '{{project_title}}', '{{level}}', '{{children_count}}', 
-            '{{children_summary}}', '{{word_count}}', '{{input "Title"}}'
+            '{{context}}', '{{word_count}}', '{{input "Title"}}'
         ];
 
         return `
@@ -2189,19 +2193,20 @@ export class ReaderGUI {
     /**
      * Setup event listeners for the actions configuration modal
      */
-    private setupActionsConfigEventListeners(): void {
-        // Store current selected action ID
-        let selectedActionId: string | null = null;
-        let unsavedChanges = false;
-
+    private setupActionsConfigEventListeners(
+        selectedActionId: string | null,
+        unsavedChanges: boolean,
+        setSelectedActionId: (id: string | null) => void,
+        setUnsavedChanges: (state: boolean) => void
+    ): void {
         // Global functions for onclick handlers
         (window as any).selectAction = (actionId: string) => {
             if (unsavedChanges && !confirm('You have unsaved changes. Continue without saving?')) {
                 return;
             }
-            selectedActionId = actionId;
+            setSelectedActionId(actionId);
             this.selectActionInModal(actionId);
-            unsavedChanges = false;
+            setUnsavedChanges(false);
         };
 
         (window as any).toggleAction = (actionId: string) => {
@@ -2209,19 +2214,19 @@ export class ReaderGUI {
                 enabled: !this.readerEditor.getAllActions().find(a => a.id === actionId)?.enabled 
             });
             this.refreshActionsList();
-            unsavedChanges = true;
+            setUnsavedChanges(true);
         };
 
         (window as any).moveActionUp = (actionId: string) => {
             this.moveAction(actionId, -1);
             this.refreshActionsList();
-            unsavedChanges = true;
+            setUnsavedChanges(true);
         };
 
         (window as any).moveActionDown = (actionId: string) => {
             this.moveAction(actionId, 1);
             this.refreshActionsList();
-            unsavedChanges = true;
+            setUnsavedChanges(true);
         };
 
         (window as any).insertPlaceholder = (placeholder: string) => {
@@ -2233,7 +2238,7 @@ export class ReaderGUI {
                 textarea.value = text.substring(0, start) + placeholder + text.substring(end);
                 textarea.focus();
                 textarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
-                unsavedChanges = true;
+                setUnsavedChanges(true);
             }
         };
 
@@ -2244,13 +2249,13 @@ export class ReaderGUI {
         addBtn?.addEventListener('click', () => {
             this.addNewAction();
             this.refreshActionsList();
-            unsavedChanges = true;
+            setUnsavedChanges(true);
         });
 
         // Form change detection
         document.addEventListener('input', (e) => {
             if ((e.target as HTMLElement).closest('#action-editor-form')) {
-                unsavedChanges = true;
+                setUnsavedChanges(true);
             }
         });
 
@@ -2260,16 +2265,16 @@ export class ReaderGUI {
             
             if (target.id === 'save-current-action' && selectedActionId) {
                 this.saveCurrentAction(selectedActionId);
-                unsavedChanges = false;
+                setUnsavedChanges(false);
             }
             
             if (target.id === 'delete-action' && selectedActionId) {
                 if (confirm('Are you sure you want to delete this action?')) {
                     this.readerEditor.deleteAction(selectedActionId);
                     this.refreshActionsList();
-                    selectedActionId = null;
+                    setSelectedActionId(null);
                     this.clearActionEditor();
-                    unsavedChanges = true;
+                    setUnsavedChanges(true);
                 }
             }
         });
