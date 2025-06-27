@@ -1273,9 +1273,9 @@ export function setupEventListeners() {
             // === GENERATION PANEL BUTTONS ===
             case 'default-prompt-btn':
                 {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
 
                     const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
                     const defaultPrompt = projectManager.getRawGenerationPrompt(node);
@@ -1654,13 +1654,13 @@ This action cannot be undone.`;
                     document.body.removeChild(fileInput);
                 }
                 break;
-
+                
             case 'chat-node-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
-
+                    
                     // Import and open chat modal
                     import('./modal-manager').then(({ openNodeChatModal }) => {
                         openNodeChatModal(projectManager!, node);
@@ -1670,7 +1670,7 @@ This action cannot be undone.`;
                     });
                 }
                 break;
-
+            
             // === VERSION NAVIGATION BUTTONS ===
             case 'version-prev-btn':
                 navigateToVersion('prev');
@@ -1699,13 +1699,13 @@ This action cannot be undone.`;
                     }).catch((error) => {
                         console.error('Failed to open reader view:', error);
                         alert('Failed to open reader view. Please try again.');
-                    });
+                        });
                 }
                 break;
 
             // === MAIN APP BUTTONS (from event-handlers.ts) ===
             // These could be moved here for true unification if desired
-            
+
             default:
                 // No handler found - this is fine, not all buttons need handling
                 break;

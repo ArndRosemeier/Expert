@@ -1,5 +1,5 @@
 import { getElementById } from "./dom-elements";
-import { openGenericModal, closeGenericModal } from './modal-manager';
+import { showGenericModal } from './modals/index';
 import { ProjectTemplate } from "../ProjectTemplate";
 import * as state from '../state';
 
@@ -45,14 +45,44 @@ export function openTemplateEditor() {
                 <div id="hierarchy-editor" class="hierarchy-editor"></div>
                 <button id="add-layer-btn" class="button button-secondary" style="margin-top: 0.5rem;">+ Add Level</button>
             </div>
-            <div class="template-actions">
-                <button id="cancel-templates-btn" class="button button-secondary" style="background: #6b7280; color: white;">✕ Close</button>
-                <button id="save-template-btn" class="button button-primary">Save Changes</button>
-            </div>
         </div>
     `;
     
-    openGenericModal(content, setupTemplateEditorListeners);
+    const modal = showGenericModal(
+        {
+            content: content,
+            actions: [
+                {
+                    id: 'cancel',
+                    label: '✕ Close',
+                    type: 'secondary',
+                    handler: async () => {
+                        if (isDirty && !confirm("You have unsaved changes. Are you sure you want to cancel?")) {
+                            throw new Error('__KEEP_MODAL_OPEN__');
+                        }
+                        modal.close();
+                    }
+                },
+                {
+                    id: 'save',
+                    label: 'Save Changes',
+                    type: 'primary',
+                    handler: async () => {
+                        handleSaveFromModal(modal);
+                    }
+                }
+            ]
+        },
+        {
+            title: 'Manage Templates',
+            maxWidth: '800px'
+        },
+        {
+            onOpen: () => {
+                setupTemplateEditorListeners();
+            }
+        }
+    );
         
     } catch (error) {
         console.error('❌ Error in openTemplateEditor:', error);
@@ -70,12 +100,10 @@ function setupTemplateEditorListeners() {
 
     // Attach listeners
     getElementById('template-select').addEventListener('change', handleTemplateSelect);
-    getElementById('save-template-btn').addEventListener('click', handleSave);
     getElementById('save-as-new-btn').addEventListener('click', handleSaveAsNew);
     getElementById('delete-template-btn').addEventListener('click', handleDelete);
     getElementById('restore-defaults-btn').addEventListener('click', handleRestoreDefaults);
     getElementById('add-layer-btn').addEventListener('click', handleAddLayer);
-    getElementById('cancel-templates-btn').addEventListener('click', handleCancel);
 
     // Listener for removing layers (delegated)
     getElementById('hierarchy-editor').addEventListener('click', (e) => {
@@ -147,9 +175,10 @@ function handleSave() {
         populateTemplateSelector();
         renderCurrentTemplateView();
         
-        closeGenericModal();
+        // Modal will be closed by the caller
     } catch (error: any) {
         alert(`Error saving template: ${error.message}`);
+        throw error; // Re-throw to prevent modal from closing on error
     }
 }
 
@@ -242,11 +271,21 @@ function handleRemoveLayer(button: HTMLElement) {
     isDirty = true;
 }
 
+function handleSaveFromModal(modal: any) {
+    try {
+        handleSave();
+        modal.close();
+    } catch (error) {
+        // Error already shown in handleSave, just keep modal open
+        throw new Error('__KEEP_MODAL_OPEN__');
+    }
+}
+
 function handleCancel() {
     if (isDirty && !confirm("You have unsaved changes. Are you sure you want to cancel?")) {
         return;
     }
-    closeGenericModal();
+    // Modal closing is now handled by the new modal system
 }
 
 // --- UI Rendering ---
