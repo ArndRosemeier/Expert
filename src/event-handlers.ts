@@ -355,37 +355,47 @@ export async function initialize() {
                         const content = event.target?.result as string;
                         const importData = JSON.parse(content);
                         
-                        // Detect suitable template (same logic as modal)
-                        const templateManager = state.getTemplateManager();
-                        if (!templateManager) {
-                            throw new Error('Template manager not available');
-                        }
+                        // Extract template - first try from project level, then from root node, then from child nodes
+                        let templateData = importData.template;
                         
-                        // Calculate depth and find suitable template
-                        const depth = calculateImportDepth(importData);
-                        const templateNames = templateManager.getTemplateNames();
-                        let bestTemplate: ProjectTemplate | null = null;
-                        
-                        // Look for a template that has enough levels for the import
-                        for (const templateName of templateNames) {
-                            const template = templateManager.getTemplate(templateName);
-                            if (template && template.hierarchyLevels.length >= depth + 1) {
-                                bestTemplate = template;
-                                break;
+                        if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                            // Check if root node has template as array (node export format)
+                            if (importData.template && Array.isArray(importData.template)) {
+                                templateData = {
+                                    name: `Imported Template (${importData.title || 'Unknown'})`,
+                                    hierarchyLevels: importData.template,
+                                    scaffoldingDocuments: []
+                                };
+                            } else if (importData.children && importData.children.length > 0) {
+                                // Try to extract template from first child that has one
+                                let foundTemplate = null;
+                                for (const child of importData.children) {
+                                    if (child.template && Array.isArray(child.template)) {
+                                        foundTemplate = child.template;
+                                        break;
+                                    }
+                                }
+                                
+                                if (foundTemplate) {
+                                    templateData = {
+                                        name: `Imported Template (${importData.title || 'Unknown'})`,
+                                        hierarchyLevels: foundTemplate,
+                                        scaffoldingDocuments: []
+                                    };
+                                } else {
+                                    throw new Error('Invalid import file: Missing or incomplete template information');
+                                }
+                            } else {
+                                throw new Error('Invalid import file: Missing or incomplete template information');
                             }
                         }
                         
-                        // If no template found, default to Standard Novel
-                        if (!bestTemplate) {
-                            const standardTemplate = templateManager.getTemplate('Standard Novel');
-                            if (standardTemplate) {
-                                bestTemplate = standardTemplate;
-                            }
-                        }
-                        
-                        if (!bestTemplate) {
-                            throw new Error('No suitable template found');
-                        }
+                        // Create template from extracted data
+                        const bestTemplate = new ProjectTemplate(
+                            templateData.name,
+                            templateData.hierarchyLevels,
+                            templateData.scaffoldingDocuments
+                        );
                         
                         // Import project data
                         handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);

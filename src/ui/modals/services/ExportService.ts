@@ -92,9 +92,10 @@ export class ExportService implements IExportService {
         const exportObject = {
             title: node.title,
             content: node.content,
-            context: node.context,
-            generationPrompt: node.generationPrompt,
+            context: node.context ?? undefined,
+            generationPrompt: node.generationPrompt ?? undefined,
             level: node.level,
+            template: node.template,  // Include template in root node for reimport
             children: node.children.map(child => this.exportNodeForReimportRecursive(child))
         };
         

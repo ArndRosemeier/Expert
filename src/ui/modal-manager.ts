@@ -141,38 +141,50 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                     throw new Error('Invalid import file: Missing required fields');
                 }
                 
-                // Calculate depth and try to determine template
+                // Extract template - first try from project level, then from root node, then from child nodes
+                let templateData = data.template;
+                
+                if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                    // Check if root node has template as array (node export format)
+                    if (data.template && Array.isArray(data.template)) {
+                        templateData = {
+                            name: `Imported Template (${data.title || 'Unknown'})`,
+                            hierarchyLevels: data.template,
+                            scaffoldingDocuments: []
+                        };
+                    } else if (data.children && data.children.length > 0) {
+                        // Try to extract template from first child that has one
+                        let foundTemplate = null;
+                        for (const child of data.children) {
+                            if (child.template && Array.isArray(child.template)) {
+                                foundTemplate = child.template;
+                                break;
+                            }
+                        }
+                        
+                        if (foundTemplate) {
+                            templateData = {
+                                name: `Imported Template (${data.title || 'Unknown'})`,
+                                hierarchyLevels: foundTemplate,
+                                scaffoldingDocuments: []
+                            };
+                        } else {
+                            throw new Error('Invalid import file: Missing or incomplete template information');
+                        }
+                    } else {
+                        throw new Error('Invalid import file: Missing or incomplete template information');
+                    }
+                }
+                
+                // Create template from extracted data
+                const bestTemplate = new ProjectTemplate(
+                    templateData.name,
+                    templateData.hierarchyLevels,
+                    templateData.scaffoldingDocuments
+                );
+                
+                // Calculate depth for display purposes
                 const depth = calculateImportDepth(data);
-                const templateManager = state.getTemplateManager();
-                
-                if (!templateManager) {
-                    throw new Error('Template manager not available');
-}
-
-                // Try to find a suitable template based on the depth
-                const templateNames = templateManager.getTemplateNames();
-                let bestTemplate: ProjectTemplate | null = null;
-                
-                // Look for a template that has enough levels for the import
-                for (const templateName of templateNames) {
-                    const template = templateManager.getTemplate(templateName);
-                    if (template && template.hierarchyLevels.length >= depth + 1) { // +1 because depth is children, not total levels
-                        bestTemplate = template;
-                        break;
-                    }
-                }
-                
-                // If no template found, default to Standard Novel
-                if (!bestTemplate) {
-                    const standardTemplate = templateManager.getTemplate('Standard Novel');
-                    if (standardTemplate) {
-                        bestTemplate = standardTemplate;
-                    }
-                }
-                
-                if (!bestTemplate) {
-                    throw new Error('No suitable template found');
-                }
                 
                 // Store data and update preview
                 importData = data;
