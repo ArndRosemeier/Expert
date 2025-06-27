@@ -247,8 +247,8 @@ export class ReaderEditManager {
      */
     private async showInputModal(title: string): Promise<string> {
         return new Promise((resolve) => {
-            // Import modal manager dynamically to avoid circular dependencies
-            import('./modal-manager').then(({ openGenericModal, closeGenericModal }) => {
+            // Import modal system dynamically to avoid circular dependencies
+            import('./modals/index').then(({ showGenericModal }) => {
                 let isResolved = false; // Prevent multiple resolutions
                 
                 const resolveOnce = (value: string) => {
@@ -258,173 +258,86 @@ export class ReaderEditManager {
                     }
                 };
 
-                const modalContent = `
-                    <style>
-                        .input-modal {
-                            width: 400px;
-                            max-width: 90vw;
-                        }
-                        .input-modal-header {
-                            margin-bottom: 1.5rem;
-                            padding-bottom: 1rem;
-                            border-bottom: 1px solid #e5e7eb;
-                        }
-                        .input-modal-title {
-                            margin: 0;
-                            color: #1f2937;
-                            font-size: 1.25rem;
-                            font-weight: 600;
-                        }
-                        .input-modal-body {
-                            margin-bottom: 1.5rem;
-                        }
-                        .input-modal-field {
-                            margin-bottom: 1rem;
-                        }
-                        .input-modal-label {
-                            display: block;
-                            font-weight: 500;
-                            color: #374151;
-                            margin-bottom: 0.5rem;
-                        }
-                        .input-modal-input {
-                            width: 100%;
-                            padding: 0.75rem;
-                            border: 1px solid #d1d5db;
-                            border-radius: 8px;
-                            font-size: 0.875rem;
-                            transition: border-color 0.2s;
-                            box-sizing: border-box;
-                        }
-                        .input-modal-input:focus {
-                            outline: none;
-                            border-color: #3b82f6;
-                            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-                        }
-                        .input-modal-actions {
-                            display: flex;
-                            gap: 0.75rem;
-                            justify-content: flex-end;
-                        }
-                        .input-modal-btn {
-                            padding: 0.75rem 1.5rem;
-                            border: none;
-                            border-radius: 8px;
-                            font-size: 0.875rem;
-                            font-weight: 500;
-                            cursor: pointer;
-                            transition: all 0.2s;
-                        }
-                        .input-modal-btn-primary {
-                            background-color: #3b82f6;
-                            color: white;
-                        }
-                        .input-modal-btn-primary:hover {
-                            background-color: #2563eb;
-                        }
-                        .input-modal-btn-secondary {
-                            background-color: #6b7280;
-                            color: white;
-                        }
-                        .input-modal-btn-secondary:hover {
-                            background-color: #4b5563;
-                        }
-                    </style>
-                    <div class="input-modal">
-                        <div class="input-modal-header">
-                            <h3 class="input-modal-title">${title}</h3>
-                        </div>
-                        <div class="input-modal-body">
-                            <div class="input-modal-field">
-                                <label class="input-modal-label" for="user-input">Please provide your input:</label>
-                                <input type="text" id="user-input" class="input-modal-input" placeholder="Enter your instruction..." autofocus>
+                const modal = showGenericModal(
+                    {
+                        content: `
+                            <div style="margin-bottom: 1.5rem;">
+                                <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
+                                    Please provide your input:
+                                </label>
+                                <input type="text" id="user-input" 
+                                       style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; transition: border-color 0.2s; box-sizing: border-box;" 
+                                       placeholder="Enter your instruction..." autofocus>
                             </div>
-                        </div>
-                        <div class="input-modal-actions">
-                            <button id="input-modal-cancel" class="input-modal-btn input-modal-btn-secondary">Cancel</button>
-                            <button id="input-modal-submit" class="input-modal-btn input-modal-btn-primary">OK</button>
-                        </div>
-                    </div>
-                `;
-
-                const modalPromise = new Promise<void>((resolveModal) => {
-                    openGenericModal(modalContent, () => {
-                        // Use setTimeout to ensure DOM is fully rendered
-                        setTimeout(() => {
-                            const input = document.getElementById('user-input') as HTMLInputElement;
-                            const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
-                            const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
-                            
-                            const handleSubmit = (e?: Event) => {
-                                if (e) e.preventDefault();
-                                const value = input.value.trim();
-                                if (value) {
-                                    resolveOnce(value);
-                                    resolveModal(); // Signal that we handled it
-                                    closeGenericModal();
-                                } else {
-                                    // Don't close if empty, just refocus
-                                    input.focus();
+                        `,
+                        actions: [
+                            {
+                                id: 'cancel',
+                                label: 'Cancel',
+                                type: 'secondary',
+                                handler: async () => {
+                                    resolveOnce('__CANCELED__');
                                 }
-                            };
-
-                            const handleCancel = (e?: Event) => {
-                                if (e) e.preventDefault();
-                                resolveOnce('__CANCELED__'); // Use special cancel value
-                                resolveModal(); // Signal that we handled it
-                                closeGenericModal();
-                            };
-
-                            // Set up event listeners with proper error handling
-                            if (submitBtn) {
-                                submitBtn.addEventListener('click', handleSubmit);
-                            }
-                            
-                            if (cancelBtn) {
-                                cancelBtn.addEventListener('click', handleCancel);
-                            }
-
-                        if (input) {
-                            // Enter key to submit, Escape key to cancel
-                            input.addEventListener('keydown', (e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleSubmit();
-                                } else if (e.key === 'Escape') {
-                                    e.preventDefault();
-                                    handleCancel();
+                            },
+                            {
+                                id: 'submit',
+                                label: 'OK',
+                                type: 'primary',
+                                handler: async () => {
+                                    const input = document.getElementById('user-input') as HTMLInputElement;
+                                    const value = input?.value?.trim() || '';
+                                    if (value) {
+                                        resolveOnce(value);
+                                    } else {
+                                        // Don't close if empty, just refocus
+                                        input?.focus();
+                                        throw new Error('Please enter a value'); // Prevent modal from closing
+                                    }
                                 }
-                            });
-
-                            // Focus the input after a short delay
+                            }
+                        ]
+                    },
+                    {
+                        title: title,
+                        maxWidth: '400px'
+                    },
+                    {
+                        onOpen: () => {
+                            // Set up input event handlers after modal opens
                             setTimeout(() => {
-                                try {
+                                const input = document.getElementById('user-input') as HTMLInputElement;
+                                if (input) {
+                                    // Enter key to submit, Escape key to cancel
+                                    input.addEventListener('keydown', (e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const value = input.value.trim();
+                                            if (value) {
+                                                resolveOnce(value);
+                                                modal.close();
+                                            } else {
+                                                input.focus();
+                                            }
+                                        } else if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            resolveOnce('__CANCELED__');
+                                            modal.close();
+                                        }
+                                    });
+
+                                    // Focus the input
                                     input.focus();
-                                } catch (error) {
-                                    // Ignore focus errors
                                 }
                             }, 100);
+                        },
+                        onClose: () => {
+                            // If modal is closed without resolving, treat as cancel
+                            if (!isResolved) {
+                                resolveOnce('__CANCELED__');
+                            }
                         }
-
-                            // Set up cleanup when modal is closed externally
-                            const checkForModalClose = () => {
-                                if (!document.querySelector('[data-modal-id]')) {
-                                    // Modal was closed externally (e.g., by base close button)
-                                    if (!isResolved) {
-                                        resolveOnce('__CANCELED__'); // Treat as cancel
-                                    }
-                                    resolveModal();
-                                } else {
-                                    // Check again in a bit
-                                    setTimeout(checkForModalClose, 100);
-                                }
-                            };
-                            setTimeout(checkForModalClose, 100);
-                        }, 50); // Give DOM time to render
-                    });
-                });
-
-                // The modal will handle itself through the promise mechanism
+                    }
+                );
             });
         });
     }
