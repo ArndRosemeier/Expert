@@ -72,7 +72,7 @@ export class ExportModal extends BaseModal {
     }
 
     /**
-     * Creates the modal header
+     * Creates the modal header (without custom close button - BaseModal handles that)
      */
     private createHeader(): HTMLElement {
         const header = createElement('div', {
@@ -83,17 +83,7 @@ export class ExportModal extends BaseModal {
             content: '📤 Export Content'
         });
 
-        const closeButton = createElement('button', {
-            classes: ['close-button'],
-            innerHTML: '&times;'
-        });
-
-        closeButton.addEventListener('click', () => {
-            this.handleCancel();
-        });
-
         header.appendChild(title);
-        header.appendChild(closeButton);
 
         return header;
     }
@@ -172,6 +162,9 @@ export class ExportModal extends BaseModal {
         this.scopeSelect.addEventListener('change', () => {
             this.updateFormatState();
         });
+
+        // Initialize format state after DOM setup
+        setTimeout(() => this.updateFormatState(), 0);
 
         option.appendChild(label);
         option.appendChild(this.scopeSelect);
@@ -275,7 +268,9 @@ export class ExportModal extends BaseModal {
         
         while (current) {
             parts.unshift(current.title);
-            current = current.parent;
+            // Note: DocumentNode doesn't have parent navigation built-in
+            // This is a simplified path building
+            break; // For now, just show the current node
         }
         
         return parts.join(' > ');
@@ -300,7 +295,7 @@ export class ExportModal extends BaseModal {
         }) as HTMLButtonElement;
 
         cancelButton.addEventListener('click', () => {
-            this.handleCancel();
+            this.close();
         });
 
         this.exportButton.addEventListener('click', () => {
@@ -384,16 +379,7 @@ export class ExportModal extends BaseModal {
      * Handles the cancel action
      */
     private handleCancel(): void {
-        this.emit('cancelled');
         this.close();
-    }
-
-    /**
-     * Called after modal is opened
-     */
-    protected onOpened(): void {
-        super.onOpened();
-        this.updateFormatState(); // Initialize format state
     }
 
     /**
