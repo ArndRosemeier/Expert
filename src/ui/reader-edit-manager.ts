@@ -343,9 +343,13 @@ export class ReaderEditManager {
 
                 const modalPromise = new Promise<void>((resolveModal) => {
                     openGenericModal(modalContent, () => {
-                        const input = document.getElementById('user-input') as HTMLInputElement;
-                        const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
-                        const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
+                        // Use setTimeout to ensure DOM is fully rendered
+                        setTimeout(() => {
+                            const input = document.getElementById('user-input') as HTMLInputElement;
+                            const submitBtn = document.getElementById('input-modal-submit') as HTMLButtonElement;
+                            const cancelBtn = document.getElementById('input-modal-cancel') as HTMLButtonElement;
+                            
+                            console.log('Elements found:', { input: !!input, submitBtn: !!submitBtn, cancelBtn: !!cancelBtn }); // Debug log
 
                         const handleSubmit = (e?: Event) => {
                             if (e) e.preventDefault();
@@ -361,6 +365,7 @@ export class ReaderEditManager {
                         };
 
                         const handleCancel = (e?: Event) => {
+                            console.log('Cancel handler called', e); // Debug log
                             if (e) e.preventDefault();
                             resolveOnce(''); // Return empty string on cancel
                             resolveModal(); // Signal that we handled it
@@ -369,11 +374,17 @@ export class ReaderEditManager {
 
                         // Set up event listeners with proper error handling
                         if (submitBtn) {
+                            console.log('Setting up submit button listener'); // Debug log
                             submitBtn.addEventListener('click', handleSubmit);
+                        } else {
+                            console.log('Submit button not found!'); // Debug log
                         }
                         
                         if (cancelBtn) {
+                            console.log('Setting up cancel button listener'); // Debug log
                             cancelBtn.addEventListener('click', handleCancel);
+                        } else {
+                            console.log('Cancel button not found!'); // Debug log
                         }
 
                         if (input) {
@@ -398,20 +409,21 @@ export class ReaderEditManager {
                             }, 100);
                         }
 
-                        // Set up cleanup when modal is closed externally
-                        const checkForModalClose = () => {
-                            if (!document.querySelector('[data-modal-id]')) {
-                                // Modal was closed externally (e.g., by base close button)
-                                if (!isResolved) {
-                                    resolveOnce(''); // Treat as cancel
+                            // Set up cleanup when modal is closed externally
+                            const checkForModalClose = () => {
+                                if (!document.querySelector('[data-modal-id]')) {
+                                    // Modal was closed externally (e.g., by base close button)
+                                    if (!isResolved) {
+                                        resolveOnce(''); // Treat as cancel
+                                    }
+                                    resolveModal();
+                                } else {
+                                    // Check again in a bit
+                                    setTimeout(checkForModalClose, 100);
                                 }
-                                resolveModal();
-                            } else {
-                                // Check again in a bit
-                                setTimeout(checkForModalClose, 100);
-                            }
-                        };
-                        setTimeout(checkForModalClose, 100);
+                            };
+                            setTimeout(checkForModalClose, 100);
+                        }, 50); // Give DOM time to render
                     });
                 });
 
