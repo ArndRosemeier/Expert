@@ -107,6 +107,7 @@ export class OpenRouterClient {
       throw new Error(`No model configured for purpose: ${purpose}`);
     }
 
+    console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}`);
     const startTime = Date.now();
     const request: OpenRouterRequest = {
       model,
@@ -116,10 +117,17 @@ export class OpenRouterClient {
     };
     
     try {
+      console.log(`📤 Sending request to OpenRouter:`, { model, messageLength: message.length });
       const response = await this.sendMessage(request, abortSignal);
+      console.log(`📨 Received response from OpenRouter:`, { 
+        hasChoices: !!response.choices, 
+        choicesLength: response.choices?.length || 0,
+        hasContent: !!response.choices?.[0]?.message?.content
+      });
       
       const answer = response.choices?.[0]?.message?.content ?? '';
       const duration = Date.now() - startTime;
+      console.log(`✅ AI generation completed successfully in ${duration}ms, response length: ${answer.length}`);
 
       // Log the interaction if logging is enabled
       if (this.settingsManager?.isAILoggingEnabled()) {
@@ -139,10 +147,19 @@ export class OpenRouterClient {
 
       return answer;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`❌ AI generation failed for purpose: ${purpose}`, {
+        error: error instanceof Error ? error.message : error,
+        duration,
+        model,
+        messageLength: message.length,
+        errorType: error instanceof Error ? error.name : typeof error,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
       // Log failed requests too if logging is enabled
       if (this.settingsManager?.isAILoggingEnabled()) {
         try {
-          const duration = Date.now() - startTime;
           await this.aiLogService.addLogEntry({
             timestamp: new Date(),
             purpose,
@@ -172,6 +189,14 @@ export class OpenRouterClient {
       });
     }
 
+    console.log(`🌐 Initiating HTTP request to OpenRouter API`, {
+      url: this.apiUrl,
+      model: request.model,
+      messageCount: request.messages.length,
+      hasStream: !!request.stream,
+      hasAbortSignal: !!externalAbortSignal
+    });
+
     try {
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -183,19 +208,49 @@ export class OpenRouterClient {
         signal: this.currentAbortController.signal
       });
 
+      console.log(`📡 HTTP response received`, {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: {
+          'content-type': response.headers.get('content-type'),
+          'content-length': response.headers.get('content-length')
+        }
+      });
+
       if (!response.ok) {
+        console.error(`🚨 HTTP error response:`, {
+          status: response.status,
+          statusText: response.statusText,
+          url: this.apiUrl
+        });
         const errorText = await response.text();
+        console.error(`🚨 Error response body:`, errorText);
         throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
+      console.log(`🔄 Parsing JSON response...`);
       const result = await response.json();
+      console.log(`✅ JSON parsed successfully`, {
+        hasChoices: !!result.choices,
+        choicesCount: result.choices?.length || 0
+      });
       return result;
     } catch (error: any) {
+      console.error(`💥 Request failed:`, {
+        errorName: error.name,
+        errorMessage: error.message,
+        isAbortError: error.name === 'AbortError',
+        isNetworkError: error instanceof TypeError,
+        url: this.apiUrl
+      });
+      
       if (error.name === 'AbortError') {
         throw new Error('Request was aborted');
       }
       throw error;
     } finally {
+      console.log(`🧹 Cleaning up abort controller`);
       this.currentAbortController = null;
     }
   }
@@ -368,5 +423,58 @@ export class OpenRouterClient {
   async chatStreamConversation(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, abortSignal?: AbortSignal): Promise<void> {
     callbacks.onStart?.();
     return this.streamingChat(purpose, messages, callbacks, abortSignal);
+  }
+
+  /**
+   * Check browser compatibility for OpenRouter client features
+   */
+  public static checkBrowserCompatibility(): { compatible: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Check fetch API
+    if (typeof fetch === 'undefined') {
+      issues.push('Fetch API not supported');
+    }
+
+    // Check AbortController
+    if (typeof AbortController === 'undefined') {
+      issues.push('AbortController not supported');
+    }
+
+    // Check JSON support
+    if (typeof JSON === 'undefined' || !JSON.parse || !JSON.stringify) {
+      issues.push('JSON API not fully supported');
+    }
+
+    // Check ReadableStream (for streaming)
+    if (typeof ReadableStream === 'undefined') {
+      issues.push('ReadableStream not supported (streaming may fail)');
+    }
+
+    // Check TextDecoder (for streaming)
+    if (typeof TextDecoder === 'undefined') {
+      issues.push('TextDecoder not supported (streaming may fail)');
+    }
+
+    // Check Response.body.getReader (for streaming)
+    try {
+      const testResponse = new Response('test');
+      if (!testResponse.body || typeof testResponse.body.getReader !== 'function') {
+        issues.push('Response.body.getReader not supported (streaming may fail)');
+      }
+    } catch (e) {
+      issues.push('Unable to test streaming capabilities');
+    }
+
+    console.log(`🔍 Browser compatibility check:`, {
+      compatible: issues.length === 0,
+      issues: issues.length > 0 ? issues : ['All features supported'],
+      userAgent: navigator.userAgent
+    });
+
+    return {
+      compatible: issues.length === 0,
+      issues
+    };
   }
 } 

@@ -206,6 +206,21 @@ async function loadPersistedProjects(): Promise<void> {
 }
 
 export async function initialize() {
+    // Check browser compatibility first
+    console.log('🔍 Running browser compatibility check...');
+    const { compatible, issues } = OpenRouterClient.checkBrowserCompatibility();
+    
+    if (!compatible) {
+        console.warn(`⚠️ Browser compatibility issues detected:`, issues);
+        // Show a warning but don't block execution
+        if (issues.length > 0) {
+            const issuesText = issues.join('\n• ');
+            alert(`⚠️ Browser Compatibility Warning\n\nThe following features may not work properly:\n• ${issuesText}\n\nPlease consider updating your browser or trying a different browser.`);
+        }
+    } else {
+        console.log('✅ Browser compatibility check passed');
+    }
+
     // Validate DOM elements are available
     try {
         validateDOMElements();
