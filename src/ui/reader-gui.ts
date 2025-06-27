@@ -107,7 +107,7 @@ export class ReaderGUI {
         this.buildClickMappings();
         this.setupAllEventListeners();
         
-        // Initialize the editor after DOM is ready
+        // Initialize the editor after DOM is ready (async)
         this.readerEditor.initialize();
         
         // Mark this instance as having been rendered

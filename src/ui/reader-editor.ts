@@ -27,6 +27,7 @@ export class ReaderEditor {
     private nodeEditors: Map<string, NodeEditor> = new Map();
     private currentActiveEditor: NodeEditor | null = null;
     private autoSaveTimer: number | null = null;
+    private configLoadedPromise!: Promise<void>;
     
     // Bound method references for proper event listener removal
     private boundHandleKeyDown: (event: KeyboardEvent) => void;
@@ -47,13 +48,20 @@ export class ReaderEditor {
             editableNodes: new Map()
         };
         
-        this.editManager.initialize();
+        // Initialize asynchronously - don't await here to avoid blocking constructor
+        this.configLoadedPromise = this.editManager.initialize().then(() => {
+            // Update action buttons after config is loaded
+            this.readerGUI.updateActionButtons();
+        });
     }
 
     /**
      * Initialize the always-on editing interface
      */
-    public initialize(preservedContent?: Map<string, string>): void {
+    public async initialize(preservedContent?: Map<string, string>): Promise<void> {
+        // Wait for config to be loaded first
+        await this.configLoadedPromise;
+        
         // If we have preserved content, we're doing a rebuild - clear existing editors first
         if (preservedContent && preservedContent.size > 0) {
             this.removeEditorOverlays();
@@ -62,6 +70,8 @@ export class ReaderEditor {
         this.createEditorOverlays(preservedContent);
         this.setupEventListeners();
         this.updateEditModeUI();
+        
+        // Update action buttons now that config is loaded
         this.readerGUI.updateActionButtons();
     }
 
