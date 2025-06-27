@@ -350,8 +350,12 @@ export class ReaderEditManager {
                         if (e) e.preventDefault();
                         const value = input.value.trim();
                         if (value) {
-                            closeGenericModal();
+                            // Resolve first, then close modal to ensure proper order
                             resolveOnce(value);
+                            // Use setTimeout to ensure the promise resolution happens first
+                            setTimeout(() => {
+                                closeGenericModal();
+                            }, 10);
                         } else {
                             // Don't close if empty, just refocus
                             input.focus();
@@ -360,8 +364,11 @@ export class ReaderEditManager {
 
                     const handleCancel = (e?: Event) => {
                         if (e) e.preventDefault();
-                        closeGenericModal();
+                        // Resolve first, then close modal to ensure proper order
                         resolveOnce(''); // Return empty string on cancel
+                        setTimeout(() => {
+                            closeGenericModal();
+                        }, 10);
                     };
 
                     // Set up event listeners with proper error handling
