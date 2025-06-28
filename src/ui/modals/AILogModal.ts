@@ -13,6 +13,8 @@ export interface AILogModalConfig extends ModalConfig {
 
 export class AILogModal extends BaseModal {
     private aiLogService: AILogService;
+    private loadingDiv: HTMLElement | null = null;
+    private contentDiv: HTMLElement | null = null;
 
     constructor(config: AILogModalConfig = { id: 'ai-log-modal' }, hooks: ModalHooks = {}) {
         super({
@@ -21,7 +23,14 @@ export class AILogModal extends BaseModal {
             maxWidth: '1200px',
             width: '95vw',
             maxHeight: '90vh'
-        }, hooks);
+        }, {
+            ...hooks,
+            onOpen: async () => {
+                await hooks.onOpen?.();
+                // Load logs after modal is in DOM
+                this.loadLogs();
+            }
+        });
         
         this.aiLogService = AILogService.getInstance();
     }
@@ -49,9 +58,6 @@ export class AILogModal extends BaseModal {
         // Create body
         const body = this.createBody();
         container.appendChild(body);
-
-        // Load logs
-        this.loadLogs();
 
         return container;
     }
@@ -157,7 +163,7 @@ export class AILogModal extends BaseModal {
         });
 
         // Loading state
-        const loadingDiv = createElement('div', {
+        this.loadingDiv = createElement('div', {
             classes: ['loading-state'],
             attributes: {
                 id: 'log-loading',
@@ -171,15 +177,15 @@ export class AILogModal extends BaseModal {
         });
 
         // Content div
-        const contentDiv = createElement('div', {
+        this.contentDiv = createElement('div', {
             attributes: {
                 id: 'log-content',
                 style: 'display: none;'
             }
         });
 
-        body.appendChild(loadingDiv);
-        body.appendChild(contentDiv);
+        body.appendChild(this.loadingDiv);
+        body.appendChild(this.contentDiv);
 
         return body;
     }
@@ -188,22 +194,24 @@ export class AILogModal extends BaseModal {
      * Loads and displays AI logs
      */
     private async loadLogs(): Promise<void> {
-        const loadingDiv = document.getElementById('log-loading');
-        const contentDiv = document.getElementById('log-content');
-        
-        if (!loadingDiv || !contentDiv) return;
+        if (!this.loadingDiv || !this.contentDiv) {
+            console.error('Modal elements not initialized');
+            return;
+        }
 
         try {
-            loadingDiv.style.display = 'block';
-            contentDiv.style.display = 'none';
+            this.loadingDiv.style.display = 'block';
+            this.contentDiv.style.display = 'none';
 
+            console.log('Loading AI logs...');
             const logs = await this.aiLogService.getAllLogs();
+            console.log('Loaded logs:', logs.length, 'entries');
 
-            loadingDiv.style.display = 'none';
-            contentDiv.style.display = 'block';
+            this.loadingDiv.style.display = 'none';
+            this.contentDiv.style.display = 'block';
 
             if (logs.length === 0) {
-                contentDiv.innerHTML = `
+                this.contentDiv.innerHTML = `
                     <div class="empty-state" style="text-align: center; padding: 3rem 2rem; color: #6b7280;">
                         <h3 style="margin: 0 0 0.5rem 0; color: #374151;">No AI logs found</h3>
                         <p>Enable AI logging in settings to start collecting request logs.</p>
@@ -212,16 +220,16 @@ export class AILogModal extends BaseModal {
                 return;
             }
 
-            this.renderLogsTable(contentDiv, logs);
+            this.renderLogsTable(this.contentDiv, logs);
 
         } catch (error) {
             console.error('Failed to load AI logs:', error);
-            loadingDiv.style.display = 'none';
-            contentDiv.style.display = 'block';
-            contentDiv.innerHTML = `
+            this.loadingDiv.style.display = 'none';
+            this.contentDiv.style.display = 'block';
+            this.contentDiv.innerHTML = `
                 <div class="empty-state" style="text-align: center; padding: 3rem 2rem; color: #6b7280;">
                     <h3 style="margin: 0 0 0.5rem 0; color: #374151;">Error loading logs</h3>
-                    <p>Failed to load AI logs. Please try again.</p>
+                    <p>Failed to load AI logs. Please try again. Error: ${error instanceof Error ? error.message : 'Unknown error'}</p>
                 </div>
             `;
         }
