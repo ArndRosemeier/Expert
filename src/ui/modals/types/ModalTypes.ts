@@ -220,7 +220,7 @@ export interface ISettingsService {
     getLastUsedProfileName(): string | null;
     getLastUsedProfile(): any | null;
     createProfile(name: string): Promise<{ success: boolean; message: string }>;
-    switchToProfile(profileName: string): any | null;
+    switchToProfile(profileName: string): Promise<any | null>;
     deleteProfile(profileName: string): Promise<{ success: boolean; message: string }>;
     exportProfile(profileName: string): { success: boolean; message: string };
     onChange(handler: (event: SettingsChangeEvent) => void): void;

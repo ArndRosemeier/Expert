@@ -39,7 +39,7 @@ export class SettingsService {
      * Gets a specific profile by name
      */
     public getProfile(name: string): SettingsProfile | null {
-        return this.settingsManager.getProfile(name);
+        return this.settingsManager.getProfile(name) || null;
     }
 
     /**
@@ -53,7 +53,7 @@ export class SettingsService {
      * Gets the last used profile
      */
     public getLastUsedProfile(): SettingsProfile | null {
-        return this.settingsManager.getLastUsedProfile();
+        return this.settingsManager.getLastUsedProfile() || null;
     }
 
     /**
@@ -81,7 +81,7 @@ export class SettingsService {
 
             // Save the new profile
             await this.settingsManager.saveProfile(name, currentSettings);
-            this.settingsManager.setLastUsedProfile(name);
+            await this.settingsManager.setLastUsedProfile(name);
 
             this.emitChange({
                 type: 'profile',
@@ -124,10 +124,11 @@ export class SettingsService {
     /**
      * Switches to a different profile
      */
-    public switchToProfile(profileName: string): SettingsProfile | null {
+    public async switchToProfile(profileName: string): Promise<SettingsProfile | null> {
         const profile = this.settingsManager.getProfile(profileName);
         if (profile) {
-            this.settingsManager.setLastUsedProfile(profileName);
+            // Wait for the profile to be saved before proceeding
+            await this.settingsManager.setLastUsedProfile(profileName);
             
             // Apply the profile settings to UI components immediately
             this.applyProfileToComponents(profile);

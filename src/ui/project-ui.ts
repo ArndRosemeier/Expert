@@ -1740,6 +1740,10 @@ This action cannot be undone.`;
             const settingsManager = state.getSettingsManager();
             if (settingsManager) {
                 await settingsManager.setLastUsedProfile(select.value);
+                // Force refresh of node details to pick up new profile settings
+                if (selectedNodeId) {
+                    renderNodeDetails();
+                }
             }
         } else if (e.target.id === 'show-ratings-checkbox') {
             const checkbox = e.target as HTMLInputElement;

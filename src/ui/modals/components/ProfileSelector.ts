@@ -186,9 +186,9 @@ export class ProfileSelector {
             attributes: { id: 'profile-select' }
         }) as HTMLSelectElement;
 
-        this.profileSelect.addEventListener('change', () => {
+        this.profileSelect.addEventListener('change', async () => {
             const profileName = this.profileSelect.value;
-            const profile = this.settingsService.switchToProfile(profileName);
+            const profile = await this.settingsService.switchToProfile(profileName);
             this.updateCurrentProfileDisplay(profileName);
             this.emitSelection(profileName, profile);
         });
