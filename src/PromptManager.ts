@@ -34,7 +34,7 @@ export const defaultPrompts: OrchestratorPrompts = {
     content_generation_initial: `
         Your task is to respond to the following user prompt: "{{prompt}}"
 
-        Your response will be rated on the following criteria:
+        Your response will be rated by a just and unforegiving rater on the following criteria:
         - {{criteria}}
 
         Please generate a high-quality response that addresses these criteria.
