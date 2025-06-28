@@ -570,12 +570,30 @@ export class GenerationService {
                 .replace(/{{context}}/g, context)
                 .replace(/{{count}}/g, String(node.generationChildrenCount));
 
-            // Prompt prepared for LLM
+            // Debug logging for problematic node
+            console.log('=== DEBUG: Child Generation ===');
+            console.log('Node ID:', nodeId);
+            console.log('Node Title:', node.title);
+            console.log('Node Content Length:', node.content?.length || 0);
+            console.log('Prompt Length:', prompt.length);
+            console.log('Prompt Preview:', prompt.substring(0, 500) + (prompt.length > 500 ? '...' : ''));
 
             try {
                 // Using the 'creator' model as it's for generating new content/structure
                 const response = await this.deps.openRouterClient.chat('creator', prompt);
+                
+                // Debug the AI response
+                console.log('=== AI RESPONSE DEBUG ===');
+                console.log('Response type:', typeof response);
+                console.log('Response length:', response?.length || 0);
+                console.log('Response preview:', response?.substring(0, 500) + (response?.length > 500 ? '...' : ''));
+                console.log('Raw response:', JSON.stringify(response));
+                
                 const nodeItems = this.parseChildrenFromJSON(response);
+                
+                console.log('Parsed items count:', nodeItems.length);
+                console.log('Parsed items:', nodeItems);
+                console.log('=== END DEBUG ===');
 
                 if (nodeItems.length === 0) {
                     this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
@@ -985,21 +1003,30 @@ export class GenerationService {
      * Returns array of objects with title and content description.
      */
     private parseChildrenFromJSON(text: string): Array<{title: string, description: string}> {
+        console.log('=== parseChildrenFromJSON DEBUG ===');
+        console.log('Input text:', JSON.stringify(text));
+        console.log('Input text length:', text?.length || 0);
+        
         try {
             // Clean the text - remove any leading/trailing whitespace and non-JSON content
             const cleanedText = text.trim();
+            console.log('Cleaned text:', JSON.stringify(cleanedText));
             
             // Try to find JSON array in the response (in case there's extra text)
             let jsonText = cleanedText;
             const arrayStart = cleanedText.indexOf('[');
             const arrayEnd = cleanedText.lastIndexOf(']');
             
+            console.log('Array boundaries - start:', arrayStart, 'end:', arrayEnd);
+            
             if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
                 jsonText = cleanedText.substring(arrayStart, arrayEnd + 1);
+                console.log('Extracted JSON text:', JSON.stringify(jsonText));
             }
             
             // Parse the JSON
             const parsed = JSON.parse(jsonText);
+            console.log('Parsed JSON successfully:', parsed);
             
             // Validate that it's an array
             if (!Array.isArray(parsed)) {
@@ -1008,7 +1035,7 @@ export class GenerationService {
             }
             
             // Validate and map each item
-            return parsed
+            const result = parsed
                 .map((item, index) => {
                     if (typeof item !== 'object' || item === null) {
                         console.warn(`Item ${index} is not an object, skipping`);
@@ -1027,8 +1054,12 @@ export class GenerationService {
                 })
                 .filter((item): item is {title: string, description: string} => item !== null);
                 
+            console.log('Final parsed result:', result);
+            return result;
+                
         } catch (error) {
             console.warn('Failed to parse as JSON, falling back to bulleted list parsing:', error);
+            console.log('Error details:', error);
             return this.parseEnhancedBulletedList(text);
         }
     }
@@ -1039,28 +1070,42 @@ export class GenerationService {
      * This is kept as a fallback for when JSON parsing fails.
      */
     private parseEnhancedBulletedList(text: string): Array<{title: string, description: string}> {
-        return text
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('*') || line.startsWith('-'))
+        console.log('=== parseEnhancedBulletedList DEBUG ===');
+        console.log('Input text for bulleted list parsing:', JSON.stringify(text));
+        
+        const lines = text.split('\n').map(line => line.trim());
+        console.log('Split lines:', lines);
+        
+        const bulletedLines = lines.filter(line => line.startsWith('*') || line.startsWith('-'));
+        console.log('Bulleted lines found:', bulletedLines);
+        
+        const result = bulletedLines
             .map(line => {
                 const content = line.substring(1).trim();
+                console.log('Processing line content:', content);
                 
                 // Check for new format: "Title: X, Content: Y"
                 const titleMatch = content.match(/^Title:\s*([^,]+),\s*Content:\s*(.*)$/i);
                 if (titleMatch) {
-                    return {
+                    const parsed = {
                         title: titleMatch[1].trim(),
                         description: titleMatch[2].trim()
                     };
+                    console.log('New format match:', parsed);
+                    return parsed;
                 }
                 
                 // Fallback to old format (just the title)
-                return {
+                const parsed = {
                     title: content,
                     description: ''
                 };
+                console.log('Old format fallback:', parsed);
+                return parsed;
             })
             .filter(item => item.title.length > 0);
+            
+        console.log('Final bulleted list result:', result);
+        return result;
     }
 } 
