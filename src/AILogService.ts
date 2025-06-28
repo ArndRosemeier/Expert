@@ -17,18 +17,40 @@ export class AILogService {
     }
 
     public async initialize(): Promise<void> {
-        const storageService = await StorageService.getInstance();
-        // Access the underlying IndexedDB service
-        this.indexedDBService = (storageService as any).indexedDBService;
+        try {
+            const storageService = await StorageService.getInstance();
+            // Access the underlying IndexedDB service
+            this.indexedDBService = (storageService as any).indexedDBService;
+            
+            if (!this.indexedDBService) {
+                console.error('❌ Failed to get IndexedDBService from StorageService');
+                throw new Error('IndexedDBService not available');
+            }
+            
+            console.log('✅ AILogService initialized successfully');
+        } catch (error) {
+            console.error('❌ Failed to initialize AILogService:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ensure the service is initialized before use
+     */
+    private async ensureInitialized(): Promise<void> {
+        if (!this.indexedDBService) {
+            await this.initialize();
+        }
+        if (!this.indexedDBService) {
+            throw new Error('Failed to initialize AILogService - IndexedDBService is not available');
+        }
     }
 
     /**
      * Add a new AI log entry
      */
     public async addLogEntry(entry: Omit<AILogEntry, 'id'>): Promise<void> {
-        if (!this.indexedDBService) {
-            await this.initialize();
-        }
+        await this.ensureInitialized();
 
         const logEntry: AILogEntry = {
             ...entry,
@@ -46,12 +68,11 @@ export class AILogService {
      * Get all AI log entries, sorted by timestamp (newest first)
      */
     public async getAllLogs(): Promise<AILogEntry[]> {
-        if (!this.indexedDBService) {
-            await this.initialize();
-        }
+        await this.ensureInitialized();
 
         try {
             const logs = await this.indexedDBService!.getAll<AILogEntry>(this.storeName);
+            console.log(`📋 Retrieved ${logs.length} AI log entries from IndexedDB`);
             // Sort by timestamp descending (newest first)
             return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         } catch (error) {
@@ -64,12 +85,11 @@ export class AILogService {
      * Clear all AI log entries
      */
     public async clearAllLogs(): Promise<void> {
-        if (!this.indexedDBService) {
-            await this.initialize();
-        }
+        await this.ensureInitialized();
 
         try {
             await this.indexedDBService!.clear(this.storeName);
+            console.log('🗑️ All AI logs cleared from IndexedDB');
         } catch (error) {
             console.error('Failed to clear AI logs:', error);
         }
