@@ -624,6 +624,12 @@ export function renderNodeDetails() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <label for="node-context">Context</label>
+                    <button id="context-info-btn" class="info-button" title="Learn about Context features" style="
+                        width: 20px; height: 20px; border-radius: 50%; border: 1px solid #6c757d; 
+                        background: #f8f9fa; color: #6c757d; font-size: 12px; font-weight: bold;
+                        display: inline-flex; align-items: center; justify-content: center;
+                        cursor: pointer; margin-left: 4px;
+                    ">i</button>
                     <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(propagates recursively to all children)</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
@@ -1400,6 +1406,19 @@ This action cannot be undone.`;
                     }).catch((error: any) => {
                         console.error('Failed to open extract context modal:', error);
                         alert('Failed to open extract context dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'context-info-btn':
+                {
+                    // Import and open context info modal
+                    import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
+                        const modal = new ContextInfoModal();
+                        modal.open();
+                    }).catch((error: any) => {
+                        console.error('Failed to open context info modal:', error);
+                        alert('Failed to open context information dialog. Please try again.');
                     });
                 }
                 break;

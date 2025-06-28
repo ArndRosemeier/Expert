@@ -54,6 +54,7 @@ export type {
 export { SettingsModal } from './SettingsModal';
 export { ExportModal } from './ExportModal';
 export { AILogModal, openAILogModal } from './AILogModal';
+export { ContextInfoModal } from './ContextInfoModal';
 export { 
     ModalFactory, 
     createModalFactory,
