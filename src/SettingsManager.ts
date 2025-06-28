@@ -31,14 +31,14 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Clarity & Conciseness",
         description: "The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.",
-        goal: 8,
+        goal: 7,
         outline: true,
         leaf: true
     },
     {
         name: "Natural & Authentic Tone",
         description: "The language sounds human and authentic. It avoids being overly formal, academic, or robotic.",
-        goal: 8,
+        goal: 7,
         outline: true,
         leaf: true
     },
