@@ -224,14 +224,12 @@ export class ContextService {
      */
     public async synthesizeContext(nodeId: string, rootNode: DocumentNode): Promise<string | null> {
         if (!this.openRouterClient || !this.settingsManager) {
-            console.warn('ContextService: OpenRouterClient or SettingsManager not available for context synthesis');
-            return null;
+            throw new Error('ContextService: OpenRouterClient or SettingsManager not available for context synthesis');
         }
 
         const node = this.treeService.findNodeById(nodeId, rootNode);
         if (!node) {
-            console.error(`ContextService: Node ${nodeId} not found`);
-            return null;
+            throw new Error(`ContextService: Node ${nodeId} not found`);
         }
 
         // Get parent context - use only the parent's own context field, not compiled context

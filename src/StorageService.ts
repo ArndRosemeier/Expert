@@ -34,7 +34,7 @@ class IndexedDBStorageService implements IStorageService {
       return result?.value;
     } catch (error) {
       console.error('IndexedDB get error:', error);
-      return undefined;
+      throw new Error(`Failed to get data from storage: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -52,6 +52,7 @@ class IndexedDBStorageService implements IStorageService {
       await this.indexedDBService.delete(this.storeName, key);
     } catch (error) {
       console.error('IndexedDB delete error:', error);
+      throw new Error(`Failed to delete data from storage: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -67,6 +68,7 @@ class IndexedDBStorageService implements IStorageService {
       }
     } catch (error) {
       console.error('IndexedDB getAll error:', error);
+      throw new Error(`Failed to get all data from storage: ${error instanceof Error ? error.message : error}`);
     }
     
     return result;
@@ -77,6 +79,7 @@ class IndexedDBStorageService implements IStorageService {
       await this.indexedDBService.clear(this.storeName);
     } catch (error) {
       console.error('IndexedDB clear error:', error);
+      throw new Error(`Failed to clear storage: ${error instanceof Error ? error.message : error}`);
     }
   }
 

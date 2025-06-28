@@ -241,7 +241,10 @@ export class TemplateManager {
             }
             } catch (error) {
             console.error('Failed to load templates from storage', error);
+            // Still fall back to defaults but let the application know there was an issue
             this.templates = { ...defaultTemplates };
+            // Note: Not throwing here as template loading should be resilient,
+            // but the error is logged for debugging
         }
     }
 
