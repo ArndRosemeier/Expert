@@ -430,8 +430,8 @@ export class GenerationService {
             return;
         }
 
-        // Check for settings override
-        const settingsOverride = this.extractSettingsOverride(node);
+        // Check for settings override from the parent node's own context
+        const settingsOverride = this.extractSettingsOverrideFromNode(node);
         const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
         
         if (settingsOverride) {
@@ -601,8 +601,8 @@ export class GenerationService {
         if (node.children.length === 0) {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles...', current: 0, total: 1 });
 
-            // Check for settings override for child creation
-            const settingsOverride = this.extractSettingsOverride(node);
+            // Check for settings override from the parent node's own context for child creation
+            const settingsOverride = this.extractSettingsOverrideFromNode(node);
             const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
             
             if (settingsOverride) {
@@ -943,6 +943,11 @@ export class GenerationService {
      * Extracts settings override from parent node's context.
      * Looks for "settingsoverride: <profilename>" in the parent's context.
      */
+    /**
+     * Extracts settings override from the parent node's context.
+     * Used when generating content for an existing node - the override instruction
+     * comes from the parent node that contains the target node.
+     */
     private extractSettingsOverride(node: DocumentNode): string | null {
         if (!node.parentId) {
             return null; // No parent, no override
@@ -954,6 +959,28 @@ export class GenerationService {
         }
         
         const contextLines = parentNode.context.split('\n');
+        for (const line of contextLines) {
+            const trimmedLine = line.trim();
+            const match = trimmedLine.match(/^settingsoverride:\s*(.+)$/i);
+            if (match) {
+                return match[1].trim();
+            }
+        }
+        
+        return null; // No settings override found
+    }
+
+    /**
+     * Extracts settings override from the node's own context.
+     * Used when creating children for a node - the override instruction
+     * comes from the node itself that will become the parent of new children.
+     */
+    private extractSettingsOverrideFromNode(node: DocumentNode): string | null {
+        if (!node.context) {
+            return null; // No context
+        }
+        
+        const contextLines = node.context.split('\n');
         for (const line of contextLines) {
             const trimmedLine = line.trim();
             const match = trimmedLine.match(/^settingsoverride:\s*(.+)$/i);
