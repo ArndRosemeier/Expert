@@ -44,7 +44,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         Your last response was: "{{lastResponse}}".
         It received feedback and the editor provided the following advice to improve it: "{{editorAdvice}}".
 
-        Please generate a new response, incorporating the editor's advice. Remember, your response will be rated on these criteria:
+        Please generate a new response, incorporating the editor's advice. Remember, your response will be rated by a just and unforegiving rater on these criteria:
         - {{criteria}}
     `.trim(),
     rater: `
