@@ -102,6 +102,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         this.abortController = new AbortController();
         const maxRetries = 3;
         let ratingsFromAI: Rating[] | null = null;
+        let lastRatingResponse = '';
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             if (this.stopRequested) {
@@ -110,8 +111,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
             const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, content, criteria);
             try {
-                const ratingString = await this.client.chat('rater', raterPrompt, this.abortController.signal);
-                ratingsFromAI = this.parseAllRatings(ratingString, criteria);
+                lastRatingResponse = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
 
                 if (ratingsFromAI) {
                     break; // Success
@@ -127,7 +128,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         }
 
         if (!ratingsFromAI) {
-            throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
+            throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.\n\nLast AI Response:\n"${lastRatingResponse}"`);
         }
 
         this.abortController = null;
@@ -210,6 +211,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
 
                 let ratingsFromAI: Rating[] | null = null;
+                let lastRatingResponse = '';
                 const maxRetries = 3;
 
                 for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -220,8 +222,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                     const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
                     try {
-                        const ratingString = await this.client.chat('rater', raterPrompt, this.abortController.signal);
-                        ratingsFromAI = this.parseAllRatings(ratingString, criteria);
+                        lastRatingResponse = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                        ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
 
                         if (ratingsFromAI) {
                             break; // Success
@@ -240,7 +242,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 if (aborted) break;
 
                 if (!ratingsFromAI) {
-                    throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.`);
+                    throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.\n\nLast AI Response:\n"${lastRatingResponse}"`);
                 }
 
                 let allGoalsMet = true;

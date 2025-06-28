@@ -438,7 +438,8 @@ export class GenerationService {
             if (nodeItems.length === 0) {
                 // Clear generating flag before emitting error
                 node.isGenerating = false;
-                this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
+                const errorMsg = `The AI did not return a valid list of titles from the outline.\n\nAI Response:\n"${response}"`;
+                this.deps.eventEmitter.emit('error', errorMsg);
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
                 return;
             }
@@ -576,10 +577,11 @@ export class GenerationService {
                 const nodeItems = this.parseChildrenFromJSON(response);
 
                 if (nodeItems.length === 0) {
-                    this.deps.eventEmitter.emit('error', `The AI did not return a valid list of titles from the outline.`);
+                    const errorMsg = `The AI did not return a valid list of titles from the outline.\n\nAI Response:\n"${response}"`;
+                    this.deps.eventEmitter.emit('error', errorMsg);
                     this.isGeneratingAllChildren = false;
                     this.deps.generationController.clearGenerationContext();
-                    throw new Error(`The AI did not return a valid list of titles from the outline.`);
+                    throw new Error(errorMsg);
                 }
 
                 nodeItems.forEach(item => {
@@ -1001,7 +1003,7 @@ export class GenerationService {
             
             // Validate that it's an array
             if (!Array.isArray(parsed)) {
-                console.warn('Response is not a JSON array, falling back to bulleted list parsing');
+                console.warn('Response is not a JSON array, falling back to bulleted list parsing. Response:', text);
                 return this.parseEnhancedBulletedList(text);
             }
             
@@ -1026,7 +1028,7 @@ export class GenerationService {
                 .filter((item): item is {title: string, description: string} => item !== null);
                 
         } catch (error) {
-            console.warn('Failed to parse as JSON, falling back to bulleted list parsing:', error);
+            console.warn('Failed to parse as JSON, falling back to bulleted list parsing. Error:', error, 'Response:', text);
             return this.parseEnhancedBulletedList(text);
         }
     }
