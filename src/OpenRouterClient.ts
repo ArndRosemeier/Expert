@@ -128,7 +128,6 @@ export class OpenRouterClient {
     
     // Use streaming by default (more reliable across different systems)
     if (this.forceStreamingMode) {
-      console.log(`🌊 Using streaming mode for reliable communication`);
       return await this.chatWithStreamingFallback(purpose, message, abortSignal);
     }
 
@@ -181,12 +180,11 @@ export class OpenRouterClient {
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // Try fallback with streaming if standard request failed
-      console.log(`🔄 Attempting streaming fallback for failed standard request...`);
+      // Try with streaming if standard request failed
       try {
         return await this.chatWithStreamingFallback(purpose, message, abortSignal);
       } catch (fallbackError) {
-        console.error(`❌ Streaming fallback also failed:`, fallbackError);
+        console.error(`❌ Streaming also failed:`, fallbackError);
         
         // Log failed requests too if logging is enabled
         if (this.settingsManager?.isAILoggingEnabled()) {
@@ -215,8 +213,6 @@ export class OpenRouterClient {
    * when standard JSON requests fail
    */
   private async chatWithStreamingFallback(purpose: string, message: string, abortSignal?: AbortSignal): Promise<string> {
-    console.log(`🌊 Using streaming fallback for purpose: ${purpose}`);
-    
     return new Promise((resolve, reject) => {
       let fullResponse = '';
       let hasStarted = false;
@@ -224,17 +220,14 @@ export class OpenRouterClient {
       const callbacks: StreamingCallbacks = {
         onStart: () => {
           hasStarted = true;
-          console.log(`🌊 Streaming fallback started`);
         },
         onChunk: (chunk: string) => {
           fullResponse += chunk;
         },
         onComplete: (finalResponse: string) => {
-          console.log(`🌊 Streaming fallback completed, response length: ${finalResponse.length}`);
           resolve(finalResponse);
         },
         onError: (error: Error) => {
-          console.error(`🌊 Streaming fallback failed:`, error);
           reject(error);
         }
       };
