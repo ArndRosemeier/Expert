@@ -346,7 +346,7 @@ async function handlePasteCriteria(_container: HTMLElement) {
 
 export function openExtractContextModal(projectManager: ProjectManager, node: DocumentNode) {
     // Import the new modal system dynamically
-    import('./modals/index').then(({ showGenericModal }) => {
+    void import('./modals/index').then(({ showGenericModal }) => {
         const modal = showGenericModal(
             {
                 content: `
@@ -608,7 +608,7 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
             }
             
             // Save project and refresh UI
-            projectManager.saveToStorage();
+            void projectManager.saveToStorage();
             
             addToContextBtn.textContent = 'Added!';
             setTimeout(() => {
@@ -882,7 +882,7 @@ function renderAILogModal() {
         </div>
     `;
 
-    setupAILogModal();
+    void setupAILogModal();
 }
 
 async function setupAILogModal() {
@@ -1179,7 +1179,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                             }
                             
                             // Open the chat interface
-                            openNodeChatInterface(projectManager, systemPrompt, node.title);
+                            void openNodeChatInterface(projectManager, systemPrompt, node.title);
                             
                         } catch (error: any) {
                             alert('Error preparing chat:\n\n' + error.message);

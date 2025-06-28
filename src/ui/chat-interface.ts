@@ -318,7 +318,7 @@ export class ChatInterface {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!this.isStreamingResponse && this.messageInput!.value.trim()) {
-                    this.sendMessage();
+                    void this.sendMessage();
                 }
             }
         });
@@ -326,7 +326,7 @@ export class ChatInterface {
         // Button events
         this.sendButton.addEventListener('click', () => {
             if (!this.isStreamingResponse && this.messageInput!.value.trim()) {
-                this.sendMessage();
+                void this.sendMessage();
             }
         });
 
@@ -337,7 +337,7 @@ export class ChatInterface {
         // Model selection
         this.modelPurposeSelect.addEventListener('change', (e) => {
             this.selectedModelPurpose = (e.target as HTMLSelectElement).value;
-            this.saveLastUsedModel(); // Save the selection
+            void this.saveLastUsedModel(); // Save the selection
         });
 
         // Clear chat button
