@@ -48,7 +48,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         - {{criteria}}
     `.trim(),
     rater: `
-        You are a rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
+        You are a just and unforegiving rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
 
         The user's original prompt was: "{{originalPrompt}}".
         
@@ -58,6 +58,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         ---
         
         Please rate this response objectively against all of the following criteria. Use your best judgment to assess the quality on a scale of 1-10.
+        Do not aim to please, be just!
         
         Criteria to evaluate:
         - {{criteria}}
@@ -65,9 +66,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         Provide your response as a JSON array of objects. Each object must have three keys:
         - "criterion": The exact name of the criterion being rated (use the full original name).
         - "score": A number from 1 to 10 based on your objective assessment.
-        - "justification": A brief explanation for your score, written in a neutral, objective tone.
-
-        Be honest and objective in your ratings. Don't aim for any particular score - just evaluate the quality as you see it.
+        - "justification": A brief explanation for your score, written in the tone of a critique.
 
         Example:
         [
