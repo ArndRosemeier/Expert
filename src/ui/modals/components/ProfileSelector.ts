@@ -223,7 +223,7 @@ export class ProfileSelector {
         this.newProfileInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this.createProfile();
+                void this.createProfile();
             }
         });
 

@@ -200,7 +200,7 @@ export function showGenericModal(
     const modal = new GenericModal(modalConfig, hooks);
     
     // Auto-open the modal
-    modal.open().catch(error => {
+    void modal.open().catch(error => {
         console.error('❌ Failed to open modal:', error);
         // Don't re-throw to avoid uncaught promise rejection
     });

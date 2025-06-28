@@ -37,8 +37,8 @@ export class TestRunner {
                 selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model' },
                 contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
             };
-            this.mockSettingsManager.saveProfile('default', defaultProfile);
-            this.mockSettingsManager.setLastUsedProfile('default');
+            void this.mockSettingsManager.saveProfile('default', defaultProfile);
+            void this.mockSettingsManager.setLastUsedProfile('default');
         } catch (error) {
             // If there's an issue setting up the profile, we'll continue with the test
             // The test should still work even without a perfect mock setup

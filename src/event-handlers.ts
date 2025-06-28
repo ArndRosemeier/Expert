@@ -33,7 +33,7 @@ function onModelsSelected(models: Record<string, string>) {
         contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
     };
     activeProfile.selectedModels = models;
-    settingsManager.saveProfile(activeProfileName, activeProfile);
+    void settingsManager.saveProfile(activeProfileName, activeProfile);
 
     // Settings modal now closes automatically after saving
     // No need to explicitly close since SettingsModal manages its own lifecycle

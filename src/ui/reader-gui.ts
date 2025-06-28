@@ -1395,7 +1395,7 @@ export class ReaderGUI {
         const target = event.target as HTMLElement;
         
         if (target.id === 'close-reader-btn') {
-            this.close();
+            void this.close();
         } else if (target.id === 'reader-actions-config') {
             this.openActionsConfigModal();
         } else if (target.classList.contains('reader-action-btn')) {
@@ -1409,7 +1409,7 @@ export class ReaderGUI {
                 }
             } else if (actionId) {
                 // Handle regular AI action buttons
-                this.readerEditor.executeAction(actionId).then(() => {
+                void this.readerEditor.executeAction(actionId).then(() => {
                     // Update undo button state after AI action completes
                     this.updateUndoButtonState();
                 });
@@ -1725,7 +1725,7 @@ export class ReaderGUI {
     private openActionsConfigModal(): void {
         try {
             // Import the new modal system dynamically
-            import('./modals/index').then(({ showGenericModal }) => {
+            void import('./modals/index').then(({ showGenericModal }) => {
                 // Store state for the modal - these will be shared with event listeners
                 let selectedActionId: string | null = null;
                 let unsavedChanges = false;
@@ -1757,7 +1757,7 @@ export class ReaderGUI {
                                     if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
                                         throw new Error('Cancel prevented'); // Prevent modal from closing
                                     }
-                                    modal.close();
+                                    void modal.close();
                                 }
                             },
                             {
@@ -1774,7 +1774,7 @@ export class ReaderGUI {
                                     this.updateActionButtons();
                                     unsavedChanges = false;
                                     alert('All changes saved successfully!');
-                                    modal.close();
+                                    void modal.close();
                                 }
                             }
                         ]
@@ -2270,7 +2270,7 @@ export class ReaderGUI {
                 const form = document.getElementById('action-editor-form') as HTMLFormElement;
                 const currentActionId = form?.getAttribute('data-action-id');
                 if (currentActionId) {
-                    this.saveCurrentAction(currentActionId).then(() => {
+                    void this.saveCurrentAction(currentActionId).then(() => {
                         setUnsavedChanges(false);
                     });
                 }
@@ -2282,7 +2282,7 @@ export class ReaderGUI {
                 const currentActionId = form?.getAttribute('data-action-id');
                 if (currentActionId) {
                     if (confirm('Are you sure you want to delete this action?')) {
-                        this.readerEditor.deleteAction(currentActionId).then(() => {
+                        void this.readerEditor.deleteAction(currentActionId).then(() => {
                             this.refreshActionsList();
                             setSelectedActionId(null);
                             this.clearActionEditor();

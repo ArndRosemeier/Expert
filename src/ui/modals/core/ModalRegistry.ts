@@ -84,7 +84,7 @@ export class ModalRegistry {
         if (entry) {
             // Close modal if it's open
             if (entry.state.isOpen) {
-                entry.modal.close();
+                void entry.modal.close();
             }
             
             // Remove from active modals
@@ -243,7 +243,7 @@ export class ModalRegistry {
      * Clear all modals (for cleanup/testing)
      */
     public clear(): void {
-        this.closeAll();
+        void this.closeAll();
         this.modals.forEach(entry => entry.modal.destroy());
         this.modals.clear();
         this.activeModals = [];

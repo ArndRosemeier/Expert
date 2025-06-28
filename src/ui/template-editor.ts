@@ -60,7 +60,7 @@ export function openTemplateEditor() {
                         if (isDirty && !confirm("You have unsaved changes. Are you sure you want to cancel?")) {
                             throw new Error('__KEEP_MODAL_OPEN__');
                         }
-                        modal.close();
+                        void modal.close();
                     }
                 },
                 {
@@ -274,7 +274,7 @@ function handleRemoveLayer(button: HTMLElement) {
 function handleSaveFromModal(modal: any) {
     try {
         handleSave();
-        modal.close();
+        void modal.close();
     } catch (error) {
         // Error already shown in handleSave, just keep modal open
         throw new Error('__KEEP_MODAL_OPEN__');

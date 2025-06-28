@@ -59,7 +59,7 @@ export class ModalFactory {
         if (replaceExisting) {
             const existing = this.registry.get('settings-modal');
             if (existing) {
-                existing.close();
+                void existing.close();
             }
         }
 
@@ -77,7 +77,7 @@ export class ModalFactory {
         this.setupModalCleanup(modal);
 
         if (autoOpen) {
-            modal.open();
+            void modal.open();
         }
 
         return modal;
@@ -97,7 +97,7 @@ export class ModalFactory {
         if (replaceExisting) {
             const existing = this.registry.get('export-modal');
             if (existing) {
-                await existing.close();
+                void existing.close();
             }
         }
 
@@ -114,7 +114,7 @@ export class ModalFactory {
         this.setupModalCleanup(modal);
 
         if (autoOpen) {
-            modal.open();
+            void modal.open();
         }
 
         return modal;
@@ -139,7 +139,7 @@ export class ModalFactory {
                 .filter(id => id.startsWith('generic-modal-'));
             existingIds.forEach(id => {
                 const modal = this.registry.get(id);
-                if (modal) modal.close();
+                if (modal) void modal.close();
             });
         }
 
@@ -155,7 +155,7 @@ export class ModalFactory {
         this.setupModalCleanup(modal);
 
         if (autoOpen) {
-            modal.open();
+            void modal.open();
         }
 
         return modal;
@@ -175,7 +175,7 @@ export class ModalFactory {
                             label: 'OK',
                             type: 'primary',
                             handler: async () => {
-                                modal.close();
+                                await modal.close();
                                 resolve();
                             }
                         }
@@ -206,7 +206,7 @@ export class ModalFactory {
                             label: cancelLabel,
                             type: 'secondary',
                             handler: async () => {
-                                modal.close();
+                                await modal.close();
                                 resolve(false);
                             }
                         },
@@ -215,7 +215,7 @@ export class ModalFactory {
                             label: confirmLabel,
                             type: 'primary',
                             handler: async () => {
-                                modal.close();
+                                await modal.close();
                                 resolve(true);
                             }
                         }
@@ -251,7 +251,7 @@ export class ModalFactory {
                             label: 'Cancel',
                             type: 'secondary',
                             handler: async () => {
-                                modal.close();
+                                await modal.close();
                                 resolve(null);
                             }
                         },
@@ -262,7 +262,7 @@ export class ModalFactory {
                             handler: async () => {
                                 const input = document.getElementById(inputId) as HTMLInputElement;
                                 const value = input ? input.value : '';
-                                modal.close();
+                                await modal.close();
                                 resolve(value);
                             }
                         }

@@ -300,15 +300,15 @@ export class ExportModal extends BaseModal {
         }) as HTMLButtonElement;
 
         cancelButton.addEventListener('click', () => {
-            this.close();
+            void this.close();
         });
 
         clipboardButton.addEventListener('click', () => {
-            this.handleClipboardExport();
+            void this.handleClipboardExport();
         });
 
         this.exportButton.addEventListener('click', () => {
-            this.handleExport();
+            void this.handleExport();
         });
 
         footer.appendChild(cancelButton);
@@ -372,7 +372,7 @@ export class ExportModal extends BaseModal {
             
             // Show success message and close
             alert(`Content successfully copied to clipboard!`);
-            this.close();
+            void this.close();
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -421,7 +421,7 @@ export class ExportModal extends BaseModal {
                 format
                 );
 
-            this.close();
+            void this.close();
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -437,7 +437,7 @@ export class ExportModal extends BaseModal {
      * Handles the cancel action
      */
     private handleCancel(): void {
-        this.close();
+        void this.close();
     }
 
     /**

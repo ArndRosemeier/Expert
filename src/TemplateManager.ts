@@ -224,7 +224,7 @@ export class TemplateManager {
     constructor() {
         this.storageService = StorageService.getInstance();
         this.templates = {};
-        this.loadTemplates();
+        void this.loadTemplates();
     }
 
     private async loadTemplates(): Promise<void> {

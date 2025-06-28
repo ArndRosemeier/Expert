@@ -586,7 +586,7 @@ export class SettingsModal extends BaseModal {
         await this.saveCurrentSettingsToProfile();
         this.updateUnsavedIndicator(false);
         this.emit('saved');
-        this.close();
+        void this.close();
     }
 
     /**
@@ -599,7 +599,7 @@ export class SettingsModal extends BaseModal {
         }
 
         this.emit('cancelled');
-        this.close();
+        void this.close();
     }
 
     /**
@@ -611,7 +611,7 @@ export class SettingsModal extends BaseModal {
             if (!confirmed) return;
         }
 
-        this.close();
+        void this.close();
     }
 
 

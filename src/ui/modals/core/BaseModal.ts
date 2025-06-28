@@ -185,7 +185,7 @@ export abstract class BaseModal implements IModal {
                 'click',
                 (e) => {
                     if (e.target === this.element) {
-                        this.close();
+                        void this.close();
                     }
                 },
                 this.cleanupHandlers
@@ -196,7 +196,7 @@ export abstract class BaseModal implements IModal {
         if (this.config.closable) {
             const escapeHandler = (e: KeyboardEvent) => {
                 if (e.key === 'Escape') {
-                    this.close();
+                    void this.close();
                 }
             };
             
@@ -248,7 +248,7 @@ export abstract class BaseModal implements IModal {
         addEventListenerWithCleanup(
             closeButton,
             'click',
-            () => this.close(),
+            () => void this.close(),
             this.cleanupHandlers
         );
 

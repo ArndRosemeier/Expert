@@ -731,14 +731,14 @@ export function renderNodeDetails() {
         if (includeContentCheckbox) {
             includeContentCheckbox.addEventListener('change', () => {
                 includeContentState = includeContentCheckbox.checked;
-                saveCheckboxStates().catch(console.error);
+                void saveCheckboxStates().catch(console.error);
             });
         }
         
         if (recursiveCheckbox) {
             recursiveCheckbox.addEventListener('change', () => {
                 recursiveState = recursiveCheckbox.checked;
-                saveCheckboxStates().catch(console.error);
+                void saveCheckboxStates().catch(console.error);
             });
         }
     }
@@ -760,7 +760,7 @@ export function renderNodeDetails() {
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
                     (contentTextArea as any)._saveTimeout = setTimeout(() => {
-                        projectManager!.saveToStorage().catch(console.error);
+                        void projectManager!.saveToStorage().catch(console.error);
                     }, 1000); // Save after 1 second of no typing
                 }
             }
@@ -777,7 +777,7 @@ export function renderNodeDetails() {
                     // Save to storage with debounced approach
                     clearTimeout((contextTextArea as any)._saveTimeout);
                     (contextTextArea as any)._saveTimeout = setTimeout(() => {
-                        projectManager!.saveToStorage().catch(console.error);
+                        void projectManager!.saveToStorage().catch(console.error);
                     }, 1000); // Save after 1 second of no typing
                 }
             }
@@ -794,7 +794,7 @@ export function renderNodeDetails() {
                     // Save to storage with debounced approach
                     clearTimeout((nodeGenerationPromptTextArea as any)._saveTimeout);
                     (nodeGenerationPromptTextArea as any)._saveTimeout = setTimeout(() => {
-                        projectManager!.saveToStorage().catch(console.error);
+                        void projectManager!.saveToStorage().catch(console.error);
                     }, 1000); // Save after 1 second of no typing
                 }
             }
@@ -811,7 +811,7 @@ export function renderNodeDetails() {
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
                     (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {
-                        projectManager!.saveToStorage().catch(console.error);
+                        void projectManager!.saveToStorage().catch(console.error);
                         // Re-render tree to show updated title
                         renderMultiProjectTree();
                     }, 1000); // Save after 1 second of no typing
@@ -947,7 +947,7 @@ function useCurrentVersion() {
     node.content = currentVersion.content;
     
     // Save to storage
-    projectManager.saveToStorage().catch(console.error);
+    void projectManager.saveToStorage().catch(console.error);
     
     // Reset to show current version
     currentVersionIndex = 0;
@@ -1415,7 +1415,7 @@ This action cannot be undone.`;
                     // Import and open context info modal
                     import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
                         const modal = new ContextInfoModal();
-                        modal.open();
+                        void modal.open();
                     }).catch((error: any) => {
                         console.error('Failed to open context info modal:', error);
                         alert('Failed to open context information dialog. Please try again.');
@@ -1546,7 +1546,7 @@ This action cannot be undone.`;
                         if (confirm(confirmMessage)) {
                             const success = projectManager.removeNode(node.id);
                             if (success) {
-                                projectManager.saveToStorage().catch(console.error);
+                                void projectManager.saveToStorage().catch(console.error);
                                 
                                 // Select the parent node or project root
                                 const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : projectManager.rootNode;
@@ -1590,7 +1590,7 @@ This action cannot be undone.`;
                         }
                         
                         if (deletedCount > 0) {
-                            projectManager.saveToStorage().catch(console.error);
+                            void projectManager.saveToStorage().catch(console.error);
                             
                             // Re-render the UI to reflect the changes
                             renderMultiProjectTree();
@@ -1760,8 +1760,8 @@ export function initializeProjectUI(manager?: ProjectManager) {
         selectedNodeId = activeProject.rootNode.id;
     }
     
-    loadCollapsedState().catch(console.error); // Load the collapsed state from storage
-    loadCheckboxStates().catch(console.error); // Load the checkbox states from storage
+    void loadCollapsedState().catch(console.error); // Load the collapsed state from storage
+    void loadCheckboxStates().catch(console.error); // Load the checkbox states from storage
 
     const mainContent = getElementById('main-content');
     
@@ -2094,7 +2094,7 @@ function renderMultiProjectTree() {
                 } else {
                     collapsedNodes.add(nodeId);
                 }
-                saveCollapsedState().catch(console.error); // Persist the collapsed state
+                void saveCollapsedState().catch(console.error); // Persist the collapsed state
                 renderMultiProjectTree(); // Re-render tree to update expand/collapse state
             }
         });
@@ -2139,7 +2139,7 @@ function renderMultiProjectTree() {
                         });
                     }
                     
-                    saveCollapsedState().catch(console.error); // Persist the collapsed state
+                    void saveCollapsedState().catch(console.error); // Persist the collapsed state
                     renderMultiProjectTree(); // Re-render tree to update expand/collapse state
                 }
             }
@@ -2244,7 +2244,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
     }
 
     // Save the project
-    projectManager.saveToStorage().catch(console.error);
+    void projectManager.saveToStorage().catch(console.error);
 }
 
 /**

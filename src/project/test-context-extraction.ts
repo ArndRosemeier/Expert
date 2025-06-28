@@ -126,7 +126,7 @@ export async function testContextExtraction(): Promise<void> {
 
 // Helper function to run tests manually
 export function runContextExtractionTests() {
-    testContextExtraction().catch(console.error);
+    void testContextExtraction().catch(console.error);
 }
 
 /**

@@ -139,7 +139,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             });
             
             if (firstValidProfile) {
-                this.settingsManager.setLastUsedProfile(firstValidProfile);
+                void this.settingsManager.setLastUsedProfile(firstValidProfile);
             }
             // If no valid profile exists, the error will be caught during generation
         }

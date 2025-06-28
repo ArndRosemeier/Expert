@@ -437,7 +437,7 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         label: 'Cancel',
                         type: 'secondary',
                         handler: async () => {
-                            modal.close();
+                            await modal.close();
                         }
                     },
                     {
@@ -1134,7 +1134,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                 handler: async () => {
                     // Explicitly close the modal
                     if (modalInstance) {
-                        modalInstance.close();
+                        void modalInstance.close();
                     }
                 }
             },
@@ -1175,7 +1175,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                             
                             // Close the modal first
                             if (modalInstance) {
-                                modalInstance.close();
+                                void modalInstance.close();
                             }
                             
                             // Open the chat interface

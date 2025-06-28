@@ -28,7 +28,7 @@ export class AILogModal extends BaseModal {
             onOpen: async () => {
                 await hooks.onOpen?.();
                 // Load logs after modal is in DOM
-                this.loadLogs();
+                await this.loadLogs();
             }
         });
         
@@ -502,7 +502,7 @@ function showLogOverlay(content: string, contentType: string): void {
  */
 export function openAILogModal(): void {
     const modal = new AILogModal();
-    modal.open().catch(error => {
+    void modal.open().catch(error => {
         console.error('❌ Failed to open AI Log modal:', error);
     });
 } 

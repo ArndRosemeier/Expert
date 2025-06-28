@@ -267,7 +267,7 @@ export class ReaderEditManager {
     private async showInputModal(title: string): Promise<string> {
         return new Promise((resolve) => {
             // Import modal system dynamically to avoid circular dependencies
-            import('./modals/index').then(({ showGenericModal }) => {
+            void import('./modals/index').then(({ showGenericModal }) => {
                 let isResolved = false; // Prevent multiple resolutions
                 
                 const resolveOnce = (value: string) => {

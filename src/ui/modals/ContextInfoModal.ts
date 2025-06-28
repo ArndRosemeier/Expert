@@ -132,14 +132,14 @@ Important guidelines that apply to all children:
             const target = e.target as HTMLElement;
             const action = target.getAttribute('data-action');
             if (action) {
-                this.handleAction(action);
+                void this.handleAction(action);
             }
         });
 
         return content;
     }
 
-    protected async handleAction(action: string): Promise<void> {
+    protected override async handleAction(action: string): Promise<void> {
         if (action === 'close') {
             await this.close();
         }

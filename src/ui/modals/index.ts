@@ -83,8 +83,8 @@ export function openGenericModal(content: string, onOpen?: () => void): void {
  */
 export function closeGenericModal(): void {
     const registry = getModalRegistry();
-    registry.closeAll().catch(error => {
-
+    void registry.closeAll().catch(error => {
+        console.error('Failed to close modals:', error);
     });
 }
 
