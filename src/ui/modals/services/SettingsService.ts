@@ -129,12 +129,16 @@ export class SettingsService {
         if (profile) {
             this.settingsManager.setLastUsedProfile(profileName);
             
+            // Apply the profile settings to UI components immediately
+            this.applyProfileToComponents(profile);
+            
             this.emitChange({
                 type: 'profile',
                 data: { action: 'switched', profileName, profile }
             });
+            return profile;
         }
-        return profile;
+        return null;
     }
 
     /**
