@@ -53,6 +53,7 @@ export type {
 // Phase 3: Complete Modal Implementations
 export { SettingsModal } from './SettingsModal';
 export { ExportModal } from './ExportModal';
+export { AILogModal, openAILogModal } from './AILogModal';
 export { 
     ModalFactory, 
     createModalFactory,

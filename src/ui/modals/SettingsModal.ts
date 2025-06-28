@@ -345,8 +345,8 @@ export class SettingsModal extends BaseModal {
         });
 
         viewLogsButton.addEventListener('click', async () => {
-            // Import and open the AI Log modal directly
-            const { openAILogModal } = await import('../modal-manager');
+            // Import and open the modern AI Log modal
+            const { openAILogModal } = await import('./AILogModal');
             openAILogModal();
         });
 
