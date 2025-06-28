@@ -145,6 +145,20 @@ export class GenerationService {
             this.deps.generationController.setupSingleNodeGeneration(nodeId);
         }
 
+        // Check for settings override from parent node
+        const settingsOverride = this.extractSettingsOverride(node);
+        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
+        
+        if (settingsOverride) {
+            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
+            if (overrideProfile) {
+                console.log(`🔧 Using settings override "${settingsOverride}" for node "${node.title}"`);
+                await this.deps.settingsManager.setLastUsedProfile(settingsOverride);
+            } else {
+                console.warn(`⚠️ Settings override "${settingsOverride}" not found for node "${node.title}". Using current settings.`);
+            }
+        }
+
         const profile = this.deps.settingsManager.getLastUsedProfile();
         
         // Fail loudly if the node is in an invalid state for generation.
@@ -178,6 +192,12 @@ export class GenerationService {
                 this.deps.generationController.clearGenerationContext();
             }
             throw error;
+        } finally {
+            // Always restore original settings if we had an override
+            if (settingsOverride && originalProfileName) {
+                console.log(`🔄 Restoring original settings profile "${originalProfileName}" after generation`);
+                await this.deps.settingsManager.setLastUsedProfile(originalProfileName);
+            }
         }
     }
 
@@ -410,6 +430,20 @@ export class GenerationService {
             return;
         }
 
+        // Check for settings override
+        const settingsOverride = this.extractSettingsOverride(node);
+        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
+        
+        if (settingsOverride) {
+            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
+            if (overrideProfile) {
+                console.log(`🔧 Using settings override "${settingsOverride}" for creating children of "${node.title}"`);
+                await this.deps.settingsManager.setLastUsedProfile(settingsOverride);
+            } else {
+                console.warn(`⚠️ Settings override "${settingsOverride}" not found for creating children of "${node.title}". Using current settings.`);
+            }
+        }
+
         // Set generating flag and emit generation started event
         node.isGenerating = true;
         this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
@@ -466,6 +500,12 @@ export class GenerationService {
             this.deps.eventEmitter.emit('error', 'The AI failed to process the outline. Please try again.');
             this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: false, error, node: node });
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+        } finally {
+            // Always restore original settings if we had an override
+            if (settingsOverride && originalProfileName) {
+                console.log(`🔄 Restoring original settings profile "${originalProfileName}" after creating children`);
+                await this.deps.settingsManager.setLastUsedProfile(originalProfileName);
+            }
         }
     }
 
@@ -561,17 +601,31 @@ export class GenerationService {
         if (node.children.length === 0) {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles...', current: 0, total: 1 });
 
-            const prompts = this.deps.settingsManager.getPrompts();
-            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-            const childLevelName = node.childLevelName || 'item';
-
-            const prompt = prompts.create_children_from_outline_user
-                .replace(/{{outline_content}}/g, node.content)
-                .replace(/{{child_level_name}}/g, childLevelName)
-                .replace(/{{context}}/g, context)
-                .replace(/{{count}}/g, String(node.generationChildrenCount));
+            // Check for settings override for child creation
+            const settingsOverride = this.extractSettingsOverride(node);
+            const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
+            
+            if (settingsOverride) {
+                const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
+                if (overrideProfile) {
+                    console.log(`🔧 Using settings override "${settingsOverride}" for creating children titles of "${node.title}"`);
+                    await this.deps.settingsManager.setLastUsedProfile(settingsOverride);
+                } else {
+                    console.warn(`⚠️ Settings override "${settingsOverride}" not found for creating children titles of "${node.title}". Using current settings.`);
+                }
+            }
 
             try {
+                const prompts = this.deps.settingsManager.getPrompts();
+                const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+                const childLevelName = node.childLevelName || 'item';
+
+                const prompt = prompts.create_children_from_outline_user
+                    .replace(/{{outline_content}}/g, node.content)
+                    .replace(/{{child_level_name}}/g, childLevelName)
+                    .replace(/{{context}}/g, context)
+                    .replace(/{{count}}/g, String(node.generationChildrenCount));
+
                 // Using the 'creator' model as it's for generating new content/structure
                 const response = await this.deps.openRouterClient.chat('creator', prompt);
                 const nodeItems = this.parseChildrenFromJSON(response);
@@ -599,6 +653,12 @@ export class GenerationService {
                 this.isGeneratingAllChildren = false;
                 this.deps.generationController.clearGenerationContext();
                 throw new Error(`The AI failed to process the outline: ${error.message || error}`);
+            } finally {
+                // Always restore original settings if we had an override
+                if (settingsOverride && originalProfileName) {
+                    console.log(`🔄 Restoring original settings profile "${originalProfileName}" after creating children titles`);
+                    await this.deps.settingsManager.setLastUsedProfile(originalProfileName);
+                }
             }
         } else {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
@@ -877,6 +937,32 @@ export class GenerationService {
      */
     public getCurrentGenerationInfo(): { type: string; nodeCount: number; canAbort: boolean } | null {
         return this.deps.generationController.getCurrentGenerationInfo();
+    }
+
+    /**
+     * Extracts settings override from parent node's context.
+     * Looks for "settingsoverride: <profilename>" in the parent's context.
+     */
+    private extractSettingsOverride(node: DocumentNode): string | null {
+        if (!node.parentId) {
+            return null; // No parent, no override
+        }
+        
+        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+        if (!parentNode || !parentNode.context) {
+            return null; // Parent has no context
+        }
+        
+        const contextLines = parentNode.context.split('\n');
+        for (const line of contextLines) {
+            const trimmedLine = line.trim();
+            const match = trimmedLine.match(/^settingsoverride:\s*(.+)$/i);
+            if (match) {
+                return match[1].trim();
+            }
+        }
+        
+        return null; // No settings override found
     }
 
     /**
