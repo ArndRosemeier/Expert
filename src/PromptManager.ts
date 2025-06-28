@@ -137,7 +137,7 @@ export const defaultPrompts: OrchestratorPrompts = {
     create_children_from_outline_user: `
         You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate exactly {{count}} entries for the '{{child_level_name}}' nodes that should be created from it.
 
-        Generate exactly {{count}} entries - no more, no less.
+        Generate exactly {{count}} entries - no more, no less. The entries expand the outline, the context is just there to help with this task.
 
         IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
         - "title": the title of the subnode
@@ -163,9 +163,7 @@ export const defaultPrompts: OrchestratorPrompts = {
         ---
 
         Here is the outline to process:
-        ---
         {{outline_content}}
-        ---
     `.trim(),
     prompt_for_child_generation_prompt: `You are an expert at creating generative prompts for a hierarchical document. The user is expanding a parent node. A new child node with the title "{{child_title}}" has just been created.
 
