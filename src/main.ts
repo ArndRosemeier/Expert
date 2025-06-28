@@ -5,7 +5,7 @@ import { setupEventListeners } from './ui/project-ui';
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('clean') === 'true') {
     // Clear all storage using the new storage service
-    (async () => {
+    void (async () => {
         try {
             const { StorageService } = await import('./StorageService');
             const storage = await StorageService.getInstance();
@@ -20,7 +20,9 @@ if (urlParams.get('clean') === 'true') {
     })();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await initialize();
-    setupEventListeners();
+document.addEventListener('DOMContentLoaded', () => {
+    void (async () => {
+        await initialize();
+        setupEventListeners();
+    })();
 }); 

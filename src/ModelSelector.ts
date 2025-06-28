@@ -12,15 +12,15 @@ const PURPOSES = [
 
 function formatPromptCompletionPricing(pricing: Record<string, string>) {
   const result: string[] = [];
-  if (pricing.prompt) {
-    const perToken = parseFloat(pricing.prompt);
+  if (pricing['prompt']) {
+    const perToken = parseFloat(pricing['prompt']);
     if (!isNaN(perToken)) {
       const perMillion = perToken * 1_000_000;
       result.push(`Input: $${perMillion.toLocaleString(undefined, { maximumFractionDigits: 2 })} per million tokens`);
     }
   }
-  if (pricing.completion) {
-    const perToken = parseFloat(pricing.completion);
+  if (pricing['completion']) {
+    const perToken = parseFloat(pricing['completion']);
     if (!isNaN(perToken)) {
       const perMillion = perToken * 1_000_000;
       result.push(`Output: $${perMillion.toLocaleString(undefined, { maximumFractionDigits: 2 })} per million tokens`);
@@ -60,7 +60,7 @@ export class ModelSelector {
   private async initializeAsync(): Promise<void> {
     await this.loadFromStorage();
     if (this.apiKey && !this.fetched) {
-      this.fetchModels();
+      await this.fetchModels();
     }
   }
 
@@ -324,7 +324,7 @@ export class ModelSelector {
       cancelBtn.textContent = 'Cancel';
       // Only allow canceling if a valid configuration is already saved.
       cancelBtn.disabled = true; // Start disabled, will be enabled async
-      this.isSavedConfigValid().then(isValid => {
+      void this.isSavedConfigValid().then(isValid => {
         cancelBtn.disabled = !isValid;
       });
       cancelBtn.addEventListener('click', () => {
@@ -366,9 +366,10 @@ export class ModelSelector {
       } else {
         alert('⚠️ API Key appears to work, but no models were returned. You may want to check your account status.');
       }
-    } catch (e: any) {
-      this.error = `API Key Test Failed: ${e.message}`;
-      alert(`❌ API Key Test Failed: ${e.message}`);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+      this.error = `API Key Test Failed: ${errorMessage}`;
+      alert(`❌ API Key Test Failed: ${errorMessage}`);
     } finally {
       this.testing = false;
       this.update();
@@ -391,8 +392,9 @@ export class ModelSelector {
         }
       }
       this.fetched = true;
-    } catch (e: any) {
-      this.error = e.message;
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+      this.error = errorMessage;
       throw e; // Re-throw so the caller can be aware
     } finally {
       this.loading = false;

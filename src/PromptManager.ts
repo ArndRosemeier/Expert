@@ -298,10 +298,9 @@ export class PromptManager {
         this.render();
     }
 
-    private saveToStorage() {
-        this.settingsManager.savePrompts(this.prompts);
+    private async saveToStorage() {
+        await this.settingsManager.savePrompts(this.prompts);
         this.onSave(this.prompts);
-
     }
 
     private revertToDefaults() {
@@ -372,7 +371,7 @@ export class PromptManager {
 
         const saveButton = document.createElement('button');
         saveButton.textContent = 'Save and Close';
-        saveButton.addEventListener('click', () => this.saveToStorage());
+        saveButton.addEventListener('click', () => void this.saveToStorage());
         buttonContainer.appendChild(saveButton);
         
         const revertButton = document.createElement('button');
