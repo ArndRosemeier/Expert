@@ -129,9 +129,14 @@ export class GenerationCoordinator {
      * Update UI when operation starts.
      */
     private updateUIForOperationStart(operation: GenerationOperation): void {
-        // Disable generation buttons immediately
+        // Add a small delay to ensure UI has been re-rendered after renderNodeDetails() call
+        setTimeout(() => {
+            // Get fresh references to buttons after potential UI re-render
         const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
         const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+            
+            console.log('🔘 Generation UI update - Generate button exists:', !!generateBtn);
+            console.log('🔘 Generation UI update - Generate All button exists:', !!generateAllBtn);
         
         if (generateBtn) {
             generateBtn.disabled = true;
@@ -145,7 +150,10 @@ export class GenerationCoordinator {
             if (operation.type === 'bulk-children') {
                 generateAllBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating Children...';
             }
+            } else if (operation.type === 'bulk-children') {
+                console.warn('⚠️ Generate All Children button not found during bulk generation start!');
         }
+        }, 50); // Small delay to ensure DOM has been updated
 
         // Show progress UI based on operation type
         if (operation.type === 'single-content') {
@@ -177,19 +185,27 @@ export class GenerationCoordinator {
     private updateUIForOperationComplete(_operation: GenerationOperation, success: boolean, error?: any): void {
         // Only clean up UI if no other operations are running
         if (!this.hasActiveOperations()) {
-            // Re-enable buttons
+            // Add a small delay to ensure UI has been re-rendered if renderNodeDetails() was called
+            setTimeout(() => {
+                // Get fresh references to buttons after potential UI re-render
             const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
             const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+                
+                console.log('✅ Generation complete - Generate button exists:', !!generateBtn);
+                console.log('✅ Generation complete - Generate All button exists:', !!generateAllBtn);
             
             if (generateBtn) {
                 generateBtn.disabled = false;
-                generateBtn.innerHTML = 'Generate Content';
+                    generateBtn.innerHTML = 'Generate';
             }
             
             if (generateAllBtn) {
                 generateAllBtn.disabled = false;
                 generateAllBtn.innerHTML = 'Generate All Children';
+                } else {
+                    console.warn('⚠️ Generate All Children button not found during cleanup!');
             }
+            }, 50); // Small delay to ensure DOM has been updated
 
             // Clear progress and overlays
             this.updateProgressUI();

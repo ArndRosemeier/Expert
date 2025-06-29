@@ -4,6 +4,7 @@
 
 import { SettingsModal, SettingsModalConfig } from './SettingsModal';
 import { ExportModal, ExportModalConfig } from './ExportModal';
+import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
@@ -67,7 +68,7 @@ export class ModalFactory {
             id: 'settings-modal',
             settingsManager: this.dependencies.settingsManager,
             modelSelector: this.dependencies.modelSelector,
-            refreshGlobalProfileSelector: this.dependencies.refreshGlobalProfileSelector
+            refreshGlobalProfileSelector: this.dependencies.refreshGlobalProfileSelector || (() => {})
         };
 
         const modal = new SettingsModal(config);
@@ -121,6 +122,59 @@ export class ModalFactory {
     }
 
     /**
+     * Creates and optionally opens an Add Child Node modal
+     */
+    public async createAddChildNodeModal(
+        parentNode: DocumentNode, 
+        parentNodeId: string, 
+        options: ModalOptions = {}
+    ): Promise<AddChildNodeModal> {
+        const { autoOpen = true, replaceExisting = true } = options;
+
+        if (!this.dependencies.projectManager) {
+            throw new Error('ProjectManager is required for AddChildNodeModal');
+        }
+
+        // Close existing add child node modal if requested
+        if (replaceExisting) {
+            const existing = this.registry.get('add-child-node-modal');
+            if (existing) {
+                void existing.close();
+            }
+        }
+
+        const config: AddChildNodeModalConfig = {
+            id: 'add-child-node-modal',
+            parentNodeId,
+            parentNode,
+            projectManager: this.dependencies.projectManager,
+            mode: 'ai' // Default to AI mode
+        };
+
+        const modal = new AddChildNodeModal(config, {
+            onAction: async (action, data) => {
+                if (action === 'created') {
+                    console.log('✅ Child node created:', data);
+                    // Refresh the project UI by triggering a re-render
+                    const { renderProjectUI } = await import('../project-ui');
+                    renderProjectUI(this.dependencies.projectManager!);
+                }
+            }
+        });
+        
+        this.registry.register(modal);
+
+        // Set up automatic cleanup
+        this.setupModalCleanup(modal);
+
+        if (autoOpen) {
+            void modal.open();
+        }
+
+        return modal;
+    }
+
+    /**
      * Creates a generic content modal
      */
     public createGenericModal(
@@ -145,7 +199,7 @@ export class ModalFactory {
 
         const modal = new GenericModal({
             id,
-            title,
+            title: title || 'Modal',
             content: typeof content === 'string' ? { content } : content
         });
 
@@ -373,4 +427,11 @@ export function showConfirm(message: string, title?: string): Promise<boolean> {
  */
 export function showPrompt(message: string, defaultValue?: string, title?: string): Promise<string | null> {
     return getDefaultModalFactory().prompt(message, defaultValue, title);
+}
+
+/**
+ * Convenience function to open add child node modal using default factory
+ */
+export function openAddChildNodeModal(parentNode: DocumentNode, parentNodeId: string): Promise<AddChildNodeModal> {
+    return getDefaultModalFactory().createAddChildNodeModal(parentNode, parentNodeId);
 } 

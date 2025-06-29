@@ -18,8 +18,8 @@ try {
         Remove-Item -Recurse -Force "dist"
     }
 
-    Write-Host "Building application..." -ForegroundColor Yellow
-    npm run build
+    Write-Host "Building application for domainfactory..." -ForegroundColor Yellow
+    npm run build:github
 
     Write-Host "Copying .htaccess..." -ForegroundColor Yellow
     Copy-Item "public/.htaccess" "dist/.htaccess" -Force

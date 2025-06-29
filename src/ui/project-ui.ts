@@ -4,6 +4,7 @@ import { getElementById } from './dom-elements';
 import * as state from '../state';
 import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
+import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 
 let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
@@ -12,6 +13,7 @@ let collapsedNodes: Set<string> = new Set();
 // Checkbox state persistence
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
+let autoPropagateState: boolean = true;
 
 // Version navigation state
 let currentVersionIndex: number = 0;
@@ -62,7 +64,8 @@ async function saveCheckboxStates() {
         const storage = await StorageService.getInstance();
         await storage.set('expert_app_checkbox_states', {
             includeContent: includeContentState,
-            recursive: recursiveState
+            recursive: recursiveState,
+            autoPropagate: autoPropagateState
         });
     } catch (error) {
         console.warn('Failed to save checkbox states:', error);
@@ -73,10 +76,11 @@ async function loadCheckboxStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{includeContent: boolean, recursive: boolean}>('expert_app_checkbox_states');
+        const saved = await storage.get<{includeContent: boolean, recursive: boolean, autoPropagate: boolean}>('expert_app_checkbox_states');
         if (saved) {
             includeContentState = saved.includeContent;
             recursiveState = saved.recursive;
+            autoPropagateState = saved.autoPropagate ?? true; // Default to true if not saved
         }
     } catch (error) {
         console.warn('Failed to load checkbox states:', error);
@@ -89,6 +93,14 @@ async function loadCheckboxStates() {
 
 export function renderProjectUI(proj: ProjectManager) {
     projectManager = proj;
+    
+    // Update modal factory dependencies to include the active project manager
+    try {
+        const modalFactory = getDefaultModalFactory();
+        modalFactory.updateDependencies({ projectManager: proj });
+    } catch (error) {
+        console.warn('Modal factory not initialized yet:', error);
+    }
     
     // One-time setup for event listeners from the manager
     setupProjectManagerListeners(proj);
@@ -110,13 +122,20 @@ export function renderProjectUI(proj: ProjectManager) {
 // --- Event Listener Setup ---
 
 function setupProjectManagerListeners(manager: ProjectManager) {
-    const handleGenerationStarted = (_e: { nodeId: string, node: DocumentNode }) => {
+    const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
         // Just refresh the tree to show spinner for the generating node
         renderMultiProjectTree();
         // Show global abort button
         showGlobalAbortButton();
-        // Always refresh UI to disable buttons during generation
-        renderNodeDetails();
+        
+        // Only refresh node details if we're looking at the node being generated
+        // This prevents unnecessary UI re-rendering that can cause button disappearance
+        if (selectedNodeId === e['nodeId']) {
+            console.log('🔄 Refreshing node details for generating node:', e['nodeId']);
+            renderNodeDetails();
+        } else {
+            console.log('⏭️ Skipping node details refresh - different node selected');
+        }
     };
 
     const handleCompletion = (_e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
@@ -435,6 +454,11 @@ export function renderNodeDetails() {
                         Delete All Subnodes
                     </button>
                 ` : ''}
+                ${!node.isLeaf ? `
+                    <button id="add-child-node-btn" class="button button-secondary" style="background-color: #22c55e; color: white; border-color: #22c55e;">
+                        ➕ Add Child Node
+                    </button>
+                ` : ''}
                 <button id="export-node-btn" class="button button-secondary" style="background-color: #6366f1; color: white; border-color: #6366f1;">
                     📤 Export
                 </button>
@@ -475,9 +499,9 @@ export function renderNodeDetails() {
                         <button id="node-generate-btn" class="button button-primary">Generate</button>
                     </div>
                     
-                    ${!node.isLeaf ? `
-                        <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
-                            <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem;">Generate All Children</button>
+                    <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
+                        <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem; ${node.isLeaf ? 'opacity: 0.6; cursor: help;' : ''}" title="${node.isLeaf ? `This node is a leaf node (${node.template[node.level] || 'final level'}) - click for more information` : 'Generate child nodes based on this node\'s content'}">Generate All Children</button>
+                        ${!node.isLeaf ? `
                             <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
@@ -488,8 +512,12 @@ export function renderNodeDetails() {
                                     <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
                                 </div>
                             </div>
-                        </div>
-                    ` : ''}
+                        ` : `
+                            <div style="font-size: 0.9rem; color: #6c757d; font-style: italic; text-align: center;">
+                                This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.
+                            </div>
+                        `}
+                    </div>
                 </div>
                 
                 <!-- Right side: Progress bars -->
@@ -630,9 +658,14 @@ export function renderNodeDetails() {
                         display: inline-flex; align-items: center; justify-content: center;
                         cursor: pointer; margin-left: 4px;
                     ">i</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(propagates recursively to all children)</span>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(auto-propagates to children when enabled)</span>
                 </div>
-                <div style="display: flex; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <input type="checkbox" id="auto-propagate-checkbox" ${autoPropagateState ? 'checked' : ''} style="margin: 0;">
+                        <label for="auto-propagate-checkbox" style="font-weight: normal; font-size: 0.8rem; margin: 0; color: #6c757d;">Auto</label>
+                    </div>
+                    <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
                     <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
                 </div>
             </div>
@@ -691,8 +724,14 @@ export function renderNodeDetails() {
     
     // Handle context buttons state
     const extractContextBtn = getElementById('node-extract-context-btn') as HTMLButtonElement;
+    const propagateContextBtn = getElementById('node-propagate-context-btn') as HTMLButtonElement;
+    
     if (extractContextBtn) {
         extractContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
+    }
+    
+    if (propagateContextBtn) {
+        propagateContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     }
 
     // Update button text to show current state
@@ -743,6 +782,15 @@ export function renderNodeDetails() {
         }
     }
 
+    // Set up auto propagate checkbox listener (outside the if block since it's always present)
+    const autoPropagateCheckbox = getElementById('auto-propagate-checkbox') as HTMLInputElement;
+    if (autoPropagateCheckbox) {
+        autoPropagateCheckbox.addEventListener('change', () => {
+            autoPropagateState = autoPropagateCheckbox.checked;
+            void saveCheckboxStates().catch(console.error);
+        });
+    }
+
     // --- CRITICAL: Add missing event listeners for content and context textareas ---
     // This must happen AFTER the DOM elements are created and appended above
     const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
@@ -774,6 +822,20 @@ export function renderNodeDetails() {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     node.context = contextTextArea.value;
+                    
+                    // Auto propagate if enabled
+                    if (autoPropagateState) {
+                        // Propagate context to all descendants
+                        const propagateRecursively = (sourceNode: DocumentNode) => {
+                            for (const child of sourceNode.children) {
+                                child.context = sourceNode.context;
+                                propagateRecursively(child);
+                            }
+                        };
+                        
+                        propagateRecursively(node);
+                    }
+                    
                     // Save to storage with debounced approach
                     clearTimeout((contextTextArea as any)._saveTimeout);
                     (contextTextArea as any)._saveTimeout = setTimeout(() => {
@@ -1345,6 +1407,13 @@ This action cannot be undone.`;
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
 
+                    // Check if this is a leaf node
+                    if (node.isLeaf) {
+                        const nodeLevelName = node.template[node.level] || 'final level';
+                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                        return;
+                    }
+
                     const coordinator = projectManager.getGenerationCoordinator();
                     
                     // Check if node has content (Draft or Final)
@@ -1391,6 +1460,49 @@ This action cannot be undone.`;
                             console.error('Error details:', error);
                             coordinator.completeOperation(operationId, false, error);
                         });
+                }
+                break;
+
+            case 'node-propagate-context-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Function to propagate context to all descendants
+                    const propagateContextToDescendants = (parentNode: DocumentNode) => {
+                        const propagatedCount = { count: 0 };
+                        
+                        const propagateRecursively = (sourceNode: DocumentNode) => {
+                            for (const child of sourceNode.children) {
+                                child.context = sourceNode.context;
+                                propagatedCount.count++;
+                                propagateRecursively(child);
+                            }
+                        };
+                        
+                        propagateRecursively(parentNode);
+                        return propagatedCount.count;
+                    };
+
+                    const propagatedCount = propagateContextToDescendants(node);
+                    
+                    if (propagatedCount > 0) {
+                        // Save the project after propagation
+                        void projectManager.saveToStorage().catch(console.error);
+                        alert(`Context propagated to ${propagatedCount} descendant node(s).`);
+                        
+                        // Refresh the UI to show updated context if we're viewing a child node
+                        const currentNode = projectManager.findNodeById(selectedNodeId);
+                        if (currentNode) {
+                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                            if (contextTextArea) {
+                                contextTextArea.value = currentNode.context;
+                            }
+                        }
+                    } else {
+                        alert('This node has no child nodes to propagate context to.');
+                    }
                 }
                 break;
 
@@ -1689,6 +1801,31 @@ This action cannot be undone.`;
                     });
                 }
                 break;
+
+            case 'add-child-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    if (node.isLeaf) {
+                        const nodeLevelName = node.template[node.level] || 'final level';
+                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                        return;
+                    }
+
+                    // Open the Add Child Node Modal
+                    openAddChildNodeModal(node, node.id)
+                        .then((modal) => {
+                            console.log('✅ Add Child Node modal opened successfully');
+                            // The modal factory handles UI refresh automatically
+                        })
+                        .catch((error) => {
+                            console.error('❌ Failed to open Add Child Node modal:', error);
+                            alert('Failed to open Add Child Node dialog. Please try again.');
+                        });
+                }
+                break;
             
             // === VERSION NAVIGATION BUTTONS ===
             case 'version-prev-btn':
@@ -1756,8 +1893,16 @@ export function initializeProjectUI(manager?: ProjectManager) {
     const activeProject = manager || state.getActiveProject();
     projectManager = activeProject;
     
+    // Update modal factory dependencies if we have an active project
     if (activeProject) {
         selectedNodeId = activeProject.rootNode.id;
+        
+        try {
+            const modalFactory = getDefaultModalFactory();
+            modalFactory.updateDependencies({ projectManager: activeProject });
+        } catch (error) {
+            console.warn('Modal factory not initialized yet:', error);
+        }
     }
     
     void loadCollapsedState().catch(console.error); // Load the collapsed state from storage
@@ -2054,7 +2199,7 @@ function renderMultiProjectTree() {
     treeContainer.querySelectorAll('.tree-node').forEach(el => {
         el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event bubbling
-            const id = (e.currentTarget as HTMLElement).dataset.id;
+            const id = (e.currentTarget as HTMLElement).dataset['id'];
             if (id) {
                 // Find which project this node belongs to
                 let nodeProject: ProjectManager | null = null;
@@ -2087,7 +2232,7 @@ function renderMultiProjectTree() {
         // Single click for individual expand/collapse
         el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event bubbling
-            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            const nodeId = (e.currentTarget as HTMLElement).dataset['nodeId'];
             if (nodeId) {
                 if (collapsedNodes.has(nodeId)) {
                     collapsedNodes.delete(nodeId);
@@ -2102,7 +2247,7 @@ function renderMultiProjectTree() {
         // Double click for expand/collapse all nodes at the same level
         el.addEventListener('dblclick', (e) => {
             e.stopPropagation(); // Prevent event bubbling
-            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            const nodeId = (e.currentTarget as HTMLElement).dataset['nodeId'];
             if (nodeId) {
                 // Find which project this node belongs to
                 let nodeProject: ProjectManager | null = null;

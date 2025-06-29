@@ -156,6 +156,44 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `stopGeneration()` - Stop current generation
   - `getGenerationStatus()` - Get current status
 
+## 🎯 Node Creation & Management ✨ **NEW SECTION**
+
+### Node Creation Service
+- **File**: `src/ui/modals/services/NodeCreationService.ts`
+- **Interface**: `INodeCreationService`
+- **Class**: `NodeCreationService`
+- **Functions**:
+  - `generateSuggestions(parentNode, count)` - Generate AI-powered child node suggestions
+  - `updateParentContent(parentNode, childTitle)` - Update parent content to reference new child
+  - `createNode(config)` - Create new child node with optional draft content
+  - `parseJsonResponse(content)` - Parse AI JSON responses
+  - `validateSuggestions(suggestions, count)` - Validate AI suggestions
+
+**Configuration Interface**:
+```typescript
+interface NodeCreationConfig {
+    parentNodeId: string;
+    title: string;
+    draft?: string;           // Optional AI-generated draft content
+    updateParent?: boolean;   // Whether to update parent content
+}
+```
+
+**Suggestion Interface**:
+```typescript
+interface NodeSuggestion {
+    title: string;    // Suggested node title
+    draft: string;    // AI-generated draft content
+}
+```
+
+### Draft Content Convention ✨ **NEW PATTERN**
+**IMPORTANT**: All AI-generated content receives a `"Draft: "` prefix to signal to the content builder that expansion is needed.
+
+- **Pattern**: `childNode.content = \`Draft: \${aiGeneratedContent}\`;`
+- **Purpose**: Content builder recognizes this pattern and knows to expand the content
+- **Usage**: Applied automatically by `NodeCreationService.createNode()`
+
 ## 🤖 AI & Model Management
 
 ### OpenRouter Client
@@ -195,6 +233,13 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `defaultPrompts` - Default prompt templates
   - `promptPlaceholders` - Available placeholders for each prompt
 - **Class**: `PromptManager` (Legacy UI - not used)
+
+**Available Prompts**:
+- `creator` - Main content generation
+- `rater` - Content quality rating  
+- `editor` - Content improvement suggestions
+- `child_node_suggestions` - AI-powered child node title/draft generation ✨ **NEW**
+- `parent_content_update` - Update parent content to reference new child ✨ **NEW**
 
 ### Prompt Service (Active)
 - **File**: `src/ui/modals/services/PromptManagementService.ts`
@@ -342,6 +387,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `createModalFactory(deps)` - Create modal factory
   - `openSettingsModal()` - Open settings modal
   - `openExportModal(node)` - Open export modal
+  - `openAddChildNodeModal(parentNode, parentId)` - Open add child node modal ✨ **NEW**
   - `showAlert(message)` - Show alert dialog
   - `showConfirm(message)` - Show confirmation dialog
 
@@ -383,6 +429,19 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `open()` - Open key validation
   - `validateKey(key)` - Validate entered key
   - `storeValidKey(key)` - Store valid key
+
+### Add Child Node Modal ✨ **NEW**
+- **File**: `src/ui/modals/AddChildNodeModal.ts`
+- **Class**: `AddChildNodeModal`
+- **Functions**:
+  - `open()` - Open add child node dialog
+  - `generateSuggestions()` - Generate AI-powered suggestions
+  - `selectSuggestion(suggestion)` - Select AI suggestion
+  - `createNode()` - Create child node with AI draft or manual input
+  - `switchMode(mode)` - Switch between AI and manual modes
+- **Modes**:
+  - `ai` - AI-powered suggestions with draft content
+  - `simple` - Manual title input only
 
 ## 🧩 Modal Components
 
@@ -532,6 +591,27 @@ const exportService = new ExportService();
 await exportService.exportNode(node, 'hierarchy', 'html');
 ```
 
+### Adding Child Nodes ✨ **NEW**
+```typescript
+import { openAddChildNodeModal } from './src/ui/modals/ModalFactory';
+
+// Open Add Child Node modal for a specific parent node
+const parentNode = projectManager.findNodeById(parentNodeId);
+const modal = await openAddChildNodeModal(parentNode, parentNodeId);
+
+// Or using the Node Creation Service directly
+import { NodeCreationService } from './src/ui/modals/services/NodeCreationService';
+
+const nodeCreationService = new NodeCreationService(/* dependencies */);
+const suggestions = await nodeCreationService.generateSuggestions(parentNode, 5);
+const newNode = await nodeCreationService.createNode({
+    parentNodeId: parentNode.id,
+    title: 'New Chapter',
+    draft: 'AI-generated draft content...',
+    updateParent: true
+});
+```
+
 ---
 
 ## 🔄 Recently Refactored (Clean Architecture)
@@ -558,4 +638,18 @@ Prompt placeholders are now centrally defined in `src/PromptManager.ts` and impo
 - ✅ **Removed `<persist>` tag mechanics** - No more special tag handling
 - ✅ **Simple parent-to-child copying** - Context is now directly inherited
 - ✅ **Cleaner generation process** - No post-generation context synthesis
-- ✅ **Reduced dependencies** - ContextService no longer needs OpenRouterClient 
+- ✅ **Reduced dependencies** - ContextService no longer needs OpenRouterClient
+
+### Add Child Node Architecture ✨ **NEW**
+- ✅ **Modal-Service Pattern** - UI modals delegate business logic to dedicated services
+- ✅ **AI-Powered Node Creation** - NodeCreationService handles AI suggestion generation
+- ✅ **Draft Content Convention** - "Draft: " prefix signals content needs expansion
+- ✅ **Automatic UI Refresh** - Modal Factory callbacks automatically refresh project tree
+- ✅ **Dual Mode Interface** - Single modal supports both AI and manual node creation
+- ✅ **Parent Content Updates** - Optional AI-powered parent content updates when adding children
+
+### Key Architectural Patterns Established
+- 🏗️ **Modal Factory with Callbacks** - `onAction` callbacks enable automatic UI refresh
+- 🏗️ **Service Layer Pattern** - Business logic separated from UI in dedicated service classes
+- 🏗️ **Content State Conventions** - Standardized patterns for content state signaling
+- 🏗️ **Dynamic Import Pattern** - Modal Factory uses dynamic imports to avoid circular dependencies 

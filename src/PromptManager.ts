@@ -25,6 +25,12 @@ export interface OrchestratorPrompts {
     // For text expansion (generic)
     expand_text_user: string;
     
+    // For child node suggestions
+    child_node_suggestions: string;
+    
+    // For parent content updates
+    parent_content_update: string;
+    
     // For node chat system prompt
     node_chat_system: string;
 }
@@ -202,6 +208,48 @@ Original text:
 
 Please expand this text to make it more detailed and complete. Focus on adding depth, examples, and clarity while preserving the core message and writing style.`,
 
+    child_node_suggestions: `You are helping expand a document by suggesting alternative approaches for the next child section.
+
+Parent node title: "{{parent_title}}"
+Parent node content:
+---
+{{parent_content}}
+---
+
+Document context:
+---
+{{context}}
+---
+
+Generate exactly 5 ALTERNATIVE suggestions for what the next child section could be. These should be 5 different approaches, themes, or directions for the single next section that would logically follow the parent content.
+
+DO NOT create sequential children (like Chapter 6, Chapter 7, Chapter 8). Instead, create 5 different possible versions of what the next single child section could focus on.
+
+Each suggestion should have:
+- A concise, descriptive title for the next section
+- A brief 1-2 sentence draft of what that particular approach would cover
+
+Return as JSON array with "title" and "draft" properties.`,
+
+    parent_content_update: `A new child node titled "{{child_title}}" is being added to this parent node.
+    
+Current parent content:
+---
+{{parent_content}}
+---
+
+Document context:
+---
+{{context}}
+---
+
+Please update the parent content to naturally incorporate a reference to the new child section "{{child_title}}". The update should:
+- Maintain the existing content's flow and style
+- Add a natural transition or reference to the new child section
+- Keep the original structure intact while enhancing it
+
+Return only the updated parent content, nothing else.`,
+
     node_chat_system: `You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
 
 {{node_data}}
@@ -231,6 +279,8 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
 
     context_extraction_user: ['extraction_request', 'node_title', 'content'],
     expand_text_user: ['content', 'path', 'context', 'title'],
+    child_node_suggestions: ['parent_title', 'parent_content', 'context'],
+    parent_content_update: ['child_title', 'parent_content', 'context'],
     node_chat_system: ['node_data'],
 };
 
