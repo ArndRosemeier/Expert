@@ -125,6 +125,13 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         goal: 8,
         outline: true,
         leaf: true
+    },
+    {
+        name: "Immediate clarity",
+        description: "Prose won't tell how things are not only to immediately tell how they are. Constructs like \"He was not x, he was y\" are way overused and should be severely limited.",
+        goal: 8,
+        outline: true,
+        leaf: true
     }
 ];
 
