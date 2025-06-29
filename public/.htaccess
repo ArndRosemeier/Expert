@@ -1,16 +1,40 @@
-# Expert Application - Apache Configuration
+# Expert Application - Apache Configuration for domainfactory deployment
 RewriteEngine On
 
 # Redirect /keys to /keys.html for the standalone key management app
 RewriteRule ^keys/?$ keys.html [L]
 
-# For the main Expert application - redirect root to Expert directory
-RewriteRule ^$ /Expert/ [R=301,L]
-
 # Handle clean URLs for the main application
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.html [L]
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive on
+    
+    # Cache JS and CSS files for 1 year
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
+    
+    # Cache images for 1 month
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    
+    # Cache fonts for 1 year
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+    
+    # Don't cache HTML files
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
 
 # Enable GZIP compression
 <IfModule mod_deflate.c>
@@ -23,11 +47,13 @@ RewriteRule ^(.*)$ index.html [L]
     AddOutputFilterByType DEFLATE application/rss+xml
     AddOutputFilterByType DEFLATE application/javascript
     AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE text/javascript
 </IfModule>
 
 # Security headers
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options nosniff
-    Header always set X-Frame-Options DENY
+    Header always set X-Frame-Options SAMEORIGIN
     Header always set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule> 
