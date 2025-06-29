@@ -130,6 +130,50 @@ export class ChatInterface {
                         " onmouseover="this.style.backgroundColor='#444'" onmouseout="this.style.backgroundColor='#333'">
                             Clear Chat
                         </button>
+                        ${this.customSystemPrompt ? `
+                        <div style="
+                            border-top: 1px solid #444;
+                            margin: 0.5rem 0;
+                            padding-top: 1rem;
+                        ">
+                            <div style="
+                                font-size: 0.8rem;
+                                color: #aaa;
+                                margin-bottom: 0.75rem;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
+                            ">Standard Actions</div>
+                            <button id="consistency-check-btn" style="
+                                width: 100%;
+                                background: #17a2b8;
+                                color: white;
+                                border: 1px solid #138496;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
+                                📋 Check Consistency
+                            </button>
+                            <button id="story-improvements-btn" style="
+                                width: 100%;
+                                background: #28a745;
+                                color: white;
+                                border: 1px solid #218838;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
+                                ✨ Suggest Improvements
+                            </button>
+                        </div>
+                        ` : ''}
                         <div style="
                             font-size: 0.8rem;
                             color: #888;
@@ -345,6 +389,21 @@ export class ChatInterface {
         if (clearButton) {
             clearButton.addEventListener('click', () => {
                 this.clearMessages();
+            });
+        }
+
+        // Standard action buttons
+        const consistencyButton = this.chatContainer?.querySelector('#consistency-check-btn');
+        if (consistencyButton) {
+            consistencyButton.addEventListener('click', () => {
+                void this.checkConsistency();
+            });
+        }
+
+        const improvementsButton = this.chatContainer?.querySelector('#story-improvements-btn');
+        if (improvementsButton) {
+            improvementsButton.addEventListener('click', () => {
+                void this.suggestImprovements();
             });
         }
     }
@@ -683,5 +742,61 @@ export class ChatInterface {
      */
     public getMessages(): ChatMessage[] {
         return this.messages;
+    }
+
+    /**
+     * Check consistency of all leaf nodes
+     */
+    private async checkConsistency(): Promise<void> {
+        if (this.isStreamingResponse || !this.customSystemPrompt) return;
+
+        const consistencyPrompt = `Please analyze all the leaf nodes (the actual content sections) for consistency. 
+
+Check for:
+- Consistent tone and writing style
+- Coherent narrative flow and continuity
+- Consistent character portrayal (if applicable)
+- Consistent world-building and setting details
+- Logical progression of ideas or plot
+- Consistent terminology and naming conventions
+
+Provide a detailed commentary on whether the text is consistent across all sections, and point out any inconsistencies or areas where the coherence could be improved.`;
+
+        await this.sendPredefinedMessage(consistencyPrompt);
+    }
+
+    /**
+     * Suggest story improvements for leaf nodes
+     */
+    private async suggestImprovements(): Promise<void> {
+        if (this.isStreamingResponse || !this.customSystemPrompt) return;
+
+        const improvementPrompt = `Please review all the leaf nodes (the actual content sections) and suggest what you would change to improve the story.
+
+Focus on:
+- Areas where the narrative could be strengthened
+- Character development opportunities
+- Plot pacing and structure improvements
+- Dialogue enhancement suggestions
+- Setting and atmosphere improvements
+- Areas that could benefit from more detail or emotion
+- Sections that might be redundant or unclear
+
+For each suggestion, provide clear justification for why the change would improve the overall story. Be specific about which sections need attention and what kind of improvements would be most beneficial.`;
+
+        await this.sendPredefinedMessage(improvementPrompt);
+    }
+
+    /**
+     * Send a predefined message automatically
+     */
+    private async sendPredefinedMessage(message: string): Promise<void> {
+        if (!this.messageInput) return;
+
+        // Set the message in the input field and send it
+        this.messageInput.value = message;
+        this.autoResizeTextarea();
+        this.updateSendButtonState();
+        await this.sendMessage();
     }
 } 

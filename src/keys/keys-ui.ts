@@ -249,7 +249,7 @@ export class KeysUI {
 
         try {
             const result = await KeyManager.validateKey(key, password);
-            
+
             if (result.valid && result.data) {
                 const timeRemaining = this.getTimeRemaining(result.data.expirationDate);
                 const keyLength = key.length;

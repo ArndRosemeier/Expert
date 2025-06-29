@@ -551,7 +551,7 @@ Prompt placeholders are now centrally defined in `src/PromptManager.ts` and impo
 - ✅ Full IndexedDB migration completed
 - ✅ No automatic localStorage usage in main application
 - ⚠️ **localStorage only with explicit user authorization**
-- ✅ All persistent data uses `StorageService` → IndexedDB
+- ✅ All persistent data uses `StorageService` → IndexedDB 
 
 ### Simplified Context System (Latest)
 - ✅ **Removed complex context synthesis** - No more LLM-based context distillation

@@ -29,7 +29,7 @@ export class KeyCrypto {
             
             const jsonString = new TextDecoder().decode(decrypted);
             return JSON.parse(jsonString);
-                } catch (error) {
+        } catch (error) {
             throw new Error('Decryption failed');
         }
     }

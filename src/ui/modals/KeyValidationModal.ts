@@ -291,4 +291,4 @@ export class KeyValidationModal extends BaseModal {
     public setOnValidKeyCallback(callback: (keyData: any) => void): void {
         this.onValidKeyCallback = callback;
     }
-}
+} 

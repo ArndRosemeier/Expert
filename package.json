@@ -59,6 +59,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
+    "deploy:domainfactory": "powershell -ExecutionPolicy Bypass -File deploy-clean.ps1",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix"
   },

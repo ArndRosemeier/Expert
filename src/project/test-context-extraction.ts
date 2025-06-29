@@ -56,7 +56,7 @@ awaited her.
             testNode, 
             'characters and their roles'
         );
-        
+    
         console.log('✓ Character extraction result:');
         console.log(characterResult);
         

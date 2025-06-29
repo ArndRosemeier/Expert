@@ -126,7 +126,7 @@ export class ContextInfoModal extends BaseModal {
                 </button>
             </div>
         `;
-        
+
         return content;
     }
 } 
