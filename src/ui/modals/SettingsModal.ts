@@ -12,6 +12,7 @@ import { ModelSelector } from '../../ModelSelector';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 import { EventEmitter } from '../../EventEmitter';
+import { AppKeyService } from '../../keys/AppKeyService';
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -120,9 +121,21 @@ export class SettingsModal extends BaseModal {
             classes: ['modal-header']
         });
 
+        const titleContainer = createElement('div', {
+            classes: ['header-title-container']
+        });
+
         const title = createElement('h2', {
             content: 'Settings'
         });
+
+        const keyInfo = createElement('div', {
+            classes: ['key-info'],
+            content: 'Loading key info...'
+        });
+
+        // Load key information asynchronously
+        this.loadKeyInfo(keyInfo);
 
         const closeButton = createElement('button', {
             classes: ['close-button'],
@@ -133,7 +146,9 @@ export class SettingsModal extends BaseModal {
             this.handleClose();
         });
 
-        header.appendChild(title);
+        titleContainer.appendChild(title);
+        titleContainer.appendChild(keyInfo);
+        header.appendChild(titleContainer);
         header.appendChild(closeButton);
 
         return header;
@@ -172,6 +187,58 @@ export class SettingsModal extends BaseModal {
         body.appendChild(loggingSection);
 
         return body;
+    }
+
+    /**
+     * Loads and displays key information
+     */
+    private async loadKeyInfo(keyInfoElement: HTMLElement): Promise<void> {
+        try {
+            const appKeyService = AppKeyService.getInstance();
+            const keyInfo = await appKeyService.getStoredKeyInfo();
+            
+            if (keyInfo.hasKey && keyInfo.expirationDate) {
+                const now = new Date();
+                const isExpired = keyInfo.expirationDate <= now;
+                const daysUntilExpiry = Math.ceil((keyInfo.expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                
+                let statusIcon = '🔑';
+                let statusText = '';
+                let statusClass = 'key-valid';
+                
+                if (isExpired) {
+                    statusIcon = '⚠️';
+                    statusText = 'Expired';
+                    statusClass = 'key-expired';
+                } else if (daysUntilExpiry <= 7) {
+                    statusIcon = '⏰';
+                    statusText = `Expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`;
+                    statusClass = 'key-expiring';
+                } else {
+                    statusText = `Valid (${daysUntilExpiry} days remaining)`;
+                }
+                
+                keyInfoElement.innerHTML = `
+                    <span class="key-status ${statusClass}">
+                        ${statusIcon} ${statusText}
+                        ${keyInfo.customString ? ` • "${keyInfo.customString}"` : ''}
+                    </span>
+                `;
+            } else {
+                keyInfoElement.innerHTML = `
+                    <span class="key-status key-missing">
+                        ⚠️ No valid key found
+                    </span>
+                `;
+            }
+        } catch (error) {
+            console.error('Failed to load key info:', error);
+            keyInfoElement.innerHTML = `
+                <span class="key-status key-error">
+                    ❌ Error loading key info
+                </span>
+            `;
+        }
     }
 
     /**
@@ -424,15 +491,11 @@ export class SettingsModal extends BaseModal {
                 this.emit('profileChanged', event.profileName);
                 
                 // Refresh the global profile selector to maintain consistency
-                if (this.refreshGlobalProfileSelector) {
-                    this.refreshGlobalProfileSelector();
-                }
+                this.refreshGlobalProfileSelector?.();
             });
 
             this.profileSelector.onAction((event) => {
-                if (this.refreshGlobalProfileSelector) {
-                    this.refreshGlobalProfileSelector();
-                }
+                this.refreshGlobalProfileSelector?.();
             });
         }
 
@@ -632,7 +695,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Cleanup when modal is destroyed
      */
-    public destroy(): void {
+    public override destroy(): void {
         if (this.saveTimeout) {
             window.clearTimeout(this.saveTimeout);
         }
@@ -665,11 +728,36 @@ export class SettingsModal extends BaseModal {
                     align-items: center;
                 }
                 
+                .settings-modal-container .header-title-container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                }
+                
                 .settings-modal-container .modal-header h2 {
                     margin: 0;
                     font-size: 1.5rem;
                     font-weight: 600;
                     color: #111827;
+                }
+                
+                .settings-modal-container .key-info {
+                    font-size: 0.875rem;
+                    opacity: 0.8;
+                }
+                
+                .settings-modal-container .key-status.key-valid {
+                    color: #059669;
+                }
+                
+                .settings-modal-container .key-status.key-expiring {
+                    color: #d97706;
+                }
+                
+                .settings-modal-container .key-status.key-expired,
+                .settings-modal-container .key-status.key-missing,
+                .settings-modal-container .key-status.key-error {
+                    color: #dc2626;
                 }
                 
                 .settings-modal-container .close-button {
