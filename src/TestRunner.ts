@@ -7,7 +7,7 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 import { StorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import { TemplateManager } from './TemplateManager';
-import { testPersistTagFunctionality } from './project/test-context-extraction';
+
 
 // Define a simple structure for a test result
 export interface TestResult {
@@ -67,7 +67,7 @@ export class TestRunner {
         results.push(this.testTemplateValidation());
         results.push(this.testErrorMessages());
         results.push(this.testGenerationChildrenCount());
-        results.push(await this.testPersistTagFunctionality());
+        
         // Removed testComprehensiveTemplates - tests configuration data, not functionality
 
         return this.formatResultsAsHtml(results, 'Phase 1: Core Functionality Tests');
@@ -102,15 +102,7 @@ export class TestRunner {
         return this.formatResultsAsHtml(results, 'Storage System Tests');
     }
 
-    private async testPersistTagFunctionality(): Promise<TestResult> {
-        try {
-            // Run the persist tag functionality test
-            await testPersistTagFunctionality();
-            return { success: true, message: "Persist Tag Functionality: Context persistence through hierarchy works correctly." };
-        } catch (error: any) {
-            return { success: false, message: `Persist Tag Functionality Failed: ${error.message}` };
-        }
-    }
+
 
     private formatResultsAsHtml(results: TestResult[], title: string = 'Test Results'): string {
         let html = `<h2>${title}</h2>`;

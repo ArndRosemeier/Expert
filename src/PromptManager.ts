@@ -17,8 +17,7 @@ export interface OrchestratorPrompts {
     create_children_from_outline_user: string;
     prompt_for_child_generation_prompt: string;
     
-    // For context synthesis
-    context_synthesis_user: string;
+
     
     // For context extraction
     context_extraction_user: string;
@@ -179,36 +178,7 @@ The broader context of the document is:
 
 Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
 
-    context_synthesis_user: `You are an expert at distilling and synthesizing contextual information for content generation.
 
-You have been given:
-1. PARENT CONTEXT - inherited context from the parent node
-2. NODE CONTENT - the actual content that was generated for this node
-
-Your task is to create a new, synthesized context by:
-- Distilling the parent context to only what remains relevant and important for child nodes of this level
-- Incorporating new concepts, themes, characters, and elements that were introduced in the node content
-- **PRESERVING STYLE INFORMATION**: Maintain details about writing style, tone, voice, narrative perspective, formatting preferences, and any stylistic patterns established in the content
-- Creating a focused context that will guide generation of child nodes effectively while maintaining consistency
-
-PARENT CONTEXT:
----
-{{parent_context}}
----
-
-NODE CONTENT:
----
-{{node_content}}
----
-
-Please generate a concise but comprehensive context summary that combines the essential elements from the parent context with the newly established concepts from this node's content. **Pay special attention to preserving style information** such as:
-- Writing tone and voice
-- Narrative perspective (first-person, third-person, etc.)
-- Formatting patterns and structure
-- Genre conventions and stylistic choices
-- Any specific writing techniques or approaches used
-
-Focus on what will be most useful for generating coherent child content that maintains stylistic consistency.`,
 
     context_extraction_user: `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 
@@ -258,7 +228,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
     create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content', 'count'],
     prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
-    context_synthesis_user: ['parent_context', 'node_content'],
+
     context_extraction_user: ['extraction_request', 'node_title', 'content'],
     expand_text_user: ['content', 'path', 'context', 'title'],
     node_chat_system: ['node_data'],
@@ -275,7 +245,7 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
     create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured JSON array of child titles with brief content descriptions.",
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
-    context_synthesis_user: "Combines parent context with node content to create a distilled, focused context for child node generation. Uses the editor model to synthesize relevant information.",
+
     context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",
     expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
 };

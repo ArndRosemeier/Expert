@@ -1,139 +1,13 @@
 import { ContextExtractionService } from './ContextExtractionService';
 import { DocumentNode } from '../DocumentNode';
-import { OpenRouterClient } from '../OpenRouterClient';
-import { SettingsManager } from '../SettingsManager';
-import { ContextService } from './ContextService';
 import { TreeService } from './TreeService';
+import { SettingsManager } from '../SettingsManager';
 
 /**
- * Test suite for ContextExtractionService
- * This is a manual test that can be run to verify the service works correctly
+ * Test the ContextExtractionService functionality
  */
-
-// Mock implementation for testing
-class MockOpenRouterClient extends OpenRouterClient {
-    constructor() {
-        super('test-key');
-    }
-
-    async chat(_purpose: string, message: string): Promise<string> {
-        // Simulate AI response based on the extraction prompt
-        if (message.includes('characters')) {
-            return `Characters found in the content:
-
-1. **John Smith** - Protagonist, a software engineer working on AI projects
-2. **Sarah Johnson** - John's colleague and project manager
-3. **Dr. Michael Chen** - Senior researcher and mentor figure
-4. **Emma Wilson** - Marketing specialist who helps with product launch
-
-These characters appear throughout the narrative and drive the main plot points.`;
-        } else if (message.includes('places')) {
-            return `Locations mentioned in the content:
-
-1. **TechCorp Headquarters** - Main office building in downtown Seattle
-2. **Innovation Lab** - High-tech research facility on the 15th floor
-3. **Conference Room A** - Where important meetings and presentations occur
-4. **Coffee Shop Downstairs** - Informal meeting place for casual discussions
-5. **John's Apartment** - Personal residence where some planning occurs
-
-These locations provide the setting for various scenes and interactions.`;
-        } else {
-            return `Extracted information for "${message.split('extract information about: ')[1]?.split('\n')[0] || 'unknown'}":
-
-Based on the content analysis, here are the key elements found:
-- Multiple relevant instances identified
-- Context and relationships mapped
-- Detailed breakdown provided
-- Organized for easy reference`;
-        }
-    }
-}
-
 export async function testContextExtraction(): Promise<void> {
-    console.log('🧪 Starting ContextExtractionService tests...\n');
-
-    // Create test dependencies
-    const mockClient = new MockOpenRouterClient();
-    const settingsManager = new SettingsManager();
-    const contextExtractionService = new ContextExtractionService(mockClient, settingsManager);
-
-    // Create test document hierarchy
-    const rootNode = new DocumentNode(0, 'Test Project', null, ['Book', 'Chapter', 'Scene']);
-    rootNode.content = 'This is a story about John Smith, a software engineer at TechCorp. The story takes place in Seattle, with most action happening at the TechCorp Headquarters building.';
-
-    const chapter1 = new DocumentNode(1, 'Chapter 1: The Beginning', rootNode.id, ['Book', 'Chapter', 'Scene']);
-    chapter1.content = 'John Smith starts his new job at TechCorp Headquarters. He meets Sarah Johnson, his project manager, in Conference Room A. Dr. Michael Chen, the senior researcher, gives him a tour of the Innovation Lab.';
-    rootNode.children.push(chapter1);
-
-    const scene1 = new DocumentNode(2, 'Scene 1: First Day', chapter1.id, ['Book', 'Chapter', 'Scene']);
-    scene1.content = 'John nervously enters the building and takes the elevator to the 15th floor. Sarah Johnson greets him with a warm smile and introduces him to the team. They head to the Coffee Shop Downstairs for an informal chat.';
-    chapter1.children.push(scene1);
-
-    const scene2 = new DocumentNode(2, 'Scene 2: The Lab Tour', chapter1.id, ['Book', 'Chapter', 'Scene']);
-    scene2.content = 'Dr. Michael Chen shows John around the Innovation Lab, explaining the various AI projects. Emma Wilson from marketing joins them to discuss the upcoming product launch.';
-    chapter1.children.push(scene2);
-
-    try {
-        // Test 1: Extract from root node only (depth 0)
-        console.log('Test 1: Extracting characters from root node only (depth 0)');
-        const result1 = await contextExtractionService.extractContext(rootNode, 'characters', 0);
-        console.log('✅ Result 1:');
-        console.log(result1);
-        console.log('\n' + '='.repeat(60) + '\n');
-
-        // Test 2: Extract from root + children (depth 1)
-        console.log('Test 2: Extracting places from root + children (depth 1)');
-        const result2 = await contextExtractionService.extractContext(rootNode, 'places', 1);
-        console.log('✅ Result 2:');
-        console.log(result2);
-        console.log('\n' + '='.repeat(60) + '\n');
-
-        // Test 3: Extract from full hierarchy (depth 2)
-        console.log('Test 3: Extracting themes from full hierarchy (depth 2)');
-        const result3 = await contextExtractionService.extractContext(rootNode, 'themes and plot points', 2);
-        console.log('✅ Result 3:');
-        console.log(result3);
-        console.log('\n' + '='.repeat(60) + '\n');
-
-        // Test 4: Preview functionality
-        console.log('Test 4: Testing preview functionality');
-        const preview0 = contextExtractionService.getContentPreview(rootNode, 0);
-        const preview1 = contextExtractionService.getContentPreview(rootNode, 1);
-        const preview2 = contextExtractionService.getContentPreview(rootNode, 2);
-
-        console.log('✅ Preview depth 0:', preview0.summary);
-        console.log('✅ Preview depth 1:', preview1.summary);
-        console.log('✅ Preview depth 2:', preview2.summary);
-        console.log('\n' + '='.repeat(60) + '\n');
-
-        // Test 5: Validation functionality
-        console.log('Test 5: Testing validation');
-        const validation1 = contextExtractionService.validateExtractionParameters(rootNode, '', 0);
-        const validation2 = contextExtractionService.validateExtractionParameters(rootNode, 'characters', -1);
-        const validation3 = contextExtractionService.validateExtractionParameters(rootNode, 'characters', 15);
-
-        console.log('✅ Empty prompt validation:', validation1);
-        console.log('✅ Negative depth validation:', validation2);
-        console.log('✅ Excessive depth validation:', validation3);
-
-        console.log('\n🎉 All ContextExtractionService tests completed successfully!');
-
-    } catch (error) {
-        console.error('❌ Test failed:', error);
-        throw error;
-    }
-}
-
-// Helper function to run tests manually
-export function runContextExtractionTests() {
-    void testContextExtraction().catch(console.error);
-}
-
-/**
- * Test the persist tag functionality in ContextService
- */
-export async function testPersistTagFunctionality(): Promise<void> {
-    console.log('🧪 Testing Persist Tag Functionality...');
+    console.log('🧪 Testing Context Extraction...');
 
     // Create mock dependencies
     const treeService = new TreeService();
@@ -142,80 +16,87 @@ export async function testPersistTagFunctionality(): Promise<void> {
     // Create a mock OpenRouterClient for testing
     const mockOpenRouterClient = {
         chat: async (purpose: string, prompt: string): Promise<string> => {
-            // Mock response that simulates an LLM synthesizing context
-            return `This is synthesized context based on: ${prompt.substring(0, 100)}...`;
+            // Mock response for context extraction
+            return `Characters: Alice (protagonist), Bob (mentor), Charlie (villain)
+Places: Castle Blackrock, The Whispering Woods, Village of Millhaven
+Themes: Courage, sacrifice, redemption
+Key Events: The awakening ceremony, The battle at dawn, The final confrontation`;
         }
     } as any;
 
-    const contextService = new ContextService(treeService, mockOpenRouterClient, settingsManager);
+    const contextExtractionService = new ContextExtractionService(mockOpenRouterClient, settingsManager);
 
-    // Test the persist tag extraction method directly
-    console.log('📝 Testing persist tag extraction...');
-    
-    const testContext = `
-This is regular context content.
+    // Create a test node with content
+    const testNode = new DocumentNode(
+        0, 
+        'Chapter 1: The Journey Begins', 
+        null, 
+        ['Book', 'Chapter', 'Section']
+    );
+    testNode.content = `
+Alice stood at the gates of Castle Blackrock, her heart pounding with anticipation. 
+The ancient stones seemed to whisper secrets of the past, and she could feel the weight 
+of destiny upon her shoulders. Bob, her mentor, had warned her about the dangers that 
+lay ahead, but she knew that facing Charlie, the dark sorcerer, was her true calling.
 
-<persist>
-Important data that should persist: API key = abc123
-Character names: Alice, Bob, Charlie
-</persist>
+The village of Millhaven seemed like a distant memory now, and the safety of home 
+felt like a luxury she could no longer afford. The awakening ceremony had changed 
+everything, imbuing her with powers she was still learning to control. 
 
-More regular context here.
+As she stepped through the gates into the Whispering Woods, Alice knew that this 
+journey would test not only her courage but also her willingness to sacrifice 
+everything for the greater good. The themes of redemption and justice burned bright 
+in her heart as she moved deeper into the forest, ready to face whatever challenges 
+awaited her.
+    `;
 
-<persist>
-Another persist block with settings:
-Theme: Dark fantasy
-Style: Third person narrative
-</persist>
-
-Final context content.
-    `.trim();
-
-    // Access private method through type assertion for testing
-    const extractResult = (contextService as any).extractPersistTags(testContext);
-    
-    console.log('✓ Extracted persist data:');
-    console.log('  - Number of persist blocks:', extractResult.persistData.length);
-    console.log('  - Cleaned context length:', extractResult.cleanedContext.length);
-    console.log('  - Persist data:', extractResult.persistData);
-    
-    // Test appending persist data back
-    const mockSynthesizedContent = 'This is new synthesized context content.';
-    const finalResult = (contextService as any).appendPersistData(mockSynthesizedContent, extractResult.persistData);
-    
-    console.log('✓ Final result with persist data appended:');
-    console.log('  - Length:', finalResult.length);
-    console.log('  - Contains original persist blocks:', finalResult.includes('<persist>'));
-    
-    // Verify that persist blocks are preserved
-    const expectedPersistBlocks = 2;
-    const actualPersistBlocks = (finalResult.match(/<persist>/g) || []).length;
-    
-    if (actualPersistBlocks === expectedPersistBlocks) {
-        console.log('✅ Persist blocks correctly preserved!');
-    } else {
-        console.log(`❌ Expected ${expectedPersistBlocks} persist blocks, found ${actualPersistBlocks}`);
+    try {
+        console.log('📝 Testing character extraction...');
+        const characterResult = await contextExtractionService.extractContext(
+            testNode, 
+            'characters and their roles'
+        );
+        
+        console.log('✓ Character extraction result:');
+        console.log(characterResult);
+        
+        console.log('📝 Testing location extraction...');
+        const locationResult = await contextExtractionService.extractContext(
+            testNode, 
+            'places and locations mentioned'
+        );
+        
+        console.log('✓ Location extraction result:');
+        console.log(locationResult);
+        
+        console.log('📝 Testing theme extraction...');
+        const themeResult = await contextExtractionService.extractContext(
+            testNode, 
+            'themes and concepts'
+        );
+        
+        console.log('✓ Theme extraction result:');
+        console.log(themeResult);
+        
+        console.log('✅ Context extraction tests completed successfully!');
+        
+    } catch (error) {
+        console.error('❌ Context extraction test failed:', error);
+        throw error;
     }
-
-    // Test with empty persist data
-    const noPersistResult = (contextService as any).appendPersistData('Clean content', []);
-    if (noPersistResult === 'Clean content') {
-        console.log('✅ Correctly handles empty persist data');
-    } else {
-        console.log('❌ Failed to handle empty persist data correctly');
-    }
-
-    console.log('🎉 Persist Tag Functionality Test Complete!');
 }
 
 /**
- * Test persist tag functionality in full context synthesis flow
+ * Run all context-related tests
  */
-export async function testFullContextSynthesisWithPersist(): Promise<void> {
-    console.log('🧪 Testing Full Context Synthesis with Persist Tags...');
-
-    // This would require setting up a full node hierarchy and testing the synthesizeContext method
-    // For now, we'll just log that this test would need to be run with actual nodes
-    console.log('📝 Full synthesis test requires actual document nodes and OpenRouter client');
-    console.log('✅ Partial test complete - persist tag extraction/appending verified');
+export async function runAllContextTests(): Promise<void> {
+    console.log('🚀 Running all context tests...');
+    
+    try {
+        await testContextExtraction();
+        console.log('🎉 All context tests passed!');
+    } catch (error) {
+        console.error('💥 Context tests failed:', error);
+        throw error;
+    }
 } 

@@ -4,7 +4,7 @@ export class ContextInfoModal extends BaseModal {
     constructor() {
         super({
             id: 'context-info-modal',
-            title: 'Context Information',
+            title: 'Understanding Context',
             maxWidth: '700px',
             maxHeight: '80vh'
         });
@@ -84,7 +84,7 @@ export class ContextInfoModal extends BaseModal {
             </style>
             <div class="info-modal-content">
                 <h3>Understanding Context</h3>
-                <p>The Context field provides additional information that gets passed to AI models when generating content for this node and its children. Here are the special features you can use:</p>
+                <p>The Context field provides additional information that gets passed to AI models when generating content for this node and its children.</p>
                 
                 <div class="feature-section">
                     <h4>🔧 Settings Override</h4>
@@ -95,28 +95,28 @@ export class ContextInfoModal extends BaseModal {
                 </div>
 
                 <div class="feature-section">
-                    <h4>📌 Persistent Content</h4>
-                    <p>Content wrapped in persist tags will be copied directly to all child contexts:</p>
-                    <pre><code>&lt;persist&gt;
-Important guidelines that apply to all children:
-- Follow company style guide
-- Use formal tone
-&lt;/persist&gt;</code></pre>
-                    <p>This content appears in every child node's context without modification.</p>
+                    <h4>📋 Simple Context Inheritance</h4>
+                    <p>Context is now inherited simply from parent to child:</p>
+                    <ul>
+                        <li>When child nodes are created, they automatically receive an exact copy of their parent's context</li>
+                        <li>No complex synthesis or transformation occurs</li>
+                        <li>This ensures consistent guidance throughout the document hierarchy</li>
+                    </ul>
                 </div>
 
                 <div class="feature-section">
-                    <h4>🎯 Context-Sensitive Adaptation</h4>
-                    <p>The AI automatically adapts the remaining context for each child node during generation. This means:</p>
+                    <h4>🎯 Generation Context</h4>
+                    <p>During content generation, the AI receives:</p>
                     <ul>
-                        <li>Context is tailored to be relevant for each specific child</li>
-                        <li>Parent information is summarized appropriately</li>
-                        <li>Hierarchical relationships are maintained</li>
+                        <li>The node's inherited context</li>
+                        <li>Parent node content for structural understanding</li>
+                        <li>Sibling titles and content for consistency</li>
+                        <li>Any settings overrides specified in the context</li>
                     </ul>
                 </div>
 
                 <div class="note-section">
-                    <p><strong>💡 Note:</strong> Context propagates recursively to all descendant nodes, making it a powerful way to provide consistent guidance throughout your document hierarchy.</p>
+                    <p><strong>💡 Note:</strong> Context inheritance is immediate and automatic. Any context you set on a parent node will be copied exactly to all its children when they are created.</p>
                 </div>
             </div>
             
@@ -126,22 +126,7 @@ Important guidelines that apply to all children:
                 </button>
             </div>
         `;
-
-        // Set up event listeners for actions
-        content.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement;
-            const action = target.getAttribute('data-action');
-            if (action) {
-                void this.handleAction(action);
-            }
-        });
-
+        
         return content;
-    }
-
-    protected override async handleAction(action: string): Promise<void> {
-        if (action === 'close') {
-            await this.close();
-        }
     }
 } 

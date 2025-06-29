@@ -110,10 +110,10 @@ This document provides a comprehensive mapping of all functionality in the Exper
 - **File**: `src/project/ContextService.ts`
 - **Class**: `ContextService`
 - **Functions**:
-  - `synthesizeContext(parentContext, nodeContent)` - Combine contexts
-  - `extractContext(content, extractionRequest)` - Extract specific info
-  - `buildNodeContext(node)` - Build context for node
-  - `generatePersistAwareness(persistBlocks)` - Generate persist awareness text
+  - `copyParentContextToChild(childNode, rootNode)` - Copy parent context to child (simple inheritance)
+  - `compileNodeContext(nodeId, rootNode)` - Compile context for generation (parent content + siblings)
+  - `buildSiblingContext(targetNode, rootNode)` - Build context from sibling nodes  
+  - `getContextSummary(nodeId, rootNode)` - Get context summary for UI display
 
 ### Context Extraction
 - **File**: `src/project/ContextExtractionService.ts`
@@ -551,4 +551,11 @@ Prompt placeholders are now centrally defined in `src/PromptManager.ts` and impo
 - ✅ Full IndexedDB migration completed
 - ✅ No automatic localStorage usage in main application
 - ⚠️ **localStorage only with explicit user authorization**
-- ✅ All persistent data uses `StorageService` → IndexedDB 
+- ✅ All persistent data uses `StorageService` → IndexedDB
+
+### Simplified Context System (Latest)
+- ✅ **Removed complex context synthesis** - No more LLM-based context distillation
+- ✅ **Removed `<persist>` tag mechanics** - No more special tag handling
+- ✅ **Simple parent-to-child copying** - Context is now directly inherited
+- ✅ **Cleaner generation process** - No post-generation context synthesis
+- ✅ **Reduced dependencies** - ContextService no longer needs OpenRouterClient 

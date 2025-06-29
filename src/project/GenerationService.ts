@@ -350,8 +350,7 @@ export class GenerationService {
                 node.setContentFromGeneration(result.finalResponse);
                 node.generationHistory = result.history;
                 
-                // Synthesize context after content generation
-                await this.synthesizeNodeContext(nodeId, isChildGeneration);
+                // Context is now simply inherited from parent (no synthesis needed)
                 
                 // Cleanup state before emitting events
                 this.cleanupGenerationState(nodeId, node, isChildGeneration);
@@ -644,6 +643,8 @@ export class GenerationService {
                     if (item.description && item.description.trim()) {
                         newNode.content = `Draft: ${item.description}`;
                     }
+                    // Copy parent context to new child node
+                    this.deps.contextService.copyParentContextToChild(newNode, this.deps.rootNode);
                 });
 
                 await this.deps.saveToStorage();
@@ -1012,86 +1013,7 @@ export class GenerationService {
         });
     }
 
-    /**
-     * Synthesizes context for a node after content generation.
-     * This combines parent context with the newly generated content to create
-     * a focused context for potential child nodes.
-     * @param nodeId The ID of the node to synthesize context for.
-     * @param isChildGeneration Whether this is part of a bulk generation operation.
-     */
-    private async synthesizeNodeContext(nodeId: string, isChildGeneration: boolean): Promise<void> {
-        // Only synthesize context if not aborted
-        if (this.isAbortRequested()) {
-            return;
-        }
 
-        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) {
-            console.warn(`Node ${nodeId} not found for context synthesis`);
-            return;
-        }
-
-        try {
-            const synthesizedContext = await this.deps.contextService.synthesizeContext(nodeId, this.deps.rootNode);
-            
-            if (synthesizedContext && synthesizedContext.trim() !== '') {
-                // Clean up the synthesized context by removing header lines
-                const cleanedContext = this.cleanSynthesizedContext(synthesizedContext);
-                
-                // Only update if we have actual cleaned content
-                if (cleanedContext && cleanedContext.trim() !== '') {
-                    node.context = cleanedContext;
-                    // Context synthesized successfully
-                } else {
-                    // Context synthesis produced empty result
-                }
-            } else {
-                // Context synthesis failed or returned null - this is not a critical error
-            }
-        } catch (error) {
-            // Log the error but ensure it doesn't break content generation
-            console.error(`Context synthesis failed for node "${node.title}" (${nodeId}):`, error);
-            // Emit a non-critical warning instead of breaking the flow
-            if (!isChildGeneration) {
-                this.deps.eventEmitter.emit('error', `Warning: Context synthesis failed for "${node.title}" but content generation completed successfully.`);
-            }
-        }
-    }
-
-    /**
-     * Cleans synthesized context by removing header lines from the beginning.
-     * Removes lines from the start until it finds a line that's non-empty and doesn't contain "context" and ":".
-     * @param synthesizedContext The raw synthesized context from the AI.
-     * @returns The cleaned context without header lines.
-     */
-    private cleanSynthesizedContext(synthesizedContext: string): string {
-        const lines = synthesizedContext.split('\n');
-        let startIndex = 0;
-        
-        // Remove lines from the beginning until we find actual content
-        for (let i = 0; i < lines.length; i++) {
-            const trimmedLine = lines[i].trim();
-            
-            // If line is empty, keep removing
-            if (trimmedLine === '') {
-                startIndex = i + 1;
-                continue;
-            }
-            
-            // If line contains both "context" and ":" (case insensitive), keep removing
-            const lowerLine = trimmedLine.toLowerCase();
-            if (lowerLine.includes('context') && lowerLine.includes(':')) {
-                startIndex = i + 1;
-                continue;
-            }
-            
-            // Found a line that's non-empty and doesn't contain "context" + ":", stop here
-            break;
-        }
-        
-        // Return everything from the first content line onwards
-        return lines.slice(startIndex).join('\n').trim();
-    }
 
     /**
      * Parses a JSON array from text containing child node information.

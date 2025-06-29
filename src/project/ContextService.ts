@@ -1,20 +1,36 @@
 import { DocumentNode } from '../DocumentNode';
 import { TreeService } from './TreeService';
-import { OpenRouterClient } from '../OpenRouterClient';
-import { SettingsManager } from '../SettingsManager';
 
 /**
- * ContextService handles all context building and hierarchical inheritance.
- * Compiles rich contextual information for node generation by combining
- * ancestral context, sibling context, and parent content.
+ * ContextService handles simple context inheritance.
+ * Contexts are now simply copied from parent to child nodes.
  */
 export class ContextService {
     
     constructor(
-        private treeService: TreeService,
-        private openRouterClient?: OpenRouterClient,
-        private settingsManager?: SettingsManager
+        private treeService: TreeService
     ) {}
+
+    /**
+     * Copies context from parent to child node.
+     * Simple inheritance - just copy the parent's context to the child.
+     * @param childNode The child node to copy context to.
+     * @param rootNode The root node of the tree.
+     */
+    public copyParentContextToChild(childNode: DocumentNode, rootNode: DocumentNode): void {
+        if (!childNode.parentId) {
+            // Root nodes have no parent, so no context to copy
+            return;
+        }
+
+        const parent = this.treeService.findNodeById(childNode.parentId, rootNode);
+        if (!parent) {
+            return;
+        }
+
+        // Simple copy: child gets exact same context as parent
+        childNode.context = parent.context || '';
+    }
 
     /**
      * Gathers context for a specific node to guide content generation.
@@ -48,26 +64,20 @@ export class ContextService {
             return contextParts.join('\n\n====================\n\n');
         }
 
-        // 2. Add the immediate parent's context if it exists
-        if (parent.context && parent.context.trim()) {
-            const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
-            contextParts.push(`PARENT CONTEXT (${parentLevelName}: "${parent.title}"):\n---\n${parent.context}\n---`);
-        }
-
-        // 3. Add the parent's content (the outline). This is the most critical structural context.
+        // 2. Add the parent's content (the outline). This is the most critical structural context.
         if (parent.content) {
             const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
             contextParts.push(`STRUCTURAL CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
         }
 
-        // 4. Add the list of all sibling titles to give a sense of scope.
+        // 3. Add the list of all sibling titles to give a sense of scope.
         if (parent.children.length > 1) {
             const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
             const siblingTitles = parent.children.map(child => `- ${child.title} ${child.id === nodeId ? '(This node)' : ''}`).join('\n');
             contextParts.push(`SIBLING SCOPE (${nodeLevelName} nodes at this level):\n${siblingTitles}`);
         }
 
-        // 5. Add full content of preceding siblings that have already been generated.
+        // 4. Add full content of preceding siblings that have already been generated.
         const precedingSiblingContent = this.buildPrecedingSiblingContext(targetNode, parent);
         if (precedingSiblingContent) {
             contextParts.push(precedingSiblingContent);
@@ -152,7 +162,7 @@ export class ContextService {
             precedingSiblingContent.push("CONTENT FROM PRECEDING SIBLINGS:");
             for (let i = 0; i < siblingIndex; i++) {
                 const sibling = parent.children[i];
-                if (sibling.content) {
+                if (sibling && sibling.content) {
                     precedingSiblingContent.push(`Content for "${sibling.title}":\n---\n${sibling.content}\n---`);
                 }
             }
@@ -199,118 +209,13 @@ export class ContextService {
     }
 
     /**
-     * Validates that a node has sufficient context for generation.
-     * @param nodeId The ID of the node to validate.
+     * Checks if a node has minimal context available for generation.
+     * @param nodeId The ID of the node to check.
      * @param rootNode The root node of the tree.
-     * @returns true if node has sufficient context, false otherwise.
+     * @returns True if the node has some context available.
      */
     public hasMinimalContext(nodeId: string, rootNode: DocumentNode): boolean {
         const context = this.compileNodeContext(nodeId, rootNode);
         return context.trim().length > 0;
-    }
-
-    /**
-     * Synthesizes context by combining parent context with node content.
-     * This distills the parent context to only what's relevant while incorporating
-     * new concepts introduced in the node's content.
-     * 
-     * Handles <persist></persist> tags by preserving their content through the synthesis process:
-     * - Extracts persist tags from parent context before sending to LLM
-     * - Appends persist data back to the synthesized context after LLM response
-     * 
-     * @param nodeId The ID of the node to synthesize context for.
-     * @param rootNode The root node of the tree.
-     * @returns The synthesized context string, or null if synthesis failed.
-     */
-    public async synthesizeContext(nodeId: string, rootNode: DocumentNode): Promise<string | null> {
-        if (!this.openRouterClient || !this.settingsManager) {
-            throw new Error('ContextService: OpenRouterClient or SettingsManager not available for context synthesis');
-        }
-
-        const node = this.treeService.findNodeById(nodeId, rootNode);
-        if (!node) {
-            throw new Error(`ContextService: Node ${nodeId} not found`);
-        }
-
-        // Get parent context - use only the parent's own context field, not compiled context
-        let parentContext = '';
-        if (node.parentId) {
-            const parent = this.treeService.findNodeById(node.parentId, rootNode);
-            if (parent && parent.context) {
-                parentContext = parent.context;
-            }
-        }
-
-        // Node's content is required for synthesis
-        if (!node.content || node.content.trim() === '') {
-            console.warn(`ContextService: Node ${nodeId} has no content for synthesis`);
-            return null;
-        }
-
-        try {
-            // Extract persist tags from parent context before sending to LLM
-            const { cleanedContext, persistData } = this.extractPersistTags(parentContext);
-            
-            const prompts = this.settingsManager.getPrompts();
-            const prompt = prompts.context_synthesis_user
-                .replace(/{{parent_context}}/g, cleanedContext || 'No parent context available.')
-                .replace(/{{node_content}}/g, node.content);
-
-            // Use the editor model for context synthesis as it's good at distilling and combining information
-            const synthesizedContext = await this.openRouterClient.chat('editor', prompt);
-            
-            if (synthesizedContext && synthesizedContext.trim() !== '') {
-                // Append persist data back to the synthesized context
-                const finalContext = this.appendPersistData(synthesizedContext.trim(), persistData);
-                return finalContext;
-            } else {
-                console.warn(`ContextService: Empty response from context synthesis for node ${nodeId}`);
-                return null;
-            }
-        } catch (error) {
-            console.error(`ContextService: Failed to synthesize context for node ${nodeId}:`, error);
-            return null;
-        }
-    }
-
-    /**
-     * Extracts <persist></persist> tags from context text.
-     * @param context The context text to extract persist tags from.
-     * @returns Object with cleaned context (without persist tags) and extracted persist data.
-     */
-    private extractPersistTags(context: string): { cleanedContext: string; persistData: string[] } {
-        const persistData: string[] = [];
-        
-        // Match <persist>...</persist> tags (including multiline content)
-        const persistRegex = /<persist>([\s\S]*?)<\/persist>/g;
-        
-        // Extract all persist content
-        let match;
-        while ((match = persistRegex.exec(context)) !== null) {
-            persistData.push(match[1]); // Content inside the tags
-        }
-        
-        // Remove persist tags from context
-        const cleanedContext = context.replace(persistRegex, '').trim();
-        
-        return { cleanedContext, persistData };
-    }
-
-    /**
-     * Appends persist data back to synthesized context.
-     * @param synthesizedContext The context returned by the LLM.
-     * @param persistData Array of persist content to append.
-     * @returns The final context with persist data appended.
-     */
-    private appendPersistData(synthesizedContext: string, persistData: string[]): string {
-        if (persistData.length === 0) {
-            return synthesizedContext;
-        }
-        
-        // Append each persist block back to the synthesized context
-        const persistBlocks = persistData.map(data => `<persist>${data}</persist>`);
-        
-        // Add persist blocks at the end, separated by newlines
-        return synthesizedContext + '\n\n' + persistBlocks.join('\n\n');
     }
 } 
