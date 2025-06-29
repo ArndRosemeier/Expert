@@ -75,7 +75,7 @@ export class CriteriaEditor {
     public removeCriterion(index: number): void {
         const criteriaList = this.container.querySelector('.criteria-list') as HTMLElement;
         const criterionElements = criteriaList.querySelectorAll('.criterion');
-        if (index >= 0 && index < criterionElements.length) {
+        if (index >= 0 && index < criterionElements.length && criterionElements[index]) {
             criterionElements[index].remove();
             this.emitChange();
         }
@@ -540,6 +540,7 @@ export class CriteriaEditor {
                 }
                 
                 .criterion textarea {
+                    width: 100%;
                     min-height: 2.5rem;
                     font-family: inherit;
                     padding: 0.5rem;
@@ -548,6 +549,7 @@ export class CriteriaEditor {
                     resize: vertical;
                     font-size: 0.9rem;
                     line-height: 1.4;
+                    box-sizing: border-box;
                 }
                 
                 .criterion textarea:focus {
