@@ -120,7 +120,27 @@ export class ModelSelector {
     input.addEventListener('input', async (e) => {
       this.apiKey = (e.target as HTMLInputElement).value;
       await this.saveToStorage();
-      this.update();
+      // Don't call this.update() here to avoid disrupting typing experience
+      // The buttons will be updated when user finishes typing or clicks elsewhere
+    });
+    
+    // Update button states when user finishes typing (on blur)
+    input.addEventListener('blur', () => {
+      // Update button states after user finishes typing
+      const testBtn = document.querySelector('#test-api-key-btn') as HTMLButtonElement;
+      const fetchBtn = document.querySelector('#fetch-models-btn') as HTMLButtonElement;
+      
+      if (testBtn) {
+        testBtn.disabled = this.testing || !this.apiKey;
+        testBtn.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
+        testBtn.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
+      }
+      
+      if (fetchBtn) {
+        fetchBtn.disabled = this.loading || !this.apiKey;
+        fetchBtn.style.background = this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+        fetchBtn.style.cursor = this.loading || !this.apiKey ? 'not-allowed' : 'pointer';
+      }
     });
     inputDiv.appendChild(input);
     // Info
@@ -140,6 +160,7 @@ export class ModelSelector {
 
     // Test API Key button
     const testBtn = document.createElement('button');
+    testBtn.id = 'test-api-key-btn';
     testBtn.textContent = this.testing ? 'Testing...' : 'Test API Key';
     testBtn.disabled = this.testing || !this.apiKey;
     testBtn.style.padding = '0.75rem 1rem';
@@ -163,6 +184,7 @@ export class ModelSelector {
 
     // Fetch button
     const fetchBtn = document.createElement('button');
+    fetchBtn.id = 'fetch-models-btn';
     fetchBtn.textContent = this.loading ? 'Fetching...' : 'Fetch Models';
     fetchBtn.disabled = this.loading || !this.apiKey;
     fetchBtn.style.padding = '0.75rem 1rem';
