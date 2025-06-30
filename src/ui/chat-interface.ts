@@ -170,8 +170,23 @@ export class ChatInterface {
                                 cursor: pointer;
                                 transition: background-color 0.2s;
                                 text-align: left;
+                                margin-bottom: 0.5rem;
                             " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
                                 ✨ Suggest Improvements
+                            </button>
+                            <button id="roleplay-adventure-btn" style="
+                                width: 100%;
+                                background: #6f42c1;
+                                color: white;
+                                border: 1px solid #5a2d91;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#5a2d91'" onmouseout="this.style.backgroundColor='#6f42c1'">
+                                🎭 Roleplay Adventure
                             </button>
                         </div>
                         ` : ''}
@@ -405,6 +420,13 @@ export class ChatInterface {
         if (improvementsButton) {
             improvementsButton.addEventListener('click', () => {
                 void this.suggestImprovements();
+            });
+        }
+
+        const roleplayButton = this.chatContainer?.querySelector('#roleplay-adventure-btn');
+        if (roleplayButton) {
+            roleplayButton.addEventListener('click', () => {
+                void this.startRoleplayAdventure();
             });
         }
     }
@@ -807,5 +829,106 @@ For each suggestion, provide clear justification for why the change would improv
         this.autoResizeTextarea();
         this.updateSendButtonState();
         await this.sendMessage();
+    }
+
+    /**
+     * Start a roleplay adventure using the roleplay prompt
+     */
+    private async startRoleplayAdventure(): Promise<void> {
+        if (this.isStreamingResponse || !this.customSystemPrompt) return;
+
+        // Get the roleplay adventure system prompt from settings
+        const prompts = this.settingsManager.getPrompts();
+        const roleplayPrompt = prompts.roleplay_adventure_system;
+
+        if (!roleplayPrompt) {
+            console.error('Roleplay adventure prompt not found');
+            return;
+        }
+
+        // Replace the node_data placeholder with the current system prompt (which contains the node data)
+        const roleplaySystemPrompt = roleplayPrompt.replace('{{node_data}}', this.customSystemPrompt);
+
+        // Create roleplay message
+        const roleplayMessage: ChatMessage = {
+            id: this.generateId(),
+            role: 'user',
+            content: 'Start roleplay adventure mode',
+            timestamp: new Date(),
+            isStreaming: false
+        };
+
+        // Add user message to conversation
+        this.messages.push(roleplayMessage);
+        this.displayMessage(roleplayMessage);
+
+        // Create assistant message placeholder
+        const assistantMessage: ChatMessage = {
+            id: this.generateId(),
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            isStreaming: true
+        };
+
+        this.messages.push(assistantMessage);
+        const messageElement = this.displayMessage(assistantMessage);
+
+        // Set streaming state
+        this.isStreamingResponse = true;
+        this.currentStreamingMessageId = assistantMessage.id;
+        this.toggleButtons(true);
+        this.updateSendButtonState();
+
+        // Prepare conversation messages with roleplay system prompt
+        const conversationMessages: OpenRouterMessage[] = [
+            {
+                role: 'system',
+                content: roleplaySystemPrompt
+            },
+            {
+                role: 'user',
+                content: 'Please analyze the story content and present me with the available characters I can roleplay as.'
+            }
+        ];
+
+        // Stream the response
+        const callbacks: StreamingCallbacks = {
+            onStart: () => {
+                // Already handled above
+            },
+            onChunk: (chunk: string) => {
+                assistantMessage.content += chunk;
+                this.updateMessageContent(messageElement, assistantMessage.content);
+                this.scrollToBottom();
+            },
+            onComplete: (fullResponse: string) => {
+                assistantMessage.content = fullResponse;
+                assistantMessage.isStreaming = false;
+                this.updateMessageContent(messageElement, fullResponse);
+                this.isStreamingResponse = false;
+                this.currentStreamingMessageId = null;
+                this.toggleButtons(false);
+                this.updateSendButtonState();
+            },
+            onError: (error: Error) => {
+                console.error('Roleplay adventure streaming error:', error);
+                assistantMessage.content = `Error starting roleplay adventure: ${error.message}`;
+                assistantMessage.isStreaming = false;
+                this.updateMessageContent(messageElement, assistantMessage.content);
+                this.isStreamingResponse = false;
+                this.currentStreamingMessageId = null;
+                this.toggleButtons(false);
+                this.updateSendButtonState();
+            }
+        };
+
+        try {
+            // Use the selected model purpose for roleplay
+            await this.openRouterClient.chatStreamConversation(this.selectedModelPurpose, conversationMessages, callbacks);
+        } catch (error) {
+            console.error('Failed to start roleplay adventure stream:', error);
+            callbacks.onError?.(error instanceof Error ? error : new Error('Unknown error'));
+        }
     }
 } 

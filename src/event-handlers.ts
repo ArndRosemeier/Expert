@@ -15,7 +15,7 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 import { openTemplateEditor } from './ui/template-editor';
 import { TemplateManager } from './TemplateManager';
 
-function onModelsSelected(models: Record<string, string>) {
+function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
     const modelSelector = state.getModelSelector();
     const settingsManager = state.getSettingsManager();
     if (!modelSelector || !settingsManager) return;
@@ -30,9 +30,13 @@ function onModelsSelected(models: Record<string, string>) {
         criteria: [], 
         maxIterations: 5, 
         selectedModels: {},
+        webSearchEnabled: {},
         contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
     };
     activeProfile.selectedModels = models;
+    if (webSearchEnabled) {
+        activeProfile.webSearchEnabled = webSearchEnabled;
+    }
     void settingsManager.saveProfile(activeProfileName, activeProfile);
 
     // Settings modal now closes automatically after saving

@@ -33,6 +33,9 @@ export interface OrchestratorPrompts {
     
     // For node chat system prompt
     node_chat_system: string;
+    
+    // For roleplaying adventure mode
+    roleplay_adventure_system: string;
 }
 
 export const defaultPrompts: OrchestratorPrompts = {
@@ -269,6 +272,41 @@ The user can ask you questions about this content, request edits, analysis, or s
 5. Suggest improvements to writing quality, clarity, or organization
 
 You have full context about the document structure and content. Be helpful, specific, and actionable in your responses.`,
+
+    roleplay_adventure_system: `You are a skilled interactive fiction and roleplaying game master. The user has provided you with story content that contains characters, settings, and narrative elements. Your task is to create an immersive roleplaying adventure based on this content.
+
+Here is the story content and context:
+{{node_data}}
+
+FIRST, analyze the content to identify all available characters that the user could potentially roleplay as. Look for:
+- Named characters with distinct personalities, backgrounds, or roles
+- Characters with speaking parts or significant presence in the narrative
+- Both major and minor characters who could offer interesting perspectives
+- Characters from different factions, backgrounds, or with different motivations
+
+Present the user with a numbered list of available characters, including:
+- Character name
+- Brief description of their role/personality
+- Why they would be interesting to play
+
+Then ask the user to choose which character they want to roleplay as by entering the number.
+
+AFTER the user selects a character, transform into that character's perspective and:
+1. Set the scene from that character's viewpoint based on the current node/context
+2. Describe the immediate situation, environment, and any other characters present
+3. Explain what the character knows, feels, and is currently thinking
+4. Present the current situation as an open-ended scenario where the user can take any action
+
+Make it clear that this is completely free-form - the user can:
+- Say anything their character would say
+- Attempt any action their character could reasonably try
+- Ask questions about the world, other characters, or the situation
+- Explore the environment or investigate things
+- Make decisions that could change the story direction
+
+Always respond as the game master, narrating consequences of the user's actions, speaking for NPCs, describing environments, and maintaining the story's continuity and tone. Keep the adventure engaging and true to the source material while allowing creative freedom.
+
+Remember: This is not multiple choice. The user can type whatever they want their character to do or say.`,
 };
 
 const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
@@ -288,6 +326,7 @@ const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
     child_node_suggestions: ['parent_title', 'parent_content', 'context'],
     parent_content_update: ['child_title', 'parent_content', 'context'],
     node_chat_system: ['node_data'],
+    roleplay_adventure_system: ['node_data'],
 };
 
 const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
@@ -303,7 +342,8 @@ const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
     prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
 
     context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",
-    expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
+    expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out.",
+    roleplay_adventure_system: "Creates an immersive roleplaying adventure where the user can play as characters from the story content. Analyzes the context to present character choices and facilitates free-form roleplay."
 };
 
 export class PromptManager {
