@@ -380,13 +380,23 @@ export function renderNodeDetails() {
     contentArea.innerHTML = ''; // Clear previous content
 
     if (!projectManager || !selectedNodeId) {
-        contentArea.innerHTML = '<div class="placeholder">No node selected.</div>';
+        // Use safe content replacement for placeholder
+        void import('./event-manager').then(({ eventManager }) => {
+            eventManager.replaceContent('node-details', '<div class="placeholder">No node selected.</div>');
+        }).catch(() => {
+            contentArea.innerHTML = '<div class="placeholder">No node selected.</div>';
+        });
         return;
     }
 
     const node = projectManager.findNodeById(selectedNodeId);
     if (!node) {
-        contentArea.innerHTML = `<div class="placeholder">Error: Node with ID "${selectedNodeId}" not found.</div>`;
+        // Use safe content replacement for error
+        void import('./event-manager').then(({ eventManager }) => {
+            eventManager.replaceContent('node-details', `<div class="placeholder">Error: Node with ID "${selectedNodeId}" not found.</div>`);
+        }).catch(() => {
+            contentArea.innerHTML = `<div class="placeholder">Error: Node with ID "${selectedNodeId}" not found.</div>`;
+        });
         return;
     }
     
@@ -488,26 +498,26 @@ export function renderNodeDetails() {
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
             ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                <button id="delete-node-btn" class="button button-secondary" style="background-color: #dc3545; color: white; border-color: #dc3545;">
-                    Delete ${getCurrentLevelName(node)}
+                <button id="delete-node-btn" class="button button-danger">
+                    🗑️ Delete ${getCurrentLevelName(node)}
                 </button>
                 ${node.children.length > 0 ? `
-                    <button id="delete-subnodes-btn" class="button button-secondary" style="background-color: #fd7e14; color: white; border-color: #fd7e14;">
-                        Delete All ${getPluralChildLevelName(node)}
+                    <button id="delete-subnodes-btn" class="button button-warning">
+                        🗂️ Delete All ${getPluralChildLevelName(node)}
                     </button>
                 ` : ''}
                 ${!node.isLeaf ? `
-                    <button id="add-child-node-btn" class="button button-secondary" style="background-color: #22c55e; color: white; border-color: #22c55e;">
+                    <button id="add-child-node-btn" class="button button-success">
                         ➕ Add ${node.childLevelName || 'Child'}
                     </button>
                 ` : ''}
-                <button id="export-node-btn" class="button button-secondary" style="background-color: #6366f1; color: white; border-color: #6366f1;">
+                <button id="export-node-btn" class="button button-primary">
                     📤 Export
                 </button>
-                <button id="import-node-btn" class="button button-secondary" style="background-color: #10b981; color: white; border-color: #10b981;">
+                <button id="import-node-btn" class="button button-success">
                     📥 Import
                 </button>
-                <button id="chat-node-btn" class="button button-secondary" style="background-color: #f59e0b; color: white; border-color: #f59e0b;">
+                <button id="chat-node-btn" class="button button-warning">
                     💬 Chat
                 </button>
             </div>
@@ -544,15 +554,15 @@ export function renderNodeDetails() {
                     <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
                         <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem; ${node.isLeaf ? 'opacity: 0.6; cursor: help;' : ''}" title="${node.isLeaf ? `This node is a leaf node (${node.template[node.level] || 'final level'}) - click for more information` : 'Generate child nodes based on this node\'s content'}">${BUTTON_LABELS.GENERATE_ALL}</button>
                         ${!node.isLeaf ? `
-                            <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="display: flex; gap: 1rem; font-size: 0.9rem; align-items: center;">
+                                <label for="include-content-checkbox">
                                     <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
-                                    <label for="include-content-checkbox" style="cursor: pointer; user-select: none;">Include content</label>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    Include content
+                                </label>
+                                <label for="recursive-checkbox">
                                     <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
-                                    <label for="recursive-checkbox" style="cursor: pointer; user-select: none;">Recursive</label>
-                                </div>
+                                    Recursive
+                                </label>
                             </div>
                         ` : `
                             <div style="font-size: 0.9rem; color: #6c757d; font-style: italic; text-align: center;">
@@ -610,7 +620,7 @@ export function renderNodeDetails() {
                     position: relative;
                 }
                 .progress-bar {
-                    background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+                    background: linear-gradient(90deg, var(--primary-500) 0%, var(--primary-600) 100%);
                     height: 100%;
                     border-radius: 6px;
                     transition: width 0.3s ease-in-out;
@@ -674,7 +684,7 @@ export function renderNodeDetails() {
                         <button id="version-prev-btn" class="version-nav-btn" title="Previous version">‹</button>
                         <span id="version-indicator">Version 1 of 1</span>
                         <button id="version-next-btn" class="version-nav-btn" title="Next version">›</button>
-                        <button id="use-this-version-btn" class="button button-primary" style="display: none; padding: 0.25rem 0.5rem; font-size: 0.8rem;">Use This Version</button>
+                        <button id="use-this-version-btn" class="button button-primary button-sm" style="display: none;">Use This Version</button>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <input type="checkbox" id="show-ratings-checkbox" style="margin: 0;">
@@ -694,19 +704,14 @@ export function renderNodeDetails() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <label for="node-context">Context</label>
-                    <button id="context-info-btn" class="info-button" title="Learn about Context features" style="
-                        width: 20px; height: 20px; border-radius: 50%; border: 1px solid #6c757d; 
-                        background: #f8f9fa; color: #6c757d; font-size: 12px; font-weight: bold;
-                        display: inline-flex; align-items: center; justify-content: center;
-                        cursor: pointer; margin-left: 4px;
-                    ">i</button>
+                    <button id="context-info-btn" class="info-button" title="Learn about Context features" style="margin-left: 4px;">i</button>
                     <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(auto-propagates to children when enabled)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="display: flex; align-items: center; gap: 0.25rem;">
-                        <input type="checkbox" id="auto-propagate-checkbox" ${autoPropagateState ? 'checked' : ''} style="margin: 0;">
-                        <label for="auto-propagate-checkbox" style="font-weight: normal; font-size: 0.8rem; margin: 0; color: #6c757d;">Auto</label>
-                    </div>
+                    <label for="auto-propagate-checkbox" style="font-weight: normal; font-size: 0.8rem; margin: 0; color: #6c757d;">
+                        <input type="checkbox" id="auto-propagate-checkbox" ${autoPropagateState ? 'checked' : ''}>
+                        Auto
+                    </label>
                     <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
                     <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
                 </div>
@@ -776,24 +781,42 @@ export function renderNodeDetails() {
         propagateContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     }
 
-    // Update button text to show current state
+    // Update button text to show current state - USING SAFE METHOD to prevent listener loss
     if (isThisNodeGenerating) {
-        generateBtn.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...';
+        // Import EventManager for safe button updates
+        void import('./event-manager').then(({ eventManager }) => {
+            eventManager.updateButtonContent('node-generate-btn', 
+                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...',
+                { disabled: true, className: 'button button-primary' }
+            );
+        }).catch(console.error);
     } else if (isAnyOperationInProgress) {
-        generateBtn.textContent = `${BUTTON_LABELS.GENERATE} (Operation in progress)`;
+        void import('./event-manager').then(({ eventManager }) => {
+            eventManager.updateButtonContent('node-generate-btn', 
+                `${BUTTON_LABELS.GENERATE} (Operation in progress)`,
+                { disabled: true, className: 'button button-primary' }
+            );
+        }).catch(console.error);
     } else {
-        generateBtn.textContent = BUTTON_LABELS.GENERATE;
+        void import('./event-manager').then(({ eventManager }) => {
+            eventManager.updateButtonContent('node-generate-btn', 
+                BUTTON_LABELS.GENERATE,
+                { disabled: false, className: 'button button-primary' }
+            );
+        }).catch(console.error);
     }
 
     // Set up button tooltips and event listeners for generate all children button (now inline)
     if (!node.isLeaf) {
         const generateAllBtn = getElementById('node-generate-all-btn') as HTMLButtonElement;
         if (generateAllBtn) {
-            // Normal state (no more button transformations)
-            generateAllBtn.className = 'button';
-            generateAllBtn.innerHTML = BUTTON_LABELS.GENERATE_ALL;
-            generateAllBtn.id = 'node-generate-all-btn';
-            generateAllBtn.disabled = isAnyOperationInProgress;
+            // Use safe button update method to prevent listener loss
+            void import('./event-manager').then(({ eventManager }) => {
+                eventManager.updateButtonContent('node-generate-all-btn', 
+                    BUTTON_LABELS.GENERATE_ALL,
+                    { disabled: isAnyOperationInProgress, className: 'button' }
+                );
+            }).catch(console.error);
             
             // Update tooltip to reflect current state
             if (isAnyOperationInProgress) {
@@ -1121,7 +1144,7 @@ function renderRatingsView() {
                     the previous ratings were cleared since they no longer apply to the modified text.
                 </p>
                 ${currentVersion && currentVersion.isCurrent ? `
-                    <button id="regenerate-ratings-btn" class="button button-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <button id="regenerate-ratings-btn" class="button button-primary">
                         ${BUTTON_LABELS.GENERATE_RATINGS}
                     </button>
                 ` : ''}
@@ -1230,7 +1253,7 @@ function showPlaceholderOverlay(placeholder: string, projectManager: ProjectMana
     const node = projectManager.findNodeById(selectedNodeId);
     if (!node) return;
 
-    // Get the generation prompt panel (section) to match its dimensions
+    // Get the generation prompt panel (section) to use as reference for initial sizing
     const promptSection = document.querySelector('.generation-section') as HTMLElement;
     if (!promptSection) return;
 
@@ -1294,33 +1317,19 @@ Please improve and expand this content.`;
             value = '';
     }
 
+    // Basic trim to remove any obvious leading/trailing whitespace
+    value = value.trim();
+
     // Create overlay
     const overlay = document.createElement('div');
     overlay.className = 'placeholder-overlay';
-    overlay.innerHTML = `
-        <div class="placeholder-content" style="
-            width: ${sectionRect.width}px;
-            height: ${sectionRect.height}px;
-            max-width: none;
-            max-height: none;
-            position: absolute;
-            top: ${sectionRect.top + window.scrollY}px;
-            left: ${sectionRect.left + window.scrollX}px;
-        ">
-            <div class="placeholder-header">
-                <h3>{{${placeholder}}}</h3>
-                <button class="placeholder-close-btn" type="button">&times;</button>
-            </div>
-            <div class="placeholder-body">
-                <div class="placeholder-description">
-                    ${descriptions[placeholder] || 'Placeholder value'}
-                </div>
-                <div class="placeholder-value ${value ? '' : 'placeholder-empty'}">
-                    ${value || '(empty)'}
-                </div>
-            </div>
-        </div>
-    `;
+    overlay.innerHTML = `<div class="placeholder-content" style="width: min(90vw, ${sectionRect.width}px); height: min(85vh, ${sectionRect.height}px); max-width: 1200px; max-height: 800px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);"><div class="placeholder-header"><h3>{{${placeholder}}}</h3><button class="placeholder-close-btn" type="button">&times;</button></div><div class="placeholder-body"><div class="placeholder-description">${descriptions[placeholder] || 'Placeholder value'}</div><div class="placeholder-value ${value ? '' : 'placeholder-empty'}"></div></div></div>`;
+    
+    // Set the placeholder value using textContent to avoid whitespace issues
+    const valueElement = overlay.querySelector('.placeholder-value');
+    if (valueElement) {
+        valueElement.textContent = value || '(empty)';
+    }
 
     // Add close functionality
     const closeBtn = overlay.querySelector('.placeholder-close-btn');
@@ -2033,7 +2042,7 @@ export function initializeProjectUI(manager?: ProjectManager) {
             <label for="active-profile-selector">Active profile:</label>
             <select id="active-profile-selector">${profileOptions}</select>
             <span style="color: #6c757d; font-size: 0.9rem;">This profile will be used for all AI operations (Generate, Summarize, etc.)</span>
-            <button id="open-reader-btn" style="margin-left: auto; padding: 0.5rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--primary-color); color: white; cursor: pointer; font-size: 0.9rem;">📖 Reader View</button>
+            <button id="open-reader-btn" class="button button-primary" style="margin-left: auto;">📖 Reader View</button>
         </div>
         <div id="project-container">
             <div id="project-tree"></div>

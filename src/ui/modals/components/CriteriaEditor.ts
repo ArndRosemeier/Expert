@@ -512,7 +512,7 @@ export class CriteriaEditor {
                 
                 .criterion {
                     display: flex;
-                    align-items: flex-start;
+                    align-items: center;
                     gap: 0.75rem;
                     padding: 1rem;
                     border: 1px solid #e5e7eb;
@@ -559,12 +559,15 @@ export class CriteriaEditor {
                 }
                 
                 .criterion input[type="number"] {
-                    width: 60px;
-                    padding: 0.5rem;
+                    width: 50px;
+                    height: 32px;
+                    padding: 0.25rem 0.5rem;
                     border: 1px solid #d1d5db;
                     border-radius: 4px;
                     text-align: center;
                     font-size: 0.9rem;
+                    flex-shrink: 0;
+                    box-sizing: border-box;
                 }
                 
                 .criterion input[type="number"]:focus {
@@ -574,9 +577,42 @@ export class CriteriaEditor {
                 }
                 
                 .criterion input[type="checkbox"] {
-                    margin: 0;
-                    transform: scale(1.2);
+                    /* Override global checkbox styling for criteria editor */
+                    width: 20px !important;
+                    height: 20px !important;
+                    margin: 0 !important;
                     cursor: pointer;
+                    border: 2px solid #d1d5db !important;
+                    border-radius: 4px !important;
+                    background-color: white !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    position: relative !important;
+                    transition: all 0.2s ease !important;
+                    flex-shrink: 0 !important;
+                    align-self: center;
+                }
+                
+                .criterion input[type="checkbox"]:checked {
+                    background-color: #3b82f6 !important;
+                    border-color: #3b82f6 !important;
+                }
+                
+                .criterion input[type="checkbox"]:checked::after {
+                    content: "" !important;
+                    position: absolute !important;
+                    left: 6px !important;
+                    top: 2px !important;
+                    width: 6px !important;
+                    height: 10px !important;
+                    border: solid white !important;
+                    border-width: 0 2px 2px 0 !important;
+                    transform: rotate(45deg) !important;
+                }
+                
+                .criterion input[type="checkbox"]:hover {
+                    border-color: #3b82f6 !important;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
                 }
                 
                 .remove-criterion-btn {
@@ -584,15 +620,16 @@ export class CriteriaEditor {
                     color: white;
                     border: none;
                     border-radius: 50%;
-                    width: 28px;
-                    height: 28px;
+                    width: 24px;
+                    height: 24px;
                     cursor: pointer;
-                    font-size: 1.2rem;
+                    font-size: 1rem;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     transition: background-color 0.2s;
                     flex-shrink: 0;
+                    line-height: 1;
                 }
                 
                 .remove-criterion-btn:hover {

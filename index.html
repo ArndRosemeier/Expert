@@ -7,10 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/ui/enhanced-layout.css">
     <style>
         :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
+            --primary-color: #475569;
+            --primary-hover: #334155;
             --secondary-color: #6b7280;
             --border-color: #d1d5db;
             --input-bg: #fff;
@@ -120,7 +121,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            border: 2px solid #4f46e5;
+            border: 2px solid #475569;
         }
         
         .placeholder-header {
@@ -210,7 +211,7 @@
     <header class="main-header">
         <h1>Expert</h1>
         <div>
-            <button id="globalAbortBtn" class="button" style="background-color: #dc2626; color: white; display: none;">🛑 Abort Generation</button>
+            <button id="globalAbortBtn" class="button button-danger" style="display: none;">🛑 Abort Generation</button>
             <button id="newProjectBtn" class="button button-primary">New Project</button>
             <button id="importProjectBtn" class="button button-primary">Import Project</button>
             <button id="runTestsBtn" class="button button-secondary">Run Tests</button>

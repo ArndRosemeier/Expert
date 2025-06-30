@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert App - Button System Showcase</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="enhanced-layout.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--secondary-50);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        .showcase-section {
+            background: white;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+        }
+        .button-row {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        code {
+            background: var(--secondary-100);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-family: ui-monospace, SFMono-Regular, monospace;
+            font-size: 0.875rem;
+        }
+        h2 {
+            color: var(--secondary-900);
+            border-bottom: 2px solid var(--secondary-200);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .color-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+            border: 1px solid var(--secondary-300);
+        }
+    </style>
+</head>
+<body>
+    <h1>Expert App - Professional Button System</h1>
+    
+    <div class="showcase-section">
+        <h2>🎨 Button Variants</h2>
+        <p>Our professional button system provides semantic variants with consistent styling.</p>
+        
+        <div class="button-row">
+            <button class="button button-primary">Primary Action</button>
+            <button class="button button-secondary">Secondary Action</button>
+            <button class="button button-success">Success Action</button>
+            <button class="button button-danger">Danger Action</button>
+            <button class="button button-warning">Warning Action</button>
+        </div>
+
+        <h3>Usage:</h3>
+        <p><code>.button .button-primary</code> - Main actions (Generate, Save, Create)</p>
+        <p><code>.button .button-secondary</code> - Supporting actions (Cancel, Settings)</p>
+        <p><code>.button .button-success</code> - Positive actions (Add, Import, Confirm)</p>
+        <p><code>.button .button-danger</code> - Destructive actions (Delete, Remove)</p>
+        <p><code>.button .button-warning</code> - Caution actions (Reset, Warning operations)</p>
+    </div>
+
+    <div class="showcase-section">
+        <h2>📏 Button Sizes</h2>
+        <p>Three size variants for different contexts.</p>
+        
+        <div class="button-row">
+            <button class="button button-primary button-sm">Small</button>
+            <button class="button button-primary">Regular</button>
+            <button class="button button-primary button-lg">Large</button>
+        </div>
+
+        <h3>Usage:</h3>
+        <p><code>.button-sm</code> - Compact spaces, utility actions</p>
+        <p><code>(default)</code> - Standard interface elements</p>
+        <p><code>.button-lg</code> - Important actions, modal buttons</p>
+    </div>
+
+    <div class="showcase-section">
+        <h2>🔘 Icon Buttons</h2>
+        <p>Square buttons for icon-only actions.</p>
+        
+        <div class="button-row">
+            <button class="button button-icon button-sm">×</button>
+            <button class="button button-icon">⚙️</button>
+            <button class="button button-icon button-lg">📤</button>
+        </div>
+
+        <h3>Usage:</h3>
+        <p><code>.button-icon</code> - Square aspect ratio for icons</p>
+        <p>Combine with size modifiers: <code>.button-icon.button-sm</code></p>
+    </div>
+
+    <div class="showcase-section">
+        <h2>👻 Ghost & Specialized Buttons</h2>
+        <p>Minimal styling for subtle actions.</p>
+        
+        <div class="button-row">
+            <button class="button button-ghost">Ghost Button</button>
+            <button class="close-btn">×</button>
+            <button class="info-button">i</button>
+            <button class="version-nav-btn">‹</button>
+            <button class="version-nav-btn">›</button>
+        </div>
+
+        <h3>Usage:</h3>
+        <p><code>.button-ghost</code> - Minimal visual weight</p>
+        <p><code>.close-btn</code> - Modal/dialog close buttons</p>
+        <p><code>.info-button</code> - Help/information triggers</p>
+        <p><code>.version-nav-btn</code> - Navigation controls</p>
+    </div>
+
+    <div class="showcase-section">
+        <h2>🔄 Button States</h2>
+        <p>Interactive states and loading indicators.</p>
+        
+        <div class="button-row">
+            <button class="button button-primary">Normal</button>
+            <button class="button button-primary" disabled>Disabled</button>
+            <button class="button button-primary loading">Loading</button>
+        </div>
+
+        <h3>States:</h3>
+        <p><code>:hover</code> - Elevated with subtle animation</p>
+        <p><code>:disabled</code> - Grayed out, not interactive</p>
+        <p><code>.loading</code> - Shows spinner, disables interaction</p>
+    </div>
+
+    <div class="showcase-section">
+        <h2>🎯 Semantic Actions with Icons</h2>
+        <p>Real-world examples from the Expert app.</p>
+        
+        <div class="demo-grid">
+            <button class="button button-success">➕ Add Child</button>
+            <button class="button button-danger">🗑️ Delete Node</button>
+            <button class="button button-primary">📤 Export</button>
+            <button class="button button-success">📥 Import</button>
+            <button class="button button-warning">💬 Chat</button>
+            <button class="button button-primary">🧪 Run Tests</button>
+            <button class="button button-secondary">📋 Copy to Clipboard</button>
+            <button class="button button-warning">🔄 Restore Defaults</button>
+        </div>
+    </div>
+
+    <div class="showcase-section">
+        <h2>🎨 Color System</h2>
+        <p>The design system uses these semantic colors:</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 1rem 0;">
+            <div>
+                <span class="color-preview" style="background: #475569;"></span>
+                <strong>Primary:</strong> #475569 (Professional Blue-Gray)
+            </div>
+            <div>
+                <span class="color-preview" style="background: #059669;"></span>
+                <strong>Success:</strong> #059669 (Forest Green)
+            </div>
+            <div>
+                <span class="color-preview" style="background: #dc2626;"></span>
+                <strong>Danger:</strong> #dc2626 (Muted Red)
+            </div>
+            <div>
+                <span class="color-preview" style="background: #d97706;"></span>
+                <strong>Warning:</strong> #d97706 (Professional Amber)
+            </div>
+            <div>
+                <span class="color-preview" style="background: #64748b;"></span>
+                <strong>Secondary:</strong> #64748b (Slate)
+            </div>
+        </div>
+    </div>
+
+    <div class="showcase-section">
+        <h2>💡 Usage Guidelines</h2>
+        
+        <h3>✅ Do:</h3>
+        <ul>
+            <li>Use semantic variants that match the action's intent</li>
+            <li>Add meaningful icons to improve recognition</li>
+            <li>Use consistent sizing within the same context</li>
+            <li>Leverage the loading state for async operations</li>
+            <li>Group related actions logically</li>
+        </ul>
+
+        <h3>❌ Don't:</h3>
+        <ul>
+            <li>Mix multiple primary buttons in the same group</li>
+            <li>Use danger styling for non-destructive actions</li>
+            <li>Override button colors with inline styles</li>
+            <li>Use icons without clear meaning</li>
+            <li>Ignore disabled states for unavailable actions</li>
+        </ul>
+    </div>
+
+    <script>
+        // Demo: Toggle loading state
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('loading')) {
+                e.target.classList.remove('loading');
+                e.target.textContent = 'Click to Load';
+            } else if (e.target.textContent === 'Click to Load') {
+                e.target.classList.add('loading');
+            }
+        });
+
+        // Add interactive demo button
+        const demoButton = document.createElement('button');
+        demoButton.className = 'button button-primary';
+        demoButton.textContent = 'Click to Load';
+        demoButton.style.marginTop = '1rem';
+        document.querySelector('.showcase-section:last-child').appendChild(demoButton);
+    </script>
+</body>
+</html> 

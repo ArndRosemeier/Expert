@@ -154,11 +154,11 @@ export const MODAL_STYLES = {
         transition: background-color 0.2s;
     `,
     primaryButton: `
-        background-color: #3b82f6;
+        background-color: var(--primary-500);
         color: white;
     `,
     secondaryButton: `
-        background-color: #6b7280;
+        background-color: var(--secondary-600);
         color: white;
     `,
     outlineButton: `

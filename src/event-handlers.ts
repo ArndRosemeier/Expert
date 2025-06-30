@@ -277,20 +277,20 @@ export async function initialize() {
             const testSelectionHtml = `
                 <h2>Select Test Suite</h2>
                 <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
-                    <button id="runCoreTestsBtn" class="button button-primary" style="padding: 1rem; font-size: 1rem;">
-                        Core Functionality Tests
+                    <button id="runCoreTestsBtn" class="button button-primary button-lg">
+                        🧪 Core Functionality Tests
                         <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
                             Document nodes, project management, templates, tree operations
                         </div>
                     </button>
-                    <button id="runStorageTestsBtn" class="button button-primary" style="padding: 1rem; font-size: 1rem;">
-                        Storage System Tests
+                    <button id="runStorageTestsBtn" class="button button-primary button-lg">
+                        💾 Storage System Tests
                         <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
                             IndexedDB, storage abstraction, service layer storage
                         </div>
                     </button>
-                    <button id="runAllTestsBtn" class="button button-secondary" style="padding: 1rem; font-size: 1rem;">
-                        Run All Tests
+                    <button id="runAllTestsBtn" class="button button-secondary button-lg">
+                        🚀 Run All Tests
                         <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
                             Complete test suite (may take longer)
                         </div>

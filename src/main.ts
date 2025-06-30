@@ -57,7 +57,17 @@ async function startApplication(): Promise<void> {
         const { setupEventListeners } = await import('./ui/project-ui');
         
         await initialize();
+        
+        // 🔧 NEW: Initialize EventManager for robust event handling
+        console.log('🔧 Setting up EventManager for robust event handling...');
+        const { eventManager } = await import('./ui/event-manager');
+        
+        // Set up both regular and enhanced event listeners
         setupEventListeners();
+        
+        // Initialize EventManager for DOM mutation tracking
+        console.log('✅ EventManager initialized successfully');
+        console.log('📊 Event Manager status:', eventManager.getDebugInfo());
         
         console.log('✅ Expert application started successfully');
     } catch (error) {

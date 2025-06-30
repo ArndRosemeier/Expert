@@ -70,7 +70,7 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
         <div class="form-group" style="margin-bottom: 1.5rem;">
             <label for="import-file-input">Select Export File</label>
             <input type="file" id="import-file-input" accept=".json" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;">
-            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                            <small style="color: var(--secondary-500); margin-top: 0.25rem; display: block;">
                 Choose a JSON file exported from Expert (must be "For reimport" format)
             </small>
         </div>
@@ -82,7 +82,7 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
                 <div><strong>Content Depth:</strong> <span id="preview-depth"></span> levels</div>
             </div>
         </div>
-        <div class="button-group" style="display: flex; justify-content: flex-end; gap: 1rem;">
+        <div class="button-row" style="display: flex; justify-content: flex-end; gap: 1rem;">
             <button id="cancel-import-project-btn" class="button button-secondary">Cancel</button>
             <button id="confirm-import-project-btn" class="button button-primary" disabled>Import Project</button>
         </div>
@@ -285,7 +285,7 @@ function renderNewProjectModal(onCreate: (title: string, template: ProjectTempla
                 ${optionsHtml}
             </select>
         </div>
-        <div class="button-group" style="display: flex; justify-content: flex-end; gap: 1rem;">
+        <div class="button-row" style="display: flex; justify-content: flex-end; gap: 1rem;">
             <button id="cancel-create-project-btn" class="button button-secondary">Cancel</button>
             <button id="confirm-create-project-btn" class="button button-primary">Create</button>
         </div>
@@ -378,15 +378,15 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         }
                         .button-row { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
                         .button { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; }
-                        .button-primary { background-color: #007bff; color: white; }
-                        .button-secondary { background-color: #6c757d; color: white; }
+                        .button-primary { background-color: var(--primary-500); color: white; }
+                        .button-secondary { background-color: var(--secondary-600); color: white; }
                         .button:disabled { opacity: 0.6; cursor: not-allowed; }
                     </style>
                     
                     <div class="extract-section">
                         <label for="extract-prompt">What to extract:</label>
                         <input type="text" id="extract-prompt" placeholder="e.g., characters, places, themes, plot points, conflicts..." />
-                        <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                        <small style="color: var(--secondary-500); font-size: 0.9rem; margin-top: 0.25rem; display: block;">
                             Describe what specific information you want to extract from the content.
                         </small>
                     </div>
@@ -401,13 +401,13 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                             <option value="4">Include 4 levels deep</option>
                             <option value="5">Include 5 levels deep</option>
                         </select>
-                        <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                        <small style="color: var(--secondary-500); font-size: 0.9rem; margin-top: 0.25rem; display: block;">
                             Choose how deep in the hierarchy to analyze content.
                         </small>
                     </div>
                     
                     <div class="extract-section">
-                        <button id="preview-btn" class="button button-secondary" style="width: auto;">Preview Content Scope</button>
+                        <button id="preview-btn" class="button button-secondary">👁️ Preview Content Scope</button>
                         <div id="preview-container" class="preview-section" style="display: none;">
                             <h4 style="margin: 0 0 0.5rem 0;">Content Analysis Preview:</h4>
                             <div id="preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
@@ -418,7 +418,7 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         <div style="text-align: center; padding: 2rem;">
                             <div style="font-size: 2rem; margin-bottom: 1rem;">⏳</div>
                             <div style="font-weight: bold; margin-bottom: 0.5rem;">Extracting Context...</div>
-                            <div style="color: #6c757d; font-size: 0.9rem;">This may take a moment depending on content size</div>
+                            <div style="color: var(--secondary-500); font-size: 0.9rem;">This may take a moment depending on content size</div>
                         </div>
                     </div>
                     
@@ -426,8 +426,8 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         <label for="extract-result">Extracted Information:</label>
                         <textarea id="extract-result" readonly></textarea>
                         <div style="margin-top: 0.5rem;">
-                            <button id="copy-result-btn" class="button button-secondary">Copy to Clipboard</button>
-                            <button id="add-to-context-btn" class="button button-primary">Add to Node Context</button>
+                                                <button id="copy-result-btn" class="button button-secondary">📋 Copy to Clipboard</button>
+                    <button id="add-to-context-btn" class="button button-primary">➕ Add to Node Context</button>
                         </div>
                     </div>
                 `,
@@ -710,7 +710,7 @@ function renderAILogModal() {
             .log-purpose {
                 width: 120px;
                 font-weight: 500;
-                color: #3b82f6;
+                color: var(--primary-500);
             }
             .log-model {
                 width: 150px;
@@ -790,7 +790,7 @@ function renderAILogModal() {
                 margin: 0;
             }
             .log-overlay-close {
-                background: #ef4444;
+                background: var(--danger-500);
                 color: white;
                 border: none;
                 border-radius: 50%;
@@ -804,7 +804,7 @@ function renderAILogModal() {
                 transition: background-color 0.2s;
             }
             .log-overlay-close:hover {
-                background-color: #dc2626;
+                background-color: var(--danger-600);
             }
             .log-overlay-body {
                 flex: 1;
@@ -838,7 +838,7 @@ function renderAILogModal() {
                 color: #6b7280;
             }
             .error-response {
-                color: #ef4444;
+                color: var(--danger-500);
                 font-style: italic;
             }
             .btn {
@@ -851,18 +851,18 @@ function renderAILogModal() {
                 transition: background-color 0.2s;
             }
             .btn-danger {
-                background-color: #ef4444;
+                background-color: var(--danger-500);
                 color: white;
             }
             .btn-danger:hover {
-                background-color: #dc2626;
+                background-color: var(--danger-600);
             }
             .btn-secondary {
-                background-color: #6b7280;
+                background-color: var(--secondary-600);
                 color: white;
             }
             .btn-secondary:hover {
-                background-color: #4b5563;
+                background-color: var(--secondary-700);
             }
         </style>
         <div class="ai-log-modal">
@@ -1095,8 +1095,8 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                     margin-top: 1rem;
                 }
                 .button { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; }
-                .button-primary { background-color: #007bff; color: white; }
-                .button-secondary { background-color: #6c757d; color: white; }
+                .button-primary { background-color: var(--primary-500); color: white; }
+                .button-secondary { background-color: var(--secondary-600); color: white; }
                 .button:disabled { opacity: 0.6; cursor: not-allowed; }
             </style>
             <div class="modal-header" style="margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem;">
@@ -1113,13 +1113,13 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                     <option value="4">Include 4 levels deep</option>
                     <option value="5">Include 5 levels deep</option>
                 </select>
-                <small style="color: #6c757d; font-size: 0.9rem; margin-top: 0.25rem; display: block;">
+                <small style="color: var(--secondary-500); font-size: 0.9rem; margin-top: 0.25rem; display: block;">
                     Choose how deep in the hierarchy to include in the chat context.
                 </small>
             </div>
             
             <div class="chat-section">
-                <button id="preview-content-btn" class="button button-secondary" style="width: auto;">Preview Content Size</button>
+                                    <button id="preview-content-btn" class="button button-secondary">📊 Preview Content Size</button>
                 <div id="content-preview-container" class="preview-section" style="display: none;">
                     <h4 style="margin: 0 0 0.5rem 0;">Content Size Analysis:</h4>
                     <div id="content-preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>

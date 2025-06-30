@@ -34,7 +34,7 @@ export function openTemplateEditor() {
             <div class="template-controls">
                 <select id="template-select"></select>
                 <button id="delete-template-btn" class="button button-danger">Delete</button>
-                <button id="restore-defaults-btn" class="button button-secondary" style="background-color: #fd7e14; color: white; border-color: #fd7e14;">Restore Defaults</button>
+                                    <button id="restore-defaults-btn" class="button button-warning">🔄 Restore Defaults</button>
             </div>
             <div class="template-controls">
                 <input type="text" id="template-name-input" placeholder="Enter template name..."/>
@@ -43,7 +43,7 @@ export function openTemplateEditor() {
             <div id="hierarchy-editor-container">
                 <h3>Hierarchy Levels</h3>
                 <div id="hierarchy-editor" class="hierarchy-editor"></div>
-                <button id="add-layer-btn" class="button button-secondary" style="margin-top: 0.5rem;">+ Add Level</button>
+                                    <button id="add-layer-btn" class="button button-success" style="margin-top: 0.5rem;">➕ Add Level</button>
             </div>
         </div>
     `;
@@ -90,7 +90,7 @@ export function openTemplateEditor() {
     }
 }
 
-// Setup all event listeners for the modal
+// Setup all event listeners for the modal - ENHANCED with EventManager
 function setupTemplateEditorListeners() {
     isDirty = false;
     
@@ -98,30 +98,66 @@ function setupTemplateEditorListeners() {
     populateTemplateSelector();
     renderCurrentTemplateView();
 
-    // Attach listeners
-    getElementById('template-select').addEventListener('change', handleTemplateSelect);
-    getElementById('save-as-new-btn').addEventListener('click', handleSaveAsNew);
-    getElementById('delete-template-btn').addEventListener('click', handleDelete);
-    getElementById('restore-defaults-btn').addEventListener('click', handleRestoreDefaults);
-    getElementById('add-layer-btn').addEventListener('click', handleAddLayer);
+    // 🔧 NEW: Use EventManager for robust event delegation to prevent listener loss
+    void import('./event-manager').then(({ eventManager }) => {
+        const container = getElementById('template-editor-container');
+        if (!container) {
+            console.error('❌ Template editor container not found');
+            return;
+        }
 
-    // Listener for removing layers (delegated)
-    getElementById('hierarchy-editor').addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).classList.contains('remove-layer-btn')) {
+        // Add delegated event listeners that survive DOM changes
+        eventManager.addDelegatedEvent(container, 'change', '#template-select', handleTemplateSelect);
+        eventManager.addDelegatedEvent(container, 'click', '#save-as-new-btn', handleSaveAsNew);
+        eventManager.addDelegatedEvent(container, 'click', '#delete-template-btn', handleDelete);
+        eventManager.addDelegatedEvent(container, 'click', '#restore-defaults-btn', handleRestoreDefaults);
+        eventManager.addDelegatedEvent(container, 'click', '#add-layer-btn', handleAddLayer);
+
+        // Delegate remove layer button clicks
+        eventManager.addDelegatedEvent(container, 'click', '.remove-layer-btn', (e) => {
             handleRemoveLayer(e.target as HTMLElement);
-        }
-    });
+        });
 
-    // Listener for tracking changes - only set dirty if not currently populating UI
-    // Exclude the template selector since changing templates is not a "dirty" operation
-    getElementById('template-editor-container').addEventListener('input', (e) => { 
-        const target = e.target as HTMLElement;
-        if (target.id === 'template-select') {
-            return; // Don't mark as dirty when changing template selection
-        }
-        if (!isPopulating) {
-            isDirty = true;
-        }
+        // Delegate input tracking for dirty state
+        eventManager.addDelegatedEvent(container, 'input', 'input, textarea, select', (e) => { 
+            const target = e.target as HTMLElement;
+            if (target.id === 'template-select') {
+                return; // Don't mark as dirty when changing template selection
+            }
+            if (!isPopulating) {
+                isDirty = true;
+            }
+        });
+
+        console.log('✅ Template editor listeners set up with EventManager');
+        console.log('📊 EventManager status:', eventManager.getDebugInfo());
+    }).catch((error) => {
+        console.error('❌ Failed to setup enhanced template editor listeners, falling back to direct listeners:', error);
+        
+        // Fallback to original direct listeners if EventManager fails
+        getElementById('template-select').addEventListener('change', handleTemplateSelect);
+        getElementById('save-as-new-btn').addEventListener('click', handleSaveAsNew);
+        getElementById('delete-template-btn').addEventListener('click', handleDelete);
+        getElementById('restore-defaults-btn').addEventListener('click', handleRestoreDefaults);
+        getElementById('add-layer-btn').addEventListener('click', handleAddLayer);
+
+        // Listener for removing layers (delegated)
+        getElementById('hierarchy-editor').addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).classList.contains('remove-layer-btn')) {
+                handleRemoveLayer(e.target as HTMLElement);
+            }
+        });
+
+        // Listener for tracking changes
+        getElementById('template-editor-container').addEventListener('input', (e) => { 
+            const target = e.target as HTMLElement;
+            if (target.id === 'template-select') {
+                return;
+            }
+            if (!isPopulating) {
+                isDirty = true;
+            }
+        });
     });
 }
 
@@ -266,7 +302,7 @@ function handleRemoveLayer(button: HTMLElement) {
     const editor = getElementById('hierarchy-editor');
     Array.from(editor.children).forEach((layer, index) => {
         const input = layer.querySelector('input');
-        if (input) input.dataset.index = String(index);
+        if (input) input.dataset['index'] = String(index);
     });
     isDirty = true;
 }
@@ -350,7 +386,7 @@ function createLayerElement(level: string, index: number): HTMLElement {
     div.className = 'hierarchy-layer';
     div.innerHTML = `
         <input type="text" value="${level}" data-index="${index}" placeholder="e.g., Chapter" />
-        <button class="remove-layer-btn button button-danger">-</button>
+                                <button class="remove-layer-btn">-</button>
     `;
     return div;
 }

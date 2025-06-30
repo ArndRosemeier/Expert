@@ -147,14 +147,26 @@ export class GenerationCoordinator {
         if (generateBtn) {
             generateBtn.disabled = true;
             if (operation.type === 'single-content') {
-                generateBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating...';
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-btn', 
+                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating...',
+                        { disabled: true, className: 'button button-primary' }
+                    );
+                }).catch(console.error);
             }
         }
         
         if (generateAllBtn) {
             generateAllBtn.disabled = true;
             if (operation.type === 'bulk-children') {
-                generateAllBtn.innerHTML = '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating Children...';
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-all-btn', 
+                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating Children...',
+                        { disabled: true, className: 'button' }
+                    );
+                }).catch(console.error);
             }
             } else if (operation.type === 'bulk-children') {
                 console.warn('⚠️ Generate All Children button not found during bulk generation start!');
@@ -202,12 +214,24 @@ export class GenerationCoordinator {
             
             if (generateBtn) {
                 generateBtn.disabled = false;
-                    generateBtn.innerHTML = BUTTON_LABELS.GENERATE;
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-btn', 
+                        BUTTON_LABELS.GENERATE,
+                        { disabled: false, className: 'button button-primary' }
+                    );
+                }).catch(console.error);
             }
             
             if (generateAllBtn) {
                 generateAllBtn.disabled = false;
-                generateAllBtn.innerHTML = BUTTON_LABELS.GENERATE_ALL;
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-all-btn', 
+                        BUTTON_LABELS.GENERATE_ALL,
+                        { disabled: false, className: 'button' }
+                    );
+                }).catch(console.error);
                 } else {
                     console.warn('⚠️ Generate All Children button not found during cleanup!');
             }
