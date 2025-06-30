@@ -353,20 +353,18 @@ export class ModelSelector {
       transition: background 0.2s;
       flex: 1;
     `;
-    if (this.testButton) {
-      this.testButton.addEventListener('click', () => void this.testApiKey());
-      this.testButton.addEventListener('mouseenter', () => {
-        if (!this.testButton!.disabled) {
-          this.testButton.style.background = '#059669';
-        }
-      });
-      this.testButton.addEventListener('mouseleave', () => {
-        if (!this.testButton!.disabled) {
-          this.testButton.style.background = '#10b981';
-        }
-      });
-      buttonRow.appendChild(this.testButton);
-    }
+    this.testButton.addEventListener('click', () => void this.testApiKey());
+    this.testButton.addEventListener('mouseenter', () => {
+      if (!this.testButton!.disabled) {
+        this.testButton.style.background = '#059669';
+      }
+    });
+    this.testButton.addEventListener('mouseleave', () => {
+      if (!this.testButton!.disabled) {
+        this.testButton.style.background = '#10b981';
+      }
+    });
+    buttonRow.appendChild(this.testButton);
 
     // Fetch Models button
     this.fetchButton = document.createElement('button');
@@ -384,22 +382,23 @@ export class ModelSelector {
       transition: background 0.2s;
       flex: 1;
     `;
-    if (this.fetchButton) {
-      this.fetchButton.addEventListener('click', () => void this.fetchModels());
-      this.fetchButton.addEventListener('mouseenter', () => {
-        if (!this.fetchButton!.disabled) {
-          this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
-        }
-      });
-      this.fetchButton.addEventListener('mouseleave', () => {
-        if (!this.fetchButton!.disabled) {
-          this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-        }
-      });
-      buttonRow.appendChild(this.fetchButton);
-    }
+    this.fetchButton.addEventListener('click', () => void this.fetchModels());
+    this.fetchButton.addEventListener('mouseenter', () => {
+      if (!this.fetchButton!.disabled) {
+        this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
+      }
+    });
+    this.fetchButton.addEventListener('mouseleave', () => {
+      if (!this.fetchButton!.disabled) {
+        this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+      }
+    });
+    buttonRow.appendChild(this.fetchButton);
 
     inputDiv.appendChild(buttonRow);
+
+    // Add the input section to the container
+    container.appendChild(inputDiv);
 
     // Setup centralized event handling for API key input
     this.setupApiKeyInputEvents();
@@ -611,14 +610,36 @@ export class ModelSelector {
     this.updateButtonStates();
     
     try {
-      const client = new OpenRouterClient(this.apiKey);
-      const models = await client.fetchModels();
+      // Use the proper OpenRouter API key validation endpoint
+      const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      if (models && models.length > 0) {
+      if (response.ok) {
+        // Key is valid, optionally get key details
+        const keyData = await response.json();
         this.error = null;
-        alert(`✅ API Key is valid! Found ${models.length} available models. You can now fetch models and configure the service.`);
+        
+        // Show success message with key details if available
+        let message = '✅ API Key is valid!';
+        if (keyData?.data?.label) {
+          message += ` (${keyData.data.label})`;
+        }
+        if (keyData?.data?.limit && keyData.data.limit > 0) {
+          message += ` Credit limit: $${keyData.data.limit}`;
+        }
+        
+        alert(message);
       } else {
-        alert('⚠️ API Key appears to work, but no models were returned. You may want to check your account status.');
+        // Key is invalid
+        const errorData = await response.json().catch(() => ({ error: { message: 'Invalid API key' } }));
+        const errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        this.error = `API Key Test Failed: ${errorMessage}`;
+        alert(`❌ API Key Test Failed: ${errorMessage}`);
       }
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';

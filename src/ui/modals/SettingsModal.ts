@@ -30,7 +30,7 @@ export interface SettingsModalEvents {
 export class SettingsModal extends BaseModal {
     private settingsManager: SettingsManager;
     private modelSelector: ModelSelector;
-    private refreshGlobalProfileSelector?: () => void;
+    private refreshGlobalProfileSelector: (() => void) | undefined;
     
     // Services
     private promptService: PromptManagementService;
@@ -108,7 +108,9 @@ export class SettingsModal extends BaseModal {
         container.appendChild(footer);
 
         // Initialize components after DOM is ready
-        setTimeout(() => this.initializeComponents(), 0);
+        setTimeout(async () => {
+            await this.initializeComponents();
+        }, 0);
 
         return container;
     }
@@ -480,7 +482,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Initializes the components after DOM is ready
      */
-    private initializeComponents(): void {
+    private async initializeComponents(): Promise<void> {
         // Initialize profile selector
         const profileContainer = this.element?.querySelector('.profile-container') as HTMLElement;
         if (profileContainer) {
@@ -511,6 +513,8 @@ export class SettingsModal extends BaseModal {
         // Initialize model selector
         const modelsContainer = this.element?.querySelector('#settings-models-container') as HTMLElement;
         if (modelsContainer) {
+            // Wait for ModelSelector initialization before rendering
+            await this.modelSelector.waitForInitialization();
             this.modelSelector.render(modelsContainer);
             modelsContainer.addEventListener('change', () => this.autoSave());
             modelsContainer.addEventListener('input', () => this.autoSave());
