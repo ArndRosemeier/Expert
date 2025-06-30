@@ -180,7 +180,8 @@ export class GenerationService {
             prompt: filledPrompt,
             criteria: this.filterCriteriaForNodeType(profile.criteria, node.isLeaf),
             maxIterations: profile.maxIterations,
-            response: '' // Initial response is empty
+            response: '', // Initial response is empty
+            isLeafNode: node.isLeaf
         };
 
         const contextNodeId = isChildGeneration ? node.parentId : nodeId;
@@ -333,8 +334,9 @@ export class GenerationService {
                 // Handle aborted generation
                 node.endGenerationSession(false, currentIterationContent || '');
                 if (currentIterationContent) {
-                    const creatorModel = profile.selectedModels?.['creator'];
-                    node.setContentFromGeneration(currentIterationContent, creatorModel);
+                    const modelKey = node.isLeaf ? 'prose' : 'creator';
+                    const modelName = profile.selectedModels?.[modelKey];
+                    node.setContentFromGeneration(currentIterationContent, modelName);
                 }
                 
                 // Cleanup state before emitting events
@@ -349,8 +351,9 @@ export class GenerationService {
             } else {
                 // Handle successful completion
                 node.endGenerationSession(result.success, result.finalResponse);
-                const creatorModel = profile.selectedModels?.['creator'];
-                node.setContentFromGeneration(result.finalResponse, creatorModel);
+                const modelKey = node.isLeaf ? 'prose' : 'creator';
+                const modelName = profile.selectedModels?.[modelKey];
+                node.setContentFromGeneration(result.finalResponse, modelName);
                 node.generationHistory = result.history;
                 
                 // Context is now simply inherited from parent (no synthesis needed)

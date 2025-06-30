@@ -9,6 +9,7 @@ export interface LoopInput {
     maxIterations: number;
     initialContent?: string;
     response: string;
+    isLeafNode?: boolean; // Determines whether to use 'prose' or 'creator' model
 }
 
 export interface Rating {
@@ -152,6 +153,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
 
         try {
+            // Determine which model to use based on node type
+            const generationModel = input.isLeafNode ? 'prose' : 'creator';
+            
             // Determine the initial prompt and response
             let initialPrompt: string;
             if (input.initialContent) {
@@ -174,10 +178,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     throw new Error('Generation aborted by user');
                 }
 
-                // Emit progress BEFORE starting the API call to show "Creator working..." state
+                // Emit progress BEFORE starting the API call to show model working state
+                const modelLabel = input.isLeafNode ? 'Prose' : 'Creator';
                 this.emit('progress', { 
                     type: 'creator', 
-                    payload: { prompt: initialPrompt, response: 'Creator is working...' }, 
+                    payload: { prompt: initialPrompt, response: `${modelLabel} is working...` }, 
                     iteration: 0, 
                     maxIterations: maxIterations, 
                     step: 1, 
@@ -185,13 +190,13 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 });
 
                 try {
-                    currentResponse = await this.client.chat('creator', initialPrompt, undefined, this.abortController.signal);
+                    currentResponse = await this.client.chat(generationModel, initialPrompt, undefined, this.abortController.signal);
                 } catch (e: any) {
                     if (e.message === 'Request was aborted' || this.stopRequested) {
                         aborted = true;
                         throw new Error('Generation aborted by user');
                     }
-                    throw new Error("The AI Creator failed to respond. Please check your API key and network connection.");
+                    throw new Error(`The AI ${modelLabel} failed to respond. Please check your API key and network connection.`);
                 }
                 const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
@@ -293,13 +298,14 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         break;
                     }
 
-                    // 3. Call creator again to get the improved response
+                    // 3. Call the appropriate model again to get the improved response
                     const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
                     
-                    // Emit progress BEFORE starting the API call to show "Creator working..." state
+                    // Emit progress BEFORE starting the API call to show model working state
+                    const modelLabel = input.isLeafNode ? 'Prose' : 'Creator';
                     this.emit('progress', { 
                         type: 'creator', 
-                        payload: { prompt: creatorPrompt, response: 'Creator is working on revision...' }, 
+                        payload: { prompt: creatorPrompt, response: `${modelLabel} is working on revision...` }, 
                         iteration: i, 
                         maxIterations, 
                         step: 1, 
@@ -307,13 +313,13 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     });
                     
                     try {
-                        currentResponse = await this.client.chat('creator', creatorPrompt, undefined, this.abortController.signal);
+                        currentResponse = await this.client.chat(generationModel, creatorPrompt, undefined, this.abortController.signal);
                     } catch (e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
                             aborted = true;
                             break;
                         }
-                        throw new Error("The AI Creator failed to respond during revision. Please check your API key and network connection.");
+                        throw new Error(`The AI ${modelLabel} failed to respond during revision. Please check your API key and network connection.`);
                     }
                     const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
                     history.push({ iteration: i, type: 'creator', payload: creatorPayload });
