@@ -1256,7 +1256,7 @@ async function openNodeChatInterface(projectManager: ProjectManager, systemPromp
         }
 
         // Create OpenRouter client with the configured models
-        const openRouterClient = new OpenRouterClient(apiKey, modelConfigs);
+        const openRouterClient = OpenRouterClient.getInstance();
         openRouterClient.setSettingsManager(settingsManager);
         
         // Create modal overlay

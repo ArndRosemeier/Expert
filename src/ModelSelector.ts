@@ -658,7 +658,7 @@ export class ModelSelector {
     this.updateButtonStates();
     
     try {
-      const client = new OpenRouterClient(this.apiKey);
+      const client = OpenRouterClient.getInstance();
       this.models = await client.fetchModels();
       
       // Ensure selectedModels only contains ids present in models

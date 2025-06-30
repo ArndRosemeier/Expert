@@ -46,7 +46,7 @@ function recreateAndReconfigureServices() {
         console.error("ModelSelector not available. Cannot configure services.");
         return;
     }
-    const client = new OpenRouterClient(modelSelector.getApiKey(), modelSelector.getSelectedModels());
+    const client = OpenRouterClient.getInstance();
     
     // Connect the OpenRouterClient to the SettingsManager for AI logging
     if (settingsManager) {

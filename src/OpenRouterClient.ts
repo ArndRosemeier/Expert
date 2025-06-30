@@ -34,6 +34,8 @@ export interface OpenRouterModelsResponse {
 
 import { AILogService } from './AILogService';
 import { SettingsManager } from './SettingsManager';
+import { StorageService } from './StorageService';
+import * as state from './state';
 
 export interface StreamingCallbacks {
   onStart?: () => void;
@@ -51,42 +53,87 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + '...' + key.slice(-4);
 }
 
+/**
+ * Singleton OpenRouterClient with operation-scoped abort controllers and dynamic key/model loading.
+ * This ensures consistent API key usage across the entire application and prevents key synchronization issues.
+ */
 export class OpenRouterClient {
-  private apiKey: string;
+  private static instance: OpenRouterClient | null = null;
+  
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
-  private modelPurposeMap: Record<string, string> = {};
   private aiLogService: AILogService;
   private settingsManager: SettingsManager | null = null;
   private forceStreamingMode: boolean = true; // Use streaming for all requests by default
+  
+  // Operation-scoped abort controllers to handle concurrent operations safely
+  private activeOperations = new Map<string, AbortController>();
 
-  private currentAbortController: AbortController | null = null;
-
-  constructor(apiKey: string, modelPurposeMap?: Record<string, string>) {
-    this.apiKey = apiKey;
-    if (modelPurposeMap) {
-      this.modelPurposeMap = modelPurposeMap;
-    }
+  private constructor() {
     this.aiLogService = AILogService.getInstance();
+  }
+
+  /**
+   * Get the singleton instance of OpenRouterClient
+   */
+  public static getInstance(): OpenRouterClient {
+    if (!OpenRouterClient.instance) {
+      OpenRouterClient.instance = new OpenRouterClient();
+    }
+    return OpenRouterClient.instance;
+  }
+
+  /**
+   * Dynamically fetch the API key from storage for each request.
+   * This ensures we always use the latest key, even if it was updated in settings.
+   */
+  private async getApiKeyFromStorage(): Promise<string> {
+    try {
+      const storage = await StorageService.getInstance();
+      const key = await storage.get<string>('openrouter_api_key');
+      return key || '';
+    } catch (error) {
+      console.error('Failed to load API key from storage:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Dynamically fetch the model for a purpose from the current ModelSelector.
+   * This ensures we always use the latest model configuration.
+   */
+  private async getModelForPurpose(purpose: string): Promise<string> {
+    try {
+      const modelSelector = state.getModelSelector();
+      if (!modelSelector) {
+        throw new Error('ModelSelector not available');
+      }
+      
+      const models = modelSelector.getSelectedModels();
+      const model = models[purpose];
+      
+      if (!model) {
+        throw new Error(`No model configured for purpose: ${purpose}`);
+      }
+      
+      return model;
+    } catch (error) {
+      console.error(`Failed to get model for purpose ${purpose}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the current settings manager instance
+   */
+  private getSettingsManager(): SettingsManager | null {
+    if (!this.settingsManager) {
+      this.settingsManager = state.getSettingsManager();
+    }
+    return this.settingsManager;
   }
 
   public setSettingsManager(settingsManager: SettingsManager): void {
     this.settingsManager = settingsManager;
-  }
-
-  setModelPurpose(purpose: string, model: string) {
-    this.modelPurposeMap[purpose] = model;
-  }
-
-  getModelForPurpose(purpose: string): string | undefined {
-    return this.modelPurposeMap[purpose];
-  }
-
-  public setSelectedModels(models: Record<string, string>): void {
-    this.modelPurposeMap = models;
-  }
-
-  public getApiKey(): string {
-    return this.apiKey;
   }
 
   /**
@@ -106,63 +153,126 @@ export class OpenRouterClient {
   }
 
   /**
-   * Cancel any ongoing API request
+   * Generate a unique operation ID
    */
-  public abort(): void {
-    if (this.currentAbortController) {
-      this.currentAbortController.abort();
-      this.currentAbortController = null;
+  private generateOperationId(purpose: string): string {
+    return `${purpose}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Abort a specific operation by ID
+   */
+  public abortOperation(operationId: string): void {
+    const controller = this.activeOperations.get(operationId);
+    if (controller) {
+      console.log(`🛑 Aborting operation: ${operationId}`);
+      controller.abort();
+      this.activeOperations.delete(operationId);
     }
   }
 
   /**
-   * Check if there's an ongoing request that can be aborted
+   * Abort all active operations
+   */
+  public abortAllOperations(): void {
+    console.log(`🛑 Aborting all operations (${this.activeOperations.size} active)`);
+    for (const [operationId, controller] of this.activeOperations.entries()) {
+      controller.abort();
+    }
+    this.activeOperations.clear();
+  }
+
+  /**
+   * Get list of active operation IDs
+   */
+  public getActiveOperationIds(): string[] {
+    return Array.from(this.activeOperations.keys());
+  }
+
+  /**
+   * Check if there are any active operations
+   */
+  public hasActiveOperations(): boolean {
+    return this.activeOperations.size > 0;
+  }
+
+  /**
+   * Legacy method for backward compatibility - aborts all operations
+   */
+  public abort(): void {
+    this.abortAllOperations();
+  }
+
+  /**
+   * Legacy method for backward compatibility - checks if any operations are active
    */
   public canAbort(): boolean {
-    return this.currentAbortController !== null;
+    return this.hasActiveOperations();
+  }
+
+  /**
+   * Legacy method for backward compatibility - returns empty string (key is now dynamic)
+   */
+  public getApiKey(): string {
+    console.warn('getApiKey() is deprecated in singleton mode - key is loaded dynamically');
+    return '';
   }
 
   /**
    * Send a chat message for a given purpose. Always uses role 'user'.
    * Returns just the model's answer string.
    */
-  async chat(purpose: string, message: string, abortSignal?: AbortSignal): Promise<string> {
-    const model = this.getModelForPurpose(purpose);
+  async chat(purpose: string, message: string, operationId?: string, externalAbortSignal?: AbortSignal): Promise<string> {
+    const opId = operationId || this.generateOperationId(purpose);
+    const abortController = new AbortController();
+    this.activeOperations.set(opId, abortController);
 
-    if (!model) {
-      throw new Error(`No model configured for purpose: ${purpose}`);
+    // Listen to external abort signal if provided
+    if (externalAbortSignal) {
+      externalAbortSignal.addEventListener('abort', () => {
+        this.abortOperation(opId);
+      });
     }
 
-    console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}`);
-    
-    // Use streaming by default (more reliable across different systems)
-    if (this.forceStreamingMode) {
-      return await this.chatWithStreamingFallback(purpose, message, abortSignal);
-    }
-
-    const startTime = Date.now();
-    const request: OpenRouterRequest = {
-      model,
-      messages: [
-        { role: 'user', content: message }
-      ],
-    };
-    
     try {
-      console.log(`📤 Sending request to OpenRouter:`, { model, messageLength: message.length });
-      const response = await this.sendMessage(request, abortSignal);
+      const apiKey = await this.getApiKeyFromStorage();
+      if (!apiKey) {
+        throw new Error('OpenRouter API key not configured. Please set it in the settings.');
+      }
+
+      const model = await this.getModelForPurpose(purpose);
+      
+      console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
+      
+      // Use streaming by default (more reliable across different systems)
+      if (this.forceStreamingMode) {
+        return await this.chatWithStreamingFallback(purpose, message, opId, abortController.signal);
+      }
+
+      const startTime = Date.now();
+      const request: OpenRouterRequest = {
+        model,
+        messages: [
+          { role: 'user', content: message }
+        ],
+      };
+      
+      console.log(`📤 Sending request to OpenRouter:`, { model, messageLength: message.length, operationId: opId });
+      const response = await this.sendMessage(request, apiKey, abortController.signal);
       console.log(`📨 Received response from OpenRouter:`, { 
         hasChoices: !!response.choices, 
         choicesLength: response.choices?.length || 0,
-        hasContent: !!response.choices?.[0]?.message?.content
+        hasContent: !!response.choices?.[0]?.message?.content,
+        operationId: opId
       });
       
       const answer = response.choices?.[0]?.message?.content ?? '';
       const duration = Date.now() - startTime;
-      console.log(`✅ AI generation completed successfully in ${duration}ms, response length: ${answer.length}`);
+      console.log(`✅ AI generation completed successfully in ${duration}ms, response length: ${answer.length}, operation: ${opId}`);
 
       // Log the interaction if logging is enabled
-      if (this.settingsManager?.isAILoggingEnabled()) {
+      const settingsManager = this.getSettingsManager();
+      if (settingsManager?.isAILoggingEnabled()) {
         try {
           await this.aiLogService.addLogEntry({
             timestamp: new Date(),
@@ -179,41 +289,41 @@ export class OpenRouterClient {
 
       return answer;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`❌ AI generation failed for purpose: ${purpose}`, {
+      console.error(`❌ AI generation failed for purpose: ${purpose}, operation: ${opId}`, {
         error: error instanceof Error ? error.message : error,
-        duration,
-        model,
-        messageLength: message.length,
         errorType: error instanceof Error ? error.name : typeof error,
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // Try with streaming if standard request failed
-      try {
-        return await this.chatWithStreamingFallback(purpose, message, abortSignal);
-      } catch (fallbackError) {
-        console.error(`❌ Streaming also failed:`, fallbackError);
-        
-        // Log failed requests too if logging is enabled
-        if (this.settingsManager?.isAILoggingEnabled()) {
-          try {
-            await this.aiLogService.addLogEntry({
-              timestamp: new Date(),
-              purpose,
-              prompt: message,
-              response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              model,
-              requestDuration: duration
-            });
-          } catch (logError) {
-            console.error('Failed to log AI interaction error:', logError);
-          }
+      // Try with streaming if standard request failed and it wasn't already a streaming attempt
+      if (!this.forceStreamingMode) {
+        try {
+          return await this.chatWithStreamingFallback(purpose, message, opId, abortController.signal);
+        } catch (fallbackError) {
+          console.error(`❌ Streaming fallback also failed for operation: ${opId}`, fallbackError);
         }
-        
-        // Throw the original error, not the fallback error
-        throw error;
       }
+      
+      // Log failed requests too if logging is enabled
+      const settingsManager = this.getSettingsManager();
+      if (settingsManager?.isAILoggingEnabled()) {
+        try {
+          await this.aiLogService.addLogEntry({
+            timestamp: new Date(),
+            purpose,
+            prompt: message,
+            response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            model: await this.getModelForPurpose(purpose).catch(() => 'unknown'),
+            requestDuration: 0
+          });
+        } catch (logError) {
+          console.error('Failed to log AI interaction error:', logError);
+        }
+      }
+      
+      throw error;
+    } finally {
+      this.activeOperations.delete(opId);
     }
   }
 
@@ -221,7 +331,7 @@ export class OpenRouterClient {
    * Fallback method that uses streaming to get a complete response
    * when standard JSON requests fail
    */
-  private async chatWithStreamingFallback(purpose: string, message: string, abortSignal?: AbortSignal): Promise<string> {
+  private async chatWithStreamingFallback(purpose: string, message: string, operationId: string, abortSignal: AbortSignal): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullResponse = '';
       let hasStarted = false;
@@ -242,29 +352,20 @@ export class OpenRouterClient {
       };
 
       // Use streaming chat with single user message
-      this.streamingChat(purpose, [{ role: 'user', content: message }], callbacks, abortSignal)
+      this.streamingChat(purpose, [{ role: 'user', content: message }], callbacks, operationId, abortSignal)
         .catch(reject);
     });
   }
 
-  async sendMessage(request: OpenRouterRequest, externalAbortSignal?: AbortSignal): Promise<OpenRouterResponse> {
-    this.currentAbortController = new AbortController();
-    if (externalAbortSignal) {
-      externalAbortSignal.addEventListener('abort', () => {
-        if (this.currentAbortController) {
-          this.currentAbortController.abort();
-        }
-      });
-    }
-
+  async sendMessage(request: OpenRouterRequest, apiKey: string, abortSignal: AbortSignal): Promise<OpenRouterResponse> {
     console.log(`🌐 Initiating HTTP request to OpenRouter API`, {
       url: this.apiUrl,
       model: request.model,
       messageCount: request.messages.length,
       hasStream: !!request.stream,
-      hasAbortSignal: !!externalAbortSignal,
+      hasAbortSignal: !!abortSignal,
       // WARNING: Logging API keys is dangerous in production!
-      apiKey: maskApiKey(this.apiKey)
+      apiKey: maskApiKey(apiKey)
     });
 
     try {
@@ -272,10 +373,10 @@ export class OpenRouterClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify(request),
-        signal: this.currentAbortController.signal
+        signal: abortSignal
       });
 
       console.log(`📡 HTTP response received`, {
@@ -307,7 +408,7 @@ export class OpenRouterClient {
           status: response.status,
           statusText: response.statusText,
           url: this.apiUrl,
-          apiKey: maskApiKey(this.apiKey), // WARNING: Logging API keys is dangerous in production!
+          apiKey: maskApiKey(apiKey), // WARNING: Logging API keys is dangerous in production!
           errorBody,
           errorText
         });
@@ -331,23 +432,25 @@ export class OpenRouterClient {
         isAbortError: error.name === 'AbortError',
         isNetworkError: error instanceof TypeError,
         url: this.apiUrl,
-        apiKey: maskApiKey(this.apiKey) // WARNING: Logging API keys is dangerous in production!
+        apiKey: maskApiKey(apiKey) // WARNING: Logging API keys is dangerous in production!
       });
       if (error.name === 'AbortError') {
         throw new Error('Request was aborted');
       }
       throw error;
-    } finally {
-      console.log(`🧹 Cleaning up abort controller`);
-      this.currentAbortController = null;
     }
   }
 
   async fetchModels(): Promise<OpenRouterModel[]> {
+    const apiKey = await this.getApiKeyFromStorage();
+    if (!apiKey) {
+      throw new Error('OpenRouter API key not configured. Please set it in the settings.');
+    }
+
     try {
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
         },
       });
       if (!response.ok) {
@@ -369,7 +472,7 @@ export class OpenRouterClient {
           status: response.status,
           statusText: response.statusText,
           url: 'https://openrouter.ai/api/v1/models',
-          apiKey: maskApiKey(this.apiKey), // WARNING: Logging API keys is dangerous in production!
+          apiKey: maskApiKey(apiKey), // WARNING: Logging API keys is dangerous in production!
           errorBody,
           errorText
         });
@@ -387,53 +490,55 @@ export class OpenRouterClient {
         isAbortError: error.name === 'AbortError',
         isNetworkError: error instanceof TypeError,
         url: 'https://openrouter.ai/api/v1/models',
-        apiKey: maskApiKey(this.apiKey) // WARNING: Logging API keys is dangerous in production!
+        apiKey: maskApiKey(apiKey) // WARNING: Logging API keys is dangerous in production!
       });
       throw error;
     }
   }
 
   /**
-   * Send a streaming chat message for a given purpose. Always uses role 'user'.
+   * Send a streaming chat message for a given purpose.
    * Calls onContent for each chunk and onComplete when finished.
    */
-  async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, abortSignal?: AbortSignal): Promise<void> {
-    const model = this.getModelForPurpose(purpose);
+  async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal): Promise<void> {
+    const opId = operationId || this.generateOperationId(purpose);
+    const abortController = new AbortController();
+    this.activeOperations.set(opId, abortController);
 
-    if (!model) {
-      const error = new Error(`No model configured for purpose: ${purpose}`);
-      callbacks.onError?.(error);
-      throw error;
+    // Listen to external abort signal if provided
+    if (externalAbortSignal) {
+      externalAbortSignal.addEventListener('abort', () => {
+        this.abortOperation(opId);
+      });
     }
 
-    const startTime = Date.now();
-    const request: OpenRouterRequest = {
-      model,
-      messages,
-      stream: true
-    };
-    
     try {
-      // Create abort controller for this request
-      this.currentAbortController = new AbortController();
-      
-      // If external abort signal is provided, listen to it and abort our controller
-      if (abortSignal) {
-        abortSignal.addEventListener('abort', () => {
-          if (this.currentAbortController) {
-            this.currentAbortController.abort();
-          }
-        });
+      const apiKey = await this.getApiKeyFromStorage();
+      if (!apiKey) {
+        const error = new Error('OpenRouter API key not configured. Please set it in the settings.');
+        callbacks.onError?.(error);
+        throw error;
       }
+
+      const model = await this.getModelForPurpose(purpose);
+
+      const startTime = Date.now();
+      const request: OpenRouterRequest = {
+        model,
+        messages,
+        stream: true
+      };
+      
+      console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify(request),
-        signal: this.currentAbortController.signal
+        signal: abortController.signal
       });
 
       if (!response.ok) {
@@ -452,6 +557,8 @@ export class OpenRouterClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+
+      callbacks.onStart?.();
 
       try {
         while (true) {
@@ -487,9 +594,11 @@ export class OpenRouterClient {
         }
         
         const duration = Date.now() - startTime;
+        console.log(`✅ Streaming chat completed successfully in ${duration}ms, response length: ${fullContent.length}, operation: ${opId}`);
         
         // Log the interaction if logging is enabled
-        if (this.settingsManager?.isAILoggingEnabled()) {
+        const settingsManager = this.getSettingsManager();
+        if (settingsManager?.isAILoggingEnabled()) {
           try {
             await this.aiLogService.addLogEntry({
               timestamp: new Date(),
@@ -511,6 +620,8 @@ export class OpenRouterClient {
       }
       
     } catch (error: any) {
+      console.error(`❌ Streaming chat failed for purpose: ${purpose}, operation: ${opId}`, error);
+      
       if (error.name === 'AbortError') {
         const abortError = new Error('Request was aborted');
         callbacks.onError?.(abortError);
@@ -518,15 +629,16 @@ export class OpenRouterClient {
       }
       
       // Log failed requests too if logging is enabled
-      if (this.settingsManager?.isAILoggingEnabled()) {
+      const settingsManager = this.getSettingsManager();
+      if (settingsManager?.isAILoggingEnabled()) {
         try {
-          const duration = Date.now() - startTime;
+          const duration = Date.now();
           await this.aiLogService.addLogEntry({
             timestamp: new Date(),
             purpose,
             prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
             response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            model,
+            model: await this.getModelForPurpose(purpose).catch(() => 'unknown'),
             requestDuration: duration
           });
         } catch (logError) {
@@ -537,7 +649,7 @@ export class OpenRouterClient {
       callbacks.onError?.(error);
       throw error;
     } finally {
-      this.currentAbortController = null;
+      this.activeOperations.delete(opId);
     }
   }
 
@@ -545,9 +657,9 @@ export class OpenRouterClient {
    * Stream a conversation with multiple messages for a given purpose.
    * This is the method expected by the chat interface.
    */
-  async chatStreamConversation(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, abortSignal?: AbortSignal): Promise<void> {
+  async chatStreamConversation(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal): Promise<void> {
     callbacks.onStart?.();
-    return this.streamingChat(purpose, messages, callbacks, abortSignal);
+    return this.streamingChat(purpose, messages, callbacks, operationId, externalAbortSignal);
   }
 
   /**
