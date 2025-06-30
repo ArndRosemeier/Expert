@@ -87,6 +87,41 @@ async function loadCheckboxStates() {
     }
 }
 
+/**
+ * Gets the template-specific name for the current node's level.
+ * e.g., if node is at level 0 and template is ["Book", "Act", "Chapter"], returns "Book"
+ * e.g., if node is at level 1 and template is ["Book", "Act", "Chapter"], returns "Act"
+ */
+function getCurrentLevelName(node: DocumentNode): string {
+    if (node.level < 0 || node.level >= node.template.length) {
+        return node.level === 0 ? 'Project' : 'Node'; // Special fallback for root level
+    }
+    
+    const rawLevelName = node.template[node.level];
+    if (!rawLevelName || typeof rawLevelName !== 'string') {
+        return node.level === 0 ? 'Project' : 'Node'; // Special fallback for root level
+    }
+    
+    // Extract just the base name (remove numbers)
+    // Pattern: "Book 1" -> "Book", "Act 1" -> "Act", "Chapter 10" -> "Chapter"
+    const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+    return match && match[1] ? match[1] : rawLevelName;
+}
+
+/**
+ * Gets the plural form of the child level name.
+ * e.g., if node's children are "Chapter", returns "Chapters"
+ */
+function getPluralChildLevelName(node: DocumentNode): string {
+    const childLevelName = node.childLevelName;
+    if (!childLevelName) {
+        return 'Subnodes'; // Fallback
+    }
+    
+    // Simple pluralization: just append 's'
+    return childLevelName + 's';
+}
+
 
 
 // --- Main Render Function ---
@@ -447,11 +482,11 @@ export function renderNodeDetails() {
             ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             <div style="margin-top: 1rem; display: flex; gap: 1rem;">
                 <button id="delete-node-btn" class="button button-secondary" style="background-color: #dc3545; color: white; border-color: #dc3545;">
-                    ${node.level === 0 ? 'Delete Project' : 'Delete Node'}
+                    Delete ${getCurrentLevelName(node)}
                 </button>
                 ${node.children.length > 0 ? `
                     <button id="delete-subnodes-btn" class="button button-secondary" style="background-color: #fd7e14; color: white; border-color: #fd7e14;">
-                        Delete All Subnodes
+                        Delete All ${getPluralChildLevelName(node)}
                     </button>
                 ` : ''}
                 ${!node.isLeaf ? `
