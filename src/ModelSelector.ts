@@ -289,7 +289,7 @@ export class ModelSelector {
         select.addEventListener('change', (e) => {
           this.selectedModels[purpose.key] = (e.target as HTMLSelectElement).value;
           const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
-          desc.textContent = model ? model.description : '';
+          desc.textContent = model ? (model.description || '') : '';
           // Update pricing
           if (pricingUl) {
             pricingUl.innerHTML = ''; // Clear previous pricing
