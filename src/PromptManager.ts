@@ -208,7 +208,7 @@ Original text:
 
 Please expand this text to make it more detailed and complete. Focus on adding depth, examples, and clarity while preserving the core message and writing style.`,
 
-    child_node_suggestions: `You are helping expand a document by suggesting alternative approaches for the next child section.
+    child_node_suggestions: `You are helping expand a document by creating alternative approaches for the next child section.
 
 Parent node title: "{{parent_title}}"
 Parent node content:
@@ -221,13 +221,15 @@ Document context:
 {{context}}
 ---
 
-Generate exactly 5 ALTERNATIVE suggestions for what the next child section could be. These should be 5 different approaches, themes, or directions for the single next section that would logically follow the parent content.
+Generate exactly 5 ALTERNATIVE suggestions for the next child section. These are 5 different approaches, themes, or directions for the single next section that logically follows the parent content.
 
-DO NOT create sequential children (like Chapter 6, Chapter 7, Chapter 8). Instead, create 5 different possible versions of what the next single child section could focus on.
+DO NOT create sequential children (like Chapter 6, Chapter 7, Chapter 8). Instead, create 5 different versions of what the next single child section focuses on.
 
-Each suggestion should have:
+Each suggestion must have:
 - A concise, descriptive title for the next section
-- A brief 1-2 sentence draft of what that particular approach would cover
+- A brief 1-2 sentence draft that states definitively what this approach covers
+
+Write the drafts using confident, definitive language. Avoid tentative phrases like "could", "might", "would", or "may". State directly what the section contains and accomplishes.
 
 Return as JSON array with "title" and "draft" properties.`,
 
@@ -243,12 +245,16 @@ Document context:
 {{context}}
 ---
 
-Please update the parent content to naturally incorporate a reference to the new child section "{{child_title}}". The update should:
-- Maintain the existing content's flow and style
-- Add a natural transition or reference to the new child section
-- Keep the original structure intact while enhancing it
+IMPORTANT: Keep the existing content exactly as it is. Do NOT enhance, improve, or rewrite any of the original content. Your job is to continue the content by adding a reference to the new child section.
 
-Return only the updated parent content, nothing else.`,
+Add only what is absolutely necessary to naturally reference the new child section "{{child_title}}". This might be:
+- A brief sentence at the end mentioning the new section
+- A simple transition phrase connecting to the new content
+- A minimal addition that acknowledges the new child
+
+Only modify existing content if it's absolutely essential to create a smooth connection to the new child section. Otherwise, preserve the original content verbatim and simply append the reference.
+
+Return the complete content with your minimal addition.`,
 
     node_chat_system: `You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
 

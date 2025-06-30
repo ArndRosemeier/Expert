@@ -22,6 +22,7 @@ interface ChildNodeModalState {
     error: string | null;
     isCreating: boolean;
     creationStep: string | null;
+    manualDraft: string;
 }
 
 export class AddChildNodeModal extends BaseModal {
@@ -43,7 +44,8 @@ export class AddChildNodeModal extends BaseModal {
             updateParent: true,
             error: null,
             isCreating: false,
-            creationStep: null
+            creationStep: null,
+            manualDraft: ''
         };
 
         // Create the node creation service
@@ -57,9 +59,6 @@ export class AddChildNodeModal extends BaseModal {
     }
 
     public override render(): HTMLElement {
-        console.log('🎨 render() called - creating modal HTML');
-        console.log('📊 Initial modal state:', this.childModalState);
-        
         const container = createElement('div', {
             classes: ['add-child-node-modal'],
             attributes: { style: this.getModalStyles() }
@@ -68,7 +67,7 @@ export class AddChildNodeModal extends BaseModal {
         // Header
         const header = createElement('div', {
             classes: ['modal-header'],
-            content: `<h2>Add ${this.childModalConfig.parentNode.childLevelName || 'Child'} to "${this.childModalConfig.parentNode.title}"</h2>`
+            innerHTML: `<h2>Add ${this.childModalConfig.parentNode.childLevelName || 'Child'} to "${this.childModalConfig.parentNode.title}"</h2>`
         });
         container.appendChild(header);
 
@@ -87,9 +86,86 @@ export class AddChildNodeModal extends BaseModal {
 
         container.appendChild(contentArea);
 
-        // Footer with parent update checkbox
-        console.log('🦶 Creating initial footer with event listeners');
-        const footer = this.createFooter();
+        // Footer - create directly here with immediate event attachment
+        const footer = createElement('div', {
+            classes: ['modal-footer'],
+            attributes: { style: 'margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px;' }
+        });
+
+        // Update parent checkbox - show in AI mode or in manual mode when there's draft content
+        const showCheckbox = this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '');
+        const checkboxContainer = createElement('label', {
+            attributes: { 
+                style: `display: ${showCheckbox ? 'flex' : 'none'}; align-items: center; margin-bottom: 16px; cursor: pointer;`
+            }
+        });
+
+        const checkbox = createElement('input', {
+            attributes: {
+                type: 'checkbox',
+                checked: this.childModalState.updateParent ? 'checked' : '',
+                style: 'margin-right: 8px;'
+            }
+        }) as HTMLInputElement;
+
+        const checkboxLabel = createElement('span', {
+            content: 'Update parent content to reference new child section'
+        });
+
+        checkbox.addEventListener('change', () => {
+            this.childModalState.updateParent = checkbox.checked;
+        });
+
+        checkboxContainer.appendChild(checkbox);
+        checkboxContainer.appendChild(checkboxLabel);
+
+        // Action buttons - create directly here
+        const buttonContainer = createElement('div', {
+            attributes: { style: 'display: flex; gap: 10px; justify-content: flex-end;' }
+        });
+
+        const isCreating = this.childModalState.isCreating;
+        const canCreate = this.canCreate();
+
+        // Cancel button
+        const cancelButton = createElement('button', {
+            content: 'Cancel',
+            attributes: { 
+                style: 'padding: 8px 16px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer;'
+            }
+        }) as HTMLButtonElement;
+
+        cancelButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!this.childModalState.isCreating) {
+                this.close();
+            }
+        });
+
+        // Create button
+        const createButton = createElement('button', {
+            content: isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`,
+            attributes: { 
+                style: `padding: 8px 16px; border: none; background: ${canCreate && !isCreating ? '#4CAF50' : '#ccc'}; color: white; border-radius: 4px; cursor: ${canCreate && !isCreating ? 'pointer' : 'not-allowed'};`,
+                ...(canCreate && !isCreating ? {} : { disabled: 'disabled' })
+            }
+        }) as HTMLButtonElement;
+
+        createButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (this.canCreate() && !this.childModalState.isCreating) {
+                this.createNode();
+            }
+        });
+
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(createButton);
+
+        footer.appendChild(checkboxContainer);
+        footer.appendChild(buttonContainer);
         container.appendChild(footer);
 
         // Show creation loading overlay if creating
@@ -98,7 +174,6 @@ export class AddChildNodeModal extends BaseModal {
             container.appendChild(creationOverlay);
         }
 
-        console.log('✅ Modal HTML created successfully');
         return container;
     }
 
@@ -113,18 +188,18 @@ export class AddChildNodeModal extends BaseModal {
         const aiButton = createElement('button', {
             content: '🤖 AI Suggestions',
             classes: this.childModalState.mode === 'ai' ? ['mode-btn', 'active'] : ['mode-btn'],
-            attributes: { 
+            attributes: {
                 style: this.getModeButtonStyle(this.childModalState.mode === 'ai', isDisabled),
-                disabled: isDisabled ? 'disabled' : ''
+                ...(isDisabled ? { disabled: 'disabled' } : {})
             }
         });
 
         const simpleButton = createElement('button', {
             content: '✏️ Manual Input',
             classes: this.childModalState.mode === 'simple' ? ['mode-btn', 'active'] : ['mode-btn'],
-            attributes: { 
+            attributes: {
                 style: this.getModeButtonStyle(this.childModalState.mode === 'simple', isDisabled),
-                disabled: isDisabled ? 'disabled' : ''
+                ...(isDisabled ? { disabled: 'disabled' } : {})
             }
         });
 
@@ -171,19 +246,87 @@ export class AddChildNodeModal extends BaseModal {
                 type: 'text',
                 placeholder: 'Enter the title for the new child node...',
                 style: 'width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 4px;',
-                value: this.childModalState.manualTitle
+                value: this.childModalState.manualTitle,
+                'data-manual-input': 'true'
             }
         }) as HTMLInputElement;
 
-        titleInput.addEventListener('input', () => {
-            this.childModalState.manualTitle = titleInput.value;
-            console.log('✏️ Manual title updated:', titleInput.value);
-            // Update button state in place
-            this.updateCreateButtonState();
+        titleInput.addEventListener('input', (e) => {
+            const target = e.target as HTMLInputElement;
+            const newValue = target.value;
+            const oldCanCreate = this.canCreate();
+            
+            this.childModalState.manualTitle = newValue;
+            
+            const newCanCreate = this.canCreate();
+            
+            // Only refresh if the button state changed (empty to non-empty or vice versa)
+            if (oldCanCreate !== newCanCreate) {
+                // Save the current cursor position
+                const cursorPosition = target.selectionStart;
+                this.refreshContent();
+                // Restore focus and cursor position after refresh
+                setTimeout(() => {
+                    const newInput = this.element?.querySelector('[data-manual-input="true"]') as HTMLInputElement;
+                    if (newInput) {
+                        newInput.focus();
+                        newInput.setSelectionRange(cursorPosition || 0, cursorPosition || 0);
+                    }
+                }, 0);
+            }
         });
+
+        // Ensure the input has the current value
+        titleInput.value = this.childModalState.manualTitle;
 
         container.appendChild(titleLabel);
         container.appendChild(titleInput);
+
+        // Draft input field
+        const draftLabel = createElement('label', {
+            content: 'Draft Content (optional):',
+            attributes: { style: 'display: block; margin-bottom: 8px; font-weight: bold;' }
+        });
+
+        const draftTextarea = createElement('textarea', {
+            attributes: {
+                placeholder: 'Enter draft content for the new child node...',
+                style: 'width: 100%; padding: 8px; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 4px; min-height: 100px; resize: vertical;',
+                value: this.childModalState.manualDraft,
+                'data-manual-draft': 'true'
+            }
+        }) as HTMLTextAreaElement;
+
+        draftTextarea.addEventListener('input', (e) => {
+            const target = e.target as HTMLTextAreaElement;
+            const newValue = target.value;
+            const oldHasDraft = this.childModalState.manualDraft.trim() !== '';
+            
+            this.childModalState.manualDraft = newValue;
+            
+            const newHasDraft = newValue.trim() !== '';
+            
+            // Refresh if draft presence changed (affects checkbox visibility)
+            if (oldHasDraft !== newHasDraft) {
+                // Save the current cursor position
+                const cursorPosition = target.selectionStart;
+                this.refreshContent();
+                // Restore focus and cursor position after refresh
+                setTimeout(() => {
+                    const newTextarea = this.element?.querySelector('[data-manual-draft="true"]') as HTMLTextAreaElement;
+                    if (newTextarea) {
+                        newTextarea.focus();
+                        newTextarea.setSelectionRange(cursorPosition || 0, cursorPosition || 0);
+                    }
+                }, 0);
+            }
+        });
+
+        // Ensure the textarea has the current value
+        draftTextarea.value = this.childModalState.manualDraft;
+
+        container.appendChild(draftLabel);
+        container.appendChild(draftTextarea);
 
         return container;
     }
@@ -217,7 +360,6 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         generateButton.addEventListener('click', () => {
-            console.log('🎯 Generate suggestions button clicked');
             this.generateSuggestions();
         });
 
@@ -366,7 +508,6 @@ export class AddChildNodeModal extends BaseModal {
         });
         
         regenerateButton.addEventListener('click', () => {
-            console.log('🔄 Regenerate suggestions clicked');
             this.generateSuggestions();
         });
         
@@ -435,100 +576,6 @@ export class AddChildNodeModal extends BaseModal {
         return card;
     }
 
-    private createButtonsWithListeners(): { cancelButton: HTMLButtonElement, createButton: HTMLButtonElement } {
-        const canCreate = this.canCreate();
-        const isCreating = this.childModalState.isCreating;
-        
-        const cancelButton = createElement('button', {
-            content: 'Cancel',
-            attributes: { 
-                style: `padding: 8px 16px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: ${isCreating ? 'not-allowed' : 'pointer'};`,
-                disabled: isCreating ? 'disabled' : ''
-            }
-        }) as HTMLButtonElement;
-
-        const createButtonContent = isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`;
-        const createButton = createElement('button', {
-            content: createButtonContent,
-            attributes: { 
-                style: `
-                    padding: 8px 16px; 
-                    border: none; 
-                    background: ${canCreate && !isCreating ? '#4CAF50' : '#ccc'}; 
-                    color: white; 
-                    border-radius: 4px; 
-                    cursor: ${canCreate && !isCreating ? 'pointer' : 'not-allowed'};
-                `,
-                disabled: canCreate && !isCreating ? '' : 'disabled'
-            }
-        }) as HTMLButtonElement;
-
-        console.log('🔗 Attaching button event listeners', { canCreate, isCreating });
-        
-        cancelButton.addEventListener('click', () => {
-            if (!isCreating) {
-                console.log('❌ Cancel button clicked');
-                this.close();
-            }
-        });
-        
-        createButton.addEventListener('click', (e) => {
-            console.log('🚀 Create button clicked - event triggered');
-            e.preventDefault();
-            e.stopPropagation();
-            this.createNode();
-        });
-
-        return { cancelButton, createButton };
-    }
-
-    private createFooter(): HTMLElement {
-        const footer = createElement('div', {
-            classes: ['modal-footer'],
-            attributes: { style: 'margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px;' }
-        });
-
-        // Update parent checkbox
-        const checkboxContainer = createElement('label', {
-            attributes: { 
-                style: 'display: flex; align-items: center; margin-bottom: 16px; cursor: pointer;' 
-            }
-        });
-
-        const checkbox = createElement('input', {
-            attributes: {
-                type: 'checkbox',
-                checked: this.childModalState.updateParent ? 'checked' : '',
-                style: 'margin-right: 8px;'
-            }
-        }) as HTMLInputElement;
-
-        const checkboxLabel = createElement('span', {
-            content: 'Update parent content to reference new child section'
-        });
-
-        checkbox.addEventListener('change', () => {
-            this.childModalState.updateParent = checkbox.checked;
-        });
-
-        checkboxContainer.appendChild(checkbox);
-        checkboxContainer.appendChild(checkboxLabel);
-
-        // Action buttons
-        const buttonContainer = createElement('div', {
-            attributes: { style: 'display: flex; gap: 10px; justify-content: flex-end;' }
-        });
-
-        const { cancelButton, createButton } = this.createButtonsWithListeners();
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(createButton);
-
-        footer.appendChild(checkboxContainer);
-        footer.appendChild(buttonContainer);
-
-        return footer;
-    }
-
     private async generateSuggestions(): Promise<void> {
         this.childModalState.isGenerating = true;
         this.childModalState.error = null;
@@ -556,7 +603,6 @@ export class AddChildNodeModal extends BaseModal {
 
     private selectSuggestion(suggestion: NodeSuggestion): void {
         this.childModalState.selectedSuggestion = suggestion;
-        console.log('🎯 Suggestion selected:', suggestion.title);
         
         // Update UI to show selected state
         if (this.element) {
@@ -576,7 +622,7 @@ export class AddChildNodeModal extends BaseModal {
         }
         
         // Update button state
-        this.updateCreateButtonState();
+        this.refreshContent();
     }
 
     private canCreate(): boolean {
@@ -590,16 +636,9 @@ export class AddChildNodeModal extends BaseModal {
     }
 
     private async createNode(): Promise<void> {
-        console.log('🚀 Create node button clicked');
-        console.log('📊 Modal state:', this.childModalState);
-        console.log('✅ Can create:', this.canCreate());
-        
         if (!this.canCreate() || this.childModalState.isCreating) {
-            console.log('❌ Cannot create - validation failed or already creating');
             return;
         }
-
-        console.log('✅ Validation passed, proceeding with node creation');
 
         // Start creation loading state
         this.childModalState.isCreating = true;
@@ -614,10 +653,12 @@ export class AddChildNodeModal extends BaseModal {
             if (this.childModalState.mode === 'ai' && this.childModalState.selectedSuggestion) {
                 title = this.childModalState.selectedSuggestion.title;
                 draft = this.childModalState.selectedSuggestion.draft;
-                console.log('🤖 Using AI suggestion:', { title, draft });
             } else {
                 title = this.childModalState.manualTitle.trim();
-                console.log('✏️ Using manual title:', title);
+                // If there's manual draft content, use it directly (service will add "Draft: " prefix)
+                if (this.childModalState.manualDraft.trim()) {
+                    draft = this.childModalState.manualDraft.trim();
+                }
             }
 
             // Step 1: Creating child node
@@ -627,7 +668,7 @@ export class AddChildNodeModal extends BaseModal {
             const createConfig: any = {
                 parentNodeId: this.childModalConfig.parentNodeId,
                 title,
-                updateParent: this.childModalState.updateParent && this.childModalConfig.parentNode.content
+                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && this.childModalConfig.parentNode.content
             };
             
             if (draft) {
@@ -635,12 +676,11 @@ export class AddChildNodeModal extends BaseModal {
             }
 
             // Show different step if updating parent
-            if (this.childModalState.updateParent && this.childModalConfig.parentNode.content) {
+            if ((this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && this.childModalConfig.parentNode.content) {
                 this.childModalState.creationStep = 'Updating parent content with AI...';
                 this.refreshContent();
             }
             
-            console.log('🔧 Calling NodeCreationService.createNode...');
             await this.nodeCreationService.createNode(createConfig);
 
             // Step 3: Saving to storage
@@ -649,9 +689,6 @@ export class AddChildNodeModal extends BaseModal {
 
             // Brief delay to show the final step
             await new Promise(resolve => setTimeout(resolve, 500));
-
-            console.log('✅ Node created successfully');
-            console.log('📤 Emitting success action...');
             
             // Reset creation state
             this.childModalState.isCreating = false;
@@ -660,11 +697,9 @@ export class AddChildNodeModal extends BaseModal {
             // Emit success and close
             await this.handleAction('created', { title, draft });
             
-            console.log('🚪 Closing modal...');
             await this.close();
 
         } catch (error) {
-            console.error('❌ Failed to create child node:', error);
             this.childModalState.isCreating = false;
             this.childModalState.creationStep = null;
             this.childModalState.error = error instanceof Error ? error.message : 'Failed to create node';
@@ -672,70 +707,16 @@ export class AddChildNodeModal extends BaseModal {
         }
     }
 
-    private updateCreateButtonState(): void {
-        if (this.element) {
-            const buttons = Array.from(this.element.querySelectorAll('button'));
-            const createButton = buttons.find(btn => 
-                btn.textContent?.includes('Creating...') || btn.textContent?.startsWith('Create ')
-            ) as HTMLButtonElement;
-            
-            if (createButton) {
-                const canCreate = this.canCreate();
-                const isCreating = this.childModalState.isCreating;
-                
-                createButton.disabled = !(canCreate && !isCreating);
-                createButton.style.background = (canCreate && !isCreating) ? '#4CAF50' : '#ccc';
-                createButton.style.cursor = (canCreate && !isCreating) ? 'pointer' : 'not-allowed';
-                createButton.textContent = isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`;
-                
-                console.log('🔄 Updated create button state:', { 
-                    canCreate, 
-                    isCreating,
-                    mode: this.childModalState.mode,
-                    selectedSuggestion: this.childModalState.selectedSuggestion?.title || 'none',
-                    manualTitle: this.childModalState.manualTitle
-                });
-            } else {
-                console.warn('⚠️ Create button not found');
-            }
-        }
-    }
-
     private refreshContent(): void {
-        console.log('🔄 refreshContent() called');
-        
-        if (this.element) {
-            const contentArea = this.element.querySelector('.modal-content-area');
-            
-            if (contentArea) {
-                contentArea.innerHTML = '';
-                if (this.childModalState.mode === 'ai') {
-                    contentArea.appendChild(this.createAIMode());
-                } else {
-                    contentArea.appendChild(this.createSimpleMode());
-                }
-                console.log('🔄 Content area refreshed');
-            }
-
-            // Handle creation loading overlay
-            const existingOverlay = this.element.querySelector('.creation-loading-state');
-            if (this.childModalState.isCreating && !existingOverlay) {
-                // Add creation loading overlay
-                const creationOverlay = this.createCreationLoadingState();
-                this.element.appendChild(creationOverlay);
-            } else if (!this.childModalState.isCreating && existingOverlay) {
-                // Remove creation loading overlay
-                existingOverlay.remove();
-            } else if (this.childModalState.isCreating && existingOverlay) {
-                // Update existing overlay with current step
-                const stepElement = existingOverlay.querySelector('div:last-child');
-                if (stepElement) {
-                    stepElement.textContent = this.childModalState.creationStep || 'Processing...';
-                }
-            }
-
-            // DON'T recreate footer - just update button state
-            this.updateCreateButtonState();
+        if (!this.element) return;
+        const contentContainer = this.element.querySelector('.modal-content');
+        if (!contentContainer) return;
+        const newContent = this.render();
+        const oldContent = contentContainer.querySelector('.add-child-node-modal');
+        if (oldContent) {
+            contentContainer.replaceChild(newContent, oldContent);
+        } else {
+            contentContainer.appendChild(newContent);
         }
     }
 
