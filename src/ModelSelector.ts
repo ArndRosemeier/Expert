@@ -29,6 +29,13 @@ function formatPromptCompletionPricing(pricing: Record<string, string>) {
   return result;
 }
 
+/**
+ * Checks if the OpenRouter API key looks valid (format only, not actual validity)
+ */
+function isApiKeyFormatValid(key: string): boolean {
+  return typeof key === 'string' && key.startsWith('sk-') && key.length >= 32;
+}
+
 export class ModelSelector {
   private onSelect: (selectedModels: Record<string, string>) => void;
   private closeModal: () => void;
@@ -295,6 +302,21 @@ export class ModelSelector {
     `;
     inputDiv.appendChild(this.apiKeyInput);
 
+    // Format warning
+    const formatWarning = document.createElement('div');
+    formatWarning.style.cssText = `
+      color: #b91c1c;
+      background: #fee2e2;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+      display: none;
+    `;
+    formatWarning.textContent = '⚠️ This API key does not match the expected format (should start with "sk-" and be at least 32 characters). It may not work.';
+    inputDiv.appendChild(formatWarning);
+
     // Info section
     const info = document.createElement('div');
     info.innerHTML = '<strong>Info:</strong> Your API key and model selections are stored in your browser\'s IndexedDB. Anyone with access to this browser profile can view them.';
@@ -331,18 +353,20 @@ export class ModelSelector {
       transition: background 0.2s;
       flex: 1;
     `;
-    this.testButton.addEventListener('click', () => void this.testApiKey());
-    this.testButton.addEventListener('mouseenter', () => {
-      if (!this.testButton?.disabled) {
-        this.testButton.style.background = '#059669';
-      }
-    });
-    this.testButton.addEventListener('mouseleave', () => {
-      if (!this.testButton?.disabled) {
-        this.testButton.style.background = '#10b981';
-      }
-    });
-    buttonRow.appendChild(this.testButton);
+    if (this.testButton) {
+      this.testButton.addEventListener('click', () => void this.testApiKey());
+      this.testButton.addEventListener('mouseenter', () => {
+        if (!this.testButton!.disabled) {
+          this.testButton.style.background = '#059669';
+        }
+      });
+      this.testButton.addEventListener('mouseleave', () => {
+        if (!this.testButton!.disabled) {
+          this.testButton.style.background = '#10b981';
+        }
+      });
+      buttonRow.appendChild(this.testButton);
+    }
 
     // Fetch Models button
     this.fetchButton = document.createElement('button');
@@ -360,24 +384,32 @@ export class ModelSelector {
       transition: background 0.2s;
       flex: 1;
     `;
-    this.fetchButton.addEventListener('click', () => void this.fetchModels());
-    this.fetchButton.addEventListener('mouseenter', () => {
-      if (!this.fetchButton?.disabled) {
-        this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
-      }
-    });
-    this.fetchButton.addEventListener('mouseleave', () => {
-      if (!this.fetchButton?.disabled) {
-        this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-      }
-    });
-    buttonRow.appendChild(this.fetchButton);
+    if (this.fetchButton) {
+      this.fetchButton.addEventListener('click', () => void this.fetchModels());
+      this.fetchButton.addEventListener('mouseenter', () => {
+        if (!this.fetchButton!.disabled) {
+          this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
+        }
+      });
+      this.fetchButton.addEventListener('mouseleave', () => {
+        if (!this.fetchButton!.disabled) {
+          this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+        }
+      });
+      buttonRow.appendChild(this.fetchButton);
+    }
 
     inputDiv.appendChild(buttonRow);
-    container.appendChild(inputDiv);
 
     // Setup centralized event handling for API key input
     this.setupApiKeyInputEvents();
+
+    // Show/hide format warning based on key
+    if ((this.apiKey as string) && !isApiKeyFormatValid(this.apiKey as string)) {
+      formatWarning.style.display = 'block';
+    } else {
+      formatWarning.style.display = 'none';
+    }
 
     // Error display
     if (this.error) {
