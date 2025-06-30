@@ -34,7 +34,7 @@ export class TestRunner {
                     { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
                 ],
                 maxIterations: 5,
-                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model' },
+                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model', prose: 'test-model' },
                 contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
             };
             void this.mockSettingsManager.saveProfile('default', defaultProfile);
@@ -907,7 +907,7 @@ export class TestRunner {
                 prompt: "Test prompt",
                 criteria: [{ name: 'Test', description: 'Test criterion', goal: 8, weight: 1.0 }],
                 maxIterations: 5,
-                selectedModels: { creator: 'test', rater: 'test', editor: 'test' },
+                selectedModels: { creator: 'test', rater: 'test', editor: 'test', prose: 'test' },
                 contextExtractionPrompt: 'Test extraction prompt'
             };
             
@@ -1065,7 +1065,7 @@ export class TestRunner {
                     { name: 'Import Test', description: 'Test criterion for import', goal: 7, weight: 0.8 }
                 ],
                 maxIterations: 8,
-                selectedModels: { creator: 'export-test', rater: 'import-test', editor: 'roundtrip-test' },
+                selectedModels: { creator: 'export-test', rater: 'import-test', editor: 'roundtrip-test', prose: 'roundtrip-test' },
                 contextExtractionPrompt: 'Test context extraction prompt'
             };
             await settingsManager.saveProfile(testProfileName, testProfile);

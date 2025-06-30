@@ -4,7 +4,7 @@ export interface ReaderEditAction {
     id: string;
     title: string;              // Button label (e.g., "More details")
     prompt: string;             // Template with placeholders
-    model: 'creator' | 'editor' | 'rater';
+    model: 'creator' | 'editor' | 'rater' | 'prose';
     enabled: boolean;
     order: number;              // For button ordering
     description?: string;       // Optional description for config UI

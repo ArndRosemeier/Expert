@@ -2160,6 +2160,7 @@ export class ReaderGUI {
                         <option value="creator" ${action.model === 'creator' ? 'selected' : ''}>Creator (Creative, detailed responses)</option>
                         <option value="editor" ${action.model === 'editor' ? 'selected' : ''}>Editor (Precise, concise editing)</option>
                         <option value="rater" ${action.model === 'rater' ? 'selected' : ''}>Rater (Analysis and evaluation)</option>
+                        <option value="prose" ${action.model === 'prose' ? 'selected' : ''}>Prose (Refined writing and style)</option>
                     </select>
                     <div class="field-description">Choose the AI model that best fits this action's purpose</div>
                 </div>
@@ -2352,7 +2353,7 @@ export class ReaderGUI {
         const updates = {
             title: (document.getElementById('action-title') as HTMLInputElement).value,
             description: (document.getElementById('action-description') as HTMLInputElement).value,
-            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater',
+                            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater' | 'prose',
             order: parseInt((document.getElementById('action-order') as HTMLInputElement).value),
             prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
         };

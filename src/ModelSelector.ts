@@ -9,6 +9,7 @@ const PURPOSES = [
   { key: 'creator', label: 'Creator' },
   { key: 'rater', label: 'Rater' },
   { key: 'editor', label: 'Editor' },
+  { key: 'prose', label: 'Prose' },
 ];
 
 function formatPromptCompletionPricing(pricing: Record<string, string>) {

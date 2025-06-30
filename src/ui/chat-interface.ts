@@ -45,7 +45,7 @@ export class ChatInterface {
         try {
             const storage = await StorageService.getInstance();
             const lastModel = await storage.get<string>(ChatInterface.LAST_CHAT_MODEL_KEY);
-            if (lastModel && ['creator', 'editor', 'rater'].includes(lastModel)) {
+            if (lastModel && ['creator', 'editor', 'rater', 'prose'].includes(lastModel)) {
                 this.selectedModelPurpose = lastModel;
             }
         } catch (error) {
@@ -267,6 +267,7 @@ export class ChatInterface {
                                 <option value="creator">Creator: ${this.getModelDisplayName('creator')}</option>
                                 <option value="editor">Editor: ${this.getModelDisplayName('editor')}</option>
                                 <option value="rater">Rater: ${this.getModelDisplayName('rater')}</option>
+                                <option value="prose">Prose: ${this.getModelDisplayName('prose')}</option>
                             </select>
                         </div>
                         <div class="input-wrapper" style="
