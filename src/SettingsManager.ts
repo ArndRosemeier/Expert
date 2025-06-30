@@ -140,6 +140,7 @@ export interface SettingsProfile {
     criteria: QualityCriterion[];
     maxIterations: number;
     selectedModels: Record<string, string>;
+    webSearchEnabled?: Record<string, boolean>;
     contextExtractionPrompt: string;
 }
 
@@ -171,6 +172,8 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             'selectedModels' in profile &&
             typeof profile.selectedModels === 'object' &&
             profile.selectedModels !== null &&
+            // webSearchEnabled is optional for backward compatibility
+            (profile.webSearchEnabled === undefined || (typeof profile.webSearchEnabled === 'object' && profile.webSearchEnabled !== null)) &&
             // contextExtractionPrompt is optional for backward compatibility
             (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string')
         );
@@ -209,10 +212,16 @@ export class SettingsManager {
             
             if (saved && areValidSettingsProfiles(saved)) {
                 this.profiles = saved;
-                // Add default context extraction prompt to existing profiles that don't have it
+                // Add default context extraction prompt and web search preferences to existing profiles that don't have them
                 Object.keys(this.profiles).forEach(profileName => {
-                    if (!this.profiles[profileName].contextExtractionPrompt) {
-                        this.profiles[profileName].contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
+                    const profile = this.profiles[profileName];
+                    if (profile) {
+                        if (!profile.contextExtractionPrompt) {
+                            profile.contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
+                        }
+                        if (!profile.webSearchEnabled) {
+                            profile.webSearchEnabled = {};
+                        }
                     }
                 });
                 // Save the updated profiles with the new field
@@ -233,6 +242,7 @@ export class SettingsManager {
                 criteria: DEFAULT_CRITERIA,
                 maxIterations: 5,
                 selectedModels: {},
+                webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
             };
             this.profiles = { default: defaultProfile };

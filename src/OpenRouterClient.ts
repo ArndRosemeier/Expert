@@ -7,6 +7,14 @@ export interface OpenRouterRequest {
   model: string;
   messages: OpenRouterMessage[];
   stream?: boolean;
+  plugins?: Array<{
+    id: string;
+    max_results?: number;
+    search_prompt?: string;
+  }>;
+  web_search_options?: {
+    search_context_size?: 'low' | 'medium' | 'high';
+  };
 }
 
 export interface OpenRouterResponse {
@@ -26,6 +34,7 @@ export interface OpenRouterModel {
   };
   pricing?: Record<string, string>;
   context_length?: number;
+  supported_parameters?: string[];
 }
 
 export interface OpenRouterModelsResponse {
@@ -118,6 +127,42 @@ export class OpenRouterClient {
       return model;
     } catch (error) {
       console.error(`Failed to get model for purpose ${purpose}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get model configuration including web search preferences for a purpose
+   */
+  private async getModelConfigForPurpose(purpose: string): Promise<{model: string, webSearchEnabled: boolean, hasNativeWebSearch: boolean}> {
+    try {
+      const modelSelector = state.getModelSelector();
+      if (!modelSelector) {
+        throw new Error('ModelSelector not available');
+      }
+      
+      const models = modelSelector.getSelectedModels();
+      const webSearchPrefs = modelSelector.getWebSearchEnabled();
+      const model = models[purpose];
+      
+      if (!model) {
+        throw new Error(`No model configured for purpose: ${purpose}`);
+      }
+
+      // Check if this model has native web search
+      const allModels = await this.fetchModels();
+      const modelInfo = allModels.find(m => m.id === model);
+      const hasNativeWebSearch = modelInfo ? OpenRouterClient.hasNativeWebSearch(modelInfo) : false;
+      
+      const webSearchEnabled = hasNativeWebSearch || (webSearchPrefs[purpose] || false);
+      
+      return {
+        model,
+        webSearchEnabled,
+        hasNativeWebSearch
+      };
+    } catch (error) {
+      console.error(`Failed to get model config for purpose ${purpose}:`, error);
       throw error;
     }
   }
@@ -240,9 +285,10 @@ export class OpenRouterClient {
         throw new Error('OpenRouter API key not configured. Please set it in the settings.');
       }
 
-      const model = await this.getModelForPurpose(purpose);
+      const modelConfig = await this.getModelConfigForPurpose(purpose);
+      const { model, webSearchEnabled, hasNativeWebSearch } = modelConfig;
       
-      console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
+      console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}, webSearch: ${webSearchEnabled}, operation: ${opId}`);
       
       // Use streaming by default (more reliable across different systems)
       if (this.forceStreamingMode) {
@@ -251,11 +297,18 @@ export class OpenRouterClient {
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
-        model,
+        model: webSearchEnabled && !hasNativeWebSearch ? `${model}:online` : model,
         messages: [
           { role: 'user', content: message }
         ],
       };
+
+      // Add web search options for native web search models
+      if (webSearchEnabled && hasNativeWebSearch) {
+        request.web_search_options = {
+          search_context_size: 'medium' // Default to medium context
+        };
+      }
       
       console.log(`📤 Sending request to OpenRouter:`, { model, messageLength: message.length, operationId: opId });
       const response = await this.sendMessage(request, apiKey, abortController.signal);
@@ -519,14 +572,22 @@ export class OpenRouterClient {
         throw error;
       }
 
-      const model = await this.getModelForPurpose(purpose);
+      const modelConfig = await this.getModelConfigForPurpose(purpose);
+      const { model, webSearchEnabled, hasNativeWebSearch } = modelConfig;
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
-        model,
+        model: webSearchEnabled && !hasNativeWebSearch ? `${model}:online` : model,
         messages,
         stream: true
       };
+
+      // Add web search options for native web search models
+      if (webSearchEnabled && hasNativeWebSearch) {
+        request.web_search_options = {
+          search_context_size: 'medium' // Default to medium context
+        };
+      }
       
       console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
 
@@ -712,5 +773,30 @@ export class OpenRouterClient {
       compatible: issues.length === 0,
       issues
     };
+  }
+
+  /**
+   * Check if a model supports native web search capabilities
+   */
+  public static hasNativeWebSearch(model: OpenRouterModel): boolean {
+    return model.pricing?.['web_search'] !== undefined && model.pricing['web_search'] !== "0";
+  }
+
+  /**
+   * Check if a model supports web search via plugin (all models do)
+   */
+  public static supportsWebSearchPlugin(): boolean {
+    return true; // All OpenRouter models support web search via plugin
+  }
+
+  /**
+   * Get web search pricing for a model (if available)
+   */
+  public static getWebSearchPricing(model: OpenRouterModel): string | null {
+    if (!model.pricing?.['web_search']) return null;
+    const pricePerRequest = parseFloat(model.pricing['web_search']);
+    if (isNaN(pricePerRequest)) return null;
+    const pricePer1000 = pricePerRequest * 1000;
+    return `$${pricePer1000.toFixed(2)} per 1000 web searches`;
   }
 } 

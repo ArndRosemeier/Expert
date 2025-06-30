@@ -4,6 +4,7 @@ import { StorageService, IStorageService } from './StorageService';
 
 const LOCAL_STORAGE_KEY = 'openrouter_api_key';
 const LOCAL_STORAGE_MODELS = 'openrouter_model_purposes';
+const LOCAL_STORAGE_WEB_SEARCH = 'openrouter_web_search_preferences';
 const PURPOSES = [
   { key: 'creator', label: 'Creator' },
   { key: 'rater', label: 'Rater' },
@@ -37,7 +38,7 @@ function isApiKeyFormatValid(key: string): boolean {
 }
 
 export class ModelSelector {
-  private onSelect: (selectedModels: Record<string, string>) => void;
+  private onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>) => void;
   private closeModal: () => void;
   private apiKey: string = '';
   private models: OpenRouterModel[] = [];
@@ -46,6 +47,7 @@ export class ModelSelector {
   private error: string | null = null;
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
+  private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
   private storageService: Promise<IStorageService>;
   private initializationPromise: Promise<void>;
@@ -60,7 +62,7 @@ export class ModelSelector {
   private readonly SAVE_DEBOUNCE_MS = 300;
 
   constructor(
-    onSelect: (selectedModels: Record<string, string>) => void,
+    onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>) => void,
     closeModal: () => void,
   ) {
     this.onSelect = onSelect;
@@ -512,6 +514,67 @@ export class ModelSelector {
         `;
         section.appendChild(desc);
         
+        // Web search capabilities indicator (only show for native web search)
+        const hasNativeWebSearch = OpenRouterClient.hasNativeWebSearch(validModel);
+        if (hasNativeWebSearch) {
+          const webSearchDiv = document.createElement('div');
+          webSearchDiv.textContent = '🌐 Native Web Search';
+          webSearchDiv.style.cssText = `
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            display: inline-block;
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+          `;
+          section.appendChild(webSearchDiv);
+        }
+
+        // Web search via plugin checkbox (show for all models)
+        const webSearchCheckboxContainer = document.createElement('div');
+        webSearchCheckboxContainer.style.cssText = `
+          margin-top: 0.5rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        `;
+
+        const webSearchCheckbox = document.createElement('input');
+        webSearchCheckbox.type = 'checkbox';
+        webSearchCheckbox.id = `web-search-${purpose.key}`;
+        webSearchCheckbox.checked = this.webSearchEnabled[purpose.key] || false;
+        webSearchCheckbox.style.cssText = `
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+          margin: 0;
+          vertical-align: middle;
+        `;
+
+        const webSearchLabel = document.createElement('label');
+        webSearchLabel.htmlFor = `web-search-${purpose.key}`;
+        webSearchLabel.textContent = 'Enable Web Search';
+        webSearchLabel.style.cssText = `
+          font-size: 0.9rem;
+          color: #374151;
+          cursor: pointer;
+          user-select: none;
+          line-height: 16px;
+          margin: 0;
+        `;
+
+        webSearchCheckbox.addEventListener('change', () => {
+          this.webSearchEnabled[purpose.key] = webSearchCheckbox.checked;
+          // Re-render to update pricing display
+          this.update();
+        });
+
+        webSearchCheckboxContainer.appendChild(webSearchCheckbox);
+        webSearchCheckboxContainer.appendChild(webSearchLabel);
+        section.appendChild(webSearchCheckboxContainer);
+        
         if (validModel.pricing) {
           pricingUl = document.createElement('ul');
           pricingUl.style.cssText = `
@@ -519,6 +582,8 @@ export class ModelSelector {
             margin-left: 1.5rem;
             margin-top: 0.5rem;
           `;
+          
+          // Regular pricing
           formatPromptCompletionPricing(validModel.pricing).forEach(line => {
             const li = document.createElement('li');
             li.textContent = line;
@@ -528,6 +593,19 @@ export class ModelSelector {
             `;
             pricingUl?.appendChild(li);
           });
+          
+          // Web search pricing (only show when checkbox is enabled)
+          if (this.webSearchEnabled[purpose.key]) {
+            const li = document.createElement('li');
+            li.textContent = `Web Search: $4.00 per 1000 results ($0.02 per request)`;
+            li.style.cssText = `
+              font-size: 0.9rem;
+              color: #d97706;
+              font-weight: 500;
+            `;
+            pricingUl?.appendChild(li);
+          }
+          
           section.appendChild(pricingUl);
         }
       } else {
@@ -540,22 +618,8 @@ export class ModelSelector {
         const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
         desc.textContent = model ? (model.description || '') : '';
         
-        // Update pricing
-        if (pricingUl) {
-          pricingUl.innerHTML = '';
-          if (model && model.pricing) {
-            formatPromptCompletionPricing(model.pricing).forEach(line => {
-              const li = document.createElement('li');
-              li.textContent = line;
-              li.style.cssText = `
-                font-size: 0.9rem;
-                color: #2563eb;
-              `;
-              pricingUl?.appendChild(li);
-            });
-          }
-        }
-        this.update(); // Re-render to update button states
+        // Update pricing - full re-render is simpler and more reliable
+        this.update(); // Re-render to update all model information including web search capabilities
       });
       
       section.appendChild(select);
@@ -596,7 +660,7 @@ export class ModelSelector {
     saveBtn.addEventListener('click', async () => {
       if (this.areAllModelsSelected()) {
         await this.saveToStorage();
-        this.onSelect(this.selectedModels);
+        this.onSelect(this.selectedModels, this.webSearchEnabled);
       }
     });
     buttonContainer.appendChild(saveBtn);
@@ -702,9 +766,18 @@ export class ModelSelector {
       } else {
         console.log('ℹ️ No OpenRouter model selections found in storage');
       }
+
+      const webSearchPrefs = await storage.get<Record<string, boolean>>(LOCAL_STORAGE_WEB_SEARCH);
+      if (webSearchPrefs) {
+        this.webSearchEnabled = webSearchPrefs;
+        console.log('✅ OpenRouter web search preferences loaded from storage');
+      } else {
+        console.log('ℹ️ No OpenRouter web search preferences found in storage');
+      }
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
       this.selectedModels = {};
+      this.webSearchEnabled = {};
       this.apiKey = '';
     }
   }
@@ -715,6 +788,7 @@ export class ModelSelector {
       const storage = await this.storageService;
       await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
       await storage.set(LOCAL_STORAGE_MODELS, this.selectedModels);
+      await storage.set(LOCAL_STORAGE_WEB_SEARCH, this.webSearchEnabled);
       console.log('✅ OpenRouter configuration saved successfully');
     } catch (error) {
       console.error('❌ CRITICAL: Failed to save OpenRouter configuration to storage:', error);
@@ -738,6 +812,37 @@ export class ModelSelector {
 
   public getApiKey(): string {
     return this.apiKey;
+  }
+
+  /**
+   * Get all models that support native web search
+   */
+  public getModelsWithNativeWebSearch(): OpenRouterModel[] {
+    return this.models.filter(model => 
+      model.pricing?.['web_search'] !== undefined && model.pricing['web_search'] !== "0"
+    );
+  }
+
+  /**
+   * Get all models (all support web search via plugin)
+   */
+  public getModelsWithWebSearchSupport(): OpenRouterModel[] {
+    return this.models; // All models support web search via plugin
+  }
+
+  /**
+   * Get web search preferences
+   */
+  public getWebSearchEnabled(): Record<string, boolean> {
+    return this.webSearchEnabled;
+  }
+
+  /**
+   * Set web search preferences
+   */
+  public async setWebSearchEnabled(webSearchEnabled: Record<string, boolean>): Promise<void> {
+    this.webSearchEnabled = webSearchEnabled;
+    await this.saveToStorage();
   }
 
   private async isSavedConfigValid(): Promise<boolean> {

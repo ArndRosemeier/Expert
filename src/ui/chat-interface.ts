@@ -1,6 +1,7 @@
 import { OpenRouterClient, OpenRouterMessage, StreamingCallbacks } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
 import { StorageService } from '../StorageService';
+import * as state from '../state';
 
 export interface ChatMessage {
     id: string;
@@ -733,8 +734,16 @@ export class ChatInterface {
      * Get display name for a model purpose
      */
     private getModelDisplayName(purpose: string): string {
-        const modelId = this.openRouterClient.getModelForPurpose(purpose);
-        return modelId || 'Not configured';
+        try {
+            const modelSelector = state.getModelSelector();
+            if (!modelSelector) return 'Not configured';
+            
+            const selectedModels = modelSelector.getSelectedModels();
+            return selectedModels[purpose] || 'Not configured';
+        } catch (error) {
+            console.warn(`Failed to get model display name for ${purpose}:`, error);
+            return 'Not configured';
+        }
     }
 
     /**
