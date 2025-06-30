@@ -68,7 +68,7 @@ export class AddChildNodeModal extends BaseModal {
         // Header
         const header = createElement('div', {
             classes: ['modal-header'],
-            content: `<h2>Add Child Node to "${this.childModalConfig.parentNode.title}"</h2>`
+            content: `<h2>Add ${this.childModalConfig.parentNode.childLevelName || 'Child'} to "${this.childModalConfig.parentNode.title}"</h2>`
         });
         container.appendChild(header);
 
@@ -447,7 +447,7 @@ export class AddChildNodeModal extends BaseModal {
             }
         }) as HTMLButtonElement;
 
-        const createButtonContent = isCreating ? '⚙️ Creating...' : 'Create Child Node';
+        const createButtonContent = isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`;
         const createButton = createElement('button', {
             content: createButtonContent,
             attributes: { 
@@ -676,7 +676,7 @@ export class AddChildNodeModal extends BaseModal {
         if (this.element) {
             const buttons = Array.from(this.element.querySelectorAll('button'));
             const createButton = buttons.find(btn => 
-                btn.textContent === 'Create Child Node' || btn.textContent === '⚙️ Creating...'
+                btn.textContent?.includes('Creating...') || btn.textContent?.startsWith('Create ')
             ) as HTMLButtonElement;
             
             if (createButton) {
@@ -686,7 +686,7 @@ export class AddChildNodeModal extends BaseModal {
                 createButton.disabled = !(canCreate && !isCreating);
                 createButton.style.background = (canCreate && !isCreating) ? '#4CAF50' : '#ccc';
                 createButton.style.cursor = (canCreate && !isCreating) ? 'pointer' : 'not-allowed';
-                createButton.textContent = isCreating ? '⚙️ Creating...' : 'Create Child Node';
+                createButton.textContent = isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`;
                 
                 console.log('🔄 Updated create button state:', { 
                     canCreate, 

@@ -456,7 +456,7 @@ export function renderNodeDetails() {
                 ` : ''}
                 ${!node.isLeaf ? `
                     <button id="add-child-node-btn" class="button button-secondary" style="background-color: #22c55e; color: white; border-color: #22c55e;">
-                        ➕ Add Child Node
+                        ➕ Add ${node.childLevelName || 'Child'}
                     </button>
                 ` : ''}
                 <button id="export-node-btn" class="button button-secondary" style="background-color: #6366f1; color: white; border-color: #6366f1;">
