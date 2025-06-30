@@ -1,6 +1,12 @@
 
 import { EventEmitter } from '../EventEmitter';
 
+// Button labels - centralized for consistency (shared with project-ui.ts)
+const BUTTON_LABELS = {
+    GENERATE: 'Generate Content',
+    GENERATE_ALL: 'Generate All Children'
+} as const;
+
 export interface GenerationOperation {
     id: string;
     type: 'single-content' | 'bulk-children' | 'child-content';
@@ -196,12 +202,12 @@ export class GenerationCoordinator {
             
             if (generateBtn) {
                 generateBtn.disabled = false;
-                    generateBtn.innerHTML = 'Generate';
+                    generateBtn.innerHTML = BUTTON_LABELS.GENERATE;
             }
             
             if (generateAllBtn) {
                 generateAllBtn.disabled = false;
-                generateAllBtn.innerHTML = 'Generate All Children';
+                generateAllBtn.innerHTML = BUTTON_LABELS.GENERATE_ALL;
                 } else {
                     console.warn('⚠️ Generate All Children button not found during cleanup!');
             }

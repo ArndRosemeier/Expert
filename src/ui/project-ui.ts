@@ -19,6 +19,13 @@ let autoPropagateState: boolean = true;
 let currentVersionIndex: number = 0;
 let availableVersions: any[] = [];
 
+// Button labels - centralized for consistency
+const BUTTON_LABELS = {
+    GENERATE: 'Generate Content',
+    GENERATE_ALL: 'Generate All Children',
+    GENERATE_RATINGS: 'Generate Ratings for Current Content'
+} as const;
+
 // Global abort button functions
 function showGlobalAbortButton() {
     const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
@@ -531,11 +538,11 @@ export function renderNodeDetails() {
                             <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
                             <input type="number" id="generation-count-input" min="1" max="20" value="${node.generationChildrenCount}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                         </div>
-                        <button id="node-generate-btn" class="button button-primary">Generate</button>
+                        <button id="node-generate-btn" class="button button-primary">${BUTTON_LABELS.GENERATE}</button>
                     </div>
                     
                     <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
-                        <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem; ${node.isLeaf ? 'opacity: 0.6; cursor: help;' : ''}" title="${node.isLeaf ? `This node is a leaf node (${node.template[node.level] || 'final level'}) - click for more information` : 'Generate child nodes based on this node\'s content'}">Generate All Children</button>
+                        <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem; ${node.isLeaf ? 'opacity: 0.6; cursor: help;' : ''}" title="${node.isLeaf ? `This node is a leaf node (${node.template[node.level] || 'final level'}) - click for more information` : 'Generate child nodes based on this node\'s content'}">${BUTTON_LABELS.GENERATE_ALL}</button>
                         ${!node.isLeaf ? `
                             <div style="display: flex; gap: 1rem; font-size: 0.9rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -773,9 +780,9 @@ export function renderNodeDetails() {
     if (isThisNodeGenerating) {
         generateBtn.innerHTML = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...';
     } else if (isAnyOperationInProgress) {
-        generateBtn.textContent = 'Generate (Operation in progress)';
+        generateBtn.textContent = `${BUTTON_LABELS.GENERATE} (Operation in progress)`;
     } else {
-        generateBtn.textContent = 'Generate';
+        generateBtn.textContent = BUTTON_LABELS.GENERATE;
     }
 
     // Set up button tooltips and event listeners for generate all children button (now inline)
@@ -784,7 +791,7 @@ export function renderNodeDetails() {
         if (generateAllBtn) {
             // Normal state (no more button transformations)
             generateAllBtn.className = 'button';
-            generateAllBtn.innerHTML = 'Generate All Children';
+            generateAllBtn.innerHTML = BUTTON_LABELS.GENERATE_ALL;
             generateAllBtn.id = 'node-generate-all-btn';
             generateAllBtn.disabled = isAnyOperationInProgress;
             
@@ -1115,7 +1122,7 @@ function renderRatingsView() {
                 </p>
                 ${currentVersion && currentVersion.isCurrent ? `
                     <button id="regenerate-ratings-btn" class="button button-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                        Generate Ratings for Current Content
+                        ${BUTTON_LABELS.GENERATE_RATINGS}
                     </button>
                 ` : ''}
             </div>
