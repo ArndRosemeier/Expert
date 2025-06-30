@@ -355,12 +355,12 @@ export class ModelSelector {
     `;
     this.testButton.addEventListener('click', () => void this.testApiKey());
     this.testButton.addEventListener('mouseenter', () => {
-      if (!this.testButton!.disabled) {
+      if (this.testButton && !this.testButton.disabled) {
         this.testButton.style.background = '#059669';
       }
     });
     this.testButton.addEventListener('mouseleave', () => {
-      if (!this.testButton!.disabled) {
+      if (this.testButton && !this.testButton.disabled) {
         this.testButton.style.background = '#10b981';
       }
     });
@@ -384,12 +384,12 @@ export class ModelSelector {
     `;
     this.fetchButton.addEventListener('click', () => void this.fetchModels());
     this.fetchButton.addEventListener('mouseenter', () => {
-      if (!this.fetchButton!.disabled) {
+      if (this.fetchButton && !this.fetchButton.disabled) {
         this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
       }
     });
     this.fetchButton.addEventListener('mouseleave', () => {
-      if (!this.fetchButton!.disabled) {
+      if (this.fetchButton && !this.fetchButton.disabled) {
         this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
       }
     });
@@ -664,7 +664,8 @@ export class ModelSelector {
       // Ensure selectedModels only contains ids present in models
       const modelIds = new Set(this.models.map(m => m.id));
       for (const purpose of PURPOSES) {
-        if (this.selectedModels[purpose.key] && !modelIds.has(this.selectedModels[purpose.key])) {
+        const selectedModel = this.selectedModels[purpose.key];
+        if (selectedModel && !modelIds.has(selectedModel)) {
           this.selectedModels[purpose.key] = '';
         }
       }

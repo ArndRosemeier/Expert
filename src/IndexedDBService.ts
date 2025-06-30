@@ -86,10 +86,14 @@ export class IndexedDBService {
           }
           
           console.log(`Creating object store: ${storeConfig.name}`);
-          objectStore = db.createObjectStore(storeConfig.name, {
-            keyPath: storeConfig.keyPath,
-            autoIncrement: storeConfig.autoIncrement
-          });
+          const options: IDBObjectStoreParameters = {};
+          if (storeConfig.keyPath !== undefined) {
+            options.keyPath = storeConfig.keyPath;
+          }
+          if (storeConfig.autoIncrement !== undefined) {
+            options.autoIncrement = storeConfig.autoIncrement;
+          }
+          objectStore = db.createObjectStore(storeConfig.name, options);
 
           // Create indexes
           if (storeConfig.indexes) {

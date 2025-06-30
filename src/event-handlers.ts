@@ -132,19 +132,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
     }
 }
 
-function calculateImportDepth(data: any): number {
-    if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
-        return 0; // No children = 0 additional depth
-    }
-    
-    let maxChildDepth = 0;
-    for (const child of data.children) {
-        const childDepth = calculateImportDepth(child);
-        maxChildDepth = Math.max(maxChildDepth, childDepth);
-    }
-    
-    return 1 + maxChildDepth; // 1 for this level + max child depth
-}
+// Removed unused function calculateImportDepth
 
 function importChildNodeForProject(project: ProjectManager, parentId: string, childData: any, index: number): void {
     if (!childData.title) {

@@ -222,8 +222,8 @@ export class OpenRouterClient {
    * Send a chat message for a given purpose. Always uses role 'user'.
    * Returns just the model's answer string.
    */
-  async chat(purpose: string, message: string, operationId?: string, externalAbortSignal?: AbortSignal): Promise<string> {
-    const opId = operationId || this.generateOperationId(purpose);
+  async chat(purpose: string, message: string, _operationId?: string, externalAbortSignal?: AbortSignal): Promise<string> {
+    const opId = _operationId || this.generateOperationId(purpose);
     const abortController = new AbortController();
     this.activeOperations.set(opId, abortController);
 
@@ -334,11 +334,10 @@ export class OpenRouterClient {
   private async chatWithStreamingFallback(purpose: string, message: string, operationId: string, abortSignal: AbortSignal): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullResponse = '';
-      let hasStarted = false;
       
       const callbacks: StreamingCallbacks = {
         onStart: () => {
-          hasStarted = true;
+          // Stream started
         },
         onChunk: (chunk: string) => {
           fullResponse += chunk;

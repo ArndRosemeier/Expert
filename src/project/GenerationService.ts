@@ -974,7 +974,7 @@ export class GenerationService {
         for (const line of contextLines) {
             const trimmedLine = line.trim();
             const match = trimmedLine.match(/^settingsoverride:\s*(.+)$/i);
-            if (match) {
+            if (match && match[1]) {
                 return match[1].trim();
             }
         }
@@ -996,7 +996,7 @@ export class GenerationService {
         for (const line of contextLines) {
             const trimmedLine = line.trim();
             const match = trimmedLine.match(/^settingsoverride:\s*(.+)$/i);
-            if (match) {
+            if (match && match[1]) {
                 return match[1].trim();
             }
         }
@@ -1094,7 +1094,7 @@ export class GenerationService {
                 
                 // Check for new format: "Title: X, Content: Y"
                 const titleMatch = content.match(/^Title:\s*([^,]+),\s*Content:\s*(.*)$/i);
-                if (titleMatch) {
+                if (titleMatch && titleMatch[1] && titleMatch[2]) {
                     return {
                         title: titleMatch[1].trim(),
                         description: titleMatch[2].trim()

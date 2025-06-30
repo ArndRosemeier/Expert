@@ -213,7 +213,7 @@ export class DocumentNode {
      */
     getLatestGenerationSession(): GenerationSession | null {
         return this.generationSessions.length > 0 
-            ? this.generationSessions[this.generationSessions.length - 1]
+            ? this.generationSessions[this.generationSessions.length - 1] ?? null
             : null;
     }
 
@@ -256,7 +256,7 @@ export class DocumentNode {
         if (this.isLeaf) {
             return null;
         }
-        const rawChildLevelName = this.template[this.level + 1] || null;
+        const rawChildLevelName = this.template[this.level + 1] ?? null;
         if (!rawChildLevelName) {
             return null;
         }
@@ -264,7 +264,7 @@ export class DocumentNode {
         // Extract just the base name (remove numbers)
         // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
         const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-        return match ? match[1] : rawChildLevelName;
+        return match && match[1] ? match[1] : rawChildLevelName;
     }
 
     /**
