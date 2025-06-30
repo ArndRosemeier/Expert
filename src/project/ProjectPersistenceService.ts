@@ -234,6 +234,7 @@ export class ProjectPersistenceService {
             generationHistory: plainNode.generationHistory || [],
             generationSessions: plainNode.generationSessions || [],
             generationChildrenCount: plainNode.generationChildrenCount || 5, // Default to 5 if not set
+            creatorModel: plainNode.creatorModel || null, // Handle creator model field
             children: [], // Reset children, as they will be rehydrated recursively
         });
 

@@ -186,11 +186,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * Adds a new node to the document tree under a specified parent.
      * @param title The title of the new node.
      * @param parentId The ID of the parent node.
+     * @param creatorModel Optional model name that created this node.
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null = null): DocumentNode {
+    public addNode(title: string, parentId: string | null = null, creatorModel?: string): DocumentNode {
         // Delegate to TreeService
-        return this.treeService.addNode(title, parentId, this.rootNode);
+        return this.treeService.addNode(title, parentId, this.rootNode, creatorModel);
     }
 
     /**
@@ -442,6 +443,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             generationPrompt: plainNode.generationPrompt || null,
             generationHistory: plainNode.generationHistory || [],
             generationSessions: plainNode.generationSessions || [],
+            creatorModel: plainNode.creatorModel || null, // Handle creator model field
             children: [], // Reset children, as they will be rehydrated recursively
         });
 

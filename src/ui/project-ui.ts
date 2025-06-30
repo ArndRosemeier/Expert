@@ -678,7 +678,10 @@ export function renderNodeDetails() {
 
         <div class="node-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <label for="node-content">Content</label>
+                <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <label for="node-content">Content</label>
+                    <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ? node.creatorModel : 'user text, not generated'}</span>
+                </div>
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div id="version-navigation" style="display: none; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
                         <button id="version-prev-btn" class="version-nav-btn" title="Previous version">‹</button>
@@ -702,10 +705,10 @@ export function renderNodeDetails() {
         
         <div class="node-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <label for="node-context">Context</label>
                     <button id="context-info-btn" class="info-button" title="Learn about Context features" style="margin-left: 4px;">i</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic;">(auto-propagates to children when enabled)</span>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">(auto-propagates to children when enabled)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <label for="auto-propagate-checkbox" style="font-weight: normal; font-size: 0.8rem; margin: 0; color: #6c757d;">

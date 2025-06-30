@@ -151,6 +151,12 @@ export class NodeCreationService implements INodeCreationService {
         // Set initial content if provided (with Draft prefix)
         if (draft) {
             childNode.content = `Draft: ${draft}`;
+            // If draft was AI-generated, track the creator model
+            const profile = this.settingsManager.getLastUsedProfile();
+            const creatorModel = profile?.selectedModels?.['creator'];
+            if (creatorModel) {
+                childNode.creatorModel = creatorModel;
+            }
         }
 
         // Update parent content if requested

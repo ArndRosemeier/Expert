@@ -32,9 +32,10 @@ export class TreeService {
      * @param title The title of the new node.
      * @param parentId The ID of the parent node (null for root operations).
      * @param rootNode The root node of the tree.
+     * @param creatorModel Optional model name that created this node.
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null, rootNode: DocumentNode): DocumentNode {
+    public addNode(title: string, parentId: string | null, rootNode: DocumentNode, creatorModel?: string): DocumentNode {
         const parent = parentId ? this.findNodeById(parentId, rootNode) : rootNode;
         if (!parent) {
             throw new Error(`Parent node with ID "${parentId}" not found.`);
@@ -42,6 +43,10 @@ export class TreeService {
 
         const newLevel = parent.level + 1;
         const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
+        
+        if (creatorModel) {
+            newNode.creatorModel = creatorModel;
+        }
         
         parent.children.push(newNode);
         

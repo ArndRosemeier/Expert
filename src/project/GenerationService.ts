@@ -333,7 +333,8 @@ export class GenerationService {
                 // Handle aborted generation
                 node.endGenerationSession(false, currentIterationContent || '');
                 if (currentIterationContent) {
-                    node.setContentFromGeneration(currentIterationContent);
+                    const creatorModel = profile.selectedModels?.['creator'];
+                    node.setContentFromGeneration(currentIterationContent, creatorModel);
                 }
                 
                 // Cleanup state before emitting events
@@ -348,7 +349,8 @@ export class GenerationService {
             } else {
                 // Handle successful completion
                 node.endGenerationSession(result.success, result.finalResponse);
-                node.setContentFromGeneration(result.finalResponse);
+                const creatorModel = profile.selectedModels?.['creator'];
+                node.setContentFromGeneration(result.finalResponse, creatorModel);
                 node.generationHistory = result.history;
                 
                 // Context is now simply inherited from parent (no synthesis needed)
@@ -478,11 +480,19 @@ export class GenerationService {
                 return;
             }
 
+            // Get the creator model name for tracking
+            const currentProfile = this.deps.settingsManager.getLastUsedProfile();
+            const creatorModel = currentProfile?.selectedModels?.['creator'];
+
             nodeItems.forEach(item => {
-                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode);
+                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
                 // Set the content description as initial content if provided
                 if (item.description && item.description.trim()) {
                     newNode.content = `Draft: ${item.description}`;
+                    // Since this is AI-generated content, set the creator model
+                    if (creatorModel) {
+                        newNode.creatorModel = creatorModel;
+                    }
                 }
             });
 
@@ -638,11 +648,19 @@ export class GenerationService {
                     throw new Error(errorMsg);
                 }
 
+                // Get the creator model name for tracking
+                const currentProfile = this.deps.settingsManager.getLastUsedProfile();
+                const creatorModel = currentProfile?.selectedModels?.['creator'];
+
                 nodeItems.forEach(item => {
-                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode);
+                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
                     // Set the content description as initial content if provided
                     if (item.description && item.description.trim()) {
                         newNode.content = `Draft: ${item.description}`;
+                        // Since this is AI-generated content, set the creator model
+                        if (creatorModel) {
+                            newNode.creatorModel = creatorModel;
+                        }
                     }
                     // Copy parent context to new child node
                     this.deps.contextService.copyParentContextToChild(newNode, this.deps.rootNode);

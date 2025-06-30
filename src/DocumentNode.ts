@@ -45,6 +45,9 @@ export class DocumentNode {
     isPromptGenerating: boolean = false;
     generationChildrenCount: number = 5; // Default count for child generation
     
+    // --- Creator Model Tracking ---
+    creatorModel: string | null = null; // Track which AI model created/generated content
+    
     // --- Legacy & Internal Properties ---
     generationHistory: LoopHistoryItem[] = [];
     isGenerating: boolean = false;
@@ -127,9 +130,12 @@ export class DocumentNode {
      * Sets content during generation process without clearing generation history.
      * This should only be called by the generation system.
      */
-    setContentFromGeneration(newContent: string): void {
+    setContentFromGeneration(newContent: string, model?: string): void {
         this._isSettingContentFromGeneration = true;
         this.content = newContent;
+        if (model) {
+            this.creatorModel = model;
+        }
         this._isSettingContentFromGeneration = false;
     }
 
@@ -303,6 +309,7 @@ export class DocumentNode {
             isGenerating: this.isGenerating,
             generationSessions: this.generationSessions,
             generationChildrenCount: this.generationChildrenCount,
+            creatorModel: this.creatorModel,
         };
     }
 } 
