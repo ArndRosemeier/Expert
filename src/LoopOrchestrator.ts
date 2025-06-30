@@ -111,7 +111,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
             const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, content, criteria);
             try {
-                lastRatingResponse = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
                 ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
 
                 if (ratingsFromAI) {
@@ -185,7 +185,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 });
 
                 try {
-                    currentResponse = await this.client.chat('creator', initialPrompt, this.abortController.signal);
+                    currentResponse = await this.client.chat('creator', initialPrompt, undefined, this.abortController.signal);
                 } catch (e: any) {
                     if (e.message === 'Request was aborted' || this.stopRequested) {
                         aborted = true;
@@ -222,7 +222,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                     const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
                     try {
-                        lastRatingResponse = await this.client.chat('rater', raterPrompt, this.abortController.signal);
+                        lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
                         ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
 
                         if (ratingsFromAI) {
@@ -274,7 +274,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     let editorAdvice: string;
                     
                     try {
-                        editorAdvice = await this.client.chat('editor', editorPrompt, this.abortController.signal);
+                        editorAdvice = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
                     } catch(e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
                             aborted = true;
@@ -307,7 +307,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     });
                     
                     try {
-                        currentResponse = await this.client.chat('creator', creatorPrompt, this.abortController.signal);
+                        currentResponse = await this.client.chat('creator', creatorPrompt, undefined, this.abortController.signal);
                     } catch (e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
                             aborted = true;

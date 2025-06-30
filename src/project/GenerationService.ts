@@ -677,6 +677,11 @@ export class GenerationService {
                 for (let i = 0; i < total; i++) {
                     const child = childrenNeedingContent[i];
                     
+                    if (!child) {
+                        console.warn(`Child at index ${i} is undefined, skipping`);
+                        continue;
+                    }
+                    
                     // Check for abort before processing each child
                     if (this.isAbortRequested()) {
                         break;
@@ -756,6 +761,11 @@ export class GenerationService {
             
             for (let i = 0; i < childrenToExpand.length; i++) {
                 const child = childrenToExpand[i];
+                
+                if (!child) {
+                    console.warn(`Child to expand at index ${i} is undefined, skipping`);
+                    continue;
+                }
                 
                 // Check for abort before recursive processing
                 if (this.isAbortRequested()) {
@@ -872,7 +882,7 @@ export class GenerationService {
 
             const abortSignal = this.deps.generationController.getCurrentGenerationInfo()?.canAbort ? 
                 new AbortController().signal : undefined;
-            const summary = await this.deps.openRouterClient.chat('editor', systemPrompt, abortSignal);
+            const summary = await this.deps.openRouterClient.chat('editor', systemPrompt, undefined, abortSignal);
             
             if (this.isAbortRequested()) {
                 throw new Error('Generation aborted by user');
