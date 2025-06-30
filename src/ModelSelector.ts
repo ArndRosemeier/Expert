@@ -42,6 +42,15 @@ export class ModelSelector {
   private root: HTMLElement | null = null;
   private storageService: Promise<IStorageService>;
   private initializationPromise: Promise<void>;
+  
+  // UI Element References for robust event handling
+  private apiKeyInput: HTMLInputElement | null = null;
+  private testButton: HTMLButtonElement | null = null;
+  private fetchButton: HTMLButtonElement | null = null;
+  
+  // Debounced save function to prevent excessive storage calls
+  private saveTimeoutId: number | null = null;
+  private readonly SAVE_DEBOUNCE_MS = 300;
 
   constructor(
     onSelect: (selectedModels: Record<string, string>) => void,
@@ -60,7 +69,11 @@ export class ModelSelector {
   private async initializeAsync(): Promise<void> {
     await this.loadFromStorage();
     if (this.apiKey && !this.fetched) {
-      await this.fetchModels();
+      try {
+        await this.fetchModels();
+      } catch (error) {
+        console.warn('Failed to auto-fetch models during initialization:', error);
+      }
     }
   }
 
@@ -69,317 +82,504 @@ export class ModelSelector {
     this.update();
   }
 
+  /**
+   * Centralized method to save API key with debouncing and error handling
+   */
+  private async debouncedSaveApiKey(): Promise<void> {
+    // Clear existing timeout
+    if (this.saveTimeoutId !== null) {
+      clearTimeout(this.saveTimeoutId);
+    }
+    
+    // Set new timeout for debounced save
+    this.saveTimeoutId = window.setTimeout(async () => {
+      try {
+        console.log('💾 Saving OpenRouter API key to storage...');
+        const storage = await this.storageService;
+        await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
+        console.log('✅ OpenRouter API key saved successfully');
+        
+        // Update button states after successful save
+        this.updateButtonStates();
+      } catch (error) {
+        console.error('❌ CRITICAL: Failed to save OpenRouter API key:', error);
+        // Show user-visible error
+        this.showStorageError('Failed to save API key. Please try again.');
+      } finally {
+        this.saveTimeoutId = null;
+      }
+    }, this.SAVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Centralized method to update button states
+   */
+  private updateButtonStates(): void {
+    if (this.testButton) {
+      this.testButton.disabled = this.testing || !this.apiKey;
+      this.testButton.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
+      this.testButton.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
+      this.testButton.textContent = this.testing ? 'Testing...' : 'Test API Key';
+    }
+    
+    if (this.fetchButton) {
+      this.fetchButton.disabled = this.loading || !this.apiKey;
+      this.fetchButton.style.background = this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+      this.fetchButton.style.cursor = this.loading || !this.apiKey ? 'not-allowed' : 'pointer';
+      this.fetchButton.textContent = this.loading ? 'Fetching...' : 'Fetch Models';
+    }
+  }
+
+  /**
+   * Show storage error to user
+   */
+  private showStorageError(message: string): void {
+    // Create or update error display
+    const container = this.root?.querySelector('.model-selector-container');
+    if (!container) return;
+    
+    let errorDiv = container.querySelector('.storage-error') as HTMLElement;
+    if (!errorDiv) {
+      errorDiv = document.createElement('div');
+      errorDiv.className = 'storage-error';
+      errorDiv.style.cssText = `
+        color: #dc2626;
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-weight: 500;
+      `;
+      container.insertBefore(errorDiv, container.firstChild);
+    }
+    
+    errorDiv.textContent = `⚠️ ${message}`;
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      if (errorDiv && errorDiv.parentNode) {
+        errorDiv.parentNode.removeChild(errorDiv);
+      }
+    }, 5000);
+  }
+
+  /**
+   * Centralized event handler setup for API key input
+   */
+  private setupApiKeyInputEvents(): void {
+    if (!this.apiKeyInput) return;
+
+    // Remove any existing listeners to prevent duplicates
+    const newInput = this.apiKeyInput.cloneNode(true) as HTMLInputElement;
+    const parentNode = this.apiKeyInput.parentNode;
+    if (parentNode) {
+      parentNode.replaceChild(newInput, this.apiKeyInput);
+    }
+    this.apiKeyInput = newInput;
+
+    // Input event - save on every keystroke (debounced)
+    this.apiKeyInput.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      this.apiKey = target.value;
+      
+      // Immediate UI feedback
+      this.updateButtonStates();
+      
+      // Debounced save to storage
+      void this.debouncedSaveApiKey();
+    });
+
+    // Focus/blur events for visual feedback
+    this.apiKeyInput.addEventListener('focus', () => {
+      const input = this.apiKeyInput;
+      if (input) {
+        input.style.borderColor = '#3b82f6';
+        input.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+      }
+    });
+
+    this.apiKeyInput.addEventListener('blur', () => {
+      const input = this.apiKeyInput;
+      if (input) {
+        input.style.borderColor = '#d1d5db';
+        input.style.boxShadow = 'none';
+      }
+    });
+
+    // Paste event - handle pasted content
+    this.apiKeyInput.addEventListener('paste', () => {
+      // Small delay to allow paste to complete
+      setTimeout(() => {
+        const input = this.apiKeyInput;
+        if (input) {
+          this.apiKey = input.value;
+          this.updateButtonStates();
+          void this.debouncedSaveApiKey();
+        }
+      }, 50);
+    });
+
+    // Keyboard shortcuts
+    this.apiKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && this.apiKey && !this.testing && !this.loading) {
+        // Enter key - test API key if available
+        e.preventDefault();
+        void this.testApiKey();
+      } else if (e.key === 'Escape') {
+        // Escape key - blur input
+        const input = this.apiKeyInput;
+        if (input) {
+          input.blur();
+        }
+      }
+    });
+  }
+
   update() {
     if (!this.root) return;
     this.root.innerHTML = '';
     const container = document.createElement('div');
     container.className = 'model-selector-container';
-    container.style.width = '100%';
-    container.style.padding = '2vw 2vw 2vw 2vw';
-    container.style.background = 'rgba(255,255,255,0.95)';
-    container.style.borderRadius = '1.5rem';
-    container.style.boxShadow = '0 4px 32px 0 rgba(0,0,0,0.10), 0 1.5px 6px 0 rgba(0,0,0,0.08)';
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '1.5rem';
-    container.style.boxSizing = 'border-box';
+    container.style.cssText = `
+      width: 100%;
+      padding: 2vw;
+      background: rgba(255,255,255,0.95);
+      border-radius: 1.5rem;
+      box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10), 0 1.5px 6px 0 rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      box-sizing: border-box;
+    `;
 
     // Header
     const h2 = document.createElement('h2');
     h2.textContent = 'Configure OpenRouter Models';
-    h2.style.fontSize = '1.5rem';
-    h2.style.fontWeight = 'bold';
-    h2.style.marginBottom = '0.5rem';
-    h2.style.textAlign = 'center';
-    h2.style.letterSpacing = '0.01em';
-    h2.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-    h2.style.color = 'white';
-    h2.style.borderRadius = '1rem';
-    h2.style.padding = '0.75rem 0';
-    h2.style.boxShadow = '0 2px 8px 0 rgba(59,130,246,0.10)';
+    h2.style.cssText = `
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin: 0 0 0.5rem 0;
+      text-align: center;
+      letter-spacing: 0.01em;
+      background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+      color: white;
+      border-radius: 1rem;
+      padding: 0.75rem 0;
+      box-shadow: 0 2px 8px 0 rgba(59,130,246,0.10);
+    `;
     container.appendChild(h2);
 
-    // API key input
+    // API key input section
     const inputDiv = document.createElement('div');
-    inputDiv.style.display = 'flex';
-    inputDiv.style.flexDirection = 'column';
-    inputDiv.style.gap = '0.5rem';
-    inputDiv.style.marginBottom = '0.5rem';
-    const input = document.createElement('input');
-    input.type = 'password';
-    input.placeholder = 'Enter OpenRouter API Key';
-    input.value = this.apiKey;
-    input.style.padding = '0.75rem 1rem';
-    input.style.border = '1.5px solid #d1d5db';
-    input.style.borderRadius = '0.75rem';
-    input.style.fontSize = '1rem';
-    input.style.background = '#f9fafb';
-    input.style.transition = 'border-color 0.2s';
-    input.addEventListener('focus', () => { input.style.borderColor = '#3b82f6'; });
-    input.addEventListener('blur', () => { input.style.borderColor = '#d1d5db'; });
-    input.addEventListener('input', async (e) => {
-      this.apiKey = (e.target as HTMLInputElement).value;
-      await this.saveToStorage();
-      // Don't call this.update() here to avoid disrupting typing experience
-      // The buttons will be updated when user finishes typing or clicks elsewhere
-    });
-    
-    // Update button states when user finishes typing (on blur)
-    input.addEventListener('blur', () => {
-      // Update button states after user finishes typing
-      const testBtn = document.querySelector('#test-api-key-btn') as HTMLButtonElement;
-      const fetchBtn = document.querySelector('#fetch-models-btn') as HTMLButtonElement;
-      
-      if (testBtn) {
-        testBtn.disabled = this.testing || !this.apiKey;
-        testBtn.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
-        testBtn.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
-      }
-      
-      if (fetchBtn) {
-        fetchBtn.disabled = this.loading || !this.apiKey;
-        fetchBtn.style.background = this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-        fetchBtn.style.cursor = this.loading || !this.apiKey ? 'not-allowed' : 'pointer';
-      }
-    });
-    inputDiv.appendChild(input);
-    // Info
+    inputDiv.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    `;
+
+    // Create API key input with robust setup
+    this.apiKeyInput = document.createElement('input');
+    this.apiKeyInput.type = 'password';
+    this.apiKeyInput.placeholder = 'Enter OpenRouter API Key';
+    this.apiKeyInput.value = this.apiKey;
+    this.apiKeyInput.style.cssText = `
+      padding: 0.75rem 1rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: 0.75rem;
+      font-size: 1rem;
+      background: #f9fafb;
+      transition: all 0.2s;
+      outline: none;
+    `;
+    inputDiv.appendChild(this.apiKeyInput);
+
+    // Info section
     const info = document.createElement('div');
-                info.innerHTML = '<strong>Info:</strong> Your API key and model selections are stored in your browser\'s IndexedDB. Anyone with access to this browser profile can view them.';
-    info.style.fontSize = '0.85rem';
-    info.style.color = '#b45309';
-    info.style.background = '#fef3c7';
-    info.style.borderRadius = '0.5rem';
-    info.style.padding = '0.5rem 0.75rem';
+    info.innerHTML = '<strong>Info:</strong> Your API key and model selections are stored in your browser\'s IndexedDB. Anyone with access to this browser profile can view them.';
+    info.style.cssText = `
+      font-size: 0.85rem;
+      color: #b45309;
+      background: #fef3c7;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+    `;
     inputDiv.appendChild(info);
-    // Button container for Fetch and Test buttons
+
+    // Button container
     const buttonRow = document.createElement('div');
-    buttonRow.style.display = 'flex';
-    buttonRow.style.gap = '0.75rem';
-    buttonRow.style.width = '100%';
+    buttonRow.style.cssText = `
+      display: flex;
+      gap: 0.75rem;
+      width: 100%;
+    `;
 
     // Test API Key button
-    const testBtn = document.createElement('button');
-    testBtn.id = 'test-api-key-btn';
-    testBtn.textContent = this.testing ? 'Testing...' : 'Test API Key';
-    testBtn.disabled = this.testing || !this.apiKey;
-    testBtn.style.padding = '0.75rem 1rem';
-    testBtn.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
-    testBtn.style.color = 'white';
-    testBtn.style.fontWeight = 'bold';
-    testBtn.style.border = 'none';
-    testBtn.style.borderRadius = '0.75rem';
-    testBtn.style.fontSize = '1rem';
-    testBtn.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
-    testBtn.style.transition = 'background 0.2s';
-    testBtn.style.flex = '1';
-    testBtn.addEventListener('mouseenter', () => {
-      if (!testBtn.disabled) testBtn.style.background = '#059669';
+    this.testButton = document.createElement('button');
+    this.testButton.textContent = this.testing ? 'Testing...' : 'Test API Key';
+    this.testButton.disabled = this.testing || !this.apiKey;
+    this.testButton.style.cssText = `
+      padding: 0.75rem 1rem;
+      background: ${this.testing || !this.apiKey ? '#d1d5db' : '#10b981'};
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 0.75rem;
+      font-size: 1rem;
+      cursor: ${this.testing || !this.apiKey ? 'not-allowed' : 'pointer'};
+      transition: background 0.2s;
+      flex: 1;
+    `;
+    this.testButton.addEventListener('click', () => void this.testApiKey());
+    this.testButton.addEventListener('mouseenter', () => {
+      if (!this.testButton?.disabled) {
+        this.testButton.style.background = '#059669';
+      }
     });
-    testBtn.addEventListener('mouseleave', () => {
-      if (!testBtn.disabled) testBtn.style.background = '#10b981';
+    this.testButton.addEventListener('mouseleave', () => {
+      if (!this.testButton?.disabled) {
+        this.testButton.style.background = '#10b981';
+      }
     });
-    testBtn.addEventListener('click', () => this.testApiKey());
-    buttonRow.appendChild(testBtn);
+    buttonRow.appendChild(this.testButton);
 
-    // Fetch button
-    const fetchBtn = document.createElement('button');
-    fetchBtn.id = 'fetch-models-btn';
-    fetchBtn.textContent = this.loading ? 'Fetching...' : 'Fetch Models';
-    fetchBtn.disabled = this.loading || !this.apiKey;
-    fetchBtn.style.padding = '0.75rem 1rem';
-    fetchBtn.style.background = this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
-    fetchBtn.style.color = 'white';
-    fetchBtn.style.fontWeight = 'bold';
-    fetchBtn.style.border = 'none';
-    fetchBtn.style.borderRadius = '0.75rem';
-    fetchBtn.style.fontSize = '1rem';
-    fetchBtn.style.cursor = this.loading || !this.apiKey ? 'not-allowed' : 'pointer';
-    fetchBtn.style.transition = 'background 0.2s';
-    fetchBtn.style.flex = '1';
-    fetchBtn.addEventListener('mouseenter', () => {
-      if (!fetchBtn.disabled) fetchBtn.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
+    // Fetch Models button
+    this.fetchButton = document.createElement('button');
+    this.fetchButton.textContent = this.loading ? 'Fetching...' : 'Fetch Models';
+    this.fetchButton.disabled = this.loading || !this.apiKey;
+    this.fetchButton.style.cssText = `
+      padding: 0.75rem 1rem;
+      background: ${this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)'};
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 0.75rem;
+      font-size: 1rem;
+      cursor: ${this.loading || !this.apiKey ? 'not-allowed' : 'pointer'};
+      transition: background 0.2s;
+      flex: 1;
+    `;
+    this.fetchButton.addEventListener('click', () => void this.fetchModels());
+    this.fetchButton.addEventListener('mouseenter', () => {
+      if (!this.fetchButton?.disabled) {
+        this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
+      }
     });
-    fetchBtn.addEventListener('mouseleave', () => {
-      if (!fetchBtn.disabled) fetchBtn.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+    this.fetchButton.addEventListener('mouseleave', () => {
+      if (!this.fetchButton?.disabled) {
+        this.fetchButton.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+      }
     });
-    fetchBtn.addEventListener('click', () => this.fetchModels());
-    buttonRow.appendChild(fetchBtn);
+    buttonRow.appendChild(this.fetchButton);
 
     inputDiv.appendChild(buttonRow);
     container.appendChild(inputDiv);
-    // Error
+
+    // Setup centralized event handling for API key input
+    this.setupApiKeyInputEvents();
+
+    // Error display
     if (this.error) {
       const err = document.createElement('p');
       err.textContent = `Error: ${this.error}`;
-      err.style.color = '#dc2626';
-      err.style.background = '#fee2e2';
-      err.style.borderRadius = '0.5rem';
-      err.style.padding = '0.5rem 0.75rem';
-      err.style.fontWeight = 'bold';
+      err.style.cssText = `
+        color: #dc2626;
+        background: #fee2e2;
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        font-weight: bold;
+        margin: 0;
+      `;
       container.appendChild(err);
     }
-    // Model selectors
+
+    // Model selectors (rest of the existing logic)
     if (this.fetched && !this.loading && !this.error && this.models.length > 0) {
-      // 2x2 grid for model selectors
-      const grid = document.createElement('div');
-      grid.style.display = 'grid';
-      grid.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
-      grid.style.gap = '1.5rem';
-      grid.style.width = '100%';
-      grid.style.boxSizing = 'border-box';
-      grid.style.margin = '0 auto';
-      grid.style.alignItems = 'stretch';
-      grid.style.justifyItems = 'stretch';
-      grid.style.maxWidth = '100%';
-      grid.style.padding = '0';
-      // Responsive: stack on small screens
-      grid.style.gridTemplateRows = 'auto auto';
-      grid.style.gridAutoRows = '1fr';
-      grid.style.gridAutoFlow = 'row';
-      PURPOSES.forEach((purpose) => {
-        const section = document.createElement('div');
-        section.style.background = '#f3f4f6';
-        section.style.border = '1.5px solid #d1d5db';
-        section.style.borderRadius = '1rem';
-        section.style.padding = '1rem 1.25rem';
-        section.style.boxShadow = '0 1px 4px 0 rgba(0,0,0,0.04)';
-        section.style.display = 'flex';
-        section.style.flexDirection = 'column';
-        section.style.gap = '0.5rem';
-        section.style.height = '100%';
-        const label = document.createElement('div');
-        label.textContent = `${purpose.label} Model`;
-        label.style.fontWeight = 'bold';
-        label.style.marginBottom = '0.25rem';
-        section.appendChild(label);
-        const select = document.createElement('select');
-        select.style.padding = '0.5rem 1rem';
-        select.style.border = '1.5px solid #d1d5db';
-        select.style.borderRadius = '0.75rem';
-        select.style.fontSize = '1rem';
-        select.style.background = '#fff';
-        select.style.transition = 'border-color 0.2s';
-        select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
-        select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
-        // Options
-        const defaultOpt = document.createElement('option');
-        defaultOpt.value = '';
-        defaultOpt.disabled = true;
-        defaultOpt.textContent = 'Select a model...';
-        select.appendChild(defaultOpt);
-        // Sort models by name for better UX
-        const sortedModels = [...this.models].sort((a, b) => a.name.localeCompare(b.name));
-        sortedModels.forEach(model => {
-          const opt = document.createElement('option');
-          opt.value = model.id;
-          opt.textContent = model.name;
-          select.appendChild(opt);
-        });
-        // Set value after options are added
-        const validModel = this.models.find(m => m.id === this.selectedModels[purpose.key]);
-        select.value = validModel ? validModel.id : '';
-        // Model description and pricing
-        let desc = document.createElement('div');
-        let pricingUl: HTMLUListElement | undefined = undefined;
-        if (validModel) {
-          desc.textContent = validModel.description;
-          desc.style.fontSize = '0.95rem';
-          desc.style.color = '#374151';
-          desc.style.marginTop = '0.25rem';
-          section.appendChild(desc);
-          if (validModel.pricing) {
-            pricingUl = document.createElement('ul');
-            pricingUl.style.listStyle = 'disc inside';
-            pricingUl.style.marginLeft = '1.5rem';
-            pricingUl.style.marginTop = '0.5rem';
-            formatPromptCompletionPricing(validModel.pricing).forEach(line => {
-              const li = document.createElement('li');
-              li.textContent = line;
-              li.style.fontSize = '0.9rem';
-              li.style.color = '#2563eb';
-              if (pricingUl) {
-                pricingUl.appendChild(li);
-              }
-            });
-            section.appendChild(pricingUl);
-          }
-        } else {
-          desc.textContent = '';
-          section.appendChild(desc);
-        }
-        select.addEventListener('change', (e) => {
-          this.selectedModels[purpose.key] = (e.target as HTMLSelectElement).value;
-          const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
-          desc.textContent = model ? (model.description || '') : '';
-          // Update pricing
-          if (pricingUl) {
-            pricingUl.innerHTML = ''; // Clear previous pricing
-            if (model && model.pricing) {
-              formatPromptCompletionPricing(model.pricing).forEach(line => {
-                const li = document.createElement('li');
-                li.textContent = line;
-                li.style.fontSize = '0.9rem';
-                li.style.color = '#2563eb';
-                pricingUl?.appendChild(li);
-              });
-            }
-          }
-          this.update(); // Re-render to update button states
-        });
-        section.appendChild(select);
-        if (validModel && pricingUl) {
+      this.renderModelSelectors(container);
+    }
+
+    this.root.appendChild(container);
+  }
+
+  /**
+   * Render model selection grid
+   */
+  private renderModelSelectors(container: HTMLElement): void {
+    const grid = document.createElement('div');
+    grid.style.cssText = `
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+    `;
+
+    PURPOSES.forEach((purpose) => {
+      const section = document.createElement('div');
+      section.style.cssText = `
+        background: #f3f4f6;
+        border: 1.5px solid #d1d5db;
+        border-radius: 1rem;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 4px 0 rgba(0,0,0,0.04);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        height: 100%;
+      `;
+
+      const label = document.createElement('div');
+      label.textContent = `${purpose.label} Model`;
+      label.style.cssText = `
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+      `;
+      section.appendChild(label);
+
+      const select = document.createElement('select');
+      select.style.cssText = `
+        padding: 0.5rem 1rem;
+        border: 1.5px solid #d1d5db;
+        border-radius: 0.75rem;
+        font-size: 1rem;
+        background: #fff;
+        transition: border-color 0.2s;
+      `;
+      select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
+      select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
+
+      // Options
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.disabled = true;
+      defaultOpt.textContent = 'Select a model...';
+      select.appendChild(defaultOpt);
+
+      // Sort models by name for better UX
+      const sortedModels = [...this.models].sort((a, b) => a.name.localeCompare(b.name));
+      sortedModels.forEach(model => {
+        const opt = document.createElement('option');
+        opt.value = model.id;
+        opt.textContent = model.name;
+        select.appendChild(opt);
+      });
+
+      // Set value after options are added
+      const validModel = this.models.find(m => m.id === this.selectedModels[purpose.key]);
+      select.value = validModel ? validModel.id : '';
+
+      // Model description and pricing
+      const desc = document.createElement('div');
+      let pricingUl: HTMLUListElement | undefined = undefined;
+      
+      if (validModel) {
+        desc.textContent = validModel.description || '';
+        desc.style.cssText = `
+          font-size: 0.95rem;
+          color: #374151;
+          margin-top: 0.25rem;
+        `;
+        section.appendChild(desc);
+        
+        if (validModel.pricing) {
+          pricingUl = document.createElement('ul');
+          pricingUl.style.cssText = `
+            list-style: disc inside;
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+          `;
+          formatPromptCompletionPricing(validModel.pricing).forEach(line => {
+            const li = document.createElement('li');
+            li.textContent = line;
+            li.style.cssText = `
+              font-size: 0.9rem;
+              color: #2563eb;
+            `;
+            pricingUl?.appendChild(li);
+          });
           section.appendChild(pricingUl);
         }
-        grid.appendChild(section);
-      });
-      container.appendChild(grid);
-      // Buttons
-      const buttonContainer = document.createElement('div');
-      buttonContainer.style.display = 'flex';
-      buttonContainer.style.justifyContent = 'flex-end';
-      buttonContainer.style.gap = '1rem';
-      buttonContainer.style.marginTop = '1.5rem';
+      } else {
+        desc.textContent = '';
+        section.appendChild(desc);
+      }
 
-      // Cancel button
-      const cancelBtn = document.createElement('button');
-      cancelBtn.textContent = 'Cancel';
-      // Only allow canceling if a valid configuration is already saved.
-      cancelBtn.disabled = true; // Start disabled, will be enabled async
-      void this.isSavedConfigValid().then(isValid => {
-        cancelBtn.disabled = !isValid;
-      });
-      cancelBtn.addEventListener('click', () => {
-        this.closeModal();
-      });
-      buttonContainer.appendChild(cancelBtn);
-      
-      // Save and Close button
-      const saveBtn = document.createElement('button');
-      const allSelected = this.areAllModelsSelected();
-      saveBtn.textContent = 'Save and Close';
-      saveBtn.disabled = !allSelected;
-      saveBtn.addEventListener('click', async () => {
-        if (this.areAllModelsSelected()) {
-          await this.saveToStorage();
-          this.onSelect(this.selectedModels);
+      select.addEventListener('change', (e) => {
+        this.selectedModels[purpose.key] = (e.target as HTMLSelectElement).value;
+        const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
+        desc.textContent = model ? (model.description || '') : '';
+        
+        // Update pricing
+        if (pricingUl) {
+          pricingUl.innerHTML = '';
+          if (model && model.pricing) {
+            formatPromptCompletionPricing(model.pricing).forEach(line => {
+              const li = document.createElement('li');
+              li.textContent = line;
+              li.style.cssText = `
+                font-size: 0.9rem;
+                color: #2563eb;
+              `;
+              pricingUl?.appendChild(li);
+            });
+          }
         }
+        this.update(); // Re-render to update button states
       });
-      buttonContainer.appendChild(saveBtn);
       
-      container.appendChild(buttonContainer);
-    }
-    this.root.appendChild(container);
+      section.appendChild(select);
+      if (validModel && pricingUl) {
+        section.appendChild(pricingUl);
+      }
+      grid.appendChild(section);
+    });
+    
+    container.appendChild(grid);
+
+    // Save/Cancel buttons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    `;
+
+    // Cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.disabled = true; // Start disabled, will be enabled async
+    void this.isSavedConfigValid().then(isValid => {
+      cancelBtn.disabled = !isValid;
+    });
+    cancelBtn.addEventListener('click', () => {
+      this.closeModal();
+    });
+    buttonContainer.appendChild(cancelBtn);
+
+    // Save and Close button
+    const saveBtn = document.createElement('button');
+    const allSelected = this.areAllModelsSelected();
+    saveBtn.textContent = 'Save and Close';
+    saveBtn.disabled = !allSelected;
+    saveBtn.addEventListener('click', async () => {
+      if (this.areAllModelsSelected()) {
+        await this.saveToStorage();
+        this.onSelect(this.selectedModels);
+      }
+    });
+    buttonContainer.appendChild(saveBtn);
+
+    container.appendChild(buttonContainer);
   }
 
   private async testApiKey() {
     this.testing = true;
     this.error = null;
-    this.update();
+    this.updateButtonStates();
     
     try {
       const client = new OpenRouterClient(this.apiKey);
-      // Test by fetching models - this is a simple GET request that validates the API key
       const models = await client.fetchModels();
       
       if (models && models.length > 0) {
@@ -394,7 +594,7 @@ export class ModelSelector {
       alert(`❌ API Key Test Failed: ${errorMessage}`);
     } finally {
       this.testing = false;
-      this.update();
+      this.updateButtonStates();
     }
   }
 
@@ -402,10 +602,12 @@ export class ModelSelector {
     this.loading = true;
     this.error = null;
     this.fetched = false;
-    this.update();
+    this.updateButtonStates();
+    
     try {
       const client = new OpenRouterClient(this.apiKey);
       this.models = await client.fetchModels();
+      
       // Ensure selectedModels only contains ids present in models
       const modelIds = new Set(this.models.map(m => m.id));
       for (const purpose of PURPOSES) {
@@ -414,41 +616,55 @@ export class ModelSelector {
         }
       }
       this.fetched = true;
+      this.update(); // Full re-render to show model selectors
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       this.error = errorMessage;
-      throw e; // Re-throw so the caller can be aware
+      this.update(); // Re-render to show error
+      throw e;
     } finally {
       this.loading = false;
-      this.update();
+      this.updateButtonStates();
     }
   }
 
   async loadFromStorage(): Promise<void> {
     try {
+      console.log('📥 Loading OpenRouter configuration from storage...');
       const storage = await this.storageService;
       
       const key = await storage.get<string>(LOCAL_STORAGE_KEY);
-    if (key) this.apiKey = key;
+      if (key) {
+        this.apiKey = key;
+        console.log('✅ OpenRouter API key loaded from storage');
+      } else {
+        console.log('ℹ️ No OpenRouter API key found in storage');
+      }
 
       const models = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
-    if (models) {
+      if (models) {
         this.selectedModels = models;
+        console.log('✅ OpenRouter model selections loaded from storage');
+      } else {
+        console.log('ℹ️ No OpenRouter model selections found in storage');
       }
     } catch (error) {
-      console.error("Failed to load model configuration from storage", error);
-        this.selectedModels = {};
+      console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
+      this.selectedModels = {};
       this.apiKey = '';
     }
   }
 
   private async saveToStorage(): Promise<void> {
     try {
+      console.log('💾 Saving OpenRouter configuration to storage...');
       const storage = await this.storageService;
       await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
       await storage.set(LOCAL_STORAGE_MODELS, this.selectedModels);
+      console.log('✅ OpenRouter configuration saved successfully');
     } catch (error) {
-      console.error("Failed to save model configuration to storage", error);
+      console.error('❌ CRITICAL: Failed to save OpenRouter configuration to storage:', error);
+      throw error; // Re-throw to handle in calling code
     }
   }
 
@@ -459,7 +675,7 @@ export class ModelSelector {
   public async setSelectedModels(models: Record<string, string>): Promise<void> {
     this.selectedModels = { ...models };
     await this.saveToStorage();
-    this.update(); // Re-render to show the new selections
+    this.update();
   }
 
   public getSelectedModels(): Record<string, string> {
@@ -474,11 +690,11 @@ export class ModelSelector {
     try {
       const storage = await this.storageService;
       const savedModels = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
-    if (!savedModels) return false;
-    
+      if (!savedModels) return false;
+      
       return PURPOSES.every(p => savedModels[p.key]);
     } catch (error) {
-      console.error("Failed to check saved config validity", error);
+      console.error('Failed to check saved config validity', error);
       return false;
     }
   }

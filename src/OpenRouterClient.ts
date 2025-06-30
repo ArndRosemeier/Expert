@@ -42,6 +42,15 @@ export interface StreamingCallbacks {
   onError?: (error: Error) => void;
 }
 
+/**
+ * Utility to mask API keys in logs (shows only first/last 4 chars)
+ * WARNING: Logging API keys is dangerous in production! Only use for debugging.
+ */
+function maskApiKey(key: string): string {
+  if (!key || key.length < 8) return '[MASKED]';
+  return key.slice(0, 4) + '...' + key.slice(-4);
+}
+
 export class OpenRouterClient {
   private apiKey: string;
   private apiUrl: string = 'https://openrouter.ai/api/v1/chat/completions';
@@ -239,10 +248,7 @@ export class OpenRouterClient {
   }
 
   async sendMessage(request: OpenRouterRequest, externalAbortSignal?: AbortSignal): Promise<OpenRouterResponse> {
-    // Create abort controller for this request
     this.currentAbortController = new AbortController();
-    
-    // If external abort signal is provided, listen to it and abort our controller
     if (externalAbortSignal) {
       externalAbortSignal.addEventListener('abort', () => {
         if (this.currentAbortController) {
@@ -256,7 +262,9 @@ export class OpenRouterClient {
       model: request.model,
       messageCount: request.messages.length,
       hasStream: !!request.stream,
-      hasAbortSignal: !!externalAbortSignal
+      hasAbortSignal: !!externalAbortSignal,
+      // WARNING: Logging API keys is dangerous in production!
+      apiKey: maskApiKey(this.apiKey)
     });
 
     try {
@@ -281,14 +289,32 @@ export class OpenRouterClient {
       });
 
       if (!response.ok) {
+        // Try to parse error body as JSON
+        let errorBody: any = null;
+        let errorText = '';
+        try {
+          const text = await response.text();
+          errorText = text;
+          try {
+            errorBody = JSON.parse(text);
+          } catch (jsonErr) {
+            // Not JSON, keep as text
+          }
+        } catch (bodyErr) {
+          errorText = '[Failed to read error body]';
+        }
         console.error(`🚨 HTTP error response:`, {
           status: response.status,
           statusText: response.statusText,
-          url: this.apiUrl
+          url: this.apiUrl,
+          apiKey: maskApiKey(this.apiKey), // WARNING: Logging API keys is dangerous in production!
+          errorBody,
+          errorText
         });
-        const errorText = await response.text();
-        console.error(`🚨 Error response body:`, errorText);
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
+        if (response.status === 401) {
+          console.error('🚨 401 Unauthorized error from OpenRouter! This is NOT always an invalid key. See logs above for details.');
+        }
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
       }
 
       console.log(`🔄 Parsing JSON response...`);
@@ -304,9 +330,9 @@ export class OpenRouterClient {
         errorMessage: error.message,
         isAbortError: error.name === 'AbortError',
         isNetworkError: error instanceof TypeError,
-        url: this.apiUrl
+        url: this.apiUrl,
+        apiKey: maskApiKey(this.apiKey) // WARNING: Logging API keys is dangerous in production!
       });
-      
       if (error.name === 'AbortError') {
         throw new Error('Request was aborted');
       }
@@ -318,16 +344,53 @@ export class OpenRouterClient {
   }
 
   async fetchModels(): Promise<OpenRouterModel[]> {
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      });
+      if (!response.ok) {
+        // Try to parse error body as JSON
+        let errorBody: any = null;
+        let errorText = '';
+        try {
+          const text = await response.text();
+          errorText = text;
+          try {
+            errorBody = JSON.parse(text);
+          } catch (jsonErr) {
+            // Not JSON, keep as text
+          }
+        } catch (bodyErr) {
+          errorText = '[Failed to read error body]';
+        }
+        console.error(`🚨 HTTP error response (fetchModels):`, {
+          status: response.status,
+          statusText: response.statusText,
+          url: 'https://openrouter.ai/api/v1/models',
+          apiKey: maskApiKey(this.apiKey), // WARNING: Logging API keys is dangerous in production!
+          errorBody,
+          errorText
+        });
+        if (response.status === 401) {
+          console.error('🚨 401 Unauthorized error from OpenRouter! This is NOT always an invalid key. See logs above for details.');
+        }
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
+      }
+      const data: OpenRouterModelsResponse = await response.json();
+      return data.data;
+    } catch (error: any) {
+      console.error(`💥 fetchModels failed:`, {
+        errorName: error.name,
+        errorMessage: error.message,
+        isAbortError: error.name === 'AbortError',
+        isNetworkError: error instanceof TypeError,
+        url: 'https://openrouter.ai/api/v1/models',
+        apiKey: maskApiKey(this.apiKey) // WARNING: Logging API keys is dangerous in production!
+      });
+      throw error;
     }
-    const data: OpenRouterModelsResponse = await response.json();
-    return data.data;
   }
 
   /**
