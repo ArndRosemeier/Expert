@@ -212,15 +212,16 @@ export class GenerationService {
         }
 
         const profile = this.deps.settingsManager.getLastUsedProfile();
-        if (profile && profile.selectedModels) {
-            this.deps.openRouterClient.setSelectedModels(profile.selectedModels);
-        } else {
+        if (!profile || !profile.selectedModels) {
             // This case should be prevented by the check in generateNodeContent, but as a safeguard:
             const errorMessage = `Could not find a valid active profile with models for node ${node.title}. Cannot run content loop.`;
             this.deps.eventEmitter.emit('error', errorMessage);
             console.error(errorMessage);
             return;
         }
+        
+        // Note: OpenRouterClient is now a singleton that dynamically fetches 
+        // model configuration from ModelSelector, so no need to set models here
 
         node.isGenerating = true;
         console.log(`🚀 Starting generation for: "${node.title}" (${nodeId})`);
