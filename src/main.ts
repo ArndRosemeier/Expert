@@ -88,37 +88,143 @@ async function startApplication(): Promise<void> {
  */
 async function checkVersionMismatches(): Promise<void> {
     try {
-        const { VersionMismatchModal } = await import('./ui/modals/VersionMismatchModal');
+        const { MigrationSelectionModal } = await import('./ui/modals/MigrationSelectionModal');
         const { getModalRegistry } = await import('./ui/modals/core/ModalRegistry');
+        const { VersionService } = await import('./VersionService');
         const state = await import('./state');
         
         // Get settings manager and model selector instances
         const settingsManager = state.getSettingsManager();
         const modelSelector = state.getModelSelector();
         
-        if (settingsManager && settingsManager.hasVersionMismatchDetected()) {
-            console.log('⚠️ Version mismatch detected in settings - showing upgrade dialog');
-            
-            // Create version mismatch modal
-            const modal = new VersionMismatchModal({
-                id: 'version-mismatch-modal',
-                settingsManager,
-                ...(modelSelector && { modelSelector }), // Only include if not null
-                onResetComplete: () => {
-                    console.log('✅ Settings reset completed, reloading UI...');
+        if (!settingsManager || !settingsManager.hasVersionMismatchDetected()) {
+            console.log('✅ Settings version is current - no migration needed');
+            return;
+        }
+
+        console.log('⚠️ Version mismatch detected in settings - analyzing compatibility...');
+        
+        const currentProfileName = settingsManager.getLastUsedProfileName() || 'default';
+        const currentProfile = settingsManager.getProfile(currentProfileName);
+        const currentVersion = VersionService.getBuildNumber();
+        
+        /**
+         * Internal function to show migration dialog with proper imports
+         */
+        const showMigrationDialogInternal = async (): Promise<void> => {
+            const analysis = {
+                profileName: currentProfileName,
+                savedVersion: currentProfile?.version,
+                currentVersion: currentVersion,
+                hasChanges: true
+            };
+
+            // Create migration selection modal
+            const modal = new MigrationSelectionModal({
+                id: 'migration-selection-modal',
+                settingsManager: settingsManager,
+                ...(modelSelector && { modelSelector }),
+                analysis,
+                onMigrationComplete: () => {
+                    console.log('✅ Migration completed, reloading UI...');
                     // Refresh the page to reload with new settings
                     window.location.reload();
                 }
             });
-            
-            // Show the modal
+
+            // Register modal
             const registry = getModalRegistry();
             registry.register(modal);
-            await registry.open('version-mismatch-modal');
+            
+            // Open modal
+            await modal.open();
+        };
+
+        if (!currentProfile) {
+            console.log('⚠️ No profile found, showing migration dialog');
+            await showMigrationDialogInternal();
+            return;
         }
+
+        // Analyze if there are actual meaningful differences
+        const hasRealChanges = await analyzeSettingsCompatibility(settingsManager, currentProfile);
+        
+        if (!hasRealChanges) {
+            // Settings are compatible - silently update version
+            console.log('✅ Settings are compatible with new version - updating version silently');
+            await silentVersionUpdate(settingsManager, currentProfileName, currentProfile, currentVersion);
+        } else {
+            // There are meaningful changes - show migration dialog
+            console.log('⚠️ Settings have compatibility issues - showing migration dialog');
+            await showMigrationDialogInternal();
+        }
+        
     } catch (error) {
         console.error('❌ Failed to check version mismatches:', error);
-        // Don't block app startup for version check failures
+        // Don't block the app if version check fails
+    }
+}
+
+/**
+ * Analyzes if settings have meaningful compatibility issues
+ */
+async function analyzeSettingsCompatibility(settingsManager: any, profile: any): Promise<boolean> {
+    // For now, implement basic compatibility check
+    // In the future, this could be expanded to check:
+    // - Missing required criteria
+    // - Deprecated prompt formats
+    // - Invalid model configurations
+    // - Changed API structures
+    
+    try {
+        // Check if profile has basic required structure
+        if (!profile.criteria || !Array.isArray(profile.criteria)) {
+            return true; // Needs migration
+        }
+        
+        if (!profile.prompt || typeof profile.prompt !== 'string') {
+            return true; // Needs migration
+        }
+        
+        // Check if criteria have required properties
+        for (const criterion of profile.criteria) {
+            if (!criterion.name || typeof criterion.name !== 'string' ||
+                typeof criterion.goal !== 'number') {
+                return true; // Needs migration
+            }
+        }
+        
+        // Profile looks compatible
+        return false;
+        
+    } catch (error) {
+        console.error('Error analyzing compatibility:', error);
+        return true; // Be safe and show migration dialog on error
+    }
+}
+
+/**
+ * Silently updates the version of compatible settings
+ */
+async function silentVersionUpdate(settingsManager: any, profileName: string, profile: any, newVersion: string): Promise<void> {
+    try {
+        // Update profile with new version
+        const updatedProfile = {
+            ...profile,
+            version: newVersion
+        };
+        
+        // Save updated profile
+        await settingsManager.saveProfile(profileName, updatedProfile);
+        
+        // Clear version mismatch flag
+        settingsManager.clearVersionMismatchFlag();
+        
+        console.log(`✅ Settings for profile "${profileName}" updated to version ${newVersion}`);
+        
+    } catch (error) {
+        console.error('Failed to update settings version:', error);
+        // If silent update fails, don't throw - let the app continue
     }
 }
 

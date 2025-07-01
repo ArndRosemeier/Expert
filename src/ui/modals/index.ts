@@ -3,38 +3,39 @@
  */
 
 // Core infrastructure
-export { BaseModal } from './core/BaseModal';
-export { ModalRegistry, getModalRegistry } from './core/ModalRegistry';
+export * from './core/BaseModal';
+export * from './core/ModalRegistry';
 export * from './core/modal-utils';
+
+// Modal implementations
+export * from './SettingsModal';
+export * from './ExportModal';
+export * from './GenericModal';
+export * from './AILogModal';
+export * from './AddChildNodeModal';
+export * from './KeyValidationModal';
+export * from './VersionMismatchModal';
+export * from './ContextInfoModal';
+export * from './MigrationSelectionModal';
+
+// Modal components and services
+export * from './components/CriteriaEditor';
+export * from './components/ProfileSelector';
+export * from './services/ExportService';
+export * from './services/NodeCreationService';
+export * from './services/PromptManagementService';
+export * from './services/SettingsService';
 
 // Types
 export * from './types/ModalTypes';
-export type { 
-    ExportConfig, 
-    ExportResult, 
-    NodeExportData, 
-    ExportGenerationOptions,
-    IExportService 
-} from './types/ExportTypes';
-export { ExportScope, ExportFormat } from './types/ExportTypes';
+export * from './types/ExportTypes';
 
-// Services
-export { ExportService } from './services/ExportService';
+// Factory
+export * from './ModalFactory';
 
-// Modal implementations
-export { GenericModal, showGenericModal, showAlert, showConfirm } from './GenericModal';
-
-// Convenience functions for backward compatibility
-import { showGenericModal, showAlert, showConfirm } from './GenericModal';
-import { getModalRegistry } from './core/ModalRegistry';
-
-// Phase 2: Service Layer and Components
-export { PromptManagementService } from './services/PromptManagementService';
-export { SettingsService } from './services/SettingsService';
-export { CriteriaEditor } from './components/CriteriaEditor';
-export { ProfileSelector } from './components/ProfileSelector';
-
-// Additional Phase 2 type exports
+/**
+ * Additional Phase 2 type exports
+ */
 export type { 
     PromptManagementConfig, 
     PromptChangeEvent,
@@ -49,25 +50,6 @@ export type {
     ModalFactoryConfig,
     ModalComponentConfig
 } from './types/ModalTypes';
-
-// Phase 3: Complete Modal Implementations
-export { SettingsModal } from './SettingsModal';
-export { ExportModal } from './ExportModal';
-export { AILogModal, openAILogModal } from './AILogModal';
-export { ContextInfoModal } from './ContextInfoModal';
-export { AddChildNodeModal } from './AddChildNodeModal';
-export { VersionMismatchModal } from './VersionMismatchModal';
-export { 
-    ModalFactory, 
-    createModalFactory,
-    setDefaultModalFactory,
-    getDefaultModalFactory,
-    openSettingsModal,
-    openExportModal,
-    showAlert as factoryAlert,
-    showConfirm as factoryConfirm,
-    showPrompt
-} from './ModalFactory';
 
 /**
  * Legacy compatibility functions

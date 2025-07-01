@@ -2,15 +2,46 @@
  * Service for managing settings profiles and configurations
  */
 
-import { SettingsManager, SettingsProfile } from '../../../SettingsManager';
+import { SettingsManager, SettingsProfile, DEFAULT_CRITERIA } from '../../../SettingsManager';
 import { ModelSelector } from '../../../ModelSelector';
 import { QualityCriterion } from '../../../types';
+import { OrchestratorPrompts, defaultPrompts } from '../../../PromptManager';
+import { VersionService } from '../../../VersionService';
 import { DEFAULT_MAX_ITERATIONS } from '../../../constants';
 
 export interface ProfileImportResult {
     success: boolean;
     message: string;
     profileName?: string;
+}
+
+// Migration-related types
+export interface PromptDifference {
+    name: string;
+    hasChanges: boolean;
+    inSaved: boolean;
+    inDefault: boolean;
+    useDefault: boolean; // User's choice
+}
+
+export interface CriteriaDifference {
+    name: string;
+    hasChanges: boolean;
+    inSaved: boolean;
+    inDefault: boolean;
+    isUserAdded: boolean;
+    useDefault: boolean; // User's choice
+    savedCriterion?: QualityCriterion;
+    defaultCriterion?: QualityCriterion;
+}
+
+export interface MigrationAnalysis {
+    profileName: string;
+    savedVersion: string | undefined;
+    currentVersion: string;
+    prompts: PromptDifference[];
+    criteria: CriteriaDifference[];
+    hasChanges: boolean;
 }
 
 export interface SettingsChangeEvent {
@@ -419,6 +450,149 @@ export class SettingsService {
         // Ensure 'default' profile exists
         if (!profiles.includes('default')) {
             await this.createProfile('default');
+        }
+    }
+
+    /**
+     * Analyze differences between saved profile and current defaults
+     */
+    public analyzeMigration(profileName: string): MigrationAnalysis | null {
+        const profile = this.settingsManager.getProfile(profileName);
+        if (!profile) return null;
+
+        const currentPrompts = defaultPrompts;
+        const savedPrompts = this.settingsManager.getPrompts();
+        const currentCriteria = DEFAULT_CRITERIA;
+        const savedCriteria = profile.criteria;
+
+        // Analyze prompt differences
+        const promptDiffs: PromptDifference[] = [];
+        const allPromptNames = new Set([
+            ...Object.keys(currentPrompts),
+            ...Object.keys(savedPrompts)
+        ]);
+
+        for (const promptName of allPromptNames) {
+            const inSaved = promptName in savedPrompts;
+            const inDefault = promptName in currentPrompts;
+            
+            // Skip deprecated prompts (in saved but not in defaults)
+            if (inSaved && !inDefault) continue;
+
+            const hasChanges = inSaved && inDefault && 
+                savedPrompts[promptName as keyof OrchestratorPrompts] !== currentPrompts[promptName as keyof OrchestratorPrompts];
+
+            promptDiffs.push({
+                name: promptName,
+                hasChanges,
+                inSaved,
+                inDefault,
+                useDefault: true // Default to using new defaults
+            });
+        }
+
+        // Analyze criteria differences
+        const criteriaDiffs: CriteriaDifference[] = [];
+        const allCriteriaNames = new Set([
+            ...currentCriteria.map((c: QualityCriterion) => c.name),
+            ...savedCriteria.map((c: QualityCriterion) => c.name)
+        ]);
+
+        for (const criterionName of allCriteriaNames) {
+            const savedCriterion = savedCriteria.find((c: QualityCriterion) => c.name === criterionName);
+            const defaultCriterion = currentCriteria.find((c: QualityCriterion) => c.name === criterionName);
+            
+            const inSaved = !!savedCriterion;
+            const inDefault = !!defaultCriterion;
+            const isUserAdded = inSaved && !inDefault;
+            
+            let hasChanges = false;
+            if (inSaved && inDefault) {
+                hasChanges = JSON.stringify(savedCriterion) !== JSON.stringify(defaultCriterion);
+            }
+
+            criteriaDiffs.push({
+                name: criterionName,
+                hasChanges,
+                inSaved,
+                inDefault,
+                isUserAdded,
+                useDefault: inDefault, // Use default for standard criteria, preserve user-added
+                savedCriterion: savedCriterion,
+                defaultCriterion: defaultCriterion
+            });
+        }
+
+        const hasChanges = promptDiffs.some(p => p.hasChanges) || 
+                          criteriaDiffs.some(c => c.hasChanges || c.isUserAdded);
+
+        return {
+            profileName,
+            savedVersion: profile.version,
+            currentVersion: VersionService.getBuildNumber(),
+            prompts: promptDiffs,
+            criteria: criteriaDiffs,
+            hasChanges
+        };
+    }
+
+    /**
+     * Apply migration choices to create updated profile
+     */
+    public async applyMigration(
+        profileName: string, 
+        analysis: MigrationAnalysis,
+        preserveModels?: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> }
+    ): Promise<boolean> {
+        try {
+            const currentPrompts = { ...defaultPrompts };
+            const currentCriteria = [...DEFAULT_CRITERIA];
+
+            // Apply prompt choices
+            const finalPrompts = { ...currentPrompts };
+            for (const promptDiff of analysis.prompts) {
+                if (!promptDiff.useDefault && promptDiff.inSaved) {
+                    const savedPrompts = this.settingsManager.getPrompts();
+                    const savedPromptValue = savedPrompts[promptDiff.name as keyof OrchestratorPrompts];
+                    if (savedPromptValue) {
+                        (finalPrompts as any)[promptDiff.name] = savedPromptValue;
+                    }
+                }
+            }
+
+            // Apply criteria choices
+            const finalCriteria: QualityCriterion[] = [];
+            for (const criteriaDiff of analysis.criteria) {
+                if (criteriaDiff.useDefault && criteriaDiff.defaultCriterion) {
+                    finalCriteria.push(criteriaDiff.defaultCriterion);
+                } else if (!criteriaDiff.useDefault && criteriaDiff.savedCriterion) {
+                    finalCriteria.push(criteriaDiff.savedCriterion);
+                }
+            }
+
+            // Get current profile for non-migrated settings
+            const currentProfile = this.settingsManager.getProfile(profileName);
+            if (!currentProfile) return false;
+
+            // Create updated profile
+            const updatedProfile: SettingsProfile = {
+                prompt: currentProfile.prompt, // Keep user's main prompt
+                criteria: finalCriteria,
+                maxIterations: currentProfile.maxIterations || DEFAULT_MAX_ITERATIONS,
+                selectedModels: preserveModels?.selectedModels || currentProfile.selectedModels || {},
+                webSearchEnabled: preserveModels?.webSearchEnabled || currentProfile.webSearchEnabled || {},
+                contextExtractionPrompt: currentProfile.contextExtractionPrompt || currentPrompts.context_extraction_user || '',
+                version: analysis.currentVersion
+            };
+
+            // Save updated profile and prompts
+            await this.settingsManager.saveProfile(profileName, updatedProfile);
+            await this.settingsManager.savePrompts(finalPrompts);
+
+            return true;
+        } catch (error) {
+            console.error('Failed to apply migration:', error);
+            return false;
         }
     }
 } 
