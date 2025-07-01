@@ -100,7 +100,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         if (!this.template.hierarchyLevels || this.template.hierarchyLevels.length === 0) {
             throw new Error(`Invalid template: "${this.template.name}" has no hierarchy levels defined.`);
         }
-        this.rootNode = new DocumentNode(0, this.projectTitle, null, this.template.hierarchyLevels);
+        
+        // Create a deep copy of the hierarchy levels for the root node
+        // This allows project-wide template modifications while child nodes share the reference
+        const rootNodeTemplate = [...this.template.hierarchyLevels];
+        this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate);
 
         // Initialize extracted services
         this.treeService = new TreeService();
@@ -427,11 +431,23 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     /**
      * Recursively reconstructs DocumentNode instances from plain objects.
      * @param plainNode The plain object representation of a node.
+     * @param rootTemplate Optional root template reference for child nodes to share.
      * @returns A DocumentNode instance.
      */
-    private static rehydrateNode(plainNode: any): DocumentNode {
+    private static rehydrateNode(plainNode: any, rootTemplate?: string[]): DocumentNode {
+        // For root node (level 0), create a deep copy of the template
+        // For child nodes, share the root template reference
+        let nodeTemplate: string[];
+        if (plainNode.level === 0) {
+            // Root node gets a deep copy
+            nodeTemplate = [...(plainNode.template || [])];
+        } else {
+            // Child nodes share the root template reference
+            nodeTemplate = rootTemplate || plainNode.template || [];
+        }
+        
         // Create a new node instance to get access to class methods
-        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, plainNode.template);
+        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, nodeTemplate);
         
         // We assign to _content directly to avoid clearing the summary on load,
         // as we assume the saved state is consistent.
@@ -449,9 +465,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             children: [], // Reset children, as they will be rehydrated recursively
         });
 
-        // Recursively rehydrate and add children
+        // Recursively rehydrate and add children, passing the root template for sharing
         if (plainNode.children && plainNode.children.length > 0) {
-            node.children = plainNode.children.map((child: any) => this.rehydrateNode(child));
+            const templateToShare = plainNode.level === 0 ? nodeTemplate : rootTemplate;
+            node.children = plainNode.children.map((child: any) => this.rehydrateNode(child, templateToShare));
         }
 
         return node;
