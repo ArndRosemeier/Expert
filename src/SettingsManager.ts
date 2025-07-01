@@ -641,16 +641,20 @@ export class SettingsManager {
     /**
      * Reset all profiles to defaults with current version
      */
-    public async resetToDefaults(): Promise<void> {
+    public async resetToDefaults(preserveModels?: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> }): Promise<void> {
         console.log('🔄 Resetting all profiles to defaults...');
+        
+        // Preserve model selections if provided, otherwise use empty objects
+        const modelsToKeep = preserveModels?.selectedModels || {};
+        const webSearchToKeep = preserveModels?.webSearchEnabled || {};
         
         // Create a new default profile with current version
         const defaultProfile: SettingsProfile = {
             prompt: "",
             criteria: DEFAULT_CRITERIA,
             maxIterations: DEFAULT_MAX_ITERATIONS,
-            selectedModels: {},
-            webSearchEnabled: {},
+            selectedModels: modelsToKeep,
+            webSearchEnabled: webSearchToKeep,
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
             version: VersionService.getBuildNumber()
         };
@@ -671,6 +675,7 @@ export class SettingsManager {
         // Clear version mismatch flag
         this.hasVersionMismatch = false;
         
-        console.log('✅ All profiles and prompts reset to defaults');
+        const modelInfo = Object.keys(modelsToKeep).length > 0 ? ' (model selections preserved)' : '';
+        console.log(`✅ All profiles and prompts reset to defaults${modelInfo}`);
     }
 } 

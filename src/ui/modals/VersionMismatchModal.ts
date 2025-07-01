@@ -4,12 +4,14 @@
 
 import { BaseModal } from './core/BaseModal';
 import { SettingsManager } from '../../SettingsManager';
+import { ModelSelector } from '../../ModelSelector';
 import { VersionService } from '../../VersionService';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 
 export interface VersionMismatchModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
+    modelSelector?: ModelSelector;
     onResetComplete?: () => void;
 }
 
@@ -21,6 +23,7 @@ export interface VersionMismatchModalEvents {
 
 export class VersionMismatchModal extends BaseModal {
     private settingsManager: SettingsManager;
+    private modelSelector: ModelSelector | undefined;
     private onResetComplete: (() => void) | undefined;
     private mismatches: Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> = [];
 
@@ -33,6 +36,7 @@ export class VersionMismatchModal extends BaseModal {
         });
 
         this.settingsManager = config.settingsManager;
+        this.modelSelector = config.modelSelector;
         this.onResetComplete = config.onResetComplete || undefined;
         this.mismatches = this.settingsManager.getVersionMismatchInfo();
     }
@@ -179,7 +183,7 @@ export class VersionMismatchModal extends BaseModal {
         });
 
         const warningText = createElement('p', {
-            content: '⚠️ Note: This will reset all your custom settings, including any modified prompts and criteria. Your API keys will be preserved.',
+            content: '⚠️ Note: This will reset all your custom settings, including any modified prompts and criteria. Your API keys and model selections will be preserved.',
             classes: ['warning-text']
         });
 
@@ -244,8 +248,25 @@ export class VersionMismatchModal extends BaseModal {
                 resetButton.textContent = 'Resetting...';
             }
 
-            // Reset settings
-            await this.settingsManager.resetToDefaults();
+            // Prepare model selections to preserve
+            let preserveModels: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> } | undefined;
+            
+            if (this.modelSelector) {
+                const selectedModels = this.modelSelector.getSelectedModels();
+                const webSearchEnabled = this.modelSelector.getWebSearchEnabled();
+                
+                // Only preserve if we have actual model selections
+                if (Object.keys(selectedModels).length > 0) {
+                    preserveModels = {
+                        selectedModels,
+                        webSearchEnabled
+                    };
+                    console.log('🔧 Preserving model selections during reset:', selectedModels);
+                }
+            }
+
+            // Reset settings with preserved models
+            await this.settingsManager.resetToDefaults(preserveModels);
 
             // Clear version mismatch flag
             this.settingsManager.clearVersionMismatchFlag();

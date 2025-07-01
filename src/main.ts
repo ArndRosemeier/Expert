@@ -92,8 +92,9 @@ async function checkVersionMismatches(): Promise<void> {
         const { getModalRegistry } = await import('./ui/modals/core/ModalRegistry');
         const state = await import('./state');
         
-        // Get settings manager instance
+        // Get settings manager and model selector instances
         const settingsManager = state.getSettingsManager();
+        const modelSelector = state.getModelSelector();
         
         if (settingsManager && settingsManager.hasVersionMismatchDetected()) {
             console.log('⚠️ Version mismatch detected in settings - showing upgrade dialog');
@@ -102,6 +103,7 @@ async function checkVersionMismatches(): Promise<void> {
             const modal = new VersionMismatchModal({
                 id: 'version-mismatch-modal',
                 settingsManager,
+                ...(modelSelector && { modelSelector }), // Only include if not null
                 onResetComplete: () => {
                     console.log('✅ Settings reset completed, reloading UI...');
                     // Refresh the page to reload with new settings
