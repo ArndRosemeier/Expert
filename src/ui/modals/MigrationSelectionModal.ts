@@ -7,6 +7,7 @@ import { SettingsManager } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
+import { SettingsService } from './services/SettingsService';
 
 // Simplified types for migration to avoid complex TypeScript issues for now
 export interface SimpleMigrationAnalysis {
@@ -154,20 +155,16 @@ export class MigrationSelectionModal extends BaseModal {
         });
 
         const migrateButton = createElement('button', {
-            content: 'Smart Migration (Coming Soon)',
-            classes: ['migrate-button', 'primary', 'disabled']
+            content: 'Smart Migration',
+            classes: ['migrate-button', 'primary']
         });
-
-        // Disable smart migration for now - show it as coming soon
-        (migrateButton as HTMLButtonElement).disabled = true;
 
         resetButton.addEventListener('click', () => {
             this.handleReset();
         });
 
         migrateButton.addEventListener('click', () => {
-            // For now, show that this feature is coming soon
-            alert('Smart migration feature is coming soon! Please use "Reset to Defaults" for now.');
+            this.handleSmartMigration();
         });
 
         buttonContainer.appendChild(migrateButton);
@@ -228,6 +225,84 @@ export class MigrationSelectionModal extends BaseModal {
             if (resetButton) {
                 resetButton.disabled = false;
                 resetButton.textContent = 'Reset to Defaults';
+            }
+        }
+    }
+
+    /**
+     * Handle smart migration action
+     */
+    private async handleSmartMigration(): Promise<void> {
+        try {
+            // Show loading state
+            const migrateButton = document.querySelector('#migration-selection-modal .migrate-button') as HTMLButtonElement;
+            if (migrateButton) {
+                migrateButton.disabled = true;
+                migrateButton.textContent = 'Migrating...';
+            }
+
+            // Create SettingsService instance - use a default ModelSelector if none provided
+            if (!this.modelSelector) {
+                throw new Error('ModelSelector is required for smart migration');
+            }
+            const settingsService = new SettingsService(this.settingsManager, this.modelSelector);
+            
+            // Analyze migration requirements
+            const migrationAnalysis = settingsService.analyzeMigration(this.analysis.profileName);
+            if (!migrationAnalysis) {
+                throw new Error('Failed to analyze migration requirements');
+            }
+
+            // Prepare model selections to preserve
+            let preserveModels: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> } | undefined;
+            
+            if (this.modelSelector) {
+                const selectedModels = this.modelSelector.getSelectedModels();
+                const webSearchEnabled = this.modelSelector.getWebSearchEnabled();
+                
+                if (Object.keys(selectedModels).length > 0) {
+                    preserveModels = {
+                        selectedModels,
+                        webSearchEnabled
+                    };
+                    console.log('🔧 Preserving model selections during smart migration:', selectedModels);
+                }
+            }
+
+            // Apply smart migration - preserve user customizations, update defaults
+            const success = await settingsService.applyMigration(
+                this.analysis.profileName,
+                migrationAnalysis,
+                preserveModels
+            );
+
+            if (!success) {
+                throw new Error('Migration failed');
+            }
+
+            // Clear version mismatch flag
+            this.settingsManager.clearVersionMismatchFlag();
+
+            // Show success message
+            alert('Smart migration completed successfully! Your custom settings have been preserved while system defaults have been updated.');
+
+            // Call completion callback
+            if (this.onMigrationComplete) {
+                this.onMigrationComplete();
+            }
+
+            // Close modal
+            this.close();
+
+        } catch (error) {
+            console.error('Failed to perform smart migration:', error);
+            alert('Smart migration failed: ' + (error instanceof Error ? error.message : 'Unknown error') + '\n\nPlease try "Reset to Defaults" instead.');
+            
+            // Re-enable button
+            const migrateButton = document.querySelector('#migration-selection-modal .migrate-button') as HTMLButtonElement;
+            if (migrateButton) {
+                migrateButton.disabled = false;
+                migrateButton.textContent = 'Smart Migration';
             }
         }
     }
@@ -309,7 +384,7 @@ export class MigrationSelectionModal extends BaseModal {
                     background: #1976D2;
                 }
 
-                .migrate-button:disabled, .migrate-button.disabled {
+                .migrate-button:disabled {
                     background: #bbbbbb;
                     cursor: not-allowed;
                     opacity: 0.6;
