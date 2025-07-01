@@ -334,25 +334,7 @@ export class ReaderEditor {
 
 
 
-    /**
-     * Save all pending changes
-     */
-    private async saveAllChanges(): Promise<void> {
-        if (!this.editState.isDirty) return;
 
-        const savePromises: Promise<void>[] = [];
-        
-        this.nodeEditors.forEach((editor) => {
-            if (editor.isDirty) {
-                savePromises.push(this.saveNodeChanges(editor));
-            }
-        });
-        
-        await Promise.all(savePromises);
-        
-        this.editState.isDirty = false;
-        this.editState.lastSaved = new Date();
-    }
 
     /**
      * Save changes for a specific node
@@ -548,13 +530,31 @@ export class ReaderEditor {
     }
 
     /**
-     * Cleanup resources
+     * Cleanup resources - robustly copy ALL content back to nodes
      */
     public async destroy(): Promise<void> {
-        // Save all pending changes before destroying editors
-        if (this.editState.isDirty) {
-            console.log('💾 Reader closing - saving pending changes...');
-            await this.saveAllChanges();
+        console.log('💾 Reader closing - copying all content back to nodes...');
+        
+        // Robustly copy ALL current content from ALL editors back to their nodes
+        // This catches changes from any source: user typing, AI actions, etc.
+        this.nodeEditors.forEach((editor, nodeId) => {
+            const currentContent = editor.editor.getText();
+            const node = this.projectManager.findNodeById(nodeId);
+            
+            if (node) {
+                // Always update node content with current editor content
+                // regardless of dirty state or how the content got there
+                node.content = currentContent;
+                console.log(`📝 Copied content from reader to node: ${node.title}`);
+            } else {
+                console.warn(`⚠️ Node not found for editor: ${nodeId}`);
+            }
+        });
+        
+        // Save the entire project to storage after updating all nodes
+        if (this.nodeEditors.size > 0) {
+            await this.projectManager.saveToStorage();
+            console.log('💾 All reader content saved to storage');
         }
         
         this.removeEventListeners();
