@@ -2656,9 +2656,13 @@ export class ReaderGUI {
         if (this.readerEditor) {
             const nodeEditor = (this.readerEditor as any).nodeEditors?.get(nodeId);
             if (nodeEditor) {
-                // Only update if not currently being edited by the user
+                // Check if the user has unsaved changes or is currently editing
                 const editorElement = nodeEditor.element.querySelector('.text-editor-with-highlighting') as HTMLElement;
-                if (editorElement && document.activeElement !== editorElement) {
+                const isCurrentlyFocused = editorElement && document.activeElement === editorElement;
+                const hasUnsavedChanges = nodeEditor.isDirty;
+                
+                // Only update if there are no unsaved changes AND not currently focused
+                if (!hasUnsavedChanges && !isCurrentlyFocused) {
                     // Update the TextEditorWithHighlighting content
                     nodeEditor.editor.setText(newContent);
                     // Update the original content so it doesn't appear as dirty
@@ -2670,7 +2674,11 @@ export class ReaderGUI {
                     
                     console.log(`📝 Reader content updated successfully for node: ${nodeId}`);
                 } else {
-                    console.log(`⏭️ Reader update skipped - node ${nodeId} is currently being edited by user`);
+                    if (hasUnsavedChanges) {
+                        console.log(`⏭️ Reader update skipped - node ${nodeId} has unsaved changes`);
+                    } else if (isCurrentlyFocused) {
+                        console.log(`⏭️ Reader update skipped - node ${nodeId} is currently being edited by user`);
+                    }
                 }
             } else {
                 console.log(`⚠️ Reader update failed - no editor found for node: ${nodeId}`);
