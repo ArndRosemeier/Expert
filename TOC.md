@@ -594,6 +594,102 @@ interface ProgressUIData {
 - ✅ Implemented professional hover and focus states
 - ✅ Created comprehensive design system documentation
 
+## 📋 Dropdown Components ✨ **NEW**
+
+### Reusable Dropdown Class
+- **File**: `src/ui/Dropdown.ts`
+- **Class**: `Dropdown`
+- **Purpose**: Generic, reusable dropdown component for creating dropdown menus attached to any trigger element
+
+**Core Features**:
+- 🎯 **Smart Positioning**: Automatically positions relative to trigger with 4 positioning modes
+- 🖱️ **Robust Event Handling**: Outside clicks, inside clicks, proper cleanup
+- 📱 **Responsive Behavior**: Auto-adjusts position when dropdown would go off-screen
+- 🎨 **Customizable Styling**: Options for width, z-index, CSS classes
+- 🔧 **Flexible Content**: Supports both HTML strings and DOM elements
+- 🧹 **Memory Safe**: Proper cleanup and event listener removal
+
+**Constructor Options**:
+```typescript
+interface DropdownOptions {
+    minWidth?: string;          // Default: '200px'
+    maxWidth?: string;          // Default: '400px'
+    offset?: number;            // Default: 5px from trigger
+    className?: string;         // Custom CSS classes
+    closeOnInsideClick?: boolean; // Default: true
+    zIndex?: number;            // Default: 1000
+}
+
+interface DropdownPosition {
+    position?: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'; // Default: 'bottom-left'
+}
+```
+
+**Public Methods**:
+- `open()` - Open the dropdown
+- `close()` - Close the dropdown  
+- `toggle()` - Toggle open/closed state
+- `updateContent(content)` - Update dropdown content dynamically
+- `get opened` - Check if dropdown is currently open
+- `destroy()` - Clean up and remove all event listeners
+
+**Usage Examples**:
+```typescript
+// Simple dropdown
+const dropdown = new Dropdown(triggerButton, '<div>Menu content</div>');
+dropdown.open();
+
+// Advanced dropdown with options
+const dropdown = new Dropdown(triggerButton, menuElement, {
+    minWidth: '280px',
+    maxWidth: '400px',
+    position: 'bottom-right',
+    className: 'custom-dropdown',
+    closeOnInsideClick: false
+});
+
+// Quick utility function
+import { createDropdown } from './src/ui/Dropdown';
+const dropdown = createDropdown(button, content, options);
+```
+
+**Positioning System**:
+- `bottom-left` - Dropdown appears below trigger, left-aligned
+- `bottom-right` - Dropdown appears below trigger, right-aligned  
+- `top-left` - Dropdown appears above trigger, left-aligned
+- `top-right` - Dropdown appears above trigger, right-aligned
+- **Auto-Adjustment**: Automatically repositions if dropdown would go off-screen
+
+**Global Styles**: 
+- Automatically injects base CSS styles for consistent appearance
+- Includes scrollbar styling for overflow content
+- Provides foundation for custom styling via className option
+
+### Actions Dropdown Implementation ✨ **REFACTORED**
+- **File**: `src/ui/project-ui.ts`
+- **Function**: `showActionsDropdown(node)`
+- **Migration**: Converted from custom dropdown implementation to use reusable Dropdown class
+
+**Improvements**:
+- ✅ **Cleaner Architecture**: Built on reusable Dropdown foundation
+- ✅ **Better Memory Management**: Proper instance tracking with `actionsDropdownInstance`
+- ✅ **Consistent Behavior**: Same positioning and event handling as future dropdowns
+- ✅ **Maintained Functionality**: All existing Actions menu features preserved
+- ✅ **Separated Concerns**: Content generation via `createActionsDropdownContent()`
+- ✅ **Modular Styling**: Styles via `ensureActionsDropdownStyles()`
+
+**Features**:
+- **Structure Section**: Add Child, Delete Node, Delete All Children (when applicable)
+- **Data Section**: Export, Import, Chat
+- **Smart Button States**: Disabled states for inappropriate actions (e.g., Add Child on leaf nodes)
+- **Color-Coded Actions**: Danger (red), Warning (orange), Normal actions
+- **Compact Design**: Optimized for dropdown usage with smaller padding and spacing
+
+**Helper Functions**:
+- `createActionsDropdownContent(node)` - Generate dropdown HTML content
+- `ensureActionsDropdownStyles()` - Inject action-specific CSS styles
+- Instance management with `actionsDropdownInstance` variable
+
 ## 📋 Modal System
 
 ### Modal Registry

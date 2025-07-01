@@ -5,6 +5,7 @@ import * as state from '../state';
 import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
+import { showGenericModal } from './modals/GenericModal';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -103,6 +104,209 @@ function getPluralChildLevelName(node: DocumentNode): string {
     
     // Simple pluralization: just append 's'
     return childLevelName + 's';
+}
+
+/**
+ * Shows the actions modal with all available node actions organized in sections
+ */
+// Import the reusable Dropdown class
+import { Dropdown } from './Dropdown';
+
+// Store the dropdown instance for the actions button
+let actionsDropdownInstance: Dropdown | null = null;
+
+function showActionsDropdown(node: DocumentNode): void {
+    // Close any existing dropdown first
+    if (actionsDropdownInstance) {
+        actionsDropdownInstance.close();
+        actionsDropdownInstance = null;
+    }
+
+    // Find the Actions button
+    const actionsButton = document.getElementById('actions-dropdown-btn');
+    if (!actionsButton) {
+        console.error('Actions button not found');
+        return;
+    }
+
+    // Create the dropdown content
+    const dropdownContent = createActionsDropdownContent(node);
+
+    // Add actions-specific styles
+    ensureActionsDropdownStyles();
+
+    // Create the dropdown instance
+    actionsDropdownInstance = new Dropdown(actionsButton, dropdownContent, {
+        minWidth: '280px',
+        maxWidth: '320px',
+        className: 'actions-dropdown',
+        closeOnInsideClick: false, // We'll handle this ourselves to allow action execution
+        position: 'bottom-left'
+    });
+
+    // Open the dropdown
+    actionsDropdownInstance.open();
+
+    // Add custom click handler for actions
+    setTimeout(() => {
+        const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
+        if (dropdownElement) {
+            dropdownElement.addEventListener('click', (e) => {
+                const button = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+                if (button) {
+                    const action = button.getAttribute('data-action');
+                    if (action) {
+                        // Map actions to the existing handler IDs
+                        const actionMap: Record<string, string> = {
+                            'add-child': 'add-child-node-btn',
+                            'delete-node': 'delete-node-btn',
+                            'delete-all-children': 'delete-subnodes-btn',
+                            'export': 'export-node-btn',
+                            'import': 'import-node-btn',
+                            'chat': 'chat-node-btn'
+                        };
+                        
+                        const handlerAction = actionMap[action];
+                        if (handlerAction) {
+                            // Close dropdown first
+                            if (actionsDropdownInstance) {
+                                actionsDropdownInstance.close();
+                                actionsDropdownInstance = null;
+                            }
+                            // Execute action
+                            handleDropdownAction(handlerAction);
+                        }
+                    }
+                }
+            });
+        }
+    }, 50);
+}
+
+function createActionsDropdownContent(node: DocumentNode): string {
+    return `
+        <div class="actions-dropdown-content">
+            <!-- Structure Section -->
+            <div class="action-section">
+                <div class="section-title">Structure</div>
+                <div class="action-buttons">
+                    ${!node.isLeaf ? `
+                        <button class="action-btn" data-action="add-child">
+                            ➕ Add ${node.childLevelName || 'Child'}
+                        </button>
+                    ` : ''}
+                    <button class="action-btn action-btn-danger" data-action="delete-node">
+                        🗑️ Delete ${getCurrentLevelName(node)}
+                    </button>
+                    ${node.children.length > 0 ? `
+                        <button class="action-btn action-btn-warning" data-action="delete-all-children">
+                            🗑️ Delete All ${getPluralChildLevelName(node)}
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Data Section -->
+            <div class="action-section">
+                <div class="section-title">Data</div>
+                <div class="action-buttons">
+                    <button class="action-btn" data-action="export">
+                        📤 Export
+                    </button>
+                    <button class="action-btn" data-action="import">
+                        📥 Import
+                    </button>
+                    <button class="action-btn" data-action="chat">
+                        💬 Chat
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function ensureActionsDropdownStyles(): void {
+    if (document.querySelector('#actions-dropdown-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'actions-dropdown-styles';
+    style.textContent = `
+        .dropdown-menu.actions-dropdown {
+            padding: 0.75rem;
+        }
+        
+        .actions-dropdown-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .actions-dropdown .action-section {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.75rem;
+            background: #f9fafb;
+        }
+        
+        .actions-dropdown .section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.25rem;
+        }
+        
+        .actions-dropdown .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .actions-dropdown .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #374151;
+            transition: all 0.15s;
+            text-align: left;
+            width: 100%;
+        }
+        
+        .actions-dropdown .action-btn:hover:not(:disabled) {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+            transform: translateY(-1px);
+        }
+        
+        .actions-dropdown .action-btn:disabled {
+            color: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .actions-dropdown .action-btn-danger:hover:not(:disabled) {
+            background: #fef2f2;
+            border-color: #f87171;
+            color: #dc2626;
+        }
+        
+        .actions-dropdown .action-btn-warning:hover:not(:disabled) {
+            background: #fffbeb;
+            border-color: #fbbf24;
+            color: #d97706;
+        }
+    `;
+    
+    document.head.appendChild(style);
 }
 
 
@@ -474,156 +678,17 @@ export function renderNodeDetails() {
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
             ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             
-            <!-- Actions Dropdown -->
+            <!-- Actions Button -->
             <div style="margin-top: 1rem;">
-                <div class="actions-dropdown-container">
-                    <button id="actions-dropdown-btn" class="button button-primary" style="display: flex; align-items: center; gap: 0.5rem;">
-                        ⚡ Actions
-                        <span style="font-size: 0.8em;">▼</span>
-                    </button>
-                    <div id="actions-dropdown-menu" class="actions-dropdown-menu">
-                        <!-- Generation Actions -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-section-title">Content</div>
-                            <button id="node-generate-content-action" class="dropdown-item">
-                                ✨ Generate Content
-                            </button>
-                            <button id="node-generate-all-action" class="dropdown-item" ${node.isLeaf ? 'disabled title="This node is a leaf node and cannot have children"' : ''}>
-                                🔄 Generate All Children
-                            </button>
-                            <button id="default-prompt-action" class="dropdown-item">
-                                📝 Reset to Default Prompt
-                            </button>
-                        </div>
-
-                        <!-- Structure Actions -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-section-title">Structure</div>
-                            ${!node.isLeaf ? `
-                                <button id="add-child-node-btn" class="dropdown-item">
-                                    ➕ Add ${node.childLevelName || 'Child'}
-                                </button>
-                            ` : ''}
-                            <button id="delete-node-btn" class="dropdown-item dropdown-item-danger">
-                                🗑️ Delete ${getCurrentLevelName(node)}
-                            </button>
-                            ${node.children.length > 0 ? `
-                                <button id="delete-subnodes-btn" class="dropdown-item dropdown-item-warning">
-                                    🗂️ Delete All ${getPluralChildLevelName(node)}
-                                </button>
-                            ` : ''}
-                        </div>
-
-                        <!-- Data Actions -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-section-title">Data</div>
-                            <button id="export-node-btn" class="dropdown-item">
-                                📤 Export
-                            </button>
-                            <button id="import-node-btn" class="dropdown-item">
-                                📥 Import
-                            </button>
-                            <button id="chat-node-btn" class="dropdown-item">
-                                💬 Chat
-                            </button>
-                        </div>
-
-                        <!-- Context Actions -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-section-title">Context</div>
-                            <button id="node-propagate-context-btn" class="dropdown-item">
-                                🔄 Propagate Context
-                            </button>
-                            <button id="node-extract-context-btn" class="dropdown-item">
-                                🎯 Extract Context
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <button id="actions-dropdown-btn" class="button button-primary" style="display: flex; align-items: center; gap: 0.5rem;">
+                    ⚡ Actions
+                    <span style="font-size: 0.8em;">▼</span>
+                </button>
             </div>
         </div>
 
         <style>
-        .actions-dropdown-container {
-            position: relative;
-            display: inline-block;
-        }
-
-        .actions-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            z-index: 1000;
-            min-width: 250px;
-            background: white;
-            border: 1px solid var(--border-color, #dee2e6);
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            padding: 0.5rem 0;
-            margin-top: 4px;
-            display: none; /* Hidden by default */
-        }
-
-        .dropdown-section {
-            margin-bottom: 0.5rem;
-        }
-
-        .dropdown-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .dropdown-section-title {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--secondary-600, #6c757d);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 0.25rem 1rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .dropdown-section + .dropdown-section {
-            border-top: 1px solid var(--border-color, #e9ecef);
-            padding-top: 0.5rem;
-        }
-
-        .dropdown-item {
-            display: block;
-            width: 100%;
-            padding: 0.5rem 1rem;
-            background: none;
-            border: none;
-            text-align: left;
-            cursor: pointer;
-            font-size: 0.875rem;
-            color: var(--text-color, #495057);
-            transition: background-color 0.2s;
-        }
-
-        .dropdown-item:hover:not(:disabled) {
-            background-color: var(--primary-50, #f8f9ff);
-            color: var(--primary-700, #364fc7);
-        }
-
-        .dropdown-item:disabled {
-            color: var(--secondary-400, #adb5bd);
-            cursor: not-allowed;
-        }
-
-        .dropdown-item-danger:hover:not(:disabled) {
-            background-color: #fef2f2;
-            color: #dc2626;
-        }
-
-        .dropdown-item-warning:hover:not(:disabled) {
-            background-color: #fffbeb;
-            color: #d97706;
-        }
-
-        /* Close dropdown when clicking outside */
-        .actions-dropdown-container.open .actions-dropdown-menu {
-            display: block;
-        }
+        /* Actions modal now uses proper BaseModal system */
         </style>
 
         <div class="node-section generation-section">
@@ -829,6 +894,9 @@ export function renderNodeDetails() {
     `;
 
     contentArea.appendChild(detailsContainer);
+
+    // === DEBUGGING: Log dropdown HTML generation ===
+    // Actions dropdown rendered successfully
 
     // --- Populate and Set States (No Listeners Here!) ---
     const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
@@ -1053,25 +1121,7 @@ export function renderNodeDetails() {
         });
     }
 
-    // === DEBUGGING: Log dropdown HTML generation ===
-    console.log('🔧 Dropdown HTML rendered');
-    const dropdownBtn = document.getElementById('actions-dropdown-btn');
-    const dropdownContainer = document.querySelector('.actions-dropdown-container');
-    const dropdownMenu = document.querySelector('.actions-dropdown-menu');
-    
-    console.log('🎯 Dropdown elements check:');
-    console.log('  - Button exists:', !!dropdownBtn);
-    console.log('  - Container exists:', !!dropdownContainer);
-    console.log('  - Menu exists:', !!dropdownMenu);
-    
-    if (dropdownBtn) {
-        console.log('  - Button ID:', dropdownBtn.id);
-        console.log('  - Button classes:', dropdownBtn.className);
-    }
-    
-    if (dropdownContainer) {
-        console.log('  - Container classes:', dropdownContainer.className);
-    }
+    // Actions dropdown elements initialized
 }
 
 function initializeVersionNavigation(node: DocumentNode) {
@@ -1947,112 +1997,31 @@ export function setupEventListeners() {
     // === DEBUGGING: Add simple direct listener as fallback ===
     console.log('🔧 Setting up event listeners...');
     
-    // Simple fallback listener for debugging
-    mainContent.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        console.log('🖱️ Click detected on:', target.tagName, target.id, target.className);
-        
-        if (target.id === 'actions-dropdown-btn' || target.closest('#actions-dropdown-btn')) {
-            console.log('🎯 Actions dropdown button clicked!');
-            e.preventDefault();
-            e.stopPropagation();
-
-            const button = target.closest('#actions-dropdown-btn') as HTMLElement;
-            const container = button?.closest('.actions-dropdown-container');
-            
-            console.log('📦 Container found:', !!container);
-            
-            if (container) {
-                const isOpen = container.classList.contains('open');
-                console.log('📂 Dropdown is currently open:', isOpen);
-                
-                // Close all other dropdowns first
-                document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
-                    el.classList.remove('open');
-                });
-                
-                // Toggle this dropdown
-                if (!isOpen) {
-                    console.log('✅ Opening dropdown...');
-                    container.classList.add('open');
-                } else {
-                    console.log('❌ Closing dropdown...');
-                }
-            }
-        }
-    });
+    // Removed duplicate fallback listener to prevent modal stacking issue
 
     // Import EventManager for robust event handling (as backup)
     import('./event-manager').then(({ EventManager }) => {
         console.log('✅ EventManager loaded successfully');
         const eventManager = EventManager.getInstance();
 
-        // === ROBUST DROPDOWN HANDLING WITH EVENT DELEGATION ===
-        // Dropdown toggle - survives DOM replacements
+        // === ACTIONS BUTTON HANDLING WITH EVENT DELEGATION ===
+        // Actions button - survives DOM replacements
         eventManager.addDelegatedEvent(
             mainContent,
             'click',
             '#actions-dropdown-btn',
             (e) => {
-                console.log('🎯 EventManager dropdown handler triggered');
+                console.log('🎯 EventManager actions button clicked');
                 e.preventDefault();
                 e.stopPropagation();
 
-                const button = e.currentTarget as HTMLElement;
-                const container = button.closest('.actions-dropdown-container');
-                if (container) {
-                    const isOpen = container.classList.contains('open');
-                    
-                    // Close all other dropdowns first
-                    document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
-                        el.classList.remove('open');
-                    });
-                    
-                    // Toggle this dropdown
-                    if (!isOpen) {
-                        container.classList.add('open');
+                if (selectedNodeId && projectManager) {
+                    const selectedNode = projectManager.findNodeById(selectedNodeId);
+                    if (selectedNode) {
+                        showActionsDropdown(selectedNode);
+                        console.log('✅ EventManager actions modal opened!');
                     }
                 }
-            }
-        );
-
-        // Close dropdown when clicking outside - using event delegation
-        eventManager.addDelegatedEvent(
-            document.body,
-            'click',
-            '*',
-            (e) => {
-                const target = e.target as HTMLElement;
-                const dropdown = target.closest('.actions-dropdown-container');
-                
-                // If clicking outside any dropdown, close all dropdowns
-                if (!dropdown) {
-                    document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
-                        el.classList.remove('open');
-                    });
-                }
-            }
-        );
-
-        // All dropdown action items - single delegation handler
-        eventManager.addDelegatedEvent(
-            mainContent,
-            'click',
-            '.dropdown-item',
-            (e) => {
-                console.log('🎯 Dropdown item clicked:', (e.currentTarget as HTMLElement).id);
-                e.preventDefault();
-                e.stopPropagation();
-
-                const button = e.currentTarget as HTMLElement;
-                const buttonId = button.id;
-
-                // Close dropdown first
-                const container = button.closest('.actions-dropdown-container');
-                if (container) container.classList.remove('open');
-
-                // Handle the specific action based on button ID
-                handleDropdownAction(buttonId);
             }
         );
 
