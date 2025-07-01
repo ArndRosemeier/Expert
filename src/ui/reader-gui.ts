@@ -58,6 +58,12 @@ export class ReaderGUI {
     private readerEditor: ReaderEditor;
     private hasBeenRendered: boolean = false; // Track if this instance has been rendered
     
+    // Search state
+    private searchTerm: string = '';
+    private searchResults: Array<{nodeId: string, startPos: number, endPos: number}> = [];
+    private currentSearchIndex: number = -1;
+    private isSearchVisible: boolean = false;
+    
     // Bound method references for proper event listener removal
     private boundHandleClick: (event: MouseEvent) => void;
     private boundHandleDoubleClick: (event: MouseEvent) => void;
@@ -125,6 +131,9 @@ export class ReaderGUI {
         if (this.isSettingsPanelOpen) {
             this.restoreSettingsPanel();
         }
+        
+        // Setup find interface event listeners
+        this.setupFindEventListeners();
         
         // Reader editor state is maintained through always-edit mode
     }
@@ -382,6 +391,14 @@ export class ReaderGUI {
                 <div class="reader-header">
                     <h1>${this.projectManager.projectTitle} - Reader View</h1>
                     <div class="reader-controls">
+                        <button id="reader-find-btn" class="control-btn">🔍 Find</button>
+                        <div id="reader-find-interface" class="reader-find-interface-inline" style="display: none;">
+                            <input type="text" id="find-input" placeholder="Search..." />
+                            <button id="find-button" class="find-btn-small">Find</button>
+                            <button id="find-next-button" class="find-btn-small" disabled>Next</button>
+                            <button id="find-close-button" class="find-close-btn-small">&times;</button>
+                            <span id="find-results-info" class="find-results-info-small"></span>
+                        </div>
                         <button id="reader-actions-config" class="control-btn">🔧 Configure Actions</button>
                         <button id="reader-toc-btn" class="control-btn">📋 TOC</button>
                         <button id="reader-settings-btn" class="control-btn">⚙️ Settings</button>
@@ -1357,6 +1374,306 @@ export class ReaderGUI {
                 border-color: #f59e0b;
                 color: #d97706;
             }
+
+            /* Find interface styles */
+            .reader-find-interface {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                margin: 16px 0;
+                padding: 16px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .find-interface-header {
+                font-weight: 600;
+                color: #334155;
+                margin-bottom: 12px;
+                font-size: 14px;
+            }
+
+            .find-interface-controls {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+            }
+
+            #find-input {
+                flex: 1;
+                min-width: 200px;
+                padding: 8px 12px;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                font-size: 14px;
+                outline: none;
+                transition: all 0.2s ease;
+            }
+
+            #find-input:focus {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+            }
+
+            .find-btn {
+                padding: 8px 16px;
+                background: #3b82f6;
+                color: white;
+                border: 1px solid #3b82f6;
+                border-radius: 4px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                white-space: nowrap;
+            }
+
+            .find-btn:hover:not(:disabled) {
+                background: #2563eb;
+                border-color: #2563eb;
+            }
+
+            .find-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                background: #94a3b8;
+                border-color: #94a3b8;
+            }
+
+            .find-close-btn {
+                padding: 6px 10px;
+                background: transparent;
+                color: #64748b;
+                border: 1px solid #cbd5e1;
+                border-radius: 4px;
+                font-size: 16px;
+                line-height: 1;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .find-close-btn:hover {
+                background: #fee2e2;
+                color: #dc2626;
+                border-color: #fca5a5;
+            }
+
+            .find-results-info {
+                color: #64748b;
+                font-size: 13px;
+                margin-left: 8px;
+                white-space: nowrap;
+            }
+
+            /* Dark theme support for find interface */
+            .reader-theme-dark .reader-find-interface {
+                background: #1e293b;
+                border-color: #334155;
+            }
+
+            .reader-theme-dark .find-interface-header {
+                color: #e2e8f0;
+            }
+
+            .reader-theme-dark #find-input {
+                background: #334155;
+                border-color: #475569;
+                color: #e2e8f0;
+            }
+
+            .reader-theme-dark #find-input:focus {
+                border-color: #60a5fa;
+                box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.1);
+            }
+
+            .reader-theme-dark .find-close-btn {
+                background: transparent;
+                color: #94a3b8;
+                border-color: #475569;
+            }
+
+            .reader-theme-dark .find-close-btn:hover {
+                background: rgba(239, 68, 68, 0.1);
+                color: #ef4444;
+                border-color: #ef4444;
+            }
+
+            .reader-theme-dark .find-results-info {
+                color: #94a3b8;
+            }
+
+            /* Sepia theme support for find interface */
+            .reader-theme-sepia .reader-find-interface {
+                background: #f5f2e8;
+                border-color: #d4b895;
+            }
+
+            .reader-theme-sepia .find-interface-header {
+                color: #8b4513;
+            }
+
+            .reader-theme-sepia #find-input {
+                background: #fdfcf8;
+                border-color: #d4b895;
+                color: #8b4513;
+            }
+
+            .reader-theme-sepia #find-input:focus {
+                border-color: #d97706;
+                box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.1);
+            }
+
+            /* Inline find interface (in header) styles */
+            .reader-find-interface-inline {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(248, 250, 252, 0.95);
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 6px 8px;
+                margin: 0 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                backdrop-filter: blur(8px);
+                animation: fadeIn 0.2s ease-out;
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-4px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .reader-find-interface-inline #find-input {
+                flex: 0 1 180px;
+                min-width: 120px;
+                padding: 4px 8px;
+                border: 1px solid #cbd5e1;
+                border-radius: 3px;
+                font-size: 13px;
+                outline: none;
+                transition: all 0.2s ease;
+            }
+
+            .reader-find-interface-inline #find-input:focus {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+            }
+
+            .find-btn-small {
+                padding: 4px 8px;
+                background: #3b82f6;
+                color: white;
+                border: 1px solid #3b82f6;
+                border-radius: 3px;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                white-space: nowrap;
+            }
+
+            .find-btn-small:hover:not(:disabled) {
+                background: #2563eb;
+                border-color: #2563eb;
+            }
+
+            .find-btn-small:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                background: #94a3b8;
+                border-color: #94a3b8;
+            }
+
+            .find-close-btn-small {
+                padding: 2px 6px;
+                background: transparent;
+                color: #64748b;
+                border: 1px solid #cbd5e1;
+                border-radius: 3px;
+                font-size: 14px;
+                line-height: 1;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .find-close-btn-small:hover {
+                background: #fee2e2;
+                color: #dc2626;
+                border-color: #fca5a5;
+            }
+
+            .find-results-info-small {
+                color: #64748b;
+                font-size: 11px;
+                margin-left: 4px;
+                white-space: nowrap;
+                min-width: 60px;
+            }
+
+            /* Dark theme support for inline find interface */
+            .reader-theme-dark .reader-find-interface-inline {
+                background: rgba(30, 41, 59, 0.95);
+                border-color: #334155;
+            }
+
+            .reader-theme-dark .reader-find-interface-inline #find-input {
+                background: #334155;
+                border-color: #475569;
+                color: #e2e8f0;
+            }
+
+            .reader-theme-dark .reader-find-interface-inline #find-input:focus {
+                border-color: #60a5fa;
+                box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
+            }
+
+            .reader-theme-dark .find-close-btn-small {
+                background: transparent;
+                color: #94a3b8;
+                border-color: #475569;
+            }
+
+            .reader-theme-dark .find-close-btn-small:hover {
+                background: rgba(239, 68, 68, 0.1);
+                color: #ef4444;
+                border-color: #ef4444;
+            }
+
+            .reader-theme-dark .find-results-info-small {
+                color: #94a3b8;
+            }
+
+            /* Sepia theme support for inline find interface */
+            .reader-theme-sepia .reader-find-interface-inline {
+                background: rgba(245, 242, 232, 0.95);
+                border-color: #d4b895;
+            }
+
+            .reader-theme-sepia .reader-find-interface-inline #find-input {
+                background: #fdfcf8;
+                border-color: #d4b895;
+                color: #8b4513;
+            }
+
+            .reader-theme-sepia .reader-find-interface-inline #find-input:focus {
+                border-color: #d97706;
+                box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.2);
+            }
+
+            /* Responsive adjustments for inline find */
+            @media (max-width: 768px) {
+                .reader-find-interface-inline {
+                    position: absolute;
+                    top: 100%;
+                    right: 0;
+                    left: 0;
+                    margin: 8px;
+                    z-index: 1000;
+                }
+                
+                .reader-find-interface-inline #find-input {
+                    flex: 1;
+                    min-width: 100px;
+                }
+            }
         `;
     }
 
@@ -1396,6 +1713,14 @@ export class ReaderGUI {
         
         if (target.id === 'close-reader-btn') {
             void this.close();
+        } else if (target.id === 'reader-find-btn') {
+            this.toggleFindInterface();
+        } else if (target.id === 'find-button') {
+            this.performSearch();
+        } else if (target.id === 'find-next-button') {
+            this.findNext();
+        } else if (target.id === 'find-close-button') {
+            this.closeFindInterface();
         } else if (target.id === 'reader-actions-config') {
             this.openActionsConfigModal();
         } else if (target.classList.contains('reader-action-btn')) {
@@ -2520,14 +2845,216 @@ export class ReaderGUI {
     }
 
     /**
+     * Toggle the find interface visibility
+     */
+    private toggleFindInterface(): void {
+        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
+        if (!findInterface) return;
+
+        this.isSearchVisible = !this.isSearchVisible;
+        findInterface.style.display = this.isSearchVisible ? 'block' : 'none';
+
+        if (this.isSearchVisible) {
+            // Focus the search input when opening
+            const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+            if (findInput) {
+                setTimeout(() => findInput.focus(), 100);
+            }
+        } else {
+            // Clear search results when closing
+            this.clearSearchResults();
+        }
+    }
+
+    /**
+     * Close the find interface
+     */
+    private closeFindInterface(): void {
+        this.isSearchVisible = false;
+        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
+        if (findInterface) {
+            findInterface.style.display = 'none';
+        }
+        this.clearSearchResults();
+    }
+
+    /**
+     * Perform a new search
+     */
+    private performSearch(): void {
+        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        if (!findInput) return;
+
+        const searchTerm = findInput.value.trim();
+        if (!searchTerm) {
+            this.updateSearchResults([]);
+            return;
+        }
+
+        this.searchTerm = searchTerm.toLowerCase();
+        const results = this.searchInAllEditors(this.searchTerm);
+        this.updateSearchResults(results);
+
+        if (results.length > 0) {
+            this.currentSearchIndex = 0;
+            this.navigateToSearchResult(0);
+        }
+    }
+
+    /**
+     * Find next occurrence
+     */
+    private findNext(): void {
+        if (this.searchResults.length === 0) return;
+
+        this.currentSearchIndex = (this.currentSearchIndex + 1) % this.searchResults.length;
+        this.navigateToSearchResult(this.currentSearchIndex);
+    }
+
+    /**
+     * Search in all text editors for the given term
+     */
+    private searchInAllEditors(searchTerm: string): Array<{nodeId: string, startPos: number, endPos: number}> {
+        const results: Array<{nodeId: string, startPos: number, endPos: number}> = [];
+        
+        // Get all editors from ReaderEditor
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return results;
+
+        nodeEditors.forEach((editor: any, nodeId: string) => {
+            const text = editor.editor.getText().toLowerCase();
+            let index = 0;
+            
+            while ((index = text.indexOf(searchTerm, index)) !== -1) {
+                results.push({
+                    nodeId,
+                    startPos: index,
+                    endPos: index + searchTerm.length
+                });
+                index += 1; // Move forward to find overlapping matches
+            }
+        });
+
+        return results;
+    }
+
+    /**
+     * Navigate to a specific search result
+     */
+    private navigateToSearchResult(resultIndex: number): void {
+        if (resultIndex < 0 || resultIndex >= this.searchResults.length) return;
+
+        const result = this.searchResults[resultIndex];
+        if (!result) return;
+
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        const editor = nodeEditors.get(result.nodeId);
+        if (!editor) return;
+
+        // Scroll to the node first
+        this.scrollToNode(result.nodeId);
+
+        // Focus the editor and set selection to the found text
+        setTimeout(() => {
+            editor.editor.focus();
+            editor.editor.setSelection(result.startPos, result.endPos);
+        }, 300);
+    }
+
+    /**
+     * Update search results and UI
+     */
+    private updateSearchResults(results: Array<{nodeId: string, startPos: number, endPos: number}>): void {
+        this.searchResults = results;
+        this.currentSearchIndex = -1;
+
+        // Update find next button state
+        const findNextBtn = this.container.querySelector('#find-next-button') as HTMLButtonElement;
+        if (findNextBtn) {
+            findNextBtn.disabled = results.length === 0;
+        }
+
+        // Update results info
+        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
+        if (resultsInfo) {
+            if (results.length === 0) {
+                resultsInfo.textContent = this.searchTerm ? 'No matches found' : '';
+            } else {
+                resultsInfo.textContent = `${results.length} match${results.length === 1 ? '' : 'es'}`;
+            }
+        }
+    }
+
+    /**
+     * Clear search results and highlights
+     */
+    private clearSearchResults(): void {
+        this.searchResults = [];
+        this.searchTerm = '';
+        this.currentSearchIndex = -1;
+        this.updateSearchResults([]);
+    }
+
+    /**
+     * Setup find interface event listeners
+     */
+    private setupFindEventListeners(): void {
+        // Add keyboard shortcuts for find input
+        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        if (findInput) {
+            findInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.performSearch();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.closeFindInterface();
+                }
+            });
+
+            // Auto-search as user types (with debouncing)
+            let searchTimeout: ReturnType<typeof setTimeout>;
+            findInput.addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (findInput.value.trim()) {
+                        this.performSearch();
+                    } else {
+                        this.clearSearchResults();
+                    }
+                }, 300);
+            });
+        }
+
+        // Add global keyboard shortcut for opening find interface
+        document.addEventListener('keydown', (e) => {
+            // Only activate if reader is visible and no input field is focused
+            if (this.container.style.display !== 'none' && 
+                (e.ctrlKey || e.metaKey) && e.key === 'f' &&
+                !(document.activeElement instanceof HTMLInputElement) &&
+                !(document.activeElement instanceof HTMLTextAreaElement)) {
+                e.preventDefault();
+                this.toggleFindInterface();
+            }
+        });
+    }
+
+    /**
      * Close the reader interface
      */
-    private close(): void {
+    private async close(): Promise<void> {
         // Stop listening for updates
         this.stopListeningForUpdates();
         
         // Reset settings panel state
         this.isSettingsPanelOpen = false;
+        
+        // Cleanup reader editor and save any pending changes
+        if (this.readerEditor) {
+            await this.readerEditor.destroy();
+        }
         
         // Remove styles
         const styleElement = document.getElementById('reader-styles');

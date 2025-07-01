@@ -70,8 +70,10 @@ export class TextEditorWithHighlighting {
         this.editableDiv.addEventListener('input', () => {
             // Update our plain text tracking when user edits manually
             this.plainTextContent = this.editableDiv.textContent || '';
-            // Clear all highlights when user edits manually
-            this.clearAllHighlights();
+            // Clear all highlights when user edits manually - BUT ONLY IF THERE ARE HIGHLIGHTS
+            if (this.highlights.size > 0) {
+                this.clearAllHighlights();
+            }
             // Note: We don't clear undo state here - let canUndo() check if replacement text is still intact
             if (this.changeCallback) {
                 this.changeCallback(this.getText());
