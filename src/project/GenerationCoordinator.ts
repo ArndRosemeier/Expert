@@ -193,8 +193,7 @@ export class GenerationCoordinator {
             });
         }
 
-        // Show global abort button
-        this.showGlobalAbortButton();
+        // Global abort button is now always visible
     }
 
     /**
@@ -240,7 +239,6 @@ export class GenerationCoordinator {
             // Clear progress and overlays
             this.updateProgressUI();
             this.hideGenerationOverlay();
-            this.hideGlobalAbortButton();
 
             // Handle errors - ALWAYS show them for debugging
             if (!success && error) {
@@ -272,17 +270,5 @@ export class GenerationCoordinator {
         }
     }
 
-    private showGlobalAbortButton(): void {
-        console.log('🟢 GenerationCoordinator: Showing global abort button');
-        if (typeof (window as any).showGlobalAbortButton === 'function') {
-            (window as any).showGlobalAbortButton();
-        }
-    }
-
-    private hideGlobalAbortButton(): void {
-        console.log('🔴 GenerationCoordinator: Hiding global abort button');
-        if (typeof (window as any).hideGlobalAbortButton === 'function') {
-            (window as any).hideGlobalAbortButton();
-        }
-    }
+    // Global abort button is now always visible - no show/hide methods needed
 } 

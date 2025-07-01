@@ -26,26 +26,7 @@ const BUTTON_LABELS = {
     GENERATE_RATINGS: 'Generate Ratings for Current Content'
 } as const;
 
-// Global abort button functions
-function showGlobalAbortButton() {
-    const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
-    if (globalAbortBtn) {
-        console.log('🟢 Showing global abort button');
-        globalAbortBtn.style.display = 'inline-block';
-    } else {
-        console.warn('⚠️ Global abort button not found when trying to show');
-    }
-}
-
-function hideGlobalAbortButton() {
-    const abortButton = document.getElementById('globalAbortBtn');
-    if (abortButton) {
-        console.log('🔴 Hiding global abort button');
-        abortButton.style.display = 'none';
-    } else {
-        console.warn('⚠️ Global abort button not found when trying to hide');
-    }
-}
+// Global abort button is now always visible - no show/hide functions needed
 
 async function saveCheckboxStates() {
     try {
@@ -2521,8 +2502,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     // Render the multi-project tree (event listeners are set up once in main.ts)
     renderMultiProjectTree();
     
-    // Ensure global abort button is hidden on initialization
-    hideGlobalAbortButton();
+    // Global abort button is now always visible
     
     // Render node details if we have a selected node
     if (selectedNodeId) {
@@ -2634,8 +2614,6 @@ function updateProgressUI(data?: ProgressUIData) {
 (window as any).updateProgressUI = updateProgressUI;
 (window as any).showGenerationOverlay = showGenerationOverlay;
 (window as any).hideGenerationOverlay = hideGenerationOverlay;
-(window as any).showGlobalAbortButton = showGlobalAbortButton;
-(window as any).hideGlobalAbortButton = hideGlobalAbortButton;
 
 
 

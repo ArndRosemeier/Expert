@@ -469,6 +469,8 @@ export async function initialize() {
             if (confirmed) {
                 activeProject.getGenerationService().abortCurrentGeneration();
             }
+        } else {
+            alert('No generation is currently in progress.');
         }
     });
     } catch (error) {
