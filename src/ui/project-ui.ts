@@ -1051,6 +1051,26 @@ export function renderNodeDetails() {
             }
         });
     }
+
+    // === DEBUGGING: Log dropdown HTML generation ===
+    console.log('🔧 Dropdown HTML rendered');
+    const dropdownBtn = document.getElementById('actions-dropdown-btn');
+    const dropdownContainer = document.querySelector('.actions-dropdown-container');
+    const dropdownMenu = document.querySelector('.actions-dropdown-menu');
+    
+    console.log('🎯 Dropdown elements check:');
+    console.log('  - Button exists:', !!dropdownBtn);
+    console.log('  - Container exists:', !!dropdownContainer);
+    console.log('  - Menu exists:', !!dropdownMenu);
+    
+    if (dropdownBtn) {
+        console.log('  - Button ID:', dropdownBtn.id);
+        console.log('  - Button classes:', dropdownBtn.className);
+    }
+    
+    if (dropdownContainer) {
+        console.log('  - Container classes:', dropdownContainer.className);
+    }
 }
 
 function initializeVersionNavigation(node: DocumentNode) {
@@ -1923,8 +1943,47 @@ This action cannot be undone.`;
 export function setupEventListeners() {
     const mainContent = getElementById('main-content');
 
-    // Import EventManager for robust event handling
+    // === DEBUGGING: Add simple direct listener as fallback ===
+    console.log('🔧 Setting up event listeners...');
+    
+    // Simple fallback listener for debugging
+    mainContent.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        console.log('🖱️ Click detected on:', target.tagName, target.id, target.className);
+        
+        if (target.id === 'actions-dropdown-btn' || target.closest('#actions-dropdown-btn')) {
+            console.log('🎯 Actions dropdown button clicked!');
+            e.preventDefault();
+            e.stopPropagation();
+
+            const button = target.closest('#actions-dropdown-btn') as HTMLElement;
+            const container = button?.closest('.actions-dropdown-container');
+            
+            console.log('📦 Container found:', !!container);
+            
+            if (container) {
+                const isOpen = container.classList.contains('open');
+                console.log('📂 Dropdown is currently open:', isOpen);
+                
+                // Close all other dropdowns first
+                document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
+                    el.classList.remove('open');
+                });
+                
+                // Toggle this dropdown
+                if (!isOpen) {
+                    console.log('✅ Opening dropdown...');
+                    container.classList.add('open');
+                } else {
+                    console.log('❌ Closing dropdown...');
+                }
+            }
+        }
+    });
+
+    // Import EventManager for robust event handling (as backup)
     import('./event-manager').then(({ EventManager }) => {
+        console.log('✅ EventManager loaded successfully');
         const eventManager = EventManager.getInstance();
 
         // === ROBUST DROPDOWN HANDLING WITH EVENT DELEGATION ===
@@ -1934,6 +1993,7 @@ export function setupEventListeners() {
             'click',
             '#actions-dropdown-btn',
             (e) => {
+                console.log('🎯 EventManager dropdown handler triggered');
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -1979,6 +2039,7 @@ export function setupEventListeners() {
             'click',
             '.dropdown-item',
             (e) => {
+                console.log('🎯 Dropdown item clicked:', (e.currentTarget as HTMLElement).id);
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -1994,7 +2055,11 @@ export function setupEventListeners() {
             }
         );
 
-    }).catch(console.error);
+        console.log('✅ EventManager delegation setup complete');
+
+    }).catch((error) => {
+        console.error('❌ Failed to load EventManager:', error);
+    });
 
     // === MAIN CONTENT EVENT DELEGATION ===
     mainContent.addEventListener('click', (e) => {
