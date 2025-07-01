@@ -35,7 +35,7 @@ function showGlobalAbortButton() {
 }
 
 function hideGlobalAbortButton() {
-    const abortButton = document.getElementById('global-abort-btn');
+    const abortButton = document.getElementById('globalAbortBtn');
     if (abortButton) {
         abortButton.style.display = 'none';
     }
