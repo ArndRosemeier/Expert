@@ -44,7 +44,9 @@ export class DocumentNode {
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
 
-    
+    // --- UI State Properties ---
+    collapsed: boolean = false; // Track if this node is collapsed in the tree view
+
     // --- Creator Model Tracking ---
     creatorModel: string | null = null; // Track which AI model created/generated content
     
@@ -72,6 +74,7 @@ export class DocumentNode {
         this.context = '';
         this.generationSessions = [];
         this.currentGenerationSession = null;
+        this.collapsed = false; // Initialize as expanded
         
 
     }
@@ -304,6 +307,7 @@ export class DocumentNode {
             template: this.template,
             generationPrompt: this.generationPrompt,
             isPromptGenerating: this.isPromptGenerating,
+            collapsed: this.collapsed, // Include collapsed state in serialization
             generationHistory: this.generationHistory,
             isGenerating: this.isGenerating,
             generationSessions: this.generationSessions,

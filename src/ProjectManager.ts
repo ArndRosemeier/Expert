@@ -445,6 +445,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             generationHistory: plainNode.generationHistory || [],
             generationSessions: plainNode.generationSessions || [],
             creatorModel: plainNode.creatorModel || null, // Handle creator model field
+            collapsed: plainNode.collapsed || false, // Restore collapsed state, default to false
             children: [], // Reset children, as they will be rehydrated recursively
         });
 

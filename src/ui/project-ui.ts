@@ -6,11 +6,11 @@ import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 
+// --- State Variables ---
 let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
-let collapsedNodes: Set<string> = new Set();
 
-// Checkbox state persistence
+// Persistent checkbox states
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
 let autoPropagateState: boolean = true;
@@ -35,33 +35,9 @@ function showGlobalAbortButton() {
 }
 
 function hideGlobalAbortButton() {
-    const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
-    if (globalAbortBtn) {
-        globalAbortBtn.style.display = 'none';
-    }
-}
-
-async function saveCollapsedState() {
-    try {
-        const { StorageService } = await import('../StorageService');
-        const storage = await StorageService.getInstance();
-        await storage.set('expert_app_collapsed_nodes', Array.from(collapsedNodes));
-    } catch (error) {
-        console.warn('Failed to save collapsed nodes state:', error);
-    }
-}
-
-async function loadCollapsedState() {
-    try {
-        const { StorageService } = await import('../StorageService');
-        const storage = await StorageService.getInstance();
-        const saved = await storage.get<string[]>('expert_app_collapsed_nodes');
-        if (saved) {
-            collapsedNodes = new Set(saved);
-        }
-    } catch (error) {
-        console.warn('Failed to load collapsed nodes state:', error);
-        collapsedNodes = new Set();
+    const abortButton = document.getElementById('global-abort-btn');
+    if (abortButton) {
+        abortButton.style.display = 'none';
     }
 }
 
@@ -1218,7 +1194,7 @@ function renderRatingsView() {
 function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): string {
     const isSelected = node.id === selectedNodeId;
     const hasChildren = node.children.length > 0;
-    const isCollapsed = collapsedNodes.has(node.id);
+    const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     const indent = node.level * 20;
     
     console.log('🌳 Building tree HTML for node:', { 
@@ -1976,8 +1952,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         }
     }
     
-    // Load the collapsed state from storage BEFORE rendering
-    await loadCollapsedState();
+    // Load the checkbox states from storage
     await loadCheckboxStates();
 
     const mainContent = getElementById('main-content');
@@ -2257,8 +2232,7 @@ function renderMultiProjectTree() {
     
     console.log('🔄 Rendering multi-project tree:', { 
         projectCount: projects.length, 
-        projectTitles: projects.map(p => p.rootNode.title),
-        collapsedNodes: Array.from(collapsedNodes)
+        projectTitles: projects.map(p => p.rootNode.title)
     });
     
     if (projects.length === 0) {
@@ -2328,29 +2302,47 @@ function renderMultiProjectTree() {
                 nodeId, 
                 element: target, 
                 dataset: target.dataset,
-                getAttribute: target.getAttribute('data-node-id'),
-                collapsedBefore: collapsedNodes.has(nodeId || ''),
-                allCollapsed: Array.from(collapsedNodes)
+                getAttribute: target.getAttribute('data-node-id')
             });
             
             if (nodeId) {
-                if (collapsedNodes.has(nodeId)) {
-                    collapsedNodes.delete(nodeId);
-                    console.log('🔼 Expanding node:', nodeId);
-                } else {
-                    collapsedNodes.add(nodeId);
-                    console.log('🔽 Collapsing node:', nodeId);
+                // Find the node in all projects
+                let targetNode: DocumentNode | null = null;
+                for (const project of projects) {
+                    targetNode = project.findNodeById(nodeId);
+                    if (targetNode) break;
                 }
                 
-                // Wait for the state to be saved before re-rendering
-                await saveCollapsedState();
-                
-                console.log('💾 Collapsed state saved, now re-rendering with:', Array.from(collapsedNodes));
-                
-                // Use requestAnimationFrame to ensure DOM updates are processed properly
-                requestAnimationFrame(() => {
-                    renderMultiProjectTree(); // Re-render tree to update expand/collapse state
-                });
+                if (targetNode) {
+                    const wasCollapsed = targetNode.collapsed;
+                    console.log('🔽 Node found, toggling collapsed state:', { 
+                        nodeId, 
+                        title: targetNode.title,
+                        collapsedBefore: wasCollapsed 
+                    });
+                    
+                    // Toggle the node's collapsed state
+                    targetNode.collapsed = !targetNode.collapsed;
+                    
+                    console.log(targetNode.collapsed ? '🔽 Collapsing node:' : '🔼 Expanding node:', nodeId);
+                    
+                    // Save the project containing this node
+                    for (const project of projects) {
+                        if (project.findNodeById(nodeId)) {
+                            await project.saveToStorage();
+                            break;
+                        }
+                    }
+                    
+                    console.log('💾 Project saved, now re-rendering with collapsed state:', targetNode.collapsed);
+                    
+                    // Use requestAnimationFrame to ensure DOM updates are processed properly
+                    requestAnimationFrame(() => {
+                        renderMultiProjectTree(); // Re-render tree to update expand/collapse state
+                    });
+                } else {
+                    console.error('❌ No node found with ID:', nodeId);
+                }
             } else {
                 console.error('❌ No nodeId found on expand button', target);
             }
@@ -2384,7 +2376,7 @@ function renderMultiProjectTree() {
                     const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtLevel(node.level, nodeProject.rootNode);
                     
                     // Determine action based on current node's state
-                    const isCurrentNodeCollapsed = collapsedNodes.has(nodeId);
+                    const isCurrentNodeCollapsed = node.collapsed;
                     
                     console.log('🔽🔽 Double-click action:', { 
                         level: node.level, 
@@ -2396,20 +2388,20 @@ function renderMultiProjectTree() {
                         // Current node is collapsed, so expand all nodes at this level
                         nodesAtSameLevel.forEach(levelNode => {
                             if (levelNode.children.length > 0) { // Only nodes with children can be expanded
-                                collapsedNodes.delete(levelNode.id);
+                                levelNode.collapsed = false;
                             }
                         });
                     } else {
                         // Current node is expanded, so collapse all nodes at this level
                         nodesAtSameLevel.forEach(levelNode => {
                             if (levelNode.children.length > 0) { // Only nodes with children can be collapsed
-                                collapsedNodes.add(levelNode.id);
+                                levelNode.collapsed = true;
                             }
                         });
                     }
                     
-                    // Wait for the state to be saved before re-rendering
-                    await saveCollapsedState();
+                    // Save the project
+                    await nodeProject.saveToStorage();
                     
                     // Use requestAnimationFrame to ensure DOM updates are processed properly
                     requestAnimationFrame(() => {
