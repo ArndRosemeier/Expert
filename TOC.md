@@ -81,6 +81,23 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `deleteTemplate(id)` - Delete template
   - `createProjectFromTemplate(template)` - Create project from template
 
+**Template Reference Architecture** ✨ **ENHANCED**:
+- **Creation**: `ProjectManager` constructor creates deep copy for root node
+- **Inheritance**: Child nodes share root node's template reference
+- **Modification**: Change template for entire project via root node
+- **Persistence**: Template structure preserved in export/import
+- **Memory**: Efficient - only root node gets copy, children share reference
+
+**Template Data Flow**:
+```typescript
+// Root node gets deep copy
+const rootNodeTemplate = [...this.template.hierarchyLevels];
+this.rootNode = new DocumentNode(0, title, null, rootNodeTemplate);
+
+// Child nodes share root's reference
+const newChild = new DocumentNode(level, title, parentId, parent.template);
+```
+
 ### Project State Management
 - **File**: `src/state.ts`
 - **Functions**:
@@ -100,11 +117,23 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `content` - Node content
   - `children` - Child nodes array
   - `parent` - Parent node reference
+  - `template` - Template array reference ✨ **ENHANCED**
+  - `collapsed` - Tree UI collapsed state ✨ **NEW**
 - **Functions**:
   - `addChild(child)` - Add child node
   - `removeChild(childId)` - Remove child node
   - `getPath()` - Get node path
   - `isLeaf()` - Check if node is leaf
+
+**Template Reference Strategy** ✨ **NEW**:
+- **Root Nodes**: Get deep copy of template array for independent modification
+- **Child Nodes**: Share root node's template reference for consistency
+- **Benefits**: Project-wide template changes via root node, memory efficiency
+
+**Collapsed State Integration** ✨ **NEW**:
+- **Property**: `collapsed: boolean` - Track tree UI folding state per node
+- **Persistence**: Automatically included in `toJSON()` serialization
+- **Benefits**: Collapsed state preserved in export/import, no race conditions
 
 ### Context Management
 - **File**: `src/project/ContextService.ts`
@@ -850,53 +879,64 @@ const newNode = await nodeCreationService.createNode({
 
 ## 🔄 Recently Refactored (Clean Architecture)
 
-### Centralized Type Definitions
-All modal-related interfaces are now centralized in `src/ui/modals/types/ModalTypes.ts` to prevent duplication bugs.
+### Template Reference Strategy ✨ **NEW OPTIMIZATION** 
+- **File**: `src/ProjectManager.ts` and `src/DocumentNode.ts`
+- **Purpose**: Optimal balance between memory efficiency and template modification flexibility
 
-### Consolidated Placeholders
-Prompt placeholders are now centrally defined in `src/PromptManager.ts` and imported where needed.
+**ROOT NODE TEMPLATE HANDLING**:
+- ✅ Root nodes get **deep copy** (`[...template.hierarchyLevels]`) of template array
+- ✅ Allows project-wide template modifications via root node reference
+- ✅ Maintains template independence between different projects
 
-### Single Source of Truth
-- ✅ No duplicate interface definitions
-- ✅ Centralized type management
-- ✅ Consistent imports across the codebase 
+**CHILD NODE TEMPLATE HANDLING**:
+- ✅ Child nodes **share root node's template reference** (shallow copy)
+- ✅ Ensures consistency: all nodes in project share same template
+- ✅ Memory efficient: no unnecessary array copies for child nodes
 
-### Storage Architecture
-- ✅ Full IndexedDB migration completed
-- ✅ No automatic localStorage usage in main application
-- ⚠️ **localStorage only with explicit user authorization**
-- ✅ All persistent data uses `StorageService` → IndexedDB 
+**PERSISTENCE CONSISTENCY**:
+- ✅ Updated `ProjectManager.rehydrateNode()` to maintain pattern during load
+- ✅ Root node gets deep copy when loading from storage
+- ✅ Child nodes share root's template reference during rehydration
 
-### Simplified Context System (Latest)
-- ✅ **Removed complex context synthesis** - No more LLM-based context distillation
-- ✅ **Removed `<persist>` tag mechanics** - No more special tag handling
-- ✅ **Simple parent-to-child copying** - Context is now directly inherited
-- ✅ **Cleaner generation process** - No post-generation context synthesis
-- ✅ **Reduced dependencies** - ContextService no longer needs OpenRouterClient
+**Benefits**:
+- 🎯 **Project Template Control**: Modify template for entire project via root node
+- 🎯 **Automatic Propagation**: Changes automatically affect all child nodes
+- 🎯 **Memory Optimization**: No waste from unnecessary deep copies
+- 🎯 **Export/Import Preservation**: Template structure maintained across save/load cycles
+- 🎯 **Referential Integrity**: Consistent template references within projects
 
-### Add Child Node Architecture ✨ **NEW**
-- ✅ **Modal-Service Pattern** - UI modals delegate business logic to dedicated services
-- ✅ **AI-Powered Node Creation** - NodeCreationService handles AI suggestion generation
-- ✅ **Draft Content Convention** - "Draft: " prefix signals content needs expansion
-- ✅ **Automatic UI Refresh** - Modal Factory callbacks automatically refresh project tree
-- ✅ **Dual Mode Interface** - Single modal supports both AI and manual node creation
-- ✅ **Parent Content Updates** - Optional AI-powered parent content updates when adding children
+### Collapsed State Architecture Migration ✨ **MAJOR REFACTORING**
+- **Purpose**: Move UI state into data model for better persistence and consistency
 
-### Systematic Progress Events Architecture ✨ **NEW**
-- ✅ **Predictable Event Timing** - `iteration-started` always fires BEFORE creator work begins
-- ✅ **Dual-Tier Progress System** - High-level operations + orchestrator iterations work together
-- ✅ **Phase Boundary Events** - Clear signals for Create/Rate/Edit transitions
-- ✅ **Creator Iteration Tracking** - Separate counter for actual content generation cycles
-- ✅ **Enhanced UI Integration** - Multi-tier progress bars with systematic updates
-- ✅ **Event Translation Layer** - GenerationService converts orchestrator events to UI events
+**BREAKING CHANGES**:
+- ❌ Removed global `collapsedNodes` Set and related storage functions
+- ✅ Added `collapsed: boolean` property to `DocumentNode` class
+- ✅ Collapsed state now part of each node's serialization (`toJSON()`)
+- ✅ Collapsed state automatically preserved in export/import operations
+- ✅ Each project maintains its own independent collapsed state
 
-### Key Architectural Patterns Established
-- 🏗️ **Modal Factory with Callbacks** - `onAction` callbacks enable automatic UI refresh
-- 🏗️ **Service Layer Pattern** - Business logic separated from UI in dedicated service classes
-- 🏗️ **Content State Conventions** - Standardized patterns for content state signaling
-- 🏗️ **Dynamic Import Pattern** - Modal Factory uses dynamic imports to avoid circular dependencies
-- 🏗️ **Event Management System** - Systematic solution for event listener persistence
-- 🏗️ **Systematic Progress Events** ✨ **NEW** - Predictable, phase-aware progress tracking
+**TECHNICAL IMPROVEMENTS**:
+- ✅ No more race conditions with async global state persistence
+- ✅ Collapsed state properly belongs in the data model
+- ✅ Simplified UI logic - no separate state management needed
+- ✅ Enhanced `buildTreeHtml()` to use `node.collapsed` directly
+- ✅ Updated expand/collapse handlers to modify node properties
+- ✅ Eliminated separate `saveCollapsedState()` and `loadCollapsedState()` functions
+
+**Benefits**:
+- 🎯 **Data Model Consistency**: UI state stored where it logically belongs
+- 🎯 **Export/Import Preservation**: Tree folding preferences maintained across operations
+- 🎯 **No Race Conditions**: Synchronous property access eliminates timing bugs
+- 🎯 **Per-Project State**: Each project maintains independent tree folding
+- 🎯 **Simplified Architecture**: One less global state management system
+
+### Tree Folding Bug Resolution ✨ **FIXED**
+- **Problem**: Clicking expand on second project incorrectly collapsed first project
+- **Root Cause**: Race condition between async state persistence and DOM re-rendering
+- **Solution**: Move collapsed state to node properties, eliminate async persistence
+- **Result**: Tree folding now works correctly and consistently
+
+### Version Migration System Development
 
 ---
 
