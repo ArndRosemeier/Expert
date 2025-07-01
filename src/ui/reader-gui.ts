@@ -1381,7 +1381,7 @@ export class ReaderGUI {
         const nodeElement = target.closest('[data-node-id]') as HTMLElement;
         
         if (nodeElement && this.onNavigateToNode) {
-            const nodeId = nodeElement.dataset.nodeId;
+            const nodeId = nodeElement.dataset['nodeId'];
             if (nodeId) {
                 this.onNavigateToNode(nodeId);
             }
@@ -1420,7 +1420,7 @@ export class ReaderGUI {
             this.toggleSettings();
         } else if (target.classList.contains('toc-link')) {
             event.preventDefault();
-            const nodeId = target.dataset.nodeId;
+            const nodeId = target.dataset['nodeId'];
             if (nodeId) {
                 this.handleTOCNavigation(nodeId);
             }
@@ -1609,7 +1609,7 @@ export class ReaderGUI {
         const nodeElements = this.container.querySelectorAll('[data-node-id]');
         
         nodeElements.forEach(element => {
-            const nodeId = (element as HTMLElement).dataset.nodeId;
+            const nodeId = (element as HTMLElement).dataset['nodeId'];
             if (nodeId) {
                 this.clickMappings.push({
                     nodeId,
@@ -2546,6 +2546,20 @@ export class ReaderGUI {
         if (globalReaderInstance === this) {
             globalReaderInstance = null;
         }
+        
+        // Trigger UI refresh to show updated content in main interface
+        this.triggerMainUIRefresh();
+    }
+
+    /**
+     * Trigger refresh of main UI to show updated content
+     */
+    private triggerMainUIRefresh(): void {
+        // Import and call renderNodeDetails to refresh the main content UI
+        import('./project-ui').then(({ renderNodeDetails }) => {
+            console.log('🔄 Refreshing main UI after reader close');
+            renderNodeDetails();
+        }).catch(console.error);
     }
 
     /**
@@ -2575,6 +2589,9 @@ export class ReaderGUI {
         if (this.readerEditor) {
             await this.readerEditor.destroy();
         }
+        
+        // Trigger UI refresh to show updated content in main interface
+        this.triggerMainUIRefresh();
     }
 
     /**
