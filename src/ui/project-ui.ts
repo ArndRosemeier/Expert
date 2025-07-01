@@ -1897,12 +1897,19 @@ This action cannot be undone.`;
             // === READER VIEW BUTTON ===
             case 'open-reader-btn':
                 {
-                    if (!projectManager) {
+                    // Check both module variable and state for active project
+                    const activeProject = projectManager || state.getActiveProject();
+                    if (!activeProject) {
                         alert('No project is currently active. Please create or select a project first.');
                         return;
                     }
                     
-                    openReaderView(projectManager, (nodeId: string) => {
+                    // Update the module variable if it was null but state has a project
+                    if (!projectManager && activeProject) {
+                        projectManager = activeProject;
+                    }
+                    
+                    openReaderView(activeProject, (nodeId: string) => {
                         // Optional callback when navigating to a node from reader
                         selectedNodeId = nodeId;
                         renderNodeDetails();
