@@ -473,31 +473,157 @@ export function renderNodeDetails() {
             <h2 id="node-title-display" contenteditable="true">${node.title}</h2>
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
             ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
-            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                <button id="delete-node-btn" class="button button-danger">
-                    🗑️ Delete ${getCurrentLevelName(node)}
-                </button>
-                ${node.children.length > 0 ? `
-                    <button id="delete-subnodes-btn" class="button button-warning">
-                        🗂️ Delete All ${getPluralChildLevelName(node)}
+            
+            <!-- Actions Dropdown -->
+            <div style="margin-top: 1rem;">
+                <div class="actions-dropdown-container">
+                    <button id="actions-dropdown-btn" class="button button-primary" style="display: flex; align-items: center; gap: 0.5rem;">
+                        ⚡ Actions
+                        <span style="font-size: 0.8em;">▼</span>
                     </button>
-                ` : ''}
-                ${!node.isLeaf ? `
-                    <button id="add-child-node-btn" class="button button-success">
-                        ➕ Add ${node.childLevelName || 'Child'}
-                    </button>
-                ` : ''}
-                <button id="export-node-btn" class="button button-primary">
-                    📤 Export
-                </button>
-                <button id="import-node-btn" class="button button-success">
-                    📥 Import
-                </button>
-                <button id="chat-node-btn" class="button button-warning">
-                    💬 Chat
-                </button>
+                    <div id="actions-dropdown-menu" class="actions-dropdown-menu" style="display: none;">
+                        <!-- Generation Actions -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-section-title">Content</div>
+                            <button id="node-generate-content-action" class="dropdown-item">
+                                ✨ Generate Content
+                            </button>
+                            <button id="node-generate-all-action" class="dropdown-item" ${node.isLeaf ? 'disabled title="This node is a leaf node and cannot have children"' : ''}>
+                                🔄 Generate All Children
+                            </button>
+                            <button id="default-prompt-action" class="dropdown-item">
+                                📝 Reset to Default Prompt
+                            </button>
+                        </div>
+
+                        <!-- Structure Actions -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-section-title">Structure</div>
+                            ${!node.isLeaf ? `
+                                <button id="add-child-node-btn" class="dropdown-item">
+                                    ➕ Add ${node.childLevelName || 'Child'}
+                                </button>
+                            ` : ''}
+                            <button id="delete-node-btn" class="dropdown-item dropdown-item-danger">
+                                🗑️ Delete ${getCurrentLevelName(node)}
+                            </button>
+                            ${node.children.length > 0 ? `
+                                <button id="delete-subnodes-btn" class="dropdown-item dropdown-item-warning">
+                                    🗂️ Delete All ${getPluralChildLevelName(node)}
+                                </button>
+                            ` : ''}
+                        </div>
+
+                        <!-- Data Actions -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-section-title">Data</div>
+                            <button id="export-node-btn" class="dropdown-item">
+                                📤 Export
+                            </button>
+                            <button id="import-node-btn" class="dropdown-item">
+                                📥 Import
+                            </button>
+                            <button id="chat-node-btn" class="dropdown-item">
+                                💬 Chat
+                            </button>
+                        </div>
+
+                        <!-- Context Actions -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-section-title">Context</div>
+                            <button id="node-propagate-context-btn" class="dropdown-item">
+                                🔄 Propagate Context
+                            </button>
+                            <button id="node-extract-context-btn" class="dropdown-item">
+                                🎯 Extract Context
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <style>
+        .actions-dropdown-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .actions-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1000;
+            min-width: 250px;
+            background: white;
+            border: 1px solid var(--border-color, #dee2e6);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 0.5rem 0;
+            margin-top: 4px;
+        }
+
+        .dropdown-section {
+            margin-bottom: 0.5rem;
+        }
+
+        .dropdown-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .dropdown-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--secondary-600, #6c757d);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.25rem 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .dropdown-section + .dropdown-section {
+            border-top: 1px solid var(--border-color, #e9ecef);
+            padding-top: 0.5rem;
+        }
+
+        .dropdown-item {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            background: none;
+            border: none;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-color, #495057);
+            transition: background-color 0.2s;
+        }
+
+        .dropdown-item:hover:not(:disabled) {
+            background-color: var(--primary-50, #f8f9ff);
+            color: var(--primary-700, #364fc7);
+        }
+
+        .dropdown-item:disabled {
+            color: var(--secondary-400, #adb5bd);
+            cursor: not-allowed;
+        }
+
+        .dropdown-item-danger:hover:not(:disabled) {
+            background-color: #fef2f2;
+            color: #dc2626;
+        }
+
+        .dropdown-item-warning:hover:not(:disabled) {
+            background-color: #fffbeb;
+            color: #d97706;
+        }
+
+        /* Close dropdown when clicking outside */
+        .actions-dropdown-container.open .actions-dropdown-menu {
+            display: block;
+        }
+        </style>
 
         <div class="node-section generation-section">
             <div class="prompt-header">
@@ -1356,14 +1482,25 @@ Please improve and expand this content.`;
 export function setupEventListeners() {
     const mainContent = getElementById('main-content');
 
+    // === DROPDOWN CLOSE ON OUTSIDE CLICK ===
+    document.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const dropdown = target.closest('.actions-dropdown-container');
+        
+        // If clicking outside any dropdown, close all dropdowns
+        if (!dropdown) {
+            document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
+                el.classList.remove('open');
+            });
+        }
+    });
+
     // === MAIN CONTENT EVENT DELEGATION ===
     mainContent.addEventListener('click', (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
         const button = e.target.closest('button');
         if (!button) return;
-
-
 
         // === UNIFIED BUTTON HANDLER FOR ALL BUTTONS IN THE GUI ===
         
@@ -1378,7 +1515,179 @@ export function setupEventListeners() {
 
         // Handle all other buttons by ID using the same pattern
         switch (button.id) {
-            // === GENERATION PANEL BUTTONS ===
+            // === ACTIONS DROPDOWN TOGGLE ===
+            case 'actions-dropdown-btn':
+                {
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) {
+                        const isOpen = container.classList.contains('open');
+                        
+                        // Close all other dropdowns first
+                        document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
+                            el.classList.remove('open');
+                        });
+                        
+                        // Toggle this dropdown
+                        if (!isOpen) {
+                            container.classList.add('open');
+                        }
+                    }
+                }
+                break;
+
+            // === DROPDOWN ACTION ITEMS ===
+            case 'node-generate-content-action':
+                {
+                    // Same logic as the old node-generate-btn
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Close dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+
+                    // Check if node state is Final and warn user
+                    if (node.getState() === 'Final') {
+                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
+                        const confirmMessage = `This node contains final content that will be replaced.
+
+Current content: "${contentPreview}"
+
+Are you sure you want to generate new content and replace the existing content?
+
+This action cannot be undone.`;
+                        
+                        if (!confirm(confirmMessage)) {
+                            return;
+                        }
+                    }
+                    
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                    node.generationPrompt = generationPromptTextArea.value;
+                    
+                    // Get the count from the input
+                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
+                    const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
+                    
+                    // Start operation through coordinator
+                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+                    
+                    // Generate content for the single node
+                    projectManager.getGenerationService().generateNodeContent(node.id, count, false)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                            if (projectManager) {
+                                void projectManager.saveToStorage().catch(console.error);
+                            }
+                        })
+                        .catch(error => {
+                            coordinator.completeOperation(operationId, false, error);
+                            console.error('Content generation failed:', error);
+                        });
+                }
+                break;
+
+            case 'node-generate-all-action':
+                {
+                    // Same logic as the old node-generate-all-btn
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Close dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+
+                    if (node.isLeaf) {
+                        alert(`This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                        return;
+                    }
+
+                    if (node.getState() === 'Empty') {
+                        alert('This node has no content yet. Please generate content for this node first, then use "Generate All Children" to create child nodes based on that content.');
+                        return;
+                    }
+
+                    const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+                    const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+                    
+                    const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
+                    const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
+
+                    const coordinator = projectManager.getGenerationCoordinator();
+                    
+                    // Count how many nodes will be affected
+                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
+                        const nodes: string[] = [];
+                        
+                        // If this node has no children, count it as needing children created
+                        if (parentNode.children.length === 0) {
+                            nodes.push(parentNode.id + '_children');
+                        }
+                        
+                        // Check each child for content generation needs
+                        for (const child of parentNode.children) {
+                            if (includeContent && child.getState() === 'Empty') {
+                                nodes.push(child.id);
+                            }
+                            
+                            // If recursive, check children too
+                            if (recursive) {
+                                nodes.push(...getAllInvolvedNodes(child));
+                            }
+                        }
+                        
+                        return nodes;
+                    };
+
+                    const involvedNodes = getAllInvolvedNodes(node);
+                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
+                    if (!operationId) {
+                        alert('Another generation operation is already in progress. Please wait for it to complete.');
+                        return;
+                    }
+
+                    // Start the bulk generation
+                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
+                        .then(() => {
+                            coordinator.completeOperation(operationId, true);
+                            if (projectManager) {
+                                void projectManager.saveToStorage().catch(console.error);
+                            }
+                        })
+                        .catch(error => {
+                            coordinator.completeOperation(operationId, false, error);
+                            console.error('Bulk generation failed:', error);
+                        });
+                }
+                break;
+
+            case 'default-prompt-action':
+                {
+                    // Same logic as the old default-prompt-btn
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Close dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+
+                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                    const defaultPrompt = projectManager.getRawGenerationPrompt(node);
+                    generationPromptTextArea.value = defaultPrompt;
+                    node.generationPrompt = defaultPrompt;
+                }
+                break;
+
+            // === GENERATION PANEL BUTTONS (Legacy - keeping for backward compatibility) ===
             case 'default-prompt-btn':
                 {
         if (!projectManager || !selectedNodeId) return;
@@ -1430,75 +1739,17 @@ This action cannot be undone.`;
                         return;
                     }
                     
-                    // Use GenerationService directly
-                    projectManager.getGenerationService().generateNodeContent(node.id, count)
+                    // Generate content for the single node
+                    projectManager.getGenerationService().generateNodeContent(node.id, count, false)
                         .then(() => {
                             coordinator.completeOperation(operationId, true);
-                        })
-                        .catch((error) => {
-                            coordinator.completeOperation(operationId, false, error);
-                        });
-                }
-                break;
-
-            case 'node-generate-all-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Check if this is a leaf node
-                    if (node.isLeaf) {
-                        const nodeLevelName = node.template[node.level] || 'final level';
-                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
-                        return;
-                    }
-
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    // Check if node has content (Draft or Final)
-                    if (node.getState() === 'Empty') {
-                        alert('This node has no content. Please write or generate content for this node first.\n\nThe content should be an outline or description that can be used to create child nodes.');
-                        return;
-                    }
-                    
-                    // Use stored checkbox states instead of reading from DOM
-                    const includeContent = includeContentState;
-                    const recursive = recursiveState;
-                    
-                    // Collect all nodes that will be involved in this operation
-                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
-                        const nodeIds = [parentNode.id];
-                        for (const child of parentNode.children) {
-                            if (recursive) {
-                                nodeIds.push(...getAllInvolvedNodes(child));
-                            } else {
-                                nodeIds.push(child.id);
+                            if (projectManager) {
+                                void projectManager.saveToStorage().catch(console.error);
                             }
-                        }
-                        return nodeIds;
-                    };
-                    
-                    const involvedNodeIds = getAllInvolvedNodes(node);
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodeIds);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-            
-                    // Use GenerationService directly
-                    console.log('🚀 Starting generateAllChildrenContent with:', { nodeId: node.id, includeContent, recursive });
-                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
-                        .then(() => {
-                            console.log('✅ generateAllChildrenContent completed successfully');
-                            coordinator.completeOperation(operationId, true);
                         })
-                        .catch((error) => {
-                            console.error('❌ generateAllChildrenContent failed:', error);
-                            console.error('Error details:', error);
+                        .catch(error => {
                             coordinator.completeOperation(operationId, false, error);
+                            console.error('Content generation failed:', error);
                         });
                 }
                 break;
@@ -1506,6 +1757,11 @@ This action cannot be undone.`;
             case 'node-propagate-context-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
 
@@ -1549,6 +1805,11 @@ This action cannot be undone.`;
             case 'node-extract-context-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
 
@@ -1562,68 +1823,224 @@ This action cannot be undone.`;
                 }
                 break;
 
-            case 'context-info-btn':
-                {
-                    // Import and open context info modal
-                    import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
-                        const modal = new ContextInfoModal();
-                        void modal.open();
-                    }).catch((error: any) => {
-                        console.error('Failed to open context info modal:', error);
-                        alert('Failed to open context information dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'regenerate-ratings-btn':
+            case 'delete-subnodes-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
 
-                    // Check if node has content to rate
-                    if (!node.content || node.content.trim() === '') {
-                        alert('No content to rate. Please add content to this node first.');
+                    if (node.children.length === 0) {
+                        alert('This node has no subnodes to delete.');
                         return;
                     }
+
+                    const childCount = node.children.length;
+                    const confirmMessage = `Are you sure you want to delete all ${childCount} subnode(s) of "${node.title}"?\n\nThis will permanently delete:\n- All ${childCount} child nodes and their content\n- All nested subnodes and their content\n- All generated summaries and history\n\nThe parent node "${node.title}" will remain intact.\n\nThis action cannot be undone.`;
                     
-                    const confirmMessage = `This will generate quality ratings for the current content.\n\nNote: This uses AI tokens and may take a moment to complete.\n\nDo you want to proceed?`;
-                    if (!confirm(confirmMessage)) {
-                        return;
-                    }
-                    
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-                    
-                    // Use the generation service to rate the content directly
-                    projectManager.getGenerationService().rateNodeContent(node.id)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                            // Switch back to content view and then to ratings view to show the new ratings
-                            const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
-                            if (showRatingsCheckbox) {
-                                showRatingsCheckbox.checked = true;
-                                toggleRatingsView(true);
+                    if (confirm(confirmMessage)) {
+                        // Create a copy of the children array since we'll be modifying the original
+                        const childrenToDelete = [...node.children];
+                        
+                        let deletedCount = 0;
+                        for (const child of childrenToDelete) {
+                            const success = projectManager.removeNode(child.id);
+                            if (success) {
+                                deletedCount++;
                             }
+                        }
+                        
+                        if (deletedCount > 0) {
+                            void projectManager.saveToStorage().catch(console.error);
+                            
+                            // Re-render the UI to reflect the changes
+                            renderMultiProjectTree();
+                            renderNodeDetails();
+                            
+                            if (deletedCount === childCount) {
+                                alert(`Successfully deleted all ${deletedCount} subnodes.`);
+                            } else {
+                                alert(`Deleted ${deletedCount} out of ${childCount} subnodes. Some nodes may have failed to delete.`);
+                            }
+                        } else {
+                            alert('Failed to delete any subnodes. Please try again.');
+                        }
+                    }
+                }
+                break;
+
+            case 'export-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Import and open export modal
+                    import('./modal-manager').then(({ openExportModal }) => {
+                        openExportModal(projectManager!, node);
+                    }).catch(error => {
+                        alert('Failed to open export dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'import-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Create file input element
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.json';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.addEventListener('change', (e) => {
+                        const target = e.target as HTMLInputElement;
+                        const file = target.files?.[0];
+                        if (!file) return;
+                        
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const content = event.target?.result as string;
+                                const importData = JSON.parse(content);
+                                
+                                // Validate and import
+                                if (projectManager) {
+                                    importNodeData(projectManager, node.id, importData);
+                                    
+                                    // Refresh the UI to show imported content
+                                    renderProjectUI(projectManager);
+                                }
+                                
+                            } catch (error) {
+                                console.error('Import failed:', error);
+                                alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                            }
+                        };
+                        
+                        reader.onerror = () => {
+                            alert('Failed to read file. Please try again.');
+                        };
+                        
+                        reader.readAsText(file);
+                    });
+                    
+                    // Trigger file selection
+                    document.body.appendChild(fileInput);
+                    fileInput.click();
+                    document.body.removeChild(fileInput);
+                }
+                break;
+                
+            case 'chat-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+                    
+                    // Import and open chat modal
+                    import('./modal-manager').then(({ openNodeChatModal }) => {
+                        openNodeChatModal(projectManager!, node);
+                    }).catch(error => {
+                        console.error('Failed to open chat modal:', error);
+                        alert('Failed to open chat dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'add-child-node-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    if (node.isLeaf) {
+                        const nodeLevelName = node.template[node.level] || 'final level';
+                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                        return;
+                    }
+
+                    // Open the Add Child Node Modal
+                    openAddChildNodeModal(node, node.id)
+                        .then((modal) => {
+                            console.log('✅ Add Child Node modal opened successfully');
+                            // The modal factory handles UI refresh automatically
                         })
                         .catch((error) => {
-                            coordinator.completeOperation(operationId, false, error);
+                            console.error('❌ Failed to open Add Child Node modal:', error);
+                            alert('Failed to open Add Child Node dialog. Please try again.');
+                        });
+                }
+                break;
+            
+            // === VERSION NAVIGATION BUTTONS ===
+            case 'version-prev-btn':
+                navigateToVersion('prev');
+                break;
+
+            case 'version-next-btn':
+                navigateToVersion('next');
+                break;
+
+            case 'use-this-version-btn':
+                useCurrentVersion();
+                break;
+
+            // === READER VIEW BUTTON ===
+            case 'open-reader-btn':
+                {
+                    // Check both module variable and state for active project
+                    const activeProject = projectManager || state.getActiveProject();
+                    if (!activeProject) {
+                        alert('No project is currently active. Please create or select a project first.');
+                        return;
+                    }
+                    
+                    // Update the module variable if it was null but state has a project
+                    if (!projectManager && activeProject) {
+                        projectManager = activeProject;
+                    }
+                    
+                    openReaderView(activeProject, (nodeId: string) => {
+                        // Optional callback when navigating to a node from reader
+                        selectedNodeId = nodeId;
+                        renderNodeDetails();
+                    }).catch((error) => {
+                        console.error('Failed to open reader view:', error);
+                        alert('Failed to open reader view. Please try again.');
                         });
                 }
                 break;
 
-
+            // === MAIN APP BUTTONS (from event-handlers.ts) ===
+            // These could be moved here for true unification if desired
 
             // === NODE MANAGEMENT BUTTONS ===
             case 'delete-node-btn':
                 {
                     if (!projectManager || !selectedNodeId) return;
+                    
+                    // Close dropdown if this action came from dropdown
+                    const container = button.closest('.actions-dropdown-container');
+                    if (container) container.classList.remove('open');
+                    
                     const node = projectManager.findNodeById(selectedNodeId);
                     if (!node) return;
 
@@ -1714,200 +2131,6 @@ This action cannot be undone.`;
                     }
                 }
                 break;
-
-            case 'delete-subnodes-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    if (node.children.length === 0) {
-                        alert('This node has no subnodes to delete.');
-                        return;
-                    }
-
-                    const childCount = node.children.length;
-                    const confirmMessage = `Are you sure you want to delete all ${childCount} subnode(s) of "${node.title}"?\n\nThis will permanently delete:\n- All ${childCount} child nodes and their content\n- All nested subnodes and their content\n- All generated summaries and history\n\nThe parent node "${node.title}" will remain intact.\n\nThis action cannot be undone.`;
-                    
-                    if (confirm(confirmMessage)) {
-                        // Create a copy of the children array since we'll be modifying the original
-                        const childrenToDelete = [...node.children];
-                        
-                        let deletedCount = 0;
-                        for (const child of childrenToDelete) {
-                            const success = projectManager.removeNode(child.id);
-                            if (success) {
-                                deletedCount++;
-                            }
-                        }
-                        
-                        if (deletedCount > 0) {
-                            void projectManager.saveToStorage().catch(console.error);
-                            
-                            // Re-render the UI to reflect the changes
-                            renderMultiProjectTree();
-                            renderNodeDetails();
-                            
-                            if (deletedCount === childCount) {
-                                alert(`Successfully deleted all ${deletedCount} subnodes.`);
-                            } else {
-                                alert(`Deleted ${deletedCount} out of ${childCount} subnodes. Some nodes may have failed to delete.`);
-                            }
-                        } else {
-                            alert('Failed to delete any subnodes. Please try again.');
-                        }
-                    }
-                }
-                break;
-
-            case 'export-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Import and open export modal
-                    import('./modal-manager').then(({ openExportModal }) => {
-                        openExportModal(projectManager!, node);
-                    }).catch(error => {
-                        alert('Failed to open export dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'import-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Create file input element
-                    const fileInput = document.createElement('input');
-                    fileInput.type = 'file';
-                    fileInput.accept = '.json';
-                    fileInput.style.display = 'none';
-                    
-                    fileInput.addEventListener('change', (e) => {
-                        const target = e.target as HTMLInputElement;
-                        const file = target.files?.[0];
-                        if (!file) return;
-                        
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            try {
-                                const content = event.target?.result as string;
-                                const importData = JSON.parse(content);
-                                
-                                // Validate and import
-                                if (projectManager) {
-                                    importNodeData(projectManager, node.id, importData);
-                                    
-                                    // Refresh the UI to show imported content
-                                    renderProjectUI(projectManager);
-                                }
-                                
-                            } catch (error) {
-                                console.error('Import failed:', error);
-                                alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
-                            }
-                        };
-                        
-                        reader.onerror = () => {
-                            alert('Failed to read file. Please try again.');
-                        };
-                        
-                        reader.readAsText(file);
-                    });
-                    
-                    // Trigger file selection
-                    document.body.appendChild(fileInput);
-                    fileInput.click();
-                    document.body.removeChild(fileInput);
-                }
-                break;
-                
-            case 'chat-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-                    
-                    // Import and open chat modal
-                    import('./modal-manager').then(({ openNodeChatModal }) => {
-                        openNodeChatModal(projectManager!, node);
-                    }).catch(error => {
-                        console.error('Failed to open chat modal:', error);
-                        alert('Failed to open chat dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'add-child-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    if (node.isLeaf) {
-                        const nodeLevelName = node.template[node.level] || 'final level';
-                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
-                        return;
-                    }
-
-                    // Open the Add Child Node Modal
-                    openAddChildNodeModal(node, node.id)
-                        .then((modal) => {
-                            console.log('✅ Add Child Node modal opened successfully');
-                            // The modal factory handles UI refresh automatically
-                        })
-                        .catch((error) => {
-                            console.error('❌ Failed to open Add Child Node modal:', error);
-                            alert('Failed to open Add Child Node dialog. Please try again.');
-                        });
-                }
-                break;
-            
-            // === VERSION NAVIGATION BUTTONS ===
-            case 'version-prev-btn':
-                navigateToVersion('prev');
-                break;
-
-            case 'version-next-btn':
-                navigateToVersion('next');
-                break;
-
-            case 'use-this-version-btn':
-                useCurrentVersion();
-                break;
-
-            // === READER VIEW BUTTON ===
-            case 'open-reader-btn':
-                {
-                    // Check both module variable and state for active project
-                    const activeProject = projectManager || state.getActiveProject();
-                    if (!activeProject) {
-                        alert('No project is currently active. Please create or select a project first.');
-                        return;
-                    }
-                    
-                    // Update the module variable if it was null but state has a project
-                    if (!projectManager && activeProject) {
-                        projectManager = activeProject;
-                    }
-                    
-                    openReaderView(activeProject, (nodeId: string) => {
-                        // Optional callback when navigating to a node from reader
-                        selectedNodeId = nodeId;
-                        renderNodeDetails();
-                    }).catch((error) => {
-                        console.error('Failed to open reader view:', error);
-                        alert('Failed to open reader view. Please try again.');
-                        });
-                }
-                break;
-
-            // === MAIN APP BUTTONS (from event-handlers.ts) ===
-            // These could be moved here for true unification if desired
 
             default:
                 // No handler found - this is fine, not all buttons need handling
