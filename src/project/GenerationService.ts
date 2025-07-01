@@ -461,11 +461,12 @@ export class GenerationService {
         const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
         const childLevelName = node.childLevelName || 'item';
 
-        const prompt = prompts.create_children_from_outline_user
-            .replace(/{{outline_content}}/g, node.content)
-            .replace(/{{child_level_name}}/g, childLevelName)
-            .replace(/{{context}}/g, context)
-            .replace(/{{count}}/g, String(node.generationChildrenCount));
+        const prompt = this.deps.promptService.fillGenerationPrompt(
+            prompts.create_children_from_outline_user,
+            node,
+            context,
+            this.deps.treeService.getNodePath(nodeId, this.deps.rootNode)
+        ).replace(/{{outline_content}}/g, node.content);
 
         // Prompt prepared for LLM
 
@@ -550,7 +551,7 @@ export class GenerationService {
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
                 
                 try {
-                    await this.generateNodeContent(nodeId, node.generationChildrenCount, false);
+                    await this.generateNodeContent(nodeId, node.getTemplateChildrenCount() ?? 5, false);
                     
                     // Refresh node reference after content generation
                     const updatedNode = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
@@ -633,11 +634,12 @@ export class GenerationService {
                 const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
                 const childLevelName = node.childLevelName || 'item';
 
-                const prompt = prompts.create_children_from_outline_user
-                    .replace(/{{outline_content}}/g, node.content)
-                    .replace(/{{child_level_name}}/g, childLevelName)
-                    .replace(/{{context}}/g, context)
-                    .replace(/{{count}}/g, String(node.generationChildrenCount));
+                const prompt = this.deps.promptService.fillGenerationPrompt(
+                    prompts.create_children_from_outline_user,
+                    node,
+                    context,
+                    this.deps.treeService.getNodePath(nodeId, this.deps.rootNode)
+                ).replace(/{{outline_content}}/g, node.content);
 
                 // Using the 'creator' model as it's for generating new content/structure
                 const response = await this.deps.openRouterClient.chat('creator', prompt);
@@ -726,7 +728,7 @@ export class GenerationService {
                         
                         try {
                             // Use the child's own generation count setting
-                            await this.generateNodeContent(child.id, child.generationChildrenCount, true);
+                            await this.generateNodeContent(child.id, child.getTemplateChildrenCount() ?? 5, true);
                             
                             // Verify content was actually generated
                             const updatedChild = this.deps.treeService.findNodeById(child.id, this.deps.rootNode);

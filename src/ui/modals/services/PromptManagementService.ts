@@ -3,7 +3,7 @@
  */
 
 import { SettingsManager } from '../../../SettingsManager';
-import { OrchestratorPrompts, defaultPrompts } from '../../../PromptManager';
+import { OrchestratorPrompts, defaultPrompts, getPromptPlaceholders, getPromptDescription } from '../../../PromptManager';
 import { createElement, autoResizeTextarea } from '../core/modal-utils';
 
 export interface PromptManagementConfig {
@@ -155,7 +155,7 @@ export class PromptManagementService {
 
         // Description
         if (this.config.showDescriptions) {
-            const description = this.getPromptDescription(promptKey);
+            const description = getPromptDescription(promptKey);
             if (description) {
                 const descriptionEl = createElement('p', {
                     classes: ['prompt-description'],
@@ -167,7 +167,7 @@ export class PromptManagementService {
 
         // Placeholders
         if (this.config.showPlaceholders) {
-            const placeholders = this.getPromptPlaceholders(promptKey);
+            const placeholders = getPromptPlaceholders(promptKey);
             if (placeholders.length > 0) {
                 const placeholderText = createElement('div', {
                     classes: ['placeholders'],
@@ -309,51 +309,5 @@ export class PromptManagementService {
         return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 
-    /**
-     * Gets the description for a prompt
-     */
-    private getPromptDescription(key: keyof OrchestratorPrompts): string | null {
-        const descriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
-            content_generation_initial: "Main system prompt for the iterative generation loop.",
-            content_generation_iterative: "System prompt for subsequent iterations with feedback.",
-            content_generation_user: "Template for generating content in leaf nodes.",
-            branch_content_generation_user: "Template for generating content in branch nodes.",
-            rater: "System prompt for the AI that scores generated content.",
-            editor: "System prompt for the AI that provides improvement feedback.",
-            summarize_system: "System prompt for summarizing generated content.",
-            expand_list_user: "Prompt for generating bulleted lists of child titles.",
-            create_children_from_outline_user: "Reads free-form text and generates structured child titles.",
-            prompt_for_child_generation_prompt: "Creates generation prompts for new child nodes.",
-            context_synthesis_user: "Combines parent context with node content to create focused context for child generation.",
-            context_extraction_user: "Analyzes node content to extract specific information (characters, places, themes, etc.).",
-            expand_text_user: "Simple prompt for expanding text with more detail.",
-            node_chat_system: "System prompt for the chat interface when chatting about specific nodes."
-        };
-
-        return descriptions[key] || null;
-    }
-
-    /**
-     * Gets the available placeholders for a prompt
-     */
-    private getPromptPlaceholders(key: keyof OrchestratorPrompts): string[] {
-        const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
-            content_generation_initial: ['prompt', 'criteria'],
-            content_generation_iterative: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
-            rater: ['originalPrompt', 'response', 'criteria'],
-            editor: ['response', 'ratings'],
-            summarize_system: ['content'],
-            expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
-            content_generation_user: ['path', 'context', 'title', 'content', 'draftorfresh'],
-            branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
-            create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content'],
-            prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
-            context_synthesis_user: ['parent_context', 'node_content'],
-            context_extraction_user: ['extraction_request', 'node_title', 'content'],
-            expand_text_user: ['content', 'path', 'context', 'title'],
-            node_chat_system: ['node_data'],
-        };
-
-        return placeholders[key] || [];
-    }
+    
 } 

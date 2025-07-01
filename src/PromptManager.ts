@@ -17,8 +17,6 @@ export interface OrchestratorPrompts {
     create_children_from_outline_user: string;
     prompt_for_child_generation_prompt: string;
     
-
-    
     // For context extraction
     context_extraction_user: string;
     
@@ -38,142 +36,197 @@ export interface OrchestratorPrompts {
     roleplay_adventure_system: string;
 }
 
-export const defaultPrompts: OrchestratorPrompts = {
-    content_generation_initial: `
-        Your task is to respond to the following user prompt: "{{prompt}}"
+export interface PromptDefinition {
+    text: string;
+    placeholders: string[];
+    description: string;
+}
 
-        Your response will be rated by a just and unforegiving rater on the following criteria:
-        - {{criteria}}
+// SINGLE SOURCE OF TRUTH for all prompt definitions
+export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefinition> = {
+    content_generation_initial: {
+        text: `
+            Your task is to respond to the following user prompt: "{{prompt}}"
 
-        Please generate a high-quality response that addresses these criteria.
-    `.trim(),
-    content_generation_iterative: `
-        The user's original prompt was: "{{prompt}}".
-        Your last response was: "{{lastResponse}}".
-        It received feedback and the editor provided the following advice to improve it: "{{editorAdvice}}".
+            Your response will be rated by a just and unforegiving rater on the following criteria:
+            - {{criteria}}
 
-        Please generate a new response, incorporating the editor's advice. Remember, your response will be rated by a just and unforegiving rater on these criteria:
-        - {{criteria}}
-    `.trim(),
-    rater: `
-        You are a just and unforegiving rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
+            Please generate a high-quality response that addresses these criteria.
+        `.trim(),
+        placeholders: ['prompt', 'criteria'],
+        description: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process."
+    },
 
-        The user's original prompt was: "{{originalPrompt}}".
-        
-        Here is a response generated for that prompt:
-        ---
-        {{response}}
-        ---
-        
-        Please rate this response objectively against all of the following criteria. Use your best judgment to assess the quality on a scale of 1-10.
-        Do not aim to please, be just!
-        
-        Criteria to evaluate:
-        - {{criteria}}
-        
-        Provide your response as a JSON array of objects. Each object must have three keys:
-        - "criterion": The exact name of the criterion being rated (use the full original name).
-        - "score": A number from 1 to 10 based on your objective assessment.
-        - "justification": A brief explanation for your score, written in the tone of a critique.
+    content_generation_iterative: {
+        text: `
+            The user's original prompt was: "{{prompt}}".
+            Your last response was: "{{lastResponse}}".
+            It received feedback and the editor provided the following advice to improve it: "{{editorAdvice}}".
 
-        Example:
-        [
-            { "criterion": "Clarity & Conciseness", "score": 8, "justification": "The response is clear and well-structured." },
-            { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." }
-        ]
-    `.trim(),
-    editor: `
-        A response was generated: "{{response}}"
-        It was rated against several criteria:
-        {{ratings}}
+            Please generate a new response, incorporating the editor's advice. Remember, your response will be rated by a just and unforegiving rater on these criteria:
+            - {{criteria}}
+        `.trim(),
+        placeholders: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
+        description: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback."
+    },
 
-        Please provide concise, actionable advice for the Creator LLM on how to improve the response to better meet the rating goals.
-        Focus on what needs to change.
-    `.trim(),
+    rater: {
+        text: `
+            You are a just and unforegiving rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
 
-    // New prompts for template-based actions
-    summarize_system: `
-        You are an expert at summarizing text for use as future context. Create a concise, factual summary of the following text, capturing the key points, main ideas, and any critical details.
+            The user's original prompt was: "{{originalPrompt}}".
+            
+            Here is a response generated for that prompt:
+            ---
+            {{response}}
+            ---
+            
+            Please rate this response objectively against all of the following criteria. Use your best judgment to assess the quality on a scale of 1-10.
+            Do not aim to please, be just!
+            
+            Criteria to evaluate:
+            - {{criteria}}
+            
+            Provide your response as a JSON array of objects. Each object must have three keys:
+            - "criterion": The exact name of the criterion being rated (use the full original name).
+            - "score": A number from 1 to 10 based on your objective assessment.
+            - "justification": A brief explanation for your score, written in the tone of a critique.
 
-        ---
-        
-        {{content}}
-    `.trim(),
-    expand_list_user: `
-        You are working on the document path: "{{path}}".
+            Example:
+            [
+                { "criterion": "Clarity & Conciseness", "score": 8, "justification": "The response is clear and well-structured." },
+                { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." }
+            ]
+        `.trim(),
+        placeholders: ['originalPrompt', 'response', 'criteria'],
+        description: "The system prompt for the 'Rater' AI. It scores the generated content against ALL provided criteria in a single call."
+    },
 
-        Here is the content of the document you are expanding:
-        ---
-        {{parent_content}}
-        ---
+    editor: {
+        text: `
+            A response was generated: "{{response}}"
+            It was rated against several criteria:
+            {{ratings}}
 
-        Here is the context of the document so far:
-        ---
-        {{context}}
-        ---
+            Please provide concise, actionable advice for the Creator LLM on how to improve the response to better meet the rating goals.
+            Focus on what needs to change.
+        `.trim(),
+        placeholders: ['response', 'ratings'],
+        description: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings."
+    },
 
-        Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow. Each title must be on a new line and start with a single asterisk (*).
-    `.trim(),
-    content_generation_user: `
-        You are writing the content for the node at the following path: "{{path}}".
-        The title of this node is "{{title}}".
+    summarize_system: {
+        text: `
+            You are an expert at summarizing text for use as future context. Create a concise, factual summary of the following text, capturing the key points, main ideas, and any critical details.
 
-        Here is the context of the story so far:
-        ---
-        {{context}}
-        ---
+            ---
+            
+            {{content}}
+        `.trim(),
+        placeholders: ['content'],
+        description: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is."
+    },
 
-        {{draftorfresh}}
+    expand_list_user: {
+        text: `
+            You are working on the document path: "{{path}}".
 
-        IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
-    `.trim(),
-    branch_content_generation_user: `
-        You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
-        This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
+            Here is the content of the document you are expanding:
+            ---
+            {{parent_content}}
+            ---
 
-        This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points or markdown formatting.
+            Here is the context of the document so far:
+            ---
+            {{context}}
+            ---
 
-        Here is the context of the document so far:
-        ---
-        {{context}}
-        ---
+            Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow. Each title must be on a new line and start with a single asterisk (*).
+        `.trim(),
+        placeholders: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
+        description: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop."
+    },
 
-        {{draftorfresh}}
+    content_generation_user: {
+        text: `
+            You are writing the content for the node at the following path: "{{path}}".
+            The title of this node is "{{title}}".
 
-        IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
-    `.trim(),
-    create_children_from_outline_user: `
-        You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and generate exactly {{count}} entries for the '{{child_level_name}}' nodes that should be created from it.
+            Here is the context of the story so far:
+            ---
+            {{context}}
+            ---
 
-        Generate exactly {{count}} entries - no more, no less. The entries expand the outline, the context is just there to help with this task.
+            {{draftorfresh}}
 
-        IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
-        - "title": the title of the subnode
-        - "description": one sentence brief description of what should be covered in this subnode
+            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
+        `.trim(),
+        placeholders: ['path', 'context', 'title', 'content', 'draftorfresh'],
+        description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
+    },
 
-        Example format:
-        [
-          {
-            "title": "Introduction to the Topic",
-            "description": "Provides an overview and sets the foundation for understanding the main concepts."
-          },
-          {
-            "title": "Core Principles",
-            "description": "Explains the fundamental principles and key concepts that underpin the topic."
-          }
-        ]
+    branch_content_generation_user: {
+        text: `
+            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
+            This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
 
-        Do not include any other text, explanations, or formatting. Only provide the JSON array.
+            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points or markdown formatting.
 
-        Here is the context of the document so far:
-        ---
-        {{context}}
-        ---
+            Here is the context of the document so far:
+            ---
+            {{context}}
+            ---
 
-        Here is the outline to process:
-        {{outline_content}}
-    `.trim(),
-    prompt_for_child_generation_prompt: `You are an expert at creating generative prompts for a hierarchical document. The user is expanding a parent node. A new child node with the title "{{child_title}}" has just been created.
+            {{draftorfresh}}
+
+            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
+        `.trim(),
+        placeholders: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
+        description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
+    },
+
+    create_children_from_outline_user: {
+        text: `
+            You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and create '{{child_level_name}}' nodes that should be created from it.
+
+            Create {{generate_count}} - analyze the outline content and break it down into logical subsections. Each subsection should:
+            - Have a clear, descriptive title
+            - Cover a distinct aspect or topic from the outline
+            - Flow naturally from the overall structure
+            - Be substantial enough to warrant its own section
+
+            IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
+            - "title": the title of the subnode
+            - "description": one sentence brief description of what should be covered in this subnode
+
+            Example format:
+            [
+              {
+                "title": "Introduction to the Topic",
+                "description": "Provides an overview and sets the foundation for understanding the main concepts."
+              },
+              {
+                "title": "Core Principles", 
+                "description": "Explains the fundamental principles and key concepts that underpin the topic."
+              }
+            ]
+
+            Do not include any other text, explanations, or formatting. Only provide the JSON array.
+
+            Here is the context of the document so far:
+            ---
+            {{context}}
+            ---
+
+            Here is the outline to process:
+            {{outline_content}}
+        `.trim(),
+        placeholders: ['outline_content', 'child_level_name', 'context', 'content', 'count', 'generate_count'],
+        description: "Reads a node's free-form text content and asks an LLM to generate a structured JSON array of child titles with brief content descriptions."
+    },
+
+    prompt_for_child_generation_prompt: {
+        text: `You are an expert at creating generative prompts for a hierarchical document. The user is expanding a parent node. A new child node with the title "{{child_title}}" has just been created.
 
 The parent node's content is:
 ---
@@ -186,10 +239,12 @@ The broader context of the document is:
 ---
 
 Based on all of this information, please write a detailed, one-paragraph prompt that can be used to generate the full text content for the new child node titled "{{child_title}}". The prompt should be self-contained and guide an AI to write content that logically follows the parent, fits within the document's context, and fulfills the promise of its title. Do not just repeat the title; create a rich instruction.`,
+        placeholders: ['parent_content', 'context', 'child_title', 'content'],
+        description: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child."
+    },
 
-
-
-    context_extraction_user: `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
+    context_extraction_user: {
+        text: `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 
 Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
 
@@ -201,8 +256,12 @@ Content to analyze from "{{node_title}}":
 Please extract and list all instances of: {{extraction_request}}
 
 Format your response as a clear, organized summary that would be useful for reference.`,
+        placeholders: ['extraction_request', 'node_title', 'content'],
+        description: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization."
+    },
 
-    expand_text_user: `You are an expert at expanding and developing written content. Take the following text and create a more detailed, comprehensive version while maintaining the original meaning and tone.
+    expand_text_user: {
+        text: `You are an expert at expanding and developing written content. Take the following text and create a more detailed, comprehensive version while maintaining the original meaning and tone.
 
 Original text:
 ---
@@ -210,8 +269,12 @@ Original text:
 ---
 
 Please expand this text to make it more detailed and complete. Focus on adding depth, examples, and clarity while preserving the core message and writing style.`,
+        placeholders: ['content', 'path', 'context', 'title'],
+        description: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
+    },
 
-    child_node_suggestions: `You are helping expand a document by creating alternative approaches for the next child section.
+    child_node_suggestions: {
+        text: `You are helping expand a document by creating alternative approaches for the next child section.
 
 Parent node title: "{{parent_title}}"
 Parent node content:
@@ -235,9 +298,13 @@ Each suggestion must have:
 Write the drafts using confident, definitive language. Avoid tentative phrases like "could", "might", "would", or "may". State directly what the section contains and accomplishes.
 
 Return as JSON array with "title" and "draft" properties.`,
+        placeholders: ['parent_title', 'parent_content', 'context'],
+        description: "Creates alternative suggestions for the next child section with different approaches or themes."
+    },
 
-    parent_content_update: `A new child node titled "{{child_title}}" is being added to this parent node.
-    
+    parent_content_update: {
+        text: `A new child node titled "{{child_title}}" is being added to this parent node.
+        
 Current parent content:
 ---
 {{parent_content}}
@@ -258,8 +325,12 @@ Add only what is absolutely necessary to naturally reference the new child secti
 Only modify existing content if it's absolutely essential to create a smooth connection to the new child section. Otherwise, preserve the original content verbatim and simply append the reference.
 
 Return the complete content with your minimal addition.`,
+        placeholders: ['child_title', 'parent_content', 'context'],
+        description: "Updates parent content to reference a newly added child section with minimal changes."
+    },
 
-    node_chat_system: `You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
+    node_chat_system: {
+        text: `You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
 
 {{node_data}}
 
@@ -272,8 +343,12 @@ The user can ask you questions about this content, request edits, analysis, or s
 5. Suggest improvements to writing quality, clarity, or organization
 
 You have full context about the document structure and content. Be helpful, specific, and actionable in your responses.`,
+        placeholders: ['node_data'],
+        description: "System prompt for the chat interface when chatting about specific nodes."
+    },
 
-    roleplay_adventure_system: `You are a skilled text adventure game master. You will create an immersive interactive experience where the user becomes a character in a living world.
+    roleplay_adventure_system: {
+        text: `You are a skilled text adventure game master. You will create an immersive interactive experience where the user becomes a character in a living world.
 
 Here is the world and character information:
 {{node_data}}
@@ -317,44 +392,30 @@ This is completely free-form. The user can:
 Never break character or refer to this as a game, story, or roleplay. You are simply describing what happens in this world as the user lives as their chosen character.
 
 Remember: This is not multiple choice. The user types what their character does or says, and you describe what happens as a result.`,
+        placeholders: ['node_data'],
+        description: "Creates an immersive roleplaying adventure where the user can play as characters from the story content. Analyzes the context to present character choices and facilitates free-form roleplay."
+    }
 };
 
-const placeholders: Record<keyof OrchestratorPrompts, string[]> = {
-    content_generation_initial: ['prompt', 'criteria'],
-    content_generation_iterative: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
-    rater: ['originalPrompt', 'response', 'criteria'],
-    editor: ['response', 'ratings'],
-    summarize_system: ['content'],
-    expand_list_user: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
-    content_generation_user: ['path', 'context', 'title', 'content', 'draftorfresh'],
-    branch_content_generation_user: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
-    create_children_from_outline_user: ['outline_content', 'child_level_name', 'context', 'content', 'count'],
-    prompt_for_child_generation_prompt: ['parent_content', 'context', 'child_title', 'content'],
+// Derived objects for backward compatibility
+export const defaultPrompts: OrchestratorPrompts = {} as OrchestratorPrompts;
+Object.keys(defaultPromptDefinitions).forEach(key => {
+    const promptKey = key as keyof OrchestratorPrompts;
+    defaultPrompts[promptKey] = defaultPromptDefinitions[promptKey].text;
+});
 
-    context_extraction_user: ['extraction_request', 'node_title', 'content'],
-    expand_text_user: ['content', 'path', 'context', 'title'],
-    child_node_suggestions: ['parent_title', 'parent_content', 'context'],
-    parent_content_update: ['child_title', 'parent_content', 'context'],
-    node_chat_system: ['node_data'],
-    roleplay_adventure_system: ['node_data'],
-};
+// Helper functions for accessing metadata
+export function getPromptPlaceholders(promptKey: keyof OrchestratorPrompts): string[] {
+    return defaultPromptDefinitions[promptKey]?.placeholders || [];
+}
 
-const promptDescriptions: Partial<Record<keyof OrchestratorPrompts, string>> = {
-    content_generation_initial: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process.",
-    content_generation_iterative: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback.",
-    content_generation_user: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content.",
-    branch_content_generation_user: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline.",
-    rater: "The system prompt for the 'Rater' AI. It scores the generated content against ALL provided criteria in a single call.",
-    editor: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings.",
-    summarize_system: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is.",
-    expand_list_user: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop.",
-    create_children_from_outline_user: "Reads a node's free-form text content and asks an LLM to generate a structured JSON array of child titles with brief content descriptions.",
-    prompt_for_child_generation_prompt: "Used after 'Expand'. For each new child title, this prompt generates a good default generation prompt for that child.",
+export function getPromptDescription(promptKey: keyof OrchestratorPrompts): string {
+    return defaultPromptDefinitions[promptKey]?.description || '';
+}
 
-    context_extraction_user: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization.",
-    expand_text_user: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out.",
-    roleplay_adventure_system: "Creates an immersive roleplaying adventure where the user can play as characters from the story content. Analyzes the context to present character choices and facilitates free-form roleplay."
-};
+export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
+    return defaultPromptDefinitions[promptKey]?.text || '';
+}
 
 export class PromptManager {
     private prompts: OrchestratorPrompts;
@@ -414,7 +475,7 @@ export class PromptManager {
 
             editorDiv.appendChild(label);
 
-            const description = promptDescriptions[k];
+            const description = getPromptDescription(k);
             if (description) {
                 const descriptionEl = document.createElement('p');
                 descriptionEl.className = 'prompt-description';
@@ -422,7 +483,7 @@ export class PromptManager {
                 editorDiv.appendChild(descriptionEl);
             }
 
-            const availablePlaceholders = placeholders[k];
+            const availablePlaceholders = getPromptPlaceholders(k);
             if (availablePlaceholders && availablePlaceholders.length > 0) {
                 const placeholderText = document.createElement('div');
                 placeholderText.className = 'placeholders';

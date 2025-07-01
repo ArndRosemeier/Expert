@@ -106,18 +106,31 @@ export class ExportService implements IExportService {
      * Recursively exports node data for reimport
      */
     private exportNodeForReimportRecursive(node: DocumentNode): NodeExportData {
-        return {
+        const data: NodeExportData = {
             id: node.id,
             title: node.title,
             content: node.content,
-            context: node.context,
             level: node.level,
             template: node.template,
-            generationPrompt: node.generationPrompt,
-            generationChildrenCount: node.generationChildrenCount,
-            childLevelName: node.childLevelName,
             children: node.children.map(child => this.exportNodeForReimportRecursive(child))
         };
+
+        // Conditionally add optional properties if they have values
+        if (node.context) {
+            data.context = node.context;
+        }
+        if (node.generationPrompt) {
+            data.generationPrompt = node.generationPrompt;
+        }
+        const templateCount = node.getTemplateChildrenCount();
+        if (templateCount !== null) {
+            data.generationChildrenCount = templateCount;
+        }
+        if (node.childLevelName) {
+            data.childLevelName = node.childLevelName;
+        }
+
+        return data;
     }
 
     /**

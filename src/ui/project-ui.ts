@@ -546,7 +546,7 @@ export function renderNodeDetails() {
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
-                            <input type="number" id="generation-count-input" min="1" max="20" value="${node.generationChildrenCount}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                            <input type="number" id="generation-count-input" min="1" max="20" value="${node.getTemplateChildrenCount() ?? ''}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                         </div>
                         <button id="node-generate-btn" class="button button-primary">${BUTTON_LABELS.GENERATE}</button>
                     </div>
@@ -1435,7 +1435,7 @@ This action cannot be undone.`;
                     
                     // Get the count from the input
                     const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                    const count = countInput ? parseInt(countInput.value, 10) : node.generationChildrenCount;
+                    const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
                     
                     // Start operation through coordinator
                     const operationId = coordinator.startOperation('single-content', node.id, [node.id]);

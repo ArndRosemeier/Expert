@@ -70,7 +70,8 @@ Please improve and expand this content.`;
             .replace(/\{\{title\}\}/g, node.title)
             .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '')
             .replace(/\{\{content\}\}/g, node.content || '')
-            .replace(/\{\{draftorfresh\}\}/g, draftOrFresh);
+            .replace(/\{\{draftorfresh\}\}/g, draftOrFresh)
+            .replace(/\{\{generate_count\}\}/g, this.getGenerateCountInstruction(node));
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {
@@ -179,6 +180,19 @@ Please improve and expand this content.`;
     }
 
     /**
+     * Generates smart count instruction based on template.
+     * @param node The node to get count instruction for.
+     * @returns Natural language instruction about how many entries to create.
+     */
+    public getGenerateCountInstruction(node: DocumentNode): string {
+        const templateCount = node.getTemplateChildrenCount();
+        if (templateCount !== null) {
+            return `exactly ${templateCount} entries`;
+        }
+        return 'as many entries as make logical sense based on the content';
+    }
+
+    /**
      * Gets placeholder descriptions for help/documentation.
      * @returns Object mapping placeholders to their descriptions.
      */
@@ -189,7 +203,8 @@ Please improve and expand this content.`;
             '{{title}}': 'The title of the current node',
             '{{content}}': 'The current content of the node (if any)',
             '{{child_level_name}}': 'The name of the child level (for branch nodes)',
-            '{{count}}': 'The number of items to generate (for list generation)'
+            '{{count}}': 'The number of items to generate (for list generation)',
+            '{{generate_count}}': 'Smart count instruction: "exactly X entries" when count specified, "as many entries as make logical sense" when not specified'
         };
     }
 

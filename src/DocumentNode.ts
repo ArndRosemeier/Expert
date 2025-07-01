@@ -43,7 +43,7 @@ export class DocumentNode {
     template: string[];
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
-    generationChildrenCount: number = 5; // Default count for child generation
+
     
     // --- Creator Model Tracking ---
     creatorModel: string | null = null; // Track which AI model created/generated content
@@ -73,29 +73,28 @@ export class DocumentNode {
         this.generationSessions = [];
         this.currentGenerationSession = null;
         
-        // Initialize generation count from template or default
-        this.generationChildrenCount = this.parseGenerationCountFromTemplate();
+
     }
 
     /**
-     * Parses generation count from template lines.
+     * Gets the children count from template hierarchy.
      * Looks for patterns like "Chapter 4" to extract the number 4 as the count.
-     * @returns The extracted count or default value of 5.
+     * @returns The extracted count or null if not specified in template.
      */
-    private parseGenerationCountFromTemplate(): number {
+    public getTemplateChildrenCount(): number | null {
         if (!this.template || this.isLeaf) {
-            return 5; // Default count for leaf nodes or missing template
+            return null; // No count for leaf nodes or missing template
         }
         
         // Look at the CHILD level name (the level this node will generate)
         const childLevelIndex = this.level + 1;
         if (childLevelIndex >= this.template.length) {
-            return 5; // Default count if no child level
+            return null; // No count if no child level
         }
         
         const childLevelName = this.template[childLevelIndex];
         if (!childLevelName) {
-            return 5; // Default count
+            return null; // No count
         }
         
         // Look for numbers in the child level name
@@ -108,7 +107,7 @@ export class DocumentNode {
             }
         }
         
-        return 5; // Default count if no valid number found
+        return null; // No count if no valid number found
     }
 
     get content(): string {
@@ -308,7 +307,7 @@ export class DocumentNode {
             generationHistory: this.generationHistory,
             isGenerating: this.isGenerating,
             generationSessions: this.generationSessions,
-            generationChildrenCount: this.generationChildrenCount,
+
             creatorModel: this.creatorModel,
         };
     }

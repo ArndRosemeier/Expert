@@ -534,12 +534,12 @@ export class TestRunner {
 
     private testGenerationChildrenCount(): TestResult {
         try {
-            // Test default count
+            // Test default case - no number should be null
             const defaultTemplate = new ProjectTemplate("Default", ['Book', 'Chapter'], []);
             const defaultProject = new ProjectManager("Test", defaultTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
-            if (defaultProject.rootNode.generationChildrenCount !== 5) {
-                throw new Error(`Expected default count of 5, got ${defaultProject.rootNode.generationChildrenCount}`);
+            if (defaultProject.rootNode.getTemplateChildrenCount() !== null) {
+                throw new Error(`Expected null count for template without number, got ${defaultProject.rootNode.getTemplateChildrenCount()}`);
             }
 
             // Test parsing count from template with number
@@ -547,8 +547,8 @@ export class TestRunner {
             const numberedProject = new ProjectManager("Test", numberedTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
             // The root node should parse the count for generating children at level 1 ("Chapter 3")
-            if (numberedProject.rootNode.generationChildrenCount !== 3) {
-                throw new Error(`Expected parsed count of 3 from "Chapter 3", got ${numberedProject.rootNode.generationChildrenCount}`);
+            if (numberedProject.rootNode.getTemplateChildrenCount() !== 3) {
+                throw new Error(`Expected parsed count of 3 from "Chapter 3", got ${numberedProject.rootNode.getTemplateChildrenCount()}`);
             }
 
             // Test parsing count from different patterns
@@ -556,26 +556,26 @@ export class TestRunner {
             const variousProject = new ProjectManager("Test", variousTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
             // The root node should parse the count for generating children at level 1 ("Act 7")
-            if (variousProject.rootNode.generationChildrenCount !== 7) {
-                throw new Error(`Expected parsed count of 7 from "Act 7", got ${variousProject.rootNode.generationChildrenCount}`);
+            if (variousProject.rootNode.getTemplateChildrenCount() !== 7) {
+                throw new Error(`Expected parsed count of 7 from "Act 7", got ${variousProject.rootNode.getTemplateChildrenCount()}`);
             }
 
-            // Test edge cases - no number should default to 5
+            // Test edge cases - no number should be null
             const nonNumberTemplate = new ProjectTemplate("NoNumber", ['Book', 'Chapter', 'Scene'], []);
             const nonNumberProject = new ProjectManager("Test", nonNumberTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
-            // The root node should get default count of 5 for "Chapter" (no number)
-            if (nonNumberProject.rootNode.generationChildrenCount !== 5) {
-                throw new Error(`Expected default count of 5 for template without number, got ${nonNumberProject.rootNode.generationChildrenCount}`);
+            // The root node should get null for "Chapter" (no number)
+            if (nonNumberProject.rootNode.getTemplateChildrenCount() !== null) {
+                throw new Error(`Expected null count for template without number, got ${nonNumberProject.rootNode.getTemplateChildrenCount()}`);
             }
 
-            // Test boundary validation - number too high should default to 5
+            // Test boundary validation - number too high should be null
             const highNumberTemplate = new ProjectTemplate("HighNumber", ['Book', 'Chapter 999', 'Scene'], []);
             const highNumberProject = new ProjectManager("Test", highNumberTemplate, this.mockLoopOrchestrator, this.mockSettingsManager, this.openRouterClient);
             
-            // The root node should get default count of 5 for "Chapter 999" (invalid high number)
-            if (highNumberProject.rootNode.generationChildrenCount !== 5) {
-                throw new Error(`Expected default count of 5 for invalid high number, got ${highNumberProject.rootNode.generationChildrenCount}`);
+            // The root node should get null for "Chapter 999" (invalid high number)
+            if (highNumberProject.rootNode.getTemplateChildrenCount() !== null) {
+                throw new Error(`Expected null count for invalid high number, got ${highNumberProject.rootNode.getTemplateChildrenCount()}`);
             }
 
             return { success: true, message: "Step 2.8: GenerationChildrenCount parsing from templates works correctly." };

@@ -341,24 +341,24 @@ export class ExportModal extends BaseModal {
         let scope: string;
         let format: string;
 
-        // Handle reimport case specially (but reimport doesn't make sense for clipboard)
+        // Handle reimport case specially
         if (this.scopeSelect.value === 'reimport') {
-            alert('Reimport format is not supported for clipboard export. Please select a different scope.');
-            return;
+            scope = 'single'; // Scope doesn't matter for reimport, but we need a valid value
+            format = 'reimport'; // This maps to ExportFormat.Reimport
+        } else {
+            // Map UI scope values to ExportService values
+            switch (this.scopeSelect.value) {
+                case 'leafOnly':
+                    scope = 'leaves';
+                    break;
+                case 'hierarchical':
+                    scope = 'hierarchy';
+                    break;
+                default:
+                    scope = 'single';
+            }
+            format = this.formatSelect.value;
         }
-
-        // Map UI scope values to ExportService values
-        switch (this.scopeSelect.value) {
-            case 'leafOnly':
-                scope = 'leaves';
-                break;
-            case 'hierarchical':
-                scope = 'hierarchy';
-                break;
-            default:
-                scope = 'single';
-        }
-        format = this.formatSelect.value;
 
         try {
             // Generate the content using the export service

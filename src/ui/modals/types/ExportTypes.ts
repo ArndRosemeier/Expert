@@ -63,7 +63,7 @@ export interface NodeExportData {
     level: number;
     template: string[];
     generationPrompt?: string;
-    generationChildrenCount: number;
+    generationChildrenCount?: number;
     childLevelName?: string;
     children: NodeExportData[];
 }
