@@ -264,8 +264,7 @@ export class ReaderEditor {
         
         // Set up event handlers
         textEditor.onTextChange((_text) => {
-            // NO change tracking - just update undo button state
-            (this.readerGUI as any).updateUndoButtonState();
+            // Do absolutely nothing during text changes
         });
         
         textEditor.onFocus(() => {
@@ -302,11 +301,7 @@ export class ReaderEditor {
     private handleEditorFocus(editor: NodeEditor): void {
         this.currentActiveEditor = editor;
         
-        // Update action buttons availability
-        this.readerGUI.updateActionButtons();
-        
-        // Update undo button state (cast to access the private method)
-        (this.readerGUI as any).updateUndoButtonState();
+        // Do minimal work on focus to avoid interference
     }
 
     /**
