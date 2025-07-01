@@ -13,7 +13,6 @@ interface NodeEditor {
     element: HTMLElement;
     editor: TextEditorWithHighlighting;
     originalContent: string;
-    isDirty: boolean;
 }
 
 /**
@@ -210,8 +209,7 @@ export class ReaderEditor {
 
 
 
-        // Mark as dirty and auto-save
-        this.markDirty(editor);
+        // Content will be copied back when reader closes
     }
 
     /**
@@ -258,8 +256,7 @@ export class ReaderEditor {
             nodeId,
             element,
             editor: textEditor,
-            originalContent: isRestoredContent ? content : (content || ''),
-            isDirty: false
+            originalContent: isRestoredContent ? content : (content || '')
         };
         
         this.nodeEditors.set(nodeId, editor);
@@ -267,8 +264,7 @@ export class ReaderEditor {
         
         // Set up event handlers
         textEditor.onTextChange((_text) => {
-            this.markDirty(editor);
-            // Update undo button state when text changes (to check if undo is still valid)
+            // NO change tracking - just update undo button state
             (this.readerGUI as any).updateUndoButtonState();
         });
         
@@ -321,14 +317,7 @@ export class ReaderEditor {
         // All content will be copied back when reader closes
     }
 
-    /**
-     * Mark an editor as dirty
-     */
-    private markDirty(editor: NodeEditor): void {
-        editor.isDirty = true;
-        this.editState.isDirty = true;
-        // Don't auto-save on every keystroke - only save on blur and close
-    }
+
 
 
 
@@ -467,8 +456,7 @@ export class ReaderEditor {
         
         const success = this.currentActiveEditor.editor.undoLastReplacement();
         if (success) {
-            // Just mark as dirty - content will be copied on reader close
-            this.markDirty(this.currentActiveEditor);
+            // Content will be copied back when reader closes
         }
         return success;
     }
@@ -561,7 +549,6 @@ export class ReaderEditor {
             if (editor) {
                 editor.editor.setText(content);
                 editor.originalContent = content;
-                editor.isDirty = false;
             }
         });
     }
