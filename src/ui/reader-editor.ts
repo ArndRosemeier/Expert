@@ -559,7 +559,13 @@ export class ReaderEditor {
     /**
      * Cleanup resources
      */
-    public destroy(): void {
+    public async destroy(): Promise<void> {
+        // Save all pending changes before destroying editors
+        if (this.editState.isDirty) {
+            console.log('💾 Reader closing - saving pending changes...');
+            await this.saveAllChanges();
+        }
+        
         this.removeEventListeners();
         this.removeEditorOverlays();
         

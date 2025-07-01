@@ -1499,7 +1499,7 @@ export class ReaderGUI {
         // Show all levels checkbox
         const showAllLevelsCheckbox = panel.querySelector('#reader-show-all-levels') as HTMLInputElement;
         if (showAllLevelsCheckbox) {
-            showAllLevelsCheckbox.addEventListener('change', (e) => {
+            showAllLevelsCheckbox.addEventListener('change', async (e) => {
                 this.config.showAllLevels = (e.target as HTMLInputElement).checked;
                 
                 // Re-analyze content with new setting
@@ -1508,8 +1508,8 @@ export class ReaderGUI {
                 // Update the content area in always-edit mode
                 const contentArea = this.container.querySelector('.reader-content-area');
                 if (contentArea) {
-                    // Destroy existing editors before regenerating content
-                    this.readerEditor.destroy();
+                    // Destroy existing editors before regenerating content (save changes first)
+                    await this.readerEditor.destroy();
                     
                     // Regenerate content HTML
                     contentArea.innerHTML = this.generateContent();
@@ -2567,13 +2567,13 @@ export class ReaderGUI {
     /**
      * Hide the reader interface
      */
-    public hide(): void {
+    public async hide(): Promise<void> {
         this.container.style.display = 'none';
         this.stopListeningForUpdates();
         
-        // Cleanup reader editor
+        // Cleanup reader editor and save any pending changes
         if (this.readerEditor) {
-            this.readerEditor.destroy();
+            await this.readerEditor.destroy();
         }
     }
 
@@ -2823,7 +2823,7 @@ export async function openReaderView(projectManager: ProjectManager, onNavigateT
     if (!globalReaderInstance || globalReaderInstance.projectManager !== projectManager) {
         // Clean up existing instance if it exists
         if (globalReaderInstance) {
-            globalReaderInstance.hide();
+            await globalReaderInstance.hide();
             globalReaderInstance = null;
         }
         
