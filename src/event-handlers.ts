@@ -79,7 +79,7 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     void project.saveToStorage();
     
     closeNewProjectModal();
-    initializeProjectUI();
+    void initializeProjectUI();
 }
 
 function handleImportProject(title: string, template: ProjectTemplate, importData: any) {
@@ -128,7 +128,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
         state.addProject(project);
         void project.saveToStorage();
         
-        initializeProjectUI();
+        void initializeProjectUI();
         alert(`Project "${title}" imported successfully!`);
         
     } catch (error) {
@@ -258,7 +258,7 @@ export async function initialize() {
 
     
     // Initialize the UI with projects (if any)
-    initializeProjectUI();
+    void initializeProjectUI();
 
     // Attach event listeners
     try {

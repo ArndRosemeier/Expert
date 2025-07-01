@@ -1236,7 +1236,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
         html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
-        console.log(`🔽 Created expand button for node ${node.id} (${node.title}) - icon: ${expandIcon}`);
+        console.log(`🔽 Created expand button for node ${node.id} (${node.title}) - icon: ${expandIcon} - isCollapsed: ${isCollapsed}`);
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
         html += `<span style="margin-right: 16px;"></span>`;
@@ -1709,7 +1709,7 @@ This action cannot be undone.`;
                                 renderMultiProjectTree();
                             } else {
                                 // Re-initialize the UI with the remaining projects
-                                initializeProjectUI();
+                                void initializeProjectUI();
                             }
                         }
                     } else {
@@ -1960,7 +1960,7 @@ This action cannot be undone.`;
     });
 }
 
-export function initializeProjectUI(manager?: ProjectManager) {
+export async function initializeProjectUI(manager?: ProjectManager) {
     const activeProject = manager || state.getActiveProject();
     projectManager = activeProject;
     
@@ -1976,8 +1976,9 @@ export function initializeProjectUI(manager?: ProjectManager) {
         }
     }
     
-    void loadCollapsedState().catch(console.error); // Load the collapsed state from storage
-    void loadCheckboxStates().catch(console.error); // Load the checkbox states from storage
+    // Load the collapsed state from storage BEFORE rendering
+    await loadCollapsedState();
+    await loadCheckboxStates();
 
     const mainContent = getElementById('main-content');
     
@@ -2316,17 +2317,18 @@ function renderMultiProjectTree() {
         console.log(`🔗 Attaching listeners to expand button ${index}: nodeId=${nodeId}`);
         
         // Single click for individual expand/collapse
-        el.addEventListener('click', (e) => {
+        el.addEventListener('click', async (e) => {
             e.stopPropagation(); // Prevent event bubbling
             e.preventDefault(); // Prevent any default behavior
             
             const target = e.currentTarget as HTMLElement;
-            const nodeId = target.dataset['nodeId'];
+            const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
             
             console.log('🔽 Expand button clicked:', { 
                 nodeId, 
                 element: target, 
                 dataset: target.dataset,
+                getAttribute: target.getAttribute('data-node-id'),
                 collapsedBefore: collapsedNodes.has(nodeId || ''),
                 allCollapsed: Array.from(collapsedNodes)
             });
@@ -2340,7 +2342,10 @@ function renderMultiProjectTree() {
                     console.log('🔽 Collapsing node:', nodeId);
                 }
                 
-                void saveCollapsedState().catch(console.error); // Persist the collapsed state
+                // Wait for the state to be saved before re-rendering
+                await saveCollapsedState();
+                
+                console.log('💾 Collapsed state saved, now re-rendering with:', Array.from(collapsedNodes));
                 
                 // Use requestAnimationFrame to ensure DOM updates are processed properly
                 requestAnimationFrame(() => {
@@ -2352,12 +2357,12 @@ function renderMultiProjectTree() {
         });
 
         // Double click for expand/collapse all nodes at the same level
-        el.addEventListener('dblclick', (e) => {
+        el.addEventListener('dblclick', async (e) => {
             e.stopPropagation(); // Prevent event bubbling
             e.preventDefault(); // Prevent any default behavior
             
             const target = e.currentTarget as HTMLElement;
-            const nodeId = target.dataset['nodeId'];
+            const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
             
             console.log('🔽🔽 Double-click expand button:', { nodeId });
             
@@ -2403,7 +2408,8 @@ function renderMultiProjectTree() {
                         });
                     }
                     
-                    void saveCollapsedState().catch(console.error); // Persist the collapsed state
+                    // Wait for the state to be saved before re-rendering
+                    await saveCollapsedState();
                     
                     // Use requestAnimationFrame to ensure DOM updates are processed properly
                     requestAnimationFrame(() => {
