@@ -317,10 +317,8 @@ export class ReaderEditor {
      * Handle editor blur
      */
     private handleEditorBlur(editor: NodeEditor): void {
-        // Save immediately when user stops editing (blur)
-        if (editor.isDirty) {
-            this.saveNodeChanges(editor).catch(console.error);
-        }
+        // No saving on blur - just mark as dirty for tracking
+        // All content will be copied back when reader closes
     }
 
     /**
@@ -336,24 +334,7 @@ export class ReaderEditor {
 
 
 
-    /**
-     * Save changes for a specific node
-     */
-    private async saveNodeChanges(editor: NodeEditor): Promise<void> {
-        const node = this.projectManager.findNodeById(editor.nodeId);
-        if (!node) {
-            console.error('Node not found for saving:', editor.nodeId);
-            return;
-        }
-        
-        // Update node content
-        node.content = editor.editor.getText();
-        editor.originalContent = editor.editor.getText();
-        editor.isDirty = false;
-        
-        // Save to storage WITHOUT triggering events that refresh the DOM
-        await this.projectManager.saveToStorage();
-    }
+
 
     /**
      * Setup event listeners
@@ -376,12 +357,10 @@ export class ReaderEditor {
         // Only handle shortcuts when focused on editor
         if (!this.currentActiveEditor) return;
 
-        // Ctrl+S or Cmd+S: Save current editor
+        // Ctrl+S or Cmd+S: Manual save (just show feedback, actual save happens on close)
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
             event.preventDefault();
-            if (this.currentActiveEditor.isDirty) {
-                this.saveNodeChanges(this.currentActiveEditor).catch(console.error);
-            }
+            console.log('💾 Save requested - content will be saved when reader closes');
             return;
         }
     }
@@ -488,9 +467,8 @@ export class ReaderEditor {
         
         const success = this.currentActiveEditor.editor.undoLastReplacement();
         if (success) {
-            // Mark as dirty and save immediately after undo
+            // Just mark as dirty - content will be copied on reader close
             this.markDirty(this.currentActiveEditor);
-            this.saveNodeChanges(this.currentActiveEditor).catch(console.error);
         }
         return success;
     }
