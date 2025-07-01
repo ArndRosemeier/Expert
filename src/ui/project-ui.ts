@@ -1477,23 +1477,524 @@ Please improve and expand this content.`;
     document.body.appendChild(overlay);
 }
 
-// The handleGenerationPanelButton function has been removed - all button handling is now unified in setupEventListeners
+/**
+ * Handle dropdown action by button ID
+ * This function contains all the logic for dropdown actions that were moved out of the main switch statement
+ */
+function handleDropdownAction(buttonId: string): void {
+    if (!projectManager || !selectedNodeId) return;
+
+    switch (buttonId) {
+        case 'node-generate-content-action':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Check if node state is Final and warn user
+                if (node.getState() === 'Final') {
+                    const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
+                    const confirmMessage = `This node contains final content that will be replaced.
+
+Current content: "${contentPreview}"
+
+Are you sure you want to generate new content and replace the existing content?
+
+This action cannot be undone.`;
+                    
+                    if (!confirm(confirmMessage)) {
+                        return;
+                    }
+                }
+                
+                const coordinator = projectManager.getGenerationCoordinator();
+                
+                const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                node.generationPrompt = generationPromptTextArea.value;
+                
+                // Get the count from the input
+                const countInput = getElementById('generation-count-input') as HTMLInputElement;
+                const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
+                
+                // Start operation through coordinator
+                const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
+                if (!operationId) {
+                    alert('Another generation operation is already in progress. Please wait for it to complete.');
+                    return;
+                }
+                
+                // Generate content for the single node
+                projectManager.getGenerationService().generateNodeContent(node.id, count, false)
+                    .then(() => {
+                        coordinator.completeOperation(operationId, true);
+                        if (projectManager) {
+                            void projectManager.saveToStorage().catch(console.error);
+                        }
+                    })
+                    .catch(error => {
+                        coordinator.completeOperation(operationId, false, error);
+                        console.error('Content generation failed:', error);
+                    });
+            }
+            break;
+
+        case 'node-generate-all-action':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                if (node.isLeaf) {
+                    alert(`This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                    return;
+                }
+
+                if (node.getState() === 'Empty') {
+                    alert('This node has no content yet. Please generate content for this node first, then use "Generate All Children" to create child nodes based on that content.');
+                    return;
+                }
+
+                const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+                const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+                
+                const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
+                const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
+
+                const coordinator = projectManager.getGenerationCoordinator();
+                
+                // Count how many nodes will be affected
+                const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
+                    const nodes: string[] = [];
+                    
+                    // If this node has no children, count it as needing children created
+                    if (parentNode.children.length === 0) {
+                        nodes.push(parentNode.id + '_children');
+                    }
+                    
+                    // Check each child for content generation needs
+                    for (const child of parentNode.children) {
+                        if (includeContent && child.getState() === 'Empty') {
+                            nodes.push(child.id);
+                        }
+                        
+                        // If recursive, check children too
+                        if (recursive) {
+                            nodes.push(...getAllInvolvedNodes(child));
+                        }
+                    }
+                    
+                    return nodes;
+                };
+
+                const involvedNodes = getAllInvolvedNodes(node);
+                const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
+                if (!operationId) {
+                    alert('Another generation operation is already in progress. Please wait for it to complete.');
+                    return;
+                }
+
+                // Start the bulk generation
+                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
+                    .then(() => {
+                        coordinator.completeOperation(operationId, true);
+                        if (projectManager) {
+                            void projectManager.saveToStorage().catch(console.error);
+                        }
+                    })
+                    .catch(error => {
+                        coordinator.completeOperation(operationId, false, error);
+                        console.error('Bulk generation failed:', error);
+                    });
+            }
+            break;
+
+        case 'default-prompt-action':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+                const defaultPrompt = projectManager.getRawGenerationPrompt(node);
+                generationPromptTextArea.value = defaultPrompt;
+                node.generationPrompt = defaultPrompt;
+            }
+            break;
+
+        case 'add-child-node-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                if (node.isLeaf) {
+                    const nodeLevelName = node.template[node.level] || 'final level';
+                    alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                    return;
+                }
+
+                // Open the Add Child Node Modal
+                openAddChildNodeModal(node, node.id)
+                    .then((modal) => {
+                        console.log('✅ Add Child Node modal opened successfully');
+                        // The modal factory handles UI refresh automatically
+                    })
+                    .catch((error) => {
+                        console.error('❌ Failed to open Add Child Node modal:', error);
+                        alert('Failed to open Add Child Node dialog. Please try again.');
+                    });
+            }
+            break;
+
+        case 'delete-node-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                if (node.level === 0) {
+                    // This is a project root node - delete the entire project
+                    state.getProjects();
+                    
+                    const confirmMessage = `Are you sure you want to delete the entire project "${node.title}"?\n\nThis will permanently delete:\n- The project and all its content\n- All child nodes and their content\n- All generated summaries and history\n\nThis action cannot be undone.`;
+                    
+                    if (confirm(confirmMessage)) {
+                        // Store the project to delete for storage cleanup
+                        const projectToDelete = projectManager;
+                        
+                        // Remove from in-memory state
+                        state.removeProject(node.id);
+                        
+                        // Handle storage cleanup
+                        (async () => {
+                            try {
+                                // If this was the last project, clear all storage
+                                const remainingProjects = state.getProjects();
+                                if (remainingProjects.length === 0) {
+                                    // Clear all project storage
+                                    if (projectToDelete) {
+                                        await projectToDelete.clearAllProjectsFromStorage();
+                                    }
+                                } else {
+                                    // First, explicitly remove the deleted project from IndexedDB
+                                    const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
+                                    if (storage.isIndexedDB()) {
+                                        const indexedDBService = (storage as any).indexedDBService;
+                                        if (indexedDBService) {
+                                            await indexedDBService.delete('projects', node.id);
+                                        }
+                                    }
+                                    
+                                    // Then save the updated project list
+                                    const remainingProject = state.getActiveProject();
+                                    if (remainingProject) {
+                                        await remainingProject.saveToStorage();
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('Failed to update storage after project deletion:', error);
+                            }
+                        })();
+                        
+                        // If this was the last project, clear selection and show empty state
+                        const remainingProjects = state.getProjects();
+                        if (remainingProjects.length === 0) {
+                            selectedNodeId = null;
+                            projectManager = null;
+                            
+                            // Show empty state
+                            const nodeDetails = getElementById('node-details');
+                            nodeDetails.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;"><h3>No Projects</h3><p>All projects have been deleted. Create a new project to get started.</p></div>';
+                            
+                            // Render empty tree
+                            renderMultiProjectTree();
+                        } else {
+                            // Re-initialize the UI with the remaining projects
+                            void initializeProjectUI();
+                        }
+                    }
+                } else {
+                    // This is a regular node - delete just this node and its children
+                    const hasChildren = node.children.length > 0;
+                    const childrenText = hasChildren ? `\n- ${node.children.length} child node(s) and all their content` : '';
+                    
+                    const confirmMessage = `Are you sure you want to delete "${node.title}"?\n\nThis will permanently delete:\n- This node and its content\n- Generated summary and history${childrenText}\n\nThis action cannot be undone.`;
+                    
+                    if (confirm(confirmMessage)) {
+                        const success = projectManager.removeNode(node.id);
+                        if (success) {
+                            void projectManager.saveToStorage().catch(console.error);
+                            
+                            // Select the parent node or project root
+                            const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : projectManager.rootNode;
+                            selectedNodeId = parentNode ? parentNode.id : projectManager.rootNode.id;
+                            
+                            // Re-render the UI
+                            renderMultiProjectTree();
+                            renderNodeDetails();
+                        } else {
+                            alert('Failed to delete the node. It may be a root node or have an invalid parent.');
+                        }
+                    }
+                }
+            }
+            break;
+
+        case 'delete-subnodes-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                if (node.children.length === 0) {
+                    alert('This node has no subnodes to delete.');
+                    return;
+                }
+
+                const childCount = node.children.length;
+                const confirmMessage = `Are you sure you want to delete all ${childCount} subnode(s) of "${node.title}"?\n\nThis will permanently delete:\n- All ${childCount} child nodes and their content\n- All nested subnodes and their content\n- All generated summaries and history\n\nThe parent node "${node.title}" will remain intact.\n\nThis action cannot be undone.`;
+                
+                if (confirm(confirmMessage)) {
+                    // Create a copy of the children array since we'll be modifying the original
+                    const childrenToDelete = [...node.children];
+                    
+                    let deletedCount = 0;
+                    for (const child of childrenToDelete) {
+                        const success = projectManager.removeNode(child.id);
+                        if (success) {
+                            deletedCount++;
+                        }
+                    }
+                    
+                    if (deletedCount > 0) {
+                        void projectManager.saveToStorage().catch(console.error);
+                        
+                        // Re-render the UI to reflect the changes
+                        renderMultiProjectTree();
+                        renderNodeDetails();
+                        
+                        if (deletedCount === childCount) {
+                            alert(`Successfully deleted all ${deletedCount} subnodes.`);
+                        } else {
+                            alert(`Deleted ${deletedCount} out of ${childCount} subnodes. Some nodes may have failed to delete.`);
+                        }
+                    } else {
+                        alert('Failed to delete any subnodes. Please try again.');
+                    }
+                }
+            }
+            break;
+
+        case 'export-node-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Import and open export modal
+                import('./modal-manager').then(({ openExportModal }) => {
+                    openExportModal(projectManager!, node);
+                }).catch(error => {
+                    alert('Failed to open export dialog. Please try again.');
+                });
+            }
+            break;
+
+        case 'import-node-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Create file input element
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.json';
+                fileInput.style.display = 'none';
+                
+                fileInput.addEventListener('change', (e) => {
+                    const target = e.target as HTMLInputElement;
+                    const file = target.files?.[0];
+                    if (!file) return;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const content = event.target?.result as string;
+                            const importData = JSON.parse(content);
+                            
+                            // Validate and import
+                            if (projectManager) {
+                                importNodeData(projectManager, node.id, importData);
+                                
+                                // Refresh the UI to show imported content
+                                renderProjectUI(projectManager);
+                            }
+                            
+                        } catch (error) {
+                            console.error('Import failed:', error);
+                            alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                        }
+                    };
+                    
+                    reader.onerror = () => {
+                        alert('Failed to read file. Please try again.');
+                    };
+                    
+                    reader.readAsText(file);
+                });
+                
+                // Trigger file selection
+                document.body.appendChild(fileInput);
+                fileInput.click();
+                document.body.removeChild(fileInput);
+            }
+            break;
+
+        case 'chat-node-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                // Import and open chat modal
+                import('./modal-manager').then(({ openNodeChatModal }) => {
+                    openNodeChatModal(projectManager!, node);
+                }).catch(error => {
+                    console.error('Failed to open chat modal:', error);
+                    alert('Failed to open chat dialog. Please try again.');
+                });
+            }
+            break;
+
+        case 'node-propagate-context-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Function to propagate context to all descendants
+                const propagateContextToDescendants = (parentNode: DocumentNode) => {
+                    const propagatedCount = { count: 0 };
+                    
+                    const propagateRecursively = (sourceNode: DocumentNode) => {
+                        for (const child of sourceNode.children) {
+                            child.context = sourceNode.context;
+                            propagatedCount.count++;
+                            propagateRecursively(child);
+                        }
+                    };
+                    
+                    propagateRecursively(parentNode);
+                    return propagatedCount.count;
+                };
+
+                const propagatedCount = propagateContextToDescendants(node);
+                
+                if (propagatedCount > 0) {
+                    // Save the project after propagation
+                    void projectManager.saveToStorage().catch(console.error);
+                    alert(`Context propagated to ${propagatedCount} descendant node(s).`);
+                    
+                    // Refresh the UI to show updated context if we're viewing a child node
+                    const currentNode = projectManager.findNodeById(selectedNodeId);
+                    if (currentNode) {
+                        const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                        if (contextTextArea) {
+                            contextTextArea.value = currentNode.context;
+                        }
+                    }
+                } else {
+                    alert('This node has no child nodes to propagate context to.');
+                }
+            }
+            break;
+
+        case 'node-extract-context-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Import and open extract context modal
+                import('./modal-manager').then(({ openExtractContextModal }) => {
+                    openExtractContextModal(projectManager!, node);
+                }).catch((error: any) => {
+                    console.error('Failed to open extract context modal:', error);
+                    alert('Failed to open extract context dialog. Please try again.');
+                });
+            }
+            break;
+
+        default:
+            console.warn('Unknown dropdown action:', buttonId);
+    }
+}
 
 export function setupEventListeners() {
     const mainContent = getElementById('main-content');
 
-    // === DROPDOWN CLOSE ON OUTSIDE CLICK ===
-    document.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        const dropdown = target.closest('.actions-dropdown-container');
-        
-        // If clicking outside any dropdown, close all dropdowns
-        if (!dropdown) {
-            document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
-                el.classList.remove('open');
-            });
-        }
-    });
+    // Import EventManager for robust event handling
+    import('./event-manager').then(({ EventManager }) => {
+        const eventManager = EventManager.getInstance();
+
+        // === ROBUST DROPDOWN HANDLING WITH EVENT DELEGATION ===
+        // Dropdown toggle - survives DOM replacements
+        eventManager.addDelegatedEvent(
+            mainContent,
+            'click',
+            '#actions-dropdown-btn',
+            (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const button = e.currentTarget as HTMLElement;
+                const container = button.closest('.actions-dropdown-container');
+                if (container) {
+                    const isOpen = container.classList.contains('open');
+                    
+                    // Close all other dropdowns first
+                    document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
+                        el.classList.remove('open');
+                    });
+                    
+                    // Toggle this dropdown
+                    if (!isOpen) {
+                        container.classList.add('open');
+                    }
+                }
+            }
+        );
+
+        // Close dropdown when clicking outside - using event delegation
+        eventManager.addDelegatedEvent(
+            document.body,
+            'click',
+            '*',
+            (e) => {
+                const target = e.target as HTMLElement;
+                const dropdown = target.closest('.actions-dropdown-container');
+                
+                // If clicking outside any dropdown, close all dropdowns
+                if (!dropdown) {
+                    document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
+                        el.classList.remove('open');
+                    });
+                }
+            }
+        );
+
+        // All dropdown action items - single delegation handler
+        eventManager.addDelegatedEvent(
+            mainContent,
+            'click',
+            '.dropdown-item',
+            (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const button = e.currentTarget as HTMLElement;
+                const buttonId = button.id;
+
+                // Close dropdown first
+                const container = button.closest('.actions-dropdown-container');
+                if (container) container.classList.remove('open');
+
+                // Handle the specific action based on button ID
+                handleDropdownAction(buttonId);
+            }
+        );
+
+    }).catch(console.error);
 
     // === MAIN CONTENT EVENT DELEGATION ===
     mainContent.addEventListener('click', (e) => {
@@ -1515,178 +2016,6 @@ export function setupEventListeners() {
 
         // Handle all other buttons by ID using the same pattern
         switch (button.id) {
-            // === ACTIONS DROPDOWN TOGGLE ===
-            case 'actions-dropdown-btn':
-                {
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) {
-                        const isOpen = container.classList.contains('open');
-                        
-                        // Close all other dropdowns first
-                        document.querySelectorAll('.actions-dropdown-container.open').forEach(el => {
-                            el.classList.remove('open');
-                        });
-                        
-                        // Toggle this dropdown
-                        if (!isOpen) {
-                            container.classList.add('open');
-                        }
-                    }
-                }
-                break;
-
-            // === DROPDOWN ACTION ITEMS ===
-            case 'node-generate-content-action':
-                {
-                    // Same logic as the old node-generate-btn
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Close dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-
-                    // Check if node state is Final and warn user
-                    if (node.getState() === 'Final') {
-                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
-                        const confirmMessage = `This node contains final content that will be replaced.
-
-Current content: "${contentPreview}"
-
-Are you sure you want to generate new content and replace the existing content?
-
-This action cannot be undone.`;
-                        
-                        if (!confirm(confirmMessage)) {
-                            return;
-                        }
-                    }
-                    
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    node.generationPrompt = generationPromptTextArea.value;
-                    
-                    // Get the count from the input
-                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                    const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-                    
-                    // Generate content for the single node
-                    projectManager.getGenerationService().generateNodeContent(node.id, count, false)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                            if (projectManager) {
-                                void projectManager.saveToStorage().catch(console.error);
-                            }
-                        })
-                        .catch(error => {
-                            coordinator.completeOperation(operationId, false, error);
-                            console.error('Content generation failed:', error);
-                        });
-                }
-                break;
-
-            case 'node-generate-all-action':
-                {
-                    // Same logic as the old node-generate-all-btn
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Close dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-
-                    if (node.isLeaf) {
-                        alert(`This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
-                        return;
-                    }
-
-                    if (node.getState() === 'Empty') {
-                        alert('This node has no content yet. Please generate content for this node first, then use "Generate All Children" to create child nodes based on that content.');
-                        return;
-                    }
-
-                    const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
-                    const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
-                    
-                    const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
-                    const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
-
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    // Count how many nodes will be affected
-                    const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
-                        const nodes: string[] = [];
-                        
-                        // If this node has no children, count it as needing children created
-                        if (parentNode.children.length === 0) {
-                            nodes.push(parentNode.id + '_children');
-                        }
-                        
-                        // Check each child for content generation needs
-                        for (const child of parentNode.children) {
-                            if (includeContent && child.getState() === 'Empty') {
-                                nodes.push(child.id);
-                            }
-                            
-                            // If recursive, check children too
-                            if (recursive) {
-                                nodes.push(...getAllInvolvedNodes(child));
-                            }
-                        }
-                        
-                        return nodes;
-                    };
-
-                    const involvedNodes = getAllInvolvedNodes(node);
-                    const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-
-                    // Start the bulk generation
-                    projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                            if (projectManager) {
-                                void projectManager.saveToStorage().catch(console.error);
-                            }
-                        })
-                        .catch(error => {
-                            coordinator.completeOperation(operationId, false, error);
-                            console.error('Bulk generation failed:', error);
-                        });
-                }
-                break;
-
-            case 'default-prompt-action':
-                {
-                    // Same logic as the old default-prompt-btn
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Close dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-
-                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    const defaultPrompt = projectManager.getRawGenerationPrompt(node);
-                    generationPromptTextArea.value = defaultPrompt;
-                    node.generationPrompt = defaultPrompt;
-                }
-                break;
-
             // === GENERATION PANEL BUTTONS (Legacy - keeping for backward compatibility) ===
             case 'default-prompt-btn':
                 {
@@ -1698,437 +2027,6 @@ This action cannot be undone.`;
                     const defaultPrompt = projectManager.getRawGenerationPrompt(node);
                     generationPromptTextArea.value = defaultPrompt;
                     node.generationPrompt = defaultPrompt;
-                }
-                break;
-
-            case 'node-generate-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Check if node state is Final and warn user
-                    if (node.getState() === 'Final') {
-                        const contentPreview = node.content.substring(0, 100) + (node.content.length > 100 ? '...' : '');
-                        const confirmMessage = `This node contains final content that will be replaced.
-
-Current content: "${contentPreview}"
-
-Are you sure you want to generate new content and replace the existing content?
-
-This action cannot be undone.`;
-                        
-                        if (!confirm(confirmMessage)) {
-                            return;
-                        }
-                    }
-                    
-                    const coordinator = projectManager.getGenerationCoordinator();
-                    
-                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    node.generationPrompt = generationPromptTextArea.value;
-                    
-                    // Get the count from the input
-                    const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                    const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
-                    
-                    // Start operation through coordinator
-                    const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                    if (!operationId) {
-                        alert('Another generation operation is already in progress. Please wait for it to complete.');
-                        return;
-                    }
-                    
-                    // Generate content for the single node
-                    projectManager.getGenerationService().generateNodeContent(node.id, count, false)
-                        .then(() => {
-                            coordinator.completeOperation(operationId, true);
-                            if (projectManager) {
-                                void projectManager.saveToStorage().catch(console.error);
-                            }
-                        })
-                        .catch(error => {
-                            coordinator.completeOperation(operationId, false, error);
-                            console.error('Content generation failed:', error);
-                        });
-                }
-                break;
-
-            case 'node-propagate-context-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Function to propagate context to all descendants
-                    const propagateContextToDescendants = (parentNode: DocumentNode) => {
-                        const propagatedCount = { count: 0 };
-                        
-                        const propagateRecursively = (sourceNode: DocumentNode) => {
-                            for (const child of sourceNode.children) {
-                                child.context = sourceNode.context;
-                                propagatedCount.count++;
-                                propagateRecursively(child);
-                            }
-                        };
-                        
-                        propagateRecursively(parentNode);
-                        return propagatedCount.count;
-                    };
-
-                    const propagatedCount = propagateContextToDescendants(node);
-                    
-                    if (propagatedCount > 0) {
-                        // Save the project after propagation
-                        void projectManager.saveToStorage().catch(console.error);
-                        alert(`Context propagated to ${propagatedCount} descendant node(s).`);
-                        
-                        // Refresh the UI to show updated context if we're viewing a child node
-                        const currentNode = projectManager.findNodeById(selectedNodeId);
-                        if (currentNode) {
-                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-                            if (contextTextArea) {
-                                contextTextArea.value = currentNode.context;
-                            }
-                        }
-                    } else {
-                        alert('This node has no child nodes to propagate context to.');
-                    }
-                }
-                break;
-
-            case 'node-extract-context-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Import and open extract context modal
-                    import('./modal-manager').then(({ openExtractContextModal }) => {
-                        openExtractContextModal(projectManager!, node);
-                    }).catch((error: any) => {
-                        console.error('Failed to open extract context modal:', error);
-                        alert('Failed to open extract context dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'delete-subnodes-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    if (node.children.length === 0) {
-                        alert('This node has no subnodes to delete.');
-                        return;
-                    }
-
-                    const childCount = node.children.length;
-                    const confirmMessage = `Are you sure you want to delete all ${childCount} subnode(s) of "${node.title}"?\n\nThis will permanently delete:\n- All ${childCount} child nodes and their content\n- All nested subnodes and their content\n- All generated summaries and history\n\nThe parent node "${node.title}" will remain intact.\n\nThis action cannot be undone.`;
-                    
-                    if (confirm(confirmMessage)) {
-                        // Create a copy of the children array since we'll be modifying the original
-                        const childrenToDelete = [...node.children];
-                        
-                        let deletedCount = 0;
-                        for (const child of childrenToDelete) {
-                            const success = projectManager.removeNode(child.id);
-                            if (success) {
-                                deletedCount++;
-                            }
-                        }
-                        
-                        if (deletedCount > 0) {
-                            void projectManager.saveToStorage().catch(console.error);
-                            
-                            // Re-render the UI to reflect the changes
-                            renderMultiProjectTree();
-                            renderNodeDetails();
-                            
-                            if (deletedCount === childCount) {
-                                alert(`Successfully deleted all ${deletedCount} subnodes.`);
-                            } else {
-                                alert(`Deleted ${deletedCount} out of ${childCount} subnodes. Some nodes may have failed to delete.`);
-                            }
-                        } else {
-                            alert('Failed to delete any subnodes. Please try again.');
-                        }
-                    }
-                }
-                break;
-
-            case 'export-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Import and open export modal
-                    import('./modal-manager').then(({ openExportModal }) => {
-                        openExportModal(projectManager!, node);
-                    }).catch(error => {
-                        alert('Failed to open export dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'import-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Create file input element
-                    const fileInput = document.createElement('input');
-                    fileInput.type = 'file';
-                    fileInput.accept = '.json';
-                    fileInput.style.display = 'none';
-                    
-                    fileInput.addEventListener('change', (e) => {
-                        const target = e.target as HTMLInputElement;
-                        const file = target.files?.[0];
-                        if (!file) return;
-                        
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            try {
-                                const content = event.target?.result as string;
-                                const importData = JSON.parse(content);
-                                
-                                // Validate and import
-                                if (projectManager) {
-                                    importNodeData(projectManager, node.id, importData);
-                                    
-                                    // Refresh the UI to show imported content
-                                    renderProjectUI(projectManager);
-                                }
-                                
-                            } catch (error) {
-                                console.error('Import failed:', error);
-                                alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
-                            }
-                        };
-                        
-                        reader.onerror = () => {
-                            alert('Failed to read file. Please try again.');
-                        };
-                        
-                        reader.readAsText(file);
-                    });
-                    
-                    // Trigger file selection
-                    document.body.appendChild(fileInput);
-                    fileInput.click();
-                    document.body.removeChild(fileInput);
-                }
-                break;
-                
-            case 'chat-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-                    
-                    // Import and open chat modal
-                    import('./modal-manager').then(({ openNodeChatModal }) => {
-                        openNodeChatModal(projectManager!, node);
-                    }).catch(error => {
-                        console.error('Failed to open chat modal:', error);
-                        alert('Failed to open chat dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'add-child-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    if (node.isLeaf) {
-                        const nodeLevelName = node.template[node.level] || 'final level';
-                        alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
-                        return;
-                    }
-
-                    // Open the Add Child Node Modal
-                    openAddChildNodeModal(node, node.id)
-                        .then((modal) => {
-                            console.log('✅ Add Child Node modal opened successfully');
-                            // The modal factory handles UI refresh automatically
-                        })
-                        .catch((error) => {
-                            console.error('❌ Failed to open Add Child Node modal:', error);
-                            alert('Failed to open Add Child Node dialog. Please try again.');
-                        });
-                }
-                break;
-            
-            // === VERSION NAVIGATION BUTTONS ===
-            case 'version-prev-btn':
-                navigateToVersion('prev');
-                break;
-
-            case 'version-next-btn':
-                navigateToVersion('next');
-                break;
-
-            case 'use-this-version-btn':
-                useCurrentVersion();
-                break;
-
-            // === READER VIEW BUTTON ===
-            case 'open-reader-btn':
-                {
-                    // Check both module variable and state for active project
-                    const activeProject = projectManager || state.getActiveProject();
-                    if (!activeProject) {
-                        alert('No project is currently active. Please create or select a project first.');
-                        return;
-                    }
-                    
-                    // Update the module variable if it was null but state has a project
-                    if (!projectManager && activeProject) {
-                        projectManager = activeProject;
-                    }
-                    
-                    openReaderView(activeProject, (nodeId: string) => {
-                        // Optional callback when navigating to a node from reader
-                        selectedNodeId = nodeId;
-                        renderNodeDetails();
-                    }).catch((error) => {
-                        console.error('Failed to open reader view:', error);
-                        alert('Failed to open reader view. Please try again.');
-                        });
-                }
-                break;
-
-            // === MAIN APP BUTTONS (from event-handlers.ts) ===
-            // These could be moved here for true unification if desired
-
-            // === NODE MANAGEMENT BUTTONS ===
-            case 'delete-node-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    
-                    // Close dropdown if this action came from dropdown
-                    const container = button.closest('.actions-dropdown-container');
-                    if (container) container.classList.remove('open');
-                    
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    if (node.level === 0) {
-                        // This is a project root node - delete the entire project
-                        state.getProjects();
-                        
-                        const confirmMessage = `Are you sure you want to delete the entire project "${node.title}"?\n\nThis will permanently delete:\n- The project and all its content\n- All child nodes and their content\n- All generated summaries and history\n\nThis action cannot be undone.`;
-                        
-                        if (confirm(confirmMessage)) {
-                            // Store the project to delete for storage cleanup
-                            const projectToDelete = projectManager;
-                            
-                            // Remove from in-memory state
-                            state.removeProject(node.id);
-                            
-                            // Handle storage cleanup
-                            (async () => {
-                                try {
-                                    // If this was the last project, clear all storage
-                                    const remainingProjects = state.getProjects();
-                                    if (remainingProjects.length === 0) {
-                                        // Clear all project storage
-                                        if (projectToDelete) {
-                                            await projectToDelete.clearAllProjectsFromStorage();
-                                        }
-                                    } else {
-                                        // First, explicitly remove the deleted project from IndexedDB
-                                        const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
-                                        if (storage.isIndexedDB()) {
-                                            const indexedDBService = (storage as any).indexedDBService;
-                                            if (indexedDBService) {
-                                                await indexedDBService.delete('projects', node.id);
-                                            }
-                                        }
-                                        
-                                        // Then save the updated project list
-                                        const remainingProject = state.getActiveProject();
-                                        if (remainingProject) {
-                                            await remainingProject.saveToStorage();
-                                        }
-                                    }
-                                } catch (error) {
-                                    console.error('Failed to update storage after project deletion:', error);
-                                }
-                            })();
-                            
-                            // If this was the last project, clear selection and show empty state
-                            const remainingProjects = state.getProjects();
-                            if (remainingProjects.length === 0) {
-                                selectedNodeId = null;
-                                projectManager = null;
-                                
-                                // Show empty state
-                                const nodeDetails = getElementById('node-details');
-                                nodeDetails.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;"><h3>No Projects</h3><p>All projects have been deleted. Create a new project to get started.</p></div>';
-                                
-                                // Render empty tree
-                                renderMultiProjectTree();
-                            } else {
-                                // Re-initialize the UI with the remaining projects
-                                void initializeProjectUI();
-                            }
-                        }
-                    } else {
-                        // This is a regular node - delete just this node and its children
-                        const hasChildren = node.children.length > 0;
-                        const childrenText = hasChildren ? `\n- ${node.children.length} child node(s) and all their content` : '';
-                        
-                        const confirmMessage = `Are you sure you want to delete "${node.title}"?\n\nThis will permanently delete:\n- This node and its content\n- Generated summary and history${childrenText}\n\nThis action cannot be undone.`;
-                        
-                        if (confirm(confirmMessage)) {
-                            const success = projectManager.removeNode(node.id);
-                            if (success) {
-                                void projectManager.saveToStorage().catch(console.error);
-                                
-                                // Select the parent node or project root
-                                const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : projectManager.rootNode;
-                                selectedNodeId = parentNode ? parentNode.id : projectManager.rootNode.id;
-                                
-                                // Re-render the UI
-                                renderMultiProjectTree();
-                                renderNodeDetails();
-                            } else {
-                                alert('Failed to delete the node. It may be a root node or have an invalid parent.');
-                            }
-                        }
-                    }
                 }
                 break;
 
