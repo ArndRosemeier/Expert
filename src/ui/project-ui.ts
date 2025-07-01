@@ -111,6 +111,7 @@ function getPluralChildLevelName(node: DocumentNode): string {
  */
 // Import the reusable Dropdown class
 import { Dropdown } from './Dropdown';
+import { ProjectTemplate } from '../ProjectTemplate';
 
 // Store the dropdown instance for the actions button
 let actionsDropdownInstance: Dropdown | null = null;
@@ -158,12 +159,14 @@ function showActionsDropdown(node: DocumentNode): void {
                     if (action) {
                         // Map actions to the existing handler IDs
                         const actionMap: Record<string, string> = {
+                            'new-top-layer': 'new-top-layer-btn',
                             'add-child': 'add-child-node-btn',
                             'delete-node': 'delete-node-btn',
                             'delete-all-children': 'delete-subnodes-btn',
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
-                            'chat': 'chat-node-btn'
+                            'chat': 'chat-node-btn',
+                            'copy-to-new-project': 'copy-to-new-project-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -183,6 +186,198 @@ function showActionsDropdown(node: DocumentNode): void {
     }, 50);
 }
 
+async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
+    // Prompt user for the new layer name
+    const layerName = prompt('Enter the name for the new top layer (e.g., "Series 3" for a series with 3 children target, or just "Series"):');
+    
+    if (!layerName || !layerName.trim()) {
+        return; // User cancelled or entered empty name
+    }
+
+    const trimmedName = layerName.trim();
+    
+    // Parse the layer name to extract target count
+    let newLevelName: string = trimmedName;
+    let targetCount: number | undefined;
+    
+    // Check if the name ends with a number (e.g., "Series 3")
+    const match = trimmedName.match(/^(.+?)\s+(\d+)$/);
+    if (match && match[1] && match[2]) {
+        newLevelName = match[1]!; // Non-null assertion since we checked above
+        targetCount = parseInt(match[2]!, 10);
+    }
+
+    try {
+        // Get the current template
+        const currentTemplate = projectManager!.template;
+        
+        // Create extended template hierarchy levels
+        const newHierarchyLevels = [newLevelName, ...currentTemplate.hierarchyLevels];
+        
+        // Create new template
+        const newTemplate = new ProjectTemplate(
+            'custom',
+            newHierarchyLevels,
+            currentTemplate.scaffoldingDocuments
+        );
+
+        // Create new root node with the extended template
+        const oldTitle: string = (oldRootNode.title !== undefined && oldRootNode.title !== null) ? oldRootNode.title : 'Root';
+        const newRoot = new DocumentNode(
+            0,
+            oldTitle,
+            null,
+            newHierarchyLevels
+        );
+
+        // Update old root's level and parent
+        oldRootNode.level = 1;
+        oldRootNode.parentId = newRoot.id;
+
+        // Add old root as child of new root
+        newRoot.children.push(oldRootNode);
+
+        // Update the project with the new structure
+        projectManager!.template = newTemplate;
+        projectManager!.rootNode = newRoot;
+        projectManager!.projectTitle = newLevelName;
+
+        // Update selected node to the new root
+        selectedNodeId = newRoot.id;
+
+        // Save changes to storage
+        await projectManager!.saveToStorage();
+
+        // Refresh the project UI
+        renderProjectUI(projectManager!);
+
+        alert(`Successfully created new top layer "${newLevelName}" with the old structure as its child.`);
+
+    } catch (error) {
+        console.error('Error creating new top layer:', error);
+        alert('Failed to create new top layer. Please try again.');
+    }
+}
+
+async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
+    try {
+        // Get the current template and slice it to start from the source node's level
+        const currentTemplate = projectManager!.template;
+        const adjustedHierarchyLevels = currentTemplate.hierarchyLevels.slice(sourceNode.level);
+        
+        if (adjustedHierarchyLevels.length === 0) {
+            alert('Cannot create project: No template levels available for this node.');
+            return;
+        }
+
+        // Create new template for the extracted project
+        const newTemplate = new ProjectTemplate(
+            `${sourceNode.title} Project`,
+            adjustedHierarchyLevels,
+            currentTemplate.scaffoldingDocuments
+        );
+
+        // Deep copy the source node and all its children, adjusting levels
+        const newRootNode = deepCopyNodeWithLevelAdjustment(sourceNode, -sourceNode.level, adjustedHierarchyLevels);
+
+        // Create unique project title
+        const baseTitle = sourceNode.level === 0 ? `${sourceNode.title} (Copy)` : sourceNode.title;
+        const uniqueTitle = generateUniqueProjectTitle(baseTitle);
+        
+        const newProjectManager = new ProjectManager(
+            uniqueTitle,
+            newTemplate,
+            state.getOrchestrator()!,
+            projectManager!.getSettingsManager(),
+            state.getOpenRouterClient()!
+        );
+
+        // Replace the auto-generated root with our copied structure
+        newProjectManager.rootNode = newRootNode;
+        
+        // Update the root node title to match the unique project title
+        newRootNode.title = uniqueTitle;
+
+        // Add to the projects list first
+        state.addProject(newProjectManager);
+
+        // Set as the active project
+        state.setActiveProject(newProjectManager.rootNode.id);
+
+        // Then save the new project to storage
+        await newProjectManager.saveToStorage();
+
+        // Refresh the project tree to show the new project
+        renderMultiProjectTree();
+
+        console.log(`New project "${uniqueTitle}" created with ID: ${newProjectManager.rootNode.id}`);
+        
+        const message = sourceNode.level === 0 
+            ? `Successfully created copy of project "${uniqueTitle}".`
+            : `Successfully created new project "${uniqueTitle}" from the selected node.`;
+        alert(message);
+
+    } catch (error) {
+        console.error('Error creating new project:', error);
+        alert('Failed to create new project. Please try again.');
+    }
+}
+
+function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustment: number, adjustedTemplate: string[]): DocumentNode {
+    // Create new node with adjusted level
+    const newLevel = sourceNode.level + levelAdjustment;
+    const newNode = new DocumentNode(
+        newLevel,
+        sourceNode.title,
+        sourceNode.parentId,
+        adjustedTemplate
+    );
+
+    // Copy all properties
+    newNode.content = sourceNode.content;
+    newNode.context = sourceNode.context;
+    newNode.generationPrompt = sourceNode.generationPrompt;
+    newNode.isPromptGenerating = sourceNode.isPromptGenerating;
+    newNode.collapsed = sourceNode.collapsed;
+    newNode.creatorModel = sourceNode.creatorModel;
+    newNode.generationHistory = [...sourceNode.generationHistory];
+    newNode.isGenerating = sourceNode.isGenerating;
+    newNode.generationSessions = sourceNode.generationSessions.map(session => ({...session}));
+
+    // Recursively copy children with level adjustment
+    newNode.children = sourceNode.children.map(child => 
+        deepCopyNodeWithLevelAdjustment(child, levelAdjustment, adjustedTemplate)
+    );
+
+    // Update parent IDs for children
+    newNode.children.forEach(child => {
+        child.parentId = newNode.id;
+    });
+
+    return newNode;
+}
+
+function generateUniqueProjectTitle(baseTitle: string): string {
+    const existingProjects = state.getProjects();
+    const existingTitles = new Set(existingProjects.map(p => p.projectTitle));
+    
+    // If the base title doesn't exist, use it
+    if (!existingTitles.has(baseTitle)) {
+        return baseTitle;
+    }
+    
+    // Try appending numbers until we find a unique title
+    let counter = 2;
+    let candidateTitle = `${baseTitle} ${counter}`;
+    
+    while (existingTitles.has(candidateTitle)) {
+        counter++;
+        candidateTitle = `${baseTitle} ${counter}`;
+    }
+    
+    return candidateTitle;
+}
+
 function createActionsDropdownContent(node: DocumentNode): string {
     return `
         <div class="actions-dropdown-content">
@@ -190,6 +385,11 @@ function createActionsDropdownContent(node: DocumentNode): string {
             <div class="action-section">
                 <div class="section-title">Structure</div>
                 <div class="action-buttons">
+                    ${node.level === 0 ? `
+                        <button class="action-btn" data-action="new-top-layer">
+                            🆕 New Top Layer
+                        </button>
+                    ` : ''}
                     ${!node.isLeaf ? `
                         <button class="action-btn" data-action="add-child">
                             ➕ Add ${node.childLevelName || 'Child'}
@@ -218,6 +418,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="chat">
                         💬 Chat
+                    </button>
+                    <button class="action-btn" data-action="copy-to-new-project">
+                        📋 Copy to New Project
                     </button>
                 </div>
             </div>
@@ -1556,6 +1759,30 @@ function handleDropdownAction(buttonId: string): void {
     if (!projectManager || !selectedNodeId) return;
 
     switch (buttonId) {
+        case 'new-top-layer-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node || node.level !== 0) {
+                    alert('This action is only available for root nodes.');
+                    return;
+                }
+
+                handleNewTopLayer(node);
+            }
+            break;
+
+        case 'copy-to-new-project-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) {
+                    alert('No node selected.');
+                    return;
+                }
+
+                handleCopyToNewProject(node);
+            }
+            break;
+
         case 'node-generate-content-action':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
