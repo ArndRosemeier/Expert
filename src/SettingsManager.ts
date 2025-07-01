@@ -1,6 +1,7 @@
 import { OrchestratorPrompts, defaultPrompts, PROMPT_STORAGE_KEY } from "./PromptManager";
 import { QualityCriterion } from "./types";
 import { StorageService, IStorageService } from './StorageService';
+import { VersionService } from './VersionService';
 
 export const SETTINGS_PROFILES_KEY = 'expert_app_settings_profiles';
 export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
@@ -142,6 +143,7 @@ export interface SettingsProfile {
     selectedModels: Record<string, string>;
     webSearchEnabled?: Record<string, boolean>;
     contextExtractionPrompt: string;
+    version?: string; // Version of the application when this profile was saved
 }
 
 function areValidSettingsProfiles(data: any): data is Record<string, SettingsProfile> {
@@ -175,7 +177,9 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             // webSearchEnabled is optional for backward compatibility
             (profile.webSearchEnabled === undefined || (typeof profile.webSearchEnabled === 'object' && profile.webSearchEnabled !== null)) &&
             // contextExtractionPrompt is optional for backward compatibility
-            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string')
+            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
+            // version is optional for backward compatibility
+            (profile.version === undefined || typeof profile.version === 'string')
         );
     });
 }
@@ -187,6 +191,7 @@ export class SettingsManager {
     private storageService: Promise<IStorageService>;
     private initializationPromise: Promise<void>;
     private aiLoggingEnabled: boolean = false;
+    private hasVersionMismatch: boolean = false;
 
     constructor() {
         this.storageService = StorageService.getInstance();
@@ -212,10 +217,20 @@ export class SettingsManager {
             
             if (saved && areValidSettingsProfiles(saved)) {
                 this.profiles = saved;
-                // Add default context extraction prompt and web search preferences to existing profiles that don't have them
+                let hasVersionMismatch = false;
+                const currentVersion = VersionService.getBuildNumber();
+                
+                // Check for version mismatches and update legacy profiles
                 Object.keys(this.profiles).forEach(profileName => {
                     const profile = this.profiles[profileName];
                     if (profile) {
+                        // Check for version mismatch
+                        if (!profile.version || profile.version !== currentVersion) {
+                            hasVersionMismatch = true;
+                            console.log(`📋 Profile "${profileName}" has version mismatch. Profile version: ${profile.version || 'unknown'}, Current version: ${currentVersion}`);
+                        }
+                        
+                        // Add default context extraction prompt and web search preferences to existing profiles that don't have them
                         if (!profile.contextExtractionPrompt) {
                             profile.contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
                         }
@@ -224,6 +239,12 @@ export class SettingsManager {
                         }
                     }
                 });
+                
+                // Store version mismatch status for UI to check
+                if (hasVersionMismatch) {
+                    this.hasVersionMismatch = true;
+                }
+                
                 // Save the updated profiles with the new field
                 await this.saveProfiles();
                 } else {
@@ -313,7 +334,14 @@ export class SettingsManager {
 
     public async saveProfile(name: string, profile: SettingsProfile): Promise<void> {
         if (!name) throw new Error("Profile name cannot be empty.");
-        this.profiles[name] = profile;
+        
+        // Add current version to the profile
+        const profileWithVersion: SettingsProfile = {
+            ...profile,
+            version: VersionService.getBuildNumber()
+        };
+        
+        this.profiles[name] = profileWithVersion;
         await this.saveProfiles();
     }
 
@@ -580,5 +608,76 @@ export class SettingsManager {
         } catch (error) {
             console.error('Failed to save AI logging setting to storage', error);
         }
+    }
+
+    /**
+     * Check if there are version mismatches in loaded profiles
+     */
+    public hasVersionMismatchDetected(): boolean {
+        return this.hasVersionMismatch;
+    }
+
+    /**
+     * Clear the version mismatch flag (typically called after user has been notified)
+     */
+    public clearVersionMismatchFlag(): void {
+        this.hasVersionMismatch = false;
+    }
+
+    /**
+     * Get detailed version mismatch information for all profiles
+     */
+    public getVersionMismatchInfo(): Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> {
+        const currentVersion = VersionService.getBuildNumber();
+        const mismatches: Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> = [];
+        
+        Object.keys(this.profiles).forEach(profileName => {
+            const profile = this.profiles[profileName];
+            if (profile && (!profile.version || profile.version !== currentVersion)) {
+                mismatches.push({
+                    profileName,
+                    profileVersion: profile.version,
+                    currentVersion
+                });
+            }
+        });
+        
+        return mismatches;
+    }
+
+    /**
+     * Reset all profiles to defaults with current version
+     */
+    public async resetToDefaults(): Promise<void> {
+        console.log('🔄 Resetting all profiles to defaults...');
+        
+        // Create a new default profile with current version
+        const defaultProfile: SettingsProfile = {
+            prompt: "",
+            criteria: DEFAULT_CRITERIA,
+            maxIterations: 5,
+            selectedModels: {},
+            webSearchEnabled: {},
+            contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
+            version: VersionService.getBuildNumber()
+        };
+        
+        // Reset profiles to just the default
+        this.profiles = { default: defaultProfile };
+        
+        // Reset prompts to defaults
+        this.prompts = { ...defaultPrompts };
+        
+        // Set default as last used profile
+        await this.setLastUsedProfile('default');
+        
+        // Save everything
+        await this.saveProfiles();
+        await this.savePrompts(this.prompts);
+        
+        // Clear version mismatch flag
+        this.hasVersionMismatch = false;
+        
+        console.log('✅ All profiles and prompts reset to defaults');
     }
 } 

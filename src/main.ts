@@ -1,4 +1,8 @@
 import { AppKeyService } from './keys/AppKeyService.js';
+import { VersionService } from './VersionService.js';
+
+// Log version info on startup
+VersionService.logVersionInfo();
 
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -69,10 +73,50 @@ async function startApplication(): Promise<void> {
         console.log('✅ EventManager initialized successfully');
         console.log('📊 Event Manager status:', eventManager.getDebugInfo());
         
+        // Check for version mismatches and show dialog if needed
+        await checkVersionMismatches();
+        
         console.log('✅ Expert application started successfully');
     } catch (error) {
         console.error('❌ Failed to start application:', error);
         alert('Failed to start the application. Please refresh the page and try again.');
+    }
+}
+
+/**
+ * Check for version mismatches in settings and show modal if needed
+ */
+async function checkVersionMismatches(): Promise<void> {
+    try {
+        const { VersionMismatchModal } = await import('./ui/modals/VersionMismatchModal');
+        const { getModalRegistry } = await import('./ui/modals/core/ModalRegistry');
+        const state = await import('./state');
+        
+        // Get settings manager instance
+        const settingsManager = state.getSettingsManager();
+        
+        if (settingsManager && settingsManager.hasVersionMismatchDetected()) {
+            console.log('⚠️ Version mismatch detected in settings - showing upgrade dialog');
+            
+            // Create version mismatch modal
+            const modal = new VersionMismatchModal({
+                id: 'version-mismatch-modal',
+                settingsManager,
+                onResetComplete: () => {
+                    console.log('✅ Settings reset completed, reloading UI...');
+                    // Refresh the page to reload with new settings
+                    window.location.reload();
+                }
+            });
+            
+            // Show the modal
+            const registry = getModalRegistry();
+            registry.register(modal);
+            await registry.open('version-mismatch-modal');
+        }
+    } catch (error) {
+        console.error('❌ Failed to check version mismatches:', error);
+        // Don't block app startup for version check failures
     }
 }
 

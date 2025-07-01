@@ -56,6 +56,7 @@ export { ExportModal } from './ExportModal';
 export { AILogModal, openAILogModal } from './AILogModal';
 export { ContextInfoModal } from './ContextInfoModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
+export { VersionMismatchModal } from './VersionMismatchModal';
 export { 
     ModalFactory, 
     createModalFactory,

@@ -13,6 +13,7 @@ import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 import { EventEmitter } from '../../EventEmitter';
 import { AppKeyService } from '../../keys/AppKeyService';
+import { VersionService } from '../../VersionService';
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -136,6 +137,11 @@ export class SettingsModal extends BaseModal {
             content: 'Loading key info...'
         });
 
+        const versionInfo = createElement('div', {
+            classes: ['version-info'],
+            content: `Version: ${VersionService.getFullVersion()}`
+        });
+
         // Load key information asynchronously
         this.loadKeyInfo(keyInfo);
 
@@ -150,6 +156,7 @@ export class SettingsModal extends BaseModal {
 
         titleContainer.appendChild(title);
         titleContainer.appendChild(keyInfo);
+        titleContainer.appendChild(versionInfo);
         header.appendChild(titleContainer);
         header.appendChild(closeButton);
 
