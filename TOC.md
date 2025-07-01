@@ -128,18 +128,71 @@ This document provides a comprehensive mapping of all functionality in the Exper
 - **File**: `src/LoopOrchestrator.ts`
 - **Class**: `LoopOrchestrator`
 - **Functions**:
-  - `runLoop(input)` - Run generation loop
-  - `generateContent(prompt, criteria)` - Generate content
+  - `runLoop(input)` - Run generation loop with systematic progress events ✨ **ENHANCED**
   - `rateContent(content, criteria)` - Rate generated content
-  - `editContent(content, ratings)` - Get editing suggestions
+  - `requestStop()` - Request loop termination
+  - `isLoopRunning()` - Check if loop is running
+  - `getCurrentIteration()` - Get current iteration number
+
+### Systematic Progress Events System ✨ **NEW**
+- **Purpose**: Provides predictable, systematic progress tracking for content generation
+- **Architecture**: Dual-tier progress system with high-level operations and iteration tracking
+
+**Event Types**:
+```typescript
+type OrchestratorEvents = {
+    'started': [input: LoopInput];                                    // Loop initialization
+    'iteration-started': [iteration: number, maxIterations: number]; // ✨ NEW: Before each creator phase
+    'phase-started': [phase: 'create' | 'rate' | 'edit', iteration: number]; // ✨ NEW: Phase boundaries
+    'progress': [progress: LoopProgress];                             // Detailed progress within phases
+    'error': [message: string];                                       // Error conditions
+    'aborted': [message: string];                                     // User-initiated termination
+};
+```
+
+**Progress Event Flow**:
+```
+🚀 Loop Started
+├── ✅ iteration-started(1)    ← BEFORE initial creator
+├── ✍️ phase-started('create') ← Creator phase begins
+├── 📊 phase-started('rate')   ← Rating phase begins  
+├── ✏️ phase-started('edit')   ← Editing phase begins (if needed)
+├── ✅ iteration-started(2)    ← BEFORE creator revision
+├── ✍️ phase-started('create') ← Creator revision begins
+└── Continue until goals met or max iterations...
+```
+
+**Key Features**:
+- ✅ **Predictable Timing**: `iteration-started` always fires BEFORE creator work begins
+- ✅ **Phase Boundaries**: Clear signals for Create/Rate/Edit phase transitions  
+- ✅ **Creator Iteration Tracking**: Separate counter tracks actual content generation iterations
+- ✅ **Consistent UI Updates**: Progress bars update at logical moments, not after work completes
+- ✅ **Dual Progress System**: Works with high-level bulk operations (e.g., "Generating child 3/5")
+
+**UI Integration**:
+- **Operations Progress**: "Generating content for: Chapter 1" (1/5) - High-level bulk operations
+- **Iterations Progress**: "Iteration 2 / 5" - Loop orchestrator iterations ✨ **ENHANCED TIMING**
+- **Stages Progress**: "Stage: Rate (2/3)" - Phase within iteration
+- **Detail Text**: "AI is evaluating against criterion: clarity" - Specific activity
 
 ### Generation Services
 - **File**: `src/project/GenerationService.ts`
 - **Class**: `GenerationService`
 - **Functions**:
-  - `generateForNode(node, options)` - Generate content for node
-  - `expandNode(node, count)` - Generate child nodes
-  - `createChildrenFromOutline(node, outline)` - Create children from outline
+  - `generateNodeContent(nodeId, count, isChildGeneration)` - Generate content for node ✨ **ENHANCED**
+  - `generateAllChildrenContent(nodeId, includeContent, recursive)` - Generate bulk child content
+  - `createChildrenFromOutline(nodeId)` - Create children from outline
+  - `rateNodeContent(nodeId)` - Rate existing node content
+  - `summarizeNodeContent(nodeId)` - Generate node summary
+  - `abortCurrentGeneration()` - Abort ongoing generation
+  - `canAbortGeneration()` - Check if generation can be aborted
+  - `getCurrentGenerationInfo()` - Get current generation context
+
+**Systematic Progress Event Integration** ✨ **NEW**:
+- **Event Listeners**: Handles all orchestrator events (`started`, `iteration-started`, `phase-started`, `progress`, `aborted`)
+- **Event Translation**: Converts orchestrator events to UI-friendly `loop-progress` events
+- **Dual Progress Support**: Integrates with both high-level and orchestrator progress systems
+- **Phase-Aware Messaging**: Provides context-specific progress messages for each phase
 
 ### Generation Coordination
 - **File**: `src/project/GenerationCoordinator.ts`
@@ -326,6 +379,26 @@ interface NodeSuggestion {
   - `renderNodeEditor(node)` - Render node editor
   - `updateNodeDisplay(node)` - Update node display
   - `showContextMenu(node, position)` - Show context menu
+  - `updateProgressUI(data)` - Update multi-tier progress system ✨ **ENHANCED**
+  - `showGenerationOverlay()` - Show generation overlay with spinner
+  - `hideGenerationOverlay()` - Hide generation overlay
+  - `setupProjectManagerListeners(manager)` - Setup systematic event listeners ✨ **ENHANCED**
+
+**Progress System Integration**:
+```typescript
+interface ProgressUIData {
+    operations?: ProgressInfo;    // Top level: High-level operations
+    iterations?: ProgressInfo;    // Middle level: LoopOrchestrator iterations ✨ NEW
+    stages?: ProgressInfo;        // Bottom level: Stage within iteration  
+    detail?: string;              // Detail text below progress bars
+}
+```
+
+**Event Handlers** ✨ **ENHANCED**:
+- `handleHighLevelProgress()` - Handles bulk operation progress (e.g., "Generating child 3/5")
+- `handleLoopProgress()` - Handles systematic orchestrator progress events ✨ **NEW**
+- `handleIterationStarted()` - Handles iteration boundary events ✨ **NEW** 
+- `handlePhaseStarted()` - Handles phase transition events ✨ **NEW**
 
 ### Reader/Editor Interface
 - **File**: `src/ui/reader-gui.ts`
@@ -445,7 +518,11 @@ interface NodeSuggestion {
 ### Form Control Improvements ✨ **NEW**
 - **Enhanced Textareas**: Better focus states, hover effects, monospace font
 - **Input Styling**: Consistent border radius, padding, and focus indicators
-- **Progress Bars**: Multi-tier progress system with gradient backgrounds
+- **Multi-Tier Progress System**: Three-level progress visualization ✨ **ENHANCED**
+  - **Operations Level**: High-level bulk operations (e.g., "Generating child 3/5")
+  - **Iterations Level**: Loop orchestrator iterations (e.g., "Iteration 2/5") 
+  - **Stages Level**: Phase within iteration (e.g., "Stage: Rate (2/3)")
+  - **Detail Text**: Specific activity description below progress bars
 - **Control Groups**: Proper spacing and visual grouping
 
 ### Tree Interface Enhancements ✨ **NEW**
@@ -805,12 +882,21 @@ Prompt placeholders are now centrally defined in `src/PromptManager.ts` and impo
 - ✅ **Dual Mode Interface** - Single modal supports both AI and manual node creation
 - ✅ **Parent Content Updates** - Optional AI-powered parent content updates when adding children
 
+### Systematic Progress Events Architecture ✨ **NEW**
+- ✅ **Predictable Event Timing** - `iteration-started` always fires BEFORE creator work begins
+- ✅ **Dual-Tier Progress System** - High-level operations + orchestrator iterations work together
+- ✅ **Phase Boundary Events** - Clear signals for Create/Rate/Edit transitions
+- ✅ **Creator Iteration Tracking** - Separate counter for actual content generation cycles
+- ✅ **Enhanced UI Integration** - Multi-tier progress bars with systematic updates
+- ✅ **Event Translation Layer** - GenerationService converts orchestrator events to UI events
+
 ### Key Architectural Patterns Established
 - 🏗️ **Modal Factory with Callbacks** - `onAction` callbacks enable automatic UI refresh
 - 🏗️ **Service Layer Pattern** - Business logic separated from UI in dedicated service classes
 - 🏗️ **Content State Conventions** - Standardized patterns for content state signaling
 - 🏗️ **Dynamic Import Pattern** - Modal Factory uses dynamic imports to avoid circular dependencies
-- 🏗️ **Event Management System** ✨ **NEW** - Systematic solution for event listener persistence
+- 🏗️ **Event Management System** - Systematic solution for event listener persistence
+- 🏗️ **Systematic Progress Events** ✨ **NEW** - Predictable, phase-aware progress tracking
 
 ---
 

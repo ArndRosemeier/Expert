@@ -49,8 +49,19 @@ export interface LoopResult {
     aborted: boolean;
 }
 
+// New interface to track each iteration's performance
+interface IterationResult {
+    iteration: number;
+    response: string;
+    ratings: Rating[];
+    failureScore: number;
+    allGoalsMet: boolean;
+}
+
 type OrchestratorEvents = {
     'started': [input: LoopInput];
+    'iteration-started': [iteration: number, maxIterations: number];
+    'phase-started': [phase: 'create' | 'rate' | 'edit', iteration: number];
     'progress': [progress: LoopProgress];
     'error': [message: string];
     'aborted': [message: string];
@@ -150,7 +161,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         let currentResponse = '';
         let success = false;
         let aborted = false;
+        let creatorIteration = 1; // Track which creator iteration we're on
         const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
+
+        // Track iteration results for best attempt selection
+        const iterationResults: IterationResult[] = [];
 
         try {
             // Determine which model to use based on node type
@@ -162,11 +177,18 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 currentResponse = input.initialContent;
                 // The "initial prompt" for a refinement is the refinement instruction itself.
                 initialPrompt = input.prompt; 
+                
+                // Emit iteration started BEFORE processing the initial content
+                this.emit('iteration-started', creatorIteration, maxIterations);
+                
+                // Emit phase started for the initial creation
+                this.emit('phase-started', 'create', creatorIteration);
+                
                 // We don't need to call the LLM for the first response, but we record it in history.
                 const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
-                history.push({ iteration: 0, type: 'creator', payload: initialCreatorPayload });
+                history.push({ iteration: creatorIteration, type: 'creator', payload: initialCreatorPayload });
 
-                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
+                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: creatorIteration, maxIterations: maxIterations, step: 1, totalStepsInIteration });
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
                 initialPrompt = this.prompts.content_generation_initial
@@ -178,12 +200,18 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     throw new Error('Generation aborted by user');
                 }
 
+                // Emit iteration started BEFORE the creator starts
+                this.emit('iteration-started', creatorIteration, maxIterations);
+                
+                // Emit phase started for the initial creation
+                this.emit('phase-started', 'create', creatorIteration);
+
                 // Emit progress BEFORE starting the API call to show model working state
                 const modelLabel = input.isLeafNode ? 'Prose' : 'Creator';
                 this.emit('progress', { 
                     type: 'creator', 
                     payload: { prompt: initialPrompt, response: `${modelLabel} is working...` }, 
-                    iteration: 0, 
+                    iteration: creatorIteration, 
                     maxIterations: maxIterations, 
                     step: 1, 
                     totalStepsInIteration 
@@ -199,10 +227,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     throw new Error(`The AI ${modelLabel} failed to respond. Please check your API key and network connection.`);
                 }
                 const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
-                history.push({ iteration: 0, type: 'creator', payload: creatorPayload });
+                history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
 
                 // Emit progress AFTER getting the response to show final result
-                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: 0, maxIterations: maxIterations, step: 1, totalStepsInIteration });
+                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: creatorIteration, maxIterations: maxIterations, step: 1, totalStepsInIteration });
             }
 
             for (let i = 1; i <= maxIterations; i++) {
@@ -212,6 +240,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     aborted = true;
                     break;
                 }
+
+                // Emit systematic phase start event for rating
+                this.emit('phase-started', 'rate', i);
 
                 this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
 
@@ -272,7 +303,21 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                 if (aborted) break;
 
+                // Store this iteration's result for best attempt selection
+                const failureScore = this.calculateFailureScore(ratingsFromAI);
+                const iterationResult: IterationResult = {
+                    iteration: i,
+                    response: currentResponse,
+                    ratings: ratingsFromAI,
+                    failureScore: failureScore,
+                    allGoalsMet: allGoalsMet
+                };
+                iterationResults.push(iterationResult);
+
                 if (!allGoalsMet && i < maxIterations) {
+                    // Emit systematic phase start event for editing
+                    this.emit('phase-started', 'edit', i);
+                    
                     // 2. If not success, call Editor
                     const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
                     const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
@@ -299,6 +344,13 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     }
 
                     // 3. Call the appropriate model again to get the improved response
+                    // Increment creator iteration counter and emit iteration started before creator revision
+                    creatorIteration++;
+                    this.emit('iteration-started', creatorIteration, maxIterations);
+                    
+                    // Emit systematic phase start event for creation
+                    this.emit('phase-started', 'create', creatorIteration);
+                    
                     const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
                     
                     // Emit progress BEFORE starting the API call to show model working state
@@ -306,7 +358,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     this.emit('progress', { 
                         type: 'creator', 
                         payload: { prompt: creatorPrompt, response: `${modelLabel} is working on revision...` }, 
-                        iteration: i, 
+                        iteration: creatorIteration, 
                         maxIterations, 
                         step: 1, 
                         totalStepsInIteration 
@@ -322,10 +374,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         throw new Error(`The AI ${modelLabel} failed to respond during revision. Please check your API key and network connection.`);
                     }
                     const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
-                    history.push({ iteration: i, type: 'creator', payload: creatorPayload });
+                    history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
                     
                     // Emit progress AFTER getting the response to show final result
-                    this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: i, maxIterations, step: 1, totalStepsInIteration });
+                    this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: creatorIteration, maxIterations, step: 1, totalStepsInIteration });
 
                 } else {
                     // If goals are met or it's the last iteration, break the loop.
@@ -347,11 +399,21 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             this.currentIteration = 0;
         }
 
+        // Select the best iteration based on failure score
+        let finalResponse = currentResponse;
+        let finalSuccess = success;
+        
+        if (!aborted && iterationResults.length > 0) {
+            const bestIteration = this.selectBestIteration(iterationResults);
+            finalResponse = bestIteration.response;
+            finalSuccess = bestIteration.allGoalsMet;
+        }
+
         return {
-            finalResponse: currentResponse,
+            finalResponse: finalResponse,
             history,
             iterations: history.filter(h => h.type === 'creator').length,
-            success,
+            success: finalSuccess,
             aborted
         };
     }
@@ -462,6 +524,42 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         return this.prompts.editor
             .replace(/{{response}}/g, response)
             .replace(/{{ratings}}/g, JSON.stringify(ratings, null, 2));
+    }
+
+    /**
+     * Calculates the failure score for a set of ratings.
+     * Failure score = sum of (goal - score) for all criteria that didn't meet their goal.
+     * Criteria that met their goal contribute 0 to the failure score.
+     */
+    private calculateFailureScore(ratings: Rating[]): number {
+        let failureScore = 0;
+        for (const rating of ratings) {
+            if (rating.score < rating.goal) {
+                failureScore += (rating.goal - rating.score);
+            }
+        }
+        return failureScore;
+    }
+
+    /**
+     * Selects the best iteration result based on the lowest failure score.
+     * If multiple iterations have the same failure score, selects the most recent one.
+     */
+    private selectBestIteration(iterationResults: IterationResult[]): IterationResult {
+        if (iterationResults.length === 0) {
+            throw new Error('No iteration results to select from');
+        }
+
+        let bestResult = iterationResults[0]!;
+        for (let i = 1; i < iterationResults.length; i++) {
+            const result = iterationResults[i]!;
+            // Select if failure score is lower, or if same failure score but more recent iteration
+            if (result.failureScore < bestResult.failureScore || 
+                (result.failureScore === bestResult.failureScore && result.iteration > bestResult.iteration)) {
+                bestResult = result;
+            }
+        }
+        return bestResult;
     }
 
 } 

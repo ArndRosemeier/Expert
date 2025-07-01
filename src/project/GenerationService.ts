@@ -322,8 +322,55 @@ export class GenerationService {
                 }
             });
         };
+
+        // Handle iteration started event
+        const onIterationStarted = (iteration: number, maxIterations: number) => {
+            this.deps.eventEmitter.emit('loop-progress', { 
+                nodeId: contextNodeId || nodeId, 
+                progress: {
+                    type: 'creator',
+                    payload: { prompt: `Starting iteration ${iteration}...`, response: '' },
+                    iteration: iteration,
+                    maxIterations: maxIterations,
+                    step: 0,
+                    totalStepsInIteration: 3
+                }
+            });
+        };
+
+        // Handle phase started event
+        const onPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
+            const phaseMessages = {
+                create: 'Creating content...',
+                rate: 'Evaluating content...',
+                edit: 'Analyzing feedback...'
+            };
+            const phaseSteps = {
+                create: 1,
+                rate: 2,
+                edit: 3
+            };
+            
+            this.deps.eventEmitter.emit('loop-progress', { 
+                nodeId: contextNodeId || nodeId, 
+                progress: {
+                    type: phase === 'create' ? 'creator' : phase === 'rate' ? 'rater' : 'editor',
+                    payload: phase === 'create' 
+                        ? { prompt: phaseMessages[phase], response: '' }
+                        : phase === 'rate'
+                        ? { criterion: phaseMessages[phase], rating: { criterion: '', score: 0, justification: '', goal: 0} }
+                        : { prompt: phaseMessages[phase], advice: '' },
+                    iteration: iteration,
+                    maxIterations: loopInput.maxIterations,
+                    step: phaseSteps[phase],
+                    totalStepsInIteration: 3
+                }
+            });
+        };
         
         this.deps.loopOrchestrator.on('started', onStarted);
+        this.deps.loopOrchestrator.on('iteration-started', onIterationStarted);
+        this.deps.loopOrchestrator.on('phase-started', onPhaseStarted);
         this.deps.loopOrchestrator.on('progress', onProgress);
         this.deps.loopOrchestrator.on('aborted', onAborted);
 
@@ -401,6 +448,8 @@ export class GenerationService {
             }
         } finally {
             this.deps.loopOrchestrator.off('started', onStarted);
+            this.deps.loopOrchestrator.off('iteration-started', onIterationStarted);
+            this.deps.loopOrchestrator.off('phase-started', onPhaseStarted);
             this.deps.loopOrchestrator.off('progress', onProgress);
             this.deps.loopOrchestrator.off('aborted', onAborted);
             
