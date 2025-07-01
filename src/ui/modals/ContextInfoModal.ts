@@ -1,4 +1,5 @@
 import { BaseModal } from './core/BaseModal';
+import { addEventListenerWithCleanup } from './core/modal-utils';
 
 export class ContextInfoModal extends BaseModal {
     constructor() {
@@ -128,5 +129,26 @@ export class ContextInfoModal extends BaseModal {
         `;
 
         return content;
+    }
+
+    /**
+     * Override setupEventHandlers to add custom button handling
+     */
+    protected override setupEventHandlers(): void {
+        // Call parent setup first
+        super.setupEventHandlers();
+
+        // Add handler for "Got it!" button
+        if (this.element) {
+            const gotItButton = this.element.querySelector('[data-action="close"]') as HTMLButtonElement;
+            if (gotItButton) {
+                addEventListenerWithCleanup(
+                    gotItButton,
+                    'click',
+                    () => void this.close(),
+                    this.cleanupHandlers
+                );
+            }
+        }
     }
 } 

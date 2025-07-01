@@ -14,7 +14,7 @@ let selectedNodeId: string | null = null;
 // Persistent checkbox states
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
-let autoPropagateState: boolean = true;
+
 
 // Version navigation state
 let currentVersionIndex: number = 0;
@@ -47,8 +47,7 @@ async function saveCheckboxStates() {
         const storage = await StorageService.getInstance();
         await storage.set('expert_app_checkbox_states', {
             includeContent: includeContentState,
-            recursive: recursiveState,
-            autoPropagate: autoPropagateState
+            recursive: recursiveState
         });
     } catch (error) {
         console.warn('Failed to save checkbox states:', error);
@@ -59,11 +58,10 @@ async function loadCheckboxStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{includeContent: boolean, recursive: boolean, autoPropagate: boolean}>('expert_app_checkbox_states');
+        const saved = await storage.get<{includeContent: boolean, recursive: boolean}>('expert_app_checkbox_states');
         if (saved) {
             includeContentState = saved.includeContent;
             recursiveState = saved.recursive;
-            autoPropagateState = saved.autoPropagate ?? true; // Default to true if not saved
         }
     } catch (error) {
         console.warn('Failed to load checkbox states:', error);
@@ -1092,13 +1090,9 @@ export function renderNodeDetails() {
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <label for="node-context">Context</label>
                     <button id="context-info-btn" class="info-button" title="Learn about Context features" style="margin-left: 4px;">i</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">(auto-propagates to children when enabled)</span>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">(Context will be copied to newly created child nodes.)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <label for="auto-propagate-checkbox" style="font-weight: normal; font-size: 0.8rem; margin: 0; color: #6c757d;">
-                        <input type="checkbox" id="auto-propagate-checkbox" ${autoPropagateState ? 'checked' : ''}>
-                        Auto
-                    </label>
                     <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
                     <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
                 </div>
@@ -1218,13 +1212,7 @@ export function renderNodeDetails() {
     }
 
     // Set up auto propagate checkbox listener (outside the if block since it's always present)
-    const autoPropagateCheckbox = getElementById('auto-propagate-checkbox') as HTMLInputElement;
-    if (autoPropagateCheckbox) {
-        autoPropagateCheckbox.addEventListener('change', () => {
-            autoPropagateState = autoPropagateCheckbox.checked;
-            void saveCheckboxStates().catch(console.error);
-        });
-    }
+
 
     // --- CRITICAL: Add missing event listeners for content and context textareas ---
     // This must happen AFTER the DOM elements are created and appended above
@@ -1256,20 +1244,17 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    node.context = contextTextArea.value;
-                    
-                    // Auto propagate if enabled
-                    if (autoPropagateState) {
-                        // Propagate context to all descendants
-                        const propagateRecursively = (sourceNode: DocumentNode) => {
-                            for (const child of sourceNode.children) {
-                                child.context = sourceNode.context;
-                                propagateRecursively(child);
-                            }
-                        };
-                        
-                        propagateRecursively(node);
+                                    node.context = contextTextArea.value;
+                
+                // Always propagate context to all descendants
+                const propagateRecursively = (sourceNode: DocumentNode) => {
+                    for (const child of sourceNode.children) {
+                        child.context = sourceNode.context;
+                        propagateRecursively(child);
                     }
+                };
+                
+                propagateRecursively(node);
                     
                     // Save to storage with debounced approach
                     clearTimeout((contextTextArea as any)._saveTimeout);
@@ -2343,6 +2328,19 @@ export function setupEventListeners() {
                     }).catch((error: any) => {
                         console.error('Failed to open extract context modal:', error);
                         alert('Failed to open extract context dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'context-info-btn':
+                {
+                    // Import and open context info modal
+                    import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
+                        const contextModal = new ContextInfoModal();
+                        void contextModal.open();
+                    }).catch((error: any) => {
+                        console.error('Failed to open context info modal:', error);
+                        alert('Failed to open context info dialog. Please try again.');
                     });
                 }
                 break;

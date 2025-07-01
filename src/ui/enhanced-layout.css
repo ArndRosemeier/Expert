@@ -214,8 +214,7 @@ label[for] {
 
 /* Specific styling for generation checkboxes */
 #include-content-checkbox,
-#recursive-checkbox,
-#auto-propagate-checkbox {
+#recursive-checkbox {
     margin-right: var(--space-2);
 }
 

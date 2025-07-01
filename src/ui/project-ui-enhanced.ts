@@ -164,12 +164,7 @@ export function setupEnhancedEventListeners(): void {
         handleRecursiveChange
     );
 
-    eventManager.addDelegatedEvent(
-        mainContent,
-        'change',
-        '#auto-propagate-checkbox',
-        handleAutoPropagateChange
-    );
+
 
     // === TEXT AREAS (Input events) ===
     eventManager.addDelegatedEvent(
@@ -370,10 +365,7 @@ function handleRecursiveChange(event: Event): void {
     // TODO: Extract implementation from original code
 }
 
-function handleAutoPropagateChange(event: Event): void {
-    console.log('🔀 Auto propagate changed');
-    // TODO: Extract implementation from original code
-}
+
 
 function handleContentInput(event: Event): void {
     console.log('📝 Content input');
