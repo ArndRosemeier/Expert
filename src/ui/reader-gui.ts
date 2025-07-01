@@ -52,11 +52,12 @@ export class ReaderGUI {
     private contentNodes: ContentNode[] = [];
     private clickMappings: ClickMapping[] = [];
     private config: ReaderConfig;
-    private onNavigateToNode?: (nodeId: string) => void;
+    private onNavigateToNode: ((nodeId: string) => void) | undefined;
     private isListeningForUpdates: boolean = false;
     private isSettingsPanelOpen: boolean = false;
     private readerEditor: ReaderEditor;
     private hasBeenRendered: boolean = false; // Track if this instance has been rendered
+    private rootNode: DocumentNode; // The starting node for the reader view
     
     // Search state
     private searchTerm: string = '';
@@ -72,9 +73,10 @@ export class ReaderGUI {
     private boundHandleNodeSummaryGenerated: (e: { nodeId: string, summary: string }) => void;
     private boundHandleProjectUpdate: () => void;
 
-    constructor(projectManager: ProjectManager, container: HTMLElement, onNavigateToNode?: (nodeId: string) => void) {
+    constructor(projectManager: ProjectManager, container: HTMLElement, rootNode?: DocumentNode, onNavigateToNode?: (nodeId: string) => void) {
         this.projectManager = projectManager;
         this.container = container;
+        this.rootNode = rootNode || projectManager.rootNode; // Use specified node or default to project root
         this.onNavigateToNode = onNavigateToNode;
         
         // Bind event handler methods
@@ -289,7 +291,7 @@ export class ReaderGUI {
             }
         };
 
-        processNode(this.projectManager.rootNode);
+        processNode(this.rootNode);
         return nodes;
     }
 
@@ -386,10 +388,14 @@ export class ReaderGUI {
             `;
         }
 
+        const readerTitle = this.rootNode === this.projectManager.rootNode 
+            ? `${this.projectManager.projectTitle} - Reader View`
+            : `${this.rootNode.title} - Reader View`;
+        
         let html = `
             <div class="reader-container">
                 <div class="reader-header">
-                    <h1>${this.projectManager.projectTitle} - Reader View</h1>
+                    <h1>${readerTitle}</h1>
                     <div class="reader-controls">
                         <button id="reader-find-btn" class="control-btn">🔍 Find</button>
                         <div id="reader-find-interface" class="reader-find-interface-inline" style="display: none;">
@@ -499,7 +505,7 @@ export class ReaderGUI {
             node.children.forEach(child => processNode(child));
         };
 
-        processNode(this.projectManager.rootNode);
+        processNode(this.rootNode);
         return nodes;
     }
 
@@ -3354,7 +3360,7 @@ let globalReaderInstance: ReaderGUI | null = null;
 /**
  * Utility function to create and show a reader for a project
  */
-export async function openReaderView(projectManager: ProjectManager, onNavigateToNode?: (nodeId: string) => void): Promise<ReaderGUI> {
+export async function openReaderView(projectManager: ProjectManager, rootNode?: DocumentNode, onNavigateToNode?: (nodeId: string) => void): Promise<ReaderGUI> {
     // Create a container for the reader
     let readerContainer = document.getElementById('reader-container') as HTMLElement;
     if (!readerContainer) {
@@ -3364,15 +3370,18 @@ export async function openReaderView(projectManager: ProjectManager, onNavigateT
     }
 
     // Check if we need to create a new reader instance or update the existing one
-    if (!globalReaderInstance || globalReaderInstance.projectManager !== projectManager) {
+    const currentRootNode = rootNode || projectManager.rootNode;
+    if (!globalReaderInstance || 
+        globalReaderInstance.projectManager !== projectManager || 
+        (globalReaderInstance as any).rootNode !== currentRootNode) {
         // Clean up existing instance if it exists
         if (globalReaderInstance) {
             await globalReaderInstance.hide();
             globalReaderInstance = null;
         }
         
-        // Create new reader instance for the new project
-        globalReaderInstance = new ReaderGUI(projectManager, readerContainer, onNavigateToNode);
+        // Create new reader instance for the new project/root node
+        globalReaderInstance = new ReaderGUI(projectManager, readerContainer, currentRootNode, onNavigateToNode);
     }
     
     await globalReaderInstance.show();

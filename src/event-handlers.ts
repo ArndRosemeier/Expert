@@ -4,6 +4,7 @@ import { openSettingsModal, createModalFactory, setDefaultModalFactory } from '.
 import { TestRunner } from './TestRunner';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
+import { DocumentNode } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
 import { initializeProjectUI } from './ui/project-ui';
 
@@ -145,8 +146,8 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         return;
     }
 
-    // Create the child node
-    const newNode = project.addNode(childData.title, parentId);
+    // Create the child node with root template (shallow copy)
+    const newNode = importChildNodeWithRootTemplateForProject(project, parentId, childData.title);
 
     // Set node properties
     if (childData.content !== undefined) {
@@ -167,6 +168,25 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
             importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
         });
     }
+}
+
+/**
+ * Creates a new child node with the root template instead of parent template for project imports
+ */
+function importChildNodeWithRootTemplateForProject(project: ProjectManager, parentId: string, title: string): DocumentNode {
+    const parent = project.findNodeById(parentId);
+    if (!parent) {
+        throw new Error(`Parent node with ID "${parentId}" not found.`);
+    }
+
+    const newLevel = parent.level + 1;
+    // Use root template (shallow copy) instead of parent template
+    const rootTemplate = [...project.rootNode.template];
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
+    
+    parent.children.push(newNode);
+    
+    return newNode;
 }
 
 async function loadPersistedProjects(): Promise<void> {

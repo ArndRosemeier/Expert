@@ -3,7 +3,7 @@ import { EventEmitter } from '../EventEmitter';
 
 // Button labels - centralized for consistency (shared with project-ui.ts)
 const BUTTON_LABELS = {
-    GENERATE: 'Generate Content',
+    GENERATE: 'Generate',
     GENERATE_ALL: 'Generate All Children'
 } as const;
 

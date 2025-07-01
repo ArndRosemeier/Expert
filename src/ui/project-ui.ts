@@ -22,8 +22,7 @@ let availableVersions: any[] = [];
 
 // Button labels - centralized for consistency
 const BUTTON_LABELS = {
-    GENERATE: 'Generate Content',
-    GENERATE_ALL: 'Generate All Children',
+    GENERATE: 'Generate',
     GENERATE_RATINGS: 'Generate Ratings for Current Content'
 } as const;
 
@@ -912,35 +911,49 @@ export function renderNodeDetails() {
             
             <!-- Generation Controls -->
             <div style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 1rem;">
-                <!-- Left side: Single generation controls -->
-                <div style="display: flex; flex-direction: column; gap: 0.75rem; min-width: 250px;">
+                <!-- Left side: Generation controls -->
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; min-width: 280px;">
+                    <!-- Generation Type Selection -->
+                    <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; color: #495057;">Generate:</label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="generation-type" value="content" ${node.getState() !== 'Final' || node.isLeaf ? 'checked' : ''} style="margin: 0;">
+                            <span>This content</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; ${node.isLeaf ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                            <input type="radio" name="generation-type" value="children" ${node.isLeaf ? 'disabled' : (node.getState() === 'Final' ? 'checked' : '')} style="margin: 0;">
+                            <span>All children</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Generation Controls Row -->
                     <div style="display: flex; align-items: center; gap: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="count-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
                             <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
                             <input type="number" id="generation-count-input" min="1" max="20" value="${node.getTemplateChildrenCount() ?? ''}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                         </div>
-                        <button id="node-generate-btn" class="button button-primary">${BUTTON_LABELS.GENERATE}</button>
+                        <button id="node-generate-btn" class="button button-primary">Generate</button>
                     </div>
                     
-                    <div style="border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
-                        <button id="node-generate-all-btn" class="button" style="width: 100%; margin-bottom: 0.5rem; ${node.isLeaf ? 'opacity: 0.6; cursor: help;' : ''}" title="${node.isLeaf ? `This node is a leaf node (${node.template[node.level] || 'final level'}) - click for more information` : 'Generate child nodes based on this node\'s content'}">${BUTTON_LABELS.GENERATE_ALL}</button>
-                        ${!node.isLeaf ? `
-                            <div style="display: flex; gap: 1rem; font-size: 0.9rem; align-items: center;">
-                                <label for="include-content-checkbox">
-                                    <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
-                                    Include content
-                                </label>
-                                <label for="recursive-checkbox">
-                                    <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
-                                    Recursive
-                                </label>
-                            </div>
-                        ` : `
-                            <div style="font-size: 0.9rem; color: #6c757d; font-style: italic; text-align: center;">
-                                This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.
-                            </div>
-                        `}
+                    <!-- Additional Options for Children Generation -->
+                    <div id="children-generation-options" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'block' : 'none'}; border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
+                        <div style="display: flex; gap: 1rem; font-size: 0.9rem; align-items: center;">
+                            <label for="include-content-checkbox">
+                                <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
+                                Include content
+                            </label>
+                            <label for="recursive-checkbox">
+                                <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
+                                Recursive
+                            </label>
+                        </div>
                     </div>
+                    
+                    ${node.isLeaf ? `
+                        <div style="font-size: 0.9rem; color: #6c757d; font-style: italic;">
+                            This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.
+                        </div>
+                    ` : ''}
                 </div>
                 
                 <!-- Right side: Progress bars -->
@@ -1185,26 +1198,6 @@ export function renderNodeDetails() {
 
     // Set up button tooltips and event listeners for generate all children button (now inline)
     if (!node.isLeaf) {
-        const generateAllBtn = getElementById('node-generate-all-btn') as HTMLButtonElement;
-        if (generateAllBtn) {
-            // Use safe button update method to prevent listener loss
-            void import('./event-manager').then(({ eventManager }) => {
-                eventManager.updateButtonContent('node-generate-all-btn', 
-                    BUTTON_LABELS.GENERATE_ALL,
-                    { disabled: isAnyOperationInProgress, className: 'button' }
-                );
-            }).catch(console.error);
-            
-            // Update tooltip to reflect current state
-            if (isAnyOperationInProgress) {
-                generateAllBtn.title = "Operation in progress. Use the global abort button to cancel.";
-            } else if (node.getState() === 'Empty') {
-                generateAllBtn.title = "This node has no content. Clicking will show instructions.";
-            } else {
-                generateAllBtn.title = "Smart fill: Creates children only if none exist, generates content only for empty nodes. Use 'Include content' and 'Recursive' to control behavior.";
-            }
-        }
-        
         // Set up checkbox event listeners to save state
         const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
         const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
@@ -2278,17 +2271,104 @@ export function setupEventListeners() {
 
         // Handle all other buttons by ID using the same pattern
         switch (button.id) {
-            // === GENERATION PANEL BUTTONS (Legacy - keeping for backward compatibility) ===
+            // === GENERATION PANEL BUTTONS ===
             case 'default-prompt-btn':
                 {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
 
                     const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
                     const defaultPrompt = projectManager.getRawGenerationPrompt(node);
                     generationPromptTextArea.value = defaultPrompt;
                     node.generationPrompt = defaultPrompt;
+                }
+                break;
+
+            case 'node-generate-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    handleUnifiedGeneration(node);
+                }
+                break;
+
+            case 'node-propagate-context-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Function to propagate context to all descendants
+                    const propagateContextToDescendants = (parentNode: DocumentNode) => {
+                        const propagatedCount = { count: 0 };
+                        
+                        const propagateRecursively = (sourceNode: DocumentNode) => {
+                            for (const child of sourceNode.children) {
+                                child.context = sourceNode.context;
+                                propagatedCount.count++;
+                                propagateRecursively(child);
+                            }
+                        };
+                        
+                        propagateRecursively(parentNode);
+                        return propagatedCount.count;
+                    };
+
+                    const propagatedCount = propagateContextToDescendants(node);
+                    
+                    if (propagatedCount > 0) {
+                        // Save the project after propagation
+                        void projectManager.saveToStorage().catch(console.error);
+                        alert(`Context propagated to ${propagatedCount} descendant node(s).`);
+                        
+                        // Refresh the UI to show updated context if we're viewing a child node
+                        const currentNode = projectManager.findNodeById(selectedNodeId);
+                        if (currentNode) {
+                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                            if (contextTextArea) {
+                                contextTextArea.value = currentNode.context;
+                            }
+                        }
+                    } else {
+                        alert('This node has no child nodes to propagate context to.');
+                    }
+                }
+                break;
+
+            case 'node-extract-context-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    // Import and open extract context modal
+                    import('./modal-manager').then(({ openExtractContextModal }) => {
+                        openExtractContextModal(projectManager!, node);
+                    }).catch((error: any) => {
+                        console.error('Failed to open extract context modal:', error);
+                        alert('Failed to open extract context dialog. Please try again.');
+                    });
+                }
+                break;
+
+            case 'open-reader-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const selectedNode = projectManager.findNodeById(selectedNodeId);
+                    if (!selectedNode) return;
+
+                    // Open reader view starting from the selected node
+                    openReaderView(projectManager, selectedNode, (nodeId: string) => {
+                        // Navigate to node when clicked in reader view
+                        selectedNodeId = nodeId;
+                        renderNodeDetails();
+                    }).catch((error: any) => {
+                        console.error('Failed to open reader view:', error);
+                        alert('Failed to open reader view. Please try again.');
+                    });
                 }
                 break;
 
@@ -2315,6 +2395,19 @@ export function setupEventListeners() {
         } else if (e.target.id === 'show-ratings-checkbox') {
             const checkbox = e.target as HTMLInputElement;
             toggleRatingsView(checkbox.checked);
+        } else if ((e.target as HTMLInputElement).name === 'generation-type') {
+            // Handle generation type radio button changes
+            const radio = e.target as HTMLInputElement;
+            const childrenOptions = document.getElementById('children-generation-options');
+            const countContainer = document.querySelector('.count-container') as HTMLElement;
+            
+            if (radio.value === 'children') {
+                if (childrenOptions) childrenOptions.style.display = 'block';
+                if (countContainer) countContainer.style.display = 'flex';
+            } else {
+                if (childrenOptions) childrenOptions.style.display = 'none';
+                if (countContainer) countContainer.style.display = 'none';
+            }
         }
     });
 }
@@ -2831,66 +2924,46 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         throw new Error('Invalid import data: Missing title field');
     }
 
-    // Validate hierarchy depth compatibility
-    if (importData.children && Array.isArray(importData.children) && importData.children.length > 0) {
-        const importDepth = calculateImportDataDepth(importData);
-        const targetLevel = targetNode.level;
-        const templateLength = targetNode.template.length;
-        const availableDepth = templateLength - targetLevel - 1; // -1 because targetLevel is 0-indexed
-        
-        if (importDepth > availableDepth) {
-            throw new Error(
-                `Hierarchy mismatch: The imported data has ${importDepth} levels of children, ` +
-                `but the target node can only accommodate ${availableDepth} more levels.\n\n` +
-                `Target node is at level ${targetLevel} in a ${templateLength}-level template ` +
-                `(${targetNode.template.join(' → ')}).`
-            );
-        }
+    // Validate that the imported data can be placed as a child of the target node
+    const totalImportDepth = 1 + calculateImportDataDepth(importData); // +1 for the imported node itself
+    const targetLevel = targetNode.level;
+    const templateLength = targetNode.template.length;
+    const availableDepth = templateLength - targetLevel - 1; // Available levels below target node
+    
+    if (totalImportDepth > availableDepth) {
+        throw new Error(
+            `Hierarchy mismatch: The imported content needs ${totalImportDepth} levels ` +
+            `but can only fit ${availableDepth} levels as a child of the selected node.\n\n` +
+            `Target node "${targetNode.title}" is at level ${targetLevel} in a ${templateLength}-level template ` +
+            `(${targetNode.template.join(' → ')}).`
+        );
     }
 
-    // Import the node data
-    if (importData.title !== undefined) {
-        targetNode.title = importData.title;
-    }
+    // Create the imported node as a new child of the target node
+    const importedNode = importChildNodeWithRootTemplate(projectManager, targetNode.id, importData.title);
 
+    // Set imported node properties
     if (importData.content !== undefined) {
-        targetNode.content = importData.content;
+        importedNode.content = importData.content;
     }
 
     if (importData.context !== undefined) {
-        targetNode.context = importData.context;
+        importedNode.context = importData.context;
     }
 
     if (importData.generationPrompt !== undefined) {
-        targetNode.generationPrompt = importData.generationPrompt;
+        importedNode.generationPrompt = importData.generationPrompt;
     }
 
-    // Option 1: Replace the current node's children (destructive)
-    // Option 2: Merge children (non-destructive)
-    // For now, let's ask the user what they want to do
-    if (importData.children && Array.isArray(importData.children) && importData.children.length > 0) {
-        const hasExistingChildren = targetNode.children.length > 0;
-        
-        if (hasExistingChildren) {
-            const userChoice = confirm(
-                `The target node "${targetNode.title}" already has ${targetNode.children.length} children.\n\n` +
-                `Click OK to REPLACE all existing children with imported ones.\n` +
-                `Click Cancel to APPEND imported children to existing ones.`
-            );
-            
-            if (userChoice) {
-                // Replace: Remove all existing children first
-                targetNode.children.forEach(child => {
-                    projectManager.removeNode(child.id);
-                });
-            }
-        }
-        
-        // Import children recursively
+    // Import children recursively
+    if (importData.children && Array.isArray(importData.children)) {
         importData.children.forEach((childData: any, index: number) => {
-            importChildNode(projectManager, targetNode.id, childData, index);
+            importChildNode(projectManager, importedNode.id, childData, index);
         });
     }
+
+    // Propagate the correct template to all newly imported nodes
+    propagateTemplateToSubtree(importedNode);
 
     // Save the project
     void projectManager.saveToStorage().catch(console.error);
@@ -2905,8 +2978,8 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         return;
     }
 
-    // Create the child node
-    const newNode = projectManager.addNode(childData.title, parentId);
+    // Create the child node with root template (shallow copy)
+    const newNode = importChildNodeWithRootTemplate(projectManager, parentId, childData.title);
 
     // Set node properties
     if (childData.content !== undefined) {
@@ -2926,5 +2999,98 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
             importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
         });
+    }
+}
+
+/**
+ * Creates a new child node with the root template instead of parent template
+ */
+function importChildNodeWithRootTemplate(projectManager: ProjectManager, parentId: string, title: string): DocumentNode {
+    const parent = projectManager.findNodeById(parentId);
+    if (!parent) {
+        throw new Error(`Parent node with ID "${parentId}" not found.`);
+    }
+
+    const newLevel = parent.level + 1;
+    // Use root template (shallow copy) instead of parent template
+    const rootTemplate = [...projectManager.rootNode.template];
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
+    
+    parent.children.push(newNode);
+    
+    return newNode;
+}
+
+/**
+ * Propagates the correct template to all nodes in a subtree based on their position in the hierarchy
+ */
+function propagateTemplateToSubtree(rootNode: DocumentNode): void {
+    const projectTemplate = projectManager?.rootNode.template;
+    if (!projectTemplate) {
+        console.warn('No project template available for propagation');
+        return;
+    }
+
+    const propagateRecursively = (node: DocumentNode) => {
+        // Update the node's template to be a shallow copy of the project template
+        node.template = [...projectTemplate];
+        
+        // Recursively propagate to all children
+        node.children.forEach(child => propagateRecursively(child));
+    };
+
+    propagateRecursively(rootNode);
+}
+
+/**
+ * Unified generation handler that checks radio button state and calls appropriate generation method
+ */
+function handleUnifiedGeneration(node: DocumentNode): void {
+    if (!projectManager) return;
+
+    // Get the selected generation type from radio buttons
+    const contentRadio = document.querySelector('input[name="generation-type"][value="content"]') as HTMLInputElement;
+    const childrenRadio = document.querySelector('input[name="generation-type"][value="children"]') as HTMLInputElement;
+    
+    if (!contentRadio || !childrenRadio) {
+        console.error('Generation type radio buttons not found');
+        return;
+    }
+
+    const generateChildren = childrenRadio.checked;
+    
+    if (generateChildren) {
+        // Generate all children
+        if (node.isLeaf) {
+            alert('This node is a leaf node and cannot have children.');
+            return;
+        }
+        
+        // Get checkbox states for children generation
+        const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+        const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+        
+        const includeContent = includeContentCheckbox?.checked ?? true;
+        const recursive = recursiveCheckbox?.checked ?? false;
+        
+        // Get count from input
+        const countInput = getElementById('generation-count-input') as HTMLInputElement;
+        const count = countInput?.value ? parseInt(countInput.value, 10) : node.getTemplateChildrenCount() || undefined;
+        
+        console.log(`🚀 Starting children generation for node "${node.title}" with options:`, {
+            includeContent,
+            recursive,
+            count
+        });
+        
+        // Call the children generation method
+        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive);
+        
+    } else {
+        // Generate this content
+        console.log(`🚀 Starting content generation for node "${node.title}"`);
+        
+        // Call the single content generation method
+        projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
     }
 }
