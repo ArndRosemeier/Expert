@@ -30,14 +30,20 @@ const BUTTON_LABELS = {
 function showGlobalAbortButton() {
     const globalAbortBtn = document.getElementById('globalAbortBtn') as HTMLButtonElement;
     if (globalAbortBtn) {
+        console.log('🟢 Showing global abort button');
         globalAbortBtn.style.display = 'inline-block';
+    } else {
+        console.warn('⚠️ Global abort button not found when trying to show');
     }
 }
 
 function hideGlobalAbortButton() {
     const abortButton = document.getElementById('globalAbortBtn');
     if (abortButton) {
+        console.log('🔴 Hiding global abort button');
         abortButton.style.display = 'none';
+    } else {
+        console.warn('⚠️ Global abort button not found when trying to hide');
     }
 }
 
@@ -547,8 +553,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
         // Just refresh the tree to show spinner for the generating node
         renderMultiProjectTree();
-        // Show global abort button
-        showGlobalAbortButton();
+        // Note: Global abort button is managed by GenerationCoordinator
         
         // Only refresh node details if we're looking at the node being generated
         // This prevents unnecessary UI re-rendering that can cause button disappearance
@@ -592,7 +597,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             if (!manager.isAnyNodeGenerating()) {
                 updateProgressUI();
                 hideGenerationOverlay();
-                hideGlobalAbortButton();
+                // Note: Global abort button is managed by GenerationCoordinator
             }
         }, 200);
     };
@@ -628,7 +633,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 if (!manager.isAnyNodeGenerating()) {
                     updateProgressUI();
                     hideGenerationOverlay();
-                    hideGlobalAbortButton();
+                    // Note: Global abort button is managed by GenerationCoordinator
                 }
             }, 100);
         } else {

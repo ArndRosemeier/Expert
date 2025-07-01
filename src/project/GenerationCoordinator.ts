@@ -273,12 +273,14 @@ export class GenerationCoordinator {
     }
 
     private showGlobalAbortButton(): void {
+        console.log('🟢 GenerationCoordinator: Showing global abort button');
         if (typeof (window as any).showGlobalAbortButton === 'function') {
             (window as any).showGlobalAbortButton();
         }
     }
 
     private hideGlobalAbortButton(): void {
+        console.log('🔴 GenerationCoordinator: Hiding global abort button');
         if (typeof (window as any).hideGlobalAbortButton === 'function') {
             (window as any).hideGlobalAbortButton();
         }
