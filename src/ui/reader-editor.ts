@@ -26,7 +26,6 @@ export class ReaderEditor {
     private editState: EditState;
     private nodeEditors: Map<string, NodeEditor> = new Map();
     private currentActiveEditor: NodeEditor | null = null;
-    private autoSaveTimer: number | null = null;
     private configLoadedPromise!: Promise<void>;
     
     // Bound method references for proper event listener removal
@@ -318,9 +317,9 @@ export class ReaderEditor {
      * Handle editor blur
      */
     private handleEditorBlur(editor: NodeEditor): void {
-        // Auto-save on blur if dirty
+        // Save immediately when user stops editing (blur)
         if (editor.isDirty) {
-            this.scheduleAutoSave();
+            this.saveNodeChanges(editor).catch(console.error);
         }
     }
 
@@ -330,21 +329,10 @@ export class ReaderEditor {
     private markDirty(editor: NodeEditor): void {
         editor.isDirty = true;
         this.editState.isDirty = true;
-        this.scheduleAutoSave();
+        // Don't auto-save on every keystroke - only save on blur and close
     }
 
-    /**
-     * Schedule auto-save with debouncing
-     */
-    private scheduleAutoSave(): void {
-        if (this.autoSaveTimer) {
-            clearTimeout(this.autoSaveTimer);
-        }
-        
-        this.autoSaveTimer = setTimeout(() => {
-            this.saveAllChanges();
-        }, 2000);
-    }
+
 
     /**
      * Save all pending changes
@@ -406,10 +394,12 @@ export class ReaderEditor {
         // Only handle shortcuts when focused on editor
         if (!this.currentActiveEditor) return;
 
-        // Ctrl+S or Cmd+S: Save
+        // Ctrl+S or Cmd+S: Save current editor
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
             event.preventDefault();
-            this.saveAllChanges();
+            if (this.currentActiveEditor.isDirty) {
+                this.saveNodeChanges(this.currentActiveEditor).catch(console.error);
+            }
             return;
         }
     }
@@ -516,8 +506,9 @@ export class ReaderEditor {
         
         const success = this.currentActiveEditor.editor.undoLastReplacement();
         if (success) {
-            // Mark as dirty and auto-save after undo
+            // Mark as dirty and save immediately after undo
             this.markDirty(this.currentActiveEditor);
+            this.saveNodeChanges(this.currentActiveEditor).catch(console.error);
         }
         return success;
     }
@@ -568,10 +559,6 @@ export class ReaderEditor {
         
         this.removeEventListeners();
         this.removeEditorOverlays();
-        
-        if (this.autoSaveTimer) {
-            clearTimeout(this.autoSaveTimer);
-        }
     }
 
     /**
