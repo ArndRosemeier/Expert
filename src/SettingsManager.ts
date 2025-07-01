@@ -2,24 +2,17 @@ import { OrchestratorPrompts, defaultPrompts, PROMPT_STORAGE_KEY } from "./Promp
 import { QualityCriterion } from "./types";
 import { StorageService, IStorageService } from './StorageService';
 import { VersionService } from './VersionService';
+import { 
+    DEFAULT_MAX_ITERATIONS, 
+    DEFAULT_PROFILE_NAME, 
+    STORAGE_KEYS, 
+    DEFAULT_CONTEXT_EXTRACTION_PROMPT 
+} from './constants';
 
-export const SETTINGS_PROFILES_KEY = 'expert_app_settings_profiles';
-export const LAST_USED_PROFILE_KEY = 'expert_app_last_used_profile';
-export const AI_LOGGING_ENABLED_KEY = 'expert_app_ai_logging_enabled';
-
-// Default context extraction prompt template
-export const DEFAULT_CONTEXT_EXTRACTION_PROMPT = `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
-
-Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
-
-Content to analyze from "{{node_title}}":
----
-{{content}}
----
-
-Please extract and list all instances of: {{extraction_request}}
-
-Format your response as a clear, organized summary that would be useful for reference.`;
+// Legacy constants - will be removed in favor of STORAGE_KEYS from constants.ts
+export const SETTINGS_PROFILES_KEY = STORAGE_KEYS.SETTINGS_PROFILES;
+export const LAST_USED_PROFILE_KEY = STORAGE_KEYS.LAST_USED_PROFILE;
+export const AI_LOGGING_ENABLED_KEY = STORAGE_KEYS.AI_LOGGING_ENABLED;
 
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
@@ -261,7 +254,7 @@ export class SettingsManager {
             const defaultProfile = {
                 prompt: "",
                 criteria: DEFAULT_CRITERIA,
-                maxIterations: 3,
+                maxIterations: DEFAULT_MAX_ITERATIONS,
                 selectedModels: {},
                 webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
@@ -655,7 +648,7 @@ export class SettingsManager {
         const defaultProfile: SettingsProfile = {
             prompt: "",
             criteria: DEFAULT_CRITERIA,
-            maxIterations: 3,
+            maxIterations: DEFAULT_MAX_ITERATIONS,
             selectedModels: {},
             webSearchEnabled: {},
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,

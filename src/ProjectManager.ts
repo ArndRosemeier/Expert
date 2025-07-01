@@ -18,6 +18,7 @@ import {
     ContextExtractionService
 } from './project';
 import { GenerationCoordinator } from './project/GenerationCoordinator';
+import { STORAGE_KEYS } from './constants';
 
 
 type ProjectManagerEvents = {
@@ -44,7 +45,7 @@ interface ProjectRecord {
 
 export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
-    private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
+    private static readonly ACTIVE_PROJECT_STORAGE_KEY = STORAGE_KEYS.ACTIVE_PROJECT;
 
     projectTitle: string;
     template: ProjectTemplate;

@@ -14,6 +14,7 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 
 import { openTemplateEditor } from './ui/template-editor';
 import { TemplateManager } from './TemplateManager';
+import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS } from './constants';
 
 function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
     const modelSelector = state.getModelSelector();
@@ -28,10 +29,10 @@ function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Rec
     const activeProfile = settingsManager.getProfile(activeProfileName) || { 
         prompt: '', 
         criteria: [], 
-        maxIterations: 3, 
+        maxIterations: DEFAULT_MAX_ITERATIONS, 
         selectedModels: {},
         webSearchEnabled: {},
-        contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
+        contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
     };
     activeProfile.selectedModels = models;
     if (webSearchEnabled) {
@@ -188,9 +189,9 @@ async function loadPersistedProjects(): Promise<void> {
         // Try to clear any corrupted storage
         try {
             const storage = await import('./StorageService').then(m => m.StorageService.getInstance());
-            await storage.delete('expert_app_current_project');
-            await storage.delete('expert_app_projects');
-            await storage.delete('expert_app_active_project');
+            await storage.delete(STORAGE_KEYS.CURRENT_PROJECT);
+            await storage.delete(STORAGE_KEYS.PROJECTS);
+            await storage.delete(STORAGE_KEYS.ACTIVE_PROJECT);
         } catch (cleanupError) {
             console.error("Failed to cleanup corrupted storage:", cleanupError);
         }

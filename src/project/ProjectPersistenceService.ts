@@ -5,6 +5,7 @@ import { StorageService, IStorageService } from '../StorageService';
 import { IndexedDBService } from '../IndexedDBService';
 import { ProjectDependencies, LoadResult, ProjectRecord } from './types/ProjectTypes';
 import * as state from '../state';
+import { STORAGE_KEYS } from '../constants';
 
 /**
  * ProjectPersistenceService handles all project serialization, storage, and loading operations.
@@ -12,7 +13,7 @@ import * as state from '../state';
  */
 export class ProjectPersistenceService {
 
-    private static readonly ACTIVE_PROJECT_STORAGE_KEY = 'expert_app_active_project';
+    private static readonly ACTIVE_PROJECT_STORAGE_KEY = STORAGE_KEYS.ACTIVE_PROJECT;
     private static storageService: Promise<IStorageService> | null = null;
 
     /**

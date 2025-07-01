@@ -1,6 +1,7 @@
 import { SettingsManager } from './SettingsManager';
+import { STORAGE_KEYS } from './constants';
 
-export const PROMPT_STORAGE_KEY = 'expert_app_prompts';
+export const PROMPT_STORAGE_KEY = STORAGE_KEYS.PROMPTS;
 
 export interface OrchestratorPrompts {
     // For the main generation loop

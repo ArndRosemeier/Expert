@@ -5,6 +5,7 @@
 import { SettingsManager, SettingsProfile } from '../../../SettingsManager';
 import { ModelSelector } from '../../../ModelSelector';
 import { QualityCriterion } from '../../../types';
+import { DEFAULT_MAX_ITERATIONS } from '../../../constants';
 
 export interface ProfileImportResult {
     success: boolean;
@@ -74,7 +75,7 @@ export class SettingsService {
             const currentSettings: SettingsProfile = {
                 selectedModels: this.modelSelector.getSelectedModels(),
                 criteria: [], // Will be filled by the UI component
-                maxIterations: 3, // Will be filled by the UI component
+                maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
                 prompt: '', // Legacy field
                 contextExtractionPrompt: '' // Legacy field
             };

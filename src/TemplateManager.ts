@@ -1,7 +1,8 @@
 import { ProjectTemplate } from './ProjectTemplate';
 import { StorageService, IStorageService } from './StorageService';
+import { STORAGE_KEYS } from './constants';
 
-export const TEMPLATE_STORAGE_KEY = 'expert_app_project_templates';
+export const TEMPLATE_STORAGE_KEY = STORAGE_KEYS.PROJECT_TEMPLATES;
 
 // Comprehensive set of default templates for various document types
 const defaultTemplates: Record<string, ProjectTemplate> = {

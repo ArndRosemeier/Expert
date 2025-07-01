@@ -14,6 +14,7 @@ import { createElement } from './core/modal-utils';
 import { EventEmitter } from '../../EventEmitter';
 import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
+import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -342,9 +343,9 @@ export class SettingsModal extends BaseModal {
             attributes: {
                 type: 'number',
                 id: 'modal-max-iterations',
-                min: '1',
-                max: '10',
-                value: '3'
+                min: String(MIN_MAX_ITERATIONS),
+                max: String(MAX_MAX_ITERATIONS),
+                value: String(DEFAULT_MAX_ITERATIONS)
             }
         }) as HTMLInputElement;
 
@@ -581,7 +582,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply max iterations
         if (this.maxIterationsInput) {
-            this.maxIterationsInput.value = String(profile.maxIterations || 3);
+            this.maxIterationsInput.value = String(profile.maxIterations || DEFAULT_MAX_ITERATIONS);
         }
 
         this.updateUnsavedIndicator(false);
@@ -635,7 +636,7 @@ export class SettingsModal extends BaseModal {
         if (!activeProfileName) return;
 
         const criteria = this.criteriaEditor?.getCriteria() || [];
-        const maxIterations = parseInt(this.maxIterationsInput?.value || '3', 10);
+        const maxIterations = parseInt(this.maxIterationsInput?.value || String(DEFAULT_MAX_ITERATIONS), 10);
 
         await this.settingsService.saveCurrentSettingsToProfile(
             activeProfileName,

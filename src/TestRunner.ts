@@ -7,6 +7,7 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 import { StorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import { TemplateManager } from './TemplateManager';
+import { DEFAULT_MAX_ITERATIONS } from './constants';
 
 
 // Define a simple structure for a test result
@@ -33,7 +34,7 @@ export class TestRunner {
                 criteria: [
                     { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
                 ],
-                maxIterations: 3,
+                maxIterations: DEFAULT_MAX_ITERATIONS,
                 selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model', prose: 'test-model' },
                 contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
             };
@@ -906,7 +907,7 @@ export class TestRunner {
             const testProfile = {
                 prompt: "Test prompt",
                 criteria: [{ name: 'Test', description: 'Test criterion', goal: 8, weight: 1.0 }],
-                maxIterations: 3,
+                maxIterations: DEFAULT_MAX_ITERATIONS,
                 selectedModels: { creator: 'test', rater: 'test', editor: 'test', prose: 'test' },
                 contextExtractionPrompt: 'Test extraction prompt'
             };
