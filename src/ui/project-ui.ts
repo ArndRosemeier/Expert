@@ -481,7 +481,7 @@ export function renderNodeDetails() {
                         ⚡ Actions
                         <span style="font-size: 0.8em;">▼</span>
                     </button>
-                    <div id="actions-dropdown-menu" class="actions-dropdown-menu" style="display: none;">
+                    <div id="actions-dropdown-menu" class="actions-dropdown-menu">
                         <!-- Generation Actions -->
                         <div class="dropdown-section">
                             <div class="dropdown-section-title">Content</div>
@@ -561,6 +561,7 @@ export function renderNodeDetails() {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             padding: 0.5rem 0;
             margin-top: 4px;
+            display: none; /* Hidden by default */
         }
 
         .dropdown-section {
