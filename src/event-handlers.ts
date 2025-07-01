@@ -220,7 +220,7 @@ async function loadPersistedProjects(): Promise<void> {
 
 export async function initialize() {
     // Check browser compatibility first
-    console.log('🔍 Running browser compatibility check...');
+  
     const { compatible, issues } = OpenRouterClient.checkBrowserCompatibility();
     
     if (!compatible) {

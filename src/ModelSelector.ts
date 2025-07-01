@@ -1,6 +1,7 @@
 import { OpenRouterClient } from './OpenRouterClient';
 import type { OpenRouterModel } from './OpenRouterClient';
 import { StorageService, IStorageService } from './StorageService';
+import { showBalanceModal } from './ui/modals/BalanceModal';
 
 const LOCAL_STORAGE_KEY = 'openrouter_api_key';
 const LOCAL_STORAGE_MODELS = 'openrouter_model_purposes';
@@ -56,6 +57,7 @@ export class ModelSelector {
   // UI Element References for robust event handling
   private apiKeyInput: HTMLInputElement | null = null;
   private testButton: HTMLButtonElement | null = null;
+  private balanceButton: HTMLButtonElement | null = null;
   private fetchButton: HTMLButtonElement | null = null;
   
   // Debounced save function to prevent excessive storage calls
@@ -124,14 +126,21 @@ export class ModelSelector {
   /**
    * Centralized method to update button states
    */
-  private updateButtonStates(): void {
+    private updateButtonStates(): void {
     if (this.testButton) {
       this.testButton.disabled = this.testing || !this.apiKey;
       this.testButton.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#10b981';
       this.testButton.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
       this.testButton.textContent = this.testing ? 'Testing...' : 'Test API Key';
     }
-    
+
+    if (this.balanceButton) {
+      this.balanceButton.disabled = this.testing || !this.apiKey;
+      this.balanceButton.style.background = this.testing || !this.apiKey ? '#d1d5db' : '#f59e0b';
+      this.balanceButton.style.cursor = this.testing || !this.apiKey ? 'not-allowed' : 'pointer';
+      this.balanceButton.textContent = this.testing ? 'Checking...' : 'Check Balance';
+    }
+
     if (this.fetchButton) {
       this.fetchButton.disabled = this.loading || !this.apiKey;
       this.fetchButton.style.background = this.loading || !this.apiKey ? '#93c5fd' : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
@@ -368,6 +377,35 @@ export class ModelSelector {
       }
     });
     buttonRow.appendChild(this.testButton);
+
+    // Check Balance button
+    this.balanceButton = document.createElement('button');
+    this.balanceButton.textContent = this.testing ? 'Checking...' : 'Check Balance';
+    this.balanceButton.disabled = this.testing || !this.apiKey;
+    this.balanceButton.style.cssText = `
+      padding: 0.75rem 1rem;
+      background: ${this.testing || !this.apiKey ? '#d1d5db' : '#f59e0b'};
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 0.75rem;
+      font-size: 1rem;
+      cursor: ${this.testing || !this.apiKey ? 'not-allowed' : 'pointer'};
+      transition: background 0.2s;
+      flex: 1;
+    `;
+    this.balanceButton.addEventListener('click', () => void this.checkBalance());
+    this.balanceButton.addEventListener('mouseenter', () => {
+      if (this.balanceButton && !this.balanceButton.disabled) {
+        this.balanceButton.style.background = '#d97706';
+      }
+    });
+    this.balanceButton.addEventListener('mouseleave', () => {
+      if (this.balanceButton && !this.balanceButton.disabled) {
+        this.balanceButton.style.background = '#f59e0b';
+      }
+    });
+    buttonRow.appendChild(this.balanceButton);
 
     // Fetch Models button
     this.fetchButton = document.createElement('button');
@@ -716,6 +754,130 @@ export class ModelSelector {
     }
   }
 
+  private async checkBalance() {
+    this.testing = true;
+    this.error = null;
+    this.updateButtonStates();
+    
+    try {
+      // Get both API key info and account credits in parallel
+      const [keyResponse, creditsResponse] = await Promise.all([
+        fetch('https://openrouter.ai/api/v1/auth/key', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }),
+        fetch('https://openrouter.ai/api/v1/credits', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      ]);
+      
+      if (!keyResponse.ok || !creditsResponse.ok) {
+        const keyError = !keyResponse.ok ? `Key API: ${keyResponse.status}` : '';
+        const creditsError = !creditsResponse.ok ? `Credits API: ${creditsResponse.status}` : '';
+        const errorMessage = [keyError, creditsError].filter(Boolean).join(', ');
+        this.error = `Balance Check Failed: ${errorMessage}`;
+        showBalanceModal({ message: `❌ Balance Check Failed: ${errorMessage}`, isError: true });
+        return;
+      }
+      
+      const keyData = await keyResponse.json();
+      const creditsData = await creditsResponse.json();
+      this.error = null;
+      
+      console.log('OpenRouter key response:', keyData); // Debug logging
+      console.log('OpenRouter credits response:', creditsData); // Debug logging
+      
+      // Check if we have the expected data structure
+      if (!keyData?.data || !creditsData?.data) {
+        showBalanceModal({ message: `❌ Unexpected response format from OpenRouter API.\n\nKey response: ${JSON.stringify(keyData, null, 2)}\n\nCredits response: ${JSON.stringify(creditsData, null, 2)}`, isError: true });
+        return;
+      }
+      
+      // Format balance information
+      let message = '💰 OpenRouter Account Balance\n\n';
+      
+      // Account-wide credits (this is your real money balance)
+      if (creditsData.data.total_credits !== undefined && creditsData.data.total_usage !== undefined) {
+        try {
+          const totalCredits = Number(creditsData.data.total_credits);
+          const totalUsage = Number(creditsData.data.total_usage);
+          const remainingBalance = totalCredits - totalUsage;
+          
+          message += `💳 Total Credits Purchased: $${totalCredits.toFixed(4)}\n`;
+          message += `📊 Total Credits Used: $${totalUsage.toFixed(4)}\n`;
+          message += `💵 Current Account Balance: $${remainingBalance.toFixed(4)}\n`;
+          
+          // Add visual indicator based on remaining account balance
+          if (remainingBalance <= 0) {
+            message += `\n🚨 CRITICAL: Account balance depleted! Add credits immediately.`;
+          } else if (remainingBalance < 1) {
+            message += `\n⚠️ Low balance warning! Consider adding more credits.`;
+          } else if (remainingBalance < 5) {
+            message += `\n⚡ Balance getting low. You may want to add more credits soon.`;
+          } else {
+            message += `\n✅ Good account balance.`;
+          }
+        } catch (e) {
+          message += `💳 Total Credits: ${creditsData.data.total_credits} (raw)\n`;
+          message += `📊 Total Usage: ${creditsData.data.total_usage} (raw)\n`;
+        }
+      }
+      
+      // API Key specific info
+      message += `\n\n🔑 API Key Information:\n`;
+      
+      if (keyData.data.label) {
+        message += `🏷️ Label: ${keyData.data.label}\n`;
+      }
+      
+      if (keyData.data.usage !== undefined && keyData.data.usage !== null) {
+        try {
+          message += `📈 Key Usage: $${Number(keyData.data.usage).toFixed(4)}\n`;
+        } catch (e) {
+          message += `📈 Key Usage: ${keyData.data.usage} (raw value)\n`;
+        }
+      }
+      
+      if (keyData.data.limit !== undefined && keyData.data.limit !== null) {
+        try {
+          if (Number(keyData.data.limit) > 0) {
+            message += `🎯 Key Limit: $${Number(keyData.data.limit).toFixed(2)}\n`;
+          } else {
+            message += `🎯 Key Limit: Unlimited\n`;
+          }
+        } catch (e) {
+          message += `🎯 Key Limit: ${keyData.data.limit} (raw value)\n`;
+        }
+      } else if (keyData.data.limit === null) {
+        message += `🎯 Key Limit: Unlimited\n`;
+      }
+      
+      if (keyData.data.is_free_tier === true) {
+        message += `\n🆓 Free tier account`;
+      } else if (keyData.data.is_free_tier === false) {
+        message += `\n💎 Paid account`;
+      }
+      
+      showBalanceModal({ message, isError: false });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+      this.error = `Balance Check Failed: ${errorMessage}`;
+      showBalanceModal({ message: `❌ Balance Check Failed: ${errorMessage}`, isError: true });
+    } finally {
+      this.testing = false;
+      this.updateButtonStates();
+    }
+  }
+
+
+
   private async fetchModels() {
     this.loading = true;
     this.error = null;
@@ -749,31 +911,24 @@ export class ModelSelector {
 
   async loadFromStorage(): Promise<void> {
     try {
-      console.log('📥 Loading OpenRouter configuration from storage...');
       const storage = await this.storageService;
       
       const key = await storage.get<string>(LOCAL_STORAGE_KEY);
       if (key) {
         this.apiKey = key;
         console.log('✅ OpenRouter API key loaded from storage');
-      } else {
-        console.log('ℹ️ No OpenRouter API key found in storage');
       }
 
       const models = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
       if (models) {
         this.selectedModels = models;
         console.log('✅ OpenRouter model selections loaded from storage');
-      } else {
-        console.log('ℹ️ No OpenRouter model selections found in storage');
       }
 
       const webSearchPrefs = await storage.get<Record<string, boolean>>(LOCAL_STORAGE_WEB_SEARCH);
       if (webSearchPrefs) {
         this.webSearchEnabled = webSearchPrefs;
         console.log('✅ OpenRouter web search preferences loaded from storage');
-      } else {
-        console.log('ℹ️ No OpenRouter web search preferences found in storage');
       }
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
@@ -785,12 +940,10 @@ export class ModelSelector {
 
   private async saveToStorage(): Promise<void> {
     try {
-      console.log('💾 Saving OpenRouter configuration to storage...');
       const storage = await this.storageService;
       await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
       await storage.set(LOCAL_STORAGE_MODELS, this.selectedModels);
       await storage.set(LOCAL_STORAGE_WEB_SEARCH, this.webSearchEnabled);
-      console.log('✅ OpenRouter configuration saved successfully');
     } catch (error) {
       console.error('❌ CRITICAL: Failed to save OpenRouter configuration to storage:', error);
       throw error; // Re-throw to handle in calling code

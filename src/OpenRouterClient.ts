@@ -763,11 +763,7 @@ export class OpenRouterClient {
       issues.push('Unable to test streaming capabilities');
     }
 
-    console.log(`🔍 Browser compatibility check:`, {
-      compatible: issues.length === 0,
-      issues: issues.length > 0 ? issues : ['All features supported'],
-      userAgent: navigator.userAgent
-    });
+
 
     return {
       compatible: issues.length === 0,

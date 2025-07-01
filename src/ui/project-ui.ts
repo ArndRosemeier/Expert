@@ -1590,14 +1590,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     const indent = node.level * 20;
     
-    console.log('🌳 Building tree HTML for node:', { 
-        id: node.id, 
-        title: node.title, 
-        level: node.level, 
-        hasChildren, 
-        isCollapsed, 
-        isProjectRoot 
-    });
+
     
     let html = `<div class="tree-item" style="padding-left: ${indent}px;">`;
     
@@ -1605,7 +1598,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
         html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
-        console.log(`🔽 Created expand button for node ${node.id} (${node.title}) - icon: ${expandIcon} - isCollapsed: ${isCollapsed}`);
+
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
         html += `<span style="margin-right: 16px;"></span>`;
@@ -2221,7 +2214,7 @@ export function setupEventListeners() {
 
     // Import EventManager for robust event handling (as backup)
     import('./event-manager').then(({ EventManager }) => {
-        console.log('✅ EventManager loaded successfully');
+    
         const eventManager = EventManager.getInstance();
 
         // === ACTIONS BUTTON HANDLING WITH EVENT DELEGATION ===
@@ -2245,7 +2238,7 @@ export function setupEventListeners() {
             }
         );
 
-        console.log('✅ EventManager delegation setup complete');
+
 
     }).catch((error) => {
         console.error('❌ Failed to load EventManager:', error);
@@ -2718,16 +2711,16 @@ function renderMultiProjectTree() {
     
     let html = '';
     projects.forEach((project, index) => {
-        console.log(`🏗️ Building HTML for project ${index}: ${project.rootNode.title} (ID: ${project.rootNode.id})`);
+
         html += buildTreeHtml(project.rootNode, true); // true indicates this is a project root
     });
     
-    console.log('📄 Setting tree HTML, length:', html.length);
+
     treeContainer.innerHTML = html;
 
     // Count expand buttons before attaching listeners
     const expandButtons = treeContainer.querySelectorAll('.tree-expand-btn');
-    console.log('🔽 Found expand buttons:', expandButtons.length);
+
     
     // Attach event listeners for node selection
     treeContainer.querySelectorAll('.tree-node').forEach(el => {
@@ -2764,7 +2757,7 @@ function renderMultiProjectTree() {
     // Attach event listeners for expand/collapse buttons
     expandButtons.forEach((el, index) => {
         const nodeId = (el as HTMLElement).dataset['nodeId'];
-        console.log(`🔗 Attaching listeners to expand button ${index}: nodeId=${nodeId}`);
+
         
         // Single click for individual expand/collapse
         el.addEventListener('click', async (e) => {
@@ -2774,12 +2767,7 @@ function renderMultiProjectTree() {
             const target = e.currentTarget as HTMLElement;
             const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
             
-            console.log('🔽 Expand button clicked:', { 
-                nodeId, 
-                element: target, 
-                dataset: target.dataset,
-                getAttribute: target.getAttribute('data-node-id')
-            });
+
             
             if (nodeId) {
                 // Find the node in all projects
@@ -2791,16 +2779,12 @@ function renderMultiProjectTree() {
                 
                 if (targetNode) {
                     const wasCollapsed = targetNode.collapsed;
-                    console.log('🔽 Node found, toggling collapsed state:', { 
-                        nodeId, 
-                        title: targetNode.title,
-                        collapsedBefore: wasCollapsed 
-                    });
+
                     
                     // Toggle the node's collapsed state
                     targetNode.collapsed = !targetNode.collapsed;
                     
-                    console.log(targetNode.collapsed ? '🔽 Collapsing node:' : '🔼 Expanding node:', nodeId);
+
                     
                     // Save the project containing this node
                     for (const project of projects) {
@@ -2810,7 +2794,7 @@ function renderMultiProjectTree() {
                         }
                     }
                     
-                    console.log('💾 Project saved, now re-rendering with collapsed state:', targetNode.collapsed);
+
                     
                     // Use requestAnimationFrame to ensure DOM updates are processed properly
                     requestAnimationFrame(() => {
@@ -2832,7 +2816,7 @@ function renderMultiProjectTree() {
             const target = e.currentTarget as HTMLElement;
             const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
             
-            console.log('🔽🔽 Double-click expand button:', { nodeId });
+
             
             if (nodeId) {
                 // Find which project this node belongs to
@@ -2854,11 +2838,7 @@ function renderMultiProjectTree() {
                     // Determine action based on current node's state
                     const isCurrentNodeCollapsed = node.collapsed;
                     
-                    console.log('🔽🔽 Double-click action:', { 
-                        level: node.level, 
-                        nodesAtLevel: nodesAtSameLevel.length,
-                        currentCollapsed: isCurrentNodeCollapsed 
-                    });
+
                     
                     if (isCurrentNodeCollapsed) {
                         // Current node is collapsed, so expand all nodes at this level
