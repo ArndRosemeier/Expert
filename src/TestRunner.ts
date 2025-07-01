@@ -33,7 +33,7 @@ export class TestRunner {
                 criteria: [
                     { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
                 ],
-                maxIterations: 5,
+                maxIterations: 3,
                 selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model', prose: 'test-model' },
                 contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
             };
@@ -906,7 +906,7 @@ export class TestRunner {
             const testProfile = {
                 prompt: "Test prompt",
                 criteria: [{ name: 'Test', description: 'Test criterion', goal: 8, weight: 1.0 }],
-                maxIterations: 5,
+                maxIterations: 3,
                 selectedModels: { creator: 'test', rater: 'test', editor: 'test', prose: 'test' },
                 contextExtractionPrompt: 'Test extraction prompt'
             };

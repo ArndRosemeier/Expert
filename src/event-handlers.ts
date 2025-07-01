@@ -28,7 +28,7 @@ function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Rec
     const activeProfile = settingsManager.getProfile(activeProfileName) || { 
         prompt: '', 
         criteria: [], 
-        maxIterations: 5, 
+        maxIterations: 3, 
         selectedModels: {},
         webSearchEnabled: {},
         contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'

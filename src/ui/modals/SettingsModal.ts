@@ -344,7 +344,7 @@ export class SettingsModal extends BaseModal {
                 id: 'modal-max-iterations',
                 min: '1',
                 max: '10',
-                value: '5'
+                value: '3'
             }
         }) as HTMLInputElement;
 
@@ -581,7 +581,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply max iterations
         if (this.maxIterationsInput) {
-            this.maxIterationsInput.value = String(profile.maxIterations || 5);
+            this.maxIterationsInput.value = String(profile.maxIterations || 3);
         }
 
         this.updateUnsavedIndicator(false);
@@ -635,7 +635,7 @@ export class SettingsModal extends BaseModal {
         if (!activeProfileName) return;
 
         const criteria = this.criteriaEditor?.getCriteria() || [];
-        const maxIterations = parseInt(this.maxIterationsInput?.value || '5', 10);
+        const maxIterations = parseInt(this.maxIterationsInput?.value || '3', 10);
 
         await this.settingsService.saveCurrentSettingsToProfile(
             activeProfileName,

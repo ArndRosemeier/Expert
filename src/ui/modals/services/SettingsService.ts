@@ -74,7 +74,7 @@ export class SettingsService {
             const currentSettings: SettingsProfile = {
                 selectedModels: this.modelSelector.getSelectedModels(),
                 criteria: [], // Will be filled by the UI component
-                maxIterations: 5, // Will be filled by the UI component
+                maxIterations: 3, // Will be filled by the UI component
                 prompt: '', // Legacy field
                 contextExtractionPrompt: '' // Legacy field
             };

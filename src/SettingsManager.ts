@@ -261,7 +261,7 @@ export class SettingsManager {
             const defaultProfile = {
                 prompt: "",
                 criteria: DEFAULT_CRITERIA,
-                maxIterations: 5,
+                maxIterations: 3,
                 selectedModels: {},
                 webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
@@ -655,7 +655,7 @@ export class SettingsManager {
         const defaultProfile: SettingsProfile = {
             prompt: "",
             criteria: DEFAULT_CRITERIA,
-            maxIterations: 5,
+            maxIterations: 3,
             selectedModels: {},
             webSearchEnabled: {},
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
