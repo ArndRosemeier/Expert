@@ -17,6 +17,8 @@ export * from './KeyValidationModal';
 export * from './VersionMismatchModal';
 export * from './ContextInfoModal';
 export * from './MigrationSelectionModal';
+export * from './NewProjectModal';
+export * from './ViewTemplateModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';
@@ -25,6 +27,7 @@ export * from './services/ExportService';
 export * from './services/NodeCreationService';
 export * from './services/PromptManagementService';
 export * from './services/SettingsService';
+export * from './services/ProjectGenerationService';
 
 // Types
 export * from './types/ModalTypes';
@@ -32,6 +35,10 @@ export * from './types/ExportTypes';
 
 // Factory
 export * from './ModalFactory';
+
+// Import functions for legacy compatibility
+import { showGenericModal, showAlert, showConfirm } from './GenericModal';
+import { getModalRegistry } from './core/ModalRegistry';
 
 /**
  * Additional Phase 2 type exports

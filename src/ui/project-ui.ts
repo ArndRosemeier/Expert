@@ -6,6 +6,7 @@ import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { showGenericModal } from './modals/GenericModal';
+import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -144,6 +145,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         // Map actions to the existing handler IDs
                         const actionMap: Record<string, string> = {
                             'new-top-layer': 'new-top-layer-btn',
+                            'view-template': 'view-template-btn',
                             'add-child': 'add-child-node-btn',
                             'delete-node': 'delete-node-btn',
                             'delete-all-children': 'delete-subnodes-btn',
@@ -226,6 +228,9 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         projectManager!.rootNode = newRoot;
         projectManager!.projectTitle = newLevelName;
 
+        // Ensure all nodes share the same template reference  
+        AssertFlatTemplateCopy(projectManager!);
+
         // Update selected node to the new root
         selectedNodeId = newRoot.id;
 
@@ -275,6 +280,9 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
             projectManager!.getSettingsManager(),
             state.getOpenRouterClient()!
         );
+
+        // Ensure all nodes share the same template reference
+        AssertFlatTemplateCopy(newProjectManager);
 
         // Replace the auto-generated root with our copied structure
         newProjectManager.rootNode = newRootNode;
@@ -372,6 +380,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ${node.level === 0 ? `
                         <button class="action-btn" data-action="new-top-layer">
                             🆕 New Top Layer
+                        </button>
+                        <button class="action-btn" data-action="view-template">
+                            📋 View Template
                         </button>
                     ` : ''}
                     ${!node.isLeaf ? `
@@ -1740,6 +1751,29 @@ function handleDropdownAction(buttonId: string): void {
             }
             break;
 
+        case 'view-template-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) {
+                    alert('No node selected.');
+                    return;
+                }
+
+                if (node.level !== 0) {
+                    alert('This action is only available for root nodes.');
+                    return;
+                }
+
+                // Import and open the view template modal
+                import('./modals/ViewTemplateModal').then(({ showViewTemplateModal }) => {
+                    showViewTemplateModal(node);
+                }).catch(error => {
+                    console.error('Failed to open view template modal:', error);
+                    alert('Failed to open template viewer. Please try again.');
+                });
+            }
+            break;
+
         case 'node-generate-content-action':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
@@ -2915,6 +2949,19 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
     if (importData.generationPrompt !== undefined) {
         importedNode.generationPrompt = importData.generationPrompt;
     }
+    
+    // Restore generation metadata
+    if (importData.creatorModel !== undefined) {
+        importedNode.creatorModel = importData.creatorModel;
+    }
+    
+    if (importData.generationHistory !== undefined && Array.isArray(importData.generationHistory)) {
+        importedNode.generationHistory = importData.generationHistory;
+    }
+    
+    if (importData.generationSessions !== undefined && Array.isArray(importData.generationSessions)) {
+        importedNode.generationSessions = importData.generationSessions;
+    }
 
     // Import children recursively
     if (importData.children && Array.isArray(importData.children)) {
@@ -2953,6 +3000,19 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
 
     if (childData.generationPrompt !== undefined) {
         newNode.generationPrompt = childData.generationPrompt;
+    }
+    
+    // Restore generation metadata for child nodes
+    if (childData.creatorModel !== undefined) {
+        newNode.creatorModel = childData.creatorModel;
+    }
+    
+    if (childData.generationHistory !== undefined && Array.isArray(childData.generationHistory)) {
+        newNode.generationHistory = childData.generationHistory;
+    }
+    
+    if (childData.generationSessions !== undefined && Array.isArray(childData.generationSessions)) {
+        newNode.generationSessions = childData.generationSessions;
     }
 
     // Recursively import children

@@ -1,4 +1,6 @@
 // Central exports for the project module
+export { AIProjectGenerator } from './AIProjectGenerator';
+export { SmartContentParser } from './SmartContentParser';
 export { TreeService } from './TreeService';
 export { ContextService } from './ContextService';
 export { PromptService } from './PromptService';

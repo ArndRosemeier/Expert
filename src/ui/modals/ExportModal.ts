@@ -4,7 +4,7 @@
 
 import { BaseModal } from './core/BaseModal';
 import { ExportService } from './services/ExportService';
-import { ExportScope, ExportFormat } from './types/ExportTypes';
+import { ExportScope, ExportFormat, HierarchyTitleConfig } from './types/ExportTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { ModalConfig } from './types/ModalTypes';
@@ -30,6 +30,9 @@ export class ExportModal extends BaseModal {
     private formatSelect?: HTMLSelectElement;
     private exportButton?: HTMLButtonElement;
     private nodeInfoDisplay?: HTMLElement;
+    private hierarchyTitleCheckboxes: { [level: number]: HTMLInputElement } = {};
+    private htmlTocCheckbox?: HTMLInputElement;
+    private hierarchyTitleContainer?: HTMLElement;
 
     constructor(config: ExportModalConfig) {
         super({
@@ -41,6 +44,32 @@ export class ExportModal extends BaseModal {
         this.projectManager = config.projectManager;
         this.node = config.node;
         this.exportService = new ExportService();
+    }
+
+    /**
+     * Gets the hierarchy levels from the node's template
+     */
+    private getHierarchyLevels(): string[] {
+        const template = this.node.template || [];
+        console.log('Node template:', template, 'Node level:', this.node.level);
+        return template;
+    }
+
+    /**
+     * Gets the default hierarchy title configuration
+     * All levels enabled except the leaf level
+     */
+    private getDefaultHierarchyTitleConfig(): HierarchyTitleConfig {
+        const hierarchyLevels = this.getHierarchyLevels();
+        const config: HierarchyTitleConfig = {};
+        
+        hierarchyLevels.forEach((levelName, index) => {
+            // All levels enabled by default except the last one (leaf level)
+            config[index] = index < hierarchyLevels.length - 1;
+        });
+        
+        console.log('Default hierarchy config for template', hierarchyLevels, ':', config);
+        return config;
     }
 
     /**
@@ -97,9 +126,13 @@ export class ExportModal extends BaseModal {
         });
 
         const exportSection = this.createExportSection();
+        const hierarchySection = this.createHierarchyTitleSection();
+        const formatOptionsSection = this.createFormatOptionsSection();
         const nodeInfoSection = this.createNodeInfoSection();
 
         body.appendChild(exportSection);
+        body.appendChild(hierarchySection);
+        body.appendChild(formatOptionsSection);
         body.appendChild(nodeInfoSection);
 
         return body;
@@ -125,6 +158,123 @@ export class ExportModal extends BaseModal {
         section.appendChild(formatOption);
 
         return section;
+    }
+
+    /**
+     * Creates the hierarchy title controls section
+     */
+    private createHierarchyTitleSection(): HTMLElement {
+        this.hierarchyTitleContainer = createElement('div', {
+            classes: ['hierarchy-title-section', 'export-section']
+        });
+
+        const title = createElement('h3', {
+            content: 'Hierarchy Title Controls'
+        });
+
+        const description = createElement('p', {
+            content: 'Choose whether to include titles for each hierarchy level. Unchecked levels will have no separation (just newlines).',
+            classes: ['section-description']
+        });
+
+        this.hierarchyTitleContainer.appendChild(title);
+        this.hierarchyTitleContainer.appendChild(description);
+
+        const hierarchyLevels = this.getHierarchyLevels();
+        const defaultConfig = this.getDefaultHierarchyTitleConfig();
+
+        hierarchyLevels.forEach((levelName, index) => {
+            const checkboxOption = this.createHierarchyTitleCheckbox(index, levelName, defaultConfig[index] || false);
+            this.hierarchyTitleContainer!.appendChild(checkboxOption);
+        });
+
+        this.updateHierarchyTitleVisibility();
+
+        return this.hierarchyTitleContainer;
+    }
+
+    /**
+     * Creates a hierarchy title checkbox for a specific level
+     */
+    private createHierarchyTitleCheckbox(level: number, levelName: string, defaultChecked: boolean): HTMLElement {
+        const option = createElement('div', {
+            classes: ['hierarchy-title-option']
+        });
+
+        const checkbox = createElement('input', {
+            attributes: { 
+                type: 'checkbox',
+                id: `hierarchy-title-${level}`
+            }
+        }) as HTMLInputElement;
+        
+        if (defaultChecked) {
+            checkbox.checked = true;
+        }
+
+        const label = createElement('label', {
+            content: `Include "${levelName}" titles`,
+            attributes: { for: `hierarchy-title-${level}` }
+        });
+
+        this.hierarchyTitleCheckboxes[level] = checkbox;
+
+        option.appendChild(checkbox);
+        option.appendChild(label);
+
+        return option;
+    }
+
+    /**
+     * Creates the format-specific options section
+     */
+    private createFormatOptionsSection(): HTMLElement {
+        const section = createElement('div', {
+            classes: ['format-options-section', 'export-section']
+        });
+
+        const title = createElement('h3', {
+            content: 'Format Options'
+        });
+
+        section.appendChild(title);
+
+        // HTML TOC option
+        const htmlTocOption = this.createHtmlTocOption();
+        section.appendChild(htmlTocOption);
+
+        this.updateFormatOptionsVisibility();
+
+        return section;
+    }
+
+    /**
+     * Creates the HTML TOC option
+     */
+    private createHtmlTocOption(): HTMLElement {
+        const option = createElement('div', {
+            classes: ['html-toc-option']
+        });
+
+        this.htmlTocCheckbox = createElement('input', {
+            attributes: { 
+                type: 'checkbox',
+                id: 'html-toc-checkbox'
+            }
+        }) as HTMLInputElement;
+        
+        // Default enabled
+        this.htmlTocCheckbox.checked = true;
+
+        const label = createElement('label', {
+            content: 'Include Table of Contents (rendered to the left of text)',
+            attributes: { for: 'html-toc-checkbox' }
+        });
+
+        option.appendChild(this.htmlTocCheckbox);
+        option.appendChild(label);
+
+        return option;
     }
 
     /**
@@ -161,6 +311,7 @@ export class ExportModal extends BaseModal {
 
         this.scopeSelect.addEventListener('change', () => {
             this.updateFormatState();
+            this.updateHierarchyTitleVisibility();
         });
 
         // Initialize format state after DOM setup
@@ -202,6 +353,10 @@ export class ExportModal extends BaseModal {
                 content: formatOption.label
             });
             this.formatSelect!.appendChild(optionElement);
+        });
+
+        this.formatSelect.addEventListener('change', () => {
+            this.updateFormatOptionsVisibility();
         });
 
         option.appendChild(label);
@@ -274,6 +429,45 @@ export class ExportModal extends BaseModal {
         }
         
         return parts.join(' > ');
+    }
+
+    /**
+     * Updates the visibility of hierarchy title controls based on scope selection
+     */
+    private updateHierarchyTitleVisibility(): void {
+        if (!this.hierarchyTitleContainer || !this.scopeSelect) return;
+        
+        // Show hierarchy controls for both hierarchical and leaf exports
+        const showHierarchyControls = this.scopeSelect.value === 'hierarchical' || this.scopeSelect.value === 'leafOnly';
+        this.hierarchyTitleContainer.style.display = showHierarchyControls ? 'block' : 'none';
+        
+        // Update the description based on scope
+        const description = this.hierarchyTitleContainer.querySelector('.section-description') as HTMLElement;
+        if (description) {
+            if (this.scopeSelect.value === 'leafOnly') {
+                description.textContent = 'Choose whether to include parent hierarchy titles above leaf content (e.g., chapter titles above scenes).';
+            } else {
+                description.textContent = 'Choose whether to include titles for each hierarchy level. Unchecked levels will have no separation (just newlines).';
+            }
+        }
+    }
+
+    /**
+     * Updates the visibility of format-specific options based on format selection
+     */
+    private updateFormatOptionsVisibility(): void {
+        if (!this.formatSelect) return;
+        
+        // Find the format options section
+        const formatOptionsSection = document.querySelector('.format-options-section') as HTMLElement;
+        if (!formatOptionsSection) return;
+        
+        // Show HTML TOC option only for HTML format
+        const isHtml = this.formatSelect.value === 'html';
+        const htmlTocOption = formatOptionsSection.querySelector('.html-toc-option') as HTMLElement;
+        if (htmlTocOption) {
+            htmlTocOption.style.display = isHtml ? 'block' : 'none';
+        }
     }
 
     /**
@@ -361,10 +555,24 @@ export class ExportModal extends BaseModal {
         }
 
         try {
+            // Collect hierarchy title configuration
+            const hierarchyTitles: { [level: number]: boolean } = {};
+            Object.keys(this.hierarchyTitleCheckboxes).forEach(levelStr => {
+                const level = parseInt(levelStr);
+                const checkbox = this.hierarchyTitleCheckboxes[level];
+                if (checkbox) {
+                    hierarchyTitles[level] = checkbox.checked;
+                }
+            });
+            
+            console.log('Collected hierarchy titles config for clipboard export:', hierarchyTitles);
+
             // Generate the content using the export service
             const result = await this.exportService.export(this.node, {
                 scope: scope as any,
-                format: format as any
+                format: format as any,
+                hierarchyTitles,
+                includeHtmlToc: this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false
             });
 
             // Copy to clipboard
@@ -413,13 +621,27 @@ export class ExportModal extends BaseModal {
         this.exportButton.textContent = 'Exporting...';
 
         try {
+            // Collect hierarchy title configuration
+            const hierarchyTitles: { [level: number]: boolean } = {};
+            Object.keys(this.hierarchyTitleCheckboxes).forEach(levelStr => {
+                const level = parseInt(levelStr);
+                const checkbox = this.hierarchyTitleCheckboxes[level];
+                if (checkbox) {
+                    hierarchyTitles[level] = checkbox.checked;
+                }
+            });
+            
+            console.log('Collected hierarchy titles config for file export:', hierarchyTitles);
+
             // Use the performExport method which handles the complete export process
             await this.exportService.performExport(
                 this.projectManager,
-                    this.node,
-                    scope,
-                format
-                );
+                this.node,
+                scope,
+                format,
+                hierarchyTitles,
+                this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false
+            );
 
             void this.close();
 
@@ -605,6 +827,66 @@ export class ExportModal extends BaseModal {
                 
                 .btn-secondary:hover {
                     background-color: #4b5563;
+                }
+                
+                .hierarchy-title-section {
+                    background-color: #f0f9ff;
+                    border: 1px solid #bfdbfe;
+                }
+                
+                .hierarchy-title-option {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    margin-bottom: 0.75rem;
+                }
+                
+                .hierarchy-title-option:last-child {
+                    margin-bottom: 0;
+                }
+                
+                .hierarchy-title-option input[type="checkbox"] {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+                
+                .hierarchy-title-option label {
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: #1e40af;
+                    margin: 0;
+                }
+                
+                .format-options-section {
+                    background-color: #f0fdf4;
+                    border: 1px solid #bbf7d0;
+                }
+                
+                .html-toc-option {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+                
+                .html-toc-option input[type="checkbox"] {
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                }
+                
+                .html-toc-option label {
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: #15803d;
+                    margin: 0;
+                }
+                
+                .section-description {
+                    font-size: 0.875rem;
+                    color: #6b7280;
+                    margin-bottom: 1rem;
+                    line-height: 1.4;
                 }
             `
         });

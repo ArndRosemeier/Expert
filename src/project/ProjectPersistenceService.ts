@@ -6,6 +6,7 @@ import { IndexedDBService } from '../IndexedDBService';
 import { ProjectDependencies, LoadResult, ProjectRecord } from './types/ProjectTypes';
 import * as state from '../state';
 import { STORAGE_KEYS } from '../constants';
+import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
 /**
  * ProjectPersistenceService handles all project serialization, storage, and loading operations.
@@ -211,6 +212,9 @@ export class ProjectPersistenceService {
         // with the hydrated version of our saved node tree.
         project.rootNode = parsedData.rootNode;
         
+        // Ensure all nodes share the same template reference
+        AssertFlatTemplateCopy(project);
+        
         return project;
     }
 
@@ -379,6 +383,9 @@ export class ProjectPersistenceService {
             // Generate a new ID to avoid conflicts
             const originalId = project.rootNode.id;
             project.rootNode.id = `imported_${Date.now()}_${originalId}`;
+            
+            // Ensure all nodes share the same template reference
+            AssertFlatTemplateCopy(project);
             
             // Save to storage
             await ProjectPersistenceService.saveToStorage(project);

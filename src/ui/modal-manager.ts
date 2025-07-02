@@ -1179,7 +1179,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                             }
                             
                             // Open the chat interface
-                            void openNodeChatInterface(projectManager, systemPrompt, node.title);
+                            void openNodeChatInterface(projectManager, systemPrompt, node.title, node);
                             
                         } catch (error: any) {
                             alert('Error preparing chat:\n\n' + error.message);
@@ -1225,7 +1225,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
 
 
 
-async function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string): Promise<void> {
+async function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string, node: DocumentNode): Promise<void> {
     try {
         // Import necessary modules
         const { ChatInterface } = await import('./chat-interface');
@@ -1278,8 +1278,8 @@ async function openNodeChatInterface(projectManager: ProjectManager, systemPromp
         modalContainer.style.cssText = `
             width: 90%;
             height: 90%;
-            max-width: 1200px;
-            max-height: 800px;
+            max-width: 90vw;
+            max-height: 90vh;
             background: white;
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -1291,8 +1291,8 @@ async function openNodeChatInterface(projectManager: ProjectManager, systemPromp
         modalOverlay.appendChild(modalContainer);
         document.body.appendChild(modalOverlay);
         
-        // Create chat interface with custom system prompt and title
-        const chatInterface = new ChatInterface(openRouterClient, settingsManager, systemPrompt, nodeTitle);
+        // Create chat interface with custom system prompt, title, and node structure
+        const chatInterface = new ChatInterface(openRouterClient, settingsManager, systemPrompt, nodeTitle, node);
         await chatInterface.initialize(modalContainer);
         
         // Close modal functionality

@@ -16,6 +16,10 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 import { openTemplateEditor } from './ui/template-editor';
 import { TemplateManager } from './TemplateManager';
 import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS } from './constants';
+import { NewProjectModal } from './ui/modals/NewProjectModal';
+import { AssertFlatTemplateCopy } from './ProjectUtils';
+
+import { PromptManager } from './PromptManager';
 
 function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
     const modelSelector = state.getModelSelector();
@@ -65,7 +69,7 @@ function recreateAndReconfigureServices() {
     
 }
 
-function handleCreateProject(title: string, template: ProjectTemplate) {
+function handleCreateProject(title: string, template: ProjectTemplate, aiData?: any) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -76,11 +80,42 @@ function handleCreateProject(title: string, template: ProjectTemplate) {
     }
     
     const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
+    
+    // Ensure all nodes share the same template reference
+    AssertFlatTemplateCopy(project);
+    
+    // Apply AI-generated content and context to root node if provided
+    if (aiData && aiData.isAIGenerated) {
+        console.log('🤖 Applying AI-generated content and context to root node');
+        const rootNode = project.rootNode;
+        
+        if (aiData.content !== undefined) {
+            rootNode.content = aiData.content;
+            console.log('✅ Applied AI content to root node, length:', aiData.content.length);
+        }
+        
+        if (aiData.context !== undefined) {
+            rootNode.context = aiData.context;
+            console.log('✅ Applied AI context to root node, length:', aiData.context.length);
+        }
+        
+        // Store AI metadata in content for reference
+        if (aiData.description) {
+            console.log('📝 AI project created from description:', aiData.description);
+            console.log('🎯 Project type:', aiData.projectType);
+            console.log('⚙️ Generation options:', aiData.options);
+        }
+    }
+    
     state.addProject(project);
+    
+    // Set the new project as active and select its root node
+    state.setActiveProject(project.rootNode.id);
+    
     void project.saveToStorage();
     
     closeNewProjectModal();
-    void initializeProjectUI();
+    void initializeProjectUI(project);
 }
 
 function handleImportProject(title: string, template: ProjectTemplate, importData: any) {
@@ -96,6 +131,9 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
     try {
         // Create a new project with the imported title and detected template
         const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
+        
+        // Ensure all nodes share the same template reference
+        AssertFlatTemplateCopy(project);
         
         // Import the data into the project's root node
         const rootNode = project.rootNode;
@@ -127,9 +165,13 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
         
         // Add to state and save
         state.addProject(project);
+        
+        // Set the imported project as active and select its root node
+        state.setActiveProject(project.rootNode.id);
+        
         void project.saveToStorage();
         
-        void initializeProjectUI();
+        void initializeProjectUI(project);
         alert(`Project "${title}" imported successfully!`);
         
     } catch (error) {
@@ -362,7 +404,12 @@ export async function initialize() {
     }
     
     try {
-    getElementById('newProjectBtn').addEventListener('click', () => openNewProjectModal(handleCreateProject));
+    getElementById('newProjectBtn').addEventListener('click', () => {
+        const settingsManager = state.getSettingsManager();
+        if (settingsManager) {
+            NewProjectModal.open(handleCreateProject, settingsManager);
+        }
+    });
     } catch (error) {
         console.error('❌ Failed to attach new project button listener:', error);
     }
@@ -491,7 +538,10 @@ export async function initialize() {
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
         openSettingsModal();
     } else if (!state.getActiveProject()) {
-        openNewProjectModal(handleCreateProject);
+        const settingsManager = state.getSettingsManager();
+        if (settingsManager) {
+            NewProjectModal.open(handleCreateProject, settingsManager);
+        }
     }
     
 } 

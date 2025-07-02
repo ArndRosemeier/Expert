@@ -140,7 +140,7 @@ export class TextEditorWithHighlighting {
 
         // Schedule automatic removal for AI result highlights after 5 seconds
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
-            const timeoutId = setTimeout(() => {
+            const timeoutId = window.setTimeout(() => {
                 this.removeHighlight(id);
                 this.highlightTimeouts.delete(id);
             }, 5000);
@@ -199,6 +199,7 @@ export class TextEditorWithHighlighting {
         // Expand start position to word boundary
         while (newStartPos > 0) {
             const char = text[newStartPos - 1];
+            if (!char) break; // Safety check
             // Stop at whitespace or sentence-ending punctuation
             if (/\s/.test(char) || /[.!?]/.test(char)) {
                 break;
@@ -214,6 +215,7 @@ export class TextEditorWithHighlighting {
         // Expand end position to word boundary
         while (newEndPos < text.length) {
             const char = text[newEndPos];
+            if (!char) break; // Safety check
             // Stop at whitespace or sentence-ending punctuation
             if (/\s/.test(char) || /[.!?]/.test(char)) {
                 break;
@@ -227,10 +229,14 @@ export class TextEditorWithHighlighting {
         }
 
         // Trim any leading/trailing whitespace from the final selection
-        while (newStartPos < newEndPos && /\s/.test(text[newStartPos])) {
+        while (newStartPos < newEndPos) {
+            const char = text[newStartPos];
+            if (!char || !/\s/.test(char)) break;
             newStartPos++;
         }
-        while (newEndPos > newStartPos && /\s/.test(text[newEndPos - 1])) {
+        while (newEndPos > newStartPos) {
+            const char = text[newEndPos - 1];
+            if (!char || !/\s/.test(char)) break;
             newEndPos--;
         }
 
@@ -245,32 +251,43 @@ export class TextEditorWithHighlighting {
         let newStartPos = startPos;
         let newEndPos = endPos;
 
+        // Check if the current selection already ends with sentence-ending punctuation
+        const currentSelectionText = text.substring(startPos, endPos).trim();
+        const alreadyEndsWithSentence = /[.!?]\s*$/.test(currentSelectionText);
+
         // Expand start position to sentence beginning
         while (newStartPos > 0) {
             const char = text[newStartPos - 1];
+            if (!char) break; // Safety check
             // Stop at sentence-ending punctuation followed by whitespace/newline
             if (/[.!?]/.test(char)) {
                 // Check if followed by whitespace or end of text
-                if (newStartPos === text.length || /\s/.test(text[newStartPos])) {
+                const nextChar = text[newStartPos];
+                if (newStartPos === text.length || (nextChar && /\s/.test(nextChar))) {
                     break;
                 }
             }
             newStartPos--;
         }
 
-        // Expand end position to sentence end
-        while (newEndPos < text.length) {
-            const char = text[newEndPos];
-            // Stop after sentence-ending punctuation
-            if (/[.!?]/.test(char)) {
-                newEndPos++; // Include the punctuation
-                break;
+        // Expand end position to sentence end - but only if we don't already have a complete sentence
+        if (!alreadyEndsWithSentence) {
+            while (newEndPos < text.length) {
+                const char = text[newEndPos];
+                if (!char) break; // Safety check
+                // Stop after sentence-ending punctuation
+                if (/[.!?]/.test(char)) {
+                    newEndPos++; // Include the punctuation
+                    break;
+                }
+                newEndPos++;
             }
-            newEndPos++;
         }
 
         // Trim leading whitespace but keep trailing punctuation
-        while (newStartPos < newEndPos && /\s/.test(text[newStartPos])) {
+        while (newStartPos < newEndPos) {
+            const char = text[newStartPos];
+            if (!char || !/\s/.test(char)) break;
             newStartPos++;
         }
 
@@ -321,10 +338,14 @@ export class TextEditorWithHighlighting {
         }
 
         // Trim leading and trailing whitespace within the paragraph
-        while (newStartPos < newEndPos && /\s/.test(text[newStartPos])) {
+        while (newStartPos < newEndPos) {
+            const char = text[newStartPos];
+            if (!char || !/\s/.test(char)) break;
             newStartPos++;
         }
-        while (newEndPos > newStartPos && /\s/.test(text[newEndPos - 1])) {
+        while (newEndPos > newStartPos) {
+            const char = text[newEndPos - 1];
+            if (!char || !/\s/.test(char)) break;
             newEndPos--;
         }
 
@@ -374,8 +395,6 @@ export class TextEditorWithHighlighting {
         // Replace text and add result highlight
         this.replaceTextWithHighlight(startPos, endPos, newText, 'ai-result');
     }
-
-
 
     /**
      * Replace text at a specific range and highlight the replacement

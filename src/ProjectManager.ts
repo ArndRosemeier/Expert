@@ -4,6 +4,7 @@ import { LoopOrchestrator, LoopProgress } from './LoopOrchestrator';
 import { EventEmitter } from './EventEmitter';
 import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
+import { AssertFlatTemplateCopy } from './ProjectUtils';
 
 import { StorageService, IStorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
@@ -424,6 +425,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         if (plainObject.selectedNodeId) {
             project.selectedNodeId = plainObject.selectedNodeId;
         }
+        
+        // Ensure all nodes share the same template reference
+        AssertFlatTemplateCopy(project);
         
         return project;
     }

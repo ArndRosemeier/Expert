@@ -1,6 +1,7 @@
 import { OpenRouterClient, OpenRouterMessage, StreamingCallbacks } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
 import { StorageService } from '../StorageService';
+import { DocumentNode } from '../DocumentNode';
 import * as state from '../state';
 
 export interface ChatMessage {
@@ -22,6 +23,7 @@ export class ChatInterface {
     private selectedModelPurpose: string = 'creator';
     private customSystemPrompt: string | null = null;
     private chatTitle: string = 'AI Chat';
+    private nodeStructure: DocumentNode | null = null; // Store the actual node structure for roleplay
     
     // DOM elements
     private chatContainer: HTMLElement | null = null;
@@ -31,11 +33,12 @@ export class ChatInterface {
     private stopButton: HTMLButtonElement | null = null;
     private modelPurposeSelect: HTMLSelectElement | null = null;
 
-    constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager, systemPrompt?: string, title?: string) {
+    constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager, systemPrompt?: string, title?: string, nodeStructure?: DocumentNode) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
         this.customSystemPrompt = systemPrompt || null;
         this.chatTitle = title || 'AI Chat';
+        this.nodeStructure = nodeStructure || null;
     }
 
     /**
@@ -128,8 +131,36 @@ export class ChatInterface {
                             font-size: 0.9rem;
                             cursor: pointer;
                             transition: background-color 0.2s;
+                            margin-bottom: 0.5rem;
                         " onmouseover="this.style.backgroundColor='#444'" onmouseout="this.style.backgroundColor='#333'">
-                            Clear Chat
+                            🗑️ Clear Chat
+                        </button>
+                        <button id="retry-last-btn" style="
+                            background: #dc3545;
+                            color: white;
+                            border: 1px solid #c82333;
+                            border-radius: 6px;
+                            padding: 0.75rem;
+                            font-size: 0.9rem;
+                            cursor: pointer;
+                            transition: background-color 0.2s;
+                            margin-bottom: 0.5rem;
+                            width: 100%;
+                        " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
+                            🔄 Retry Last
+                        </button>
+                        <button id="copy-conversation-btn" style="
+                            background: #6c757d;
+                            color: white;
+                            border: 1px solid #5a6268;
+                            border-radius: 6px;
+                            padding: 0.75rem;
+                            font-size: 0.9rem;
+                            cursor: pointer;
+                            transition: background-color 0.2s;
+                            width: 100%;
+                        " onmouseover="this.style.backgroundColor='#5a6268'" onmouseout="this.style.backgroundColor='#6c757d'">
+                            📋 Copy Conversation
                         </button>
                         ${this.customSystemPrompt ? `
                         <div style="
@@ -406,6 +437,22 @@ export class ChatInterface {
         if (clearButton) {
             clearButton.addEventListener('click', () => {
                 this.clearMessages();
+            });
+        }
+
+        // Retry last button
+        const retryLastButton = this.chatContainer?.querySelector('#retry-last-btn');
+        if (retryLastButton) {
+            retryLastButton.addEventListener('click', () => {
+                this.retryLastMessage();
+            });
+        }
+
+        // Copy conversation button
+        const copyConversationButton = this.chatContainer?.querySelector('#copy-conversation-btn');
+        if (copyConversationButton) {
+            copyConversationButton.addEventListener('click', () => {
+                this.copyConversationToClipboard();
             });
         }
 
@@ -833,10 +880,124 @@ For each suggestion, provide clear justification for why the change would improv
     }
 
     /**
+     * Retry the last message by removing the last AI response and user input, then resending
+     */
+    private async retryLastMessage(): Promise<void> {
+        if (this.isStreamingResponse) {
+            alert('Cannot retry while a response is being generated. Please wait or stop the current generation.');
+            return;
+        }
+
+        // Find the last user message
+        const lastUserMessageIndex = this.messages.map((m, i) => m.role === 'user' ? i : -1).filter(i => i !== -1).pop();
+        
+        if (lastUserMessageIndex === undefined) {
+            alert('No user message found to retry.');
+            return;
+        }
+
+        const lastUserMessage = this.messages[lastUserMessageIndex];
+        
+        if (!lastUserMessage) {
+            alert('Could not find the last user message to retry.');
+            return;
+        }
+        
+        // Remove all messages from the last user message onwards (including any AI responses after it)
+        this.messages = this.messages.slice(0, lastUserMessageIndex);
+        
+        // Re-render the messages
+        this.displayAllMessages();
+        
+        // Set the message in the input field and send it
+        if (this.messageInput) {
+            this.messageInput.value = lastUserMessage.content;
+            this.autoResizeTextarea();
+            this.updateSendButtonState();
+            await this.sendMessage();
+        }
+    }
+
+    /**
+     * Copy the entire conversation to clipboard
+     */
+    private async copyConversationToClipboard(): Promise<void> {
+        if (this.messages.length === 0) {
+            alert('No conversation to copy.');
+            return;
+        }
+
+        try {
+            // Format the conversation
+            let conversationText = `=== ${this.chatTitle} ===\n`;
+            conversationText += `Generated on: ${new Date().toLocaleString()}\n\n`;
+
+            for (const message of this.messages) {
+                const role = message.role === 'user' ? 'User' : 'Assistant';
+                const timestamp = this.formatTimestamp(message.timestamp);
+                conversationText += `[${timestamp}] ${role}:\n`;
+                conversationText += `${message.content}\n\n`;
+            }
+
+            // Copy to clipboard
+            await navigator.clipboard.writeText(conversationText);
+            
+            // Show temporary success feedback
+            const button = this.chatContainer?.querySelector('#copy-conversation-btn') as HTMLElement;
+            if (button && button.textContent) {
+                const originalText = button.textContent;
+                button.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    if (button) {
+                        button.textContent = originalText;
+                    }
+                }, 2000);
+            }
+            
+        } catch (error) {
+            console.error('Failed to copy conversation:', error);
+            alert('Failed to copy conversation to clipboard. This might be due to browser permissions.');
+        }
+    }
+
+    /**
+     * Re-display all messages in the chat
+     */
+    private displayAllMessages(): void {
+        if (!this.messagesContainer) return;
+        
+        // Clear the messages container
+        this.messagesContainer.innerHTML = '';
+        
+        // Re-display all messages
+        for (const message of this.messages) {
+            this.displayMessage(message);
+        }
+        
+        this.scrollToBottom();
+    }
+
+    /**
      * Start a roleplay adventure using the roleplay prompt
      */
     private async startRoleplayAdventure(): Promise<void> {
         if (this.isStreamingResponse || !this.customSystemPrompt) return;
+
+        // First, extract the lowest level nodes for starting position selection
+        const lowestLevelNodes = this.nodeStructure ? 
+            this.extractLowestLevelNodesFromStructure(this.nodeStructure) : 
+            this.extractLowestLevelNodes(this.customSystemPrompt || '');
+        
+        if (lowestLevelNodes.length === 0) {
+            alert('No suitable starting locations found in the content. The story needs some detailed scenes or sections to start a roleplay adventure.');
+            return;
+        }
+
+        // Present starting location selection to user
+        const selectedStartingNode = await this.showStartingLocationDialog(lowestLevelNodes);
+        if (!selectedStartingNode) {
+            return; // User cancelled
+        }
 
         // Get the roleplay adventure system prompt from settings
         const prompts = this.settingsManager.getPrompts();
@@ -847,14 +1008,16 @@ For each suggestion, provide clear justification for why the change would improv
             return;
         }
 
-        // Replace the node_data placeholder with the current system prompt (which contains the node data)
-        const roleplaySystemPrompt = roleplayPrompt.replace('{{node_data}}', this.customSystemPrompt);
+        // Replace placeholders in the roleplay prompt
+        const roleplaySystemPrompt = roleplayPrompt
+            .replace('{{node_data}}', this.customSystemPrompt)
+            .replace(/\{\{starting_node\}\}/g, selectedStartingNode);
 
         // Create roleplay message
         const roleplayMessage: ChatMessage = {
             id: this.generateId(),
             role: 'user',
-            content: 'Start roleplay adventure mode',
+            content: `Start roleplay adventure mode in: "${selectedStartingNode}"`,
             timestamp: new Date(),
             isStreaming: false
         };
@@ -889,7 +1052,7 @@ For each suggestion, provide clear justification for why the change would improv
             },
             {
                 role: 'user',
-                content: 'Please analyze the story content and present me with the available characters I can roleplay as.'
+                content: `Please analyze the story content and present me with the available characters I can roleplay as, focusing on those who would be present in or connected to "${selectedStartingNode}".`
             }
         ];
 
@@ -931,5 +1094,206 @@ For each suggestion, provide clear justification for why the change would improv
             console.error('Failed to start roleplay adventure stream:', error);
             callbacks.onError?.(error instanceof Error ? error : new Error('Unknown error'));
         }
+    }
+
+    /**
+     * Extract the lowest level nodes (leaf nodes) from the actual node structure
+     */
+    private extractLowestLevelNodesFromStructure(node: DocumentNode): string[] {
+        const leafNodes: DocumentNode[] = [];
+        
+        // Find all leaf nodes (nodes with no children)
+        const findLeafNodes = (currentNode: DocumentNode): void => {
+            if (currentNode.children.length === 0) {
+                // This is a leaf node
+                leafNodes.push(currentNode);
+            } else {
+                // Recursively check children
+                for (const child of currentNode.children) {
+                    findLeafNodes(child);
+                }
+            }
+        };
+        
+        findLeafNodes(node);
+        
+        // Return the titles of leaf nodes
+        return leafNodes.map(n => n.title);
+    }
+
+    /**
+     * Extract the lowest level nodes (leaf nodes) from the context for starting location selection (fallback)
+     */
+    private extractLowestLevelNodes(systemPrompt: string): string[] {
+        const nodes: string[] = [];
+        
+        // Parse the system prompt to find node structure
+        // Look for patterns like "### Node Title" or "## Node Title" (markdown headers)
+        const lines = systemPrompt.split('\n');
+        let currentPath: string[] = [];
+        let deepestLevel = 0;
+        const allNodes: { title: string; level: number; path: string[] }[] = [];
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            // Check for markdown headers (### Title, ## Title, etc.)
+            const headerMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+            if (headerMatch) {
+                const level = headerMatch[1].length;
+                const title = headerMatch[2].trim();
+                
+                // Update current path based on level
+                currentPath = currentPath.slice(0, level - 1);
+                currentPath.push(title);
+                
+                // Track deepest level
+                if (level > deepestLevel) {
+                    deepestLevel = level;
+                }
+                
+                allNodes.push({
+                    title,
+                    level,
+                    path: [...currentPath]
+                });
+            }
+        }
+        
+        // Extract nodes at the deepest level (leaf nodes)
+        const leafNodes = allNodes.filter(node => node.level === deepestLevel);
+        
+        // If we have leaf nodes, return their titles
+        if (leafNodes.length > 0) {
+            return leafNodes.map(node => node.title);
+        }
+        
+        // Fallback: if no clear hierarchy, look for any content sections
+        // Look for lines that might be titles or section headers
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.length > 0 && 
+                !trimmedLine.startsWith('You are') && 
+                !trimmedLine.startsWith('Here is') && 
+                !trimmedLine.startsWith('This is') &&
+                trimmedLine.length < 100 && // Reasonable title length
+                !trimmedLine.includes(':') && // Avoid metadata lines
+                trimmedLine !== trimmedLine.toLowerCase()) { // Has some capitalization
+                nodes.push(trimmedLine);
+            }
+        }
+        
+        // Remove duplicates and limit to reasonable number
+        return [...new Set(nodes)].slice(0, 20);
+    }
+
+    /**
+     * Show a dialog for selecting the starting location
+     */
+    private async showStartingLocationDialog(locations: string[]): Promise<string | null> {
+        return new Promise((resolve) => {
+            // Create modal backdrop
+            const backdrop = document.createElement('div');
+            backdrop.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+            `;
+
+            // Create modal dialog
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                border-radius: 12px;
+                padding: 2rem;
+                max-width: 600px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            `;
+
+            // Create dialog content
+            dialog.innerHTML = `
+                <h2 style="margin: 0 0 1rem 0; color: #333; font-size: 1.5rem;">
+                    🎭 Choose Starting Location
+                </h2>
+                <p style="margin: 0 0 1.5rem 0; color: #666; line-height: 1.5;">
+                    Select where you want your roleplay adventure to begin. These are the detailed scenes and locations available in your story:
+                </p>
+                <div id="location-list" style="margin: 0 0 1.5rem 0;">
+                    ${locations.map((location, index) => `
+                        <div class="location-option" data-location="${location}" style="
+                            padding: 1rem;
+                            margin: 0.5rem 0;
+                            border: 2px solid #e1e5e9;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            background: #f8f9fa;
+                        ">
+                            <strong>${index + 1}. ${location}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                    <button id="cancel-roleplay" style="
+                        padding: 0.75rem 1.5rem;
+                        border: 2px solid #6c757d;
+                        background: transparent;
+                        color: #6c757d;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 1rem;
+                    ">Cancel</button>
+                </div>
+            `;
+
+            backdrop.appendChild(dialog);
+            document.body.appendChild(backdrop);
+
+            // Add event listeners
+            const locationOptions = dialog.querySelectorAll('.location-option');
+            locationOptions.forEach(option => {
+                option.addEventListener('mouseenter', () => {
+                    const element = option as HTMLElement;
+                    element.style.borderColor = '#007bff';
+                    element.style.background = '#e7f3ff';
+                });
+                
+                option.addEventListener('mouseleave', () => {
+                    const element = option as HTMLElement;
+                    element.style.borderColor = '#e1e5e9';
+                    element.style.background = '#f8f9fa';
+                });
+                
+                option.addEventListener('click', () => {
+                    const location = option.getAttribute('data-location');
+                    document.body.removeChild(backdrop);
+                    resolve(location);
+                });
+            });
+
+            const cancelButton = dialog.querySelector('#cancel-roleplay');
+            cancelButton?.addEventListener('click', () => {
+                document.body.removeChild(backdrop);
+                resolve(null);
+            });
+
+            // Close on backdrop click
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) {
+                    document.body.removeChild(backdrop);
+                    resolve(null);
+                }
+            });
+        });
     }
 } 

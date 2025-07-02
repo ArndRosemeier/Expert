@@ -8,6 +8,7 @@ import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
+import { SmartContentParser } from './SmartContentParser';
 
 
 interface GenerationDependencies {

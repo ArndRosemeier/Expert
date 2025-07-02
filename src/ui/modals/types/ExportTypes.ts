@@ -24,6 +24,13 @@ export enum ExportFormat {
 }
 
 /**
+ * Hierarchy title configuration for each level
+ */
+export interface HierarchyTitleConfig {
+    [level: number]: boolean; // true = include titles, false = just newlines
+}
+
+/**
  * Export configuration
  */
 export interface ExportConfig {
@@ -32,6 +39,10 @@ export interface ExportConfig {
     includeRatings?: boolean;
     includeMetadata?: boolean;
     filename?: string;
+    // New options for hierarchy title controls
+    hierarchyTitles?: HierarchyTitleConfig;
+    // HTML-specific options
+    includeHtmlToc?: boolean;
 }
 
 /**
@@ -66,6 +77,10 @@ export interface NodeExportData {
     generationChildrenCount?: number;
     childLevelName?: string;
     children: NodeExportData[];
+    // Generation metadata
+    creatorModel?: string;
+    generationHistory?: any[];
+    generationSessions?: any[];
 }
 
 /**
