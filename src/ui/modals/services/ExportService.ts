@@ -55,9 +55,9 @@ export class ExportService implements IExportService {
             case ExportFormat.HTML:
                 return this.generateHtmlContent(nodes, title || 'Export', config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownContent(nodes, config, projectManager);
+                return this.generateMarkdownContent(nodes, title || 'Export', config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextContent(nodes, config, projectManager);
+                return this.generatePlainTextContent(nodes, title || 'Export', config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -191,11 +191,11 @@ export class ExportService implements IExportService {
         
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlContent(leafNodes, 'Lowest Layer Content', config, projectManager);
+                return this.generateHtmlContent(leafNodes, node.title, config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownContent(leafNodes, config, projectManager);
+                return this.generateMarkdownContent(leafNodes, node.title, config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextContent(leafNodes, config, projectManager);
+                return this.generatePlainTextContent(leafNodes, node.title, config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -758,8 +758,8 @@ export class ExportService implements IExportService {
     /**
      * Generates Markdown content for a list of nodes
      */
-    private generateMarkdownContent(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
-        let markdown = `# Lowest Layer Content\n\n`;
+    private generateMarkdownContent(nodes: DocumentNode[], title: string, config?: ExportConfig, projectManager?: ProjectManager): string {
+        let markdown = `# ${title}\n\n`;
 
         // Group nodes by hierarchy and generate content with hierarchy titles
         const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config, projectManager);
@@ -800,8 +800,9 @@ export class ExportService implements IExportService {
     /**
      * Generates plain text content for a list of nodes
      */
-    private generatePlainTextContent(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
-        let text = `LOWEST LAYER CONTENT\n${'='.repeat(20)}\n\n`;
+    private generatePlainTextContent(nodes: DocumentNode[], title: string, config?: ExportConfig, projectManager?: ProjectManager): string {
+        const titleLine = title.toUpperCase();
+        let text = `${titleLine}\n${'='.repeat(titleLine.length)}\n\n`;
 
         // Group nodes by hierarchy and generate content with hierarchy titles
         const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config, projectManager);
