@@ -570,7 +570,30 @@ export class SmartContentParser {
             suggestions: [] as string[]
         };
 
-        // Count JSON-like blocks
+        // Check for section-based structure first (our primary format)
+        const hasSectionTitle = /Section:\s*Title/i.test(response);
+        const hasSectionConcept = /Section:\s*Concept/i.test(response);
+        const hasSectionTemplate = /Section:\s*Template/i.test(response);
+        const hasSectionContext = /Section:\s*Context/i.test(response);
+
+        if (hasSectionTitle || hasSectionConcept || hasSectionTemplate || hasSectionContext) {
+            analysis.probableStructure = 'section_based';
+            
+            // Check for missing required sections
+            if (!hasSectionTitle) {
+                analysis.suggestions.push('Missing "Section: Title" - required for project generation');
+            }
+            if (!hasSectionConcept) {
+                analysis.suggestions.push('Missing "Section: Concept" - required for project generation');
+            }
+            if (!hasSectionTemplate) {
+                analysis.suggestions.push('Missing "Section: Template" - recommended for structured projects');
+            }
+            
+            return analysis;
+        }
+
+        // Fallback: Check for JSON structure (legacy format)
         const jsonBlockPattern = /```json[\s\S]*?```/gi;
         const jsonMatches = response.match(jsonBlockPattern);
         analysis.jsonBlocks = jsonMatches ? jsonMatches.length : 0;
@@ -593,8 +616,8 @@ export class SmartContentParser {
             analysis.suggestions.push('JSON appears to have unmatched braces - check syntax');
         }
 
-        if (!analysis.hasJson) {
-            analysis.suggestions.push('No JSON detected - ensure prompt requests structured response');
+        if (!analysis.hasJson && analysis.probableStructure === 'plain_text') {
+            analysis.suggestions.push('No structured format detected - ensure response uses section format (Section: Title, Section: Concept, etc.) or JSON fallback');
         }
 
         return analysis;
