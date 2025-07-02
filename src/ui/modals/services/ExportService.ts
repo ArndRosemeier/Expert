@@ -17,6 +17,18 @@ interface TocNode {
     children: TocNode[];
 }
 
+/**
+ * Interface for hierarchical content structure
+ */
+interface ContentNode {
+    title: string;
+    titleId: string;
+    level: number;
+    content: string;
+    children: ContentNode[];
+    isLeaf: boolean;
+}
+
 export class ExportService implements IExportService {
     
     /**
@@ -572,82 +584,179 @@ export class ExportService implements IExportService {
         console.log('groupLeafNodesWithHierarchy called with config:', config?.hierarchyTitles);
         console.log('Nodes to process:', nodes.map(n => ({ title: n.title, level: n.level, template: n.template })));
         
-        let html = '';
-        let markdown = '';
-        let plain = '';
+        // Build hierarchical content structure to avoid duplicate parent headers
+        const contentStructure = this.buildHierarchicalContentStructure(nodes, config, projectManager);
+        return this.renderContentStructure(contentStructure, config);
+    }
+
+    /**
+     * Builds a hierarchical content structure to avoid duplicate parent headers
+     */
+    private buildHierarchicalContentStructure(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): ContentNode[] {
+        const contentNodes: ContentNode[] = [];
+        const nodeMap = new Map<string, ContentNode>();
 
         // Group nodes by their parent hierarchy
         const groupedNodes = this.groupNodesByParent(nodes, projectManager);
         
         for (const [parentPath, nodeGroup] of groupedNodes) {
-            // Add hierarchy titles based on config
-            const hierarchyTitles = this.generateHierarchyTitles(parentPath, config);
+            // Process each level of the hierarchy
+            let currentLevel = contentNodes;
+            let currentKey = '';
             
-            // HTML format
-            html += hierarchyTitles.html;
+            // Add parent hierarchy levels
+            parentPath.forEach((title, level) => {
+                const includeTitle = this.shouldIncludeTitle(level, config);
+                
+                if (includeTitle) {
+                    currentKey += `${level}:${title}|`;
+                    
+                    // Check if this node already exists at this level
+                    let existingNode = nodeMap.get(currentKey);
+                    
+                    if (!existingNode) {
+                        // Create new parent node
+                        const titleId = this.generateHierarchyTitleId(title, level);
+                        
+                        existingNode = {
+                            title,
+                            titleId,
+                            level,
+                            content: '',
+                            children: [],
+                            isLeaf: false
+                        };
+                        
+                        currentLevel.push(existingNode);
+                        nodeMap.set(currentKey, existingNode);
+                    }
+                    
+                    currentLevel = existingNode.children;
+                }
+            });
+            
+            // Add leaf nodes to the current level
             for (const node of nodeGroup) {
                 if (node.content && node.content.trim()) {
-                    // Check if node title should be included (leaf level)
                     const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
-                    
-                    html += `
-    <div class="node-content">`;
                     
                     if (includeNodeTitle) {
                         const nodeId = this.generateNodeId(node, node.level);
-                        html += `
-        <h${Math.min(node.level + 2, 6)} id="${nodeId}">${escapeHtml(node.title)}</h${Math.min(node.level + 2, 6)}>`;
+                        
+                        const leafKey = `${currentKey}leaf:${node.title}`;
+                        
+                        if (!nodeMap.has(leafKey)) {
+                            const leafNode: ContentNode = {
+                                title: node.title,
+                                titleId: nodeId,
+                                level: node.level,
+                                content: node.content,
+                                children: [],
+                                isLeaf: true
+                            };
+                            
+                            currentLevel.push(leafNode);
+                            nodeMap.set(leafKey, leafNode);
+                        }
+                    } else {
+                        // If title not included, just add content without title
+                        const contentKey = `${currentKey}content:${node.id}`;
+                        
+                        if (!nodeMap.has(contentKey)) {
+                            const contentNode: ContentNode = {
+                                title: '',
+                                titleId: '',
+                                level: node.level,
+                                content: node.content,
+                                children: [],
+                                isLeaf: true
+                            };
+                            
+                            currentLevel.push(contentNode);
+                            nodeMap.set(contentKey, contentNode);
+                        }
                     }
-                    
-                    html += `
+                }
+            }
+        }
+        
+        return contentNodes;
+    }
+
+    /**
+     * Renders the hierarchical content structure to different formats
+     */
+    private renderContentStructure(contentNodes: ContentNode[], config?: ExportConfig): { html: string; markdown: string; plain: string } {
+        let html = '';
+        let markdown = '';
+        let plain = '';
+        
+        for (const node of contentNodes) {
+            const renderedContent = this.renderContentNode(node, config);
+            html += renderedContent.html;
+            markdown += renderedContent.markdown;
+            plain += renderedContent.plain;
+        }
+        
+        return { html, markdown, plain };
+    }
+
+    /**
+     * Renders a single content node and its children
+     */
+    private renderContentNode(node: ContentNode, config?: ExportConfig): { html: string; markdown: string; plain: string } {
+        let html = '';
+        let markdown = '';
+        let plain = '';
+        
+        // Render the node title if it exists
+        if (node.title) {
+            // HTML
+            const headingTag = `h${Math.min(node.level + 2, 6)}`;
+            html += `
+    <${headingTag} id="${node.titleId}">${escapeHtml(node.title)}</${headingTag}>`;
+            
+            // Markdown
+            const headingPrefix = '#'.repeat(Math.min(node.level + 2, 6));
+            markdown += `${headingPrefix} ${node.title}\n\n`;
+            
+            // Plain text
+            const indent = '  '.repeat(node.level);
+            plain += `${indent}${node.title}\n`;
+        }
+        
+        // Render the node content if it exists
+        if (node.content && node.content.trim()) {
+            // HTML
+            html += `
+    <div class="node-content">
         <div class="content">
             ${formatContentAsHtml(node.content)}
         </div>
     </div>`;
-                }
-            }
             
-            // Close hierarchy group if it was opened
-            if (hierarchyTitles.html) {
-                html += `
-    </div>`;
-            }
+            // Markdown
+            markdown += `${node.content}\n\n`;
             
-            // Markdown format
-            markdown += hierarchyTitles.markdown;
-            for (const node of nodeGroup) {
-                if (node.content && node.content.trim()) {
-                    const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
-                    
-                    if (includeNodeTitle) {
-                        const headingPrefix = '#'.repeat(Math.min(node.level + 1, 6));
-                        markdown += `${headingPrefix} ${node.title}\n\n`;
-                    }
-                    
-                    markdown += `${node.content}\n\n`;
-                }
+            // Plain text
+            if (node.title) {
+                plain += '\n'; // Add spacing after title
             }
-            
-            // Plain text format
-            plain += hierarchyTitles.plain;
-            for (const node of nodeGroup) {
-                if (node.content && node.content.trim()) {
-                    const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
-                    
-                    if (includeNodeTitle) {
-                        const indent = '  '.repeat(node.level);
-                        plain += `${indent}${node.title}\n`;
-                    }
-                    
-                    const contentLines = node.content.split('\n');
-                    for (const line of contentLines) {
-                        plain += line ? `  ${line}\n` : '\n';
-                    }
-                    plain += '\n';
-                }
+            const contentLines = node.content.split('\n');
+            for (const line of contentLines) {
+                plain += line ? `  ${line}\n` : '\n';
             }
+            plain += '\n';
         }
-
+        
+        // Render children
+        for (const child of node.children) {
+            const childContent = this.renderContentNode(child, config);
+            html += childContent.html;
+            markdown += childContent.markdown;
+            plain += childContent.plain;
+        }
+        
         return { html, markdown, plain };
     }
 
