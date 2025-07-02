@@ -208,13 +208,13 @@ export class MigrationSelectionModal extends BaseModal {
             // Clear version mismatch flag
             this.settingsManager.clearVersionMismatchFlag();
 
-            // Call completion callback
+            // Close modal first
+            await this.close();
+
+            // Call completion callback after modal is closed
             if (this.onMigrationComplete) {
                 this.onMigrationComplete();
             }
-
-            // Close modal
-            this.close();
 
         } catch (error) {
             console.error('Failed to reset settings:', error);
@@ -270,6 +270,7 @@ export class MigrationSelectionModal extends BaseModal {
             }
 
             // Apply smart migration - preserve user customizations, update defaults
+            console.log('🔄 Starting smart migration for profile:', this.analysis.profileName);
             const success = await settingsService.applyMigration(
                 this.analysis.profileName,
                 migrationAnalysis,
@@ -280,19 +281,22 @@ export class MigrationSelectionModal extends BaseModal {
                 throw new Error('Migration failed');
             }
 
+            console.log('✅ Smart migration completed successfully');
+            
             // Clear version mismatch flag
             this.settingsManager.clearVersionMismatchFlag();
+            console.log('✅ Version mismatch flag cleared');
 
             // Show success message
             alert('Smart migration completed successfully! Your custom settings have been preserved while system defaults have been updated.');
 
-            // Call completion callback
+            // Close modal first
+            await this.close();
+
+            // Call completion callback after modal is closed
             if (this.onMigrationComplete) {
                 this.onMigrationComplete();
             }
-
-            // Close modal
-            this.close();
 
         } catch (error) {
             console.error('Failed to perform smart migration:', error);

@@ -127,8 +127,10 @@ async function checkVersionMismatches(): Promise<void> {
                 analysis,
                 onMigrationComplete: () => {
                     console.log('✅ Migration completed, reloading UI...');
-                    // Refresh the page to reload with new settings
-                    window.location.reload();
+                    // Add a small delay to ensure all save operations complete before reload
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
                 }
             });
 
