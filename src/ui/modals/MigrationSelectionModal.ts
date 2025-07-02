@@ -269,19 +269,41 @@ export class MigrationSelectionModal extends BaseModal {
                 }
             }
 
-            // Apply smart migration - preserve user customizations, update defaults
-            console.log('🔄 Starting smart migration for profile:', this.analysis.profileName);
-            const success = await settingsService.applyMigration(
-                this.analysis.profileName,
-                migrationAnalysis,
-                preserveModels
-            );
+            // Get all profiles that need migration
+            const versionMismatchInfo = this.settingsManager.getVersionMismatchInfo();
+            console.log('🔄 Found', versionMismatchInfo.length, 'profiles needing migration:', versionMismatchInfo.map(p => p.profileName));
 
-            if (!success) {
-                throw new Error('Migration failed');
+            // Apply smart migration to all profiles with version mismatches
+            let allSuccessful = true;
+            for (const profileInfo of versionMismatchInfo) {
+                console.log('🔄 Migrating profile:', profileInfo.profileName);
+                
+                const profileAnalysis = settingsService.analyzeMigration(profileInfo.profileName);
+                if (!profileAnalysis) {
+                    console.warn('⚠️ Could not analyze profile for migration:', profileInfo.profileName);
+                    continue;
+                }
+
+                const profileSuccess = await settingsService.applyMigration(
+                    profileInfo.profileName,
+                    profileAnalysis,
+                    // Only preserve models for the primary profile
+                    profileInfo.profileName === this.analysis.profileName ? preserveModels : undefined
+                );
+
+                if (!profileSuccess) {
+                    console.error('❌ Failed to migrate profile:', profileInfo.profileName);
+                    allSuccessful = false;
+                } else {
+                    console.log('✅ Successfully migrated profile:', profileInfo.profileName);
+                }
             }
 
-            console.log('✅ Smart migration completed successfully');
+            if (!allSuccessful) {
+                throw new Error('Some profiles failed to migrate');
+            }
+
+            console.log('✅ All profiles migrated successfully');
             
             // Clear version mismatch flag
             this.settingsManager.clearVersionMismatchFlag();
