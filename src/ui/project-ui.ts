@@ -913,11 +913,11 @@ export function renderNodeDetails() {
                         <label style="font-weight: 600; color: #495057;">Generate:</label>
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                             <input type="radio" name="generation-type" value="content" ${node.getState() !== 'Final' || node.isLeaf ? 'checked' : ''} style="margin: 0;">
-                            <span>This content</span>
+                            <span>This ${getCurrentLevelName(node).toLowerCase()}</span>
                         </label>
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; ${node.isLeaf ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
                             <input type="radio" name="generation-type" value="children" ${node.isLeaf ? 'disabled' : (node.getState() === 'Final' ? 'checked' : '')} style="margin: 0;">
-                            <span>All children</span>
+                            <span>All ${getPluralChildLevelName(node).toLowerCase()}</span>
                         </label>
                     </div>
                     
