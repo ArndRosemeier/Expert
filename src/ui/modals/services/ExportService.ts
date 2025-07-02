@@ -7,6 +7,16 @@ import { ProjectManager } from '../../../ProjectManager';
 import { IExportService, ExportConfig, ExportResult, NodeExportData, ExportScope, ExportFormat } from '../types/ExportTypes';
 import { sanitizeFilename, escapeHtml, formatContentAsHtml } from '../core/modal-utils';
 
+/**
+ * Interface for hierarchical TOC structure
+ */
+interface TocNode {
+    title: string;
+    href: string;
+    level: number;
+    children: TocNode[];
+}
+
 export class ExportService implements IExportService {
     
     /**
@@ -423,22 +433,60 @@ export class ExportService implements IExportService {
     private generateTocForLeafNodes(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
         let toc = '<ul>\n';
         
+        // Build a hierarchical structure to avoid duplicate parent entries
+        const tocStructure = this.buildHierarchicalTocStructure(nodes, config, projectManager);
+        toc += this.renderTocStructure(tocStructure, 0);
+        
+        toc += '</ul>';
+        return toc;
+    }
+
+    /**
+     * Builds a hierarchical TOC structure to avoid duplicate parent entries
+     */
+    private buildHierarchicalTocStructure(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): TocNode[] {
+        const tocNodes: TocNode[] = [];
+        const nodeMap = new Map<string, TocNode>();
+
         // Group nodes by their parent hierarchy
         const groupedNodes = this.groupNodesByParent(nodes, projectManager);
         
         for (const [parentPath, nodeGroup] of groupedNodes) {
-            // Add hierarchy titles to TOC
+            // Process each level of the hierarchy
+            let currentLevel = tocNodes;
+            let currentKey = '';
+            
+            // Add parent hierarchy levels
             parentPath.forEach((title, level) => {
                 const includeTitle = this.shouldIncludeTitle(level, config);
                 
                 if (includeTitle) {
-                    const titleId = this.generateHierarchyTitleId(title, level);
-                    const indent = level > 6 ? 6 : level + 1;
-                    toc += `<li class="level-${indent}"><a href="#${titleId}">${escapeHtml(title)}</a></li>\n`;
+                    currentKey += `${level}:${title}|`;
+                    
+                    // Check if this node already exists at this level
+                    let existingNode = nodeMap.get(currentKey);
+                    
+                    if (!existingNode) {
+                        // Create new parent node
+                        const titleId = this.generateHierarchyTitleId(title, level);
+                        const indent = level > 6 ? 6 : level + 1;
+                        
+                        existingNode = {
+                            title,
+                            href: `#${titleId}`,
+                            level: indent,
+                            children: []
+                        };
+                        
+                        currentLevel.push(existingNode);
+                        nodeMap.set(currentKey, existingNode);
+                    }
+                    
+                    currentLevel = existingNode.children;
                 }
             });
             
-            // Add leaf nodes to TOC
+            // Add leaf nodes to the current level
             for (const node of nodeGroup) {
                 if (node.content && node.content.trim()) {
                     const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
@@ -446,14 +494,47 @@ export class ExportService implements IExportService {
                     if (includeNodeTitle) {
                         const nodeId = this.generateNodeId(node, node.level);
                         const indent = node.level > 6 ? 6 : node.level + 1;
-                        toc += `<li class="level-${indent}"><a href="#${nodeId}">${escapeHtml(node.title)}</a></li>\n`;
+                        
+                        const leafKey = `${currentKey}leaf:${node.title}`;
+                        
+                        if (!nodeMap.has(leafKey)) {
+                            const leafNode: TocNode = {
+                                title: node.title,
+                                href: `#${nodeId}`,
+                                level: indent,
+                                children: []
+                            };
+                            
+                            currentLevel.push(leafNode);
+                            nodeMap.set(leafKey, leafNode);
+                        }
                     }
                 }
             }
         }
         
-        toc += '</ul>';
-        return toc;
+        return tocNodes;
+    }
+
+    /**
+     * Renders the hierarchical TOC structure to HTML
+     */
+    private renderTocStructure(tocNodes: TocNode[], baseLevel: number): string {
+        let html = '';
+        
+        for (const node of tocNodes) {
+            html += `<li class="level-${node.level}"><a href="${node.href}">${escapeHtml(node.title)}</a>`;
+            
+            if (node.children.length > 0) {
+                html += '\n<ul>\n';
+                html += this.renderTocStructure(node.children, baseLevel + 1);
+                html += '</ul>\n';
+            }
+            
+            html += '</li>\n';
+        }
+        
+        return html;
     }
 
     /**
