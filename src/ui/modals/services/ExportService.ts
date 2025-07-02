@@ -12,7 +12,7 @@ export class ExportService implements IExportService {
     /**
      * Main export function that handles all export types
      */
-    public async export(node: DocumentNode, config: ExportConfig): Promise<ExportResult> {
+    public async export(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<ExportResult> {
         let content: string;
         let filename: string;
         let mimeType: string;
@@ -24,7 +24,7 @@ export class ExportService implements IExportService {
             mimeType = 'application/json';
         } else {
             // Export for reading - formatted content
-            content = this.exportNodeContent(node, config.scope, config.format, config);
+            content = this.exportNodeContent(node, config.scope, config.format, config, projectManager);
             const extension = this.getFileExtension(config.format);
             filename = config.filename || `${sanitizeFilename(node.title)}_${config.scope}.${extension}`;
             mimeType = this.getMimeType(config.format);
@@ -40,14 +40,14 @@ export class ExportService implements IExportService {
     /**
      * Generates content in the specified format for multiple nodes
      */
-    public generateContent(nodes: DocumentNode[], format: ExportFormat, title?: string, config?: ExportConfig): string {
+    public generateContent(nodes: DocumentNode[], format: ExportFormat, title?: string, config?: ExportConfig, projectManager?: ProjectManager): string {
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlContent(nodes, title || 'Export', config);
+                return this.generateHtmlContent(nodes, title || 'Export', config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownContent(nodes, config);
+                return this.generateMarkdownContent(nodes, config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextContent(nodes, config);
+                return this.generatePlainTextContent(nodes, config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -92,7 +92,7 @@ export class ExportService implements IExportService {
             config.includeHtmlToc = includeHtmlToc;
         }
 
-        const result = await this.export(node, config);
+        const result = await this.export(node, config, projectManager);
         this.downloadFile(result);
         
         // Show success message
@@ -165,27 +165,27 @@ export class ExportService implements IExportService {
     /**
      * Exports node content based on scope and format
      */
-    private exportNodeContent(node: DocumentNode, scope: ExportScope, format: ExportFormat, config?: ExportConfig): string {
+    private exportNodeContent(node: DocumentNode, scope: ExportScope, format: ExportFormat, config?: ExportConfig, projectManager?: ProjectManager): string {
         if (scope === ExportScope.Leaves) {
-            return this.exportLowestLayer(node, format, config);
+            return this.exportLowestLayer(node, format, config, projectManager);
         } else {
-            return this.exportAllLayers(node, format, config);
+            return this.exportAllLayers(node, format, config, projectManager);
         }
     }
 
     /**
      * Exports only the leaf nodes (lowest layer)
      */
-    private exportLowestLayer(node: DocumentNode, format: ExportFormat, config?: ExportConfig): string {
+    private exportLowestLayer(node: DocumentNode, format: ExportFormat, config?: ExportConfig, projectManager?: ProjectManager): string {
         const leafNodes = this.findLeafNodes(node);
         
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlContent(leafNodes, 'Lowest Layer Content', config);
+                return this.generateHtmlContent(leafNodes, 'Lowest Layer Content', config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownContent(leafNodes, config);
+                return this.generateMarkdownContent(leafNodes, config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextContent(leafNodes, config);
+                return this.generatePlainTextContent(leafNodes, config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -194,14 +194,14 @@ export class ExportService implements IExportService {
     /**
      * Exports all layers in hierarchy
      */
-    private exportAllLayers(node: DocumentNode, format: ExportFormat, config?: ExportConfig): string {
+    private exportAllLayers(node: DocumentNode, format: ExportFormat, config?: ExportConfig, projectManager?: ProjectManager): string {
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlHierarchy(node, 1, config);
+                return this.generateHtmlHierarchy(node, 1, config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownHierarchy(node, 1, config);
+                return this.generateMarkdownHierarchy(node, 1, config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextHierarchy(node, 0, config);
+                return this.generatePlainTextHierarchy(node, 0, config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -225,7 +225,7 @@ export class ExportService implements IExportService {
     /**
      * Generates HTML content for a list of nodes
      */
-    private generateHtmlContent(nodes: DocumentNode[], title: string, config?: ExportConfig): string {
+    private generateHtmlContent(nodes: DocumentNode[], title: string, config?: ExportConfig, projectManager?: ProjectManager): string {
         const includeToc = config?.includeHtmlToc || false;
         
         let html = `<!DOCTYPE html>
@@ -262,7 +262,7 @@ export class ExportService implements IExportService {
 
         // Generate TOC if enabled
         if (includeToc) {
-            const tocContent = this.generateTocForLeafNodes(nodes, config);
+            const tocContent = this.generateTocForLeafNodes(nodes, config, projectManager);
             html += `
         <div class="toc">
             <h3>Table of Contents</h3>
@@ -275,7 +275,7 @@ export class ExportService implements IExportService {
             <h1>${title}</h1>`;
 
         // Group nodes by hierarchy and generate content with hierarchy titles
-        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config);
+        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config, projectManager);
         html += groupedContent.html;
 
         html += `
@@ -289,7 +289,7 @@ export class ExportService implements IExportService {
     /**
      * Generates HTML hierarchy for a node tree
      */
-    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig): string {
+    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, projectManager?: ProjectManager): string {
         if (level === 1) {
             const includeToc = config?.includeHtmlToc || false;
             
@@ -420,11 +420,11 @@ export class ExportService implements IExportService {
     /**
      * Generates TOC specifically for leaf node exports
      */
-    private generateTocForLeafNodes(nodes: DocumentNode[], config?: ExportConfig): string {
+    private generateTocForLeafNodes(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
         let toc = '<ul>\n';
         
         // Group nodes by their parent hierarchy
-        const groupedNodes = this.groupNodesByParent(nodes);
+        const groupedNodes = this.groupNodesByParent(nodes, projectManager);
         
         for (const [parentPath, nodeGroup] of groupedNodes) {
             // Add hierarchy titles to TOC
@@ -487,7 +487,7 @@ export class ExportService implements IExportService {
     /**
      * Groups leaf nodes with their hierarchy titles for export
      */
-    private groupLeafNodesWithHierarchy(nodes: DocumentNode[], config?: ExportConfig): { html: string; markdown: string; plain: string } {
+    private groupLeafNodesWithHierarchy(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): { html: string; markdown: string; plain: string } {
         console.log('groupLeafNodesWithHierarchy called with config:', config?.hierarchyTitles);
         console.log('Nodes to process:', nodes.map(n => ({ title: n.title, level: n.level, template: n.template })));
         
@@ -496,7 +496,7 @@ export class ExportService implements IExportService {
         let plain = '';
 
         // Group nodes by their parent hierarchy
-        const groupedNodes = this.groupNodesByParent(nodes);
+        const groupedNodes = this.groupNodesByParent(nodes, projectManager);
         
         for (const [parentPath, nodeGroup] of groupedNodes) {
             // Add hierarchy titles based on config
@@ -573,11 +573,11 @@ export class ExportService implements IExportService {
     /**
      * Groups nodes by their parent hierarchy path
      */
-    private groupNodesByParent(nodes: DocumentNode[]): Map<string[], DocumentNode[]> {
+    private groupNodesByParent(nodes: DocumentNode[], projectManager?: ProjectManager): Map<string[], DocumentNode[]> {
         const groups = new Map<string[], DocumentNode[]>();
         
         for (const node of nodes) {
-            const parentPath = this.getNodeParentPath(node);
+            const parentPath = this.getNodeParentPath(node, projectManager);
             const pathKey = parentPath.join('|'); // Use string key for Map
             
             // Find existing group with same path
@@ -603,20 +603,34 @@ export class ExportService implements IExportService {
     }
 
     /**
-     * Gets the parent hierarchy path for a node
+     * Gets the parent hierarchy path for a node by traversing up the actual parent chain
      */
-    private getNodeParentPath(node: DocumentNode): string[] {
-        // For now, we'll use the template hierarchy and node level
-        // In a full implementation, we'd traverse up the actual parent chain
+    private getNodeParentPath(node: DocumentNode, projectManager?: ProjectManager): string[] {
         const path: string[] = [];
         
-        if (node.template && node.level > 0) {
-            for (let i = 0; i < node.level; i++) {
-                const templateLevel = node.template[i];
-                if (templateLevel) {
-                    // Create a generic parent title based on template level
-                    const levelName = templateLevel.replace(/\s+\d+$/, ''); // Remove numbers
-                    path.push(`${levelName} 1`); // Use consistent numbering for grouped export
+        if (projectManager) {
+            // Traverse up the parent chain to get actual parent titles
+            let currentNodeId = node.parentId;
+            while (currentNodeId) {
+                const currentNode = projectManager.findNodeById(currentNodeId);
+                if (currentNode && currentNode.parentId !== null) { // Don't include root node
+                    // Insert at the beginning to maintain correct hierarchy order (root -> leaf)
+                    path.unshift(currentNode.title);
+                    currentNodeId = currentNode.parentId;
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Fallback to the old method if no project manager available
+            if (node.template && node.level > 0) {
+                for (let i = 0; i < node.level; i++) {
+                    const templateLevel = node.template[i];
+                    if (templateLevel) {
+                        // Create a generic parent title based on template level
+                        const levelName = templateLevel.replace(/\s+\d+$/, ''); // Remove numbers
+                        path.push(`${levelName} 1`); // Use consistent numbering for grouped export
+                    }
                 }
             }
         }
@@ -663,11 +677,11 @@ export class ExportService implements IExportService {
     /**
      * Generates Markdown content for a list of nodes
      */
-    private generateMarkdownContent(nodes: DocumentNode[], config?: ExportConfig): string {
+    private generateMarkdownContent(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
         let markdown = `# Lowest Layer Content\n\n`;
 
         // Group nodes by hierarchy and generate content with hierarchy titles
-        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config);
+        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config, projectManager);
         markdown += groupedContent.markdown;
 
         return markdown;
@@ -676,7 +690,7 @@ export class ExportService implements IExportService {
     /**
      * Generates Markdown hierarchy for a node tree
      */
-    private generateMarkdownHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig): string {
+    private generateMarkdownHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, projectManager?: ProjectManager): string {
         let markdown = '';
         
         // Check if titles should be included for this level
@@ -696,7 +710,7 @@ export class ExportService implements IExportService {
         }
 
         for (const child of node.children) {
-            markdown += this.generateMarkdownHierarchy(child, level + 1, config);
+            markdown += this.generateMarkdownHierarchy(child, level + 1, config, projectManager);
         }
 
         return markdown;
@@ -705,11 +719,11 @@ export class ExportService implements IExportService {
     /**
      * Generates plain text content for a list of nodes
      */
-    private generatePlainTextContent(nodes: DocumentNode[], config?: ExportConfig): string {
+    private generatePlainTextContent(nodes: DocumentNode[], config?: ExportConfig, projectManager?: ProjectManager): string {
         let text = `LOWEST LAYER CONTENT\n${'='.repeat(20)}\n\n`;
 
         // Group nodes by hierarchy and generate content with hierarchy titles
-        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config);
+        const groupedContent = this.groupLeafNodesWithHierarchy(nodes, config, projectManager);
         text += groupedContent.plain;
 
         return text;
@@ -718,7 +732,7 @@ export class ExportService implements IExportService {
     /**
      * Generates plain text hierarchy for a node tree
      */
-    private generatePlainTextHierarchy(node: DocumentNode, level: number = 0, config?: ExportConfig): string {
+    private generatePlainTextHierarchy(node: DocumentNode, level: number = 0, config?: ExportConfig, projectManager?: ProjectManager): string {
         const indent = '  '.repeat(level);
         let text = '';
         
@@ -743,7 +757,7 @@ export class ExportService implements IExportService {
         text += '\n';
 
         for (const child of node.children) {
-            text += this.generatePlainTextHierarchy(child, level + 1);
+            text += this.generatePlainTextHierarchy(child, level + 1, config, projectManager);
         }
 
         return text;
