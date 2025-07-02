@@ -8,6 +8,7 @@ import { ProjectTemplate } from '../../../ProjectTemplate';
 import { ProjectGenerationService, ProjectGenerationRequest } from '../services/ProjectGenerationService';
 import * as state from '../../../state';
 import { SettingsManager } from '../../../SettingsManager';
+import { StorageService } from '../../../StorageService';
 
 export interface AIProjectCreatorConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: any) => void;
@@ -26,6 +27,8 @@ export class AIProjectCreator {
     private cleanupHandlers: (() => void)[] = [];
     private isGenerating: boolean = false;
     private generationService: ProjectGenerationService;
+    private static readonly CREATION_PROMPTS_KEY = 'ai_creation_prompts';
+    private cachedPrompts: string[] = [];
 
     constructor(config: AIProjectCreatorConfig) {
         this.config = config;
@@ -33,6 +36,8 @@ export class AIProjectCreator {
         // Phase 1: Use without client (mock generation)
         // Phase 2: Will pass the actual OpenRouter client
         this.generationService = new ProjectGenerationService(undefined, config.settingsManager);
+        // Load cached prompts
+        this.loadCachedPrompts();
     }
 
     public render(): string {
@@ -225,9 +230,20 @@ export class AIProjectCreator {
                 </style>
                 
                 <div class="description-section">
-                    <label for="ai-project-description">
-                        🤖 Describe Your Project
-                    </label>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                        <label for="ai-project-description" style="margin: 0;">
+                            🤖 Describe Your Project
+                        </label>
+                        <div class="prompt-dropdown-container" style="position: relative;">
+                            <button id="saved-prompts-btn" type="button" style="padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                📋 Saved Prompts
+                                <span style="color: #666;">▼</span>
+                            </button>
+                            <div id="prompts-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 300px; max-width: 500px; max-height: 300px; overflow-y: auto;">
+                                <!-- Prompts will be populated here -->
+                            </div>
+                        </div>
+                    </div>
                     <textarea 
                         id="ai-project-description" 
                         placeholder="Example: A fantasy novel about a young wizard discovering ancient magic in modern Tokyo. The story should have 5 main characters, follow a 3-act structure, and blend Japanese folklore with contemporary urban setting. Include themes of tradition vs. modernity and coming of age..."
@@ -313,6 +329,9 @@ export class AIProjectCreator {
             textarea.addEventListener('input', resizeHandler);
             this.cleanupHandlers.push(() => textarea.removeEventListener('input', resizeHandler));
         }
+
+        // Setup prompt dropdown functionality
+        this.setupPromptDropdownListeners(container);
     }
 
     private async handleGenerate(): Promise<void> {
@@ -368,6 +387,9 @@ export class AIProjectCreator {
                 generatedAt: result.metadata.generatedAt,
                 projectType: result.metadata.projectType
             };
+            
+            // Save the prompt to cache for future use
+            await this.savePromptToCache(description);
             
             // Use the generated title and template
             this.config.onCreate(result.title, result.template, aiData);
@@ -465,5 +487,178 @@ export class AIProjectCreator {
             isValid: errors.length === 0,
             errors
         };
+    }
+
+    /**
+     * Load cached prompts from storage
+     */
+    private async loadCachedPrompts(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            const prompts = await storage.get<string[]>(AIProjectCreator.CREATION_PROMPTS_KEY);
+            this.cachedPrompts = prompts || [];
+        } catch (error) {
+            console.error('Failed to load cached prompts:', error);
+            this.cachedPrompts = [];
+        }
+    }
+
+    /**
+     * Save a new prompt to the cached list
+     */
+    private async savePromptToCache(prompt: string): Promise<void> {
+        const trimmedPrompt = prompt.trim();
+        if (!trimmedPrompt || this.cachedPrompts.includes(trimmedPrompt)) {
+            return; // Don't add empty or duplicate prompts
+        }
+
+        this.cachedPrompts.unshift(trimmedPrompt); // Add to beginning of list
+        
+        // Keep only the most recent 20 prompts
+        if (this.cachedPrompts.length > 20) {
+            this.cachedPrompts = this.cachedPrompts.slice(0, 20);
+        }
+
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(AIProjectCreator.CREATION_PROMPTS_KEY, this.cachedPrompts);
+        } catch (error) {
+            console.error('Failed to save prompt to cache:', error);
+        }
+    }
+
+    /**
+     * Remove a prompt from the cached list
+     */
+    private async removePromptFromCache(prompt: string): Promise<void> {
+        const index = this.cachedPrompts.indexOf(prompt);
+        if (index === -1) return;
+
+        this.cachedPrompts.splice(index, 1);
+
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(AIProjectCreator.CREATION_PROMPTS_KEY, this.cachedPrompts);
+            this.updatePromptDropdown(); // Refresh the dropdown after deletion
+        } catch (error) {
+            console.error('Failed to remove prompt from cache:', error);
+        }
+    }
+
+    /**
+     * Abbreviate a prompt to 40 characters
+     */
+    private abbreviatePrompt(prompt: string): string {
+        if (prompt.length <= 40) return prompt;
+        return prompt.substring(0, 37) + '...';
+    }
+
+    /**
+     * Update the prompt dropdown with current cached prompts
+     */
+    private updatePromptDropdown(): void {
+        const menu = document.getElementById('prompts-dropdown-menu');
+        if (!menu) return;
+
+        // Clear existing content
+        menu.innerHTML = '';
+
+        if (this.cachedPrompts.length === 0) {
+            menu.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666; font-style: italic;">No saved prompts yet</div>';
+            return;
+        }
+
+        // Add cached prompts with individual delete buttons
+        this.cachedPrompts.forEach((prompt, index) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'display: flex; align-items: center; padding: 0.5rem; border-bottom: 1px solid #eee; cursor: pointer;';
+            item.dataset['fullPrompt'] = prompt;
+            
+            item.innerHTML = `
+                <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${prompt.replace(/"/g, '&quot;')}">
+                    ${this.abbreviatePrompt(prompt)}
+                </div>
+                <button type="button" class="delete-prompt-btn" data-index="${index}" style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; background: #ff4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem;">
+                    ✕
+                </button>
+            `;
+
+            // Handle prompt selection
+            item.addEventListener('click', (e) => {
+                if ((e.target as HTMLElement).classList.contains('delete-prompt-btn')) {
+                    e.stopPropagation();
+                    return; // Don't select when deleting
+                }
+                const textarea = document.getElementById('ai-project-description') as HTMLTextAreaElement;
+                if (textarea) {
+                    textarea.value = prompt;
+                    this.hidePromptDropdown();
+                }
+            });
+
+            // Handle delete button
+            const deleteBtn = item.querySelector('.delete-prompt-btn') as HTMLButtonElement;
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const confirmDelete = confirm(`Delete this prompt?\n\n"${this.abbreviatePrompt(prompt)}"`);
+                if (confirmDelete) {
+                    this.removePromptFromCache(prompt);
+                }
+            });
+
+            menu.appendChild(item);
+        });
+    }
+
+    /**
+     * Show the prompt dropdown menu
+     */
+    private showPromptDropdown(): void {
+        const menu = document.getElementById('prompts-dropdown-menu');
+        if (menu) {
+            menu.style.display = 'block';
+            this.updatePromptDropdown();
+        }
+    }
+
+    /**
+     * Hide the prompt dropdown menu
+     */
+    private hidePromptDropdown(): void {
+        const menu = document.getElementById('prompts-dropdown-menu');
+        if (menu) {
+            menu.style.display = 'none';
+        }
+    }
+
+    /**
+     * Setup event listeners for the prompt dropdown
+     */
+    private setupPromptDropdownListeners(container: HTMLElement): void {
+        const button = container.querySelector('#saved-prompts-btn') as HTMLButtonElement;
+        const menu = container.querySelector('#prompts-dropdown-menu') as HTMLElement;
+
+        if (!button || !menu) return;
+
+        // Handle button click to toggle dropdown
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = menu.style.display === 'block';
+            if (isVisible) {
+                this.hidePromptDropdown();
+            } else {
+                this.showPromptDropdown();
+            }
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!container.contains(e.target as Node)) {
+                this.hidePromptDropdown();
+            }
+        });
+
+        // Initialize with current prompts
+        this.updatePromptDropdown();
     }
 } 
