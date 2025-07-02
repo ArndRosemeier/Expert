@@ -435,12 +435,19 @@ TEMPLATE RULES:
 
 CONTEXT GUIDELINES:
 - Include information that helps maintain project consistency
-- For narratives: may include character details, world-building, themes, style guide
+- For narratives: must include SPECIFIC character details (names, ages, personalities, backgrounds, motivations, relationships), world-building, themes, style guide
 - For business: may include target market, financial considerations, strategy, style guide
 - For research: may include methodology, variables, ethical considerations, style guide
 - Always include a style guide appropriate to the project type
 - Only include what's actually relevant to the specific project
 - Be comprehensive but focused - aim for actionable information
+
+CHARACTER REQUIREMENTS (for narratives):
+- Characters must be SPECIFIC and DETAILED, not generic
+- BAD: "A young man", "The protagonist", "An elderly woman"
+- GOOD: "Marcus Chen, 28, introverted software engineer with social anxiety who dreams of becoming a chef"
+- Include: full names, specific ages, detailed personalities, backstories, motivations, relationships to other characters
+- Each character should be unique and well-defined to maintain consistency throughout the project
 
 TEMPLATE EXAMPLES:
 
