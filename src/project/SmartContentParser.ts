@@ -1,7 +1,7 @@
 /**
  * Smart Content Parser
  * 
- * Detects and parses JSON responses from LLMs with multiple fallback strategies.
+ * Detects and parses section-based responses from LLMs with multiple fallback strategies.
  * Provides enhanced debugging and validation for AI-generated content.
  */
 
@@ -17,6 +17,19 @@ export interface ParsedContent {
     };
 }
 
+// New interface for section-based structure
+export interface AIProjectSections {
+    title: string;
+    template?: {
+        name: string;
+        hierarchy: string;
+        scaffolding: string;
+    };
+    context: string;
+    outline: string;
+}
+
+// Legacy interface for backward compatibility
 export interface AIProjectStructure {
     Content: string;
     Template: {
@@ -43,12 +56,32 @@ export class SmartContentParser {
         this.debug('Response preview:', response.substring(0, 200) + '...');
 
         try {
-            // Try to extract JSON from response
+            // First try to parse section-based format
+            const sectionData = this.extractSections(response);
+            
+            if (sectionData) {
+                this.debug('Successfully extracted sections:', Object.keys(sectionData));
+                
+                if (expectedType === 'project') {
+                    const result = this.parseProjectSections(sectionData, response);
+                    this.debug('parseProjectSections returned:', {
+                        hasStructuredData: result.hasStructuredData,
+                        parseMethod: result.metadata['parseMethod'],
+                        hasTemplate: !!result.template
+                    });
+                    return result;
+                } else {
+                    return this.parseContentSections(sectionData, response);
+                }
+            } else {
+                this.debug('❌ extractSections returned null - trying JSON fallback');
+            }
+
+            // Fallback to JSON parsing for backward compatibility
             const jsonData = this.extractJson(response);
             
             if (jsonData) {
                 this.debug('Successfully extracted JSON with keys:', Object.keys(jsonData));
-                this.debug('JSON structure check - Content:', typeof jsonData.Content, 'Template:', typeof jsonData.Template, 'Context:', typeof jsonData.Context);
                 
                 if (expectedType === 'project') {
                     const result = this.parseProjectStructure(jsonData, response);
@@ -65,13 +98,159 @@ export class SmartContentParser {
                 this.debug('❌ extractJson returned null - no valid JSON found');
             }
         } catch (error) {
-            this.debug('JSON extraction failed:', error);
+            this.debug('Parsing failed:', error);
         }
         
         // Fallback to raw response
-        this.debug('No structured JSON found, using raw response');
+        this.debug('No structured data found, using raw response');
         return this.createRawParsedContent(response);
     }
+
+    /**
+     * Extract sections from response text
+     */
+    private static extractSections(text: string): AIProjectSections | null {
+        this.debug('Trying section extraction...');
+
+        const sections: Partial<AIProjectSections> = {};
+        
+        // Regular expressions for each section
+        const sectionPatterns = {
+            title: /Section:\s*Title\s*\n([\s\S]*?)(?=\nSection:|$)/i,
+            template: /Section:\s*Template\s*\n([\s\S]*?)(?=\nSection:|$)/i,
+            context: /Section:\s*Context\s*\n([\s\S]*?)(?=\nSection:|$)/i,
+            outline: /Section:\s*Outline\s*\n([\s\S]*?)(?=\nSection:|$)/i
+        };
+
+        // Extract each section
+        for (const [key, pattern] of Object.entries(sectionPatterns)) {
+            const match = text.match(pattern);
+            if (match && match[1]) {
+                const content = match[1].trim();
+                
+                if (key === 'template') {
+                    // Parse template section
+                    const templateData = this.parseTemplateSection(content);
+                    if (templateData) {
+                        sections.template = templateData;
+                    }
+                } else {
+                    (sections as any)[key] = content;
+                }
+                
+                this.debug(`✅ Extracted ${key} section (${content.length} chars)`);
+            } else {
+                this.debug(`❌ No ${key} section found`);
+            }
+        }
+
+        // Require at least title and outline for a valid response
+        if (sections.title && sections.outline) {
+            this.debug('✅ Valid section structure found');
+            return sections as AIProjectSections;
+        }
+
+        this.debug('❌ Invalid section structure - missing required sections');
+        return null;
+    }
+
+    /**
+     * Parse template section content
+     */
+    private static parseTemplateSection(content: string): { name: string; hierarchy: string; scaffolding: string } | null {
+        const nameMatch = content.match(/Template\s*Name:\s*(.+?)(?=\n|$)/i);
+        const hierarchyMatch = content.match(/Hierarchy:\s*(.+?)(?=\n|$)/i);
+        const scaffoldingMatch = content.match(/Scaffolding:\s*(.+?)(?=\n|$)/i);
+
+        if (nameMatch && nameMatch[1] && hierarchyMatch && hierarchyMatch[1]) {
+            return {
+                name: nameMatch[1].trim(),
+                hierarchy: hierarchyMatch[1].trim(),
+                scaffolding: (scaffoldingMatch && scaffoldingMatch[1]) ? scaffoldingMatch[1].trim() : ''
+            };
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse project structure from sections
+     */
+    private static parseProjectSections(sectionData: AIProjectSections, originalResponse: string): ParsedContent {
+        if (this.isValidProjectSections(sectionData) && sectionData.template) {
+            const templateData = sectionData.template;
+            
+            // Convert hierarchy string to array
+            const hierarchyLevels = templateData.hierarchy
+                ? templateData.hierarchy.split('|').map(level => level.trim())
+                : [];
+
+            // Convert scaffolding string to array
+            const scaffoldingDocuments = templateData.scaffolding
+                ? templateData.scaffolding.split(',').map(doc => doc.trim()).filter(doc => doc.length > 0)
+                : [];
+
+            const template = {
+                name: templateData.name,
+                hierarchyLevels,
+                scaffoldingDocuments
+            };
+
+            return {
+                hasStructuredData: true,
+                content: sectionData.outline,
+                context: sectionData.context || '',
+                template,
+                metadata: {
+                    parseMethod: 'structured_sections',
+                    originalLength: originalResponse.length,
+                    title: sectionData.title,
+                    sectionCount: Object.keys(sectionData).length
+                }
+            };
+        }
+
+        return this.createRawParsedContent(originalResponse);
+    }
+
+    /**
+     * Parse content structure from sections
+     */
+    private static parseContentSections(sectionData: AIProjectSections, originalResponse: string): ParsedContent {
+        return {
+            hasStructuredData: true,
+            content: sectionData.outline || sectionData.title || originalResponse,
+            context: sectionData.context || '',
+            metadata: {
+                parseMethod: 'content_sections',
+                originalLength: originalResponse.length,
+                sectionCount: Object.keys(sectionData).length
+            }
+        };
+    }
+
+    /**
+     * Validate if sections have valid project structure
+     */
+    private static isValidProjectSections(sections: AIProjectSections): boolean {
+        this.debug('🔍 Validating project sections:');
+        this.debug('  - title exists:', !!sections.title);
+        this.debug('  - outline exists:', !!sections.outline);
+        this.debug('  - template exists:', !!sections.template);
+        this.debug('  - template.name exists:', !!(sections.template && sections.template.name));
+        this.debug('  - template.hierarchy exists:', !!(sections.template && sections.template.hierarchy));
+        
+        const isValid = !!(sections.title && 
+                          sections.outline && 
+                          sections.template &&
+                          sections.template.name &&
+                          sections.template.hierarchy);
+        
+        this.debug('  - Overall valid:', isValid);
+        return isValid;
+    }
+
+
 
     /**
      * Parse project structure from JSON
@@ -454,7 +633,7 @@ export class SmartContentParser {
                 this.debug('⚠️ Repaired JSON still has issues:', (testError as Error).message);
                 // Show a sample around the error position if available
                 const match = (testError as Error).message.match(/position (\d+)/);
-                if (match) {
+                if (match && match[1]) {
                     const pos = parseInt(match[1]);
                     const start = Math.max(0, pos - 50);
                     const end = Math.min(repaired.length, pos + 50);

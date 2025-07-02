@@ -410,28 +410,24 @@ USER DESCRIPTION:
 {{description}}
 
 YOUR TASK:
-Generate a complete project structure based on the user's description. Return your response as a JSON object with this exact structure:
+Generate a complete project structure based on the user's description. You must format your response using exactly these sections in this exact order:
 
-{
-    "Content": "Detailed project outline and structure description",
-    "Template": {
-        "name": "Template Name",
-        "hierarchyLevels": ["Level1", "Level2", "Level3"],
-        "scaffoldingDocuments": ["Doc1", "Doc2"]
-    },
-    "Context": "All relevant contextual information for this project type - may include style guides, character information (for narratives), methodology (for research), financial considerations (for business), etc."
-}
+Section: Title
+Section: Template
+Section: Context
+Section: Outline
 
 TEMPLATE RULES:
+- The ROOT LEVEL (first level) may NEVER have a number - there can only be one root
 - Layer names WITHOUT numbers = flexible count: "Chapter" means any number of chapters
 - Layer names WITH numbers = fixed count: "Chapter 5" means exactly 5 chapters, "Act 3" means exactly 3 acts
 - Examples:
-  * ["Story", "Chapter", "Scene"] = flexible chapters, any number allowed
-  * ["Story", "Chapter 8", "Scene"] = exactly 8 chapters, no more, no less
-  * ["Play", "Act 3", "Scene"] = exactly 3 acts
+  * Story|Chapter|Scene = flexible chapters, any number allowed
+  * Story|Chapter 8|Scene = exactly 8 chapters, no more, no less
+  * Play|Act 3|Scene = exactly 3 acts
+- Use pipe (|) to separate hierarchy levels in the template
 - Only use fixed numbers when specifically requested by the user or structurally important
 - Keep hierarchy levels to 3-4 levels max for usability
-- Choose scaffolding documents that are genuinely helpful for the project type
 
 CONTEXT GUIDELINES:
 - Include information that helps maintain project consistency
@@ -452,46 +448,48 @@ CHARACTER REQUIREMENTS (for narratives):
 TEMPLATE EXAMPLES:
 
 2-LAYER TEMPLATES (simple projects):
-BLOG: ["Blog", "Post"]
-CHECKLIST: ["Guide", "Item"]
-FAQ: ["FAQ", "Question"]
+BLOG: Blog|Post
+CHECKLIST: Guide|Item
+FAQ: FAQ|Question
 
 3-LAYER TEMPLATES (medium complexity):
-NOVEL: ["Book", "Chapter", "Scene"]
-BUSINESS PLAN: ["Plan", "Section", "Topic"]
-COURSE: ["Course", "Module", "Lesson"]
-COOKBOOK: ["Cookbook", "Category", "Recipe"]
+NOVEL: Book|Chapter|Scene
+BUSINESS PLAN: Plan|Section|Topic
+COURSE: Course|Module|Lesson
+COOKBOOK: Cookbook|Category|Recipe
 
 4-LAYER TEMPLATES (complex projects):
-SCREENPLAY: ["Script", "Act", "Scene", "Beat"]
-RESEARCH STUDY: ["Study", "Phase", "Topic", "Subtopic"]
-GAME DESIGN: ["Game", "Chapter", "Level", "Challenge"]
-TECHNICAL DOCS: ["Documentation", "Section", "Feature", "Implementation"]
+SCREENPLAY: Script|Act|Scene|Beat
+RESEARCH STUDY: Study|Phase|Topic|Subtopic
+GAME DESIGN: Game|Chapter|Level|Challenge
+TECHNICAL DOCS: Documentation|Section|Feature|Implementation
 
 FIXED NUMBER EXAMPLES:
-["Story", "Act 3", "Scene"] = exactly 3 acts
-["Course", "Module 8", "Lesson"] = exactly 8 modules
-["Novel", "Part 4", "Chapter", "Scene"] = exactly 4 parts
+Story|Act 3|Scene = exactly 3 acts
+Course|Module 8|Lesson = exactly 8 modules
+Novel|Part 4|Chapter|Scene = exactly 4 parts
 
 GENERATION OPTIONS:
 - Detailed outline: {{detailed_outline}} - {{detailed_outline_description}}
 
-CRITICAL: Return ONLY the JSON object wrapped in code blocks. No additional text, explanations, or commentary before or after the JSON. 
+RESPONSE FORMAT:
+You must structure your response with exactly these four sections in this order:
 
-Format your response exactly like this:
-\`\`\`json
-{
-    "Content": "Your content here",
-    "Template": {
-        "name": "Template name", 
-        "hierarchyLevels": ["Level1", "Level2"],
-        "scaffoldingDocuments": ["Doc1", "Doc2"]
-    },
-    "Context": "Your context here"
-}
-\`\`\`
+Section: Title
+[Write a compelling project title here]
 
-The response must be valid JSON that can be parsed directly.`,
+Section: Template
+Template Name: [Name of your template]
+Hierarchy: [Level1|Level2|Level3] (use pipe separators)
+Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
+
+Section: Context
+[All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc.]
+
+Section: Outline
+[Detailed project outline and structure description based on detailed_outline setting: {{detailed_outline}}]
+
+CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`,
         placeholders: ['description', 'detailed_outline', 'detailed_outline_description'],
         description: "System prompt for AI-powered project generation. Creates comprehensive project structures from natural language descriptions, including templates, content outlines, and contextual information."
     }
