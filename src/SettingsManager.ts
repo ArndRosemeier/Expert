@@ -214,6 +214,7 @@ export class SettingsManager {
                 const currentVersion = VersionService.getBuildNumber();
                 
                 // Check for version mismatches and update legacy profiles
+                console.log('🔍 Checking profiles for version mismatches...');
                 Object.keys(this.profiles).forEach(profileName => {
                     const profile = this.profiles[profileName];
                     if (profile) {
@@ -221,6 +222,8 @@ export class SettingsManager {
                         if (!profile.version || profile.version !== currentVersion) {
                             hasVersionMismatch = true;
                             console.log(`📋 Profile "${profileName}" has version mismatch. Profile version: ${profile.version || 'unknown'}, Current version: ${currentVersion}`);
+                        } else {
+                            console.log(`✅ Profile "${profileName}" version matches. Version: ${profile.version}`);
                         }
                         
                         // Add default context extraction prompt and web search preferences to existing profiles that don't have them

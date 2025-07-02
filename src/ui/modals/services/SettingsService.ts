@@ -588,16 +588,23 @@ export class SettingsService {
             // Save updated profile and prompts
             console.log('🔄 Saving updated profile with version:', analysis.currentVersion);
             await this.settingsManager.saveProfile(profileName, updatedProfile);
-            console.log('✅ Profile saved successfully');
+            
+            // Verify the profile was saved correctly
+            const savedProfile = this.settingsManager.getProfile(profileName);
+            console.log('✅ Profile saved successfully. Saved version:', savedProfile?.version);
             
             console.log('🔄 Saving updated prompts...');
             await this.settingsManager.savePrompts(finalPrompts);
             console.log('✅ Prompts saved successfully');
 
-            // Force a small delay to ensure storage operations complete
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Force a longer delay to ensure storage operations complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
-            console.log('✅ Migration save operations completed');
+            // Double check the profile is still correctly saved
+            const finalProfile = this.settingsManager.getProfile(profileName);
+            console.log('🔍 Final verification - Profile version:', finalProfile?.version, 'Current version:', analysis.currentVersion);
+            
+            console.log('✅ Migration save operations completed successfully');
             return true;
         } catch (error) {
             console.error('Failed to apply migration:', error);
