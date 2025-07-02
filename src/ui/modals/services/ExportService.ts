@@ -261,7 +261,7 @@ export class ExportService implements IExportService {
         .toc .level-6 { padding-left: 5rem; }
         h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
         h2, h3, h4, h5, h6 { color: #34495e; margin-top: 2rem; }
-        .content { margin-bottom: 2rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #007bff; }
+        .content { margin-bottom: 2rem; }
         .meta { font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; }
         .hierarchy-group { margin-bottom: 3rem; }
         .node-content { margin-bottom: 1.5rem; }
@@ -326,8 +326,8 @@ export class ExportService implements IExportService {
         .toc .level-6 { padding-left: 5rem; }
         h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 0.5rem; }
         h2, h3, h4, h5, h6 { color: #34495e; margin-top: 2rem; }
-        .content { margin-bottom: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-left: 4px solid #007bff; }
-        .summary { margin-bottom: 1rem; padding: 0.75rem; background-color: #e7f3ff; border-left: 4px solid #0056b3; font-style: italic; }
+        .content { margin-bottom: 1.5rem; }
+        .summary { margin-bottom: 1rem; font-style: italic; }
         .level-node { margin-bottom: 1.5rem; }
     </style>
 </head>
