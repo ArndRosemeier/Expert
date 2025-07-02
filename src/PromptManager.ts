@@ -415,7 +415,7 @@ Generate a complete project structure based on the user's description. You must 
 Section: Title
 Section: Template
 Section: Context
-Section: Outline
+Section: Concept
 
 TEMPLATE RULES:
 - The ROOT LEVEL (first level) may NEVER have a number - there can only be one root
@@ -486,8 +486,8 @@ Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
 Section: Context
 [All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc.]
 
-Section: Outline
-[Detailed project outline and structure description based on detailed_outline setting: {{detailed_outline}}]
+Section: Concept
+[High-level project concept and structure overview based on detailed_outline setting: {{detailed_outline}}]
 
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`,
         placeholders: ['description', 'detailed_outline', 'detailed_outline_description'],

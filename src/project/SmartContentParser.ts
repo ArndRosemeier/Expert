@@ -26,7 +26,7 @@ export interface AIProjectSections {
         scaffolding: string;
     };
     context: string;
-    outline: string;
+    concept: string;
 }
 
 // Legacy interface for backward compatibility
@@ -119,7 +119,7 @@ export class SmartContentParser {
             title: /Section:\s*Title\s*\n([\s\S]*?)(?=\nSection:|$)/i,
             template: /Section:\s*Template\s*\n([\s\S]*?)(?=\nSection:|$)/i,
             context: /Section:\s*Context\s*\n([\s\S]*?)(?=\nSection:|$)/i,
-            outline: /Section:\s*Outline\s*\n([\s\S]*?)(?=\nSection:|$)/i
+            concept: /Section:\s*Concept\s*\n([\s\S]*?)(?=\nSection:|$)/i
         };
 
         // Extract each section
@@ -144,8 +144,8 @@ export class SmartContentParser {
             }
         }
 
-        // Require at least title and outline for a valid response
-        if (sections.title && sections.outline) {
+        // Require at least title and concept for a valid response
+        if (sections.title && sections.concept) {
             this.debug('✅ Valid section structure found');
             return sections as AIProjectSections;
         }
@@ -198,7 +198,7 @@ export class SmartContentParser {
 
             return {
                 hasStructuredData: true,
-                content: sectionData.outline,
+                content: sectionData.concept,
                 context: sectionData.context || '',
                 template,
                 metadata: {
@@ -219,7 +219,7 @@ export class SmartContentParser {
     private static parseContentSections(sectionData: AIProjectSections, originalResponse: string): ParsedContent {
         return {
             hasStructuredData: true,
-            content: sectionData.outline || sectionData.title || originalResponse,
+            content: sectionData.concept || sectionData.title || originalResponse,
             context: sectionData.context || '',
             metadata: {
                 parseMethod: 'content_sections',
@@ -235,13 +235,13 @@ export class SmartContentParser {
     private static isValidProjectSections(sections: AIProjectSections): boolean {
         this.debug('🔍 Validating project sections:');
         this.debug('  - title exists:', !!sections.title);
-        this.debug('  - outline exists:', !!sections.outline);
+        this.debug('  - concept exists:', !!sections.concept);
         this.debug('  - template exists:', !!sections.template);
         this.debug('  - template.name exists:', !!(sections.template && sections.template.name));
         this.debug('  - template.hierarchy exists:', !!(sections.template && sections.template.hierarchy));
         
         const isValid = !!(sections.title && 
-                          sections.outline && 
+                          sections.concept && 
                           sections.template &&
                           sections.template.name &&
                           sections.template.hierarchy);
