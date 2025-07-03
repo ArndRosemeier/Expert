@@ -211,7 +211,7 @@ export class ReaderEditManager {
         
         // Check if action was canceled during prompt filling
         if (filledPrompt === '__CANCELED__') {
-            return ''; // Return empty result for canceled actions
+            throw new Error('ACTION_CANCELED'); // Throw cancellation error instead of returning empty
         }
         
         // Execute the prompt using OpenRouterClient directly

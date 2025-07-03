@@ -167,6 +167,16 @@ export class ReaderEditor {
             this.applyAIResult(this.currentActiveEditor, processedContext, result);
             
         } catch (error) {
+            // Handle cancellation gracefully without error message
+            if (error instanceof Error && error.message === 'ACTION_CANCELED') {
+                console.log('Action was canceled by user');
+                // Clear any preview highlights that might be showing
+                if (this.currentActiveEditor && this.currentActiveEditor.editor.hasPreviewHighlight()) {
+                    this.currentActiveEditor.editor.clearAllHighlights();
+                }
+                return; // Exit gracefully without applying any changes
+            }
+            
             console.error('Failed to execute action:', error);
             alert(`Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
