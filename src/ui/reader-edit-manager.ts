@@ -1,6 +1,7 @@
 import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { OpenRouterClient } from '../OpenRouterClient';
+import { QualityCriterion } from '../types';
 import { 
     ReaderEditAction, 
     EditActionConfig, 
@@ -33,7 +34,7 @@ export class ReaderEditManager {
      */
     private getDefaultConfig(): EditActionConfig {
         return {
-            version: 4,
+            version: 5,
             actions: [
                 {
                     id: 'expand-details',
@@ -74,7 +75,7 @@ export class ReaderEditManager {
                 {
                     id: 'change',
                     title: 'Change',
-                    prompt: 'Full context for reference:\nNode: {{title}}\nContent: {{content}}\n\nAn instruction follows that should be applied to a text.\nOnly return the result of that instruction, nothing more.\nInstruction: {{input "How should the text be changed?"}}\nText:\n{{selected}}',
+                    prompt: 'Quality criteria for this project:\n{{criteria}}\n\nFull context for reference:\nNode: {{title}}\nContent: {{content}}\n\nAn instruction follows that should be applied to a text.\nWhen making changes, consider the quality criteria above.\nOnly return the result of that instruction, nothing more.\nInstruction: {{input "How should the text be changed?"}}\nText:\n{{selected}}',
                     model: 'creator',
                     enabled: true,
                     order: 5,
@@ -83,7 +84,7 @@ export class ReaderEditManager {
                 {
                     id: 'continue-cursor-end',
                     title: 'Continue (cursor at the end)',
-                    prompt: 'Please continue the following text:\n\n{{content}}\n\nJust answer with the continuation.',
+                    prompt: 'Quality criteria for this project:\n{{criteria}}\n\nPlease continue the following text while adhering to the quality criteria above:\n\n{{content}}\n\nJust answer with the continuation.',
                     model: 'creator',
                     enabled: true,
                     order: 6,
@@ -102,7 +103,7 @@ export class ReaderEditManager {
             const savedConfig = await storage.get<EditActionConfig>(ReaderEditManager.CONFIG_STORAGE_KEY);
             
             // TEMPORARY: Force reset to fix prompt issues - increment version to invalidate old configs
-            const currentVersion = 4; // Incremented to add Continue (cursor at the end) action
+            const currentVersion = 5; // Incremented to add criteria support
             
             if (savedConfig && savedConfig.version === currentVersion) {
                 this.config = savedConfig;
@@ -396,6 +397,15 @@ export class ReaderEditManager {
         const context = contextService.compileNodeContext(node.id, this.projectManager.rootNode);
         const path = treeService.getNodePath(node.id, this.projectManager.rootNode);
         
+        // Get criteria from settings manager
+        const settingsManager = this.projectManager.getSettingsManager();
+        const profile = settingsManager.getLastUsedProfile();
+        const allCriteria = profile?.criteria || [];
+        
+        // Filter criteria for leaf nodes (most editing actions are on leaf content)
+        const isLeafNode = !node.children || node.children.length === 0;
+        const criteria = this.filterCriteriaForNodeType(allCriteria, isLeafNode);
+        
         return {
             'content': node.content || '',
             'title': node.title,
@@ -404,11 +414,50 @@ export class ReaderEditManager {
             'project_title': this.projectManager.projectTitle,
             'parent_content': node.parentId ? 
                 this.projectManager.findNodeById(node.parentId)?.content || '' : '',
-            'child_level_name': node.childLevelName || ''
+            'child_level_name': node.childLevelName || '',
+            'criteria': this.formatCriteriaAsJson(criteria)
         };
     }
 
+    /**
+     * Formats criteria as JSON for consistent presentation to AI models
+     * (Same format as LoopOrchestrator)
+     */
+    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+        const formattedCriteria = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return {
+                name: shortName,
+                description: c.description || shortName
+            };
+        });
+        
+        return JSON.stringify(formattedCriteria, null, 2);
+    }
 
+    /**
+     * Filters criteria based on node type (leaf vs outline/branch).
+     * @param criteria The full list of criteria.
+     * @param isLeafNode Whether the node is a leaf node.
+     * @returns Filtered criteria appropriate for the node type.
+     */
+    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
+        return criteria.filter(criterion => {
+            // If both outline and leaf are undefined or both are true, include the criterion
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                return true; // Legacy criteria - apply to all
+            }
+            
+            // For leaf nodes, include criteria where leaf is true
+            if (isLeafNode) {
+                return criterion.leaf === true;
+            }
+            
+            // For outline/branch nodes, include criteria where outline is true
+            return criterion.outline === true;
+        });
+    }
 
     /**
      * Get available placeholders for prompt building UI
@@ -428,6 +477,7 @@ export class ReaderEditManager {
             placeholders['project_title'] = '[Project title]';
             placeholders['parent_content'] = '[Parent node content]';
             placeholders['context'] = '[Node context and hierarchy]';
+            placeholders['criteria'] = '[Quality criteria for this project]';
         }
         
         return placeholders;
