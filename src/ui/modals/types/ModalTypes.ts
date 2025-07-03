@@ -79,8 +79,7 @@ export interface ExportModalConfig extends ModalConfig {
     node: DocumentNode;
 }
 
-export type ExportScope = 'single' | 'hierarchy' | 'leaves';
-export type ExportFormat = 'html' | 'markdown' | 'plain' | 'reimport';
+// Export types moved to ExportTypes.ts to avoid conflicts
 
 /**
  * Settings modal specific types

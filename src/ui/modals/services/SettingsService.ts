@@ -222,9 +222,9 @@ export class SettingsService {
         confirmOverwrite: (profileName: string) => Promise<boolean>
     ): Promise<ProfileImportResult> {
         try {
-            const result = await this.settingsManager.importProfileFromFile(file, confirmOverwrite);
+            const result = await this.settingsManager.importProfileFromFile(file, confirmOverwrite) as ProfileImportResult;
             
-            if (result.success) {
+            if (result.success && result.profileName) {
                 this.emitChange({
                     type: 'profile',
                     data: { action: 'imported', profileName: result.profileName }
@@ -237,7 +237,7 @@ export class SettingsService {
             return {
                 success: false,
                 message: 'Failed to import profile. Please check the file format and try again.'
-            };
+            } as ProfileImportResult;
         }
     }
 
@@ -437,7 +437,7 @@ export class SettingsService {
 
         return {
             criteriaCount: profile.criteria?.length || 0,
-            modelsCount: profile.selectedModels?.length || 0
+            modelsCount: Object.keys(profile.selectedModels || {}).length || 0
         };
     }
 
@@ -511,16 +511,23 @@ export class SettingsService {
                 hasChanges = JSON.stringify(savedCriterion) !== JSON.stringify(defaultCriterion);
             }
 
-            criteriaDiffs.push({
+            const criteriaDiff: CriteriaDifference = {
                 name: criterionName,
                 hasChanges,
                 inSaved,
                 inDefault,
                 isUserAdded,
-                useDefault: inDefault, // Use default for standard criteria, preserve user-added
-                savedCriterion: savedCriterion,
-                defaultCriterion: defaultCriterion
-            });
+                useDefault: inDefault // Use default for standard criteria, preserve user-added
+            };
+            
+            if (savedCriterion !== undefined) {
+                criteriaDiff.savedCriterion = savedCriterion;
+            }
+            if (defaultCriterion !== undefined) {
+                criteriaDiff.defaultCriterion = defaultCriterion;
+            }
+            
+            criteriaDiffs.push(criteriaDiff);
         }
 
         const hasChanges = promptDiffs.some(p => p.hasChanges) || 
@@ -546,7 +553,6 @@ export class SettingsService {
     ): Promise<boolean> {
         try {
             const currentPrompts = { ...defaultPrompts };
-            const currentCriteria = [...DEFAULT_CRITERIA];
 
             // Apply prompt choices
             const finalPrompts = { ...currentPrompts };

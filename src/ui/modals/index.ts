@@ -7,18 +7,18 @@ export * from './core/BaseModal';
 export * from './core/ModalRegistry';
 export * from './core/modal-utils';
 
-// Modal implementations
-export * from './SettingsModal';
-export * from './ExportModal';
-export * from './GenericModal';
-export * from './AILogModal';
-export * from './AddChildNodeModal';
-export * from './KeyValidationModal';
-export * from './VersionMismatchModal';
-export * from './ContextInfoModal';
-export * from './MigrationSelectionModal';
-export * from './NewProjectModal';
-export * from './ViewTemplateModal';
+// Modal implementations (explicit exports to avoid conflicts)
+export { SettingsModal } from './SettingsModal';
+export { ExportModal } from './ExportModal';
+export { showGenericModal, showAlert, showConfirm, GenericModal } from './GenericModal';
+export { AILogModal } from './AILogModal';
+export { AddChildNodeModal } from './AddChildNodeModal';
+export { KeyValidationModal } from './KeyValidationModal';
+export { VersionMismatchModal } from './VersionMismatchModal';
+export { ContextInfoModal } from './ContextInfoModal';
+export { MigrationSelectionModal } from './MigrationSelectionModal';
+export { NewProjectModal } from './NewProjectModal';
+export { showViewTemplateModal } from './ViewTemplateModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';
@@ -66,7 +66,8 @@ export type {
  * Opens a generic modal with content (backward compatibility)
  */
 export function openGenericModal(content: string, onOpen?: () => void): void {
-    showGenericModal(content, {}, { onOpen });
+    const hooks = onOpen ? { onOpen } : {};
+    showGenericModal(content, {}, hooks);
 }
 
 /**

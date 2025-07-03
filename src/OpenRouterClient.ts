@@ -221,7 +221,7 @@ export class OpenRouterClient {
    */
   public abortAllOperations(): void {
     console.log(`🛑 Aborting all operations (${this.activeOperations.size} active)`);
-    for (const [operationId, controller] of this.activeOperations.entries()) {
+            for (const [, controller] of this.activeOperations.entries()) {
       controller.abort();
     }
     this.activeOperations.clear();

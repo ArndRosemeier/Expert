@@ -1,12 +1,11 @@
 import { getElementById } from "./dom-elements";
 import { showGenericModal } from './modals/index';
-import { ProjectTemplate } from "../ProjectTemplate";
+// ProjectTemplate import removed - no longer used
 import { SingleTemplateEditor } from './components/SingleTemplateEditor';
 import * as state from '../state';
 
 let currentTemplateName: string | null = null;
 let isDirty = false;
-let isPopulating = false; // Semaphore to prevent dirty flag during UI population
 let singleTemplateEditor: SingleTemplateEditor | null = null;
 
 // Main entry point
@@ -256,12 +255,7 @@ function handleSaveFromModal(modal: any) {
     }
 }
 
-function handleCancel() {
-    if (isDirty && !confirm("You have unsaved changes. Are you sure you want to cancel?")) {
-        return;
-    }
-    // Modal closing is now handled by the new modal system
-}
+// handleCancel function removed - no longer used
 
 // --- UI Rendering ---
 
@@ -270,18 +264,12 @@ function populateTemplateSelector() {
     const select = getElementById<HTMLSelectElement>('template-select');
     if (!templateManager || !select) return;
 
-    // Set semaphore to prevent dirty flag during UI population
-    isPopulating = true;
-
     const names = templateManager.getTemplateNames().sort();
     select.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join('');
     
     if (currentTemplateName) {
         select.value = currentTemplateName;
     }
-
-    // Clear semaphore after population
-    isPopulating = false;
 }
 
 function renderCurrentTemplateView() {
@@ -289,13 +277,9 @@ function renderCurrentTemplateView() {
     const container = getElementById('single-template-editor-container');
     if (!templateManager || !container) return;
 
-    // Set semaphore to prevent dirty flag during UI population
-    isPopulating = true;
-
     if (!currentTemplateName) {
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No template selected.</p>';
         singleTemplateEditor = null;
-        isPopulating = false;
         return;
     }
 
@@ -303,7 +287,6 @@ function renderCurrentTemplateView() {
     if (!template) {
         container.innerHTML = `<p style="text-align: center; color: #666; padding: 2rem;">Template '${currentTemplateName}' not found.</p>`;
         singleTemplateEditor = null;
-        isPopulating = false;
         return;
     }
 
@@ -311,7 +294,7 @@ function renderCurrentTemplateView() {
     singleTemplateEditor = new SingleTemplateEditor({
         containerId: 'single-template-editor-container',
         template: template,
-        onTemplateChange: (updatedTemplate) => {
+        onTemplateChange: (_updatedTemplate) => {
             isDirty = true;
         },
         readonly: false,
@@ -320,8 +303,7 @@ function renderCurrentTemplateView() {
 
     singleTemplateEditor.render();
     
-    // Clear semaphore and ensure dirty flag is false after population
-    isPopulating = false;
+    // Ensure dirty flag is false after population
     isDirty = false;
 }
 

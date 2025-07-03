@@ -1,5 +1,5 @@
 import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
-import { openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
@@ -19,7 +19,7 @@ import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 
-import { PromptManager } from './PromptManager';
+
 
 function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
     const modelSelector = state.getModelSelector();

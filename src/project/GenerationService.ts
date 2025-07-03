@@ -8,7 +8,7 @@ import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
-import { SmartContentParser } from './SmartContentParser';
+
 
 
 interface GenerationDependencies {
@@ -509,7 +509,6 @@ export class GenerationService {
 
         const prompts = this.deps.settingsManager.getPrompts();
         const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-        const childLevelName = node.childLevelName || 'item';
 
         const prompt = this.deps.promptService.fillGenerationPrompt(
             prompts.create_children_from_outline_user,
@@ -682,7 +681,6 @@ export class GenerationService {
             try {
                 const prompts = this.deps.settingsManager.getPrompts();
                 const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-                const childLevelName = node.childLevelName || 'item';
 
                 const prompt = this.deps.promptService.fillGenerationPrompt(
                     prompts.create_children_from_outline_user,

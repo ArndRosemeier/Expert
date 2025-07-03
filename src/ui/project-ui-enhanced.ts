@@ -8,7 +8,7 @@
 import { eventManager } from './event-manager';
 import { getElementById } from './dom-elements';
 import type { ProjectManager } from '../ProjectManager';
-import type { DocumentNode } from '../DocumentNode';
+
 
 // Re-export original functions for compatibility
 export { 
@@ -225,9 +225,9 @@ export function setupEnhancedEventListeners(): void {
  * Safe button update that preserves event listeners
  */
 export function updateGenerateButton(
-    nodeId: string, 
+    _nodeId: string, 
     state: 'generating' | 'idle' | 'disabled',
-    projectManager?: ProjectManager
+    _projectManager?: ProjectManager
 ): void {
     const buttonId = 'node-generate-btn';
     
@@ -269,19 +269,19 @@ export function replaceNodeDetailsContent(htmlContent: string): void {
 // === EVENT HANDLERS ===
 // These handlers extract the logic from the original setupEventListeners function
 
-function handleDefaultPromptClick(event: Event): void {
+function handleDefaultPromptClick(_event: Event): void {
     console.log('🔧 Default prompt clicked - implementation needed');
     // TODO: Access project state through proper state management
     // This handler needs access to current project and selected node
 }
 
-function handleNodeGenerateClick(event: Event): void {
+function handleNodeGenerateClick(_event: Event): void {
     console.log('🚀 Node generate clicked - implementation needed');
     // TODO: Access project state through proper state management
     // This handler needs access to current project and selected node
 }
 
-function handleNodeGenerateAllClick(event: Event): void {
+function handleNodeGenerateAllClick(_event: Event): void {
     console.log('🚀 Node generate all clicked - implementation needed');
     // TODO: Access project state through proper state management
     // This handler needs access to current project and selected node
@@ -290,114 +290,114 @@ function handleNodeGenerateAllClick(event: Event): void {
 // Placeholder implementations for other handlers
 // These would be extracted from the original setupEventListeners function
 
-function handlePropagateContextClick(event: Event): void {
+function handlePropagateContextClick(_event: Event): void {
     console.log('🔄 Propagate context clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleExtractContextClick(event: Event): void {
+function handleExtractContextClick(_event: Event): void {
     console.log('🔄 Extract context clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleDeleteNodeClick(event: Event): void {
+function handleDeleteNodeClick(_event: Event): void {
     console.log('🗑️ Delete node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleDeleteSubnodesClick(event: Event): void {
+function handleDeleteSubnodesClick(_event: Event): void {
     console.log('🗂️ Delete subnodes clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleAddChildNodeClick(event: Event): void {
+function handleAddChildNodeClick(_event: Event): void {
     console.log('➕ Add child node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleExportNodeClick(event: Event): void {
+function handleExportNodeClick(_event: Event): void {
     console.log('📤 Export node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleImportNodeClick(event: Event): void {
+function handleImportNodeClick(_event: Event): void {
     console.log('📥 Import node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleChatNodeClick(event: Event): void {
+function handleChatNodeClick(_event: Event): void {
     console.log('💬 Chat node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handlePlaceholderClick(event: Event): void {
+function handlePlaceholderClick(_event: Event): void {
     console.log('🔍 Placeholder clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleVersionPrevClick(event: Event): void {
+function handleVersionPrevClick(_event: Event): void {
     console.log('⬅️ Version prev clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleVersionNextClick(event: Event): void {
+function handleVersionNextClick(_event: Event): void {
     console.log('➡️ Version next clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleUseVersionClick(event: Event): void {
+function handleUseVersionClick(_event: Event): void {
     console.log('✅ Use version clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleShowRatingsChange(event: Event): void {
+function handleShowRatingsChange(_event: Event): void {
     console.log('📊 Show ratings changed');
     // TODO: Extract implementation from original code
 }
 
-function handleIncludeContentChange(event: Event): void {
+function handleIncludeContentChange(_event: Event): void {
     console.log('📄 Include content changed');
     // TODO: Extract implementation from original code
 }
 
-function handleRecursiveChange(event: Event): void {
+function handleRecursiveChange(_event: Event): void {
     console.log('🔄 Recursive changed');
     // TODO: Extract implementation from original code
 }
 
 
 
-function handleContentInput(event: Event): void {
+function handleContentInput(_event: Event): void {
     console.log('📝 Content input');
     // TODO: Extract implementation from original code
 }
 
-function handleContextInput(event: Event): void {
+function handleContextInput(_event: Event): void {
     console.log('🎯 Context input');
     // TODO: Extract implementation from original code
 }
 
-function handleGenerationPromptInput(event: Event): void {
+function handleGenerationPromptInput(_event: Event): void {
     console.log('🔧 Generation prompt input');
     // TODO: Extract implementation from original code
 }
 
-function handleTitleInput(event: Event): void {
+function handleTitleInput(_event: Event): void {
     console.log('📝 Title input');
     // TODO: Extract implementation from original code
 }
 
-function handleTreeNodeClick(event: Event): void {
+function handleTreeNodeClick(_event: Event): void {
     console.log('🌳 Tree node clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleTreeExpandClick(event: Event): void {
+function handleTreeExpandClick(_event: Event): void {
     console.log('➕ Tree expand clicked');
     // TODO: Extract implementation from original code
 }
 
-function handleTreeExpandDoubleClick(event: Event): void {
+function handleTreeExpandDoubleClick(_event: Event): void {
     console.log('➕➕ Tree expand double clicked');
     // TODO: Extract implementation from original code
 }

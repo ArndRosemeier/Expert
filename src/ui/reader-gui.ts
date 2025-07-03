@@ -2,7 +2,7 @@ import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { ReaderEditor } from './reader-editor';
 import { ReaderEditAction } from '../types/ReaderEditingTypes';
-import { openGenericModal, closeGenericModal } from './modal-manager';
+// openGenericModal, closeGenericModal imports removed - no longer used
 
 import { StorageService } from '../StorageService';
 
@@ -2528,7 +2528,7 @@ export class ReaderGUI {
      * Setup event listeners for the actions configuration modal
      */
     private setupActionsConfigEventListeners(
-        selectedActionId: string | null,
+        _selectedActionId: string | null,
         unsavedChanges: boolean,
         setSelectedActionId: (id: string | null) => void,
         setUnsavedChanges: (state: boolean) => void
@@ -3193,7 +3193,7 @@ export class ReaderGUI {
     /**
      * Handle node summary generation - update reader content without breaking editor
      */
-    private handleNodeSummaryGenerated(e: { nodeId: string, summary: string }): void {
+    private handleNodeSummaryGenerated(_e: { nodeId: string, summary: string }): void {
         // Summary updates don't affect reader content directly since we show content, not summaries
         // But we could update any summary displays if needed in the future
     }
@@ -3330,24 +3330,7 @@ export class ReaderGUI {
         }
     }
 
-    /**
-     * Preserve the current reading position before updating content
-     */
-    private preserveReadingPosition(): void {
-        // Content state is managed by individual text editors in always-edit mode
-        // No position preservation needed
-    }
-
-
-
-    /**
-     * Refresh content while preserving reading position
-     */
-    private refreshContent(): void {
-        // In always-edit mode, content is managed entirely by individual text editors
-        // No full DOM refreshes needed - updates happen through ReaderEditor
-        return;
-    }
+    // preserveReadingPosition and refreshContent methods removed - no longer used
 
 
 

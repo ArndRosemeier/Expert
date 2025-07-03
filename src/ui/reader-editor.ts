@@ -307,7 +307,7 @@ export class ReaderEditor {
     /**
      * Handle editor blur
      */
-    private handleEditorBlur(editor: NodeEditor): void {
+    private handleEditorBlur(_editor: NodeEditor): void {
         // No saving on blur - just mark as dirty for tracking
         // All content will be copied back when reader closes
     }

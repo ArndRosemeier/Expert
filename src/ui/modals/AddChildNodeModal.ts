@@ -4,6 +4,7 @@ import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { NodeCreationService, NodeSuggestion, INodeCreationService } from './services/NodeCreationService';
 import { createElement } from './core/modal-utils';
+import { OpenRouterClient } from '../../OpenRouterClient';
 
 export interface AddChildNodeModalConfig extends ModalConfig {
     parentNodeId: string;
@@ -49,8 +50,11 @@ export class AddChildNodeModal extends BaseModal {
         };
 
         // Create the node creation service
+        const openRouterClient = OpenRouterClient.getInstance();
+        openRouterClient.setSettingsManager(config.projectManager.getSettingsManager());
+        
         this.nodeCreationService = new NodeCreationService(
-            (config.projectManager as any).openRouterClient, // Access private property
+            openRouterClient,
             config.projectManager.getSettingsManager(),
             config.projectManager.getContextService(),
             config.projectManager.getTreeService(),
@@ -524,7 +528,7 @@ export class AddChildNodeModal extends BaseModal {
         return container;
     }
 
-    private createSuggestionCard(suggestion: NodeSuggestion, index: number): HTMLElement {
+    private createSuggestionCard(suggestion: NodeSuggestion, _index: number): HTMLElement {
         const isSelected = this.childModalState.selectedSuggestion === suggestion;
         
         const card = createElement('div', {

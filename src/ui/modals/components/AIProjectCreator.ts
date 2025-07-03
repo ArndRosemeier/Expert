@@ -6,7 +6,7 @@
 
 import { ProjectTemplate } from '../../../ProjectTemplate';
 import { ProjectGenerationService, ProjectGenerationRequest } from '../services/ProjectGenerationService';
-import * as state from '../../../state';
+// import * as state from '../../../state'; // Not used currently
 import { SettingsManager } from '../../../SettingsManager';
 import { StorageService } from '../../../StorageService';
 
@@ -17,8 +17,7 @@ export interface AIProjectCreatorConfig {
 
 export interface ProjectGenerationOptions {
     includeCharacters: boolean;  // Always true - automatically included for narrative projects
-    includeStyleGuide: boolean;  // Always true - automatically included for all projects  
-    detailedOutline: boolean;    // User choice - create comprehensive detailed outline
+    includeStyleGuide: boolean;  // Always true - automatically included for all projects
 }
 
 export class AIProjectCreator {
@@ -107,7 +106,7 @@ export class AIProjectCreator {
                         font-style: italic;
                     }
                     
-                    .generation-options {
+                    .generation-info {
                         background-color: #f8f9fa;
                         border: 1px solid #e9ecef;
                         border-radius: 8px;
@@ -116,46 +115,23 @@ export class AIProjectCreator {
                         height: fit-content;
                     }
                     
-                    .generation-options h4 {
+                    .generation-info h4 {
                         margin: 0 0 1rem 0;
                         color: #495057;
                         font-size: 1rem;
                     }
                     
-                    .option-group {
+                    .info-content {
                         display: flex;
                         flex-direction: column;
                         gap: 0.75rem;
                     }
                     
-                    .option-group label {
-                        display: flex;
-                        align-items: center;
-                        gap: 0.5rem;
-                        font-weight: normal;
-                        cursor: pointer;
-                        color: #495057;
-                        transition: color 0.2s ease;
-                    }
-                    
-                    .option-group label:hover {
-                        color: #007bff;
-                    }
-                    
-                    .option-group input[type="checkbox"] {
-                        width: 18px;
-                        height: 18px;
-                        cursor: pointer;
-                    }
-                    
-                    .option-note {
-                        margin-top: 1rem;
-                        padding: 0.75rem;
-                        background-color: #e7f3ff;
-                        border: 1px solid #b3d7ff;
-                        border-radius: 6px;
+                    .info-content p {
+                        margin: 0;
                         font-size: 0.9rem;
-                        color: #0056b3;
+                        color: #495057;
+                        line-height: 1.4;
                     }
                     
                     .action-buttons {
@@ -255,16 +231,11 @@ export class AIProjectCreator {
                 
                 <div class="bottom-content">
                     <div class="left-column">
-                        <div class="generation-options">
-                            <h4>🎯 Generation Options</h4>
-                            <div class="option-group">
-                                <label>
-                                    <input type="checkbox" id="detailed-outline" checked>
-                                    <span>📋 Create detailed project outline</span>
-                                </label>
-                            </div>
-                            <div class="option-note">
-                                <small>💡 <strong>Note:</strong> Style guides and character information (for stories) are automatically included based on your project type.</small>
+                        <div class="generation-info">
+                            <h4>🎯 What's Generated</h4>
+                            <div class="info-content">
+                                <p>✨ Your project will include creative brainstorming and conceptual ideas to inspire your writing</p>
+                                <p>📝 Style guides and character information are automatically included based on your project type</p>
                             </div>
                         </div>
                         
@@ -382,7 +353,7 @@ export class AIProjectCreator {
                 description: result.metadata.description,
                 options: result.metadata.options,
                 isAIGenerated: true,
-                content: result.content,           // Project outline/structure
+                content: result.content,           // Project concept/structure
                 context: result.context,          // Consolidated context (characters, style guides, etc.)
                 generatedAt: result.metadata.generatedAt,
                 projectType: result.metadata.projectType
@@ -415,14 +386,9 @@ export class AIProjectCreator {
     }
 
     private getGenerationOptions(): ProjectGenerationOptions {
-        if (!this.container) {
-            return { includeCharacters: true, includeStyleGuide: true, detailedOutline: true };
-        }
-        
         return {
             includeCharacters: true,  // Always true, automatically included for narratives
-            includeStyleGuide: true,  // Always true, automatically included for all projects
-            detailedOutline: (this.container.querySelector('#detailed-outline') as HTMLInputElement)?.checked || false
+            includeStyleGuide: true   // Always true, automatically included for all projects
         };
     }
 

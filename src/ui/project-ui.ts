@@ -5,7 +5,7 @@ import * as state from '../state';
 import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
-import { showGenericModal } from './modals/GenericModal';
+
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
 // --- State Variables ---
@@ -184,13 +184,12 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
     
     // Parse the layer name to extract target count
     let newLevelName: string = trimmedName;
-    let targetCount: number | undefined;
     
     // Check if the name ends with a number (e.g., "Series 3")
     const match = trimmedName.match(/^(.+?)\s+(\d+)$/);
     if (match && match[1] && match[2]) {
         newLevelName = match[1]!; // Non-null assertion since we checked above
-        targetCount = parseInt(match[2]!, 10);
+        // Target count parsing available but not currently used
     }
 
     try {
@@ -1388,59 +1387,11 @@ function updateVersionNavigationUI() {
     }
 }
 
-function navigateToVersion(direction: 'prev' | 'next') {
-    if (direction === 'prev' && currentVersionIndex > 0) {
-        currentVersionIndex--;
-    } else if (direction === 'next' && currentVersionIndex < availableVersions.length - 1) {
-        currentVersionIndex++;
-    }
-    
-    displayCurrentVersion();
-    updateVersionNavigationUI();
-}
 
-function displayCurrentVersion() {
-    const currentVersion = availableVersions[currentVersionIndex];
-    if (!currentVersion) return;
 
-    // Update content display
-    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-    if (contentTextArea) {
-        contentTextArea.value = currentVersion.content;
-    }
 
-    // Update ratings display if currently showing ratings
-    const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
-    if (showRatingsCheckbox?.checked) {
-        renderRatingsView();
-    }
-}
 
-function useCurrentVersion() {
-    if (!projectManager || !selectedNodeId) return;
-    
-    const node = projectManager.findNodeById(selectedNodeId);
-    const currentVersion = availableVersions[currentVersionIndex];
-    
-    if (!node || !currentVersion || currentVersion.isCurrent) return;
 
-    // Update the node's content
-    node.content = currentVersion.content;
-    
-    // Save to storage
-    void projectManager.saveToStorage().catch(console.error);
-    
-    // Reset to show current version
-    currentVersionIndex = 0;
-    availableVersions[0].content = currentVersion.content;
-    
-    // Update UI
-    displayCurrentVersion();
-    updateVersionNavigationUI();
-    
-    // Show success message
-    alert('Content updated to selected version!');
-}
 
 function toggleRatingsView(showRatings: boolean) {
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
@@ -1920,7 +1871,7 @@ This action cannot be undone.`;
 
                 // Open the Add Child Node Modal
                 openAddChildNodeModal(node, node.id)
-                    .then((modal) => {
+                    .then((_modal) => {
                         console.log('✅ Add Child Node modal opened successfully');
                         // The modal factory handles UI refresh automatically
                     })
@@ -2076,7 +2027,7 @@ This action cannot be undone.`;
                 // Import and open export modal
                 import('./modal-manager').then(({ openExportModal }) => {
                     openExportModal(projectManager!, node);
-                }).catch(error => {
+                }).catch(_error => {
                     alert('Failed to open export dialog. Please try again.');
                 });
             }
@@ -2725,7 +2676,7 @@ function renderMultiProjectTree() {
     }
     
     let html = '';
-    projects.forEach((project, index) => {
+    projects.forEach((project, _index) => {
 
         html += buildTreeHtml(project.rootNode, true); // true indicates this is a project root
     });
@@ -2770,8 +2721,7 @@ function renderMultiProjectTree() {
     });
 
     // Attach event listeners for expand/collapse buttons
-    expandButtons.forEach((el, index) => {
-        const nodeId = (el as HTMLElement).dataset['nodeId'];
+    expandButtons.forEach((el, _index) => {
 
         
         // Single click for individual expand/collapse
@@ -2793,7 +2743,6 @@ function renderMultiProjectTree() {
                 }
                 
                 if (targetNode) {
-                    const wasCollapsed = targetNode.collapsed;
 
                     
                     // Toggle the node's collapsed state

@@ -4,7 +4,6 @@ import { StorageService, IStorageService } from './StorageService';
 import { VersionService } from './VersionService';
 import { 
     DEFAULT_MAX_ITERATIONS, 
-    DEFAULT_PROFILE_NAME, 
     STORAGE_KEYS, 
     DEFAULT_CONTEXT_EXTRACTION_PROMPT 
 } from './constants';
@@ -365,7 +364,7 @@ export class SettingsManager {
         }
         // Return the first profile if no last-used is set
         const names = this.getProfileNames();
-        return names.length > 0 ? this.getProfile(names[0]) : undefined;
+        return names.length > 0 ? this.getProfile(names[0]!) : undefined;
     }
 
     public getLastUsedProfileName(): string | null {
@@ -373,7 +372,7 @@ export class SettingsManager {
             return this.lastUsedProfileName;
         }
         const names = this.getProfileNames();
-        return names.length > 0 ? names[0] : null;
+        return names.length > 0 ? names[0]! : null;
     }
 
     public async setLastUsedProfile(name: string): Promise<void> {

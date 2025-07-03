@@ -469,8 +469,11 @@ Story|Act 3|Scene = exactly 3 acts
 Course|Module 8|Lesson = exactly 8 modules
 Novel|Part 4|Chapter|Scene = exactly 4 parts
 
-GENERATION OPTIONS:
-- Detailed outline: {{detailed_outline}} - {{detailed_outline_description}}
+CONCEPT APPROACH:
+- The concept should be a guideline for the construction of an outline, not the outline itself
+- Avoid numbered lists, structured sections, or detailed breakdowns
+- Focus on the flow of events, characters, themes and mood
+- Write in a flowing, idea-rich style that sparks creativity
 
 RESPONSE FORMAT:
 You must structure your response with exactly these four sections in this order:
@@ -487,10 +490,10 @@ Section: Context
 [All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc.]
 
 Section: Concept
-[High-level project concept and structure overview based on detailed_outline setting: {{detailed_outline}}]
+[A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
 
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`,
-        placeholders: ['description', 'detailed_outline', 'detailed_outline_description'],
+        placeholders: ['description'],
         description: "System prompt for AI-powered project generation. Creates comprehensive project structures from natural language descriptions, including templates, content outlines, and contextual information."
     }
 };

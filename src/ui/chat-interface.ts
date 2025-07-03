@@ -1140,8 +1140,8 @@ For each suggestion, provide clear justification for why the change would improv
             // Check for markdown headers (### Title, ## Title, etc.)
             const headerMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
             if (headerMatch) {
-                const level = headerMatch[1].length;
-                const title = headerMatch[2].trim();
+                const level = headerMatch[1]!.length;
+                const title = headerMatch[2]!.trim();
                 
                 // Update current path based on level
                 currentPath = currentPath.slice(0, level - 1);

@@ -10,11 +10,12 @@ import { SmartContentParser, ParsedContent } from './SmartContentParser';
 import { SettingsManager } from '../SettingsManager';
 
 export interface ProjectGenerationOptions {
-    detailedOutline: boolean;
+    // Options for project generation - concepts are always detailed
 }
 
 export interface AIGenerationResponse {
-    Content: string;  // Project outline and structure
+    Title?: string;   // Extracted project title from AI response
+    Content: string;  // Project concept and structure
     Template: {
         name: string;
         hierarchyLevels: string[];
@@ -76,15 +77,13 @@ export class AIProjectGenerator {
     /**
      * Build the sophisticated prompt for project generation using PromptManager
      */
-    private buildProjectGenerationPrompt(description: string, options: ProjectGenerationOptions): string {
+    private buildProjectGenerationPrompt(description: string, _options: ProjectGenerationOptions): string {
         const prompts = this.settingsManager.getPrompts();
         const promptTemplate = prompts.ai_project_generation;
         
-        // Replace placeholders
+        // Replace placeholders - concepts are always detailed now
         return promptTemplate
-            .replace(/\{\{description\}\}/g, description)
-            .replace(/\{\{detailed_outline\}\}/g, options.detailedOutline ? 'YES' : 'NO')
-            .replace(/\{\{detailed_outline_description\}\}/g, options.detailedOutline ? 'Create comprehensive content section' : 'Keep content section concise');
+            .replace(/\{\{description\}\}/g, description);
     }
 
 
@@ -96,7 +95,9 @@ export class AIProjectGenerator {
         if (parsedContent.hasStructuredData && parsedContent.template) {
             // Use structured data
             console.log('✅ Successfully parsed AI response with method:', parsedContent.metadata['parseMethod']);
+            console.log('✅ Extracted title:', parsedContent.metadata['title']);
             return {
+                Title: parsedContent.metadata['title'] || undefined,
                 Content: parsedContent.content,
                 Template: parsedContent.template,
                 Context: parsedContent.context

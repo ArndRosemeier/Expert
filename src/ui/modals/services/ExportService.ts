@@ -285,11 +285,11 @@ export class ExportService implements IExportService {
         // Generate TOC if enabled
         if (includeToc) {
             const tocContent = this.generateTocForLeafNodes(nodes, config, projectManager);
-            html += `
+                html += `
         <div class="toc">
             <h3>Table of Contents</h3>
             ${tocContent}
-        </div>`;
+    </div>`;
         }
 
         html += `
@@ -311,7 +311,7 @@ export class ExportService implements IExportService {
     /**
      * Generates HTML hierarchy for a node tree
      */
-    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, projectManager?: ProjectManager): string {
+    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, _projectManager?: ProjectManager): string {
         if (level === 1) {
             const includeToc = config?.includeHtmlToc || false;
             
@@ -765,7 +765,7 @@ export class ExportService implements IExportService {
      */
     private groupNodesByParent(nodes: DocumentNode[], projectManager?: ProjectManager): Map<string[], DocumentNode[]> {
         const groups = new Map<string[], DocumentNode[]>();
-        
+
         for (const node of nodes) {
             const parentPath = this.getNodeParentPath(node, projectManager);
             const pathKey = parentPath.join('|'); // Use string key for Map
@@ -829,40 +829,7 @@ export class ExportService implements IExportService {
         return path;
     }
 
-    /**
-     * Generates hierarchy titles for different formats
-     */
-    private generateHierarchyTitles(parentPath: string[], config?: ExportConfig): { html: string; markdown: string; plain: string } {
-        let html = '';
-        let markdown = '';
-        let plain = '';
-        
-        parentPath.forEach((title, level) => {
-            const includeTitle = this.shouldIncludeTitle(level, config);
-            
-            if (includeTitle) {
-                // HTML with ID for TOC linking
-                const headingTag = `h${Math.min(level + 2, 6)}`;
-                const titleId = this.generateHierarchyTitleId(title, level);
-                html += `
-    <${headingTag} id="${titleId}">${escapeHtml(title)}</${headingTag}>`;
-                
-                // Markdown
-                const headingPrefix = '#'.repeat(Math.min(level + 2, 6));
-                markdown += `${headingPrefix} ${title}\n\n`;
-                
-                // Plain text
-                const indent = '  '.repeat(level);
-                plain += `${indent}${title}\n`;
-            }
-        });
-        
-        if (html) html += '\n    <div class="hierarchy-group">';
-        if (markdown) markdown += '\n';
-        if (plain) plain += '\n';
-        
-        return { html, markdown, plain };
-    }
+    // generateHierarchyTitles method removed - no longer used
 
     /**
      * Generates Markdown content for a list of nodes
@@ -887,7 +854,7 @@ export class ExportService implements IExportService {
         const includeTitle = this.shouldIncludeTitle(level - 1, config); // level is 1-based here, convert to 0-based
         
         if (includeTitle) {
-            const headingPrefix = '#'.repeat(level);
+        const headingPrefix = '#'.repeat(level);
             markdown += `${headingPrefix} ${node.title}\n\n`;
         }
 
