@@ -8,6 +8,7 @@
 import { OpenRouterClient } from '../OpenRouterClient';
 import { SmartContentParser, ParsedContent } from './SmartContentParser';
 import { SettingsManager } from '../SettingsManager';
+import { QualityCriterion } from '../types';
 
 export interface ProjectGenerationOptions {
     // Options for project generation - concepts are always detailed
@@ -81,9 +82,55 @@ export class AIProjectGenerator {
         const prompts = this.settingsManager.getPrompts();
         const promptTemplate = prompts.ai_project_generation;
         
-        // Replace placeholders - concepts are always detailed now
+        // Get quality criteria from current profile
+        const profile = this.settingsManager.getLastUsedProfile();
+        const allCriteria = profile?.criteria || [];
+        
+        // Filter criteria for outline/structure generation (not leaf content)
+        const criteria = this.filterCriteriaForOutlineGeneration(allCriteria);
+        
+        // Format criteria as JSON (same as LoopOrchestrator)
+        const criteriaJson = this.formatCriteriaAsJson(criteria);
+        
+        // Replace placeholders
         return promptTemplate
-            .replace(/\{\{description\}\}/g, description);
+            .replace(/\{\{description\}\}/g, description)
+            .replace(/\{\{criteria\}\}/g, criteriaJson);
+    }
+
+    /**
+     * Filters criteria for outline/structure generation (AI project generation).
+     * This is similar to the PromptService filtering but specifically for outline nodes.
+     * @param criteria The full list of criteria from the profile
+     * @returns Filtered criteria appropriate for outline/structure generation
+     */
+    private filterCriteriaForOutlineGeneration(criteria: QualityCriterion[]): QualityCriterion[] {
+        return criteria.filter(criterion => {
+            // If both outline and leaf are undefined, include the criterion (legacy criteria)
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                return true; // Legacy criteria - apply to all
+            }
+            
+            // For outline/structure generation, include criteria where outline is true
+            return criterion.outline === true;
+        });
+    }
+
+    /**
+     * Formats criteria as JSON for consistent presentation to AI models
+     * (Same format as LoopOrchestrator)
+     */
+    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+        const formattedCriteria = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return {
+                name: shortName,
+                description: c.description || shortName
+            };
+        });
+        
+        return JSON.stringify(formattedCriteria, null, 2);
     }
 
 

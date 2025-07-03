@@ -336,18 +336,18 @@ function handlePlaceholderClick(_event: Event): void {
 }
 
 function handleVersionPrevClick(_event: Event): void {
-    console.log('⬅️ Version prev clicked');
-    // TODO: Extract implementation from original code
+    // Note: Version navigation is now handled in project-ui.ts
+    // This handler is no longer needed but kept for compatibility
 }
 
 function handleVersionNextClick(_event: Event): void {
-    console.log('➡️ Version next clicked');
-    // TODO: Extract implementation from original code
+    // Note: Version navigation is now handled in project-ui.ts
+    // This handler is no longer needed but kept for compatibility
 }
 
 function handleUseVersionClick(_event: Event): void {
-    console.log('✅ Use version clicked');
-    // TODO: Extract implementation from original code
+    // Note: Version navigation is now handled in project-ui.ts
+    // This handler is no longer needed but kept for compatibility
 }
 
 function handleShowRatingsChange(_event: Event): void {

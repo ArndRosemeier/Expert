@@ -409,6 +409,12 @@ Remember: This is not multiple choice. The user types what their character does 
 USER DESCRIPTION:
 {{description}}
 
+QUALITY CRITERIA:
+The project structure you create will be evaluated against these quality criteria:
+{{criteria}}
+
+Please keep these criteria in mind when generating the project structure to ensure high-quality, well-designed projects.
+
 YOUR TASK:
 Generate a complete project structure based on the user's description. You must format your response using exactly these sections in this exact order:
 
@@ -441,7 +447,7 @@ CONTEXT GUIDELINES:
 CHARACTER REQUIREMENTS (for narratives):
 - Characters must be SPECIFIC and DETAILED, not generic
 - BAD: "A young man", "The protagonist", "An elderly woman"
-- GOOD: "Marcus Chen, 28, introverted software engineer with social anxiety who dreams of becoming a chef"
+- GOOD: "Marcus Wilde, 28, introverted software engineer with social anxiety who dreams of becoming a chef"
 - Include: full names, specific ages, detailed personalities, backstories, motivations, relationships to other characters
 - Each character should be unique and well-defined to maintain consistency throughout the project
 
@@ -472,8 +478,7 @@ Novel|Part 4|Chapter|Scene = exactly 4 parts
 CONCEPT APPROACH:
 - The concept should be a guideline for the construction of an outline, not the outline itself
 - Avoid numbered lists, structured sections, or detailed breakdowns
-- Focus on the flow of events, characters, themes and mood
-- Write in a flowing, idea-rich style that sparks creativity
+- Focus on the flow of events and details
 
 RESPONSE FORMAT:
 You must structure your response with exactly these four sections in this order:
@@ -493,7 +498,7 @@ Section: Concept
 [A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
 
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`,
-        placeholders: ['description'],
+        placeholders: ['description', 'criteria'],
         description: "System prompt for AI-powered project generation. Creates comprehensive project structures from natural language descriptions, including templates, content outlines, and contextual information."
     }
 };

@@ -1119,6 +1119,9 @@ export function renderNodeDetails() {
 
     // Initialize version navigation
     initializeVersionNavigation(node);
+    
+    // Update the content display to show the current version
+    updateVersionContentDisplay();
 
     if (!node.generationPrompt) {
         node.generationPrompt = projectManager.getRawGenerationPrompt(node);
@@ -1384,6 +1387,23 @@ function updateVersionNavigationUI() {
         useVersionBtn.style.display = currentVersion.isCurrent ? 'none' : 'inline-block';
     } else {
         versionNav.style.display = 'none';
+    }
+}
+
+function updateVersionContentDisplay() {
+    const currentVersion = availableVersions[currentVersionIndex];
+    if (!currentVersion) return;
+    
+    // Update the content textarea to show the selected version's content
+    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+    if (contentTextArea) {
+        contentTextArea.value = currentVersion.content;
+    }
+    
+    // Update the ratings view if it's currently showing
+    const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
+    if (showRatingsCheckbox && showRatingsCheckbox.checked) {
+        renderRatingsView();
     }
 }
 
@@ -2331,6 +2351,59 @@ export function setupEventListeners() {
                         console.error('Failed to open reader view:', error);
                         alert('Failed to open reader view. Please try again.');
                     });
+                }
+                break;
+
+            case 'version-prev-btn':
+                {
+                    if (currentVersionIndex > 0) {
+                        currentVersionIndex--;
+                        updateVersionNavigationUI();
+                        updateVersionContentDisplay();
+                    }
+                }
+                break;
+
+            case 'version-next-btn':
+                {
+                    if (currentVersionIndex < availableVersions.length - 1) {
+                        currentVersionIndex++;
+                        updateVersionNavigationUI();
+                        updateVersionContentDisplay();
+                    }
+                }
+                break;
+
+            case 'use-this-version-btn':
+                {
+                    if (!projectManager || !selectedNodeId) return;
+                    const node = projectManager.findNodeById(selectedNodeId);
+                    if (!node) return;
+
+                    const currentVersion = availableVersions[currentVersionIndex];
+                    if (currentVersion && !currentVersion.isCurrent) {
+                        // Set the node's content to the selected version
+                        node.content = currentVersion.content;
+                        
+                        // Note: Setting content will automatically clear generation history/ratings
+                        // because it's not set via setContentFromGeneration()
+                        
+                        // Save the project
+                        void projectManager.saveToStorage();
+                        
+                        // Refresh the node details to show the new content
+                        renderNodeDetails();
+                        
+                        // Show success message
+                        const statusElement = document.getElementById('generation-status');
+                        if (statusElement) {
+                            statusElement.style.display = 'block';
+                            statusElement.textContent = `Version ${currentVersionIndex + 1} has been set as the current content.`;
+                            setTimeout(() => {
+                                statusElement.style.display = 'none';
+                            }, 3000);
+                        }
+                    }
                 }
                 break;
 
