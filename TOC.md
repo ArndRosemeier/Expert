@@ -1134,6 +1134,34 @@ const newNode = await nodeCreationService.createNode({
 - ✅ **Button Handler Centralization**: Unified handlers for consistent re-attachment
 - ✅ **Event Listener Pattern**: Remove all → Change UI → Re-attach all
 
+### AI Action Blocking During External Updates ✨ **CRITICAL STABILITY FIX**
+- **Purpose**: Prevent external content updates from interfering with active AI actions in reader view
+- **Files**: `src/ui/reader-editor.ts`, `src/ui/reader-gui.ts`
+
+**Problem Solved**:
+- ✅ **Root Cause**: Automatic content updates during AI generation were breaking active AI actions
+- ✅ **External Updates**: Reader view automatically updates when new content arrives via generation
+- ✅ **State Interference**: External updates could disrupt AI action state and user workflow
+- ✅ **Comprehensive Blocking**: All external update vectors now check for active AI actions
+
+**Technical Implementation**:
+- ✅ **Action State Tracking**: Added `activeActionsCount` to track number of active AI actions
+- ✅ **State Monitoring**: `isAIActionInProgress()` method for checking active actions
+- ✅ **Loading State Integration**: Enhanced `showActionLoadingState`/`hideActionLoadingState` to manage counter
+- ✅ **Update Blocking**: Added AI action checks to all external update methods
+
+**Protected Update Methods**:
+- ✅ **`handleNodeGenerationComplete()`**: Blocks automatic content updates during AI actions
+- ✅ **`updateNodeContentInReader()`**: Prevents individual node content updates during AI actions
+- ✅ **`refreshReaderForNewNodes()`**: Blocks reader rebuilds when AI actions are active
+- ✅ **`handleProjectUpdate()`**: Prevents project structure changes during AI actions
+
+**Benefits**:
+- 🎯 **Stable AI Actions**: AI actions complete without external interference
+- 🎯 **Preserved User Context**: User's editing state remains intact during AI operations
+- 🎯 **Predictable Behavior**: Consistent AI action experience without unexpected interruptions
+- 🎯 **Comprehensive Coverage**: All external update vectors properly protected
+
 ### Version Migration System Development
 
 ---
