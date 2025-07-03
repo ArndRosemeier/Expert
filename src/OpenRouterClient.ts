@@ -210,9 +210,16 @@ export class OpenRouterClient {
   public abortOperation(operationId: string): void {
     const controller = this.activeOperations.get(operationId);
     if (controller) {
-      console.log(`🛑 Aborting operation: ${operationId}`);
-      controller.abort();
+      console.log(`🛑 OpenRouterClient: Aborting operation: ${operationId}`);
+      try {
+        controller.abort();
+        console.log(`🛑 OpenRouterClient: Operation ${operationId} aborted successfully`);
+      } catch (error) {
+        console.warn(`🛑 OpenRouterClient: Error aborting operation ${operationId}:`, error);
+      }
       this.activeOperations.delete(operationId);
+    } else {
+      console.log(`🛑 OpenRouterClient: Operation ${operationId} not found (might already be completed)`);
     }
   }
 
@@ -220,10 +227,35 @@ export class OpenRouterClient {
    * Abort all active operations
    */
   public abortAllOperations(): void {
-    console.log(`🛑 Aborting all operations (${this.activeOperations.size} active)`);
-            for (const [, controller] of this.activeOperations.entries()) {
-      controller.abort();
+    const operationCount = this.activeOperations.size;
+    console.log(`🛑 OpenRouterClient: Aborting all operations (${operationCount} active)`);
+    
+    if (operationCount === 0) {
+      console.log(`🛑 OpenRouterClient: No active operations to abort`);
+      return;
     }
+    
+    const abortPromises = [];
+    for (const [operationId, controller] of this.activeOperations.entries()) {
+      abortPromises.push(
+        Promise.resolve().then(() => {
+          try {
+            controller.abort();
+            console.log(`🛑 OpenRouterClient: Operation ${operationId} aborted`);
+          } catch (error) {
+            console.warn(`🛑 OpenRouterClient: Error aborting operation ${operationId}:`, error);
+          }
+        })
+      );
+    }
+    
+    // Execute all aborts in parallel for faster response
+    Promise.all(abortPromises).then(() => {
+      console.log(`🛑 OpenRouterClient: All ${operationCount} operations aborted`);
+    }).catch(error => {
+      console.warn(`🛑 OpenRouterClient: Error during bulk abort:`, error);
+    });
+    
     this.activeOperations.clear();
   }
 
@@ -275,9 +307,12 @@ export class OpenRouterClient {
     // Listen to external abort signal if provided
     if (externalAbortSignal) {
       externalAbortSignal.addEventListener('abort', () => {
+        console.log(`🛑 OpenRouterClient: External abort signal received for operation: ${opId}`);
         this.abortOperation(opId);
       });
     }
+    
+
 
     try {
       const apiKey = await this.getApiKeyFromStorage();

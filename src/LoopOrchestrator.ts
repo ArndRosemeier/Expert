@@ -82,12 +82,30 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     public requestStop() {
+        console.log('🛑 LoopOrchestrator: Stop requested');
         this.stopRequested = true;
+        
+        // Abort in parallel for faster response
+        const abortPromises = [];
+        
         if (this.abortController) {
-            this.abortController.abort();
+            console.log('🛑 LoopOrchestrator: Aborting internal controller');
+            abortPromises.push(Promise.resolve().then(() => this.abortController?.abort()));
         }
+        
         // Also abort any ongoing API requests in the client
-        this.client.abort();
+        console.log('🛑 LoopOrchestrator: Aborting OpenRouter client operations');
+        abortPromises.push(Promise.resolve().then(() => this.client.abort()));
+        
+        // Execute all aborts in parallel for faster response
+        Promise.all(abortPromises).then(() => {
+            console.log('🛑 LoopOrchestrator: All abort operations completed');
+        }).catch(error => {
+            console.warn('🛑 LoopOrchestrator: Error during abort operations:', error);
+        });
+        
+        // Emit abort event immediately for UI feedback
+        this.emit('aborted', 'Generation aborted by user request');
     }
 
     public isLoopRunning(): boolean {
@@ -221,6 +239,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     currentResponse = await this.client.chat(generationModel, initialPrompt, undefined, this.abortController.signal);
                 } catch (e: any) {
                     if (e.message === 'Request was aborted' || this.stopRequested) {
+                        console.log('🛑 LoopOrchestrator: Initial generation aborted');
                         aborted = true;
                         throw new Error('Generation aborted by user');
                     }
@@ -237,6 +256,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 this.currentIteration = i;
                 
                 if (this.stopRequested) {
+                    console.log(`🛑 LoopOrchestrator: Iteration ${i} aborted by user`);
                     aborted = true;
                     break;
                 }
@@ -268,6 +288,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                     } catch(e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
+                            console.log(`🛑 LoopOrchestrator: Rating aborted during attempt ${attempt + 1}`);
                             aborted = true;
                             break;
                         }
@@ -327,6 +348,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         editorAdvice = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
                     } catch(e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
+                            console.log('🛑 LoopOrchestrator: Editor aborted');
                             aborted = true;
                             break;
                         }
@@ -368,6 +390,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         currentResponse = await this.client.chat(generationModel, creatorPrompt, undefined, this.abortController.signal);
                     } catch (e: any) {
                         if (e.message === 'Request was aborted' || this.stopRequested) {
+                            console.log('🛑 LoopOrchestrator: Creator revision aborted');
                             aborted = true;
                             break;
                         }
