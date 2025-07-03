@@ -26,6 +26,7 @@ export class ReaderEditor {
     private nodeEditors: Map<string, NodeEditor> = new Map();
     private currentActiveEditor: NodeEditor | null = null;
     private configLoadedPromise!: Promise<void>;
+    private activeActionsCount: number = 0; // Track number of active AI actions
     
     // Bound method references for proper event listener removal
     private boundHandleKeyDown: (event: KeyboardEvent) => void;
@@ -363,6 +364,9 @@ export class ReaderEditor {
      * Show loading state for an action button
      */
     private showActionLoadingState(actionId: string): void {
+        this.activeActionsCount++;
+        console.log(`🔄 AI action started: ${actionId} (${this.activeActionsCount} active)`);
+        
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
             button.disabled = true;
@@ -374,6 +378,9 @@ export class ReaderEditor {
      * Hide loading state for an action button
      */
     private hideActionLoadingState(actionId: string): void {
+        this.activeActionsCount = Math.max(0, this.activeActionsCount - 1);
+        console.log(`✅ AI action completed: ${actionId} (${this.activeActionsCount} active)`);
+        
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
             button.disabled = false;
@@ -382,6 +389,13 @@ export class ReaderEditor {
                 button.textContent = originalText;
             }
         }
+    }
+
+    /**
+     * Check if any AI actions are currently in progress
+     */
+    public isAIActionInProgress(): boolean {
+        return this.activeActionsCount > 0;
     }
 
     /**
