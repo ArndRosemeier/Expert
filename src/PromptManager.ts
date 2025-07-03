@@ -38,6 +38,9 @@ export interface OrchestratorPrompts {
     
     // For AI project generation
     ai_project_generation: string;
+    
+    // For text import analysis
+    text_import_analysis: string;
 }
 
 export interface PromptDefinition {
@@ -398,7 +401,7 @@ This is completely free-form. The user can:
 
 Never break character or refer to this as a game, story, or roleplay. You are simply describing what happens in this world as the user lives as their chosen character.
 
-Remember: This is not multiple choice. The user types what their character does or says, and you describe what happens as a result.`,
+Remember: This is not multiple choice. The user types what their character does or says, and you describe what happens as a result. You do not present options, just ask what the user wants to do.`,
         placeholders: ['node_data', 'starting_node'],
         description: "Creates an immersive roleplaying adventure where the user can play as characters from the story content. Analyzes the context to present character choices and facilitates free-form roleplay, starting from a specific chosen location/scene."
     },
@@ -492,6 +495,71 @@ Section: Concept
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`,
         placeholders: ['description', 'detailed_outline', 'detailed_outline_description'],
         description: "System prompt for AI-powered project generation. Creates comprehensive project structures from natural language descriptions, including templates, content outlines, and contextual information."
+    },
+
+    text_import_analysis: {
+        text: `You are an expert project analyst. Analyze the provided text content and extract a project structure from it.
+
+ORIGINAL TEXT FILE: {{file_name}}
+
+TEXT CONTENT:
+{{text_content}}
+
+YOUR TASK:
+Analyze the text and extract a project structure. The text is bound content that should be preserved and worked with, not a creative prompt. You must format your response using exactly these sections in this exact order:
+
+Section: Title
+Section: Template  
+Section: Context
+Section: Concept
+
+ANALYSIS GUIDELINES:
+- Extract a meaningful title that reflects the actual content
+- Determine an appropriate template structure based on the text's organization
+- Context should be tightly bound to the actual text content (not creative additions)
+- Concept should be a concise version of the text content itself (not a creative interpretation)
+
+TEMPLATE RULES:
+- The ROOT LEVEL (first level) may NEVER have a number - there can only be one root
+- Layer names WITHOUT numbers = flexible count: "Chapter" means any number of chapters
+- Layer names WITH numbers = fixed count: "Chapter 5" means exactly 5 chapters
+- Use pipe (|) to separate hierarchy levels in the template
+- Keep hierarchy levels to 3-4 levels max for usability
+
+CONTEXT REQUIREMENTS:
+- Must be specific to the actual text content provided
+- Include key themes, concepts, or elements that appear in the text
+- For narratives: extract comprehensive story context including:
+  * CHARACTERS: Full names, ages, personalities, backgrounds, motivations, relationships, speech patterns, and distinctive traits
+  * ORGANIZATIONS: Groups, factions, institutions with their goals, structure, and characteristics
+  * WORLD DESCRIPTION: Setting details, geography, culture, technology level, social structures
+  * HISTORICAL EVENTS: Past events mentioned that shape the current story
+  * STYLE GUIDE: Narrative voice, tone, writing style, dialogue patterns
+  * THEMES: Central themes and concepts explored in the text
+- For technical content: include methodologies, frameworks, or concepts mentioned
+- For business content: include strategies, markets, or approaches described
+- DO NOT add creative elements not present in the original text
+
+RESPONSE FORMAT:
+You must structure your response with exactly these four sections in this order:
+
+Section: Title
+[Extract or derive a title from the content]
+
+Section: Template
+Template Name: [Name based on content type]
+Hierarchy: [Level1|Level2|Level3] (use pipe separators)
+Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
+
+Section: Context
+[Specific contextual information derived from the actual text content]
+
+Section: Concept
+[Concise summary/outline of the actual text content - not creative expansion]
+
+CRITICAL: Use exactly the section headers shown above. Base everything on the actual text content provided, not creative interpretations.`,
+        placeholders: ['file_name', 'text_content'],
+        description: "System prompt for analyzing text files and extracting project structure. Creates project templates and context from existing text content rather than generating new creative content."
     }
 };
 

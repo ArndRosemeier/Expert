@@ -68,10 +68,10 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
     const content = `
         <h2>Import Project from File</h2>
         <div class="form-group" style="margin-bottom: 1.5rem;">
-            <label for="import-file-input">Select Export File</label>
-            <input type="file" id="import-file-input" accept=".json" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;">
+            <label for="import-file-input">Select Import File</label>
+            <input type="file" id="import-file-input" accept=".json,.txt,.pdf" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;">
                             <small style="color: var(--secondary-500); margin-top: 0.25rem; display: block;">
-                Choose a JSON file exported from Expert (must be "For reimport" format)
+                Choose a JSON file exported from Expert, a text file, or a PDF file to analyze and import
             </small>
         </div>
         <div id="import-preview" style="display: none; margin-bottom: 1.5rem;">

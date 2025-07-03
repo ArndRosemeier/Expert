@@ -31,6 +31,8 @@ export class ChatInterface {
     private messageInput: HTMLTextAreaElement | null = null;
     private sendButton: HTMLButtonElement | null = null;
     private stopButton: HTMLButtonElement | null = null;
+    private retryButton: HTMLButtonElement | null = null;
+    private rewindButton: HTMLButtonElement | null = null;
     private modelPurposeSelect: HTMLSelectElement | null = null;
 
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager, systemPrompt?: string, title?: string, nodeStructure?: DocumentNode) {
@@ -134,20 +136,6 @@ export class ChatInterface {
                             margin-bottom: 0.5rem;
                         " onmouseover="this.style.backgroundColor='#444'" onmouseout="this.style.backgroundColor='#333'">
                             🗑️ Clear Chat
-                        </button>
-                        <button id="retry-last-btn" style="
-                            background: #dc3545;
-                            color: white;
-                            border: 1px solid #c82333;
-                            border-radius: 6px;
-                            padding: 0.75rem;
-                            font-size: 0.9rem;
-                            cursor: pointer;
-                            transition: background-color 0.2s;
-                            margin-bottom: 0.5rem;
-                            width: 100%;
-                        " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
-                            🔄 Retry Last
                         </button>
                         <button id="copy-conversation-btn" style="
                             background: #6c757d;
@@ -305,76 +293,138 @@ export class ChatInterface {
                             max-width: 800px;
                             margin: 0 auto;
                             position: relative;
+                            display: flex;
+                            gap: 0.5rem;
+                            align-items: flex-start;
                         ">
-                            <textarea 
-                                id="message-input" 
-                                placeholder="Type your message here..."
-                                style="
-                                    width: 100%;
-                                    min-height: 60px;
-                                    max-height: 200px;
-                                    padding: 1rem 3rem 1rem 1rem;
-                                    border: 1px solid #d1d5db;
-                                    border-radius: 12px;
-                                    resize: none;
-                                    font-family: inherit;
-                                    font-size: 1rem;
-                                    line-height: 1.5;
-                                    outline: none;
-                                    box-sizing: border-box;
-                                "
-                            ></textarea>
-                            <button 
-                                id="send-btn" 
-                                class="send-button"
-                                style="
-                                    position: absolute;
-                                    right: 8px;
-                                    bottom: 8px;
-                                    background: #007bff;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 8px;
-                                    width: 32px;
-                                    height: 32px;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    transition: background-color 0.2s;
-                                    opacity: 0.6;
-                                "
-                                disabled
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="m22 2-7 20-4-9-9-4Z"/>
-                                    <path d="M22 2 11 13"/>
-                                </svg>
-                            </button>
-                            <button 
-                                id="stop-btn" 
-                                class="stop-button"
-                                style="
-                                    position: absolute;
-                                    right: 8px;
-                                    bottom: 8px;
-                                    background: #dc3545;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 8px;
-                                    width: 32px;
-                                    height: 32px;
-                                    cursor: pointer;
-                                    display: none;
-                                    align-items: center;
-                                    justify-content: center;
-                                    transition: background-color 0.2s;
-                                "
-                            >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                                </svg>
-                            </button>
+                            <div style="flex: 1; position: relative;">
+                                <textarea 
+                                    id="message-input" 
+                                    placeholder="Type your message here..."
+                                    style="
+                                        width: 100%;
+                                        min-height: 60px;
+                                        max-height: 200px;
+                                        padding: 1rem 3rem 1rem 1rem;
+                                        border: 1px solid #d1d5db;
+                                        border-radius: 12px;
+                                        resize: none;
+                                        font-family: inherit;
+                                        font-size: 1rem;
+                                        line-height: 1.5;
+                                        outline: none;
+                                        box-sizing: border-box;
+                                    "
+                                ></textarea>
+                                <button 
+                                    id="send-btn" 
+                                    class="send-button"
+                                    style="
+                                        position: absolute;
+                                        right: 8px;
+                                        bottom: 8px;
+                                        background: #007bff;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 8px;
+                                        width: 32px;
+                                        height: 32px;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: background-color 0.2s;
+                                        opacity: 0.6;
+                                    "
+                                    disabled
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="m22 2-7 20-4-9-9-4Z"/>
+                                        <path d="M22 2 11 13"/>
+                                    </svg>
+                                </button>
+                                <button 
+                                    id="stop-btn" 
+                                    class="stop-button"
+                                    style="
+                                        position: absolute;
+                                        right: 8px;
+                                        bottom: 8px;
+                                        background: #dc3545;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 8px;
+                                        width: 32px;
+                                        height: 32px;
+                                        cursor: pointer;
+                                        display: none;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: background-color 0.2s;
+                                    "
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Action buttons next to input, stacked vertically -->
+                            <div class="action-buttons" style="
+                                display: flex;
+                                flex-direction: column;
+                                gap: 4px;
+                                margin-top: 8px;
+                            ">
+                                <button 
+                                    id="retry-btn" 
+                                    class="retry-button"
+                                    style="
+                                        background: #007bff;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 4px;
+                                        width: 24px;
+                                        height: 24px;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: background-color 0.2s;
+                                        font-size: 12px;
+                                        opacity: 0.8;
+                                    "
+                                    title="Retry last message"
+                                    onmouseover="this.style.opacity='1'; this.style.backgroundColor='#0056b3';"
+                                    onmouseout="this.style.opacity='0.8'; this.style.backgroundColor='#007bff';"
+                                >
+                                    🔄
+                                </button>
+                                <button 
+                                    id="rewind-btn" 
+                                    class="rewind-button"
+                                    style="
+                                        background: #dc3545;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 4px;
+                                        width: 24px;
+                                        height: 24px;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        transition: background-color 0.2s;
+                                        font-size: 12px;
+                                        opacity: 0.8;
+                                    "
+                                    title="Delete last conversation step"
+                                    onmouseover="this.style.opacity='1'; this.style.backgroundColor='#c82333';"
+                                    onmouseout="this.style.opacity='0.8'; this.style.backgroundColor='#dc3545';"
+                                >
+                                    🗑️
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -386,6 +436,8 @@ export class ChatInterface {
         this.messageInput = this.chatContainer.querySelector('#message-input') as HTMLTextAreaElement;
         this.sendButton = this.chatContainer.querySelector('#send-btn') as HTMLButtonElement;
         this.stopButton = this.chatContainer.querySelector('#stop-btn') as HTMLButtonElement;
+        this.retryButton = this.chatContainer.querySelector('#retry-btn') as HTMLButtonElement;
+        this.rewindButton = this.chatContainer.querySelector('#rewind-btn') as HTMLButtonElement;
         this.modelPurposeSelect = this.chatContainer.querySelector('#model-purpose-select') as HTMLSelectElement;
         
         // Set the selected model purpose
@@ -426,6 +478,19 @@ export class ChatInterface {
             this.stopGeneration();
         });
 
+        // New symbol buttons
+        if (this.retryButton) {
+            this.retryButton.addEventListener('click', () => {
+                void this.retryLastMessage();
+            });
+        }
+
+        if (this.rewindButton) {
+            this.rewindButton.addEventListener('click', () => {
+                this.rewindConversation();
+            });
+        }
+
         // Model selection
         this.modelPurposeSelect.addEventListener('change', (e) => {
             this.selectedModelPurpose = (e.target as HTMLSelectElement).value;
@@ -437,14 +502,6 @@ export class ChatInterface {
         if (clearButton) {
             clearButton.addEventListener('click', () => {
                 this.clearMessages();
-            });
-        }
-
-        // Retry last button
-        const retryLastButton = this.chatContainer?.querySelector('#retry-last-btn');
-        if (retryLastButton) {
-            retryLastButton.addEventListener('click', () => {
-                this.retryLastMessage();
             });
         }
 
@@ -915,6 +972,43 @@ For each suggestion, provide clear justification for why the change would improv
             this.autoResizeTextarea();
             this.updateSendButtonState();
             await this.sendMessage();
+        }
+    }
+
+    /**
+     * Rewind the conversation by removing the last user message and assistant response
+     */
+    private rewindConversation(): void {
+        if (this.isStreamingResponse) {
+            alert('Cannot rewind while a response is being generated. Please wait or stop the current generation.');
+            return;
+        }
+
+        if (this.messages.length === 0) {
+            alert('No messages to rewind.');
+            return;
+        }
+
+        // Find the last user message
+        const lastUserMessageIndex = this.messages.map((m, i) => m.role === 'user' ? i : -1).filter(i => i !== -1).pop();
+        
+        if (lastUserMessageIndex === undefined) {
+            alert('No user message found to rewind.');
+            return;
+        }
+
+        // Remove all messages from the last user message onwards (including any AI responses after it)
+        this.messages = this.messages.slice(0, lastUserMessageIndex);
+        
+        // Re-render the messages
+        this.displayAllMessages();
+        
+        // Show feedback
+        if (this.messages.length === 0) {
+            // If no messages left, show a subtle confirmation
+            console.log('Conversation rewound to the beginning.');
+        } else {
+            console.log('Conversation rewound one step.');
         }
     }
 

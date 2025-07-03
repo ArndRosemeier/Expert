@@ -20,6 +20,102 @@ import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 
 import { PromptManager } from './PromptManager';
+import * as pdfjsLib from 'pdfjs-dist';
+
+/**
+ * Show a simple progress modal during text analysis
+ */
+function showProgressModal(message: string): HTMLElement {
+    const modalHtml = `
+        <div id="progress-modal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        ">
+            <div style="
+                background: white;
+                padding: 2rem;
+                border-radius: 8px;
+                text-align: center;
+                max-width: 300px;
+                width: 90%;
+            ">
+                <div style="margin-bottom: 1rem;">
+                    <div style="
+                        border: 3px solid #f3f3f3;
+                        border-top: 3px solid #007bff;
+                        border-radius: 50%;
+                        width: 40px;
+                        height: 40px;
+                        animation: spin 1s linear infinite;
+                        margin: 0 auto;
+                    "></div>
+                </div>
+                <div style="font-size: 1rem; color: #333;">${message}</div>
+            </div>
+        </div>
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    `;
+    
+    const modalElement = document.createElement('div');
+    modalElement.innerHTML = modalHtml;
+    document.body.appendChild(modalElement);
+    return modalElement;
+}
+
+/**
+ * Close the progress modal
+ */
+function closeProgressModal(modalElement: HTMLElement): void {
+    if (modalElement && modalElement.parentNode) {
+        modalElement.parentNode.removeChild(modalElement);
+    }
+}
+
+/**
+ * Extract text content from a PDF file
+ */
+async function extractTextFromPDF(file: File): Promise<string> {
+    try {
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        
+        // Load the PDF
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        
+        let fullText = '';
+        
+        // Extract text from each page
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+                .map((item: any) => item.str)
+                .join(' ');
+            fullText += pageText + '\n\n';
+        }
+        
+        return fullText.trim();
+    } catch (error) {
+        console.error('PDF text extraction failed:', error);
+        throw new Error('Failed to extract text from PDF. The file may be corrupted or contain only images.');
+    }
+}
+
+
 
 function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
     const modelSelector = state.getModelSelector();
@@ -417,80 +513,193 @@ export async function initialize() {
     try {
         getElementById('importProjectBtn').addEventListener('click', () => {
             
-            // Create file input element (same as node import)
+            // Create file input element (now accepts JSON, text, and PDF files)
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
-            fileInput.accept = '.json';
+            fileInput.accept = '.json,.txt,.pdf';
             fileInput.style.display = 'none';
             
-            fileInput.addEventListener('change', (e) => {
+            fileInput.addEventListener('change', async (e) => {
                 const target = e.target as HTMLInputElement;
                 const file = target.files?.[0];
                 if (!file) return;
                 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const content = event.target?.result as string;
-                        const importData = JSON.parse(content);
-                        
-                        // Extract template - first try from project level, then from root node, then from child nodes
-                        let templateData = importData.template;
-                        
-                        if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
-                            // Check if root node has template as array (node export format)
-                            if (importData.template && Array.isArray(importData.template)) {
-                                templateData = {
-                                    name: `Imported Template (${importData.title || 'Unknown'})`,
-                                    hierarchyLevels: importData.template,
-                                    scaffoldingDocuments: []
-                                };
-                            } else if (importData.children && importData.children.length > 0) {
-                                // Try to extract template from first child that has one
-                                let foundTemplate = null;
-                                for (const child of importData.children) {
-                                    if (child.template && Array.isArray(child.template)) {
-                                        foundTemplate = child.template;
-                                        break;
+                try {
+                    // Determine file type and handle accordingly
+                    const fileName = file.name.toLowerCase();
+                    const isJsonFile = fileName.endsWith('.json');
+                    const isPdfFile = fileName.endsWith('.pdf');
+                    
+                    if (isJsonFile) {
+                        // Handle JSON file (existing logic)
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                            try {
+                                const content = event.target?.result as string;
+                                const importData = JSON.parse(content);
+                                
+                                // Extract template - first try from project level, then from root node, then from child nodes
+                                let templateData = importData.template;
+                                
+                                if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                                    // Check if root node has template as array (node export format)
+                                    if (importData.template && Array.isArray(importData.template)) {
+                                        templateData = {
+                                            name: `Imported Template (${importData.title || 'Unknown'})`,
+                                            hierarchyLevels: importData.template,
+                                            scaffoldingDocuments: []
+                                        };
+                                    } else if (importData.children && importData.children.length > 0) {
+                                        // Try to extract template from first child that has one
+                                        let foundTemplate = null;
+                                        for (const child of importData.children) {
+                                            if (child.template && Array.isArray(child.template)) {
+                                                foundTemplate = child.template;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (foundTemplate) {
+                                            templateData = {
+                                                name: `Imported Template (${importData.title || 'Unknown'})`,
+                                                hierarchyLevels: foundTemplate,
+                                                scaffoldingDocuments: []
+                                            };
+                                        } else {
+                                            throw new Error('Invalid import file: Missing or incomplete template information');
+                                        }
+                                    } else {
+                                        throw new Error('Invalid import file: Missing or incomplete template information');
                                     }
                                 }
                                 
-                                if (foundTemplate) {
-                                    templateData = {
-                                        name: `Imported Template (${importData.title || 'Unknown'})`,
-                                        hierarchyLevels: foundTemplate,
-                                        scaffoldingDocuments: []
-                                    };
-                                } else {
-                                    throw new Error('Invalid import file: Missing or incomplete template information');
-                                }
-                            } else {
-                                throw new Error('Invalid import file: Missing or incomplete template information');
+                                // Create template from extracted data
+                                const bestTemplate = new ProjectTemplate(
+                                    templateData.name,
+                                    templateData.hierarchyLevels,
+                                    templateData.scaffoldingDocuments
+                                );
+                                
+                                // Import project data
+                                handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
+                                
+                            } catch (error) {
+                                console.error('JSON import failed:', error);
+                                alert('JSON import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
                             }
+                        };
+                        
+                        reader.onerror = () => {
+                            alert('Failed to read JSON file. Please try again.');
+                        };
+                        
+                        reader.readAsText(file);
+                        
+                    } else if (isPdfFile) {
+                        // Handle PDF file - extract text then analyze with AI
+                        const progressModal = showProgressModal('Extracting text from PDF...');
+                        
+                        try {
+                            const textContent = await extractTextFromPDF(file);
+                            closeProgressModal(progressModal);
+                            
+                            if (!textContent.trim()) {
+                                throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
+                            }
+                            
+                            // Pass extracted text to text import handler
+                            await handleTextImport(textContent, file.name);
+                            
+                        } catch (error) {
+                            closeProgressModal(progressModal);
+                            console.error('PDF import failed:', error);
+                            alert('PDF import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
                         }
                         
-                        // Create template from extracted data
-                        const bestTemplate = new ProjectTemplate(
-                            templateData.name,
-                            templateData.hierarchyLevels,
-                            templateData.scaffoldingDocuments
-                        );
+                    } else {
+                        // Handle text file - analyze with AI
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                            try {
+                                const content = event.target?.result as string;
+                                await handleTextImport(content, file.name);
+                            } catch (error) {
+                                console.error('Text import failed:', error);
+                                alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                            }
+                        };
                         
-                        // Import project data
-                        handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
+                        reader.onerror = () => {
+                            alert('Failed to read text file. Please try again.');
+                        };
                         
-                    } catch (error) {
-                        console.error('Import failed:', error);
-                        alert('Import failed: ' + (error instanceof Error ? error.message : 'Invalid JSON file'));
+                        reader.readAsText(file);
                     }
-                };
-                
-                reader.onerror = () => {
-                    alert('Failed to read file. Please try again.');
-                };
-                
-                reader.readAsText(file);
+                    
+                } catch (error) {
+                    console.error('Import failed:', error);
+                    alert('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                }
             });
+            
+            // Helper function to handle text import with AI analysis
+            async function handleTextImport(textContent: string, fileName: string): Promise<void> {
+                const settingsManager = state.getSettingsManager();
+                const openRouterClient = state.getOpenRouterClient();
+                
+                if (!settingsManager || !openRouterClient) {
+                    throw new Error('Core services not initialized. Cannot analyze text file.');
+                }
+                
+                // Show progress indicator
+                const progressModal = showProgressModal('Analyzing text content...');
+                
+                try {
+                    // Create analysis prompt using PromptManager
+                    const prompts = settingsManager.getPrompts();
+                    const analysisPrompt = prompts.text_import_analysis
+                        .replace(/\{\{file_name\}\}/g, fileName)
+                        .replace(/\{\{text_content\}\}/g, textContent);
+                    
+                    // Use creator model for analysis
+                    const response = await openRouterClient.chat('creator', analysisPrompt);
+                    
+                    // Parse the AI response using the same parser as AI project generation
+                    const { SmartContentParser } = await import('./project/SmartContentParser');
+                    const parsedContent = SmartContentParser.parseGenerationResponse(response, 'project');
+                    
+                    if (!parsedContent.hasStructuredData || !parsedContent.template) {
+                        throw new Error('Failed to extract project structure from text. The AI could not identify clear project elements.');
+                    }
+                    
+                    // Create template from parsed data
+                    const template = new ProjectTemplate(
+                        parsedContent.template.name,
+                        parsedContent.template.hierarchyLevels,
+                        parsedContent.template.scaffoldingDocuments
+                    );
+                    
+                    // Create import data in the same format as JSON import
+                    const importData = {
+                        title: parsedContent.metadata['title'] || fileName.replace(/\.[^/.]+$/, ''), // Remove file extension
+                        content: parsedContent.content,
+                        context: parsedContent.context,
+                        template: parsedContent.template,
+                        isTextImport: true,
+                        originalFileName: fileName
+                    };
+                    
+                    // Hide progress modal
+                    closeProgressModal(progressModal);
+                    
+                    // Import the analyzed project
+                    handleImportProject(importData.title, template, importData);
+                    
+                } catch (error) {
+                    closeProgressModal(progressModal);
+                    throw error;
+                }
+            }
             
             // Trigger file selection
             document.body.appendChild(fileInput);
