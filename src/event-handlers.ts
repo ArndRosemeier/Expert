@@ -1,5 +1,5 @@
 import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
-import { openNewProjectModal, closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import { TestRunner } from './TestRunner';
 import * as state from './state';
@@ -114,7 +114,6 @@ async function extractTextFromPDF(file: File): Promise<string> {
         throw new Error('Failed to extract text from PDF. The file may be corrupted or contain only images.');
     }
 }
-
 
 
 function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
@@ -716,14 +715,43 @@ export async function initialize() {
         console.error('❌ Failed to attach manage templates button listener:', error);
     }
     
-    // Global abort button handler
+    // Global abort button handler - SIMPLIFIED VERSION
     try {
-    getElementById('globalAbortBtn').addEventListener('click', () => {
+    getElementById('globalAbortBtn').addEventListener('click', async () => {
         const activeProject = state.getActiveProject();
         if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
             const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
             if (confirmed) {
-                activeProject.getGenerationService().abortCurrentGeneration();
+                console.log('🛑 User confirmed abort - using simplified abort');
+                try {
+                    // HYBRID APPROACH: Immediate abort at both levels
+                    // 1. Stop all HTTP requests immediately (single bottleneck)
+                    const { OpenRouterClient } = await import('./OpenRouterClient');
+                    const openRouterClient = OpenRouterClient.getInstance();
+                    openRouterClient.abortAllOperations();
+                    
+                    // 2. Set stopRequested flag for immediate loop exit
+                    activeProject.getGenerationService().abortCurrentGeneration();
+                    
+                    console.log('🛑 Simplified abort completed successfully');
+                    
+                    // Provide immediate feedback
+                    const abortBtn = getElementById('globalAbortBtn') as HTMLButtonElement;
+                    if (abortBtn) {
+                        const originalText = abortBtn.textContent;
+                        abortBtn.textContent = 'Aborting...';
+                        abortBtn.disabled = true;
+                        
+                        // Reset button after 2 seconds (faster since it's simpler)
+                        setTimeout(() => {
+                            abortBtn.textContent = originalText;
+                            abortBtn.disabled = false;
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to abort generation:', error);
+                    alert('Failed to abort generation. Please try again.');
+                }
             }
         } else {
             alert('No generation is currently in progress.');

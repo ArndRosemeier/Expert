@@ -6,7 +6,7 @@
 
 import { ProjectTemplate } from '../../../ProjectTemplate';
 import * as state from '../../../state';
-import { getElementById } from '../../dom-elements';
+// import { getElementById } from '../../dom-elements'; // Not used in this component
 
 export interface ManualProjectCreatorConfig {
     onCreate: (title: string, template: ProjectTemplate) => void;

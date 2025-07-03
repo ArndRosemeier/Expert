@@ -162,6 +162,7 @@ const newChild = new DocumentNode(level, title, parentId, parent.template);
   - `requestStop()` - Request loop termination
   - `isLoopRunning()` - Check if loop is running
   - `getCurrentIteration()` - Get current iteration number
+  - `getModelNameForPurpose(purpose)` - Get friendly model name for specific purpose ✨ **NEW**
 
 ### Systematic Progress Events System ✨ **NEW**
 - **Purpose**: Provides predictable, systematic progress tracking for content generation
@@ -197,12 +198,34 @@ type OrchestratorEvents = {
 - ✅ **Creator Iteration Tracking**: Separate counter tracks actual content generation iterations
 - ✅ **Consistent UI Updates**: Progress bars update at logical moments, not after work completes
 - ✅ **Dual Progress System**: Works with high-level bulk operations (e.g., "Generating child 3/5")
+- ✅ **Enhanced Progress Messages**: Context-aware messaging with model names and content types ✨ **NEW**
 
 **UI Integration**:
 - **Operations Progress**: "Generating content for: Chapter 1" (1/5) - High-level bulk operations
 - **Iterations Progress**: "Iteration 2 / 5" - Loop orchestrator iterations ✨ **ENHANCED TIMING**
 - **Stages Progress**: "Stage: Rate (2/3)" - Phase within iteration
-- **Detail Text**: "AI is evaluating against criterion: clarity" - Specific activity
+- **Detail Text**: "Claude 3 Sonnet is creating prose..." - Model-specific activity messaging ✨ **ENHANCED**
+
+**Enhanced Progress Interface** ✨ **NEW**:
+```typescript
+interface LoopProgress {
+    // ... existing fields ...
+    modelName?: string;              // Friendly display name (e.g., "Claude 3 Sonnet")
+    isFirstCreation?: boolean;       // Whether this is initial content creation
+    isRevision?: boolean;            // Whether this is a revision based on recommendations
+    isRejected?: boolean;            // Whether content was rejected
+    contentType?: 'prose' | 'outline'; // Based on node type (leaf vs non-leaf)
+    isCompletion?: boolean;          // Whether this is final completion message
+    allCriteriaSatisfied?: boolean;  // Whether all criteria were met
+}
+```
+
+**Enhanced Progress Messages**:
+- **First Creation**: "{{ModelName}} is creating prose/outline..." (based on node type)
+- **Rating**: "{{ModelName}} is rating the prose/outline..."
+- **Rejection**: "prose/outline rejected! {{EditorModelName}} is generating recommendations..."
+- **Revision**: "{{ModelName}} is revising prose/outline based on recommendations..."
+- **Completion**: "Done! All criteria satisfied" or "Done! Not all criteria satisfied, best version selected"
 
 ### Generation Services
 - **File**: `src/project/GenerationService.ts`
@@ -412,6 +435,10 @@ interface NodeSuggestion {
   - `showGenerationOverlay()` - Show generation overlay with spinner
   - `hideGenerationOverlay()` - Hide generation overlay
   - `setupProjectManagerListeners(manager)` - Setup systematic event listeners ✨ **ENHANCED**
+  - `renderProjectUI(proj)` - Render entire project UI with event listener re-attachment ✨ **ENHANCED**
+  - `renderNodeDetails()` - Render node details with event listener re-attachment ✨ **ENHANCED**
+  - `renderMultiProjectTree()` - Render multi-project tree structure
+  - `setupEventListeners()` - Centralized event listener setup with robustness ✨ **ENHANCED**
 
 **Progress System Integration**:
 ```typescript
@@ -869,6 +896,47 @@ getElementById('some-button').addEventListener('click', handler);
 eventManager.addDelegatedEvent('main-content', 'click', '#some-button', handler);
 ```
 
+### DOM Replacement Point Management ✨ **NEW - CRITICAL FIX**
+- **Problem**: Event listeners were lost when DOM elements were replaced via `innerHTML` operations
+- **Solution**: Systematic identification and fixing of all DOM replacement points
+- **Files**: `src/ui/project-ui.ts` (primary fixes)
+
+**Critical DOM Replacement Points Fixed**:
+- ✅ **`renderProjectUI()`** - Added `setupEventListeners()` call after DOM replacement
+- ✅ **`renderNodeDetails()`** - Already had `setupEventListeners()` call after DOM replacement
+- ✅ **`renderMultiProjectTree()`** - Tree navigation only, no button areas affected
+- ✅ **Profile selector updates** - Only affects dropdown options, not button areas
+
+**Event Listener Robustness Pattern**:
+```typescript
+// Pattern: DOM replacement followed by event listener re-attachment
+function renderProjectUI(proj: ProjectManager) {
+    // ... DOM replacement operations ...
+    renderMultiProjectTree();
+    renderNodeDetails();
+    
+    // Critical: Re-attach event listeners after DOM replacement
+    setupEventListeners();
+}
+```
+
+**Button Handler Centralization**:
+```typescript
+// Centralized button handlers for consistent re-attachment
+const buttonHandlers: Record<string, (event: Event) => void> = {
+    'node-generate-btn': handleGenerateClick,
+    'default-prompt-btn': handleDefaultPromptClick,
+    'actions-dropdown-btn': handleActionsClick,
+    // ... all other button handlers
+};
+```
+
+**Benefits**:
+- 🎯 **Eliminated Event Listener Loss**: Buttons remain functional after any UI state changes
+- 🎯 **Systematic Coverage**: All DOM replacement points identified and fixed
+- 🎯 **Centralized Management**: Single point of control for event listener setup
+- 🎯 **Robust Architecture**: Automatic re-attachment after any DOM structural changes
+
 ## 🏗️ Types & Interfaces
 
 ### Core Types
@@ -1031,6 +1099,68 @@ const newNode = await nodeCreationService.createNode({
 - **Root Cause**: Race condition between async state persistence and DOM re-rendering
 - **Solution**: Move collapsed state to node properties, eliminate async persistence
 - **Result**: Tree folding now works correctly and consistently
+
+### Enhanced Progress Bar Messaging System ✨ **MAJOR ENHANCEMENT**
+- **Purpose**: Provide clear, context-aware progress messages during AI generation
+- **Files**: `src/LoopOrchestrator.ts`, `src/project/GenerationService.ts`, `src/ui/project-ui.ts`
+
+**Key Improvements**:
+- ✅ **Model Name Resolution**: Added `getModelNameForPurpose()` for friendly model names
+- ✅ **Enhanced LoopProgress Interface**: Added fields for model names, content types, completion status
+- ✅ **Context-Aware Messaging**: Different messages for prose vs outline, first creation vs revision
+- ✅ **Completion Messages**: Clear feedback on whether all criteria were satisfied
+- ✅ **Progress Event Filtering**: Prevented duplicate editor progress events
+
+**Message Examples**:
+- "Claude 3 Sonnet is creating prose..." (first creation)
+- "Claude 3 Sonnet is rating the prose..." (rating phase)
+- "prose rejected! xAI: Grok 3 Mini is generating recommendations..." (rejection)
+- "Claude 3 Sonnet is revising prose based on recommendations..." (revision)
+- "Done! All criteria satisfied" (successful completion)
+
+### Event Listener Robustness & DOM Replacement Management ✨ **CRITICAL FIX**
+- **Purpose**: Eliminate event listener loss during DOM replacement operations
+- **Files**: `src/ui/project-ui.ts` (primary fixes)
+
+**Problem Solved**:
+- ✅ **Root Cause**: `innerHTML` operations were destroying DOM elements and their event listeners
+- ✅ **Systematic Fix**: Identified all DOM replacement points and added `setupEventListeners()` calls
+- ✅ **Centralized Architecture**: Unified button handler management for consistent re-attachment
+- ✅ **Comprehensive Coverage**: All critical DOM replacement points now trigger event listener re-attachment
+
+**Technical Implementation**:
+- ✅ **`renderProjectUI()`**: Added `setupEventListeners()` after DOM replacement
+- ✅ **`renderNodeDetails()`**: Already had proper event listener re-attachment
+- ✅ **Button Handler Centralization**: Unified handlers for consistent re-attachment
+- ✅ **Event Listener Pattern**: Remove all → Change UI → Re-attach all
+
+### AI Action Blocking During External Updates ✨ **CRITICAL STABILITY FIX**
+- **Purpose**: Prevent external content updates from interfering with active AI actions in reader view
+- **Files**: `src/ui/reader-editor.ts`, `src/ui/reader-gui.ts`
+
+**Problem Solved**:
+- ✅ **Root Cause**: Automatic content updates during AI generation were breaking active AI actions
+- ✅ **External Updates**: Reader view automatically updates when new content arrives via generation
+- ✅ **State Interference**: External updates could disrupt AI action state and user workflow
+- ✅ **Comprehensive Blocking**: All external update vectors now check for active AI actions
+
+**Technical Implementation**:
+- ✅ **Action State Tracking**: Added `activeActionsCount` to track number of active AI actions
+- ✅ **State Monitoring**: `isAIActionInProgress()` method for checking active actions
+- ✅ **Loading State Integration**: Enhanced `showActionLoadingState`/`hideActionLoadingState` to manage counter
+- ✅ **Update Blocking**: Added AI action checks to all external update methods
+
+**Protected Update Methods**:
+- ✅ **`handleNodeGenerationComplete()`**: Blocks automatic content updates during AI actions
+- ✅ **`updateNodeContentInReader()`**: Prevents individual node content updates during AI actions
+- ✅ **`refreshReaderForNewNodes()`**: Blocks reader rebuilds when AI actions are active
+- ✅ **`handleProjectUpdate()`**: Prevents project structure changes during AI actions
+
+**Benefits**:
+- 🎯 **Stable AI Actions**: AI actions complete without external interference
+- 🎯 **Preserved User Context**: User's editing state remains intact during AI operations
+- 🎯 **Predictable Behavior**: Consistent AI action experience without unexpected interruptions
+- 🎯 **Comprehensive Coverage**: All external update vectors properly protected
 
 ### Version Migration System Development
 

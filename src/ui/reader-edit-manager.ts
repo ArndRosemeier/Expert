@@ -174,7 +174,11 @@ export class ReaderEditManager {
         const index = this.config.actions.findIndex(action => action.id === id);
         if (index === -1) return false;
         
-        this.config.actions[index] = { ...this.config.actions[index], ...updates };
+        // Ensure the action exists before updating
+        const existingAction = this.config.actions[index];
+        if (existingAction) {
+            Object.assign(existingAction, updates);
+        }
         await this.saveConfig();
         
         return true;
@@ -207,7 +211,7 @@ export class ReaderEditManager {
         
         // Check if action was canceled during prompt filling
         if (filledPrompt === '__CANCELED__') {
-            return ''; // Return empty result for canceled actions
+            throw new Error('ACTION_CANCELED'); // Throw cancellation error instead of returning empty
         }
         
         // Execute the prompt using OpenRouterClient directly
@@ -231,7 +235,7 @@ export class ReaderEditManager {
         if (inputMatches) {
             for (const match of inputMatches) {
                 const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
-                if (titleMatch) {
+                if (titleMatch && titleMatch[1]) {
                     const title = titleMatch[1];
                     const userInput = await this.showInputModal(title);
                     

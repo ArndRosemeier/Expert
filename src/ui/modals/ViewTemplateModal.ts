@@ -193,7 +193,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
             singleTemplateEditor = new SingleTemplateEditor({
                 containerId: 'view-template-editor-container',
                 template: templateCopy,
-                onTemplateChange: (updatedTemplate) => {
+                onTemplateChange: (_updatedTemplate) => {
                     isDirty = true;
                 },
                 readonly: false,

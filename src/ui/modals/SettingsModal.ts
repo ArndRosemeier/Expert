@@ -11,7 +11,7 @@ import { SettingsManager } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
-import { EventEmitter } from '../../EventEmitter';
+// EventEmitter import removed - no longer used
 import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
@@ -78,7 +78,7 @@ export class SettingsModal extends BaseModal {
     }
 
     // Simple emit method for compatibility
-    private emit(eventName: string, data?: any): void {
+    private emit(_eventName: string, _data?: any): void {
         // Silent event emitter stub
     }
 
@@ -504,7 +504,7 @@ export class SettingsModal extends BaseModal {
                 this.refreshGlobalProfileSelector?.();
             });
 
-            this.profileSelector.onAction((event) => {
+            this.profileSelector.onAction((_event) => {
                 this.refreshGlobalProfileSelector?.();
             });
         }

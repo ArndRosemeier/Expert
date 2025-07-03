@@ -271,7 +271,7 @@ export class EventManager {
     /**
      * Handle element removal and cleanup
      */
-    private handleElementRemoved(removedElement: HTMLElement): void {
+    private handleElementRemoved(_removedElement: HTMLElement): void {
         // Clean up direct events for removed elements
         this.directEvents = this.directEvents.filter(eventInfo => {
             if (!document.contains(eventInfo.element)) {

@@ -2,7 +2,7 @@ import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { ReaderEditor } from './reader-editor';
 import { ReaderEditAction } from '../types/ReaderEditingTypes';
-import { openGenericModal, closeGenericModal } from './modal-manager';
+// openGenericModal, closeGenericModal imports removed - no longer used
 
 import { StorageService } from '../StorageService';
 
@@ -2528,7 +2528,7 @@ export class ReaderGUI {
      * Setup event listeners for the actions configuration modal
      */
     private setupActionsConfigEventListeners(
-        selectedActionId: string | null,
+        _selectedActionId: string | null,
         unsavedChanges: boolean,
         setSelectedActionId: (id: string | null) => void,
         setUnsavedChanges: (state: boolean) => void
@@ -3172,6 +3172,12 @@ export class ReaderGUI {
      * Handle node generation completion - update reader content without breaking editor
      */
     private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }): void {
+        // Check if any AI actions are in progress - block all updates if so
+        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+            console.log(`🚫 Reader update blocked - AI action in progress, skipping update for: "${e.node.title}" (${e.nodeId})`);
+            return;
+        }
+        
         if (e.success) {
             console.log(`📖 Reader auto-updating content for: "${e.node.title}" (${e.nodeId})`);
             
@@ -3193,7 +3199,7 @@ export class ReaderGUI {
     /**
      * Handle node summary generation - update reader content without breaking editor
      */
-    private handleNodeSummaryGenerated(e: { nodeId: string, summary: string }): void {
+    private handleNodeSummaryGenerated(_e: { nodeId: string, summary: string }): void {
         // Summary updates don't affect reader content directly since we show content, not summaries
         // But we could update any summary displays if needed in the future
     }
@@ -3204,6 +3210,12 @@ export class ReaderGUI {
     private updateNodeContentInReader(nodeId: string, newContent: string): void {
         // Access the ReaderEditor to update the content directly
         if (this.readerEditor) {
+            // Check if any AI actions are in progress - block updates if so
+            if (this.readerEditor.isAIActionInProgress()) {
+                console.log(`🚫 Reader update blocked - AI action in progress for node: ${nodeId}`);
+                return;
+            }
+            
             const nodeEditor = (this.readerEditor as any).nodeEditors?.get(nodeId);
             if (nodeEditor) {
                 // Check if the user has unsaved changes or is currently editing
@@ -3278,6 +3290,12 @@ export class ReaderGUI {
      * Refresh the reader when new nodes are detected (e.g., after child node generation)
      */
     private refreshReaderForNewNodes(): void {
+        // Check if any AI actions are in progress - block refresh if so
+        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+            console.log(`🚫 Reader refresh blocked - AI action in progress`);
+            return;
+        }
+        
         // Preserve content from existing editors before destroying them
         let preservedContent = new Map<string, string>();
         if (this.readerEditor) {
@@ -3311,6 +3329,12 @@ export class ReaderGUI {
      * Handle overall project updates
      */
     private handleProjectUpdate(): void {
+        // Check if any AI actions are in progress - block updates if so
+        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+            console.log(`🚫 Project update blocked - AI action in progress`);
+            return;
+        }
+        
         console.log(`📋 Project structure changed - checking for new nodes`);
         
         // Check if there are new nodes that need to be added to the reader
@@ -3330,24 +3354,7 @@ export class ReaderGUI {
         }
     }
 
-    /**
-     * Preserve the current reading position before updating content
-     */
-    private preserveReadingPosition(): void {
-        // Content state is managed by individual text editors in always-edit mode
-        // No position preservation needed
-    }
-
-
-
-    /**
-     * Refresh content while preserving reading position
-     */
-    private refreshContent(): void {
-        // In always-edit mode, content is managed entirely by individual text editors
-        // No full DOM refreshes needed - updates happen through ReaderEditor
-        return;
-    }
+    // preserveReadingPosition and refreshContent methods removed - no longer used
 
 
 

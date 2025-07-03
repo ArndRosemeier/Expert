@@ -187,9 +187,9 @@ export function showGenericModal(
 
     const modalConfig: ModalConfig & { content: GenericModalContent } = {
         id: config.id || `generic-modal-${Date.now()}`,
-        title: config.title,
-        width: config.width,
-        height: config.height,
+        ...(config.title !== undefined && { title: config.title }),
+        ...(config.width !== undefined && { width: config.width }),
+        ...(config.height !== undefined && { height: config.height }),
         maxWidth: config.maxWidth || '80vw',
         maxHeight: config.maxHeight || '90vh',
         closable: config.closable !== false,
@@ -235,7 +235,7 @@ export function showAlert(
             maxWidth: '400px'
         },
         {
-            onClose
+            ...(onClose !== undefined && { onClose })
         }
     );
 }

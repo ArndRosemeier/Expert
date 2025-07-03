@@ -15,7 +15,7 @@ export function testPhase2Services(): void {
     // Create test dependencies
     const template = ['Book', 'Chapter', 'Scene'];
     const rootNode = new DocumentNode(0, 'Test Book', null, template);
-    const openRouterClient = new OpenRouterClient('test-api-key');
+    const openRouterClient = OpenRouterClient.getInstance();
     const loopOrchestrator = new LoopOrchestrator(openRouterClient);
 
     
@@ -117,7 +117,7 @@ export function testServiceIntegration(): void {
     
     // Test TreeService + GenerationController integration
     const treeService = new TreeService();
-    const openRouterClient2 = new OpenRouterClient('test-api-key');
+    const openRouterClient2 = OpenRouterClient.getInstance();
     const loopOrchestrator = new LoopOrchestrator(openRouterClient2);
     const generationController = new GenerationController(loopOrchestrator, treeService);
     

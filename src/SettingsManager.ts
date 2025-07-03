@@ -4,7 +4,6 @@ import { StorageService, IStorageService } from './StorageService';
 import { VersionService } from './VersionService';
 import { 
     DEFAULT_MAX_ITERATIONS, 
-    DEFAULT_PROFILE_NAME, 
     STORAGE_KEYS, 
     DEFAULT_CONTEXT_EXTRACTION_PROMPT 
 } from './constants';
@@ -109,7 +108,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: 'Human-like Naming',
         goal: 8,
-        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Avoid overused fantasy/AI-generated names like Elara, Lyra, Lyria, Chen, Kai, Raven, Yuki, Marcus, Zara, Voss, Aria, Moonshadow, Seraphina, Ashwood, Clive, Maximilian, Everett, Benedict, Oswald, Rupert, Magnus, Stormrider, Dawnwalker, Shadowblade, Emberheart, Snowsong, Park, Johnson, Thorne, Alaric, Nyx, Orion, Cassian, Mira, Selene, Vale, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian. Instead, use more natural, varied names that feel authentic and less predictable. Do not change names that are already established.",
+        description: "If a new character is introduced with a generic placeholder name (e.g., 'a character', 'the archivist'), replace it with a more human-sounding name. Avoid overused fantasy/AI-generated names like Elara, Lyra, Aris, Thorne, Lyria, Chen, Kai, Raven, Yuki, Marcus, Zara, Voss, Aria, Moonshadow, Seraphina, Ashwood, Clive, Maximilian, Everett, Benedict, Oswald, Rupert, Magnus, Stormrider, Dawnwalker, Shadowblade, Emberheart, Snowsong, Park, Johnson, Thorne, Alaric, Nyx, Orion, Cassian, Mira, Selene, Vale, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian. Instead, use more natural, varied names that feel authentic and less predictable. Do not change names that are already established.",
         outline: true,
         leaf: false
     },
@@ -365,7 +364,7 @@ export class SettingsManager {
         }
         // Return the first profile if no last-used is set
         const names = this.getProfileNames();
-        return names.length > 0 ? this.getProfile(names[0]) : undefined;
+        return names.length > 0 ? this.getProfile(names[0]!) : undefined;
     }
 
     public getLastUsedProfileName(): string | null {
@@ -373,7 +372,7 @@ export class SettingsManager {
             return this.lastUsedProfileName;
         }
         const names = this.getProfileNames();
-        return names.length > 0 ? names[0] : null;
+        return names.length > 0 ? names[0]! : null;
     }
 
     public async setLastUsedProfile(name: string): Promise<void> {

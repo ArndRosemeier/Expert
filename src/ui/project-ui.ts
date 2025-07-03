@@ -2,10 +2,10 @@ import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { getElementById } from './dom-elements';
 import * as state from '../state';
-import { LoopProgress, RaterProgressPayload } from '../LoopOrchestrator';
+import { LoopProgress } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
-import { showGenericModal } from './modals/GenericModal';
+
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
 // --- State Variables ---
@@ -184,13 +184,12 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
     
     // Parse the layer name to extract target count
     let newLevelName: string = trimmedName;
-    let targetCount: number | undefined;
     
     // Check if the name ends with a number (e.g., "Series 3")
     const match = trimmedName.match(/^(.+?)\s+(\d+)$/);
     if (match && match[1] && match[2]) {
         newLevelName = match[1]!; // Non-null assertion since we checked above
-        targetCount = parseInt(match[2]!, 10);
+        // Target count parsing available but not currently used
     }
 
     try {
@@ -537,6 +536,10 @@ export function renderProjectUI(proj: ProjectManager) {
     refreshGlobalProfileSelector(); // Keep the profile selector up-to-date
     renderMultiProjectTree();
     renderNodeDetails();
+    
+    // Re-attach event listeners after DOM replacement in renderProjectUI
+    console.log('🔧 Re-setting up event listeners after renderProjectUI DOM replacement');
+    setupEventListeners();
 }
 
 // --- Event Listener Setup ---
@@ -656,15 +659,28 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         };
 
         let detailText = '';
+        const modelName = progress.modelName || 'AI';
+        const contentType = progress.contentType || 'content';
+        
         switch (progress.type) {
             case 'creator':
-                detailText = 'AI is generating content...';
+                if (progress.isCompletion) {
+                    detailText = progress.allCriteriaSatisfied 
+                        ? `Done! All criteria satisfied.`
+                        : `Done! Not all criteria satisfied, best version selected.`;
+                } else if (progress.isFirstCreation) {
+                    detailText = `${modelName} is creating ${contentType}...`;
+                } else if (progress.isRevision) {
+                    detailText = `${modelName} is revising ${contentType} based on recommendations...`;
+                } else {
+                    detailText = `${modelName} is generating content...`;
+                }
                 break;
             case 'rater':
-                detailText = `AI is evaluating against criterion: ${(progress.payload as RaterProgressPayload).criterion}`;
+                detailText = `${modelName} is rating the ${contentType}...`;
                 break;
             case 'editor':
-                detailText = 'AI is compiling feedback for the next iteration...';
+                detailText = `${contentType} rejected! ${modelName} is generating recommendations...`;
                 break;
         }
 
@@ -1101,6 +1117,10 @@ export function renderNodeDetails() {
     `;
 
     contentArea.appendChild(detailsContainer);
+    
+    // Re-attach event listeners after DOM content replacement
+    console.log('🔧 Re-setting up event listeners after renderNodeDetails DOM replacement');
+    setupEventListeners();
 
     // === DEBUGGING: Log dropdown HTML generation ===
     // Actions dropdown rendered successfully
@@ -1120,6 +1140,9 @@ export function renderNodeDetails() {
 
     // Initialize version navigation
     initializeVersionNavigation(node);
+    
+    // Update the content display to show the current version
+    updateVersionContentDisplay();
 
     if (!node.generationPrompt) {
         node.generationPrompt = projectManager.getRawGenerationPrompt(node);
@@ -1388,59 +1411,28 @@ function updateVersionNavigationUI() {
     }
 }
 
-function navigateToVersion(direction: 'prev' | 'next') {
-    if (direction === 'prev' && currentVersionIndex > 0) {
-        currentVersionIndex--;
-    } else if (direction === 'next' && currentVersionIndex < availableVersions.length - 1) {
-        currentVersionIndex++;
-    }
-    
-    displayCurrentVersion();
-    updateVersionNavigationUI();
-}
-
-function displayCurrentVersion() {
+function updateVersionContentDisplay() {
     const currentVersion = availableVersions[currentVersionIndex];
     if (!currentVersion) return;
-
-    // Update content display
+    
+    // Update the content textarea to show the selected version's content
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
     if (contentTextArea) {
         contentTextArea.value = currentVersion.content;
     }
-
-    // Update ratings display if currently showing ratings
+    
+    // Update the ratings view if it's currently showing
     const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
-    if (showRatingsCheckbox?.checked) {
+    if (showRatingsCheckbox && showRatingsCheckbox.checked) {
         renderRatingsView();
     }
 }
 
-function useCurrentVersion() {
-    if (!projectManager || !selectedNodeId) return;
-    
-    const node = projectManager.findNodeById(selectedNodeId);
-    const currentVersion = availableVersions[currentVersionIndex];
-    
-    if (!node || !currentVersion || currentVersion.isCurrent) return;
 
-    // Update the node's content
-    node.content = currentVersion.content;
-    
-    // Save to storage
-    void projectManager.saveToStorage().catch(console.error);
-    
-    // Reset to show current version
-    currentVersionIndex = 0;
-    availableVersions[0].content = currentVersion.content;
-    
-    // Update UI
-    displayCurrentVersion();
-    updateVersionNavigationUI();
-    
-    // Show success message
-    alert('Content updated to selected version!');
-}
+
+
+
+
 
 function toggleRatingsView(showRatings: boolean) {
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
@@ -1920,7 +1912,7 @@ This action cannot be undone.`;
 
                 // Open the Add Child Node Modal
                 openAddChildNodeModal(node, node.id)
-                    .then((modal) => {
+                    .then((_modal) => {
                         console.log('✅ Add Child Node modal opened successfully');
                         // The modal factory handles UI refresh automatically
                     })
@@ -2076,7 +2068,7 @@ This action cannot be undone.`;
                 // Import and open export modal
                 import('./modal-manager').then(({ openExportModal }) => {
                     openExportModal(projectManager!, node);
-                }).catch(error => {
+                }).catch(_error => {
                     alert('Failed to open export dialog. Please try again.');
                 });
             }
@@ -2210,186 +2202,16 @@ This action cannot be undone.`;
 }
 
 export function setupEventListeners() {
+    console.log('🔧 Setting up simplified event listeners...');
+    
+    // Remove all existing listeners first
+    removeAllListeners();
+    
+    // Attach listeners to all buttons
+    attachAllListeners();
+    
+    // Set up non-click event listeners
     const mainContent = getElementById('main-content');
-
-    // === DEBUGGING: Add simple direct listener as fallback ===
-    console.log('🔧 Setting up event listeners...');
-    
-    // Removed duplicate fallback listener to prevent modal stacking issue
-
-    // Import EventManager for robust event handling (as backup)
-    import('./event-manager').then(({ EventManager }) => {
-    
-        const eventManager = EventManager.getInstance();
-
-        // === ACTIONS BUTTON HANDLING WITH EVENT DELEGATION ===
-        // Actions button - survives DOM replacements
-        eventManager.addDelegatedEvent(
-            mainContent,
-            'click',
-            '#actions-dropdown-btn',
-            (e) => {
-                console.log('🎯 EventManager actions button clicked');
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (selectedNodeId && projectManager) {
-                    const selectedNode = projectManager.findNodeById(selectedNodeId);
-                    if (selectedNode) {
-                        showActionsDropdown(selectedNode);
-                        console.log('✅ EventManager actions modal opened!');
-                    }
-                }
-            }
-        );
-
-
-
-    }).catch((error) => {
-        console.error('❌ Failed to load EventManager:', error);
-    });
-
-    // === MAIN CONTENT EVENT DELEGATION ===
-    mainContent.addEventListener('click', (e) => {
-        if (!e.target || !(e.target instanceof HTMLElement)) return;
-
-        const button = e.target.closest('button');
-        if (!button) return;
-
-        // === UNIFIED BUTTON HANDLER FOR ALL BUTTONS IN THE GUI ===
-        
-        // Handle placeholder buttons by data attribute
-        if (button.classList.contains('placeholder-btn')) {
-            const placeholder = button.getAttribute('data-placeholder');
-            if (placeholder && projectManager && selectedNodeId) {
-                showPlaceholderOverlay(placeholder, projectManager, selectedNodeId);
-            }
-            return;
-        }
-
-        // Handle all other buttons by ID using the same pattern
-        switch (button.id) {
-            // === GENERATION PANEL BUTTONS ===
-            case 'default-prompt-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                    const defaultPrompt = projectManager.getRawGenerationPrompt(node);
-                    generationPromptTextArea.value = defaultPrompt;
-                    node.generationPrompt = defaultPrompt;
-                }
-                break;
-
-            case 'node-generate-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    handleUnifiedGeneration(node);
-                }
-                break;
-
-            case 'node-propagate-context-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Function to propagate context to all descendants
-                    const propagateContextToDescendants = (parentNode: DocumentNode) => {
-                        const propagatedCount = { count: 0 };
-                        
-                        const propagateRecursively = (sourceNode: DocumentNode) => {
-                            for (const child of sourceNode.children) {
-                                child.context = sourceNode.context;
-                                propagatedCount.count++;
-                                propagateRecursively(child);
-                            }
-                        };
-                        
-                        propagateRecursively(parentNode);
-                        return propagatedCount.count;
-                    };
-
-                    const propagatedCount = propagateContextToDescendants(node);
-                    
-                    if (propagatedCount > 0) {
-                        // Save the project after propagation
-                        void projectManager.saveToStorage().catch(console.error);
-                        alert(`Context propagated to ${propagatedCount} descendant node(s).`);
-                        
-                        // Refresh the UI to show updated context if we're viewing a child node
-                        const currentNode = projectManager.findNodeById(selectedNodeId);
-                        if (currentNode) {
-                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-                            if (contextTextArea) {
-                                contextTextArea.value = currentNode.context;
-                            }
-                        }
-                    } else {
-                        alert('This node has no child nodes to propagate context to.');
-                    }
-                }
-                break;
-
-            case 'node-extract-context-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const node = projectManager.findNodeById(selectedNodeId);
-                    if (!node) return;
-
-                    // Import and open extract context modal
-                    import('./modal-manager').then(({ openExtractContextModal }) => {
-                        openExtractContextModal(projectManager!, node);
-                    }).catch((error: any) => {
-                        console.error('Failed to open extract context modal:', error);
-                        alert('Failed to open extract context dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'context-info-btn':
-                {
-                    // Import and open context info modal
-                    import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
-                        const contextModal = new ContextInfoModal();
-                        void contextModal.open();
-                    }).catch((error: any) => {
-                        console.error('Failed to open context info modal:', error);
-                        alert('Failed to open context info dialog. Please try again.');
-                    });
-                }
-                break;
-
-            case 'open-reader-btn':
-                {
-                    if (!projectManager || !selectedNodeId) return;
-                    const selectedNode = projectManager.findNodeById(selectedNodeId);
-                    if (!selectedNode) return;
-
-                    // Open reader view starting from the selected node
-                    openReaderView(projectManager, selectedNode, (nodeId: string) => {
-                        // Navigate to node when clicked in reader view
-                        selectedNodeId = nodeId;
-                        renderNodeDetails();
-                    }).catch((error: any) => {
-                        console.error('Failed to open reader view:', error);
-                        alert('Failed to open reader view. Please try again.');
-                    });
-                }
-                break;
-
-            default:
-                // No handler found - this is fine, not all buttons need handling
-                break;
-        }
-    });
-
-    // === NON-CLICK EVENT LISTENERS ===
     mainContent.addEventListener('change', async (e) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
@@ -2545,6 +2367,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         const nodeDetails = getElementById('node-details');
         nodeDetails.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;">Select a node to view details.</div>';
     }
+    
+    // Re-setup event listeners after DOM replacement
+    console.log('🔧 Re-setting up event listeners after DOM replacement in initializeProjectUI');
+    setupEventListeners();
 }
 
 
@@ -2725,7 +2551,7 @@ function renderMultiProjectTree() {
     }
     
     let html = '';
-    projects.forEach((project, index) => {
+    projects.forEach((project, _index) => {
 
         html += buildTreeHtml(project.rootNode, true); // true indicates this is a project root
     });
@@ -2770,8 +2596,7 @@ function renderMultiProjectTree() {
     });
 
     // Attach event listeners for expand/collapse buttons
-    expandButtons.forEach((el, index) => {
-        const nodeId = (el as HTMLElement).dataset['nodeId'];
+    expandButtons.forEach((el, _index) => {
 
         
         // Single click for individual expand/collapse
@@ -2793,7 +2618,6 @@ function renderMultiProjectTree() {
                 }
                 
                 if (targetNode) {
-                    const wasCollapsed = targetNode.collapsed;
 
                     
                     // Toggle the node's collapsed state
@@ -3115,3 +2939,236 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
     }
 }
+
+
+
+// === CHECKBOX STATE MANAGEMENT ===
+
+// === CENTRALIZED EVENT LISTENER SYSTEM ===
+
+/**
+ * Mapping of button IDs to their event handlers
+ */
+const buttonHandlers: Record<string, (event: Event) => void> = {
+    'node-generate-btn': (_e: Event) => {
+        console.log('🎯 Generate button clicked');
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        handleUnifiedGeneration(node);
+    },
+    
+    'default-prompt-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
+        const defaultPrompt = projectManager.getRawGenerationPrompt(node);
+        generationPromptTextArea.value = defaultPrompt;
+        node.generationPrompt = defaultPrompt;
+    },
+    
+    'node-propagate-context-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        const propagateContextToDescendants = (parentNode: DocumentNode) => {
+            const propagatedCount = { count: 0 };
+            
+            const propagateRecursively = (sourceNode: DocumentNode) => {
+                for (const child of sourceNode.children) {
+                    child.context = sourceNode.context;
+                    propagatedCount.count++;
+                    propagateRecursively(child);
+                }
+            };
+            
+            propagateRecursively(parentNode);
+            return propagatedCount.count;
+        };
+        
+        const propagatedCount = propagateContextToDescendants(node);
+        
+        if (propagatedCount > 0) {
+            void projectManager.saveToStorage().catch(console.error);
+            alert(`Context propagated to ${propagatedCount} descendant node(s).`);
+            
+            const currentNode = projectManager.findNodeById(selectedNodeId);
+            if (currentNode) {
+                const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                if (contextTextArea) {
+                    contextTextArea.value = currentNode.context;
+                }
+            }
+        } else {
+            alert('This node has no child nodes to propagate context to.');
+        }
+    },
+    
+    'node-extract-context-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        import('./modal-manager').then(({ openExtractContextModal }) => {
+            openExtractContextModal(projectManager!, node);
+        }).catch((error: any) => {
+            console.error('Failed to open extract context modal:', error);
+            alert('Failed to open extract context dialog. Please try again.');
+        });
+    },
+    
+    'context-info-btn': (_e: Event) => {
+        import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
+            const contextModal = new ContextInfoModal();
+            void contextModal.open();
+        }).catch((error: any) => {
+            console.error('Failed to open context info modal:', error);
+            alert('Failed to open context info dialog. Please try again.');
+        });
+    },
+    
+    'open-reader-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const selectedNode = projectManager.findNodeById(selectedNodeId);
+        if (!selectedNode) return;
+        
+        openReaderView(projectManager, selectedNode, (nodeId: string) => {
+            selectedNodeId = nodeId;
+            renderNodeDetails();
+        }).catch((error: any) => {
+            console.error('Failed to open reader view:', error);
+            alert('Failed to open reader view. Please try again.');
+        });
+    },
+    
+    'version-prev-btn': (_e: Event) => {
+        if (currentVersionIndex > 0) {
+            currentVersionIndex--;
+            updateVersionNavigationUI();
+            updateVersionContentDisplay();
+        }
+    },
+    
+    'version-next-btn': (_e: Event) => {
+        if (currentVersionIndex < availableVersions.length - 1) {
+            currentVersionIndex++;
+            updateVersionNavigationUI();
+            updateVersionContentDisplay();
+        }
+    },
+    
+    'use-this-version-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node || !availableVersions[currentVersionIndex]) return;
+        
+        const selectedVersion = availableVersions[currentVersionIndex];
+        node.content = selectedVersion.content;
+        node.generationHistory = selectedVersion.generationHistory || [];
+        node.generationSessions = selectedVersion.generationSessions || [];
+        node.creatorModel = selectedVersion.creatorModel;
+        
+        void projectManager.saveToStorage().catch(console.error);
+        
+        initializeVersionNavigation(node);
+        updateVersionNavigationUI();
+        updateVersionContentDisplay();
+        
+        const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
+        if (contentTextArea) {
+            contentTextArea.value = node.content;
+        }
+        
+        alert('Version restored as current content.');
+    },
+    
+    'actions-dropdown-btn': (e: Event) => {
+        console.log('🎯 Actions button clicked');
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (selectedNodeId && projectManager) {
+            const selectedNode = projectManager.findNodeById(selectedNodeId);
+            if (selectedNode) {
+                showActionsDropdown(selectedNode);
+            }
+        }
+    }
+};
+
+/**
+ * Removes all event listeners from tracked buttons
+ */
+function removeAllListeners() {
+    console.log('🧹 Removing all event listeners');
+    
+    // Remove click listeners from all tracked buttons
+    Object.keys(buttonHandlers).forEach(buttonId => {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            const handler = (button as any)._expertHandler;
+            if (handler) {
+                button.removeEventListener('click', handler);
+                delete (button as any)._expertHandler;
+            }
+        }
+    });
+    
+    // Remove main content delegation listener
+    const mainContent = getElementById('main-content');
+    const existingListener = (mainContent as any)._expertEventListener;
+    if (existingListener) {
+        mainContent.removeEventListener('click', existingListener);
+        delete (mainContent as any)._expertEventListener;
+    }
+}
+
+/**
+ * Attaches event listeners to all present buttons
+ */
+function attachAllListeners() {
+    console.log('🔧 Attaching event listeners to all buttons');
+    
+    // Attach listeners to all buttons that exist in the DOM
+    Object.entries(buttonHandlers).forEach(([buttonId, handler]) => {
+        const button = document.getElementById(buttonId);
+        if (button && !(button as any)._expertHandler) {
+            const wrappedHandler = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handler(e);
+            };
+            
+            button.addEventListener('click', wrappedHandler);
+            (button as any)._expertHandler = wrappedHandler;
+        }
+    });
+    
+    // Set up event delegation for placeholder buttons and other dynamic content
+    const mainContent = getElementById('main-content');
+    if (!(mainContent as any)._expertEventListener) {
+        const delegationHandler = (e: Event) => {
+            if (!e.target || !(e.target instanceof HTMLElement)) return;
+            
+            const button = e.target.closest('button');
+            if (!button) return;
+            
+            // Handle placeholder buttons
+            if (button.classList.contains('placeholder-btn')) {
+                const placeholder = button.getAttribute('data-placeholder');
+                if (placeholder && projectManager && selectedNodeId) {
+                    showPlaceholderOverlay(placeholder, projectManager, selectedNodeId);
+                }
+                return;
+            }
+        };
+        
+        mainContent.addEventListener('click', delegationHandler);
+        (mainContent as any)._expertEventListener = delegationHandler;
+    }
+}
+
+// === CHECKBOX STATE MANAGEMENT ===

@@ -3,18 +3,16 @@ import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 
-import { SettingsProfile, DEFAULT_CRITERIA, SettingsManager } from '../SettingsManager';
-import { QualityCriterion } from '../types';
-import { OrchestratorPrompts, defaultPrompts } from '../PromptManager';
+
 import { DocumentNode } from '../DocumentNode';
 import { AILogService } from '../AILogService';
-import { refreshGlobalProfileSelector } from './project-ui';
+
 
 // --- Generic Modal Functions ---
 // TODO: Migrate to new modal system
 // These functions are maintained for backward compatibility during migration
 
-import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal, showGenericModal, ExportModal } from './modals/index';
+import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal, showGenericModal } from './modals/index';
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -241,13 +239,13 @@ export function openExportModal(projectManager: ProjectManager, node: DocumentNo
                 projectManager: projectManager
             });
             
-            const exportModal = await modalFactory.createExportModal(node);
+            await modalFactory.createExportModal(node);
             // Modal opens automatically by default
             
-        } catch (error) {
+        } catch (_error) {
             alert('Failed to open export dialog. Please try again.');
         }
-    }).catch(error => {
+    }).catch(_error => {
         alert('Failed to load export modal. Please try again.');
     });
 }
@@ -255,10 +253,7 @@ export function openExportModal(projectManager: ProjectManager, node: DocumentNo
 // renderExportModal function removed - replaced by ExportModal.ts
 // This 166-line function was completely duplicating ExportModal functionality
 
-// Export functionality moved to ExportService - keeping minimal stub to prevent breaking legacy export modal
-function performExport(_projectManager: ProjectManager, node: DocumentNode, scope: string, format: string) {
-    alert('Export functionality moved to new modal system. Please use the new Export modal.');
-}
+// Export functionality moved to ExportService and new modal system
 
 // --- Private Functions ---
 
@@ -309,40 +304,6 @@ function renderNewProjectModal(onCreate: (title: string, template: ProjectTempla
 
 // CRITERIA MANAGEMENT FUNCTIONS REMOVED - MOVED TO CriteriaEditor
 // All criteria functions moved to src/ui/modals/components/CriteriaEditor.ts
-function autoResizeTextarea(this: HTMLTextAreaElement) {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
-}
-
-function createCriterionElement(_criterion: QualityCriterion): HTMLDivElement {
-    const div = document.createElement('div');
-    div.innerHTML = '<p style="color: #888;">Criteria editing moved to new Settings modal</p>';
-    return div;
-}
-
-function getCriteriaFromUI(_container: HTMLElement): QualityCriterion[] {
-    return []; // Return empty array since functionality moved to new modal
-}
-
-function renderCriteria(container: HTMLElement, _criteria: QualityCriterion[]) {
-    container.innerHTML = '<p style="color: #888;">Criteria management moved to new Settings modal</p>';
-}
-
-function isCriteriaArray(_data: any): _data is QualityCriterion[] {
-    return false; // Stub - functionality moved to CriteriaEditor
-}
-
-function migrateCriteriaFormat(criteria: any[]): QualityCriterion[] {
-    return criteria as QualityCriterion[]; // Stub - functionality moved to CriteriaEditor
-}
-
-async function handleCopyCriteria(_container: HTMLElement) {
-    alert('Criteria management moved to new Settings modal');
-}
-
-async function handlePasteCriteria(_container: HTMLElement) {
-    alert('Criteria management moved to new Settings modal');
-}
 
 export function openExtractContextModal(projectManager: ProjectManager, node: DocumentNode) {
     // Import the new modal system dynamically
@@ -557,7 +518,7 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
     const previewBtn = getElementById<HTMLButtonElement>('preview-btn');
     const previewContainer = getElementById('preview-container');
     const previewContent = getElementById('preview-content');
-    const resultSection = getElementById('result-section');
+
     const extractResult = getElementById<HTMLTextAreaElement>('extract-result');
     const copyResultBtn = getElementById<HTMLButtonElement>('copy-result-btn');
     const addToContextBtn = getElementById<HTMLButtonElement>('add-to-context-btn');
@@ -1225,7 +1186,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
 
 
 
-async function openNodeChatInterface(projectManager: ProjectManager, systemPrompt: string, nodeTitle: string, node: DocumentNode): Promise<void> {
+async function openNodeChatInterface(_projectManager: ProjectManager, systemPrompt: string, nodeTitle: string, node: DocumentNode): Promise<void> {
     try {
         // Import necessary modules
         const { ChatInterface } = await import('./chat-interface');
@@ -1249,7 +1210,6 @@ async function openNodeChatInterface(projectManager: ProjectManager, systemPromp
         }
 
         // Get selected models from model selector
-        const modelConfigs = modelSelector.getSelectedModels();
         if (!modelSelector.areAllModelsSelected()) {
             alert('Please configure all required models in the settings first.');
             return;

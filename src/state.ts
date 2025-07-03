@@ -46,7 +46,7 @@ export const removeProject = (projectId: string) => {
     if (index >= 0) {
         projects.splice(index, 1);
         if (activeProjectId === projectId) {
-            activeProjectId = projects.length > 0 ? projects[0].rootNode.id : null;
+            activeProjectId = projects.length > 0 ? projects[0]!.rootNode.id : null;
         }
     }
 };

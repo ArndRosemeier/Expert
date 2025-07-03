@@ -33,25 +33,45 @@ export class GenerationController {
      * Aborts the current generation operation.
      */
     public abortCurrentGeneration(rootNode: DocumentNode): string[] {
+        console.log('🛑 GenerationController: Starting abort process');
         this.abortRequested = true;
         
+        // Get the list of aborted node IDs before clearing context
+        const abortedNodeIds = this.currentGenerationContext?.nodeIds || [];
+        console.log('🛑 GenerationController: Aborting nodes:', abortedNodeIds);
+        
+        // Execute abort operations in parallel for faster response
+        const abortOperations = [];
+        
         if (this.currentGenerationContext) {
-            this.currentGenerationContext.abortController.abort();
+            console.log('🛑 GenerationController: Aborting generation context controller');
+            abortOperations.push(
+                Promise.resolve().then(() => this.currentGenerationContext?.abortController.abort())
+            );
         }
         
-        // Abort the loop orchestrator
-        this.loopOrchestrator.requestStop();
+        // Abort the loop orchestrator (this will also abort OpenRouter operations)
+        console.log('🛑 GenerationController: Requesting LoopOrchestrator stop');
+        abortOperations.push(
+            Promise.resolve().then(() => this.loopOrchestrator.requestStop())
+        );
         
-        // Mark all generating nodes as no longer generating
+        // Mark all generating nodes as no longer generating (immediate UI feedback)
+        console.log('🛑 GenerationController: Clearing generating flags');
         this.treeService.clearAllGeneratingFlags(rootNode);
         
-        // Get the list of aborted node IDs
-        const abortedNodeIds = this.currentGenerationContext?.nodeIds || [];
+        // Execute all abort operations in parallel
+        Promise.all(abortOperations).then(() => {
+            console.log('🛑 GenerationController: All abort operations completed');
+        }).catch(error => {
+            console.warn('🛑 GenerationController: Error during abort operations:', error);
+        });
         
-        // Clear generation context
+        // Clear generation context immediately for UI feedback
         this.currentGenerationContext = null;
         this.isGeneratingAllChildren = false;
         
+        console.log('🛑 GenerationController: Abort process completed, returning aborted node IDs:', abortedNodeIds);
         return abortedNodeIds;
     }
 

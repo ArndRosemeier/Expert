@@ -8,13 +8,15 @@
 import { OpenRouterClient } from '../OpenRouterClient';
 import { SmartContentParser, ParsedContent } from './SmartContentParser';
 import { SettingsManager } from '../SettingsManager';
+import { QualityCriterion } from '../types';
 
 export interface ProjectGenerationOptions {
-    detailedOutline: boolean;
+    // Options for project generation - concepts are always detailed
 }
 
 export interface AIGenerationResponse {
-    Content: string;  // Project outline and structure
+    Title?: string;   // Extracted project title from AI response
+    Content: string;  // Project concept and structure
     Template: {
         name: string;
         hierarchyLevels: string[];
@@ -76,15 +78,59 @@ export class AIProjectGenerator {
     /**
      * Build the sophisticated prompt for project generation using PromptManager
      */
-    private buildProjectGenerationPrompt(description: string, options: ProjectGenerationOptions): string {
+    private buildProjectGenerationPrompt(description: string, _options: ProjectGenerationOptions): string {
         const prompts = this.settingsManager.getPrompts();
         const promptTemplate = prompts.ai_project_generation;
+        
+        // Get quality criteria from current profile
+        const profile = this.settingsManager.getLastUsedProfile();
+        const allCriteria = profile?.criteria || [];
+        
+        // Filter criteria for outline/structure generation (not leaf content)
+        const criteria = this.filterCriteriaForOutlineGeneration(allCriteria);
+        
+        // Format criteria as JSON (same as LoopOrchestrator)
+        const criteriaJson = this.formatCriteriaAsJson(criteria);
         
         // Replace placeholders
         return promptTemplate
             .replace(/\{\{description\}\}/g, description)
-            .replace(/\{\{detailed_outline\}\}/g, options.detailedOutline ? 'YES' : 'NO')
-            .replace(/\{\{detailed_outline_description\}\}/g, options.detailedOutline ? 'Create comprehensive content section' : 'Keep content section concise');
+            .replace(/\{\{criteria\}\}/g, criteriaJson);
+    }
+
+    /**
+     * Filters criteria for outline/structure generation (AI project generation).
+     * This is similar to the PromptService filtering but specifically for outline nodes.
+     * @param criteria The full list of criteria from the profile
+     * @returns Filtered criteria appropriate for outline/structure generation
+     */
+    private filterCriteriaForOutlineGeneration(criteria: QualityCriterion[]): QualityCriterion[] {
+        return criteria.filter(criterion => {
+            // If both outline and leaf are undefined, include the criterion (legacy criteria)
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                return true; // Legacy criteria - apply to all
+            }
+            
+            // For outline/structure generation, include criteria where outline is true
+            return criterion.outline === true;
+        });
+    }
+
+    /**
+     * Formats criteria as JSON for consistent presentation to AI models
+     * (Same format as LoopOrchestrator)
+     */
+    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+        const formattedCriteria = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return {
+                name: shortName,
+                description: c.description || shortName
+            };
+        });
+        
+        return JSON.stringify(formattedCriteria, null, 2);
     }
 
 
@@ -96,7 +142,9 @@ export class AIProjectGenerator {
         if (parsedContent.hasStructuredData && parsedContent.template) {
             // Use structured data
             console.log('✅ Successfully parsed AI response with method:', parsedContent.metadata['parseMethod']);
+            console.log('✅ Extracted title:', parsedContent.metadata['title']);
             return {
+                Title: parsedContent.metadata['title'] || undefined,
                 Content: parsedContent.content,
                 Template: parsedContent.template,
                 Context: parsedContent.context

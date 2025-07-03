@@ -8,7 +8,7 @@ import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
-import { SmartContentParser } from './SmartContentParser';
+
 
 
 interface GenerationDependencies {
@@ -341,26 +341,27 @@ export class GenerationService {
 
         // Handle phase started event
         const onPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
+            // Skip editor phase - LoopOrchestrator now handles enhanced editor progress with model names
+            if (phase === 'edit') {
+                return;
+            }
+            
             const phaseMessages = {
                 create: 'Creating content...',
-                rate: 'Evaluating content...',
-                edit: 'Analyzing feedback...'
+                rate: 'Evaluating content...'
             };
             const phaseSteps = {
                 create: 1,
-                rate: 2,
-                edit: 3
+                rate: 2
             };
             
             this.deps.eventEmitter.emit('loop-progress', { 
                 nodeId: contextNodeId || nodeId, 
                 progress: {
-                    type: phase === 'create' ? 'creator' : phase === 'rate' ? 'rater' : 'editor',
+                    type: phase === 'create' ? 'creator' : 'rater',
                     payload: phase === 'create' 
                         ? { prompt: phaseMessages[phase], response: '' }
-                        : phase === 'rate'
-                        ? { criterion: phaseMessages[phase], rating: { criterion: '', score: 0, justification: '', goal: 0} }
-                        : { prompt: phaseMessages[phase], advice: '' },
+                        : { criterion: phaseMessages[phase], rating: { criterion: '', score: 0, justification: '', goal: 0} },
                     iteration: iteration,
                     maxIterations: loopInput.maxIterations,
                     step: phaseSteps[phase],
@@ -509,7 +510,6 @@ export class GenerationService {
 
         const prompts = this.deps.settingsManager.getPrompts();
         const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-        const childLevelName = node.childLevelName || 'item';
 
         const prompt = this.deps.promptService.fillGenerationPrompt(
             prompts.create_children_from_outline_user,
@@ -682,7 +682,6 @@ export class GenerationService {
             try {
                 const prompts = this.deps.settingsManager.getPrompts();
                 const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-                const childLevelName = node.childLevelName || 'item';
 
                 const prompt = this.deps.promptService.fillGenerationPrompt(
                     prompts.create_children_from_outline_user,

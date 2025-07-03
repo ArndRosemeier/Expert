@@ -170,7 +170,7 @@ async function checkVersionMismatches(): Promise<void> {
 /**
  * Analyzes if settings have meaningful compatibility issues
  */
-async function analyzeSettingsCompatibility(settingsManager: any, profile: any): Promise<boolean> {
+async function analyzeSettingsCompatibility(_settingsManager: any, profile: any): Promise<boolean> {
     // For now, implement basic compatibility check
     // In the future, this could be expanded to check:
     // - Missing required criteria

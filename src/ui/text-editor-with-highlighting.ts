@@ -251,43 +251,77 @@ export class TextEditorWithHighlighting {
         let newStartPos = startPos;
         let newEndPos = endPos;
 
-        // Check if the current selection already ends with sentence-ending punctuation
+        // Check if the current selection already represents a complete sentence
         const currentSelectionText = text.substring(startPos, endPos).trim();
-        const alreadyEndsWithSentence = /[.!?]\s*$/.test(currentSelectionText);
+        const startsWithCapitalOrPunctuation = /^[A-Z"']/.test(currentSelectionText);
+        const endsWithSentencePunctuation = /[.!?]\s*$/.test(currentSelectionText);
+        const isCompleteSentence = startsWithCapitalOrPunctuation && endsWithSentencePunctuation;
 
-        // Expand start position to sentence beginning
-        while (newStartPos > 0) {
+        // If we already have a complete sentence selected, don't expand at all
+        if (isCompleteSentence) {
+            return {startPos, endPos};
+        }
+
+        // Check if we're already at a sentence boundary (don't expand backwards if we are)
+        let isAtSentenceBoundary = newStartPos === 0; // At beginning of text
+        
+        if (!isAtSentenceBoundary) {
+            // Check if current position starts what looks like a sentence
+            const currentChar = text[newStartPos] || '';
+            const startsLikeSentence = /[A-Z"']/.test(currentChar);
+            
+            if (startsLikeSentence) {
+                // Check if we're at a word/sentence boundary (not in middle of a word)
+                const prevChar = text[newStartPos - 1] || '';
+                const isAtWordBoundary = /\s/.test(prevChar) || /[.!?:;]/.test(prevChar) || newStartPos === 0;
+                
+                if (isAtWordBoundary) {
+                    isAtSentenceBoundary = true;
+                }
+            }
+        }
+
+        // Expand start position to sentence beginning only if not already at boundary
+        if (!isAtSentenceBoundary) {
+            while (newStartPos > 0) {
             const char = text[newStartPos - 1];
             if (!char) break; // Safety check
-            // Stop at sentence-ending punctuation followed by whitespace/newline
-            if (/[.!?]/.test(char)) {
-                // Check if followed by whitespace or end of text
+            
+            // Stop at sentence-ending punctuation followed by whitespace/newline/start
+            if (/[.!?:;]/.test(char)) {
+                // Check if this punctuation is followed by whitespace or we're at the boundary
                 const nextChar = text[newStartPos];
-                if (newStartPos === text.length || (nextChar && /\s/.test(nextChar))) {
+                if (newStartPos === text.length || !nextChar || /\s/.test(nextChar)) {
+                    // Skip any whitespace after the punctuation to find the real sentence start
+                    while (newStartPos < text.length) {
+                        const currentChar = text[newStartPos];
+                        if (!currentChar || !/\s/.test(currentChar)) break;
+                        newStartPos++;
+                    }
                     break;
                 }
             }
             newStartPos--;
+            }
         }
 
-        // Expand end position to sentence end - but only if we don't already have a complete sentence
-        if (!alreadyEndsWithSentence) {
-            while (newEndPos < text.length) {
-                const char = text[newEndPos];
-                if (!char) break; // Safety check
-                // Stop after sentence-ending punctuation
-                if (/[.!?]/.test(char)) {
-                    newEndPos++; // Include the punctuation
-                    break;
-                }
-                newEndPos++;
+        // Expand end position to sentence end
+        while (newEndPos < text.length) {
+            const char = text[newEndPos];
+            if (!char) break; // Safety check
+            
+            // Stop after sentence-ending punctuation
+            if (/[.!?]/.test(char)) {
+                newEndPos++; // Include the punctuation
+                break;
             }
+            newEndPos++;
         }
 
         // Trim leading whitespace but keep trailing punctuation
         while (newStartPos < newEndPos) {
-            const char = text[newStartPos];
-            if (!char || !/\s/.test(char)) break;
+            const currentChar = text[newStartPos];
+            if (!currentChar || !/\s/.test(currentChar)) break;
             newStartPos++;
         }
 

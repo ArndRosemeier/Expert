@@ -63,7 +63,7 @@ export class ExportModal extends BaseModal {
         const hierarchyLevels = this.getHierarchyLevels();
         const config: HierarchyTitleConfig = {};
         
-        hierarchyLevels.forEach((levelName, index) => {
+        hierarchyLevels.forEach((_levelName, index) => {
             // All levels enabled by default except the last one (leaf level)
             config[index] = index < hierarchyLevels.length - 1;
         });
@@ -655,12 +655,7 @@ export class ExportModal extends BaseModal {
         }
     }
 
-    /**
-     * Handles the cancel action
-     */
-    private handleCancel(): void {
-        void this.close();
-    }
+    // handleCancel method removed - no longer used
 
     /**
      * Adds styles for the export modal

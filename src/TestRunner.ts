@@ -122,11 +122,7 @@ export class TestRunner {
     }
 
     private async testApiConnection(): Promise<TestResult> {
-        // The client is constructed with an API key, so we access it directly.
-        // There's no public getter, so this is a "white-box" test.
-        if (!this.openRouterClient['apiKey']) {
-            return { success: false, message: "API Test Aborted: OpenRouterClient was not initialized with an API key." };
-        }
+        // Test OpenRouterClient API connection by attempting to fetch models
         try {
             const models = await this.openRouterClient.fetchModels();
             if (models.length > 0) {

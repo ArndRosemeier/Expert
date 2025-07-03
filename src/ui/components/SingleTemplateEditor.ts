@@ -12,7 +12,7 @@ export interface SingleTemplateEditorOptions {
 export class SingleTemplateEditor {
     private containerId: string;
     private template: ProjectTemplate;
-    private onTemplateChange?: (template: ProjectTemplate) => void;
+    private onTemplateChange: ((template: ProjectTemplate) => void) | undefined;
     private readonly: boolean;
     private showNameField: boolean;
     private isDirty = false;
@@ -21,7 +21,7 @@ export class SingleTemplateEditor {
     constructor(options: SingleTemplateEditorOptions) {
         this.containerId = options.containerId;
         this.template = options.template;
-        this.onTemplateChange = options.onTemplateChange;
+        this.onTemplateChange = options.onTemplateChange || undefined;
         this.readonly = options.readonly || false;
         this.showNameField = options.showNameField !== false; // Default to true
     }
@@ -133,7 +133,7 @@ export class SingleTemplateEditor {
             }
         });
 
-        container.addEventListener('input', (e) => {
+        container.addEventListener('input', (_e) => {
             if (!this.isPopulating) {
                 this.isDirty = true;
                 this.notifyChange();

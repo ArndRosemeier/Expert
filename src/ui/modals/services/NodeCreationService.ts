@@ -74,14 +74,11 @@ export class NodeCreationService implements INodeCreationService {
                 throw new Error('No creator model configured in the active profile');
             }
 
-            // Use the creator model directly
-            const response = await this.openRouterClient.sendMessage({
-                model: creatorModel,
-                messages: [{ role: 'user', content: filledPrompt }]
-            });
+            // Use the creator model directly via chat method
+            const response = await this.openRouterClient.chat('creator', filledPrompt);
 
             // Parse the JSON response
-            const suggestions = this.parseJsonResponse(response.choices[0]?.message?.content || '');
+            const suggestions = this.parseJsonResponse(response);
             
             // Validate and return suggestions
             return this.validateSuggestions(suggestions, count);
@@ -120,13 +117,10 @@ export class NodeCreationService implements INodeCreationService {
                 throw new Error('No creator model configured in the active profile');
             }
 
-            // Use the creator model directly
-            const response = await this.openRouterClient.sendMessage({
-                model: creatorModel,
-                messages: [{ role: 'user', content: filledPrompt }]
-            });
+            // Use the creator model directly via chat method
+            const response = await this.openRouterClient.chat('creator', filledPrompt);
 
-            return response.choices[0]?.message?.content?.trim() || '';
+            return response.trim();
         } catch (error) {
             console.error('Failed to update parent content:', error);
             throw new Error('Failed to update parent content. The child node will be created without parent updates.');

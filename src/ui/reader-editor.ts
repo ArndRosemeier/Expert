@@ -26,6 +26,7 @@ export class ReaderEditor {
     private nodeEditors: Map<string, NodeEditor> = new Map();
     private currentActiveEditor: NodeEditor | null = null;
     private configLoadedPromise!: Promise<void>;
+    private activeActionsCount: number = 0; // Track number of active AI actions
     
     // Bound method references for proper event listener removal
     private boundHandleKeyDown: (event: KeyboardEvent) => void;
@@ -167,6 +168,16 @@ export class ReaderEditor {
             this.applyAIResult(this.currentActiveEditor, processedContext, result);
             
         } catch (error) {
+            // Handle cancellation gracefully without error message
+            if (error instanceof Error && error.message === 'ACTION_CANCELED') {
+                console.log('Action was canceled by user');
+                // Clear any preview highlights that might be showing
+                if (this.currentActiveEditor && this.currentActiveEditor.editor.hasPreviewHighlight()) {
+                    this.currentActiveEditor.editor.clearAllHighlights();
+                }
+                return; // Exit gracefully without applying any changes
+            }
+            
             console.error('Failed to execute action:', error);
             alert(`Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
@@ -307,7 +318,7 @@ export class ReaderEditor {
     /**
      * Handle editor blur
      */
-    private handleEditorBlur(editor: NodeEditor): void {
+    private handleEditorBlur(_editor: NodeEditor): void {
         // No saving on blur - just mark as dirty for tracking
         // All content will be copied back when reader closes
     }
@@ -353,6 +364,9 @@ export class ReaderEditor {
      * Show loading state for an action button
      */
     private showActionLoadingState(actionId: string): void {
+        this.activeActionsCount++;
+        console.log(`🔄 AI action started: ${actionId} (${this.activeActionsCount} active)`);
+        
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
             button.disabled = true;
@@ -364,6 +378,9 @@ export class ReaderEditor {
      * Hide loading state for an action button
      */
     private hideActionLoadingState(actionId: string): void {
+        this.activeActionsCount = Math.max(0, this.activeActionsCount - 1);
+        console.log(`✅ AI action completed: ${actionId} (${this.activeActionsCount} active)`);
+        
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
             button.disabled = false;
@@ -372,6 +389,13 @@ export class ReaderEditor {
                 button.textContent = originalText;
             }
         }
+    }
+
+    /**
+     * Check if any AI actions are currently in progress
+     */
+    public isAIActionInProgress(): boolean {
+        return this.activeActionsCount > 0;
     }
 
     /**

@@ -1,6 +1,6 @@
 import { ContextExtractionService } from './ContextExtractionService';
 import { DocumentNode } from '../DocumentNode';
-import { TreeService } from './TreeService';
+// import { TreeService } from './TreeService'; // Not used in this test
 import { SettingsManager } from '../SettingsManager';
 
 /**
@@ -10,12 +10,12 @@ export async function testContextExtraction(): Promise<void> {
     console.log('🧪 Testing Context Extraction...');
 
     // Create mock dependencies
-    const treeService = new TreeService();
+    // const treeService = new TreeService(); // Not used in this test
     const settingsManager = new SettingsManager();
     
     // Create a mock OpenRouterClient for testing
     const mockOpenRouterClient = {
-        chat: async (purpose: string, prompt: string): Promise<string> => {
+        chat: async (_purpose: string, _prompt: string): Promise<string> => {
             // Mock response for context extraction
             return `Characters: Alice (protagonist), Bob (mentor), Charlie (villain)
 Places: Castle Blackrock, The Whispering Woods, Village of Millhaven
