@@ -135,6 +135,17 @@ export class ReaderEditor {
             // Show loading state
             this.showActionLoadingState(actionId);
             
+            // UPDATE: Save current editor content to node before executing AI action
+            // This ensures {{content}} placeholder uses the latest edited content
+            if (this.currentActiveEditor) {
+                const currentContent = this.currentActiveEditor.editor.getText();
+                const node = this.projectManager.findNodeById(this.currentActiveEditor.nodeId);
+                if (node) {
+                    node.content = currentContent;
+                    console.log(`📝 Updated node content before AI action: ${node.title}`);
+                }
+            }
+            
             // Get smart word-boundary selection if user has text selected
             let processedContext = context;
             if (context.selection && context.selection.text) {
