@@ -431,6 +431,20 @@ export class TextEditorWithHighlighting {
     }
 
     /**
+     * Replace text at a specific range without highlighting (for Find & Replace)
+     */
+    public replaceRange(startPos: number, endPos: number, newText: string): void {
+        const currentText = this.getText();
+        const beforeText = currentText.substring(0, startPos);
+        const afterText = currentText.substring(endPos);
+        
+        const newFullText = beforeText + newText + afterText;
+        
+        // Set the new text (this clears all existing highlights)
+        this.setText(newFullText);
+    }
+
+    /**
      * Replace text at a specific range and highlight the replacement
      */
     public replaceTextWithHighlight(startPos: number, endPos: number, newText: string, highlightId: string = 'ai-replacement'): void {
