@@ -3083,7 +3083,11 @@ export class ReaderGUI {
 
         if (results.length > 0) {
             this.currentSearchIndex = 0;
-            this.navigateToSearchResult(0);
+            // Only auto-navigate if find input doesn't have focus (user pressed Enter vs auto-search)
+            const findInputHasFocus = findInput && document.activeElement === findInput;
+            if (!findInputHasFocus) {
+                this.navigateToSearchResult(0);
+            }
         }
     }
 
@@ -3142,9 +3146,16 @@ export class ReaderGUI {
         // Scroll to the node first
         this.scrollToNode(result.nodeId);
 
+        // Check if find input is currently focused - if so, don't steal focus
+        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        const findInputHasFocus = findInput && document.activeElement === findInput;
+
         // Focus the editor and set selection to the found text
+        // Only if find input doesn't have focus (user is actively typing)
         setTimeout(() => {
-            editor.editor.focus();
+            if (!findInputHasFocus) {
+                editor.editor.focus();
+            }
             editor.editor.setSelection(result.startPos, result.endPos);
         }, 300);
     }
