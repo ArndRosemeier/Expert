@@ -109,17 +109,68 @@ export class ReaderGUI {
      * Render the complete reader interface
      */
     public render(): void {
+        // Save find input state before re-rendering
+        const findInputState = this.saveFindInputState();
+        
         this.contentNodes = this.analyzeProjectContent();
         this.container.innerHTML = this.generateReaderHTML();
         this.applyStyles();
         this.buildClickMappings();
         this.setupAllEventListeners();
         
+        // Restore find input state after re-rendering
+        this.restoreFindInputState(findInputState);
+        
         // Initialize the editor after DOM is ready (async)
         this.readerEditor.initialize();
         
         // Mark this instance as having been rendered
         this.hasBeenRendered = true;
+    }
+
+    /**
+     * Save the current state of the find input
+     */
+    private saveFindInputState(): { value: string; focused: boolean; selectionStart: number; selectionEnd: number; visible: boolean } | null {
+        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        if (!findInput) return null;
+        
+        return {
+            value: findInput.value,
+            focused: document.activeElement === findInput,
+            selectionStart: findInput.selectionStart || 0,
+            selectionEnd: findInput.selectionEnd || 0,
+            visible: this.isSearchVisible
+        };
+    }
+
+    /**
+     * Restore the find input state after re-rendering
+     */
+    private restoreFindInputState(state: { value: string; focused: boolean; selectionStart: number; selectionEnd: number; visible: boolean } | null): void {
+        if (!state) return;
+        
+        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
+        
+        if (!findInput || !findInterface) return;
+        
+        // Restore visibility
+        if (state.visible) {
+            findInterface.style.display = 'block';
+            this.isSearchVisible = true;
+        }
+        
+        // Restore value
+        findInput.value = state.value;
+        
+        // Restore focus and cursor position
+        if (state.focused) {
+            setTimeout(() => {
+                findInput.focus();
+                findInput.setSelectionRange(state.selectionStart, state.selectionEnd);
+            }, 0);
+        }
     }
 
     /**
