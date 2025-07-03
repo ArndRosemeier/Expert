@@ -131,13 +131,24 @@ export class ReaderGUI {
     /**
      * Save the current state of the find input
      */
-    private saveFindInputState(): { value: string; focused: boolean; selectionStart: number; selectionEnd: number; visible: boolean } | null {
+    private saveFindInputState(): { 
+        findValue: string; 
+        replaceValue: string; 
+        findFocused: boolean; 
+        replaceFocused: boolean; 
+        selectionStart: number; 
+        selectionEnd: number; 
+        visible: boolean 
+    } | null {
         const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
         if (!findInput) return null;
         
         return {
-            value: findInput.value,
-            focused: document.activeElement === findInput,
+            findValue: findInput.value,
+            replaceValue: replaceInput ? replaceInput.value : '',
+            findFocused: document.activeElement === findInput,
+            replaceFocused: replaceInput ? document.activeElement === replaceInput : false,
             selectionStart: findInput.selectionStart || 0,
             selectionEnd: findInput.selectionEnd || 0,
             visible: this.isSearchVisible
@@ -147,10 +158,19 @@ export class ReaderGUI {
     /**
      * Restore the find input state after re-rendering
      */
-    private restoreFindInputState(state: { value: string; focused: boolean; selectionStart: number; selectionEnd: number; visible: boolean } | null): void {
+    private restoreFindInputState(state: { 
+        findValue: string; 
+        replaceValue: string; 
+        findFocused: boolean; 
+        replaceFocused: boolean; 
+        selectionStart: number; 
+        selectionEnd: number; 
+        visible: boolean 
+    } | null): void {
         if (!state) return;
         
         const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
+        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
         const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
         
         if (!findInput || !findInterface) return;
@@ -161,14 +181,21 @@ export class ReaderGUI {
             this.isSearchVisible = true;
         }
         
-        // Restore value
-        findInput.value = state.value;
+        // Restore values
+        findInput.value = state.findValue;
+        if (replaceInput) {
+            replaceInput.value = state.replaceValue;
+        }
         
         // Restore focus and cursor position
-        if (state.focused) {
+        if (state.findFocused) {
             setTimeout(() => {
                 findInput.focus();
                 findInput.setSelectionRange(state.selectionStart, state.selectionEnd);
+            }, 0);
+        } else if (state.replaceFocused && replaceInput) {
+            setTimeout(() => {
+                replaceInput.focus();
             }, 0);
         }
     }
@@ -450,11 +477,18 @@ export class ReaderGUI {
                     <div class="reader-controls">
                         <button id="reader-find-btn" class="control-btn">🔍 Find</button>
                         <div id="reader-find-interface" class="reader-find-interface-inline" style="display: none;">
-                            <input type="text" id="find-input" placeholder="Search..." />
-                            <button id="find-button" class="find-btn-small">Find</button>
-                            <button id="find-next-button" class="find-btn-small" disabled>Next</button>
-                            <button id="find-close-button" class="find-close-btn-small">&times;</button>
-                            <span id="find-results-info" class="find-results-info-small"></span>
+                            <div class="find-replace-row">
+                                <input type="text" id="find-input" placeholder="Find..." />
+                                <button id="find-button" class="find-btn-small">Find</button>
+                                <button id="find-next-button" class="find-btn-small" disabled>Next</button>
+                                <button id="find-close-button" class="find-close-btn-small">&times;</button>
+                                <span id="find-results-info" class="find-results-info-small"></span>
+                            </div>
+                            <div class="find-replace-row">
+                                <input type="text" id="replace-input" placeholder="Replace..." />
+                                <button id="replace-button" class="find-btn-small" disabled>Replace</button>
+                                <button id="replace-all-button" class="find-btn-small" disabled>Replace All</button>
+                            </div>
                         </div>
                         <button id="reader-actions-config" class="control-btn">🔧 Configure Actions</button>
                         <button id="reader-toc-btn" class="control-btn">📋 TOC</button>
@@ -1582,16 +1616,23 @@ export class ReaderGUI {
             /* Inline find interface (in header) styles */
             .reader-find-interface-inline {
                 display: flex;
-                align-items: center;
+                flex-direction: column;
                 gap: 6px;
                 background: rgba(248, 250, 252, 0.95);
                 border: 1px solid #e2e8f0;
                 border-radius: 6px;
-                padding: 6px 8px;
+                padding: 8px 10px;
                 margin: 0 8px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
                 backdrop-filter: blur(8px);
                 animation: fadeIn 0.2s ease-out;
+                min-width: 400px;
+            }
+
+            .find-replace-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
             }
 
             @keyframes fadeIn {
@@ -1599,7 +1640,8 @@ export class ReaderGUI {
                 to { opacity: 1; transform: translateY(0); }
             }
 
-            .reader-find-interface-inline #find-input {
+            .reader-find-interface-inline #find-input,
+            .reader-find-interface-inline #replace-input {
                 flex: 0 1 180px;
                 min-width: 120px;
                 padding: 4px 8px;
@@ -1610,7 +1652,8 @@ export class ReaderGUI {
                 transition: all 0.2s ease;
             }
 
-            .reader-find-interface-inline #find-input:focus {
+            .reader-find-interface-inline #find-input:focus,
+            .reader-find-interface-inline #replace-input:focus {
                 border-color: #3b82f6;
                 box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
             }
@@ -1671,13 +1714,15 @@ export class ReaderGUI {
                 border-color: #334155;
             }
 
-            .reader-theme-dark .reader-find-interface-inline #find-input {
+            .reader-theme-dark .reader-find-interface-inline #find-input,
+            .reader-theme-dark .reader-find-interface-inline #replace-input {
                 background: #334155;
                 border-color: #475569;
                 color: #e2e8f0;
             }
 
-            .reader-theme-dark .reader-find-interface-inline #find-input:focus {
+            .reader-theme-dark .reader-find-interface-inline #find-input:focus,
+            .reader-theme-dark .reader-find-interface-inline #replace-input:focus {
                 border-color: #60a5fa;
                 box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.2);
             }
@@ -1704,13 +1749,15 @@ export class ReaderGUI {
                 border-color: #d4b895;
             }
 
-            .reader-theme-sepia .reader-find-interface-inline #find-input {
+            .reader-theme-sepia .reader-find-interface-inline #find-input,
+            .reader-theme-sepia .reader-find-interface-inline #replace-input {
                 background: #fdfcf8;
                 border-color: #d4b895;
                 color: #8b4513;
             }
 
-            .reader-theme-sepia .reader-find-interface-inline #find-input:focus {
+            .reader-theme-sepia .reader-find-interface-inline #find-input:focus,
+            .reader-theme-sepia .reader-find-interface-inline #replace-input:focus {
                 border-color: #d97706;
                 box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.2);
             }
@@ -1724,9 +1771,11 @@ export class ReaderGUI {
                     left: 0;
                     margin: 8px;
                     z-index: 1000;
+                    min-width: auto;
                 }
                 
-                .reader-find-interface-inline #find-input {
+                .reader-find-interface-inline #find-input,
+                .reader-find-interface-inline #replace-input {
                     flex: 1;
                     min-width: 100px;
                 }
@@ -1778,6 +1827,10 @@ export class ReaderGUI {
             this.findNext();
         } else if (target.id === 'find-close-button') {
             this.closeFindInterface();
+        } else if (target.id === 'replace-button') {
+            this.performReplace();
+        } else if (target.id === 'replace-all-button') {
+            this.performReplaceAll();
         } else if (target.id === 'reader-actions-config') {
             this.openActionsConfigModal();
         } else if (target.classList.contains('reader-action-btn')) {
@@ -3173,6 +3226,16 @@ export class ReaderGUI {
             findNextBtn.disabled = results.length === 0;
         }
 
+        // Update replace buttons state
+        const replaceBtn = this.container.querySelector('#replace-button') as HTMLButtonElement;
+        const replaceAllBtn = this.container.querySelector('#replace-all-button') as HTMLButtonElement;
+        if (replaceBtn) {
+            replaceBtn.disabled = results.length === 0;
+        }
+        if (replaceAllBtn) {
+            replaceAllBtn.disabled = results.length === 0;
+        }
+
         // Update results info
         const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
         if (resultsInfo) {
@@ -3195,6 +3258,88 @@ export class ReaderGUI {
     }
 
     /**
+     * Replace the current search result
+     */
+    private performReplace(): void {
+        if (this.searchResults.length === 0 || this.currentSearchIndex === -1) {
+            return;
+        }
+
+        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
+        if (!replaceInput) return;
+
+        const replaceText = replaceInput.value;
+        const currentResult = this.searchResults[this.currentSearchIndex];
+        
+        if (!currentResult) return;
+
+        // Get the editor for this node
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        const editor = nodeEditors.get(currentResult.nodeId);
+        if (!editor) return;
+
+        // Replace the text
+        editor.editor.replaceRange(currentResult.startPos, currentResult.endPos, replaceText);
+
+        // Update search results to reflect the change
+        this.performSearch();
+    }
+
+    /**
+     * Replace all search results
+     */
+    private performReplaceAll(): void {
+        if (this.searchResults.length === 0) {
+            return;
+        }
+
+        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
+        if (!replaceInput) return;
+
+        const replaceText = replaceInput.value;
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        // Group results by node to handle multiple replacements in same node
+        const resultsByNode = new Map<string, Array<{startPos: number, endPos: number}>>();
+        
+        this.searchResults.forEach(result => {
+            if (!resultsByNode.has(result.nodeId)) {
+                resultsByNode.set(result.nodeId, []);
+            }
+            resultsByNode.get(result.nodeId)!.push({
+                startPos: result.startPos,
+                endPos: result.endPos
+            });
+        });
+
+        // Replace all occurrences, working backwards to maintain correct positions
+        resultsByNode.forEach((results, nodeId) => {
+            const editor = nodeEditors.get(nodeId);
+            if (!editor) return;
+
+            // Sort by position descending to replace from end to beginning
+            results.sort((a, b) => b.startPos - a.startPos);
+
+            results.forEach(result => {
+                editor.editor.replaceRange(result.startPos, result.endPos, replaceText);
+            });
+        });
+
+        // Update search results to reflect the changes
+        this.performSearch();
+
+        // Show replacement count
+        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
+        if (resultsInfo) {
+            const replacementCount = this.searchResults.length;
+            resultsInfo.textContent = `Replaced ${replacementCount} occurrence${replacementCount === 1 ? '' : 's'}`;
+        }
+    }
+
+    /**
      * Setup find interface event listeners
      */
     private setupFindEventListeners(): void {
@@ -3210,18 +3355,19 @@ export class ReaderGUI {
                     this.closeFindInterface();
                 }
             });
+        }
 
-            // Auto-search as user types (with debouncing)
-            let searchTimeout: ReturnType<typeof setTimeout>;
-            findInput.addEventListener('input', () => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    if (findInput.value.trim()) {
-                        this.performSearch();
-                    } else {
-                        this.clearSearchResults();
-                    }
-                }, 300);
+        // Add keyboard shortcuts for replace input
+        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
+        if (replaceInput) {
+            replaceInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.performReplace();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.closeFindInterface();
+                }
             });
         }
 
