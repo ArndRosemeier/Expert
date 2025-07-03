@@ -15,6 +15,7 @@ let modelSelector: ModelSelector | null = null;
 let templateManager: TemplateManager | null = null;
 let isAppRendered: boolean = false;
 let orchestratorPrompts: OrchestratorPrompts | null = null;
+let currentlyLoadedProfileName: string | null = null;
 
 // --- Getters ---
 export const getOrchestrator = () => orchestrator;
@@ -26,6 +27,7 @@ export const getModelSelector = () => modelSelector;
 export const getTemplateManager = () => templateManager;
 export const getIsAppRendered = () => isAppRendered;
 export const getOrchestratorPrompts = () => orchestratorPrompts;
+export const getCurrentlyLoadedProfileName = () => currentlyLoadedProfileName;
 
 // --- Setters ---
 export const setOrchestrator = (orch: LoopOrchestrator | null) => orchestrator = orch;
@@ -56,6 +58,7 @@ export const setModelSelector = (selector: ModelSelector | null) => modelSelecto
 export const setTemplateManager = (manager: TemplateManager | null) => templateManager = manager;
 export const setIsAppRendered = (rendered: boolean) => isAppRendered = rendered;
 export const setOrchestratorPrompts = (prompts: OrchestratorPrompts | null) => orchestratorPrompts = prompts;
+export const setCurrentlyLoadedProfileName = (profileName: string | null) => currentlyLoadedProfileName = profileName;
 
 // --- Legacy compatibility ---
 export const getCurrentProject = () => getActiveProject();

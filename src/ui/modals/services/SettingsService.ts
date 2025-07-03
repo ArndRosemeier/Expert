@@ -8,6 +8,7 @@ import { QualityCriterion } from '../../../types';
 import { OrchestratorPrompts, defaultPrompts } from '../../../PromptManager';
 import { VersionService } from '../../../VersionService';
 import { DEFAULT_MAX_ITERATIONS } from '../../../constants';
+import * as state from '../../../state';
 
 export interface ProfileImportResult {
     success: boolean;
@@ -269,6 +270,13 @@ export class SettingsService {
         // Apply models
         if (profile.selectedModels) {
             this.modelSelector.setSelectedModels(profile.selectedModels);
+            
+            // Update global state to track which profile is actually loaded
+            const profileName = this.getLastUsedProfileName();
+            if (profileName) {
+                state.setCurrentlyLoadedProfileName(profileName);
+                console.log(`📋 Profile "${profileName}" models loaded into ModelSelector`);
+            }
         }
 
         this.emitChange({

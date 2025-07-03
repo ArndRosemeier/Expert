@@ -2263,8 +2263,20 @@ export function setupEventListeners() {
         if (e.target.id === 'active-profile-selector') {
             const select = e.target as HTMLSelectElement;
             const settingsManager = state.getSettingsManager();
-            if (settingsManager) {
+            const modelSelector = state.getModelSelector();
+            if (settingsManager && modelSelector) {
                 await settingsManager.setLastUsedProfile(select.value);
+                
+                // Actually load the profile models into the ModelSelector to ensure consistency
+                const profile = settingsManager.getProfile(select.value);
+                if (profile && profile.selectedModels) {
+                    modelSelector.setSelectedModels(profile.selectedModels);
+                    
+                    // Update global state to track which profile is actually loaded
+                    state.setCurrentlyLoadedProfileName(select.value);
+                    console.log(`📋 Profile "${select.value}" models loaded into ModelSelector from dropdown change`);
+                }
+                
                 // Force refresh of node details to pick up new profile settings
                 if (selectedNodeId) {
                     renderNodeDetails();

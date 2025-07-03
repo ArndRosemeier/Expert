@@ -107,6 +107,47 @@ export class OpenRouterClient {
   }
 
   /**
+   * Ensures that the UI profile selection matches the actually loaded profile.
+   * This fixes inconsistencies where the dropdown shows one profile but different models are loaded.
+   */
+  private async ensureProfileConsistency(): Promise<void> {
+    try {
+      const settingsManager = state.getSettingsManager();
+      const modelSelector = state.getModelSelector();
+      
+      if (!settingsManager || !modelSelector) {
+        return; // Can't ensure consistency without both services
+      }
+      
+      // Get the profile selected in the UI
+      const uiSelectedProfile = settingsManager.getLastUsedProfileName();
+      
+      // Get the profile that's actually loaded in the ModelSelector
+      const loadedProfile = state.getCurrentlyLoadedProfileName();
+      
+      // If they don't match, load the correct profile
+      if (uiSelectedProfile !== loadedProfile) {
+        console.log(`⚠️  Profile inconsistency detected! UI shows "${uiSelectedProfile}" but "${loadedProfile}" is loaded. Fixing...`);
+        
+        if (uiSelectedProfile) {
+          const profile = settingsManager.getProfile(uiSelectedProfile);
+          if (profile && profile.selectedModels) {
+            // Load the correct profile models
+            modelSelector.setSelectedModels(profile.selectedModels);
+            state.setCurrentlyLoadedProfileName(uiSelectedProfile);
+            console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" models.`);
+          } else {
+            console.warn(`⚠️  Profile "${uiSelectedProfile}" not found or has no models. Using current loaded profile.`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to ensure profile consistency:', error);
+      // Don't throw - this is a safety check, not a critical operation
+    }
+  }
+
+  /**
    * Dynamically fetch the model for a purpose from the current ModelSelector.
    * This ensures we always use the latest model configuration.
    */
@@ -312,7 +353,8 @@ export class OpenRouterClient {
       });
     }
     
-
+    // CRITICAL FIX: Ensure UI selection matches loaded profile
+    await this.ensureProfileConsistency();
 
     try {
       const apiKey = await this.getApiKeyFromStorage();
@@ -598,6 +640,9 @@ export class OpenRouterClient {
         this.abortOperation(opId);
       });
     }
+
+    // CRITICAL FIX: Ensure UI selection matches loaded profile
+    await this.ensureProfileConsistency();
 
     try {
       const apiKey = await this.getApiKeyFromStorage();

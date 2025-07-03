@@ -409,6 +409,13 @@ export async function initialize() {
     setDefaultModalFactory(modalFactory);
 
     recreateAndReconfigureServices();
+    
+    // Set initial loaded profile name to match what's in SettingsManager
+    const initialProfileName = settingsManager.getLastUsedProfileName();
+    if (initialProfileName) {
+        state.setCurrentlyLoadedProfileName(initialProfileName);
+        console.log(`🔄 Initial profile consistency: "${initialProfileName}" set as loaded profile`);
+    }
 
     await loadPersistedProjects();
     
