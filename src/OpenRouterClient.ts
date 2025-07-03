@@ -111,39 +111,30 @@ export class OpenRouterClient {
    * This fixes inconsistencies where the dropdown shows one profile but different models are loaded.
    */
   private async ensureProfileConsistency(): Promise<void> {
-    try {
-      const settingsManager = state.getSettingsManager();
-      const modelSelector = state.getModelSelector();
+    const settingsManager = state.getSettingsManager()!;
+    const modelSelector = state.getModelSelector()!;
+    
+    // Get the profile selected in the UI
+    const uiSelectedProfile = settingsManager.getLastUsedProfileName();
+    
+    // Get the profile that's actually loaded in the ModelSelector
+    const loadedProfile = state.getCurrentlyLoadedProfileName();
+    
+    // If they don't match, load the correct profile
+    if (uiSelectedProfile !== loadedProfile) {
+      console.log(`⚠️  Profile inconsistency detected! UI shows "${uiSelectedProfile}" but "${loadedProfile}" is loaded. Fixing...`);
       
-      if (!settingsManager || !modelSelector) {
-        return; // Can't ensure consistency without both services
-      }
-      
-      // Get the profile selected in the UI
-      const uiSelectedProfile = settingsManager.getLastUsedProfileName();
-      
-      // Get the profile that's actually loaded in the ModelSelector
-      const loadedProfile = state.getCurrentlyLoadedProfileName();
-      
-      // If they don't match, load the correct profile
-      if (uiSelectedProfile !== loadedProfile) {
-        console.log(`⚠️  Profile inconsistency detected! UI shows "${uiSelectedProfile}" but "${loadedProfile}" is loaded. Fixing...`);
-        
-        if (uiSelectedProfile) {
-          const profile = settingsManager.getProfile(uiSelectedProfile);
-          if (profile && profile.selectedModels) {
-            // Load the correct profile models
-            modelSelector.setSelectedModels(profile.selectedModels);
-            state.setCurrentlyLoadedProfileName(uiSelectedProfile);
-            console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" models.`);
-          } else {
-            console.warn(`⚠️  Profile "${uiSelectedProfile}" not found or has no models. Using current loaded profile.`);
-          }
+      if (uiSelectedProfile) {
+        const profile = settingsManager.getProfile(uiSelectedProfile);
+        if (profile && profile.selectedModels) {
+          // Load the correct profile models
+          modelSelector.setSelectedModels(profile.selectedModels);
+          state.setCurrentlyLoadedProfileName(uiSelectedProfile);
+          console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" models.`);
+        } else {
+          console.warn(`⚠️  Profile "${uiSelectedProfile}" not found or has no models. Using current loaded profile.`);
         }
       }
-    } catch (error) {
-      console.error('Failed to ensure profile consistency:', error);
-      // Don't throw - this is a safety check, not a critical operation
     }
   }
 
