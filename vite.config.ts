@@ -67,6 +67,10 @@ export default defineConfig(({ mode }) => {
       target: 'es2015',
       rollupOptions: {
         output: {
+          // Add hash to filenames for cache busting
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
           manualChunks: {
             vendor: ['uuid']
           }
@@ -75,7 +79,18 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
-      host: true
+      host: true,
+      // Force browser to not cache files during development
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      },
+      hmr: {
+        // Force HMR to always reload
+        overlay: true
+      }
     }
   };
 }); 

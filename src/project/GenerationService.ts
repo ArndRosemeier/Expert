@@ -663,7 +663,7 @@ export class GenerationService {
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
-            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles...', current: 0, total: 1 });
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
 
             // Check for settings override from the parent node's own context for child creation
             const settingsOverride = this.extractSettingsOverrideFromNode(node);

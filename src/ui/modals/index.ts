@@ -19,6 +19,7 @@ export { ContextInfoModal } from './ContextInfoModal';
 export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
+export { CoherenceModal } from './CoherenceModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';
@@ -28,10 +29,12 @@ export * from './services/NodeCreationService';
 export * from './services/PromptManagementService';
 export * from './services/SettingsService';
 export * from './services/ProjectGenerationService';
+export * from './services/CoherenceService';
 
 // Types
 export * from './types/ModalTypes';
 export * from './types/ExportTypes';
+export * from '../../types/CoherenceTypes';
 
 // Factory
 export * from './ModalFactory';

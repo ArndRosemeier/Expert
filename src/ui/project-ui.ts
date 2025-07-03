@@ -5,6 +5,8 @@ import * as state from '../state';
 import { LoopProgress } from '../LoopOrchestrator';
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
+import { CoherenceService } from './modals/services/CoherenceService';
+import { CoherenceModal } from './modals/CoherenceModal';
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
@@ -152,7 +154,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
-                            'copy-to-new-project': 'copy-to-new-project-btn'
+                            'copy-to-new-project': 'copy-to-new-project-btn',
+                            'check-coherence': 'check-coherence-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -416,6 +419,11 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="copy-to-new-project">
                         📋 Copy to New Project
                     </button>
+                    ${node.children && node.children.length > 0 ? `
+                        <button class="action-btn" data-action="check-coherence">
+                            🔍 Check Coherence
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -2193,6 +2201,43 @@ This action cannot be undone.`;
                     console.error('Failed to open extract context modal:', error);
                     alert('Failed to open extract context dialog. Please try again.');
                 });
+            }
+            break;
+
+        case 'check-coherence-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Create coherence service instance
+                const coherenceService = new CoherenceService(
+                    state.getOpenRouterClient()!,
+                    state.getSettingsManager()!
+                );
+
+                // Check if node is eligible for coherence analysis
+                if (!coherenceService.isNodeEligible(node)) {
+                    alert(coherenceService.getIneligibilityReason(node));
+                    return;
+                }
+
+                // Create and show modal in loading state
+                const analysisModal = new CoherenceModal();
+                analysisModal.openInLoadingState(node);
+                
+                // Perform analysis
+                coherenceService.analyzeCoherence(node)
+                    .then((result) => {
+                        console.log('Coherence analysis completed, updating modal with results:', result);
+                        // Update modal with results
+                        analysisModal.updateWithResults(result);
+                    })
+                    .catch((error) => {
+                        console.error('Coherence analysis failed:', error);
+                        // Close loading modal and show error
+                        analysisModal.close();
+                        alert('Coherence analysis failed: ' + error.message);
+                    });
             }
             break;
 

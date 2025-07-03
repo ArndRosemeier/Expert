@@ -41,6 +41,12 @@ export interface OrchestratorPrompts {
     
     // For text import analysis
     text_import_analysis: string;
+    
+    // For coherence analysis
+    coherence_analysis: string;
+    
+    // For fixing contradictions
+    fix_contradiction: string;
 }
 
 export interface PromptDefinition {
@@ -204,7 +210,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
             - "title": the title of the subnode
-            - "description": one sentence brief description of what should be covered in this subnode
+            - "description": Complete description of what should be covered in this subnode
 
             Example format:
             [
@@ -568,6 +574,86 @@ Section: Concept
 CRITICAL: Use exactly the section headers shown above. Base everything on the actual text content provided, not creative interpretations.`,
         placeholders: ['file_name', 'text_content'],
         description: "System prompt for analyzing text files and extracting project structure. Creates project templates and context from existing text content rather than generating new creative content."
+    },
+
+    coherence_analysis: {
+        text: `You are analyzing the coherence between an outline and its expanded content.
+
+Your goal is to be very critical. If in doubt, report the contradiction. Better too many contradictions than too few.
+
+PARENT OUTLINE:
+{{parent_content}}
+
+PARENT CONTEXT (background information):
+{{parent_context}}
+
+EXPANDED CONTENT (from child sections):
+{{children_content}}
+
+TASK: Identify contradictions between the outline and the expanded content.
+
+IMPORTANT INSTRUCTIONS:
+- Focus on factual contradictions, not minor style differences
+- Look for conflicts in: facts, dates, names, events, causation, logic, timelines
+- Use the parent context to better understand the intended meaning
+
+RESPONSE FORMAT:
+Return a JSON array where each contradiction has exactly these fields:
+- "fact_in_outline": The specific fact or claim from the outline
+- "fact_in_expansion": The contradictory fact or claim from the expanded content  
+- "justification": Brief explanation of why this is a contradiction
+- "offending_child_title": Title of the child node that contains the contradictory content
+
+If no contradictions found, return an empty array: []
+
+EXAMPLE:
+[
+  {
+    "fact_in_outline": "The meeting was scheduled for Tuesday",
+    "fact_in_expansion": "The meeting occurred on Wednesday morning",
+    "justification": "Timeline contradiction - different days specified for the same event",
+    "offending_child_title": "Meeting Summary"
+  }
+]
+
+JSON Response:`,
+        placeholders: ['parent_content', 'parent_context', 'children_content'],
+        description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions and returns them in structured JSON format."
+    },
+
+    fix_contradiction: {
+        text: `You are an expert editor. Your job is to fix a contradiction in text content.
+
+PARENT OUTLINE REFERENCE:
+{{parent_content}}
+
+PARENT CONTEXT (for reference):
+{{parent_context}}
+
+CHILD NODE: "{{child_title}}"
+
+CURRENT CONTENT:
+{{child_content}}
+
+CONTRADICTION TO FIX:
+- Parent says: "{{fact_in_outline}}"
+- Child says: "{{fact_in_expansion}}"
+- Problem: {{justification}}
+
+INSTRUCTIONS:
+1. Take the current content above
+2. Change only the parts that contradict the parent outline
+3. Keep everything else exactly the same
+4. Make sure the fixed content flows naturally
+5. Return the complete corrected content
+
+EXAMPLE:
+If the current content is "The meeting happened on Wednesday and was very productive" but the parent says it was on Tuesday, you would return: "The meeting happened on Tuesday and was very productive"
+
+YOUR RESPONSE:
+Provide the complete corrected content for this child node:`,
+        placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification'],
+        description: "System prompt for fixing contradictions in child node content. Takes the contradiction details and rewrites the child content to resolve the issue while maintaining style and structure."
     }
 };
 
