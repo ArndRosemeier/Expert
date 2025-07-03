@@ -262,8 +262,29 @@ export class TextEditorWithHighlighting {
             return {startPos, endPos};
         }
 
-        // Expand start position to sentence beginning
-        while (newStartPos > 0) {
+        // Check if we're already at a sentence boundary (don't expand backwards if we are)
+        let isAtSentenceBoundary = newStartPos === 0; // At beginning of text
+        
+        if (!isAtSentenceBoundary && newStartPos > 0) {
+            // Look backwards to find if we're positioned right after a sentence boundary
+            let checkPos = newStartPos - 1;
+            
+            // Skip any whitespace before current position
+            while (checkPos >= 0 && /\s/.test(text[checkPos] || '')) {
+                checkPos--;
+            }
+            
+            // Check if we found sentence-ending punctuation
+            if (checkPos >= 0 && /[.!?]/.test(text[checkPos] || '')) {
+                // We're at a sentence boundary if current position starts with capital/quote
+                const currentChar = text[newStartPos] || '';
+                isAtSentenceBoundary = /[A-Z"']/.test(currentChar);
+            }
+        }
+
+        // Expand start position to sentence beginning only if not already at boundary
+        if (!isAtSentenceBoundary) {
+            while (newStartPos > 0) {
             const char = text[newStartPos - 1];
             if (!char) break; // Safety check
             
@@ -282,6 +303,7 @@ export class TextEditorWithHighlighting {
                  }
             }
             newStartPos--;
+            }
         }
 
         // Expand end position to sentence end
