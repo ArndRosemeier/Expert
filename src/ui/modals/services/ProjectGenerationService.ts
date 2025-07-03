@@ -254,10 +254,6 @@ export class ProjectGenerationService {
             errors.push('Description must be at least 10 characters long');
         }
         
-        if (request.description.length > 5000) {
-            errors.push('Description must be less than 5000 characters');
-        }
-        
         return {
             isValid: errors.length === 0,
             errors

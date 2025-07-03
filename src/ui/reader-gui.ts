@@ -2076,6 +2076,7 @@ export class ReaderGUI {
                                         this.clearActionEditor();
                                         selectedActionId = null;
                                         unsavedChanges = false;
+                                        this.updateActionButtons(); // Refresh action buttons after reset
                                         alert('Actions reset to defaults successfully!');
                                     }
                                 }
@@ -2087,6 +2088,12 @@ export class ReaderGUI {
                                 handler: async () => {
                                     if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
                                         throw new Error('Cancel prevented'); // Prevent modal from closing
+                                    }
+                                    // Clean up event handler
+                                    const handler = (window as any).currentModalClickHandler;
+                                    if (handler) {
+                                        document.removeEventListener('click', handler);
+                                        delete (window as any).currentModalClickHandler;
                                     }
                                     void modal.close();
                                 }
@@ -2100,11 +2107,17 @@ export class ReaderGUI {
                                     const form = document.getElementById('action-editor-form') as HTMLFormElement;
                                     const currentActionId = form?.getAttribute('data-action-id');
                                     if (currentActionId) {
-                                        await this.saveCurrentAction(currentActionId);
+                                        await this.saveCurrentActionFixed(currentActionId);
                                     }
                                     this.updateActionButtons();
                                     unsavedChanges = false;
                                     alert('All changes saved successfully!');
+                                    // Clean up event handler
+                                    const handler = (window as any).currentModalClickHandler;
+                                    if (handler) {
+                                        document.removeEventListener('click', handler);
+                                        delete (window as any).currentModalClickHandler;
+                                    }
                                     void modal.close();
                                 }
                             }
@@ -2438,7 +2451,7 @@ export class ReaderGUI {
     private renderActionListItem(action: ReaderEditAction): string {
         return `
             <div class="action-item" data-action-id="${action.id}">
-                <div class="action-header" onclick="selectAction('${action.id}')">
+                <div class="action-header" data-action="select" data-target="${action.id}">
                     <div>
                         <h4 class="action-title">${action.title}</h4>
                         <div class="action-meta">
@@ -2449,11 +2462,11 @@ export class ReaderGUI {
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <div class="order-controls">
-                            <button class="order-btn" onclick="moveActionUp('${action.id}')" title="Move up">↑</button>
-                            <button class="order-btn" onclick="moveActionDown('${action.id}')" title="Move down">↓</button>
+                            <button class="order-btn" data-action="move-up" data-target="${action.id}" title="Move up">↑</button>
+                            <button class="order-btn" data-action="move-down" data-target="${action.id}" title="Move down">↓</button>
                         </div>
                         <div class="action-toggle ${action.enabled ? 'enabled' : ''}" 
-                             onclick="toggleAction('${action.id}')" 
+                             data-action="toggle" data-target="${action.id}"
                              data-enabled="${action.enabled}"></div>
                     </div>
                 </div>
@@ -2511,14 +2524,15 @@ export class ReaderGUI {
                         <div class="placeholders-title">Available Placeholders (click to insert):</div>
                         <div class="placeholders-grid">
                             ${availablePlaceholders.map(placeholder => 
-                                `<span class="placeholder-item" onclick="insertPlaceholder('${placeholder}')">${placeholder}</span>`
+                                `<span class="placeholder-item" data-action="insert-placeholder" data-target="${placeholder}">${placeholder}</span>`
                             ).join('')}
                         </div>
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 0.75rem; margin-top: 2rem;">
+                <div style="display: flex; gap: 0.75rem; margin-top: 2rem; justify-content: space-between;">
                     <button type="button" id="delete-action" class="btn btn-danger" ${action.id.startsWith('custom-') ? '' : 'disabled title="Default actions cannot be deleted"'}>Delete Action</button>
+                    <button type="button" id="save-current-action" class="btn btn-primary">💾 Save Action</button>
                 </div>
             </form>
         `;
@@ -2533,56 +2547,102 @@ export class ReaderGUI {
         setSelectedActionId: (id: string | null) => void,
         setUnsavedChanges: (state: boolean) => void
     ): void {
-        // Global functions for onclick handlers
-        (window as any).selectAction = (actionId: string) => {
-            if (unsavedChanges && !confirm('You have unsaved changes. Continue without saving?')) {
-                return;
+        // Use simple event delegation with document - will work reliably
+        const handleModalClicks = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            
+            // Find the element with data-action (walk up the tree)
+            let actionElement = target;
+            let attempts = 0;
+            while (actionElement && attempts < 5) {
+                const action = actionElement.getAttribute('data-action');
+                const targetId = actionElement.getAttribute('data-target');
+                
+                if (action && targetId) {
+                    console.log('Action clicked:', action, 'Target:', targetId);
+                    
+                    // Only prevent default for our specific actions
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    switch (action) {
+                        case 'select':
+                            if (unsavedChanges && !confirm('You have unsaved changes. Continue without saving?')) {
+                                return;
+                            }
+                            setSelectedActionId(targetId);
+                            this.selectActionInModal(targetId);
+                            setUnsavedChanges(false);
+                            break;
+                            
+                        case 'toggle':
+                            void (async () => {
+                                await this.readerEditor.updateAction(targetId, { 
+                                    enabled: !this.readerEditor.getAllActions().find(a => a.id === targetId)?.enabled 
+                                });
+                                this.refreshActionsList();
+                                this.updateActionButtons();
+                                setUnsavedChanges(true);
+                            })();
+                            break;
+                            
+                        case 'move-up':
+                            void (async () => {
+                                await this.moveAction(targetId, -1);
+                                this.refreshActionsList();
+                                this.updateActionButtons();
+                                setUnsavedChanges(true);
+                            })();
+                            break;
+                            
+                        case 'move-down':
+                            void (async () => {
+                                await this.moveAction(targetId, 1);
+                                this.refreshActionsList();
+                                this.updateActionButtons();
+                                setUnsavedChanges(true);
+                            })();
+                            break;
+                            
+                        case 'insert-placeholder':
+                            const textarea = document.getElementById('action-prompt') as HTMLTextAreaElement;
+                            if (textarea) {
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = textarea.value;
+                                textarea.value = text.substring(0, start) + targetId + text.substring(end);
+                                textarea.focus();
+                                textarea.setSelectionRange(start + targetId.length, start + targetId.length);
+                                setUnsavedChanges(true);
+                            }
+                            break;
+                    }
+                    return; // Stop processing once we found and handled an action
+                }
+                
+                const parent = actionElement.parentElement;
+                if (!parent) break;
+                actionElement = parent;
+                attempts++;
             }
-            setSelectedActionId(actionId);
-            this.selectActionInModal(actionId);
-            setUnsavedChanges(false);
         };
-
-        (window as any).toggleAction = async (actionId: string) => {
-            await this.readerEditor.updateAction(actionId, { 
-                enabled: !this.readerEditor.getAllActions().find(a => a.id === actionId)?.enabled 
-            });
-            this.refreshActionsList();
-            setUnsavedChanges(true);
-        };
-
-        (window as any).moveActionUp = async (actionId: string) => {
-            await this.moveAction(actionId, -1);
-            this.refreshActionsList();
-            setUnsavedChanges(true);
-        };
-
-        (window as any).moveActionDown = async (actionId: string) => {
-            await this.moveAction(actionId, 1);
-            this.refreshActionsList();
-            setUnsavedChanges(true);
-        };
-
-        (window as any).insertPlaceholder = (placeholder: string) => {
-            const textarea = document.getElementById('action-prompt') as HTMLTextAreaElement;
-            if (textarea) {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const text = textarea.value;
-                textarea.value = text.substring(0, start) + placeholder + text.substring(end);
-                textarea.focus();
-                textarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
-                setUnsavedChanges(true);
-            }
-        };
+        
+        // Attach to document but remove when modal closes
+        document.addEventListener('click', handleModalClicks);
+        
+        // Store the handler so we can remove it later (add this to modal cleanup)
+        (window as any).currentModalClickHandler = handleModalClicks;
 
         // Close button - removed, now handled by base modal
 
         // Add new action
         const addBtn = document.getElementById('add-new-action');
-        addBtn?.addEventListener('click', async () => {
+        addBtn?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             await this.addNewAction();
             this.refreshActionsList();
+            this.updateActionButtons(); // Refresh action buttons in reader view
             setUnsavedChanges(true);
         });
 
@@ -2598,17 +2658,32 @@ export class ReaderGUI {
             const target = e.target as HTMLElement;
             
             if (target.id === 'save-current-action') {
+                e.preventDefault();
+                e.stopPropagation();
                 // Get the action ID from the form data attribute
                 const form = document.getElementById('action-editor-form') as HTMLFormElement;
                 const currentActionId = form?.getAttribute('data-action-id');
                 if (currentActionId) {
-                    void this.saveCurrentAction(currentActionId).then(() => {
+                    void this.saveCurrentActionFixed(currentActionId).then(() => {
                         setUnsavedChanges(false);
+                        
+                        // Show feedback to user
+                        const saveBtn = target as HTMLButtonElement;
+                        const originalText = saveBtn.textContent;
+                        saveBtn.textContent = '✅ Saved!';
+                        saveBtn.disabled = true;
+                        
+                        setTimeout(() => {
+                            saveBtn.textContent = originalText;
+                            saveBtn.disabled = false;
+                        }, 1500);
                     });
                 }
             }
             
             if (target.id === 'delete-action') {
+                e.preventDefault();
+                e.stopPropagation();
                 // Get the action ID from the form data attribute
                 const form = document.getElementById('action-editor-form') as HTMLFormElement;
                 const currentActionId = form?.getAttribute('data-action-id');
@@ -2616,6 +2691,7 @@ export class ReaderGUI {
                     if (confirm('Are you sure you want to delete this action?')) {
                         void this.readerEditor.deleteAction(currentActionId).then(() => {
                             this.refreshActionsList();
+                            this.updateActionButtons(); // Refresh action buttons in reader view
                             setSelectedActionId(null);
                             this.clearActionEditor();
                             setUnsavedChanges(true);
@@ -2694,6 +2770,56 @@ export class ReaderGUI {
     }
 
     /**
+     * Save the current action being edited - fixed version that handles both new and existing actions
+     */
+    private async saveCurrentActionFixed(actionId: string): Promise<void> {
+        const form = document.getElementById('action-editor-form') as HTMLFormElement;
+        if (!form) return;
+
+        const actionData = {
+            title: (document.getElementById('action-title') as HTMLInputElement).value,
+            description: (document.getElementById('action-description') as HTMLInputElement).value,
+            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater' | 'prose',
+            order: parseInt((document.getElementById('action-order') as HTMLInputElement).value),
+            prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
+        };
+
+        // Check if this is a new action (not yet properly saved with user details)
+        const existingAction = this.readerEditor.getAllActions().find(a => a.id === actionId);
+        if (existingAction && existingAction.title === 'New Action' && existingAction.prompt.includes('Please modify the following text:')) {
+            // This is a newly created action that hasn't been properly saved yet
+            // Delete the temporary action and create a new one with the proper details
+            await this.readerEditor.deleteAction(actionId);
+            
+            const newActionData = {
+                ...actionData,
+                enabled: true
+            };
+            
+            const newActionId = await this.readerEditor.addAction(newActionData);
+            
+            // Update the form to reference the new action ID
+            form.setAttribute('data-action-id', newActionId);
+            
+            // Auto-select the new action in the list
+            setTimeout(() => {
+                const actionElement = document.querySelector(`[data-action="select"][data-target="${newActionId}"]`) as HTMLElement;
+                if (actionElement) {
+                    actionElement.click();
+                }
+            }, 100);
+        } else {
+            // This is an existing action, just update it
+            await this.readerEditor.updateAction(actionId, actionData);
+        }
+        
+        this.refreshActionsList();
+        
+        // Refresh the action buttons in the reader view to show changes
+        this.updateActionButtons();
+    }
+
+    /**
      * Add a new custom action
      */
     private async addNewAction(): Promise<void> {
@@ -2708,9 +2834,12 @@ export class ReaderGUI {
 
         const actionId = await this.readerEditor.addAction(newAction);
         
-        // Auto-select the new action
+        // Auto-select the new action by dispatching a click event
         setTimeout(() => {
-            (window as any).selectAction(actionId);
+            const actionElement = document.querySelector(`[data-action="select"][data-target="${actionId}"]`) as HTMLElement;
+            if (actionElement) {
+                actionElement.click();
+            }
         }, 100);
     }
 

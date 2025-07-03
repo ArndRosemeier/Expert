@@ -33,7 +33,7 @@ export class ReaderEditManager {
      */
     private getDefaultConfig(): EditActionConfig {
         return {
-            version: 3,
+            version: 4,
             actions: [
                 {
                     id: 'expand-details',
@@ -79,6 +79,15 @@ export class ReaderEditManager {
                     enabled: true,
                     order: 5,
                     description: 'Change selected text according to custom instructions'
+                },
+                {
+                    id: 'continue-cursor-end',
+                    title: 'Continue (cursor at the end)',
+                    prompt: 'Please continue the following text:\n\n{{content}}\n\nJust answer with the continuation.',
+                    model: 'creator',
+                    enabled: true,
+                    order: 6,
+                    description: 'Continue the text from where it ends'
                 }
             ]
         };
@@ -93,7 +102,7 @@ export class ReaderEditManager {
             const savedConfig = await storage.get<EditActionConfig>(ReaderEditManager.CONFIG_STORAGE_KEY);
             
             // TEMPORARY: Force reset to fix prompt issues - increment version to invalidate old configs
-            const currentVersion = 3; // Incremented to add Change action with input placeholder
+            const currentVersion = 4; // Incremented to add Continue (cursor at the end) action
             
             if (savedConfig && savedConfig.version === currentVersion) {
                 this.config = savedConfig;
