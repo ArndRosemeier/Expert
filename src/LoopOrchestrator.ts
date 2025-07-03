@@ -2,6 +2,7 @@ import { OpenRouterClient } from './OpenRouterClient';
 import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { EventEmitter } from './EventEmitter';
+import * as state from './state';
 
 export interface LoopInput {
     prompt: string;
@@ -33,6 +34,14 @@ export interface LoopProgress {
     maxIterations: number;
     step: number;
     totalStepsInIteration: number;
+    // Enhanced messaging fields
+    modelName?: string;
+    isFirstCreation?: boolean;
+    isRevision?: boolean;
+    isRejected?: boolean;
+    contentType?: 'prose' | 'outline';
+    isCompletion?: boolean;
+    allCriteriaSatisfied?: boolean;
 }
 
 export interface LoopHistoryItem {
@@ -79,6 +88,45 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         super();
         this.client = client;
         this.prompts = prompts || { ...defaultPrompts };
+    }
+
+    /**
+     * Get friendly model name for display in progress messages
+     */
+    private async getModelNameForPurpose(purpose: string): Promise<string> {
+        try {
+            const modelSelector = state.getModelSelector();
+            if (!modelSelector) {
+                return purpose.charAt(0).toUpperCase() + purpose.slice(1); // Fallback to purpose name
+            }
+            
+            const selectedModels = modelSelector.getSelectedModels();
+            const modelId = selectedModels[purpose];
+            
+            if (!modelId) {
+                return purpose.charAt(0).toUpperCase() + purpose.slice(1); // Fallback to purpose name
+            }
+            
+            // Try to get friendly name from available models
+            try {
+                const allModels = await this.client.fetchModels();
+                const modelInfo = allModels.find(m => m.id === modelId);
+                if (modelInfo && modelInfo.name) {
+                    return modelInfo.name;
+                }
+            } catch (error) {
+                console.warn('Failed to fetch models for name lookup:', error);
+            }
+            
+            // Fallback: extract name from model ID
+            const parts = modelId.split('/');
+            const modelName = parts[parts.length - 1] || modelId;
+            return modelName.charAt(0).toUpperCase() + modelName.slice(1).replace(/-/g, ' ');
+            
+        } catch (error) {
+            console.warn('Failed to get model name for purpose:', purpose, error);
+            return purpose.charAt(0).toUpperCase() + purpose.slice(1); // Fallback to purpose name
+        }
     }
 
     public requestStop() {
@@ -185,9 +233,16 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         // Track iteration results for best attempt selection
         const iterationResults: IterationResult[] = [];
 
+        // Determine which model to use based on node type
+        const generationModel = input.isLeafNode ? 'prose' : 'creator';
+        const contentType = input.isLeafNode ? 'prose' : 'outline';
+
         try {
-            // Determine which model to use based on node type
-            const generationModel = input.isLeafNode ? 'prose' : 'creator';
+            
+            // Get model names for progress messaging
+            const creatorModelName = await this.getModelNameForPurpose(generationModel);
+            const raterModelName = await this.getModelNameForPurpose('rater');
+            const editorModelName = await this.getModelNameForPurpose('editor');
             
             // Determine the initial prompt and response
             let initialPrompt: string;
@@ -206,7 +261,18 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 const initialCreatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: creatorIteration, type: 'creator', payload: initialCreatorPayload });
 
-                this.emit('progress', { type: 'creator', payload: initialCreatorPayload, iteration: creatorIteration, maxIterations: maxIterations, step: 1, totalStepsInIteration });
+                this.emit('progress', { 
+                    type: 'creator', 
+                    payload: initialCreatorPayload, 
+                    iteration: creatorIteration, 
+                    maxIterations: maxIterations, 
+                    step: 1, 
+                    totalStepsInIteration,
+                    modelName: creatorModelName,
+                    isFirstCreation: true,
+                    isRevision: false,
+                    contentType: contentType
+                });
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
                 initialPrompt = this.prompts.content_generation_initial
@@ -225,14 +291,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 this.emit('phase-started', 'create', creatorIteration);
 
                 // Emit progress BEFORE starting the API call to show model working state
-                const modelLabel = input.isLeafNode ? 'Prose' : 'Creator';
                 this.emit('progress', { 
                     type: 'creator', 
-                    payload: { prompt: initialPrompt, response: `${modelLabel} is working...` }, 
+                    payload: { prompt: initialPrompt, response: `${creatorModelName} is working...` }, 
                     iteration: creatorIteration, 
                     maxIterations: maxIterations, 
                     step: 1, 
-                    totalStepsInIteration 
+                    totalStepsInIteration,
+                    modelName: creatorModelName,
+                    isFirstCreation: true,
+                    isRevision: false,
+                    contentType: contentType
                 });
 
                 try {
@@ -243,13 +312,24 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         aborted = true;
                         throw new Error('Generation aborted by user');
                     }
-                    throw new Error(`The AI ${modelLabel} failed to respond. Please check your API key and network connection.`);
+                    throw new Error(`The AI ${creatorModelName} failed to respond. Please check your API key and network connection.`);
                 }
                 const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
 
                 // Emit progress AFTER getting the response to show final result
-                this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: creatorIteration, maxIterations: maxIterations, step: 1, totalStepsInIteration });
+                this.emit('progress', { 
+                    type: 'creator', 
+                    payload: creatorPayload, 
+                    iteration: creatorIteration, 
+                    maxIterations: maxIterations, 
+                    step: 1, 
+                    totalStepsInIteration,
+                    modelName: creatorModelName,
+                    isFirstCreation: true,
+                    isRevision: false,
+                    contentType: contentType
+                });
             }
 
             for (let i = 1; i <= maxIterations; i++) {
@@ -264,7 +344,16 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 // Emit systematic phase start event for rating
                 this.emit('phase-started', 'rate', i);
 
-                this.emit('progress', { type: 'rater', payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+                this.emit('progress', { 
+                    type: 'rater', 
+                    payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
+                    iteration: i, 
+                    maxIterations, 
+                    step: 2, 
+                    totalStepsInIteration,
+                    modelName: raterModelName,
+                    contentType: contentType
+                });
 
                 let ratingsFromAI: Rating[] | null = null;
                 let lastRatingResponse = '';
@@ -311,7 +400,16 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     }
 
                     const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
-                    this.emit('progress', { type: 'rater', payload: ratingPayload, iteration: i, maxIterations, step: 2, totalStepsInIteration });
+                    this.emit('progress', { 
+                        type: 'rater', 
+                        payload: ratingPayload, 
+                        iteration: i, 
+                        maxIterations, 
+                        step: 2, 
+                        totalStepsInIteration,
+                        modelName: raterModelName,
+                        contentType: contentType
+                    });
 
                     const originalCriterion = criteria.find(c => c.name === rating.criterion);
                     if (originalCriterion && rating.score < originalCriterion.goal) {
@@ -358,7 +456,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
                     history.push({ iteration: i, type: 'editor', payload: editorPayload });
 
-                    this.emit('progress', { type: 'editor', payload: editorPayload, iteration: i, maxIterations, step: 3, totalStepsInIteration });
+                    this.emit('progress', { 
+                        type: 'editor', 
+                        payload: editorPayload, 
+                        iteration: i, 
+                        maxIterations, 
+                        step: 3, 
+                        totalStepsInIteration,
+                        modelName: editorModelName,
+                        isRejected: true,
+                        contentType: contentType
+                    });
 
                     if (this.stopRequested) {
                         aborted = true;
@@ -376,14 +484,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
                     
                     // Emit progress BEFORE starting the API call to show model working state
-                    const modelLabel = input.isLeafNode ? 'Prose' : 'Creator';
                     this.emit('progress', { 
                         type: 'creator', 
-                        payload: { prompt: creatorPrompt, response: `${modelLabel} is working on revision...` }, 
+                        payload: { prompt: creatorPrompt, response: `${creatorModelName} is working on revision...` }, 
                         iteration: creatorIteration, 
                         maxIterations, 
                         step: 1, 
-                        totalStepsInIteration 
+                        totalStepsInIteration,
+                        modelName: creatorModelName,
+                        isFirstCreation: false,
+                        isRevision: true,
+                        contentType: contentType
                     });
                     
                     try {
@@ -394,13 +505,24 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                             aborted = true;
                             break;
                         }
-                        throw new Error(`The AI ${modelLabel} failed to respond during revision. Please check your API key and network connection.`);
+                        throw new Error(`The AI ${creatorModelName} failed to respond during revision. Please check your API key and network connection.`);
                     }
                     const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
                     history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
                     
                     // Emit progress AFTER getting the response to show final result
-                    this.emit('progress', { type: 'creator', payload: creatorPayload, iteration: creatorIteration, maxIterations, step: 1, totalStepsInIteration });
+                    this.emit('progress', { 
+                        type: 'creator', 
+                        payload: creatorPayload, 
+                        iteration: creatorIteration, 
+                        maxIterations, 
+                        step: 1, 
+                        totalStepsInIteration,
+                        modelName: creatorModelName,
+                        isFirstCreation: false,
+                        isRevision: true,
+                        contentType: contentType
+                    });
 
                 } else {
                     // If goals are met or it's the last iteration, break the loop.
@@ -430,6 +552,28 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             const bestIteration = this.selectBestIteration(iterationResults);
             finalResponse = bestIteration.response;
             finalSuccess = bestIteration.allGoalsMet;
+        }
+
+        // Emit final completion message
+        if (!aborted) {
+            const completionMessage = finalSuccess 
+                ? `Done! All criteria satisfied.`
+                : `Done! Not all criteria satisfied, best version selected.`;
+            
+            this.emit('progress', {
+                type: 'creator',
+                payload: { prompt: '', response: completionMessage },
+                iteration: this.currentIteration,
+                maxIterations: input.maxIterations,
+                step: 3,
+                totalStepsInIteration: 3,
+                modelName: '',
+                isFirstCreation: false,
+                isRevision: false,
+                contentType: contentType,
+                isCompletion: true,
+                allCriteriaSatisfied: finalSuccess
+            });
         }
 
         return {
