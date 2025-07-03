@@ -2479,9 +2479,9 @@ export class ReaderGUI {
      */
     private renderActionEditor(action: ReaderEditAction): string {
         const availablePlaceholders = [
-            '{{selected}}', '{{content}}', '{{title}}', '{{node_path}}', 
-            '{{project_title}}', '{{level}}', '{{children_count}}', 
-            '{{context}}', '{{word_count}}', '{{input "Title"}}'
+            '{{selected}}', '{{content}}', '{{title}}', '{{path}}', 
+            '{{project_title}}', '{{context}}', '{{criteria}}', 
+            '{{parent_content}}', '{{child_level_name}}', '{{input "Title"}}'
         ];
 
         return `
