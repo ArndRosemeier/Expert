@@ -889,23 +889,56 @@ export class ModelSelector {
       const client = OpenRouterClient.getInstance();
       this.models = await client.fetchModels();
       
+      console.log(`🔄 Fetched ${this.models.length} models from OpenRouter`);
+      
+      // BUGFIX: Don't clear models if fetch returned zero models (likely an API/network issue)
+      if (this.models.length === 0) {
+        console.warn('⚠️ Fetched 0 models - this might be an API issue. Not clearing existing selections.');
+        this.fetched = true;
+        this.update();
+        return;
+      }
+      
+      // Track if any models were cleared during validation
+      let modelsCleared = false;
+      
+      // Log current selections before validation
+      console.log('🔍 Current model selections before validation:', this.selectedModels);
+      
       // Ensure selectedModels only contains ids present in models
       const modelIds = new Set(this.models.map(m => m.id));
       for (const purpose of PURPOSES) {
         const selectedModel = this.selectedModels[purpose.key];
         if (selectedModel && !modelIds.has(selectedModel)) {
+          console.warn(`⚠️ Model "${selectedModel}" for ${purpose.key} no longer exists in fetched models, clearing selection`);
           this.selectedModels[purpose.key] = '';
+          modelsCleared = true;
         }
       }
+      
+      // Log selections after validation
+      if (modelsCleared) {
+        console.log('🔍 Model selections after validation:', this.selectedModels);
+      }
+      
+      // BUGFIX: Only save to storage if we actually cleared models (to prevent unnecessary saves)
+      if (modelsCleared) {
+        console.log('💾 Saving updated model selections after clearing invalid models');
+        await this.saveToStorage();
+      }
+      
       this.fetched = true;
+      this.loading = false; // Set loading to false BEFORE update() so model selectors render
       this.update(); // Full re-render to show model selectors
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       this.error = errorMessage;
+      this.loading = false; // Also set loading to false in error case
+      console.error('❌ fetchModels failed:', errorMessage);
       this.update(); // Re-render to show error
       throw e;
     } finally {
-      this.loading = false;
+      // updateButtonStates() still needed to refresh button states
       this.updateButtonStates();
     }
   }
@@ -918,18 +951,24 @@ export class ModelSelector {
       if (key) {
         this.apiKey = key;
         console.log('✅ OpenRouter API key loaded from IndexedDB');
+      } else {
+        console.log('ℹ️ No OpenRouter API key found in IndexedDB');
       }
 
       const models = await storage.get<Record<string, string>>(STORAGE_KEY_MODELS);
       if (models) {
         this.selectedModels = models;
-        console.log('✅ OpenRouter model selections loaded from IndexedDB');
+        console.log('✅ OpenRouter model selections loaded from IndexedDB:', models);
+      } else {
+        console.log('ℹ️ No OpenRouter model selections found in IndexedDB');
       }
 
       const webSearchPrefs = await storage.get<Record<string, boolean>>(STORAGE_KEY_WEB_SEARCH);
       if (webSearchPrefs) {
         this.webSearchEnabled = webSearchPrefs;
-        console.log('✅ OpenRouter web search preferences loaded from IndexedDB');
+        console.log('✅ OpenRouter web search preferences loaded from IndexedDB:', webSearchPrefs);
+      } else {
+        console.log('ℹ️ No OpenRouter web search preferences found in IndexedDB');
       }
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
