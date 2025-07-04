@@ -31,9 +31,13 @@ export class DiffTool {
         const originalCopy = [...originalSentences];
         const modifiedCopy = [...modifiedSentences];
         
-        // Create sets for efficient lookup
-        const originalSet = new Set(originalSentences);
-        const modifiedSet = new Set(modifiedSentences);
+        // Create normalized versions for comparison (removes punctuation/whitespace differences)
+        const originalNormalized = originalSentences.map(s => this.normalizeSentence(s));
+        const modifiedNormalized = modifiedSentences.map(s => this.normalizeSentence(s));
+        
+        // Create sets for efficient lookup using normalized versions
+        const originalNormalizedSet = new Set(originalNormalized);
+        const modifiedNormalizedSet = new Set(modifiedNormalized);
         
         // Count statistics
         let removedCount = 0;
@@ -43,8 +47,9 @@ export class DiffTool {
         // Process original sentences - mark removed ones with light red
         for (let i = 0; i < originalCopy.length; i++) {
             const sentence = originalCopy[i]!; // Non-null assertion since we know array is well-formed
-            if (!modifiedSet.has(sentence)) {
-                // Sentence was removed
+            const normalizedSentence = originalNormalized[i]!;
+            if (!modifiedNormalizedSet.has(normalizedSentence)) {
+                // Sentence was removed (based on normalized comparison)
                 originalCopy[i] = this.wrapWithBackground(sentence, '#ffebee'); // Light red
                 removedCount++;
             } else {
@@ -58,8 +63,9 @@ export class DiffTool {
         // Process modified sentences - mark added ones with light green
         for (let i = 0; i < modifiedCopy.length; i++) {
             const sentence = modifiedCopy[i]!; // Non-null assertion since we know array is well-formed
-            if (!originalSet.has(sentence)) {
-                // Sentence was added
+            const normalizedSentence = modifiedNormalized[i]!;
+            if (!originalNormalizedSet.has(normalizedSentence)) {
+                // Sentence was added (based on normalized comparison)
                 modifiedCopy[i] = this.wrapWithBackground(sentence, '#e8f5e8'); // Light green
                 addedCount++;
             } else {
@@ -137,6 +143,22 @@ export class DiffTool {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Normalize a sentence by removing all non-word and non-digit characters
+     * This makes comparison less sensitive to punctuation and whitespace differences
+     * @param sentence - The sentence to normalize
+     * @returns Normalized sentence with only word and digit characters
+     */
+    private static normalizeSentence(sentence: string): string {
+        // Remove all characters that are not letters, digits, or basic whitespace
+        // Then normalize whitespace to single spaces and trim
+        return sentence
+            .replace(/[^\w\d\s]/g, '') // Remove all non-word, non-digit, non-whitespace chars
+            .replace(/\s+/g, ' ')      // Normalize multiple whitespace to single space
+            .trim()                    // Remove leading/trailing whitespace
+            .toLowerCase();            // Convert to lowercase for case-insensitive comparison
     }
     
     /**

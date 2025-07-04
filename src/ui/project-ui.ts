@@ -592,6 +592,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Use the node that actually completed generation, not the currently selected node
             if (_e.node && ((_e.node as any)._pendingCoherenceCheck)) {
                 const completedNode = _e.node;
+                console.log(`🔍 Auto-starting coherence analysis for node "${completedNode.title}" (ID: ${completedNode.id})`);
                 // Clear the pending flag
                 delete (completedNode as any)._pendingCoherenceCheck;
                 

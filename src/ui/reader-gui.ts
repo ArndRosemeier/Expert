@@ -2585,7 +2585,7 @@ export class ReaderGUI {
         const availablePlaceholders = [
             '{{selected}}', '{{content}}', '{{title}}', '{{path}}', 
             '{{project_title}}', '{{context}}', '{{criteria}}', 
-            '{{parent_content}}', '{{child_level_name}}', '{{input "Title"}}'
+            '{{parent_content}}', '{{child_level_name}}', '{{input "Title with spaces"}}', '{{input Title}}', '{{input}}'
         ];
 
         return `

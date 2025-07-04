@@ -240,10 +240,10 @@ export class ReaderEditManager {
     private async fillPrompt(promptTemplate: string, context: EditContext): Promise<string> {
         let filledPrompt = promptTemplate;
         
-        // Handle {{input "Title"}} placeholders first
-        const inputMatches = filledPrompt.match(/\{\{input\s+"([^"]+)"\}\}/g);
-        if (inputMatches) {
-            for (const match of inputMatches) {
+        // Handle {{input "Title with spaces"}} placeholders first (quoted)
+        const quotedInputMatches = filledPrompt.match(/\{\{input\s+"([^"]+)"\}\}/g);
+        if (quotedInputMatches) {
+            for (const match of quotedInputMatches) {
                 const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
                 if (titleMatch && titleMatch[1]) {
                     const title = titleMatch[1];
@@ -256,6 +256,40 @@ export class ReaderEditManager {
                     
                     filledPrompt = filledPrompt.replace(match, userInput);
                 }
+            }
+        }
+        
+        // Handle {{input Title}} placeholders (unquoted single word)
+        const unquotedInputMatches = filledPrompt.match(/\{\{input\s+([^}"\s]+)\}\}/g);
+        if (unquotedInputMatches) {
+            for (const match of unquotedInputMatches) {
+                const titleMatch = match.match(/\{\{input\s+([^}"\s]+)\}\}/);
+                if (titleMatch && titleMatch[1]) {
+                    const title = titleMatch[1];
+                    const userInput = await this.showInputModal(title);
+                    
+                    // Check if user canceled the input
+                    if (userInput === '__CANCELED__') {
+                        return '__CANCELED__'; // Return cancel signal instead of throwing
+                    }
+                    
+                    filledPrompt = filledPrompt.replace(match, userInput);
+                }
+            }
+        }
+        
+        // Handle simple {{input}} placeholders (no title)
+        const simpleInputMatches = filledPrompt.match(/\{\{input\}\}/g);
+        if (simpleInputMatches) {
+            for (const match of simpleInputMatches) {
+                const userInput = await this.showInputModal('Enter your custom instructions');
+                
+                // Check if user canceled the input
+                if (userInput === '__CANCELED__') {
+                    return '__CANCELED__'; // Return cancel signal instead of throwing
+                }
+                
+                filledPrompt = filledPrompt.replace(match, userInput);
             }
         }
         

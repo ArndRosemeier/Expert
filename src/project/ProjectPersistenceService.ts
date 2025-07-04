@@ -227,14 +227,13 @@ export class ProjectPersistenceService {
         // Create a new node instance to get access to class methods
         const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, plainNode.template);
         
-        // We assign to _content directly to avoid clearing the summary on load,
-        // as we assume the saved state is consistent.
-        node['_content'] = plainNode.content || '';
+        // Use the setter to ensure proper trimming when loading content
+        node.content = plainNode.content || '';
 
         // Overwrite the other plain properties from the saved data
         Object.assign(node, {
             id: plainNode.id,
-            context: plainNode.context || plainNode.summary || '', // Handle legacy summary field
+            context: plainNode.context || plainNode.summary || '', // Handle legacy summary field (will be trimmed by setter)
             generationPrompt: plainNode.generationPrompt || null,
             generationHistory: plainNode.generationHistory || [],
             generationSessions: plainNode.generationSessions || [],

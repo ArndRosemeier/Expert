@@ -51,6 +51,71 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
+ * Add version and build time info to the header
+ */
+function addVersionInfoToHeader(): void {
+    const headerElement = document.querySelector('.main-header h1');
+    if (headerElement) {
+        const versionElement = document.createElement('span');
+        versionElement.style.fontSize = '0.75rem';
+        versionElement.style.fontWeight = '400';
+        versionElement.style.color = '#6b7280';
+        versionElement.style.marginLeft = '0.75rem';
+        versionElement.style.fontFamily = 'Monaco, Menlo, Ubuntu Mono, monospace';
+        versionElement.id = 'version-display';
+        
+        // Determine if we're in development mode
+        const isDev = import.meta.env.DEV;
+        
+        if (isDev) {
+            // In development: show version + server start time + live update time
+            const buildDate = VersionService.getBuildDate();
+            const startTime = buildDate.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            
+            const currentTime = new Date().toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            
+            versionElement.innerHTML = `v${VersionService.getVersion()} <span style="color: #9ca3af;">(dev: ${startTime} → ${currentTime})</span>`;
+            
+            // Update the current time every 30 seconds during development
+            setInterval(() => {
+                const newCurrentTime = new Date().toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+                versionElement.innerHTML = `v${VersionService.getVersion()} <span style="color: #9ca3af;">(dev: ${startTime} → ${newCurrentTime})</span>`;
+            }, 30000);
+        } else {
+            // In production: show version + build time
+            const buildDate = VersionService.getBuildDate();
+            const formattedDate = buildDate.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric'
+            });
+            const formattedTime = buildDate.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            
+            versionElement.textContent = `v${VersionService.getVersion()} (${formattedDate} ${formattedTime})`;
+        }
+        
+        headerElement.appendChild(versionElement);
+    }
+}
+
+/**
  * Start the main application after key validation is complete
  */
 async function startApplication(): Promise<void> {
@@ -72,6 +137,9 @@ async function startApplication(): Promise<void> {
         // Initialize EventManager for DOM mutation tracking
         console.log('✅ EventManager initialized successfully');
         console.log('📊 Event Manager status:', eventManager.getDebugInfo());
+        
+        // Add version info to the header
+        addVersionInfoToHeader();
         
         // Check for version mismatches and show dialog if needed
         await checkVersionMismatches();

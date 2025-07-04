@@ -38,8 +38,8 @@ export class DocumentNode {
 
     // --- Content and Context Properties ---
     private _content: string = '';
+    private _context: string = '';
     private _isSettingContentFromGeneration: boolean = false;
-    context: string = '';
     template: string[];
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
@@ -118,7 +118,8 @@ export class DocumentNode {
     }
 
     set content(newContent: string) {
-        this._content = newContent;
+        // Store content directly without trimming
+        this._content = newContent || '';
         
         // Clear generation history when content is manually changed (not during generation)
         if (!this._isSettingContentFromGeneration) {
@@ -128,13 +129,22 @@ export class DocumentNode {
         }
     }
 
+    get context(): string {
+        return this._context;
+    }
+
+    set context(newContext: string) {
+        // Automatically trim context to prevent whitespace issues
+        this._context = (newContext || '').trim();
+    }
+
     /**
      * Sets content during generation process without clearing generation history.
      * This should only be called by the generation system.
      */
     setContentFromGeneration(newContent: string, model?: string): void {
         this._isSettingContentFromGeneration = true;
-        this.content = newContent;
+        this.content = newContent; // Will be trimmed by the setter
         if (model) {
             this.creatorModel = model;
         }
@@ -280,11 +290,11 @@ export class DocumentNode {
      * @returns 'Empty' if no content, 'Draft' if content starts with 'Draft:', 'Final' if has other content
      */
     getState(): 'Empty' | 'Draft' | 'Final' {
-        if (!this.content || this.content.trim() === '') {
+        if (!this.content || this.content === '') {
             return 'Empty';
         }
         
-        if (this.content.trim().startsWith('Draft:')) {
+        if (this.content.startsWith('Draft:')) {
             return 'Draft';
         }
         
@@ -303,7 +313,7 @@ export class DocumentNode {
             parentId: this.parentId,
             children: this.children,
             content: this._content, // Serialize private _content as 'content'
-            context: this.context,
+            context: this._context,
             template: this.template,
             generationPrompt: this.generationPrompt,
             isPromptGenerating: this.isPromptGenerating,

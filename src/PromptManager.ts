@@ -47,6 +47,9 @@ export interface OrchestratorPrompts {
     
     // For fixing contradictions
     fix_contradiction: string;
+    
+    // For text polishing
+    text_polishing: string;
 }
 
 export interface PromptDefinition {
@@ -651,12 +654,32 @@ EXAMPLE:
 If the current content is "The meeting happened on Wednesday and was very productive" but the parent says it was on Tuesday, you would return: "The meeting happened on Tuesday and was very productive"
 
 YOUR RESPONSE:
-Provide the complete corrected content for this child node, no abbreviations. The corrected text will REPLACE the original text.
+Provide the complete corrected content for this child node, no abbreviations. The corrected text will REPLACE the original text, so the FULL TEXT MUST BE PRESENT.
 This is for an automated workflow, so do not add any additional text or comments or questions.
 Corrected text:
 `,
         placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification'],
         description: "System prompt for fixing contradictions in child node content. Takes the contradiction details and rewrites the child content to resolve the issue while maintaining style and structure."
+    },
+
+    text_polishing: {
+        text: `You are an expert text polisher and editor. Your task is to enhance the provided text to {{detail}}.
+
+INSTRUCTIONS:
+1. Enhance the text while preserving its core meaning and structure
+2. Focus specifically on: {{detail}}
+3. Ensure the enhanced text meets all the quality criteria above
+4. Maintain the original tone and style unless the enhancement requires changes
+5. Return ONLY the enhanced text, no explanations or meta-commentary
+
+Your response will be evaluated against these criteria:
+- {{criteria}}
+
+Please provide the full enhanced version of the text, this is for an automated workflow, so no questions or comments please.
+Text:
+`,
+        placeholders: ['detail', 'criteria'],
+        description: "System prompt for polishing and enhancing text content. Takes custom polishing instructions and quality criteria to improve writing quality, clarity, style, and other aspects."
     }
 };
 

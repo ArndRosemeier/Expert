@@ -20,6 +20,7 @@ export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
+export { PolisherModal } from './PolisherModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';

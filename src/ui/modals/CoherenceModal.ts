@@ -4,6 +4,7 @@ import { DocumentNode } from '../../DocumentNode';
 import { CoherenceService } from './services/CoherenceService';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
+import { DiffTool } from '../../DiffTool';
 
 export class CoherenceModal extends BaseModal {
     private analysisResult: CoherenceAnalysisResult | null = null;
@@ -253,6 +254,10 @@ export class CoherenceModal extends BaseModal {
      * Render before/after comparison for fixed contradictions
      */
     private renderBeforeAfterComparison(index: number, fixData: { originalContent: string; fixedContent: string }, isApplied: boolean = false): string {
+        // Use DiffTool to generate highlighted differences
+        const diffResult = DiffTool.compare(fixData.originalContent, fixData.fixedContent);
+        const diffSummary = DiffTool.getSummary(diffResult);
+        
         return `
             <div class="before-after-section">
                 <details class="before-after-details" open>
@@ -260,17 +265,20 @@ export class CoherenceModal extends BaseModal {
                         <span class="summary-text">📝 Proposed Fix (Review Before Applying)</span>
                         <span class="summary-icon">▼</span>
                     </summary>
+                    <div class="diff-summary">
+                        <p class="diff-stats">Changes: ${diffSummary}</p>
+                    </div>
                     <div class="before-after-content">
                         <div class="before-section">
                             <h5>Current Content:</h5>
-                            <div class="content-box before-content">
-                                ${this.escapeHtml(fixData.originalContent)}
+                            <div class="content-box before-content diff-content">
+                                ${diffResult.originalHtml}
                             </div>
                         </div>
                         <div class="after-section">
                             <h5>Proposed Fix:</h5>
-                            <div class="content-box after-content">
-                                ${this.escapeHtml(fixData.fixedContent)}
+                            <div class="content-box after-content diff-content">
+                                ${diffResult.modifiedHtml}
                             </div>
                         </div>
                     </div>

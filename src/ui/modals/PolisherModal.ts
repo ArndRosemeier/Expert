@@ -1,0 +1,997 @@
+import { BaseModal } from './core/BaseModal';
+import { DocumentNode } from '../../DocumentNode';
+import { OpenRouterClient } from '../../OpenRouterClient';
+import { SettingsManager } from '../../SettingsManager';
+import { DiffTool } from '../../DiffTool';
+import { showGenericModal } from './index';
+
+export interface PolishingButton {
+    id: string;
+    label: string;
+    detail: string;
+}
+
+export interface PolishingOptions {
+    modelType: 'creator' | 'rater' | 'editor' | 'prose';
+    detail: string;
+    criteria: string;
+}
+
+export class PolisherModal extends BaseModal {
+    private node: DocumentNode | null = null;
+    private settingsManager: SettingsManager;
+    private openRouterClient: OpenRouterClient;
+    private currentPolishedContent: string | null = null;
+    private isGenerating: boolean = false;
+    
+    // Default polishing buttons
+    private defaultButtons: PolishingButton[] = [
+        { id: 'clarity', label: '✨ Clarity', detail: 'make the text clearer and more understandable' },
+        { id: 'concise', label: '📝 Concise', detail: 'make the text more concise and to the point' },
+        { id: 'engaging', label: '🎯 Engaging', detail: 'make the text more engaging and compelling' },
+        { id: 'professional', label: '💼 Professional', detail: 'make the text more professional and formal' },
+        { id: 'creative', label: '🎨 Creative', detail: 'make the text more creative and imaginative' },
+        { id: 'direct', label: '⚡ Direct', detail: 'use more direct speech and active voice' },
+        { id: 'gritty', label: '💪 Gritty', detail: 'make the text more gritty and realistic' },
+        { id: 'detailed', label: '🔍 Detailed', detail: 'add more specific details and examples' },
+        { id: 'custom', label: '🎯 Custom', detail: 'make the text more {{input "make the text more..."}}' }
+    ];
+
+    private polishingButtons: PolishingButton[] = [];
+
+    constructor(settingsManager: SettingsManager, openRouterClient: OpenRouterClient) {
+        super({ 
+            id: 'polisher-modal',
+            closable: true,
+            backdrop: true,
+            width: '92vw',
+            height: '92vh',
+            maxWidth: 'none',
+            maxHeight: 'none'
+        });
+        this.settingsManager = settingsManager;
+        this.openRouterClient = openRouterClient;
+        this.polishingButtons = [...this.defaultButtons];
+    }
+
+    /**
+     * Override buildContentStyle to remove BaseModal constraints
+     */
+    protected override buildContentStyle(): string {
+        // Start with clean styles, removing BaseModal's max-height and padding constraints
+        let style = `
+            background-color: white;
+            border-radius: 12px;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            padding: 0;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        `;
+        
+        // Apply our custom dimensions
+        if (this.config.width) {
+            style += `width: ${this.config.width};`;
+        }
+        if (this.config.height) {
+            style += `height: ${this.config.height};`;
+        }
+        if (this.config.maxWidth) {
+            style += `max-width: ${this.config.maxWidth};`;
+        }
+        if (this.config.maxHeight) {
+            style += `max-height: ${this.config.maxHeight};`;
+        }
+        
+        return style;
+    }
+
+    /**
+     * Open modal with a node to polish
+     */
+    async openWithNode(node: DocumentNode): Promise<void> {
+        this.node = node;
+        this.currentPolishedContent = null;
+        this.isGenerating = false;
+        
+        // Prevent body scrolling while modal is open
+        document.body.style.overflow = 'hidden';
+        
+        await super.open();
+        this.setupEventListeners();
+    }
+
+    /**
+     * Render method required by BaseModal
+     */
+    public render(): HTMLElement {
+        const content = document.createElement('div');
+        content.innerHTML = this.renderModalContent();
+        return content;
+    }
+
+    /**
+     * Render modal content
+     */
+    private renderModalContent(): string {
+        if (!this.node) {
+            return '<p>No node selected for polishing.</p>';
+        }
+
+        const nodeTitle = this.node.title || 'Untitled Node';
+        const nodeContent = this.node.content || ''; // No need to trim - handled by DocumentNode
+        
+        return `
+            <style>
+                /* CSS for nested container structure */
+                .polisher-modal-container {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .modal-header {
+                    flex-shrink: 0;
+                    padding: 1.5rem 1.5rem 0;
+                    background-color: white;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                
+                .modal-body.polisher-body {
+                    display: flex;
+                    flex-direction: row;
+                    flex: 1;
+                    min-height: 0;
+                    padding: 1rem 1.5rem;
+                    gap: 1.5rem;
+                }
+                
+                .polisher-controls {
+                    flex-shrink: 0;
+                    width: 300px;
+                    margin-bottom: 0;
+                }
+                
+                .polisher-content {
+                    display: grid;
+                    grid-template-rows: auto 1fr;
+                    gap: 1rem;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .content-section {
+                    display: grid;
+                    grid-template-rows: auto 1fr;
+                    gap: 0.5rem;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .content-comparison {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 1rem;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .content-comparison .content-section {
+                    display: grid;
+                    grid-template-rows: auto 1fr;
+                    gap: 0.5rem;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .content-box {
+                    overflow-y: auto;
+                    padding: 1rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    background-color: #fafafa;
+                    font-family: 'Source Code Pro', monospace;
+                    font-size: 0.875rem;
+                    line-height: 1.5;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                    box-sizing: border-box;
+                    height: 100%;
+                    min-height: 0;
+                }
+                
+                .diff-summary-section {
+                    flex-shrink: 0;
+                    margin-bottom: 1rem;
+                }
+                
+                .modal-actions.polisher-actions {
+                    flex-shrink: 0;
+                    padding: 1rem 1.5rem;
+                    border-top: 1px solid #e5e7eb;
+                    background-color: white;
+                    display: flex;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                }
+                
+                .polishing-loading-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(255, 255, 255, 0.9);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10;
+                }
+            </style>
+            <div class="polisher-modal-container">
+                <div class="modal-header">
+                    <h2>🎨 Text Polisher</h2>
+                    <p class="polisher-subtitle">Enhance: <strong>${this.escapeHtml(nodeTitle)}</strong></p>
+                </div>
+                
+                <div class="modal-body polisher-body">
+                    ${this.renderControls()}
+                    ${this.renderContent(nodeContent)}
+                </div>
+                
+                <div class="modal-actions polisher-actions">
+                    ${this.renderActionButtons()}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render control panel
+     */
+    private renderControls(): string {
+        const currentProfile = this.settingsManager.getLastUsedProfile();
+        const models = currentProfile?.selectedModels || {};
+        
+        return `
+            <div class="polisher-controls">
+                <div class="polisher-control-section">
+                    <h3>Model Selection</h3>
+                    <div class="model-selector">
+                        <label for="polisher-model-type">Model Type:</label>
+                        <select id="polisher-model-type" class="polisher-select">
+                            <option value="creator">Creator (${models['creator'] || 'Not set'})</option>
+                            <option value="rater">Rater (${models['rater'] || 'Not set'})</option>
+                            <option value="editor">Editor (${models['editor'] || 'Not set'})</option>
+                            <option value="prose">Prose (${models['prose'] || 'Not set'})</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="polisher-control-section">
+                    <h3>Polishing Style</h3>
+                    <div class="polishing-buttons">
+                        ${this.renderPolishingButtons()}
+                    </div>
+                    <button class="button button-secondary polisher-edit-buttons-btn" id="edit-polishing-buttons" 
+                            ${this.isGenerating ? 'disabled' : ''}>
+                        ⚙️ Edit Buttons
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render polishing buttons
+     */
+    private renderPolishingButtons(): string {
+        return this.polishingButtons.map(button => `
+            <button class="button button-secondary polishing-style-btn" 
+                    data-detail="${this.escapeHtmlAttribute(button.detail)}"
+                    ${this.isGenerating ? 'disabled' : ''}>
+                ${button.label}
+            </button>
+        `).join('');
+    }
+
+    /**
+     * Render action buttons based on current state
+     */
+    private renderActionButtons(): string {
+        if (this.isGenerating) {
+            return `<button class="button button-secondary" id="close-polisher-btn">Close</button>`;
+        } else if (!this.currentPolishedContent) {
+            return `<button class="button button-secondary" id="close-polisher-btn">Close</button>`;
+        } else {
+            // Show all action buttons when content is polished
+            return `
+                <button class="button button-success" id="accept-polished-content">
+                    ✅ Accept & Apply
+                </button>
+                <button class="button button-secondary" id="retry-polishing">
+                    🔄 Retry
+                </button>
+                <button class="button button-danger" id="cancel-polishing">
+                    ❌ Cancel
+                </button>
+                <button class="button button-secondary" id="close-polisher-btn">Close</button>
+            `;
+        }
+    }
+
+    /**
+     * Render content area
+     */
+    private renderContent(originalContent: string): string {
+        const baseContent = !this.currentPolishedContent ? `
+            <div class="polisher-content">
+                <div class="content-section">
+                    <h3>Original Content</h3>
+                    <div class="content-box original-content">
+                        ${this.escapeHtml(originalContent)}
+                    </div>
+                </div>
+            </div>
+        ` : `
+            <div class="polisher-content">
+                <div class="diff-summary-section">
+                    <h3>Polishing Results</h3>
+                    <p class="diff-stats">Changes: ${DiffTool.getSummary(DiffTool.compare(originalContent, this.currentPolishedContent))}</p>
+                </div>
+                
+                <div class="content-comparison">
+                    <div class="content-section">
+                        <h4>Original Content</h4>
+                        <div class="content-box original-content diff-content">
+                            ${DiffTool.compare(originalContent, this.currentPolishedContent).originalHtml}
+                        </div>
+                    </div>
+                    
+                    <div class="content-section">
+                        <h4>Polished Content</h4>
+                        <div class="content-box polished-content diff-content">
+                            ${DiffTool.compare(originalContent, this.currentPolishedContent).modifiedHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add loading overlay if generating
+        const loadingOverlay = this.isGenerating ? `
+            <div class="polishing-loading-overlay">
+                <div class="polishing-loading">
+                    <div class="loading-spinner"></div>
+                    <h3>🎨 Polishing Content...</h3>
+                    <p>AI is enhancing your text. This may take a few moments.</p>
+                </div>
+            </div>
+        ` : '';
+
+        return baseContent + loadingOverlay;
+    }
+
+
+
+    /**
+     * Get filtered criteria based on node type
+     */
+    private getFilteredCriteria(): any[] {
+        const currentProfile = this.settingsManager.getLastUsedProfile();
+        if (!currentProfile || !this.node) return [];
+        
+        const allCriteria = currentProfile.criteria || [];
+        return this.filterCriteriaForNodeType(allCriteria, this.node.isLeaf);
+    }
+
+    /**
+     * Filter criteria based on node type (leaf vs outline/branch)
+     */
+    private filterCriteriaForNodeType(criteria: any[], isLeafNode: boolean): any[] {
+        return criteria.filter(criterion => {
+            // If both outline and leaf are undefined or both are true, include the criterion
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                return true; // Legacy criteria - apply to all
+            }
+            
+            // For leaf nodes, include criteria where leaf is true
+            if (isLeafNode) {
+                return criterion.leaf === true;
+            }
+            
+            // For outline/branch nodes, include criteria where outline is true
+            return criterion.outline === true;
+        });
+    }
+
+    /**
+     * Format criteria as text for the prompt
+     */
+    private formatCriteriaAsText(): string {
+        const criteria = this.getFilteredCriteria();
+        return criteria.map(c => c.name + (c.description ? ': ' + c.description : '')).join('\n');
+    }
+
+    /**
+     * Setup event listeners
+     */
+    private setupEventListeners(): void {
+        // Close button
+        const closeBtn = document.getElementById('close-polisher-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.close());
+        }
+
+        // Polishing style buttons
+        const styleButtons = document.querySelectorAll('.polishing-style-btn');
+        styleButtons.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const button = e.target as HTMLButtonElement;
+                const detail = button.dataset['detail'] || '';
+                
+                // Process {{input}} placeholders
+                const processedDetail = await this.processInputPlaceholders(detail);
+                
+                // Check if action was canceled
+                if (processedDetail === '__CANCELED__') {
+                    return;
+                }
+                
+                await this.generatePolishedContentWithDetail(processedDetail);
+            });
+        });
+
+        // Edit buttons
+        const editButtonsBtn = document.getElementById('edit-polishing-buttons');
+        if (editButtonsBtn) {
+            editButtonsBtn.addEventListener('click', () => this.openEditButtonsModal());
+        }
+
+        // Polishing action buttons
+        this.setupPolishingActionListeners();
+
+        // ESC key handler
+        document.addEventListener('keydown', this.handleEscKey.bind(this));
+    }
+
+    /**
+     * Process {{input}} placeholders in detail text
+     */
+    private async processInputPlaceholders(detail: string): Promise<string> {
+        let processedDetail = detail;
+        
+        // Handle {{input "Title with spaces"}} placeholders first (quoted)
+        const quotedInputMatches = processedDetail.match(/\{\{input\s+"([^"]+)"\}\}/g);
+        if (quotedInputMatches) {
+            for (const match of quotedInputMatches) {
+                const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
+                if (titleMatch && titleMatch[1]) {
+                    const title = titleMatch[1];
+                    const userInput = await this.showInputModal(title);
+                    
+                    // Check if user canceled the input
+                    if (userInput === '__CANCELED__') {
+                        return '__CANCELED__';
+                    }
+                    
+                    processedDetail = processedDetail.replace(match, userInput);
+                }
+            }
+        }
+        
+        // Handle {{input Title}} placeholders (unquoted single word)
+        const unquotedInputMatches = processedDetail.match(/\{\{input\s+([^}"\s]+)\}\}/g);
+        if (unquotedInputMatches) {
+            for (const match of unquotedInputMatches) {
+                const titleMatch = match.match(/\{\{input\s+([^}"\s]+)\}\}/);
+                if (titleMatch && titleMatch[1]) {
+                    const title = titleMatch[1];
+                    const userInput = await this.showInputModal(title);
+                    
+                    // Check if user canceled the input
+                    if (userInput === '__CANCELED__') {
+                        return '__CANCELED__';
+                    }
+                    
+                    processedDetail = processedDetail.replace(match, userInput);
+                }
+            }
+        }
+        
+        // Handle simple {{input}} placeholders (no title)
+        const simpleInputMatches = processedDetail.match(/\{\{input\}\}/g);
+        if (simpleInputMatches) {
+            for (const match of simpleInputMatches) {
+                const userInput = await this.showInputModal('Enter your custom polishing instructions');
+                
+                // Check if user canceled the input
+                if (userInput === '__CANCELED__') {
+                    return '__CANCELED__';
+                }
+                
+                processedDetail = processedDetail.replace(match, userInput);
+            }
+        }
+        
+        return processedDetail;
+    }
+
+    /**
+     * Show an input modal and return the user's input
+     */
+    private async showInputModal(title: string): Promise<string> {
+        return new Promise((resolve) => {
+            let isResolved = false; // Prevent multiple resolutions
+            
+            const resolveOnce = (value: string) => {
+                if (!isResolved) {
+                    isResolved = true;
+                    resolve(value);
+                }
+            };
+            
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'polisher-edit-overlay';
+            overlay.innerHTML = `
+                <div class="polisher-edit-modal">
+                    <div class="polisher-edit-header">
+                        <h3>${this.escapeHtml(title)}</h3>
+                        <button class="polisher-edit-close">&times;</button>
+                    </div>
+                    <div class="polisher-edit-body">
+                        <input type="text" class="button-label-input" id="custom-input" placeholder="Enter your instruction..." style="width: 100%; margin-bottom: 1rem;">
+                    </div>
+                    <div class="polisher-edit-actions">
+                        <button class="button button-secondary" id="cancel-input">Cancel</button>
+                        <button class="button button-primary" id="submit-input">OK</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Focus the input
+            const input = overlay.querySelector('#custom-input') as HTMLInputElement;
+            if (input) {
+                input.focus();
+            }
+            
+            // Handle submit
+            const submitBtn = overlay.querySelector('#submit-input');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', () => {
+                    const value = input?.value || '';
+                    document.body.removeChild(overlay);
+                    resolveOnce(value);
+                });
+            }
+            
+            // Handle cancel
+            const cancelBtn = overlay.querySelector('#cancel-input');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolveOnce('__CANCELED__');
+                });
+            }
+            
+            // Handle close button
+            const closeBtn = overlay.querySelector('.polisher-edit-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolveOnce('__CANCELED__');
+                });
+            }
+            
+            // Handle enter key
+            if (input) {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const value = input.value || '';
+                        document.body.removeChild(overlay);
+                        resolveOnce(value);
+                    }
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        document.body.removeChild(overlay);
+                        resolveOnce('__CANCELED__');
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Setup polishing action listeners
+     */
+    private setupPolishingActionListeners(): void {
+        // Accept button
+        const acceptBtn = document.getElementById('accept-polished-content');
+        if (acceptBtn) {
+            acceptBtn.addEventListener('click', () => this.acceptPolishedContent());
+        }
+
+        // Retry button
+        const retryBtn = document.getElementById('retry-polishing');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => this.retryPolishing());
+        }
+
+        // Cancel button
+        const cancelBtn = document.getElementById('cancel-polishing');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => this.cancelPolishing());
+        }
+    }
+
+    /**
+     * Generate polished content with specific detail
+     */
+    private async generatePolishedContentWithDetail(detail: string): Promise<void> {
+        try {
+            this.isGenerating = true;
+            this.refresh();
+            
+            const modelTypeSelect = document.getElementById('polisher-model-type') as HTMLSelectElement;
+            const modelType = (modelTypeSelect?.value || 'creator') as 'creator' | 'rater' | 'editor' | 'prose';
+            
+            const criteria = this.formatCriteriaAsText();
+            
+            const options: PolishingOptions = {
+                modelType,
+                detail,
+                criteria
+            };
+            
+            const polishedContent = await this.performPolishing(options);
+            
+            this.currentPolishedContent = polishedContent;
+            this.isGenerating = false;
+            this.refresh();
+            
+        } catch (error) {
+            console.error('Error generating polished content:', error);
+            this.isGenerating = false;
+            this.refresh();
+        }
+    }
+
+    /**
+     * Open custom polishing modal
+     */
+    private openCustomPolishingModal(): void {
+        console.log('Opening custom polishing modal...');
+        // Implementation for custom polishing modal
+    }
+
+    /**
+     * Perform the actual polishing
+     */
+    private async performPolishing(options: PolishingOptions): Promise<string> {
+        if (!this.node) {
+            throw new Error('No node selected for polishing');
+        }
+
+        const prompt = this.createPolishingPrompt(options);
+        console.log('Polishing prompt:', prompt);
+
+        try {
+            const response = await this.openRouterClient.chat(
+                options.modelType,
+                prompt
+            );
+
+            if (!response) {
+                throw new Error('Empty response from AI');
+            }
+
+            return response;
+        } catch (error) {
+            console.error('Error in performPolishing:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create the polishing prompt
+     */
+    private createPolishingPrompt(options: PolishingOptions): string {
+        if (!this.node) {
+            throw new Error('No node selected for polishing');
+        }
+
+        const content = this.node.content || '';
+        
+        // Use the text_polishing prompt template
+        const promptTemplate = `You are an expert text polisher and editor. Your task is to enhance the provided text to ${options.detail}.
+
+INSTRUCTIONS:
+1. Enhance the text while preserving its core meaning and structure
+2. Focus specifically on: ${options.detail}
+3. Ensure the enhanced text meets all the quality criteria above
+4. Maintain the original tone and style unless the enhancement requires changes
+5. Return ONLY the enhanced text, no explanations or meta-commentary
+
+Your response will be evaluated against these criteria:
+- ${options.criteria}
+
+Please provide the full enhanced version of the text, this is for an automated workflow, so no questions or comments please.
+Text:
+${content}`;
+
+        return promptTemplate;
+    }
+
+    /**
+     * Accept polished content
+     */
+    private acceptPolishedContent(): void {
+        if (!this.node || !this.currentPolishedContent) {
+            console.error('No content to accept');
+            return;
+        }
+
+        // Update the node content
+        this.node.content = this.currentPolishedContent;
+        
+        // Clear the polished content
+        this.currentPolishedContent = null;
+        
+        // Close the modal
+        this.close();
+        
+        // Trigger UI update
+        const event = new CustomEvent('nodeContentChanged', {
+            detail: { nodeId: this.node.id }
+        });
+        document.dispatchEvent(event);
+    }
+
+    /**
+     * Retry polishing
+     */
+    private retryPolishing(): void {
+        // Clear current polished content and refresh
+        this.currentPolishedContent = null;
+        this.refresh();
+    }
+
+    /**
+     * Cancel polishing
+     */
+    private cancelPolishing(): void {
+        // Clear current polished content and refresh
+        this.currentPolishedContent = null;
+        this.refresh();
+    }
+
+    /**
+     * Refresh modal content
+     */
+    private refresh(): void {
+        const modalContent = document.querySelector(`[data-modal-id="${this.id}"] .modal-content`);
+        if (modalContent) {
+            modalContent.innerHTML = this.renderModalContent();
+            this.setupEventListeners();
+        }
+    }
+
+    /**
+     * Open edit buttons modal
+     */
+    private openEditButtonsModal(): void {
+        // Create simple overlay modal for editing buttons
+        const overlay = document.createElement('div');
+        overlay.className = 'polisher-edit-overlay';
+        overlay.innerHTML = `
+            <div class="polisher-edit-modal">
+                <div class="polisher-edit-header">
+                    <h3>Edit Polishing Buttons</h3>
+                    <button class="polisher-edit-close">&times;</button>
+                </div>
+                <div class="polisher-edit-body">
+                    ${this.renderButtonEditor()}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        this.setupButtonEditorListeners(overlay);
+    }
+
+    /**
+     * Render button editor
+     */
+    private renderButtonEditor(): string {
+        return `
+            <div class="button-editor-help">
+                <p>💡 Tip: Use <code>{{input}}</code> as the detail to make a button open custom instructions.</p>
+            </div>
+            <div class="button-editor-list">
+        ` + this.polishingButtons.map((button, index) => `
+                <div class="button-editor-row">
+                    <input type="text" class="button-label-input" value="${this.escapeHtmlAttribute(button.label)}" 
+                           data-index="${index}" data-field="label" placeholder="Button label (e.g., ✨ Clarity)">
+                    <input type="text" class="button-detail-input" value="${this.escapeHtmlAttribute(button.detail)}" 
+                           data-index="${index}" data-field="detail" placeholder="Polishing instruction (or {{input}} for custom)">
+                    <button class="button button-danger button-sm remove-button-btn" data-index="${index}">×</button>
+                </div>
+        `).join('') + `
+            </div>
+            <div class="button-editor-add-section">
+                <button class="button button-secondary button-add-new" id="add-new-button">
+                    <span>+</span> Add New Button
+                </button>
+                <div class="button-editor-actions">
+                    <button class="button button-secondary" id="reset-default-buttons">Reset to Default</button>
+                    <button class="button button-primary" id="save-polishing-buttons">Save Changes</button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Setup button editor listeners
+     */
+    private setupButtonEditorListeners(overlay: HTMLElement): void {
+        // Close button
+        const closeBtn = overlay.querySelector('.polisher-edit-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+            });
+        }
+
+        // Input change handlers
+        const inputs = overlay.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const target = e.target as HTMLInputElement;
+                const index = parseInt(target.dataset['index'] || '0');
+                const field = target.dataset['field'] as 'label' | 'detail';
+                
+                if (this.polishingButtons[index] && field) {
+                    this.polishingButtons[index][field] = target.value;
+                }
+            });
+        });
+
+        // Remove button handlers
+        const removeButtons = overlay.querySelectorAll('.remove-button-btn');
+        removeButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = parseInt((e.target as HTMLElement).dataset['index'] || '0');
+                this.polishingButtons.splice(index, 1);
+                this.refreshButtonEditor(overlay);
+            });
+        });
+
+        // Add new button
+        const addBtn = overlay.querySelector('#add-new-button');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                this.polishingButtons.push({
+                    id: `custom_${Date.now()}`,
+                    label: '🆕 New Style',
+                    detail: 'make it more...'
+                });
+                this.refreshButtonEditor(overlay);
+            });
+        }
+
+        // Reset to default
+        const resetBtn = overlay.querySelector('#reset-default-buttons');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (confirm('Reset all buttons to default? This will lose any custom buttons.')) {
+                    this.polishingButtons = [...this.defaultButtons];
+                    this.refreshButtonEditor(overlay);
+                }
+            });
+        }
+
+        // Save changes
+        const saveBtn = overlay.querySelector('#save-polishing-buttons');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                // Save to localStorage or settings
+                this.savePolishingButtons();
+                document.body.removeChild(overlay);
+                this.refresh(); // Refresh main modal
+            });
+        }
+    }
+
+    /**
+     * Refresh button editor content
+     */
+    private refreshButtonEditor(overlay: HTMLElement): void {
+        const body = overlay.querySelector('.polisher-edit-body');
+        if (body) {
+            body.innerHTML = this.renderButtonEditor();
+            this.setupButtonEditorListeners(overlay);
+        }
+    }
+
+    /**
+     * Save polishing buttons to localStorage
+     */
+    private savePolishingButtons(): void {
+        try {
+            localStorage.setItem('polisher_buttons', JSON.stringify(this.polishingButtons));
+            console.log('Polishing buttons saved');
+        } catch (error) {
+            console.error('Failed to save polishing buttons:', error);
+        }
+    }
+
+    /**
+     * Load polishing buttons from localStorage
+     */
+    private loadPolishingButtons(): void {
+        try {
+            const saved = localStorage.getItem('polisher_buttons');
+            if (saved) {
+                this.polishingButtons = JSON.parse(saved);
+            }
+        } catch (error) {
+            console.error('Failed to load polishing buttons:', error);
+            this.polishingButtons = [...this.defaultButtons];
+        }
+    }
+
+    /**
+     * Handle ESC key press
+     */
+    private handleEscKey(event: KeyboardEvent): void {
+        if (event.key === 'Escape') {
+            this.close();
+        }
+    }
+
+    /**
+     * Initialize modal (called after construction)
+     */
+    public initialize(): void {
+        this.loadPolishingButtons();
+    }
+
+    /**
+     * Close modal and cleanup
+     */
+    override async close(): Promise<void> {
+        // Remove any edit overlays
+        const overlays = document.querySelectorAll('.polisher-edit-overlay');
+        overlays.forEach(overlay => overlay.remove());
+        
+        // Restore body scrolling
+        document.body.style.overflow = '';
+        
+        await super.close();
+    }
+
+    /**
+     * Escape HTML characters
+     */
+    private escapeHtml(text: string): string {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Escape HTML characters for use in HTML attributes
+     */
+    private escapeHtmlAttribute(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+}
