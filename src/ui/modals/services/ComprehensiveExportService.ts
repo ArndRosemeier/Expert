@@ -103,8 +103,14 @@ export class ComprehensiveExportService {
             };
             zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-            // Generate ZIP file and trigger download
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            // Generate ZIP file with maximum compression and trigger download
+            const zipBlob = await zip.generateAsync({ 
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: {
+                    level: 9  // Maximum compression (1-9, where 9 is best compression)
+                }
+            });
             this.downloadBlob(zipBlob, filename);
 
             return {
