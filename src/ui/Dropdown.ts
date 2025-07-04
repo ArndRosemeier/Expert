@@ -70,7 +70,8 @@ export class Dropdown {
         }
 
         if (this.outsideClickHandler) {
-            document.removeEventListener('click', this.outsideClickHandler);
+            document.removeEventListener('click', this.outsideClickHandler, true);
+            document.removeEventListener('mousedown', this.outsideClickHandler, true);
             this.outsideClickHandler = null;
         }
 
@@ -266,10 +267,12 @@ export class Dropdown {
             }
         };
 
-        // Add the outside click listener after a short delay to prevent immediate closure
+        // Add both click and mousedown listeners for better coverage
+        // Some controls prevent click events from bubbling, but mousedown is more reliable
         setTimeout(() => {
             if (this.outsideClickHandler) {
-                document.addEventListener('click', this.outsideClickHandler);
+                document.addEventListener('click', this.outsideClickHandler, true); // Use capture phase
+                document.addEventListener('mousedown', this.outsideClickHandler, true); // Use capture phase
             }
         }, 10);
     }
