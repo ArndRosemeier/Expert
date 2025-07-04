@@ -2854,24 +2854,7 @@ export class ReaderGUI {
         }
     }
 
-    /**
-     * Save the current action being edited
-     */
-    private async saveCurrentAction(actionId: string): Promise<void> {
-        const form = document.getElementById('action-editor-form') as HTMLFormElement;
-        if (!form) return;
 
-        const updates = {
-            title: (document.getElementById('action-title') as HTMLInputElement).value,
-            description: (document.getElementById('action-description') as HTMLInputElement).value,
-                            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater' | 'prose',
-            order: parseInt((document.getElementById('action-order') as HTMLInputElement).value),
-            prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
-        };
-
-        await this.readerEditor.updateAction(actionId, updates);
-        this.refreshActionsList();
-    }
 
     /**
      * Save the current action being edited - fixed version that handles both new and existing actions

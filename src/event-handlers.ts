@@ -19,7 +19,7 @@ import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 
-import { PromptManager } from './PromptManager';
+
 import * as pdfjsLib from 'pdfjs-dist';
 
 /**
