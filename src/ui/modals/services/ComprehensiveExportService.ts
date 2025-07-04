@@ -111,7 +111,7 @@ export class ComprehensiveExportService {
                     level: 9  // Maximum compression (1-9, where 9 is best compression)
                 }
             });
-            this.downloadBlob(zipBlob, filename);
+            await this.downloadBlob(zipBlob, filename);
 
             return {
                 success: true,
@@ -166,9 +166,34 @@ export class ComprehensiveExportService {
     }
 
     /**
-     * Downloads a blob as a file
+     * Downloads a blob as a file with optional "Save As" dialog support
+     * Falls back to traditional download if File System Access API is not available
      */
-    private static downloadBlob(blob: Blob, filename: string): void {
+    private static async downloadBlob(blob: Blob, filename: string): Promise<void> {
+        try {
+            // Try modern File System Access API first (Chrome/Edge 86+)
+            if ('showSaveFilePicker' in window) {
+                const fileHandle = await (window as any).showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                        description: 'Expert Application Backup',
+                        accept: { 'application/zip': ['.zip'] }
+                    }]
+                });
+                
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                
+                console.log('✅ File saved using Save As dialog');
+                return;
+            }
+        } catch (error) {
+            // User cancelled or API not supported - fall back to download
+            console.log('💡 Save As not available or cancelled, using Downloads folder');
+        }
+        
+        // Fallback: Traditional download to Downloads folder
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -177,6 +202,8 @@ export class ComprehensiveExportService {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        
+        console.log('📁 File downloaded to Downloads folder');
     }
 
     /**
