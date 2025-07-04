@@ -17,6 +17,7 @@ let selectedNodeId: string | null = null;
 // Persistent checkbox states
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
+let checkCoherenceState: boolean = true;
 
 
 // Version navigation state
@@ -37,7 +38,8 @@ async function saveCheckboxStates() {
         const storage = await StorageService.getInstance();
         await storage.set('expert_app_checkbox_states', {
             includeContent: includeContentState,
-            recursive: recursiveState
+            recursive: recursiveState,
+            checkCoherence: checkCoherenceState
         });
     } catch (error) {
         console.warn('Failed to save checkbox states:', error);
@@ -48,10 +50,11 @@ async function loadCheckboxStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{includeContent: boolean, recursive: boolean}>('expert_app_checkbox_states');
+        const saved = await storage.get<{includeContent: boolean, recursive: boolean, checkCoherence: boolean}>('expert_app_checkbox_states');
         if (saved) {
             includeContentState = saved.includeContent;
             recursiveState = saved.recursive;
+            checkCoherenceState = saved.checkCoherence ?? true; // Default to true if not saved
         }
     } catch (error) {
         console.warn('Failed to load checkbox states:', error);
@@ -154,6 +157,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
+                            'polish-text': 'polish-text-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn'
                         };
@@ -416,6 +420,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="chat">
                         💬 Chat
                     </button>
+                    <button class="action-btn" data-action="polish-text">
+                        🎨 Polish Text
+                    </button>
                     <button class="action-btn" data-action="copy-to-new-project">
                         📋 Copy to New Project
                     </button>
@@ -580,6 +587,56 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Force clear progress UI as additional safety measure
             updateProgressUI();
             hideGenerationOverlay();
+            
+            // Check if coherence check was requested for this generation
+            if (selectedNodeId) {
+                const node = manager.findNodeById(selectedNodeId);
+                if (node && (node as any)._pendingCoherenceCheck) {
+                    // Clear the pending flag
+                    delete (node as any)._pendingCoherenceCheck;
+                    
+                    // Open coherence check modal after a short delay
+                    setTimeout(() => {
+                        import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
+                            import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
+                                // Create coherence service instance
+                                const coherenceService = new CoherenceService(
+                                    state.getOpenRouterClient()!,
+                                    state.getSettingsManager()!
+                                );
+
+                                // Check if node is eligible for coherence analysis
+                                if (!coherenceService.isNodeEligible(node)) {
+                                    console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(node));
+                                    return;
+                                }
+
+                                // Create and show modal in loading state
+                                const analysisModal = new CoherenceModal();
+                                analysisModal.openInLoadingState(node);
+                                
+                                // Perform analysis
+                                coherenceService.analyzeCoherence(node)
+                                    .then((result) => {
+                                        console.log('Coherence analysis completed, updating modal with results:', result);
+                                        // Update modal with results
+                                        analysisModal.updateWithResults(result);
+                                    })
+                                    .catch((error) => {
+                                        console.error('Coherence analysis failed:', error);
+                                        // Close loading modal and show error
+                                        analysisModal.close();
+                                        alert('Coherence analysis failed: ' + error.message);
+                                    });
+                            }).catch((error: any) => {
+                                console.error('Failed to load CoherenceService:', error);
+                            });
+                        }).catch((error: any) => {
+                            console.error('Failed to open coherence modal:', error);
+                        });
+                    }, 1000);
+                }
+            }
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
             renderMultiProjectTree();
@@ -961,6 +1018,10 @@ export function renderNodeDetails() {
                                 <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
                                 Include content
                             </label>
+                            <label for="check-coherence-checkbox">
+                                <input type="checkbox" id="check-coherence-checkbox" ${checkCoherenceState && !recursiveState ? 'checked' : ''} ${recursiveState ? 'disabled' : ''}>
+                                Check coherence
+                            </label>
                             <label for="recursive-checkbox">
                                 <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
                                 Recursive
@@ -1222,6 +1283,7 @@ export function renderNodeDetails() {
     if (!node.isLeaf) {
         // Set up checkbox event listeners to save state
         const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+        const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
         const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
         
         if (includeContentCheckbox) {
@@ -1231,9 +1293,29 @@ export function renderNodeDetails() {
             });
         }
         
+        if (checkCoherenceCheckbox) {
+            checkCoherenceCheckbox.addEventListener('change', () => {
+                checkCoherenceState = checkCoherenceCheckbox.checked;
+                void saveCheckboxStates().catch(console.error);
+            });
+        }
+        
         if (recursiveCheckbox) {
             recursiveCheckbox.addEventListener('change', () => {
                 recursiveState = recursiveCheckbox.checked;
+                
+                // When recursive is checked, uncheck and disable coherence check
+                if (checkCoherenceCheckbox) {
+                    if (recursiveState) {
+                        checkCoherenceCheckbox.checked = false;
+                        checkCoherenceCheckbox.disabled = true;
+                        checkCoherenceState = false;
+                    } else {
+                        checkCoherenceCheckbox.disabled = false;
+                        checkCoherenceCheckbox.checked = checkCoherenceState;
+                    }
+                }
+                
                 void saveCheckboxStates().catch(console.error);
             });
         }
@@ -1674,8 +1756,8 @@ Please improve and expand this content.`;
             value = '';
     }
 
-    // Basic trim to remove any obvious leading/trailing whitespace
-    value = value.trim();
+    // No need to manually trim - DocumentNode setters handle this automatically
+    // value = value.trim();
 
     // Create overlay
     const overlay = document.createElement('div');
@@ -2143,6 +2225,32 @@ This action cannot be undone.`;
                 }).catch(error => {
                     console.error('Failed to open chat modal:', error);
                     alert('Failed to open chat dialog. Please try again.');
+                });
+            }
+            break;
+
+        case 'polish-text-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                // Check if node has content to polish
+                if (!node.content || node.content.trim() === '') {
+                    alert('This node has no content to polish. Please add some content first.');
+                    return;
+                }
+                
+                // Import and open polisher modal
+                import('./modals/PolisherModal').then(({ PolisherModal }) => {
+                    const polisherModal = new PolisherModal(
+                        state.getSettingsManager()!,
+                        state.getOpenRouterClient()!
+                    );
+                    polisherModal.initialize();
+                    polisherModal.openWithNode(node);
+                }).catch(error => {
+                    console.error('Failed to open polisher modal:', error);
+                    alert('Failed to open text polisher. Please try again.');
                 });
             }
             break;
@@ -2970,9 +3078,11 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         
         // Get checkbox states for children generation
         const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
+        const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
         const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
         
         const includeContent = includeContentCheckbox?.checked ?? true;
+        const checkCoherence = checkCoherenceCheckbox?.checked ?? false;
         const recursive = recursiveCheckbox?.checked ?? false;
         
         // Get count from input
@@ -2981,9 +3091,15 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         
         console.log(`🚀 Starting children generation for node "${node.title}" with options:`, {
             includeContent,
+            checkCoherence,
             recursive,
             count
         });
+        
+        // Store the coherence check state for this generation
+        if (checkCoherence) {
+            (node as any)._pendingCoherenceCheck = true;
+        }
         
         // Call the children generation method
         projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive);
