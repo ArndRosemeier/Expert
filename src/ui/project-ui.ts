@@ -589,53 +589,52 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             hideGenerationOverlay();
             
             // Check if coherence check was requested for this generation
-            if (selectedNodeId) {
-                const node = manager.findNodeById(selectedNodeId);
-                if (node && (node as any)._pendingCoherenceCheck) {
-                    // Clear the pending flag
-                    delete (node as any)._pendingCoherenceCheck;
-                    
-                    // Open coherence check modal after a short delay
-                    setTimeout(() => {
-                        import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
-                            import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
-                                // Create coherence service instance
-                                const coherenceService = new CoherenceService(
-                                    state.getOpenRouterClient()!,
-                                    state.getSettingsManager()!
-                                );
+            // Use the node that actually completed generation, not the currently selected node
+            if (_e.node && ((_e.node as any)._pendingCoherenceCheck)) {
+                const completedNode = _e.node;
+                // Clear the pending flag
+                delete (completedNode as any)._pendingCoherenceCheck;
+                
+                // Open coherence check modal after a short delay
+                setTimeout(() => {
+                    import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
+                        import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
+                            // Create coherence service instance
+                            const coherenceService = new CoherenceService(
+                                state.getOpenRouterClient()!,
+                                state.getSettingsManager()!
+                            );
 
-                                // Check if node is eligible for coherence analysis
-                                if (!coherenceService.isNodeEligible(node)) {
-                                    console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(node));
-                                    return;
-                                }
+                            // Check if node is eligible for coherence analysis
+                            if (!coherenceService.isNodeEligible(completedNode)) {
+                                console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(completedNode));
+                                return;
+                            }
 
-                                // Create and show modal in loading state
-                                const analysisModal = new CoherenceModal();
-                                analysisModal.openInLoadingState(node);
-                                
-                                // Perform analysis
-                                coherenceService.analyzeCoherence(node)
-                                    .then((result) => {
-                                        console.log('Coherence analysis completed, updating modal with results:', result);
-                                        // Update modal with results
-                                        analysisModal.updateWithResults(result);
-                                    })
-                                    .catch((error) => {
-                                        console.error('Coherence analysis failed:', error);
-                                        // Close loading modal and show error
-                                        analysisModal.close();
-                                        alert('Coherence analysis failed: ' + error.message);
-                                    });
-                            }).catch((error: any) => {
-                                console.error('Failed to load CoherenceService:', error);
-                            });
+                            // Create and show modal in loading state
+                            const analysisModal = new CoherenceModal();
+                            analysisModal.openInLoadingState(completedNode);
+                            
+                            // Perform analysis
+                            coherenceService.analyzeCoherence(completedNode)
+                                .then((result) => {
+                                    console.log('Coherence analysis completed, updating modal with results:', result);
+                                    // Update modal with results
+                                    analysisModal.updateWithResults(result);
+                                })
+                                .catch((error) => {
+                                    console.error('Coherence analysis failed:', error);
+                                    // Close loading modal and show error
+                                    analysisModal.close();
+                                    alert('Coherence analysis failed: ' + error.message);
+                                });
                         }).catch((error: any) => {
-                            console.error('Failed to open coherence modal:', error);
+                            console.error('Failed to load CoherenceService:', error);
                         });
-                    }, 1000);
-                }
+                    }).catch((error: any) => {
+                        console.error('Failed to open coherence modal:', error);
+                    });
+                }, 1000);
             }
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
