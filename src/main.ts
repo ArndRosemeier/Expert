@@ -121,6 +121,23 @@ function addVersionInfoToHeader(): void {
 async function startApplication(): Promise<void> {
     console.log('🚀 Initializing Expert application...');
     
+    // ⚠️ IMPORTANT: Initialize localStorage blocker to prevent accidental usage
+    // This must happen early to catch any localStorage attempts during app startup
+    try {
+        const { LocalStorageBlocker } = await import('./LocalStorageBlocker');
+        if (!LocalStorageBlocker.getConfig()) {
+            // Only initialize if not already initialized
+            LocalStorageBlocker.initialize({
+                allowedKeys: ['expert_generated_keys'], // Only allow app keys for security
+                verbose: true,
+                logAttempts: true
+            });
+            console.log('🚫 localStorage usage is now blocked - use StorageService instead!');
+        }
+    } catch (error) {
+        console.error('❌ Failed to initialize localStorage blocker:', error);
+    }
+    
     try {
         const { initialize } = await import('./event-handlers');
         const { setupEventListeners } = await import('./ui/project-ui');

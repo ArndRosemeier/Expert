@@ -1,6 +1,25 @@
 /**
  * Storage Service - IndexedDB-only storage service for the Expert application.
  * Provides virtually unlimited storage capacity with ACID transactions.
+ * 
+ * ⚠️ IMPORTANT: localStorage is FORBIDDEN in this application!
+ * The localStorage API has been overridden to throw errors when used.
+ * ALWAYS use StorageService for all data storage needs.
+ * 
+ * Benefits over localStorage:
+ * - Large storage capacity (hundreds of MB+) vs localStorage (~5-10MB)
+ * - Asynchronous API that doesn't block UI thread
+ * - Transaction support for data integrity
+ * - Structured data support with TypeScript types
+ * - Better performance with large datasets
+ * 
+ * Usage:
+ * ```typescript
+ * const storage = await StorageService.getInstance();
+ * await storage.set('key', data);
+ * const data = await storage.get('key');
+ * await storage.delete('key');
+ * ```
  */
 
 import { IndexedDBService, IDBDatabaseConfig } from './IndexedDBService';
@@ -18,6 +37,9 @@ export interface IStorageService {
   // Storage info
   getUsage(): Promise<{quota: number, usage: number}>;
   isIndexedDB(): boolean;
+  
+  // Advanced operations for exports
+  getIndexedDBService?(): IndexedDBService;
 }
 
 class IndexedDBStorageService implements IStorageService {
@@ -94,6 +116,14 @@ class IndexedDBStorageService implements IStorageService {
 
   isIndexedDB(): boolean {
     return true;
+  }
+
+  /**
+   * Get the underlying IndexedDB service for advanced operations like complete data export
+   * This method is used by the export service to access all stores directly
+   */
+  getIndexedDBService(): IndexedDBService {
+    return this.indexedDBService;
   }
 }
 

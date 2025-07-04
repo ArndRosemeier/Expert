@@ -9,9 +9,8 @@ import { SettingsManager } from '../SettingsManager';
 export async function testContextExtraction(): Promise<void> {
     console.log('🧪 Testing Context Extraction...');
 
-    // Create mock dependencies
-    // const treeService = new TreeService(); // Not used in this test
-    const settingsManager = new SettingsManager();
+    // Use singleton pattern
+    const settingsManager = await SettingsManager.getInstance();
     
     // Create a mock OpenRouterClient for testing
     const mockOpenRouterClient = {

@@ -3,9 +3,10 @@ import type { OpenRouterModel } from './OpenRouterClient';
 import { StorageService, IStorageService } from './StorageService';
 import { showBalanceModal } from './ui/modals/BalanceModal';
 
-const LOCAL_STORAGE_KEY = 'openrouter_api_key';
-const LOCAL_STORAGE_MODELS = 'openrouter_model_purposes';
-const LOCAL_STORAGE_WEB_SEARCH = 'openrouter_web_search_preferences';
+// Use IndexedDB storage keys instead of localStorage
+const STORAGE_KEY_API_KEY = 'openrouter_api_key';
+const STORAGE_KEY_MODELS = 'openrouter_model_purposes';
+const STORAGE_KEY_WEB_SEARCH = 'openrouter_web_search_preferences';
 const PURPOSES = [
   { key: 'creator', label: 'Creator' },
   { key: 'rater', label: 'Rater' },
@@ -106,10 +107,10 @@ export class ModelSelector {
     // Set new timeout for debounced save
     this.saveTimeoutId = window.setTimeout(async () => {
       try {
-        console.log('💾 Saving OpenRouter API key to storage...');
+        console.log('💾 Saving OpenRouter API key to IndexedDB...');
         const storage = await this.storageService;
-        await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
-        console.log('✅ OpenRouter API key saved successfully');
+        await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
+        console.log('✅ OpenRouter API key saved successfully to IndexedDB');
         
         // Update button states after successful save
         this.updateButtonStates();
@@ -913,22 +914,22 @@ export class ModelSelector {
     try {
       const storage = await this.storageService;
       
-      const key = await storage.get<string>(LOCAL_STORAGE_KEY);
+      const key = await storage.get<string>(STORAGE_KEY_API_KEY);
       if (key) {
         this.apiKey = key;
-        console.log('✅ OpenRouter API key loaded from storage');
+        console.log('✅ OpenRouter API key loaded from IndexedDB');
       }
 
-      const models = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
+      const models = await storage.get<Record<string, string>>(STORAGE_KEY_MODELS);
       if (models) {
         this.selectedModels = models;
-        console.log('✅ OpenRouter model selections loaded from storage');
+        console.log('✅ OpenRouter model selections loaded from IndexedDB');
       }
 
-      const webSearchPrefs = await storage.get<Record<string, boolean>>(LOCAL_STORAGE_WEB_SEARCH);
+      const webSearchPrefs = await storage.get<Record<string, boolean>>(STORAGE_KEY_WEB_SEARCH);
       if (webSearchPrefs) {
         this.webSearchEnabled = webSearchPrefs;
-        console.log('✅ OpenRouter web search preferences loaded from storage');
+        console.log('✅ OpenRouter web search preferences loaded from IndexedDB');
       }
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
@@ -941,12 +942,13 @@ export class ModelSelector {
   private async saveToStorage(): Promise<void> {
     try {
       const storage = await this.storageService;
-      await storage.set(LOCAL_STORAGE_KEY, this.apiKey);
-      await storage.set(LOCAL_STORAGE_MODELS, this.selectedModels);
-      await storage.set(LOCAL_STORAGE_WEB_SEARCH, this.webSearchEnabled);
+      await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
+      await storage.set(STORAGE_KEY_MODELS, this.selectedModels);
+      await storage.set(STORAGE_KEY_WEB_SEARCH, this.webSearchEnabled);
+      console.log('✅ OpenRouter configuration saved to IndexedDB');
     } catch (error) {
-      console.error('❌ CRITICAL: Failed to save OpenRouter configuration to storage:', error);
-      throw error; // Re-throw to handle in calling code
+      console.error('❌ Failed to save OpenRouter configuration to IndexedDB:', error);
+      throw error;
     }
   }
 
@@ -1002,7 +1004,7 @@ export class ModelSelector {
   private async isSavedConfigValid(): Promise<boolean> {
     try {
       const storage = await this.storageService;
-      const savedModels = await storage.get<Record<string, string>>(LOCAL_STORAGE_MODELS);
+      const savedModels = await storage.get<Record<string, string>>(STORAGE_KEY_MODELS);
       if (!savedModels) return false;
       
       return PURPOSES.every(p => savedModels[p.key]);

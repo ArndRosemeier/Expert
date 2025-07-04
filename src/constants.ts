@@ -24,7 +24,7 @@ export const STORAGE_KEYS = {
     PROJECT_TEMPLATES: 'expert_app_project_templates',
     APP_KEY: 'expert_app_key',
     READER_CONFIG: 'expert_app_reader_config',
-    COLLAPSED_NODES: 'expert_app_collapsed_nodes',
+    // COLLAPSED_NODES removed - now stored per-node in DocumentNode.collapsed property
     CHECKBOX_STATES: 'expert_app_checkbox_states',
     LAST_CHAT_MODEL: 'expert_app_last_chat_model'
 } as const;

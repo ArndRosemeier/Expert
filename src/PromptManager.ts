@@ -333,14 +333,11 @@ Document context:
 
 IMPORTANT: Keep the existing content exactly as it is. Do NOT enhance, improve, or rewrite any of the original content. Your job is to continue the content by adding a reference to the new child section.
 
-Add only what is absolutely necessary to naturally reference the new child section "{{child_title}}". This might be:
-- A brief sentence at the end mentioning the new section
-- A simple transition phrase connecting to the new content
-- A minimal addition that acknowledges the new child
+Add about a paragraph of content to the parent content to naturally reference the new child section "{{child_title}}". Make it flow naturally from the existing content.
 
 Only modify existing content if it's absolutely essential to create a smooth connection to the new child section. Otherwise, preserve the original content verbatim and simply append the reference.
 
-Return the complete content with your minimal addition.`,
+Return the complete content with your addition.`,
         placeholders: ['child_title', 'parent_content', 'context'],
         description: "Updates parent content to reference a newly added child section with minimal changes."
     },

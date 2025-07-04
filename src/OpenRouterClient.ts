@@ -204,7 +204,13 @@ export class OpenRouterClient {
    */
   private getSettingsManager(): SettingsManager | null {
     if (!this.settingsManager) {
-      this.settingsManager = state.getSettingsManager();
+      // Use the singleton pattern - try sync first, fall back to state if not initialized
+      try {
+        this.settingsManager = SettingsManager.getInstanceSync();
+      } catch {
+        // Fallback to state method if singleton not yet initialized
+        this.settingsManager = state.getSettingsManager();
+      }
     }
     return this.settingsManager;
   }

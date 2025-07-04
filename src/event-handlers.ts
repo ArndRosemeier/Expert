@@ -379,7 +379,7 @@ export async function initialize() {
         // Continue execution even if validation fails
     }
     
-    const settingsManager = new SettingsManager();
+    const settingsManager = await SettingsManager.getInstance();
     state.setSettingsManager(settingsManager);
 
     const templateManager = new TemplateManager();
@@ -392,7 +392,6 @@ export async function initialize() {
     state.setModelSelector(modelSelector);
 
     // Wait for async initialization to complete
-    await settingsManager.waitForInitialization();
     await modelSelector.waitForInitialization();
 
     // Initialize the modal factory with dependencies
@@ -517,6 +516,15 @@ export async function initialize() {
     }
     
     try {
+        getElementById('comprehensiveExportBtn').addEventListener('click', () => {
+            import('./ui/modals/ModalFactory').then(({ openComprehensiveExportModal }) => {
+                openComprehensiveExportModal();
+            }).catch(error => {
+                console.error('Failed to open comprehensive export modal:', error);
+                alert('Failed to open comprehensive export dialog. Please try again.');
+            });
+        });
+
         getElementById('importProjectBtn').addEventListener('click', () => {
             
             // Create file input element (now accepts JSON, text, and PDF files)

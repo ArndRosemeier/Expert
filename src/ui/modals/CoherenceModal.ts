@@ -519,29 +519,52 @@ export class CoherenceModal extends BaseModal {
         button.disabled = true;
 
         try {
-            // Apply the fix to the child node
-            childNode.content = fixData.fixedContent;
+            // Store original content before fixing
+            const originalContent = childNode.content || '';
             
-            // Mark as applied
-            this.appliedFixes.add(contradictionIndex);
+            // Get required services
+            const settingsManager = await SettingsManager.getInstance();
+            const openRouterClient = OpenRouterClient.getInstance();
+            const coherenceService = new CoherenceService(openRouterClient, settingsManager);
             
-            // Update the UI to show applied status
+            // Generate the proposed fix (but don't apply it yet)
+            const fixedContent = await coherenceService.fixContradiction(
+                this.parentNode,
+                childNode,
+                contradiction
+            );
+
+            // Store the proposed fix for review
+            this.fixedContradictions.set(contradictionIndex, {
+                originalContent,
+                fixedContent
+            });
+            
+            // Show success feedback for generation
+            button.textContent = '📝 Fix Generated';
+            button.classList.remove('button-warning');
+            button.classList.add('button-secondary');
+            button.disabled = true;
+            
+            // Update the contradiction item to show the before/after comparison
             this.updateContradictionItem(contradictionIndex);
             
-            console.log('Applied fix to child:', childNode.title);
+            console.log('Generated proposed fix for child:', childNode.title);
             
         } catch (error) {
-            console.error('Failed to apply fix:', error);
-            button.textContent = '❌ Apply Failed';
+            console.error('Failed to generate fix:', error);
+            button.textContent = '❌ Generation Failed';
+            button.classList.remove('button-warning');
             button.classList.add('button-danger');
             
             setTimeout(() => {
                 button.textContent = originalText;
                 button.classList.remove('button-danger');
+                button.classList.add('button-warning');
                 button.disabled = false;
             }, 3000);
             
-            alert('Failed to apply fix. Please try again.');
+            alert('Failed to generate fix. Please try again.');
         }
     }
 
@@ -606,7 +629,7 @@ export class CoherenceModal extends BaseModal {
             const originalContent = childNode.content || '';
             
             // Get required services
-            const settingsManager = new SettingsManager();
+            const settingsManager = await SettingsManager.getInstance();
             const openRouterClient = OpenRouterClient.getInstance();
             const coherenceService = new CoherenceService(openRouterClient, settingsManager);
             

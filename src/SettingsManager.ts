@@ -177,22 +177,70 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
 }
 
 export class SettingsManager {
+    private static instance: SettingsManager | null = null;
+    private static initializationPromise: Promise<SettingsManager> | null = null;
+
     private profiles: Record<string, SettingsProfile> = {};
     private lastUsedProfileName: string | null = null;
     private prompts: OrchestratorPrompts;
     private storageService: Promise<IStorageService>;
-    private initializationPromise: Promise<void>;
     private aiLoggingEnabled: boolean = false;
     private hasVersionMismatch: boolean = false;
+    private initialized: boolean = false;
 
-    constructor() {
+    private constructor() {
         this.storageService = StorageService.getInstance();
         this.prompts = { ...defaultPrompts };
-        this.initializationPromise = this.initializeAsync();
     }
 
+    /**
+     * Get the singleton instance (async version for proper initialization)
+     */
+    public static async getInstance(): Promise<SettingsManager> {
+        if (SettingsManager.instance && SettingsManager.instance.initialized) {
+            return SettingsManager.instance;
+        }
+
+        if (!SettingsManager.initializationPromise) {
+            SettingsManager.initializationPromise = SettingsManager.initializeInstance();
+        }
+
+        return SettingsManager.initializationPromise;
+    }
+
+    /**
+     * Get the singleton instance (sync version for when you know it's already initialized)
+     * Use this only after calling getInstance() at least once
+     */
+    public static getInstanceSync(): SettingsManager {
+        if (!SettingsManager.instance || !SettingsManager.instance.initialized) {
+            throw new Error('SettingsManager not initialized. Call getInstance() first.');
+        }
+        return SettingsManager.instance;
+    }
+
+    /**
+     * Initialize the singleton instance
+     */
+    private static async initializeInstance(): Promise<SettingsManager> {
+        if (SettingsManager.instance) {
+            return SettingsManager.instance;
+        }
+
+        SettingsManager.instance = new SettingsManager();
+        await SettingsManager.instance.initializeAsync();
+        SettingsManager.instance.initialized = true;
+        
+        console.log('✅ SettingsManager singleton initialized');
+        return SettingsManager.instance;
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     * @deprecated Use getInstance() instead
+     */
     public async waitForInitialization(): Promise<void> {
-        return this.initializationPromise;
+        await SettingsManager.getInstance();
     }
 
     private async initializeAsync(): Promise<void> {

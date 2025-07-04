@@ -4,9 +4,10 @@
 
 import { SettingsModal, SettingsModalConfig } from './SettingsModal';
 import { ExportModal, ExportModalConfig } from './ExportModal';
+import { ComprehensiveExportModal, ComprehensiveExportModalConfig } from './ComprehensiveExportModal';
 import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal';
 import { GenericModal } from './GenericModal';
-import { getModalRegistry } from './core/ModalRegistry';
+import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
 import { SettingsManager } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
@@ -26,11 +27,42 @@ export interface ModalOptions {
 }
 
 export class ModalFactory {
+    private registry: ModalRegistry;
     private dependencies: ModalFactoryDependencies;
-    private registry = getModalRegistry();
+    private unsubscribeFromActiveProject?: () => void;
 
     constructor(dependencies: ModalFactoryDependencies) {
+        this.registry = getModalRegistry();
         this.dependencies = dependencies;
+        
+        // Subscribe to active project changes to automatically update dependencies
+        this.setupActiveProjectSubscription();
+    }
+
+    /**
+     * Subscribe to active project changes to automatically update dependencies
+     */
+    private setupActiveProjectSubscription(): void {
+        // Import state dynamically to avoid circular dependencies
+        import('../../state').then(state => {
+            this.unsubscribeFromActiveProject = state.onActiveProjectChange((activeProject) => {
+                if (activeProject) {
+                    this.dependencies.projectManager = activeProject;
+                    console.log(`🔄 ModalFactory updated to use project: ${activeProject.projectTitle}`);
+                }
+            });
+        }).catch(error => {
+            console.error('Failed to subscribe to active project changes:', error);
+        });
+    }
+
+    /**
+     * Clean up subscriptions
+     */
+    public destroy(): void {
+        if (this.unsubscribeFromActiveProject) {
+            this.unsubscribeFromActiveProject();
+        }
     }
 
     /**
@@ -87,12 +119,14 @@ export class ModalFactory {
     /**
      * Creates and optionally opens an Export modal
      */
-    public async createExportModal(node: DocumentNode, options: ModalOptions = {}): Promise<ExportModal> {
+    public async createExportModal(
+        node: DocumentNode, 
+        options: ModalOptions = {}
+    ): Promise<ExportModal> {
         const { autoOpen = true, replaceExisting = true } = options;
 
-        if (!this.dependencies.projectManager) {
-            throw new Error('ProjectManager is required for ExportModal');
-        }
+        // Always use the current active project manager instead of the cached one
+        const currentProjectManager = await this.getCurrentProjectManager();
 
         // Close existing export modal if requested
         if (replaceExisting) {
@@ -104,7 +138,7 @@ export class ModalFactory {
 
         const config: ExportModalConfig = {
             id: 'export-modal',
-            projectManager: this.dependencies.projectManager,
+            projectManager: currentProjectManager,
             node
         };
 
@@ -122,6 +156,60 @@ export class ModalFactory {
     }
 
     /**
+     * Creates and optionally opens a Comprehensive Export modal
+     */
+    public createComprehensiveExportModal(options: ModalOptions = {}): ComprehensiveExportModal {
+        const { autoOpen = true, replaceExisting = true } = options;
+
+        // Close existing comprehensive export modal if requested
+        if (replaceExisting) {
+            const existing = this.registry.get('comprehensive-export-modal');
+            if (existing) {
+                void existing.close();
+            }
+        }
+
+        const config: ComprehensiveExportModalConfig = {
+            id: 'comprehensive-export-modal'
+        };
+
+        const modal = new ComprehensiveExportModal(config);
+        this.registry.register(modal);
+
+        // Set up automatic cleanup
+        this.setupModalCleanup(modal);
+
+        if (autoOpen) {
+            void modal.open();
+        }
+
+        return modal;
+    }
+
+    /**
+     * Gets the current active project manager, ensuring modals always work with the correct project
+     */
+    private async getCurrentProjectManager(): Promise<ProjectManager> {
+        const currentProjectManager = await import('../../state').then(state => state.getActiveProject());
+        
+        if (!currentProjectManager) {
+            throw new Error('No active project manager found');
+        }
+
+        // Update our dependencies to use the current project manager
+        this.dependencies.projectManager = currentProjectManager;
+        
+        return currentProjectManager;
+    }
+
+    /**
+     * Updates the modal factory dependencies
+     */
+    public updateDependencies(newDependencies: Partial<ModalFactoryDependencies>): void {
+        this.dependencies = { ...this.dependencies, ...newDependencies };
+    }
+
+    /**
      * Creates and optionally opens an Add Child Node modal
      */
     public async createAddChildNodeModal(
@@ -131,9 +219,9 @@ export class ModalFactory {
     ): Promise<AddChildNodeModal> {
         const { autoOpen = true, replaceExisting = true } = options;
 
-        if (!this.dependencies.projectManager) {
-            throw new Error('ProjectManager is required for AddChildNodeModal');
-        }
+        // Always use the current active project manager instead of the cached one
+        // This ensures we're working with the correct project when switching between projects
+        const currentProjectManager = await this.getCurrentProjectManager();
 
         // Close existing add child node modal if requested
         if (replaceExisting) {
@@ -147,7 +235,7 @@ export class ModalFactory {
             id: 'add-child-node-modal',
             parentNodeId,
             parentNode,
-            projectManager: this.dependencies.projectManager,
+            projectManager: currentProjectManager,
             mode: 'ai' // Default to AI mode
         };
 
@@ -157,7 +245,7 @@ export class ModalFactory {
                     console.log('✅ Child node created:', data);
                     // Refresh the project UI by triggering a re-render
                     const { renderProjectUI } = await import('../project-ui');
-                    renderProjectUI(this.dependencies.projectManager!);
+                    renderProjectUI(currentProjectManager);
                 }
             }
         });
@@ -358,13 +446,6 @@ export class ModalFactory {
     public getActiveModalIds(): string[] {
         return this.registry.getOpenModals();
     }
-
-    /**
-     * Updates the factory dependencies
-     */
-    public updateDependencies(dependencies: Partial<ModalFactoryDependencies>): void {
-        this.dependencies = { ...this.dependencies, ...dependencies };
-    }
 }
 
 /**
@@ -434,4 +515,8 @@ export function showPrompt(message: string, defaultValue?: string, title?: strin
  */
 export function openAddChildNodeModal(parentNode: DocumentNode, parentNodeId: string): Promise<AddChildNodeModal> {
     return getDefaultModalFactory().createAddChildNodeModal(parentNode, parentNodeId);
+}
+
+export function openComprehensiveExportModal(): ComprehensiveExportModal {
+    return getDefaultModalFactory().createComprehensiveExportModal();
 } 

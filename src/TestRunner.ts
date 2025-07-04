@@ -18,34 +18,18 @@ export interface TestResult {
 
 export class TestRunner {
     private openRouterClient: OpenRouterClient;
-    private mockSettingsManager: SettingsManager;
     private mockLoopOrchestrator: LoopOrchestrator;
+    private mockSettingsManager: SettingsManager;
 
     constructor(openRouterClient: OpenRouterClient) {
         this.openRouterClient = openRouterClient;
-        // Create mock instances for dependencies that are not under test
-        this.mockSettingsManager = new SettingsManager();
+        this.mockLoopOrchestrator = {
+            orchestrate: async () => 'Mock orchestration result',
+            abortCurrentLoop: () => {}
+        } as any;
         
-        // Set up a valid default profile for testing
-        // This prevents the ProjectManager constructor from failing when it tries to access profiles
-        try {
-            const defaultProfile = {
-                prompt: "Test generation prompt",
-                criteria: [
-                    { name: 'Test Criterion', description: 'A test criterion for testing', goal: 7, weight: 1.0 }
-                ],
-                maxIterations: DEFAULT_MAX_ITERATIONS,
-                selectedModels: { creator: 'test-model', rater: 'test-model', editor: 'test-model', prose: 'test-model' },
-                contextExtractionPrompt: 'Extract relevant context from the following content for use in generating new content:\n\n{{content}}\n\nProvide a clear, structured summary of the key information that would be useful for content generation.'
-            };
-            void this.mockSettingsManager.saveProfile('default', defaultProfile);
-            void this.mockSettingsManager.setLastUsedProfile('default');
-        } catch (error) {
-            // If there's an issue setting up the profile, we'll continue with the test
-            // The test should still work even without a perfect mock setup
-        }
-        
-        this.mockLoopOrchestrator = new LoopOrchestrator(this.openRouterClient, this.mockSettingsManager.getPrompts());
+        // Use singleton pattern - this will be initialized later
+        this.mockSettingsManager = null as any;
     }
 
     public async runPhase1Tests(): Promise<string> {
@@ -894,7 +878,7 @@ export class TestRunner {
 
     private async testSettingsManagerStorage(): Promise<TestResult> {
         try {
-            const settingsManager = new SettingsManager();
+            const settingsManager = await SettingsManager.getInstance();
             
             // Give it time to initialize asynchronously
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -1049,7 +1033,7 @@ export class TestRunner {
     private async testSettingsExportImport(): Promise<TestResult> {
         const testProfileName = 'export_test_profile_' + Date.now();
         try {
-            const settingsManager = new SettingsManager();
+            const settingsManager = await SettingsManager.getInstance();
             
             // Give it time to initialize asynchronously
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -1140,7 +1124,7 @@ export class TestRunner {
         } catch (error: any) {
             // Cleanup on error as well
             try {
-                const settingsManager = new SettingsManager();
+                const settingsManager = await SettingsManager.getInstance();
                 await new Promise(resolve => setTimeout(resolve, 100));
                 await settingsManager.deleteProfile(testProfileName);
             } catch (cleanupError) {

@@ -8,7 +8,7 @@ import { SettingsManager } from '../SettingsManager';
  * Simple test script to verify Phase 1 services work correctly.
  * This can be run to validate the refactoring before proceeding to Phase 2.
  */
-export function testPhase1Services(): void {
+export async function testPhase1Services(): Promise<void> {
     console.log('🧪 Testing Phase 1 Services...');
     
     // Create test data
@@ -50,7 +50,7 @@ export function testPhase1Services(): void {
     
     // Test PromptService (requires SettingsManager)
     console.log('📝 Testing PromptService...');
-    const settingsManager = new SettingsManager();
+    const settingsManager = await SettingsManager.getInstance();
     const promptService = new PromptService(settingsManager);
     
     try {

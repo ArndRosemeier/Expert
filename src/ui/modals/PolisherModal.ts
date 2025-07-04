@@ -3,7 +3,6 @@ import { DocumentNode } from '../../DocumentNode';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
 import { DiffTool } from '../../DiffTool';
-import { showGenericModal } from './index';
 
 export interface PolishingButton {
     id: string;
@@ -372,8 +371,6 @@ export class PolisherModal extends BaseModal {
         return baseContent + loadingOverlay;
     }
 
-
-
     /**
      * Get filtered criteria based on node type
      */
@@ -660,13 +657,7 @@ export class PolisherModal extends BaseModal {
         }
     }
 
-    /**
-     * Open custom polishing modal
-     */
-    private openCustomPolishingModal(): void {
-        console.log('Opening custom polishing modal...');
-        // Implementation for custom polishing modal
-    }
+
 
     /**
      * Perform the actual polishing
@@ -897,9 +888,9 @@ ${content}`;
         // Save changes
         const saveBtn = overlay.querySelector('#save-polishing-buttons');
         if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                // Save to localStorage or settings
-                this.savePolishingButtons();
+            saveBtn.addEventListener('click', async () => {
+                // Save to IndexedDB
+                await this.savePolishingButtons();
                 document.body.removeChild(overlay);
                 this.refresh(); // Refresh main modal
             });
@@ -918,28 +909,37 @@ ${content}`;
     }
 
     /**
-     * Save polishing buttons to localStorage
+     * Save polishing buttons to IndexedDB
      */
-    private savePolishingButtons(): void {
+    private async savePolishingButtons(): Promise<void> {
         try {
-            localStorage.setItem('polisher_buttons', JSON.stringify(this.polishingButtons));
-            console.log('Polishing buttons saved');
+            const { StorageService } = await import('../../StorageService');
+            const storage = await StorageService.getInstance();
+            await storage.set('polisher_buttons', this.polishingButtons);
+            console.log('✅ Polisher buttons saved to IndexedDB');
         } catch (error) {
-            console.error('Failed to save polishing buttons:', error);
+            console.error('❌ Failed to save polisher buttons to IndexedDB:', error);
         }
     }
 
     /**
-     * Load polishing buttons from localStorage
+     * Load polishing buttons from IndexedDB
      */
-    private loadPolishingButtons(): void {
+    private async loadPolishingButtons(): Promise<void> {
         try {
-            const saved = localStorage.getItem('polisher_buttons');
+            const { StorageService } = await import('../../StorageService');
+            const storage = await StorageService.getInstance();
+            const saved = await storage.get('polisher_buttons') as PolishingButton[] | undefined;
+            
             if (saved) {
-                this.polishingButtons = JSON.parse(saved);
+                this.polishingButtons = saved;
+                console.log('✅ Loaded polisher buttons from IndexedDB');
+            } else {
+                this.polishingButtons = [...this.defaultButtons];
+                console.log('🔄 No saved polisher buttons found, using defaults');
             }
         } catch (error) {
-            console.error('Failed to load polishing buttons:', error);
+            console.error('❌ Failed to load polisher buttons from IndexedDB:', error);
             this.polishingButtons = [...this.defaultButtons];
         }
     }
@@ -956,8 +956,8 @@ ${content}`;
     /**
      * Initialize modal (called after construction)
      */
-    public initialize(): void {
-        this.loadPolishingButtons();
+    public async initialize(): Promise<void> {
+        await this.loadPolishingButtons();
     }
 
     /**
