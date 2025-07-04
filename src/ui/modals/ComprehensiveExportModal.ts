@@ -5,7 +5,7 @@
 import { BaseModal } from './core/BaseModal';
 import { ComprehensiveExportService } from './services/ComprehensiveExportService';
 import { ComprehensiveImportService } from './services/ComprehensiveImportService';
-import { LocalStorageCleanupService } from './services/LocalStorageCleanupService';
+
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 
@@ -131,10 +131,7 @@ export class ComprehensiveExportModal extends BaseModal {
             content: '📥 Import Backup ZIP'
         }) as HTMLButtonElement;
 
-        const cleanupButton = createElement('button', {
-            classes: ['button', 'button-warning'],
-            content: '🧹 Clean Old Storage'
-        }) as HTMLButtonElement;
+
 
         const cancelButton = createElement('button', {
             classes: ['button', 'button-secondary'],
@@ -144,15 +141,10 @@ export class ComprehensiveExportModal extends BaseModal {
         // Event listeners
         this.exportButton.addEventListener('click', () => this.handleExport());
         this.importButton.addEventListener('click', () => this.handleImport());
-        cleanupButton.addEventListener('click', () => {
-            LocalStorageCleanupService.showCleanupDialog();
-            // Refresh summary after potential cleanup
-            void this.loadExportSummary();
-        });
+
         cancelButton.addEventListener('click', () => this.close());
 
         footer.appendChild(cancelButton);
-        footer.appendChild(cleanupButton);
         footer.appendChild(this.importButton);
         footer.appendChild(this.exportButton);
 
@@ -311,10 +303,16 @@ export class ComprehensiveExportModal extends BaseModal {
                         ).join('')}
                     </ul>
                     
-                    <div style="background: #fff3cd; padding: 1rem; border-radius: 6px; margin: 1rem 0; border-left: 4px solid #ffc107;">
-                        <strong>⚠️ Warning:</strong> This will completely replace all current application data.
-                        Your API keys and sensitive settings will be preserved.
-                        If the backup is from an older version, you'll be prompted to migrate settings.
+                    <div style="background: #ffe6e6; padding: 1rem; border-radius: 6px; margin: 1rem 0; border-left: 4px solid #dc3545;">
+                        <strong>⚠️ IMPORTANT WARNING:</strong> This will completely replace ALL current application data!
+                        <br><br>
+                        <strong>What will happen:</strong>
+                        <ul style="margin: 0.5rem 0;">
+                            <li>All current projects, settings, and templates will be deleted</li>
+                            <li>Your API keys will be preserved for security</li>
+                            <li>Application will restart with the imported data</li>
+                        </ul>
+                        <strong>💡 Recommendation:</strong> Export your current settings first if you're unsure!
                     </div>
                     
                     <p>Do you want to proceed with the import?</p>

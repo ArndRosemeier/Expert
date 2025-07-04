@@ -43,6 +43,7 @@ export interface ImportValidation {
 // Keys that should be preserved during import (not overwritten)
 const PRESERVED_KEYS = [
     'expert_generated_keys',  // App validation keys must not be overwritten
+    'openrouter_api_key',     // OpenRouter API key should be preserved
 ];
 
 export class ComprehensiveImportService {

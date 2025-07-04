@@ -525,6 +525,8 @@ export async function initialize() {
             });
         });
 
+
+
         getElementById('importProjectBtn').addEventListener('click', () => {
             
             // Create file input element (now accepts JSON, text, and PDF files)
