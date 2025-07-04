@@ -651,7 +651,10 @@ EXAMPLE:
 If the current content is "The meeting happened on Wednesday and was very productive" but the parent says it was on Tuesday, you would return: "The meeting happened on Tuesday and was very productive"
 
 YOUR RESPONSE:
-Provide the complete corrected content for this child node:`,
+Provide the complete corrected content for this child node, no abbreviations. The corrected text will REPLACE the original text.
+This is for an automated workflow, so do not add any additional text or comments or questions.
+Corrected text:
+`,
         placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification'],
         description: "System prompt for fixing contradictions in child node content. Takes the contradiction details and rewrites the child content to resolve the issue while maintaining style and structure."
     }
