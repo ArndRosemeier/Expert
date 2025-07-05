@@ -119,7 +119,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
 - **Properties**:
   - `id` - Unique node identifier
   - `title` - Node title
-  - `content` - Node content
+  - `content` - Node content (getter for master-tagged version)
   - `children` - Child nodes array
   - `parent` - Parent node reference
   - `template` - Template array reference
@@ -130,6 +130,55 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `getPath()` - Get node path
   - `isLeaf()` - Check if node is leaf
   - `toJSON()` - Serialize node data
+  - `fromJSON(data)` - Static method to restore from JSON with legacy conversion
+
+### Tag-Based Version System
+- **File**: `src/DocumentNode.ts`
+- **Interface**: `ContentVersion`
+- **Properties**:
+  - `id` - Unique version identifier
+  - `content` - Version content
+  - `tags` - Set of tags for categorization
+  - `timestamp` - Creation timestamp
+  - `metadata` - Optional metadata (ratings, creator model, etc.)
+- **Content Management Functions**:
+  - `setContentWithTags(content, tags, metadata)` - Set content with explicit tags (becomes master)
+  - `setMasterContentDirect(content)` - Internal use only, updates master content directly
+  - `getAllVersions()` - Get all content versions
+  - `getVersionsWithTag(tag)` - Get versions with specific tag
+  - `getMasterVersion()` - Get the master-tagged version
+  - `promoteToMaster(versionId)` - Promote version to master
+  - `addTagsToVersion(versionId, tags)` - Add tags to existing version
+  - `removeTagsFromVersion(versionId, tags)` - Remove tags from version
+
+### Version Tags System
+**Automatic Tags**:
+- `master` - Current active content (only one version can have this)
+- `generated` - AI-generated content
+- `iteration{N}` - Generation iteration number (e.g., iteration1, iteration2)
+- `generatedWinner` - Chosen winner from generation iterations
+- `draft` - Draft content (often combined with generated)
+- `legacy` - Content converted from old system
+
+**User-Triggered Tags**:
+- `imported` - Content imported from external files
+- `polished` - Content processed through polisher modal
+- `coherenceFix` - Content fixed through coherence modal
+- `ManualEdit_YYYY-MM-DD_HH-MM-SS` - Manual edits with timestamp
+- `Batch_YYYY-MM-DD_HH-MM-SS` - Batch operations with timestamp
+- `Restored_YYYY-MM-DD_HH-MM-SS` - Restored from version navigation
+
+### Content Assignment Safety
+- **Enforced Tagging**: Direct `node.content = value` assignment **REMOVED** - causes TypeScript compiler errors
+- **Required Methods**: Must use `setContentWithTags()` or `setMasterContentDirect()` for all content changes
+- **Developer Safety**: Prevents accidental content overwrites without proper version tracking
+- **Clear Intent**: Forces explicit choice of tagging strategy for each content modification
+
+### Legacy Compatibility
+- **Automatic Conversion**: Old `_content` and `generationSessions` automatically converted to tagged versions
+- **Metadata Preservation**: Legacy `creatorModel` and ratings preserved in version metadata
+- **Backward Compatibility**: All existing APIs continue to work unchanged
+- **Seamless Migration**: Legacy projects load automatically with full version history preserved
 
 ### Context Management
 - **File**: `src/project/ContextService.ts`
@@ -312,6 +361,27 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `renderMultiProjectTree()` - Render project tree
   - `updateGenerateButton(nodeId, state)` - Update generation button state
 
+### Version Navigation UI
+- **File**: `src/ui/project-ui.ts`
+- **Location**: Content panel of selected node
+- **Functions**:
+  - `initializeVersionNavigation(node)` - Initialize version navigation for node
+  - `updateVersionNavigationUI()` - Update navigation controls and indicators
+  - `updateVersionContentDisplay()` - Update content display for selected version
+- **Features**:
+  - **Smart Labels**: Contextual version labels based on tags (Master, Generated Winner, Polished, etc.)
+  - **Chronological Sorting**: Versions sorted by timestamp (newest first), master always on top
+  - **Comprehensive Coverage**: Shows ALL versions (generated, manual edits, imports, batch updates, etc.)
+  - **Timestamp Display**: Shows creation time for non-current versions
+  - **Version Counter**: Displays "1/5: Current (Master)" format
+  - **Restore Functionality**: "Use This Version" button creates restored version with audit trail
+- **UI Elements**:
+  - Previous/Next navigation buttons
+  - Version indicator with count and label
+  - Timestamp information for historical versions
+  - "Use This Version" button (hidden for current master)
+  - Integration with ratings view
+
 ### Enhanced Event Management
 - **File**: `src/ui/event-manager.ts`
 - **Class**: `EventManager`
@@ -329,6 +399,71 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `open()` - Open modal
   - `close()` - Close modal
   - `render()` - Render modal content
+
+### Modal Scrolling & Layout Best Practices
+**Critical for scrollable content in modals:**
+- Modal content containers use `max-height: 90vh` and `overflow: hidden`
+- For flex children to use `height: 100%`, parent must have defined height
+- Scrollable flex children need `flex: 1 1 0%`, `overflow-y: auto`, and `min-height: 0`
+- Avoid mixing hardcoded viewport heights (`calc(90vh - 6em)`) with flex layouts
+- Both panels in multi-panel modals should use consistent height strategies
+
+### Making Controls Fill Available Space - Critical CSS Patterns
+**⚠️ COMMON PROBLEM**: Controls not expanding to fill available vertical space in modals
+
+**🔑 THE MAGIC COMBINATION**: 
+- `flex: 1` - to expand and fill space
+- `overflow-y: auto` - to handle content overflow properly
+- **Both properties are required!** Without `overflow-y: auto`, flex containers won't expand properly.
+
+**📏 HEIGHT CONSTRAINT CHAIN**: Every container in the chain must have proper height constraints:
+```css
+.modal-container { height: 100%; }
+.inspector-body { flex: 1; min-height: 0; }
+.column { flex: 1; min-height: 0; }
+.content-area { flex: 1; overflow-y: auto; }
+```
+
+**🚫 THE `min-height: 0` RULE**: Flex children need `min-height: 0` to shrink below their content size. Without this, they grow beyond their container.
+
+**🔒 OVERFLOW CONSTRAINTS**: When content can overflow, parent containers need `overflow: hidden` to prevent children from pushing beyond bounds:
+```css
+.inspector-body { overflow: hidden; }
+.columns { max-height: 100%; overflow: hidden; }
+```
+
+**❌ WHAT DOESN'T WORK**:
+- Hardcoded heights like `calc(90vh - 6em)`
+- Mixing hardcoded heights with flex layouts
+- `height: 100%` on flex children (use `flex: 1` instead)
+- Complex nested height calculations
+- Missing `overflow-y: auto` on scrollable areas
+
+**✅ THE WORKING PATTERN**:
+```css
+.container { 
+    height: 100%; 
+    display: flex; 
+    flex-direction: column; 
+}
+.body { 
+    flex: 1; 
+    min-height: 0; 
+    overflow: hidden; 
+}
+.scrollable-content { 
+    flex: 1; 
+    overflow-y: auto; 
+}
+```
+
+**🔍 DEBUGGING CHECKLIST**: When a control doesn't fill space, check:
+1. Does it have `flex: 1`?
+2. Does it have `overflow-y: auto` if scrollable?
+3. Does the parent have `min-height: 0`?
+4. Is there a height constraint break in the chain?
+
+**💡 KEY INSIGHT**: `flex: 1` + `overflow-y: auto` is the magic combination for filling available space with scrollable content!
 
 ### Modal Registry
 - **File**: `src/ui/modals/core/ModalRegistry.ts`
@@ -448,20 +583,4 @@ import { StorageService } from './src/StorageService';
 const storage = await StorageService.getInstance();
 await storage.set('key', data);
 const data = await storage.get('key');
-```
-
-### Opening Modals
-```typescript
-import { openSettingsModal, openExportModal } from './src/ui/modals/ModalFactory';
-
-openSettingsModal({ activeTab: 'prompts' });
-openExportModal({ nodeId: 'node-123' });
-```
-
-### Generating Content
-```typescript
-import { getActiveProject } from './src/state';
-
-const project = getActiveProject();
-await project.generateContent(nodeId);
 ``` 
