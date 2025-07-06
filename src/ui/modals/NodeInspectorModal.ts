@@ -154,7 +154,6 @@ export class NodeInspectorModal extends BaseModal {
                     min-height: 0;
                     gap: 1.5rem;
                     overflow: hidden;
-                    max-height: calc(80vh - 140px);
                 }
                 
                 .left-column {
@@ -183,6 +182,24 @@ export class NodeInspectorModal extends BaseModal {
                     flex-direction: column;
                     gap: 1rem;
                     min-height: 0;
+                    max-height: 100%;
+                }
+                
+                .versions-list {
+                    flex: 1;
+                    overflow-y: auto;
+                    min-height: 0;
+                    padding: 0.5rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: white;
+                }
+                
+                .version-actions {
+                    flex-shrink: 0;
+                    padding: 0.5rem 0;
+                    border-top: 1px solid #e5e7eb;
+                    background-color: #f9fafb;
                 }
                 
                 .content-view {
@@ -191,8 +208,103 @@ export class NodeInspectorModal extends BaseModal {
                     padding: 1rem;
                     background-color: white;
                     border-radius: 6px;
-                    margin: 1rem;
                     border: 1px solid #e5e7eb;
+                    margin: 1rem;
+                    min-height: 0;
+                }
+                
+                .version-item {
+                    margin-bottom: 0.75rem;
+                    padding: 0.75rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    background-color: #f9fafb;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .version-item:hover {
+                    background-color: #f3f4f6;
+                    border-color: #d1d5db;
+                }
+                
+                .version-item.selected {
+                    background-color: #dbeafe;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 1px #3b82f6;
+                }
+                
+                .version-item.master {
+                    background-color: #fef3c7;
+                    border-color: #f59e0b;
+                }
+                
+                .version-item.master.selected {
+                    background-color: #fed7aa;
+                    border-color: #ea580c;
+                    box-shadow: 0 0 0 1px #ea580c;
+                }
+                
+                .version-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .version-id {
+                    font-family: monospace;
+                    font-size: 0.75rem;
+                    color: #6b7280;
+                }
+                
+                .master-badge {
+                    background-color: #f59e0b;
+                    color: white;
+                    padding: 0.125rem 0.5rem;
+                    border-radius: 0.25rem;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                }
+                
+                .version-tags {
+                    margin-bottom: 0.5rem;
+                }
+                
+                .version-tag {
+                    display: inline-block;
+                    padding: 0.125rem 0.375rem;
+                    margin-right: 0.25rem;
+                    border-radius: 0.25rem;
+                    font-size: 0.75rem;
+                    font-weight: 500;
+                    background-color: #e5e7eb;
+                    color: #374151;
+                }
+                
+                .version-tag.generated {
+                    background-color: #dbeafe;
+                    color: #1e40af;
+                }
+                
+                .version-tag.generatedWinner {
+                    background-color: #dcfce7;
+                    color: #166534;
+                }
+                
+                .version-timestamp {
+                    font-size: 0.75rem;
+                    color: #6b7280;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .version-content-preview {
+                    font-size: 0.875rem;
+                    color: #374151;
+                    line-height: 1.4;
+                    max-height: 3.5rem;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 
                 .ratings-section {
