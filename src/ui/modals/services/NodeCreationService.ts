@@ -144,20 +144,30 @@ export class NodeCreationService implements INodeCreationService {
         
         // Set initial content if provided (with Draft prefix)
         if (draft) {
-            childNode.content = `Draft: ${draft}`;
+            const draftContent = `Draft: ${draft}`;
             // If draft was AI-generated, track the creator model
             const profile = this.settingsManager.getLastUsedProfile();
             const creatorModel = profile?.selectedModels?.['creator'];
+            
+            // Create a separate draft version instead of updating master
+            const metadata: { [key: string]: any } = {};
             if (creatorModel) {
-                childNode.creatorModel = creatorModel;
+                metadata['creatorModel'] = creatorModel;
             }
+            
+            childNode.addVersion(['draft'], {
+                content: draftContent,
+                title: childNode.title,
+                context: childNode.context
+            }, metadata);
         }
 
         // Update parent content if requested
         if (updateParent && parentNode.content) {
             try {
                 const updatedParentContent = await this.updateParentContent(parentNode, title);
-                parentNode.content = updatedParentContent;
+                // Use version management system to update parent content
+                parentNode.setContent(updatedParentContent, 'master');
             } catch (error) {
                 console.warn('Parent content update failed, but child node was created:', error);
             }

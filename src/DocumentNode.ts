@@ -1,7 +1,20 @@
 import { LoopHistoryItem, Rating } from './LoopOrchestrator';
 import { v4 as uuidv4 } from 'uuid';
 
-
+/**
+ * Represents a single version of node content with tags and metadata.
+ */
+export interface ContentVersion {
+    id: string;
+    content: string;
+    title: string;
+    context: string;
+    tags: Set<string>;
+    timestamp: Date;
+    ratings?: Rating[];
+    creatorModel?: string;
+    metadata?: { [key: string]: any };
+}
 
 /**
  * Represents a single iteration attempt during content generation.
@@ -32,23 +45,20 @@ export interface GenerationSession {
 export class DocumentNode {
     id: string;
     level: number;
-    title: string;
     parentId: string | null;
     children: DocumentNode[] = [];
 
-    // --- Content and Context Properties ---
-    private _content: string = '';
-    private _context: string = '';
-    private _isSettingContentFromGeneration: boolean = false;
+    // --- Version-based Content Management ---
+    private versions: ContentVersion[] = [];
+    private isContextPropagating: boolean = false; // Flag to prevent infinite recursion
+    
+    // --- Template and Generation Properties ---
     template: string[];
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
 
     // --- UI State Properties ---
     collapsed: boolean = false; // Track if this node is collapsed in the tree view
-
-    // --- Creator Model Tracking ---
-    creatorModel: string | null = null; // Track which AI model created/generated content
     
     // --- Legacy & Internal Properties ---
     generationHistory: LoopHistoryItem[] = [];
@@ -58,25 +68,33 @@ export class DocumentNode {
     generationSessions: GenerationSession[] = [];
     currentGenerationSession: GenerationSession | null = null;
 
-    constructor(level: number, title: string, parentId: string | null = null, template: string[] = []) {
+    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
-        this.title = title;
         this.parentId = parentId;
         this.template = template;
 
-        // Initialize properties to empty/default values
+        // Initialize properties to default values
         this.generationPrompt = null;
         this.isPromptGenerating = false;
         this.generationHistory = [];
         this.isGenerating = false;
-        this.content = '';
-        this.context = '';
         this.generationSessions = [];
         this.currentGenerationSession = null;
         this.collapsed = false; // Initialize as expanded
         
-
+        // Create initial master version
+        const initialVersion = {
+            id: uuidv4(),
+            content: initialContent || '',
+            title: initialTitle,
+            context: initialContext || '',
+            tags: new Set(['master']),
+            timestamp: new Date(),
+            metadata: {}
+        };
+        
+        this.versions = [initialVersion];
     }
 
     /**
@@ -113,43 +131,448 @@ export class DocumentNode {
         return null; // No count if no valid number found
     }
 
-    get content(): string {
-        return this._content;
-    }
-
-    set content(newContent: string) {
-        // Store content directly without trimming
-        this._content = newContent || '';
-        
-        // Clear generation history when content is manually changed (not during generation)
-        if (!this._isSettingContentFromGeneration) {
-            this.generationHistory = [];
-            this.generationSessions = [];
-            this.currentGenerationSession = null;
+    /**
+     * Gets the current state of the node based on its content.
+     * @returns 'Empty' if no content, 'Draft' if content starts with 'Draft:', 'Final' if has other content
+     */
+    getState(): 'Empty' | 'Draft' | 'Final' {
+        const content = this.content;
+        if (!content || content === '') {
+            return 'Empty';
         }
-    }
-
-    get context(): string {
-        return this._context;
-    }
-
-    set context(newContext: string) {
-        // Automatically trim context to prevent whitespace issues
-        this._context = (newContext || '').trim();
+        
+        // Check if the master version has draft tags
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion && masterVersion.tags.has('draft')) {
+            return 'Draft';
+        }
+        
+        if (content.startsWith('Draft:')) {
+            return 'Draft';
+        }
+        
+        return 'Final';
     }
 
     /**
-     * Sets content during generation process without clearing generation history.
-     * This should only be called by the generation system.
+     * Custom serializer for JSON.stringify.
+     * Ensures private fields and getters are correctly serialized.
      */
-    setContentFromGeneration(newContent: string, model?: string): void {
-        this._isSettingContentFromGeneration = true;
-        this.content = newContent; // Will be trimmed by the setter
-        if (model) {
-            this.creatorModel = model;
-        }
-        this._isSettingContentFromGeneration = false;
+    toJSON() {
+        return {
+            id: this.id,
+            level: this.level,
+            parentId: this.parentId,
+            children: this.children,
+            template: this.template,
+            generationPrompt: this.generationPrompt,
+            collapsed: this.collapsed,
+            generationHistory: this.generationHistory,
+            generationSessions: this.generationSessions,
+            versions: this.versions.map(v => ({
+                ...v,
+                tags: Array.from(v.tags) // Convert Set to Array for JSON
+            }))
+        };
     }
+
+    /**
+     * Static method to restore from JSON with legacy compatibility.
+     */
+    static fromJSON(data: any): DocumentNode {
+        // Always use a non-empty string for title
+        const safeTitle = (typeof data.title === 'string' && data.title.trim()) ? data.title : 'Untitled';
+        
+        // Create node with empty initial values (will be overwritten by versions)
+        const node = new DocumentNode(data.level, safeTitle, data.parentId, data.template, '', '');
+        
+        // Restore basic properties
+        node.id = data.id;
+        node.collapsed = data.collapsed || false;
+        node.generationPrompt = data.generationPrompt;
+        node.isPromptGenerating = false; // Always reset transient state on load
+        node.generationHistory = data.generationHistory || [];
+        node.isGenerating = false; // Always reset transient state on load
+        node.generationSessions = data.generationSessions || [];
+        
+        // Restore versions
+        if (data.versions && Array.isArray(data.versions)) {
+            // New format: restore versions directly
+            node.versions = data.versions.map((v: any) => {
+                // Handle tags conversion
+                let tags: Set<string>;
+                if (Array.isArray(v.tags)) {
+                    tags = new Set(v.tags);
+                } else if (v.tags && typeof v.tags === 'object') {
+                    // Handle case where tags might be stored as an object or Set-like structure
+                    if (v.tags instanceof Set) {
+                        tags = v.tags;
+                    } else {
+                        // Try to extract values if it's an object with numeric keys (serialized Set)
+                        const tagValues = Object.values(v.tags).filter(tag => typeof tag === 'string');
+                        tags = new Set(tagValues as string[]);
+                    }
+                } else {
+                    tags = new Set(['master']); // Fallback to master tag
+                }
+                
+                return {
+                    ...v,
+                    title: (typeof v.title === 'string' && v.title.trim()) ? v.title : safeTitle,
+                    tags: tags,
+                    timestamp: new Date(v.timestamp)
+                };
+            });
+        } else {
+            // Legacy compatibility: convert old format to new version system
+            node.versions = [];
+            
+            // 1. Handle main content (from data.content or data._content)
+            const mainContent = data.content || data._content || '';
+            const mainTitle = data.title || safeTitle;
+            const mainContext = data.context || data.summary || '';
+            
+            if (mainContent || mainTitle !== 'Untitled' || mainContext) {
+                const masterMetadata: { [key: string]: any } = {};
+                
+                // Preserve legacy creatorModel if it exists
+                if (data.creatorModel) {
+                    masterMetadata['creatorModel'] = data.creatorModel;
+                }
+                
+                node.versions.push({
+                    id: uuidv4(),
+                    content: mainContent,
+                    title: mainTitle,
+                    context: mainContext,
+                    tags: new Set(['master', 'legacy']),
+                    timestamp: new Date(),
+                    metadata: masterMetadata
+                });
+            }
+            
+            // 2. Convert legacy generationSessions to versions
+            if (data.generationSessions && Array.isArray(data.generationSessions)) {
+                data.generationSessions.forEach((session: any) => {
+                    if (session.iterations && Array.isArray(session.iterations)) {
+                        session.iterations.forEach((iteration: any) => {
+                            const tags = new Set(['generated', `iteration${iteration.iteration}`, 'legacy']);
+                            
+                            // Mark winner iterations
+                            if (iteration.wasChosen) {
+                                tags.add('generatedWinner');
+                            }
+                            
+                            const iterationMetadata: { [key: string]: any } = {
+                                sessionId: session.sessionId,
+                                ratings: iteration.ratings || []
+                            };
+                            
+                            // If this was the chosen iteration, it might have been the master
+                            // But we already created a master from the main content, so don't duplicate
+                            if (!iteration.wasChosen || iteration.content !== mainContent) {
+                                node.versions.push({
+                                    id: uuidv4(),
+                                    content: iteration.content,
+                                    title: mainTitle,
+                                    context: mainContext,
+                                    tags: tags,
+                                    timestamp: new Date(iteration.timestamp || session.startTime),
+                                    metadata: iterationMetadata
+                                });
+                            } else if (iteration.wasChosen && iteration.content === mainContent) {
+                                // Update the master version with generation metadata
+                                const masterVersion = node.versions.find(v => v.tags.has('master'));
+                                if (masterVersion) {
+                                    masterVersion.tags.add('generatedWinner');
+                                    masterVersion.metadata = { ...masterVersion.metadata, ...iterationMetadata };
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // 3. Ensure we always have at least an empty master version
+            if (node.versions.length === 0) {
+                node.versions.push({
+                    id: uuidv4(),
+                    content: '',
+                    title: safeTitle,
+                    context: '',
+                    tags: new Set(['master']),
+                    timestamp: new Date(),
+                    metadata: {}
+                });
+            }
+        }
+        
+        // Restore children
+        if (data.children && Array.isArray(data.children)) {
+            node.children = data.children.map((child: any) => DocumentNode.fromJSON(child));
+        }
+        
+        return node;
+    }
+
+    // --- Read-only Getters for Version-based Content ---
+    
+    get content(): string {
+        const masterVersion = this.getMasterVersion();
+        return masterVersion?.content || '';
+    }
+
+    get title(): string {
+        const masterVersion = this.getMasterVersion();
+        return masterVersion?.title || 'Untitled';
+    }
+
+    get context(): string {
+        const masterVersion = this.getMasterVersion();
+        return masterVersion?.context || '';
+    }
+
+    get creatorModel(): string | null {
+        const masterVersion = this.getMasterVersion();
+        return masterVersion?.creatorModel || null;
+    }
+
+    // --- Version Management Methods ---
+
+    /**
+     * Gets the master version of this node.
+     */
+    getMasterVersion(): ContentVersion | null {
+        return this.versions.find(v => v.tags.has('master')) || null;
+    }
+
+    /**
+     * Gets all versions of this node.
+     */
+    getAllVersions(): ContentVersion[] {
+        return [...this.versions];
+    }
+
+    /**
+     * Gets versions with a specific tag.
+     */
+    getVersionsWithTag(tag: string): ContentVersion[] {
+        return this.versions.filter(v => v.tags.has(tag));
+    }
+
+    /**
+     * Adds a new version with the given tags if that exact combination doesn't exist.
+     * @param tags Array of tag strings
+     * @param fields Optional initial field values
+     * @param metadata Optional metadata
+     * @param ratings Optional ratings array
+     * @returns The ID of the created version, or null if no version was created
+     */
+    addVersion(tags: string[], fields?: { title?: string, content?: string, context?: string }, metadata?: { [key: string]: any }, ratings?: Rating[]): string | null {
+        const tagSet = new Set(tags);
+        
+        // Check if a version with this exact tag combination already exists
+        const existingVersion = this.versions.find(v => {
+            if (v.tags.size !== tagSet.size) return false;
+            for (const tag of tagSet) {
+                if (!v.tags.has(tag)) return false;
+            }
+            return true;
+        });
+        
+        if (existingVersion) {
+            // Version with exact tag combination already exists
+            return null;
+        }
+        
+        // Get defaults from master version if available
+        const masterVersion = this.getMasterVersion();
+        const defaultTitle = masterVersion?.title || 'Untitled';
+        const defaultContent = masterVersion?.content || '';
+        const defaultContext = masterVersion?.context || '';
+        
+        // Check if we should replace an empty master version
+        const masterIsEmpty = masterVersion && masterVersion.content.trim() === '';
+        const newContentIsReal = fields?.content && fields.content.trim() !== '';
+        const isGenerationIteration = tags.includes('generated') && tags.some(tag => tag.startsWith('iteration'));
+        const shouldReplaceMaster = masterIsEmpty && newContentIsReal && !isGenerationIteration;
+        
+        // If no master version exists and this is the first version with actual content,
+        // automatically make it master (unless it's a generation iteration)
+        const shouldBeMaster = !masterVersion || shouldReplaceMaster;
+        
+        if (shouldBeMaster && !isGenerationIteration) {
+            tagSet.add('master');
+        }
+        
+        // If replacing empty master, remove it first
+        if (shouldReplaceMaster && masterVersion) {
+            const masterIndex = this.versions.findIndex(v => v.id === masterVersion.id);
+            if (masterIndex !== -1) {
+                this.versions.splice(masterIndex, 1);
+            }
+        }
+        
+        // Create new version
+        const newVersion: ContentVersion = {
+            id: uuidv4(),
+            content: fields?.content ?? defaultContent,
+            title: fields?.title ?? defaultTitle,
+            context: fields?.context ?? defaultContext,
+            tags: tagSet,
+            timestamp: new Date(),
+            metadata: metadata || {},
+            ...(ratings && { ratings: ratings })
+        };
+        
+        // If this version becomes master, remove master tag from remaining versions
+        if (newVersion.tags.has('master')) {
+            this.versions.forEach(v => v.tags.delete('master'));
+        }
+        
+        this.versions.push(newVersion);
+        return newVersion.id;
+    }
+
+    /**
+     * Sets content for all versions with the given tag.
+     * @param content New content value
+     * @param tag Tag to match versions against
+     * @throws Error if no versions have the given tag
+     */
+    setContent(content: string, tag: string): void {
+        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
+        if (matchingVersions.length === 0) {
+            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+        }
+        
+        matchingVersions.forEach(version => {
+            version.content = content;
+            version.timestamp = new Date();
+        });
+    }
+
+    /**
+     * Sets context for all versions with the given tag.
+     * @param context New context value
+     * @param tag Tag to match versions against
+     * @throws Error if no versions have the given tag
+     */
+    setContext(context: string, tag: string): void {
+        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
+        if (matchingVersions.length === 0) {
+            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+        }
+        
+        matchingVersions.forEach(version => {
+            version.context = context;
+            version.timestamp = new Date();
+        });
+    }
+
+    /**
+     * Sets title for all versions with the given tag.
+     * @param title New title value
+     * @param tag Tag to match versions against
+     * @throws Error if no versions have the given tag
+     */
+    setTitle(title: string, tag: string): void {
+        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
+        if (matchingVersions.length === 0) {
+            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+        }
+        
+        matchingVersions.forEach(version => {
+            version.title = title;
+            version.timestamp = new Date();
+        });
+    }
+
+
+
+    /**
+     * Propagates context to all versions.
+     */
+    private propagateContextToAllVersions(context: string): void {
+        // Prevent infinite recursion
+        if (this.isContextPropagating) {
+            return;
+        }
+        
+        this.isContextPropagating = true;
+        try {
+            this.versions.forEach(version => {
+                if (version.context !== context) {
+                    version.context = context;
+                    // Don't update timestamp for non-master versions to preserve their original creation time
+                }
+            });
+        } finally {
+            this.isContextPropagating = false;
+        }
+    }
+
+    /**
+     * Promotes a version to master.
+     */
+    promoteToMaster(versionId: string, additionalTags: string[] = []): void {
+        const version = this.versions.find(v => v.id === versionId);
+        if (!version) {
+            throw new Error(`Version with id ${versionId} not found`);
+        }
+        
+        // Remove master tag from all versions
+        this.versions.forEach(v => v.tags.delete('master'));
+        
+        // Add master tag and any additional tags to the promoted version
+        version.tags.add('master');
+        additionalTags.forEach(tag => version.tags.add(tag));
+        version.timestamp = new Date();
+    }
+
+    /**
+     * Sets content during generation process (does NOT promote to master automatically).
+     */
+    setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number): void {
+        // Get current master version for title/context preservation
+        const currentMaster = this.getMasterVersion();
+        const preservedTitle = currentMaster?.title || 'Untitled';
+        const preservedContext = currentMaster?.context || '';
+        
+        const tags = ['generated']; // Do NOT include master tag automatically
+        if (iterationIndex !== undefined) {
+            tags.push(`iteration${iterationIndex}`);
+        }
+        
+        const metadata: { [key: string]: any } = {};
+        if (model) {
+            metadata['creatorModel'] = model;
+        }
+        
+        // Look up ratings from the generation session if iteration index is provided
+        let ratings: Rating[] | undefined;
+        if (iterationIndex !== undefined) {
+            const currentSession = this.currentGenerationSession;
+            const latestSession = this.getLatestGenerationSession();
+            
+            // Check current session first, then latest session
+            const sessionToCheck = currentSession || latestSession;
+            if (sessionToCheck) {
+                const iteration = sessionToCheck.iterations.find(iter => iter.iteration === iterationIndex);
+                if (iteration && iteration.ratings) {
+                    ratings = iteration.ratings.map(r => ({ ...r })); // Deep copy ratings
+                }
+            }
+        }
+        
+        this.addVersion(tags, {
+            content: newContent,
+            title: preservedTitle,
+            context: preservedContext
+        }, metadata, ratings);
+    }
+
+
 
     /**
      * Starts a new generation session.
@@ -256,6 +679,32 @@ export class DocumentNode {
     }
 
     /**
+     * Calculates the quality score for a version based on its ratings.
+     * @param version The version to calculate score for
+     * @returns The calculated score
+     */
+    static calculateVersionScore(version: ContentVersion): number {
+        // No ratings = manual work = highest priority score
+        if (!version.ratings || version.ratings.length === 0) {
+            return 10000;
+        }
+
+        // Calculate sum of all rating scores
+        const totalScore = version.ratings.reduce((sum, rating) => sum + rating.score, 0);
+        
+        // Check if all goals are met
+        const allGoalsMet = version.ratings.every(rating => rating.score >= rating.goal);
+        
+        if (allGoalsMet) {
+            // All goals met: return sum of scores
+            return totalScore;
+        } else {
+            // At least one goal failed: subtract penalty to ensure it's below successful versions
+            return totalScore - 1000;
+        }
+    }
+
+    /**
      * Checks if the node is a leaf node according to its template.
      * A node is a leaf if its level is the last one defined in the template.
      */
@@ -284,45 +733,4 @@ export class DocumentNode {
         const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
         return match && match[1] ? match[1] : rawChildLevelName;
     }
-
-    /**
-     * Gets the current state of the node based on its content.
-     * @returns 'Empty' if no content, 'Draft' if content starts with 'Draft:', 'Final' if has other content
-     */
-    getState(): 'Empty' | 'Draft' | 'Final' {
-        if (!this.content || this.content === '') {
-            return 'Empty';
-        }
-        
-        if (this.content.startsWith('Draft:')) {
-            return 'Draft';
-        }
-        
-        return 'Final';
-    }
-
-    /**
-     * Custom serializer for JSON.stringify.
-     * Ensures private fields and getters are correctly serialized.
-     */
-    toJSON() {
-        return {
-            id: this.id,
-            level: this.level,
-            title: this.title,
-            parentId: this.parentId,
-            children: this.children,
-            content: this._content, // Serialize private _content as 'content'
-            context: this._context,
-            template: this.template,
-            generationPrompt: this.generationPrompt,
-            isPromptGenerating: this.isPromptGenerating,
-            collapsed: this.collapsed, // Include collapsed state in serialization
-            generationHistory: this.generationHistory,
-            isGenerating: this.isGenerating,
-            generationSessions: this.generationSessions,
-
-            creatorModel: this.creatorModel,
-        };
-    }
-} 
+}

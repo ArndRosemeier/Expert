@@ -381,16 +381,20 @@ export class TestRunner {
             if (chapter1.content !== '') throw new Error("Initial content should be empty");
             if (chapter1.context !== '') throw new Error("Initial context should be empty");
             
-            // Test content setting
-            chapter1.content = "This is test content for chapter 1.";
-            if (chapter1.content !== "This is test content for chapter 1.") {
-                throw new Error("Content setting failed");
+            // Test content setting using version management system
+            const testContent = "This is test content for chapter 1.";
+            chapter1.setContent(testContent, 'master');
+            const actualContent = chapter1.content as string;
+            if (actualContent !== testContent) {
+                throw new Error(`Content setting failed: expected "${testContent}", got "${actualContent}"`);
             }
             
-            // Test context setting
-            chapter1.context = "A brief context for chapter 1.";
-            if (chapter1.context !== "A brief context for chapter 1.") {
-                throw new Error("Context setting failed");
+            // Test context setting using version management system
+            const testContext = "A brief context for chapter 1.";
+            chapter1.setContext(testContext, 'master');
+            const actualContext = chapter1.context as string;
+            if (actualContext !== testContext) {
+                throw new Error(`Context setting failed: expected "${testContext}", got "${actualContext}"`);
             }
             
             // Test isLeaf detection (leaf nodes don't have children)
@@ -917,7 +921,7 @@ export class TestRunner {
             
             // Add some content
             project.addNode('Test Child', project.rootNode.id);
-            project.rootNode.content = 'Test root content';
+            project.rootNode.setContent('Test root content', 'master');
             
             // Test save operation
             await project.saveToStorage();

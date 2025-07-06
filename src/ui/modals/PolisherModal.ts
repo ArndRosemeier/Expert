@@ -726,8 +726,8 @@ ${content}`;
             return;
         }
 
-        // Update the node content
-        this.node.content = this.currentPolishedContent;
+        // Update the node content using version management system
+        this.node.setContent(this.currentPolishedContent, 'master');
         
         // Clear the polished content
         this.currentPolishedContent = null;

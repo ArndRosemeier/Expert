@@ -14,11 +14,13 @@ export async function testPhase1Services(): Promise<void> {
     // Create test data
     const template = ['Book', 'Chapter', 'Scene'];
     const rootNode = new DocumentNode(0, 'Test Book', null, template);
-    rootNode.context = 'This is a test book about software architecture.';
+    // Set context using version management system
+    rootNode.setContext('This is a test book about software architecture.', 'master');
     
     const chapter1 = new DocumentNode(1, 'Chapter 1: Introduction', rootNode.id, template);
-    chapter1.context = 'Introduction to the main concepts.';
-    chapter1.content = 'This chapter covers:\n- Basic concepts\n- Key principles\n- Getting started';
+    // Set context and content using version management system
+    chapter1.setContent('This chapter covers:\n- Basic concepts\n- Key principles\n- Getting started', 'master');
+    chapter1.setContext('Introduction to the main concepts.', 'master');
     rootNode.children.push(chapter1);
     
     const scene1 = new DocumentNode(2, 'Scene 1: The Beginning', chapter1.id, template);

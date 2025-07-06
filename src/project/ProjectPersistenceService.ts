@@ -224,30 +224,8 @@ export class ProjectPersistenceService {
      * @returns A DocumentNode instance.
      */
     public static rehydrateNode(plainNode: any): DocumentNode {
-        // Create a new node instance to get access to class methods
-        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, plainNode.template);
-        
-        // Use the setter to ensure proper trimming when loading content
-        node.content = plainNode.content || '';
-
-        // Overwrite the other plain properties from the saved data
-        Object.assign(node, {
-            id: plainNode.id,
-            context: plainNode.context || plainNode.summary || '', // Handle legacy summary field (will be trimmed by setter)
-            generationPrompt: plainNode.generationPrompt || null,
-            generationHistory: plainNode.generationHistory || [],
-            generationSessions: plainNode.generationSessions || [],
-
-            creatorModel: plainNode.creatorModel || null, // Handle creator model field
-            children: [], // Reset children, as they will be rehydrated recursively
-        });
-
-        // Recursively rehydrate and add children
-        if (plainNode.children && plainNode.children.length > 0) {
-            node.children = plainNode.children.map((child: any) => ProjectPersistenceService.rehydrateNode(child));
-        }
-
-        return node;
+        // Use DocumentNode.fromJSON for comprehensive version handling
+        return DocumentNode.fromJSON(plainNode);
     }
 
     /**

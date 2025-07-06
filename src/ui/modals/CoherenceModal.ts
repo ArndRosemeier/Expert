@@ -519,8 +519,8 @@ export class CoherenceModal extends BaseModal {
         button.disabled = true;
 
         try {
-            // Actually apply the fix to the child node content
-            childNode.content = fixData.fixedContent;
+            // Actually apply the fix to the child node content using version management system
+            childNode.setContent(fixData.fixedContent, 'master');
             
             // Mark this fix as applied
             this.appliedFixes.add(contradictionIndex);

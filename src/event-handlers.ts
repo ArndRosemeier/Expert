@@ -184,13 +184,16 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
         console.log('🤖 Applying AI-generated content and context to root node');
         const rootNode = project.rootNode;
         
+        // Use version management system for content/context updates
+
+        
         if (aiData.content !== undefined) {
-            rootNode.content = aiData.content;
+            rootNode.setContent(aiData.content, 'master');
             console.log('✅ Applied AI content to root node, length:', aiData.content.length);
         }
         
         if (aiData.context !== undefined) {
-            rootNode.context = aiData.context;
+            rootNode.setContext(aiData.context, 'master');
             console.log('✅ Applied AI context to root node, length:', aiData.context.length);
         }
         
@@ -233,18 +236,19 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
         // Import the data into the project's root node
         const rootNode = project.rootNode;
         
-        // Import node data (reusing the existing import logic)
+        // Import node data using version management system
+        
         if (importData.title !== undefined) {
-            rootNode.title = importData.title;
+            rootNode.setTitle(importData.title, 'master');
             project.projectTitle = importData.title; // Keep project title in sync
         }
 
         if (importData.content !== undefined) {
-            rootNode.content = importData.content;
+            rootNode.setContent(importData.content, 'master');
         }
 
         if (importData.context !== undefined) {
-            rootNode.context = importData.context;
+            rootNode.setContext(importData.context, 'master');
         }
 
         if (importData.generationPrompt !== undefined) {
@@ -286,13 +290,14 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
     // Create the child node with root template (shallow copy)
     const newNode = importChildNodeWithRootTemplateForProject(project, parentId, childData.title);
 
-    // Set node properties
+    // Set node properties using version management system
+    
     if (childData.content !== undefined) {
-        newNode.content = childData.content;
+        newNode.setContent(childData.content, 'master');
     }
 
     if (childData.context !== undefined) {
-        newNode.context = childData.context;
+        newNode.setContext(childData.context, 'master');
     }
 
     if (childData.generationPrompt !== undefined) {

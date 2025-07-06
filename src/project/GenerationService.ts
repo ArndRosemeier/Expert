@@ -386,6 +386,12 @@ export class GenerationService {
                     const modelKey = node.isLeaf ? 'prose' : 'creator';
                     const modelName = profile.selectedModels?.[modelKey];
                     node.setContentFromGeneration(currentIterationContent, modelName);
+                    
+                    // Set context for generated content
+                    const parentContext = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+                    if (parentContext) {
+                        node.setContext(parentContext, 'generated');
+                    }
                 }
                 
                 // Cleanup state before emitting events
@@ -402,10 +408,31 @@ export class GenerationService {
                 node.endGenerationSession(result.success, result.finalResponse);
                 const modelKey = node.isLeaf ? 'prose' : 'creator';
                 const modelName = profile.selectedModels?.[modelKey];
-                node.setContentFromGeneration(result.finalResponse, modelName);
-                node.generationHistory = result.history;
                 
-                // Context is now simply inherited from parent (no synthesis needed)
+                // Create generation versions from the completed session iterations
+                const latestSession = node.getLatestGenerationSession();
+                if (latestSession && latestSession.iterations.length > 0) {
+                    latestSession.iterations.forEach((iteration) => {
+                        node.setContentFromGeneration(iteration.content, modelName, iteration.iteration);
+                    });
+                    
+                    // Set context for all generated content
+                    const parentContext = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+                    if (parentContext) {
+                        node.setContext(parentContext, 'generated');
+                    }
+                }
+                
+                // Promote the final result to master and mark as winner
+                const generationVersion = node.getAllVersions().find(v => 
+                    v.tags.has('generated') && v.content === result.finalResponse
+                );
+                if (generationVersion) {
+                    node.promoteToMaster(generationVersion.id, ['generatedWinner']);
+                } else {
+                    console.warn('No matching generation version found for final content');
+                }
+                node.generationHistory = result.history;
                 
                 // Cleanup state before emitting events
                 this.cleanupGenerationState(nodeId, node, isChildGeneration);
@@ -538,17 +565,33 @@ export class GenerationService {
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
             const creatorModel = currentProfile?.selectedModels?.['creator'];
 
-            nodeItems.forEach(item => {
-                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
-                // Set the content description as initial content if provided
-                if (item.description && item.description.trim()) {
-                    newNode.content = `Draft: ${item.description}`;
-                    // Since this is AI-generated content, set the creator model
-                    if (creatorModel) {
-                        newNode.creatorModel = creatorModel;
+                            nodeItems.forEach(item => {
+                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
+                    
+                    // Set the content description as initial content if provided
+                    if (item.description && item.description.trim()) {
+                        // Create a separate draft version instead of updating master
+                        const metadata: { [key: string]: any } = {};
+                        if (creatorModel) {
+                            metadata['creatorModel'] = creatorModel;
+                        }
+                        
+                        newNode.addVersion(['generated', 'draft'], {
+                            content: `Draft: ${item.description}`,
+                            title: newNode.title,
+                            context: newNode.context
+                        }, metadata);
+                        
+                        // Set context for generated child content
+                        if (newNode.parentId) {
+                            const parent = this.deps.treeService.findNodeById(newNode.parentId, this.deps.rootNode);
+                            const parentContext = parent?.context || '';
+                            if (parentContext) {
+                                newNode.setContext(parentContext, 'generated');
+                            }
+                        }
                     }
-                }
-            });
+                });
 
             await this.deps.saveToStorage();
             
@@ -664,76 +707,9 @@ export class GenerationService {
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
-
-            // Check for settings override from the parent node's own context for child creation
-            const settingsOverride = this.extractSettingsOverrideFromNode(node);
-            const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() : null;
             
-            if (settingsOverride) {
-                const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
-                if (overrideProfile) {
-                    console.log(`🔧 Using settings override "${settingsOverride}" for creating children titles of "${node.title}"`);
-                    await this.deps.settingsManager.setLastUsedProfile(settingsOverride);
-                } else {
-                    console.warn(`⚠️ Settings override "${settingsOverride}" not found for creating children titles of "${node.title}". Using current settings.`);
-                }
-            }
-
-            try {
-                const prompts = this.deps.settingsManager.getPrompts();
-                const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-
-                const prompt = this.deps.promptService.fillGenerationPrompt(
-                    prompts.create_children_from_outline_user,
-                    node,
-                    context,
-                    this.deps.treeService.getNodePath(nodeId, this.deps.rootNode)
-                ).replace(/{{outline_content}}/g, node.content);
-
-                // Using the 'creator' model as it's for generating new content/structure
-                const response = await this.deps.openRouterClient.chat('creator', prompt);
-                const nodeItems = this.parseChildrenFromJSON(response);
-
-                if (nodeItems.length === 0) {
-                    const errorMsg = `The AI did not return a valid list of titles from the outline.\n\nAI Response:\n"${response}"`;
-                    this.deps.eventEmitter.emit('error', errorMsg);
-                    this.isGeneratingAllChildren = false;
-                    this.deps.generationController.clearGenerationContext();
-                    throw new Error(errorMsg);
-                }
-
-                // Get the creator model name for tracking
-                const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-                const creatorModel = currentProfile?.selectedModels?.['creator'];
-
-                nodeItems.forEach(item => {
-                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
-                    // Set the content description as initial content if provided
-                    if (item.description && item.description.trim()) {
-                        newNode.content = `Draft: ${item.description}`;
-                        // Since this is AI-generated content, set the creator model
-                        if (creatorModel) {
-                            newNode.creatorModel = creatorModel;
-                        }
-                    }
-                    // Copy parent context to new child node
-                    this.deps.contextService.copyParentContextToChild(newNode, this.deps.rootNode);
-                });
-
-                await this.deps.saveToStorage();
-            } catch(error: any) {
-                console.error('Failed to create children from outline via LLM:', error);
-                this.deps.eventEmitter.emit('error', 'The AI failed to process the outline. Please try again.');
-                this.isGeneratingAllChildren = false;
-                this.deps.generationController.clearGenerationContext();
-                throw new Error(`The AI failed to process the outline: ${error.message || error}`);
-            } finally {
-                // Always restore original settings if we had an override
-                if (settingsOverride && originalProfileName) {
-                    console.log(`🔄 Restoring original settings profile "${originalProfileName}" after creating children titles`);
-                    await this.deps.settingsManager.setLastUsedProfile(originalProfileName);
-                }
-            }
+            // Use the dedicated createChildrenFromOutline method instead of duplicating logic
+            await this.createChildrenFromOutline(nodeId);
         } else {
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
         }
@@ -960,7 +936,8 @@ export class GenerationService {
                 throw new Error('Generation aborted by user');
             }
 
-            node.context = summary;
+            // Use version management system to update context
+            node.setContext(summary, 'master');
             this.deps.eventEmitter.emit('nodeSummaryGenerated', { nodeId, summary });
             await this.deps.saveToStorage();
 

@@ -32,7 +32,8 @@ Key Events: The awakening ceremony, The battle at dawn, The final confrontation`
         null, 
         ['Book', 'Chapter', 'Section']
     );
-    testNode.content = `
+    // Set content using version management system
+    testNode.setContent(`
 Alice stood at the gates of Castle Blackrock, her heart pounding with anticipation. 
 The ancient stones seemed to whisper secrets of the past, and she could feel the weight 
 of destiny upon her shoulders. Bob, her mentor, had warned her about the dangers that 
@@ -47,7 +48,7 @@ journey would test not only her courage but also her willingness to sacrifice
 everything for the greater good. The themes of redemption and justice burned bright 
 in her heart as she moved deeper into the forest, ready to face whatever challenges 
 awaited her.
-    `;
+    `, 'master');
 
     try {
         console.log('📝 Testing character extraction...');

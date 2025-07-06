@@ -21,6 +21,8 @@ export { NewProjectModal } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
 export { PolisherModal } from './PolisherModal';
+export { NodeInspectorModal } from './NodeInspectorModal';
+export { NodeInspectorModalV2 } from './NodeInspectorModalV2';
 
 // Modal components and services
 export * from './components/CriteriaEditor';

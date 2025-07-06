@@ -450,24 +450,15 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             nodeTemplate = rootTemplate || plainNode.template || [];
         }
         
-        // Create a new node instance to get access to class methods
-        const node = new DocumentNode(plainNode.level, plainNode.title, plainNode.parentId, nodeTemplate);
+        // Update the node data with the correct template before conversion
+        const nodeDataWithTemplate = {
+            ...plainNode,
+            template: nodeTemplate
+        };
         
-        // Use the setter to ensure proper trimming when loading content
-        node.content = plainNode.content || '';
-
-        // Overwrite the other plain properties from the saved data
-        Object.assign(node, {
-            id: plainNode.id,
-            context: plainNode.context || plainNode.summary || '', // Handle legacy summary field (will be trimmed by setter)
-            generationPrompt: plainNode.generationPrompt || null,
-            generationHistory: plainNode.generationHistory || [],
-            generationSessions: plainNode.generationSessions || [],
-            creatorModel: plainNode.creatorModel || null, // Handle creator model field
-            collapsed: plainNode.collapsed || false, // Restore collapsed state, default to false
-            children: [], // Reset children, as they will be rehydrated recursively
-        });
-
+        // Use DocumentNode.fromJSON for comprehensive version handling
+        const node = DocumentNode.fromJSON(nodeDataWithTemplate);
+        
         // Recursively rehydrate and add children, passing the root template for sharing
         if (plainNode.children && plainNode.children.length > 0) {
             const templateToShare = plainNode.level === 0 ? nodeTemplate : rootTemplate;

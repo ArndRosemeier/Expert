@@ -12,11 +12,7 @@ interface LayoutConfig {
     gap: string;
 }
 
-interface LayoutConstraints {
-    maxHeight: 'viewport' | 'container' | number;
-    minHeight: number;
-    preferredHeight: 'content' | 'fill';
-}
+
 
 interface Rating {
     score: number;
@@ -99,29 +95,7 @@ class LayoutManager {
     }
 }
 
-class ConstraintSolver {
-    static apply(constraints: LayoutConstraints, element: HTMLElement): void {
-        // Set minimum height
-        element.style.minHeight = `${constraints.minHeight}px`;
-        
-        // Set maximum height based on constraint type
-        switch (constraints.maxHeight) {
-            case 'viewport':
-                element.style.maxHeight = '100vh';
-                break;
-            case 'container':
-                element.style.maxHeight = '100%';
-                break;
-            default:
-                element.style.maxHeight = `${constraints.maxHeight}px`;
-        }
-        
-        // Set preferred height
-        if (constraints.preferredHeight === 'fill') {
-            element.style.height = '100%';
-        }
-    }
-}
+
 
 // ============================================================================
 // BASE COMPONENT SYSTEM
@@ -133,7 +107,6 @@ abstract class UIComponent {
     protected eventBus: EventBus;
 
     constructor(eventBus: EventBus) {
-        this.eventBus = eventBus;
         this.element = this.createElement();
     }
 
@@ -475,10 +448,10 @@ class NodeInspectorModel {
 
 class NodeInspectorView {
     private container: HTMLElement;
-    private layoutManager: LayoutManager | null = null;
+    private layoutManager: LayoutManager | null = null; // eslint-disable-line @typescript-eslint/no-unused-vars
     private versionsList: VersionsList;
     private contentViewer: ContentViewer;
-    private eventBus: EventBus;
+    private eventBus: EventBus; // eslint-disable-line @typescript-eslint/no-unused-vars
 
     constructor(eventBus: EventBus) {
         this.eventBus = eventBus;
@@ -556,59 +529,7 @@ class NodeInspectorView {
 // CONTROLLER (BUSINESS LOGIC)
 // ============================================================================
 
-class NodeInspectorController {
-    private model: NodeInspectorModel;
-    private view: NodeInspectorView;
-    private eventBus: EventBus;
 
-    constructor(node: DocumentNode) {
-        this.eventBus = new EventBus();
-        this.model = new NodeInspectorModel(node);
-        this.view = new NodeInspectorView(this.eventBus);
-        this.setupEventHandlers();
-        this.initializeView();
-    }
-
-    private setupEventHandlers(): void {
-        this.eventBus.on('version:selected', (versionId: string) => {
-            this.model.selectVersion(versionId);
-            this.view.updateSelectedVersion(this.model.getSelectedVersion());
-        });
-
-        this.eventBus.on('version:promote', (versionId: string) => {
-            const success = this.model.promoteToMaster(versionId);
-            if (success) {
-                this.refreshView();
-                console.log('Version promoted to master successfully');
-            } else {
-                alert('Failed to promote version to master. Please try again.');
-            }
-        });
-    }
-
-    private initializeView(): void {
-        this.refreshView();
-    }
-
-    private refreshView(): void {
-        const versions = this.model.getVersions();
-        const selectedVersion = this.model.getSelectedVersion();
-        const title = this.model.getNodeTitle();
-        
-        this.view.updateTitle(title, versions.length);
-        this.view.updateVersions(versions);
-        this.view.updateSelectedVersion(selectedVersion);
-    }
-
-    getElement(): HTMLElement {
-        return this.view.getElement();
-    }
-
-    destroy(): void {
-        this.view.destroy();
-        this.eventBus.destroy();
-    }
-}
 
 // ============================================================================
 // MAIN MODAL CLASS
@@ -702,6 +623,28 @@ export class NodeInspectorModalV2 extends BaseModal {
             return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
         for (const version of versions) {
+            // Add promote button above the selected version if it's not master
+            if (version.id === this.selectedVersionId && !version.tags.has('master')) {
+                const promoteButton = document.createElement('div');
+                promoteButton.className = 'promote-button-container';
+                promoteButton.innerHTML = `
+                    <button class="promote-to-master-btn" data-version-id="${version.id}">
+                        ⭐ Promote to Master
+                    </button>
+                `;
+                
+                // Add event listener for the promote button
+                const promoteBtn = promoteButton.querySelector('.promote-to-master-btn') as HTMLButtonElement;
+                if (promoteBtn) {
+                    promoteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Prevent triggering version selection
+                        this.handlePromoteToMaster(version.id);
+                    });
+                }
+                
+                wrapper.appendChild(promoteButton);
+            }
+            
             const item = document.createElement('div');
             item.className = 'version-list-item' + (version.id === this.selectedVersionId ? ' selected' : '') + (version.tags.has('master') ? ' master' : '');
             item.tabIndex = 0;
@@ -709,10 +652,26 @@ export class NodeInspectorModalV2 extends BaseModal {
                 this.selectedVersionId = version.id;
                 this.rerender();
             };
+            // Generate tags display
+            const tags = Array.from(version.tags)
+                .filter(tag => tag !== 'master') // Master gets special treatment with styling
+                .map(tag => `<span class="version-tag ${tag}">${tag}</span>`)
+                .join('');
+            
+            // Calculate the version score
+            const score = this.calculateVersionScore(version);
+            const scoreClass = score < 0 ? 'negative-score' : '';
+            
             item.innerHTML = `
                 <div class="version-label">${this.getVersionLabel(version)}</div>
+                <div class="version-score ${scoreClass}">Score: ${score}</div>
+                ${tags ? `<div class="version-tags">${tags}</div>` : ''}
                 <div class="version-timestamp">${new Date(version.timestamp).toLocaleString()}</div>
-                <div class="version-preview">${this.escapeHtml(version.content.substring(0, 60))}${version.content.length > 60 ? '…' : ''}</div>
+                <div class="version-preview">
+                    ${version.title ? `<div class="preview-title"><strong>Title:</strong> ${this.escapeHtml(version.title.substring(0, 40))}${version.title.length > 40 ? '…' : ''}</div>` : ''}
+                    <div class="preview-content"><strong>Content:</strong> ${this.escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
+                    ${version.context ? `<div class="preview-context"><strong>Context:</strong> ${this.escapeHtml(version.context.substring(0, 40))}${version.context.length > 40 ? '…' : ''}</div>` : ''}
+                </div>
             `;
             wrapper.appendChild(item);
         }
@@ -728,10 +687,36 @@ export class NodeInspectorModalV2 extends BaseModal {
             wrapper.innerHTML = '<p>No version selected.</p>';
             return wrapper;
         }
+        
+        // Generate tags display for content view
+        const contentTags = Array.from(version.tags)
+            .map(tag => `<span class="content-version-tag ${tag}">${tag}</span>`)
+            .join('');
+            
         wrapper.innerHTML = `
-            <div class="content-label"><strong>${this.getVersionLabel(version)}</strong> <span class="content-timestamp">${new Date(version.timestamp).toLocaleString()}</span></div>
-            <pre class="content-main">${this.escapeHtml(version.content)}</pre>
+            <div class="content-header">
+                <div class="content-label"><strong>${this.getVersionLabel(version)}</strong> <span class="content-timestamp">${new Date(version.timestamp).toLocaleString()}</span></div>
+                ${contentTags ? `<div class="content-version-tags">${contentTags}</div>` : ''}
+            </div>
+            
+            <div class="version-sections">
+                <div class="version-section">
+                    <h4 class="section-title">Title</h4>
+                    <div class="section-content title-content">${this.escapeHtml(version.title || 'No title')}</div>
+                </div>
+                
+                <div class="version-section">
+                    <h4 class="section-title">Content</h4>
+                    <pre class="section-content content-main">${this.escapeHtml(version.content || 'No content')}</pre>
+                </div>
+                
+                <div class="version-section">
+                    <h4 class="section-title">Context</h4>
+                    <pre class="section-content context-content">${this.escapeHtml(version.context || 'No context')}</pre>
+                </div>
+            </div>
         `;
+        
         return wrapper;
     }
 
@@ -742,17 +727,21 @@ export class NodeInspectorModalV2 extends BaseModal {
         if (version.tags.has('coherenceFix')) return 'Coherence Fix';
         if (version.tags.has('draft')) return 'Draft';
         if (version.tags.has('imported')) return 'Imported';
+        
+        // Check for generation iterations
+        const iterationTag = Array.from(version.tags).find(tag => tag.startsWith('iteration'));
+        if (iterationTag && version.tags.has('generated')) {
+            const iterationNumber = iterationTag.replace('iteration', '');
+            return `Generation ${iterationNumber}`;
+        }
+        
+        if (version.tags.has('generated')) return 'Generated';
         const restoredTag = Array.from(version.tags).find(tag => tag.startsWith('Restored_'));
         if (restoredTag) return 'Restored';
         const batchTag = Array.from(version.tags).find(tag => tag.startsWith('Batch_'));
         if (batchTag) return 'Batch Update';
         const manualEditTag = Array.from(version.tags).find(tag => tag.startsWith('ManualEdit_'));
         if (manualEditTag) return 'Manual Edit';
-        const iterationTag = Array.from(version.tags).find(tag => tag.startsWith('iteration'));
-        if (iterationTag && version.tags.has('generated')) {
-            const iterationNum = iterationTag.replace('iteration', '');
-            return `Generated v${iterationNum}`;
-        }
         if (version.tags.has('legacy')) return 'Legacy';
         return 'Version';
     }
@@ -761,6 +750,43 @@ export class NodeInspectorModalV2 extends BaseModal {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    private calculateVersionScore(version: ContentVersion): number {
+        // No ratings = manual work = highest priority score
+        if (!version.ratings || version.ratings.length === 0) {
+            return 10000;
+        }
+
+        // Calculate sum of all rating scores
+        const totalScore = version.ratings.reduce((sum, rating) => sum + rating.score, 0);
+        
+        // Check if all goals are met
+        const allGoalsMet = version.ratings.every(rating => rating.score >= rating.goal);
+        
+        if (allGoalsMet) {
+            // All goals met: return sum of scores
+            return totalScore;
+        } else {
+            // At least one goal failed: subtract penalty to ensure it's below successful versions
+            return totalScore - 1000;
+        }
+    }
+
+    private handlePromoteToMaster(versionId: string): void {
+        if (!this.node) return;
+        
+        try {
+            // Promote the version to master
+            this.node.promoteToMaster(versionId);
+            
+            // Update the selected version to show the newly promoted master
+            this.selectedVersionId = versionId;
+            // Re-render the modal to reflect the changes
+            this.rerender();
+        } catch (error) {
+            console.error('Failed to promote version to master:', error);
+        }
     }
 
     private rerender() {
@@ -846,26 +872,201 @@ export class NodeInspectorModalV2 extends BaseModal {
                 color: #374151;
                 margin-bottom: 0.25rem;
             }
+            .version-score {
+                font-size: 0.8em;
+                font-weight: 600;
+                color: #059669;
+                margin-bottom: 0.25rem;
+                padding: 0.25rem 0.5rem;
+                background: #f0fdf4;
+                border: 1px solid #bbf7d0;
+                border-radius: 0.375rem;
+                display: inline-block;
+            }
+            .version-score.negative-score {
+                color: #dc2626;
+                background: #fef2f2;
+                border-color: #fecaca;
+            }
             .version-timestamp {
                 font-size: 0.85em;
                 color: #6b7280;
                 margin-bottom: 0.25rem;
             }
             .version-preview {
-                font-size: 0.9em;
+                font-size: 0.85em;
                 color: #6b7280;
-                white-space: pre;
+                line-height: 1.3;
+            }
+            .preview-title, .preview-content, .preview-context {
+                margin: 0.25rem 0;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .preview-title strong, .preview-content strong, .preview-context strong {
+                color: #374151;
+                font-size: 0.8em;
+            }
+            .version-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.25rem;
+                margin: 0.5rem 0;
+            }
+            .version-tag {
+                font-size: 0.7rem;
+                padding: 0.125rem 0.375rem;
+                border-radius: 0.25rem;
+                border: 1px solid #d1d5db;
+                background: #f3f4f6;
+                color: #374151;
+                font-weight: 500;
+            }
+            .version-tag.master {
+                background: #10b981;
+                color: white;
+                border-color: #059669;
+            }
+            .version-tag.generated {
+                background: #3b82f6;
+                color: white;
+                border-color: #2563eb;
+            }
+            .version-tag.polished {
+                background: #8b5cf6;
+                color: white;
+                border-color: #7c3aed;
+            }
+            .version-tag.coherenceFix {
+                background: #f59e0b;
+                color: white;
+                border-color: #d97706;
+            }
+            .version-tag.generatedWinner {
+                background: #059669;
+                color: white;
+                border-color: #047857;
+            }
+            .version-tag.draft {
+                background: #6b7280;
+                color: white;
+                border-color: #4b5563;
+            }
+            .version-tag[class*="iteration"] {
+                background: #1f2937;
+                color: white;
+                border-color: #111827;
+                font-size: 0.65rem;
+            }
+            .content-header {
+                margin-bottom: 1rem;
+                padding-bottom: 0.75rem;
+                border-bottom: 1px solid #e5e7eb;
             }
             .content-label {
                 font-size: 1.1em;
                 margin-bottom: 0.5em;
             }
+            .content-version-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.375rem;
+                margin-top: 0.5rem;
+            }
+            .content-version-tag {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.375rem;
+                border: 1px solid #d1d5db;
+                background: #f9fafb;
+                color: #374151;
+                font-weight: 500;
+            }
+            .content-version-tag.master {
+                background: #10b981;
+                color: white;
+                border-color: #059669;
+            }
+            .content-version-tag.generated {
+                background: #3b82f6;
+                color: white;
+                border-color: #2563eb;
+            }
+            .content-version-tag.polished {
+                background: #8b5cf6;
+                color: white;
+                border-color: #7c3aed;
+            }
+            .content-version-tag.coherenceFix {
+                background: #f59e0b;
+                color: white;
+                border-color: #d97706;
+            }
+            .content-version-tag.generatedWinner {
+                background: #059669;
+                color: white;
+                border-color: #047857;
+            }
+            .content-version-tag.draft {
+                background: #6b7280;
+                color: white;
+                border-color: #4b5563;
+            }
+            .content-version-tag[class*="iteration"] {
+                background: #1f2937;
+                color: white;
+                border-color: #111827;
+                font-size: 0.7rem;
+            }
             .content-timestamp {
                 font-size: 0.9em;
                 color: #6b7280;
                 margin-left: 1em;
+            }
+            .version-sections {
+                display: flex;
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            .version-section {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .section-title {
+                background: #f9fafb;
+                color: #374151;
+                font-size: 0.9rem;
+                font-weight: 600;
+                margin: 0;
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            .section-content {
+                padding: 1rem;
+                margin: 0;
+            }
+            .title-content {
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: #111827;
+                background: #fff;
+                border: none;
+                font-family: inherit;
+            }
+            .context-content {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 1rem;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+                font-size: 0.9em;
+                line-height: 1.5;
+                color: #374151;
+                white-space: pre-wrap;
+                word-break: break-word;
+                margin: 0;
             }
             .content-main {
                 background: #f9fafb;
@@ -879,6 +1080,39 @@ export class NodeInspectorModalV2 extends BaseModal {
                 white-space: pre-wrap;
                 word-break: break-word;
                 margin: 0;
+            }
+            .promote-button-container {
+                margin: 1rem 0 1.5rem 0;
+                padding: 0.75rem;
+                background: #fef3c7;
+                border: 1px solid #fbbf24;
+                border-radius: 8px;
+                display: flex;
+                justify-content: center;
+            }
+            .promote-to-master-btn {
+                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                color: white;
+                border: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 6px;
+                font-size: 1rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .promote-to-master-btn:hover {
+                background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+            .promote-to-master-btn:active {
+                transform: translateY(0);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
         `;
         return style;

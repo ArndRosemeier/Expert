@@ -45,7 +45,12 @@ export class TreeService {
         const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
         
         if (creatorModel) {
-            newNode.creatorModel = creatorModel;
+            // Set creator model in the master version's metadata
+            const masterVersion = newNode.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['creatorModel'] = creatorModel;
+            }
         }
         
         parent.children.push(newNode);

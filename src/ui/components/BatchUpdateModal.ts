@@ -1,7 +1,7 @@
 import { DocumentNode } from '../../DocumentNode';
 import { SelectableNodeTree } from './SelectableNodeTree';
 import { OpenRouterClient } from '../../OpenRouterClient';
-import { v4 as uuidv4 } from 'uuid';
+
 
 const MODEL_PURPOSES = [
     { key: 'creator', label: 'Creator' },
@@ -619,15 +619,16 @@ For the node titled "{{title}}" with current content:
                             const newContent = parsedResult.content || node.content;
                             
                             // Create version with batch tag
-                            const versionId = uuidv4();
-                            node.setFieldsWithTags({ 
+                            const versionId = node.addVersion([currentBatchTag], { 
                                 title: newTitle, 
                                 content: newContent, 
                                 context: node.context 
-                            }, new Set([currentBatchTag]), { versionId });
+                            });
                             
                             // Promote to master so changes become active
-                            node.promoteToMaster(versionId);
+                            if (versionId) {
+                                node.promoteToMaster(versionId);
+                            }
                             
                             // Track what was updated
                             if (titleChanged) {
@@ -944,15 +945,15 @@ For the node titled "{{title}}" with current content:
                 const manualEditTag = `ManualEdit_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
                 
                 // Create single atomic update for manual edit
-                const versionId = uuidv4();
-                nodeData.node.setFieldsWithTags(
-                    { title: newTitle, content: newContent, context: nodeData.node.context }, 
-                    new Set([manualEditTag, this.batchTag]),
-                    { versionId }
+                const versionId = nodeData.node.addVersion(
+                    [manualEditTag, this.batchTag],
+                    { title: newTitle, content: newContent, context: nodeData.node.context }
                 );
                 
                 // Promote to master so changes become active
-                nodeData.node.promoteToMaster(versionId);
+                if (versionId) {
+                    nodeData.node.promoteToMaster(versionId);
+                }
                 
                 // Persist changes and update GUI
                 await this.persistNodeChanges();

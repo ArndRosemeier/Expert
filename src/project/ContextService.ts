@@ -11,26 +11,7 @@ export class ContextService {
         private treeService: TreeService
     ) {}
 
-    /**
-     * Copies context from parent to child node.
-     * Simple inheritance - just copy the parent's context to the child.
-     * @param childNode The child node to copy context to.
-     * @param rootNode The root node of the tree.
-     */
-    public copyParentContextToChild(childNode: DocumentNode, rootNode: DocumentNode): void {
-        if (!childNode.parentId) {
-            // Root nodes have no parent, so no context to copy
-            return;
-        }
 
-        const parent = this.treeService.findNodeById(childNode.parentId, rootNode);
-        if (!parent) {
-            return;
-        }
-
-        // Simple copy: child gets exact same context as parent
-        childNode.context = parent.context || '';
-    }
 
     /**
      * Gathers context for a specific node to guide content generation.

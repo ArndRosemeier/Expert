@@ -159,7 +159,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'chat': 'chat-node-btn',
                             'polish-text': 'polish-text-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
-                            'check-coherence': 'check-coherence-btn'
+                            'check-coherence': 'check-coherence-btn',
+                            'batch-update': 'batch-update-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -293,8 +294,8 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
         // Replace the auto-generated root with our copied structure
         newProjectManager.rootNode = newRootNode;
         
-        // Update the root node title to match the unique project title
-        newRootNode.title = uniqueTitle;
+        // Update the root node title to match the unique project title using version management
+        newRootNode.setTitle(uniqueTitle, 'master');
 
         // Add to the projects list first
         state.addProject(newProjectManager);
@@ -331,16 +332,26 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
         adjustedTemplate
     );
 
-    // Copy all properties
-    newNode.content = sourceNode.content;
-    newNode.context = sourceNode.context;
+    // Copy all properties using version management system
+    newNode.setContent(sourceNode.content, 'master');
+    newNode.setContext(sourceNode.context, 'master');
+    
+    // Copy other properties directly
     newNode.generationPrompt = sourceNode.generationPrompt;
     newNode.isPromptGenerating = sourceNode.isPromptGenerating;
     newNode.collapsed = sourceNode.collapsed;
-    newNode.creatorModel = sourceNode.creatorModel;
     newNode.generationHistory = [...sourceNode.generationHistory];
     newNode.isGenerating = sourceNode.isGenerating;
     newNode.generationSessions = sourceNode.generationSessions.map(session => ({...session}));
+    
+    // Set creator model in metadata if it exists
+    if (sourceNode.creatorModel) {
+        const masterVersion = newNode.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.metadata = masterVersion.metadata || {};
+            masterVersion.metadata['creatorModel'] = sourceNode.creatorModel;
+        }
+    }
 
     // Recursively copy children with level adjustment
     newNode.children = sourceNode.children.map(child => 
@@ -416,6 +427,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="import">
                         📥 Import
+                    </button>
+                    <button class="action-btn" data-action="batch-update">
+                        🔄 Batch Update
                     </button>
                     <button class="action-btn" data-action="chat">
                         💬 Chat
@@ -1144,6 +1158,7 @@ export function renderNodeDetails() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <label for="node-content">Content</label>
+                    <button id="node-inspector-btn" class="info-button" title="Inspect Node Versions" style="margin-left: 4px;">i</button>
                     <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ? node.creatorModel : 'user text, not generated'}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 1rem;">
@@ -1337,7 +1352,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    node.content = contentTextArea.value;
+                    // Use version management system to update content
+                    node.setContent(contentTextArea.value, 'master');
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
                     (contentTextArea as any)._saveTimeout = setTimeout(() => {
@@ -1354,12 +1370,15 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                                    node.context = contextTextArea.value;
+                    const newContext = contextTextArea.value;
+                    // Use version management system to update context
+                    node.setContext(newContext, 'master');
                 
                 // Always propagate context to all descendants
-                const propagateRecursively = (sourceNode: DocumentNode) => {
-                    for (const child of sourceNode.children) {
-                        child.context = sourceNode.context;
+                const propagateRecursively = (parentNode: DocumentNode) => {
+                    for (const child of parentNode.children) {
+                        // Use version management system to update child context
+                        child.setContext(parentNode.context, 'master'); // Use parent's context, not sourceNode
                         propagateRecursively(child);
                     }
                 };
@@ -1399,7 +1418,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    node.title = nodeTitleDisplay.textContent || '';
+                    // Use version management system to update title
+                    node.setTitle(nodeTitleDisplay.textContent || '', 'master');
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
                     (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {
@@ -2266,7 +2286,8 @@ This action cannot be undone.`;
                     
                     const propagateRecursively = (sourceNode: DocumentNode) => {
                         for (const child of sourceNode.children) {
-                            child.context = sourceNode.context;
+                            // Use version management system to update child context
+                            child.setContext(sourceNode.context, 'master');
                             propagatedCount.count++;
                             propagateRecursively(child);
                         }
@@ -2346,6 +2367,90 @@ This action cannot be undone.`;
                         analysisModal.close();
                         alert('Coherence analysis failed: ' + error.message);
                     });
+            }
+            break;
+
+        case 'batch-update-btn':
+            {
+                if (!projectManager || !selectedNodeId) return;
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Import and open batch update modal
+                import('./components/BatchUpdateModal').then(({ BatchUpdateModal }) => {
+                    if (!projectManager) return; // Additional null check after async import
+                    
+                    // Create modal container
+                    const modalContainer = document.createElement('div');
+                    modalContainer.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.5);
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        z-index: 1000;
+                    `;
+
+                    // Create modal content
+                    const modalContent = document.createElement('div');
+                    modalContent.style.cssText = `
+                        width: 95%;
+                        max-width: 1200px;
+                        height: 85%;
+                        max-height: 800px;
+                        background: white;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                        overflow: hidden;
+                        position: relative;
+                    `;
+
+                    modalContainer.appendChild(modalContent);
+                    document.body.appendChild(modalContainer);
+
+                    // Create and render batch update modal
+                    const batchModal = new BatchUpdateModal(projectManager.rootNode, modalContent, {
+                        onClose: () => {
+                            document.body.removeChild(modalContainer);
+                            // Refresh UI after batch update
+                            if (projectManager) {
+                                renderProjectUI(projectManager);
+                            }
+                        }
+                    });
+
+                    batchModal.render();
+
+                    // Close modal when clicking outside
+                    modalContainer.addEventListener('click', (e) => {
+                        if (e.target === modalContainer) {
+                            document.body.removeChild(modalContainer);
+                            if (projectManager) {
+                                renderProjectUI(projectManager);
+                            }
+                        }
+                    });
+
+                    // Close modal with Escape key
+                    const handleEscape = (e: KeyboardEvent) => {
+                        if (e.key === 'Escape') {
+                            document.body.removeChild(modalContainer);
+                            if (projectManager) {
+                                renderProjectUI(projectManager);
+                            }
+                            document.removeEventListener('keydown', handleEscape);
+                        }
+                    };
+                    document.addEventListener('keydown', handleEscape);
+                    
+                }).catch(error => {
+                    console.error('Failed to open batch update modal:', error);
+                    alert('Failed to open batch update dialog. Please try again.');
+                });
             }
             break;
 
@@ -2701,7 +2806,7 @@ function hideGenerationOverlay() {
     }
 }
 
-function renderMultiProjectTree() {
+export function renderMultiProjectTree() {
     const treeContainer = getElementById('project-tree');
     const projects = state.getProjects();
     
@@ -2926,22 +3031,27 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
     // Create the imported node as a new child of the target node
     const importedNode = importChildNodeWithRootTemplate(projectManager, targetNode.id, importData.title);
 
-    // Set imported node properties
+    // Set imported node properties using version management system
+    // Apply the fields using version management
     if (importData.content !== undefined) {
-        importedNode.content = importData.content;
+        importedNode.setContent(importData.content, 'master');
     }
 
     if (importData.context !== undefined) {
-        importedNode.context = importData.context;
+        importedNode.setContext(importData.context, 'master');
     }
 
     if (importData.generationPrompt !== undefined) {
         importedNode.generationPrompt = importData.generationPrompt;
     }
     
-    // Restore generation metadata
+    // Restore generation metadata in version metadata
     if (importData.creatorModel !== undefined) {
-        importedNode.creatorModel = importData.creatorModel;
+        const masterVersion = importedNode.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.metadata = masterVersion.metadata || {};
+            masterVersion.metadata['creatorModel'] = importData.creatorModel;
+        }
     }
     
     if (importData.generationHistory !== undefined && Array.isArray(importData.generationHistory)) {
@@ -2978,22 +3088,26 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
     // Create the child node with root template (shallow copy)
     const newNode = importChildNodeWithRootTemplate(projectManager, parentId, childData.title);
 
-    // Set node properties
+    // Set node properties using version management system
     if (childData.content !== undefined) {
-        newNode.content = childData.content;
+        newNode.setContent(childData.content, 'master');
     }
 
     if (childData.context !== undefined) {
-        newNode.context = childData.context;
+        newNode.setContext(childData.context, 'master');
     }
 
     if (childData.generationPrompt !== undefined) {
         newNode.generationPrompt = childData.generationPrompt;
     }
     
-    // Restore generation metadata for child nodes
+    // Restore generation metadata for child nodes in version metadata
     if (childData.creatorModel !== undefined) {
-        newNode.creatorModel = childData.creatorModel;
+        const masterVersion = newNode.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.metadata = masterVersion.metadata || {};
+            masterVersion.metadata['creatorModel'] = childData.creatorModel;
+        }
     }
     
     if (childData.generationHistory !== undefined && Array.isArray(childData.generationHistory)) {
@@ -3152,7 +3266,8 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
             
             const propagateRecursively = (sourceNode: DocumentNode) => {
                 for (const child of sourceNode.children) {
-                    child.context = sourceNode.context;
+                    // Use version management system to update child context
+                    child.setContext(sourceNode.context, 'master');
                     propagatedCount.count++;
                     propagateRecursively(child);
                 }
@@ -3203,6 +3318,21 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
+    'node-inspector-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        // Import and open node inspector modal (using V2 - the more recent version)
+        import('./modals/NodeInspectorModalV2').then(({ NodeInspectorModalV2 }) => {
+            const inspectorModal = new NodeInspectorModalV2();
+            inspectorModal.openWithNode(node);
+        }).catch(error => {
+            console.error('Failed to open node inspector modal:', error);
+            alert('Failed to open node inspector. Please try again.');
+        });
+    },
+    
     'open-reader-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
         const selectedNode = projectManager.findNodeById(selectedNodeId);
@@ -3239,10 +3369,19 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         if (!node || !availableVersions[currentVersionIndex]) return;
         
         const selectedVersion = availableVersions[currentVersionIndex];
-        node.content = selectedVersion.content;
+        // Use version management system to update content
+        node.setContent(selectedVersion.content, 'master');
         node.generationHistory = selectedVersion.generationHistory || [];
         node.generationSessions = selectedVersion.generationSessions || [];
-        node.creatorModel = selectedVersion.creatorModel;
+        
+        // Set creator model in version metadata if it exists
+        if (selectedVersion.creatorModel) {
+            const masterVersion = node.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['creatorModel'] = selectedVersion.creatorModel;
+            }
+        }
         
         void projectManager.saveToStorage().catch(console.error);
         
