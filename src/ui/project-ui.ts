@@ -3324,8 +3324,8 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         if (!node) return;
         
         // Import and open node inspector modal (using V2 - the more recent version)
-        import('./modals/NodeInspectorModalV2').then(({ NodeInspectorModalV2 }) => {
-            const inspectorModal = new NodeInspectorModalV2();
+                                import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
+                            const inspectorModal = new NodeInspectorModal();
             inspectorModal.openWithNode(node);
         }).catch(error => {
             console.error('Failed to open node inspector modal:', error);
