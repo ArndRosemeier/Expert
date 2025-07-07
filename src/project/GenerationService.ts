@@ -516,7 +516,7 @@ export class GenerationService {
      */
     public async createChildrenFromOutline(nodeId: string): Promise<void> {
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node || !node.content) {
+        if (!node || !node.content || node.content.trim() === '') {
             this.deps.eventEmitter.emit('error', `Cannot create children for node ${nodeId}: No content found.`);
             return;
         }
