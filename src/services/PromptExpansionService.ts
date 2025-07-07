@@ -456,7 +456,7 @@ export class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('criteria', (context) => ({
-            value: formatCriteriaAsJson(context.project?.criteria || []),
+            value: context.custom?.['criteria'] || formatCriteriaAsJson(context.project?.criteria || []),
             description: 'Project quality criteria'
         }));
         
