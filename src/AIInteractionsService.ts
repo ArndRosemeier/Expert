@@ -123,12 +123,17 @@ export class AIInteractionsService {
             return;
         }
 
-        // Add a completion indicator
+        // Add a completion indicator and auto-close
         setTimeout(() => {
             if (this.responseContent && this.responseContent.textContent) {
                 this.responseContent.textContent += '\n\n--- Response Complete ---';
                 this.responseContent.scrollTop = this.responseContent.scrollHeight;
             }
+            
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                this.hideOverlay();
+            }, 2000);
         }, 500);
     }
 

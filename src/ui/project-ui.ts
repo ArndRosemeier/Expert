@@ -2667,18 +2667,20 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         
         <!-- AI Interactions Overlay -->
         <div id="ai-interactions-overlay" style="display: none;">
-            <div class="ai-overlay-header">
-                <h3>🤖 AI Interaction</h3>
-                <button id="close-ai-overlay" class="close-btn">&times;</button>
-            </div>
-            <div class="ai-overlay-content">
-                <div class="ai-prompt-section">
-                    <h4>📤 Prompt:</h4>
-                    <div id="ai-prompt-content" class="ai-content-box"></div>
+            <div class="ai-modal-content">
+                <div class="ai-overlay-header">
+                    <h3>🤖 AI Interaction</h3>
+                    <button id="close-ai-overlay" class="close-btn">&times;</button>
                 </div>
-                <div class="ai-response-section">
-                    <h4>📥 Response:</h4>
-                    <div id="ai-response-content" class="ai-content-box"></div>
+                <div class="ai-overlay-content">
+                    <div class="ai-prompt-section">
+                        <h4>📤 Prompt:</h4>
+                        <div id="ai-prompt-content" class="ai-content-box"></div>
+                    </div>
+                    <div class="ai-response-section">
+                        <h4>📥 Response:</h4>
+                        <div id="ai-response-content" class="ai-content-box"></div>
+                    </div>
                 </div>
             </div>
         </div>
