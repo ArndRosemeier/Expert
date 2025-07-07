@@ -153,8 +153,29 @@ export class CoherenceService {
                     offending_child_title: offendingChildTitle
                 };
 
-                // Add child ID if we can find it
-                const childId = titleToIdMap.get(offendingChildTitle);
+                // Add child ID using robust title matching
+                let childId = titleToIdMap.get(offendingChildTitle);
+                
+                // If exact match fails, try fuzzy matching
+                if (!childId) {
+                    const normalizedOffendingTitle = offendingChildTitle.toLowerCase().trim();
+                    for (const child of childNodes) {
+                        const normalizedChildTitle = child.title.toLowerCase().trim();
+                        if (normalizedChildTitle === normalizedOffendingTitle || 
+                            normalizedChildTitle.includes(normalizedOffendingTitle) ||
+                            normalizedOffendingTitle.includes(normalizedChildTitle)) {
+                            childId = child.id;
+                            break;
+                        }
+                    }
+                }
+                
+                // If still no match, use the first child as fallback (better than no fix button)
+                if (!childId && childNodes.length > 0) {
+                    console.warn(`Could not match offending child title "${offendingChildTitle}" to any child node. Using first child as fallback.`);
+                    childId = childNodes[0]!.id;
+                }
+                
                 if (childId) {
                     contradiction.offending_child_id = childId;
                 }
