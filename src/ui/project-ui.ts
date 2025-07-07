@@ -10,6 +10,7 @@ import { CoherenceModal } from './modals/CoherenceModal';
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
+import { AIInteractionsService } from '../AIInteractionsService';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -2651,11 +2652,35 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             <div id="global-language-selector">
                 <div id="language-selector-container"></div>
             </div>
-            <button id="open-reader-btn" class="button button-primary" style="margin-left: auto;">📖 Reader View</button>
+            <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
+                    <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
+                    🤖 See AI interactions
+                </label>
+                <button id="open-reader-btn" class="button button-primary">📖 Reader View</button>
+            </div>
         </div>
         <div id="project-container">
             <div id="project-tree"></div>
             <div id="node-details"></div>
+        </div>
+        
+        <!-- AI Interactions Overlay -->
+        <div id="ai-interactions-overlay" style="display: none;">
+            <div class="ai-overlay-header">
+                <h3>🤖 AI Interaction</h3>
+                <button id="close-ai-overlay" class="close-btn">&times;</button>
+            </div>
+            <div class="ai-overlay-content">
+                <div class="ai-prompt-section">
+                    <h4>📤 Prompt:</h4>
+                    <div id="ai-prompt-content" class="ai-content-box"></div>
+                </div>
+                <div class="ai-response-section">
+                    <h4>📥 Response:</h4>
+                    <div id="ai-response-content" class="ai-content-box"></div>
+                </div>
+            </div>
         </div>
     `;
     
@@ -2687,6 +2712,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     // Re-setup event listeners after DOM replacement
     console.log('🔧 Re-setting up event listeners after DOM replacement in initializeProjectUI');
     setupEventListeners();
+    
+    // Initialize AI interactions service
+    const aiInteractionsService = AIInteractionsService.getInstance();
+    aiInteractionsService.initialize();
 }
 
 

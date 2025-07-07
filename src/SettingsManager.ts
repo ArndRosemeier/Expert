@@ -52,7 +52,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Subtlety (Show, Don't Tell)",
         description: "The writing implies emotions and ideas through description and action rather than stating them directly. It avoids being on-the-nose.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -94,7 +94,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
         name: "Emotional Subtlety",
         description: "Emotions are implied or layered rather than explicitly stated.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },

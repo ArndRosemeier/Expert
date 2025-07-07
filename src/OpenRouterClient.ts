@@ -44,6 +44,7 @@ export interface OpenRouterModelsResponse {
 import { AILogService } from './AILogService';
 import { SettingsManager } from './SettingsManager';
 import { StorageService } from './StorageService';
+import { AIInteractionsService } from './AIInteractionsService';
 import * as state from './state';
 
 export interface StreamingCallbacks {
@@ -668,6 +669,11 @@ export class OpenRouterClient {
       
       console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
 
+      // Show AI interactions overlay if enabled
+      const aiInteractionsService = AIInteractionsService.getInstance();
+      const promptText = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
+      aiInteractionsService.showInteraction(purpose, promptText);
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
@@ -721,6 +727,7 @@ export class OpenRouterClient {
                 if (content) {
                   fullContent += content;
                   callbacks.onChunk?.(content);
+                  aiInteractionsService.updateResponse(content);
                 }
               } catch (parseError) {
                 // Ignore JSON parse errors for partial chunks
@@ -750,6 +757,7 @@ export class OpenRouterClient {
           }
         }
         
+        aiInteractionsService.completeInteraction();
         callbacks.onComplete?.(fullContent);
         
       } finally {
