@@ -1844,6 +1844,11 @@ export class ReaderGUI {
                 }
             } else if (actionId) {
                 // Handle regular AI action buttons
+                const context = this.readerEditor.getCurrentEditContext();
+                if (!context) {
+                    throw new Error(`AI action '${actionId}' requires an active text editor. Click on text content first to focus an editor, then try the action again.`);
+                }
+                
                 void this.readerEditor.executeAction(actionId).then(() => {
                     // Update undo button state after AI action completes
                     this.updateUndoButtonState();

@@ -244,10 +244,10 @@ export class ReaderEditManager {
         try {
             // Build prompt context for centralized expansion
             const placeholders = await this.buildPlaceholders(context.node);
-            const promptContext = PromptContextBuilder.fromLegacyParams(
-                context.node ? this.projectManager.getSettingsManager() : { getLanguage: () => 'English', getCriteria: () => [] } as any,
-                placeholders
-            );
+            const promptContext = PromptContextBuilder.forNode(context.node, this.projectManager.getSettingsManager());
+            
+            // Add legacy placeholders to custom context
+            promptContext.custom = placeholders;
             
             // Add selected text to UI context
             if (context.selection?.text) {
