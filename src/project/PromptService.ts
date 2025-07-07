@@ -79,8 +79,16 @@ Please improve and expand this content.`;
         
         const promptContext = PromptContextBuilder.forGeneration(node, this.settingsManager, generationOptions);
         
-        // Add node path to context
-        promptContext.node!.path = path;
+        // Add node path to context (extending the node interface)
+        (promptContext.node as any).path = path;
+        
+        // Check if prompt template contains analysis placeholders and extend context if needed
+        if (promptTemplate.includes('{{outline_content}}')) {
+            const analysisContext = PromptContextBuilder.forAnalysis(this.settingsManager, {
+                outlineContent: node.content
+            });
+            promptContext.analysis = analysisContext.analysis!;
+        }
         
         let filledPrompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
         
