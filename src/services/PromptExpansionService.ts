@@ -547,7 +547,7 @@ export class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('ratings', (context) => ({
-            value: JSON.stringify(context.prompt!.ratings!, null, 2),
+            value: context.custom?.['ratings'] || JSON.stringify(context.prompt!.ratings!, null, 2),
             description: 'Response ratings data'
         }));
         
