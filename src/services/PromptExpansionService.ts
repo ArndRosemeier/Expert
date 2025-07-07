@@ -449,11 +449,6 @@ export class PromptExpansionService {
         }));
         
         // Advanced node placeholders
-        this.registerContextPlaceholder('title', (context) => ({
-            value: context.node!.title!,
-            description: 'Current node title'
-        }));
-        
         this.registerContextPlaceholder('content', (context) => ({
             value: context.node!.content!,
             description: 'Current node content'

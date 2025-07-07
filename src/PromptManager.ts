@@ -182,7 +182,6 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are writing the content for the node at the following path: "{{path}}".
-            The title of this node is "{{title}}".
 
             Here is the context of the story so far:
             ---
@@ -191,9 +190,9 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
+            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure content that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'title', 'content', 'draftorfresh', 'language'],
+        placeholders: ['path', 'context', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
     },
 
@@ -201,10 +200,10 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
         text: `
             Generate outline in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
-            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
+            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
             This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
 
-            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points or markdown formatting.
+            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points, markdown formatting, or section headers.
 
             Here is the context of the document so far:
             ---
@@ -213,9 +212,9 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
+            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure outline text that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
+        placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
     },
 
