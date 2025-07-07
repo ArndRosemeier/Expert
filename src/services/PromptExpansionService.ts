@@ -408,6 +408,26 @@ export class PromptExpansionService {
     private escapeRegex(string: string): string {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
+
+    /**
+     * Formats criteria as JSON for consistent presentation to AI models
+     */
+    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+        if (!criteria || criteria.length === 0) {
+            return 'No criteria defined';
+        }
+        
+        const formattedCriteria = criteria.map(c => {
+            // Extract just the name part (before any period) for cleaner display
+            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+            return {
+                name: shortName,
+                description: c.description || shortName
+            };
+        });
+        
+        return JSON.stringify(formattedCriteria, null, 2);
+    }
     
     private registerDefaultProviders(): void {
         // Global placeholders that are always available
@@ -453,7 +473,7 @@ export class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('criteria', (context) => ({
-            value: context.project?.criteria?.join('\n- ') || 'No criteria defined',
+            value: this.formatCriteriaAsJson(context.project?.criteria || []),
             description: 'Project quality criteria'
         }));
         
