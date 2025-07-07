@@ -432,48 +432,22 @@ export class GenerationService {
                 }
                 
                 // Promote the final result to master and mark as winner
-                // First try exact content match
-                let generationVersion = node.getAllVersions().find(v => 
-                    v.tags.has('generated') && v.content === result.finalResponse
+                // Use the tracked final iteration number to find the exact version
+                const completedSession = node.getLatestGenerationSession();
+                if (!completedSession) {
+                    throw new Error('No generation session found after completion');
+                }
+                
+                const finalIterationNumber = completedSession.finalIterationNumber;
+                const generationVersion = node.getAllVersions().find(v => 
+                    v.tags.has('generated') && v.tags.has(`iteration${finalIterationNumber}`)
                 );
                 
-                // If exact match fails, try to find by content similarity (trim whitespace)
                 if (!generationVersion) {
-                    const trimmedFinalResponse = result.finalResponse.trim();
-                    generationVersion = node.getAllVersions().find(v => 
-                        v.tags.has('generated') && v.content.trim() === trimmedFinalResponse
-                    );
+                    throw new Error(`No version found for final iteration ${finalIterationNumber}. This indicates a critical bug in version tracking.`);
                 }
                 
-                // If still no match, create a new version for the final response
-                if (!generationVersion) {
-                    console.warn('No matching generation version found for final content, creating new version');
-                    const currentMaster = node.getMasterVersion();
-                    const preservedTitle = currentMaster?.title || 'Untitled';
-                    const preservedContext = currentMaster?.context || '';
-                    
-                    const metadata: { [key: string]: any } = {};
-                    if (modelName) {
-                        metadata['creatorModel'] = modelName;
-                    }
-                    
-                    const versionId = node.addVersion(['generated', 'finalWinner'], {
-                        content: result.finalResponse,
-                        title: preservedTitle,
-                        context: preservedContext
-                    }, metadata);
-                    
-                    if (versionId) {
-                        generationVersion = node.getAllVersions().find(v => v.id === versionId);
-                    }
-                }
-                
-                // Promote the version to master
-                if (generationVersion) {
-                    node.promoteToMaster(generationVersion.id, ['generatedWinner']);
-                } else {
-                    console.error('Failed to create or find generation version for final content');
-                }
+                node.promoteToMaster(generationVersion.id, ['generatedWinner']);
                 node.generationHistory = result.history;
                 
                 // Cleanup state before emitting events
