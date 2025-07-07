@@ -170,15 +170,12 @@ export class CoherenceService {
                     }
                 }
                 
-                // If still no match, use the first child as fallback (better than no fix button)
-                if (!childId && childNodes.length > 0) {
-                    console.warn(`Could not match offending child title "${offendingChildTitle}" to any child node. Using first child as fallback.`);
-                    childId = childNodes[0]!.id;
+                // No fallback - if we can't match the title, that's an error that must be visible
+                if (!childId) {
+                    throw new Error(`Could not match offending child title "${offendingChildTitle}" to any child node. Available titles: ${childNodes.map(c => c.title).join(', ')}`);
                 }
                 
-                if (childId) {
-                    contradiction.offending_child_id = childId;
-                }
+                contradiction.offending_child_id = childId;
 
                 if (!contradiction.fact_in_outline || !contradiction.fact_in_expansion || !contradiction.justification || !contradiction.offending_child_title) {
                     throw new Error(`Missing required fields in contradiction at index ${index}`);
