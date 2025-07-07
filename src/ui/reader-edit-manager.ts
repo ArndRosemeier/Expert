@@ -9,6 +9,7 @@ import {
 } from '../types/ReaderEditingTypes';
 import { promptExpansionService } from '../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
+import { formatCriteriaAsJson } from '../ProjectUtils';
 
 /**
  * ReaderEditManager handles AI-powered editing actions within the reader view.
@@ -303,7 +304,7 @@ export class ReaderEditManager {
             'parent_content': node.parentId ? 
                 this.projectManager.findNodeById(node.parentId)?.content || '' : '',
             'child_level_name': node.childLevelName || '',
-            'criteria': this.formatCriteriaAsJson(criteria)
+            'criteria': formatCriteriaAsJson(criteria)
         };
     }
 
@@ -311,18 +312,7 @@ export class ReaderEditManager {
      * Formats criteria as JSON for consistent presentation to AI models
      * (Same format as LoopOrchestrator)
      */
-    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
-        const formattedCriteria = criteria.map(c => {
-            // Extract just the name part (before any period) for cleaner display
-            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
-            return {
-                name: shortName,
-                description: c.description || shortName
-            };
-        });
-        
-        return JSON.stringify(formattedCriteria, null, 2);
-    }
+
 
     /**
      * Filters criteria based on node type (leaf vs outline/branch).

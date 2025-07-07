@@ -1,5 +1,6 @@
 import { ProjectManager } from './ProjectManager';
 import { DocumentNode } from './DocumentNode';
+import { QualityCriterion } from './types';
 
 /**
  * Ensures all nodes in a project share the same template reference as the root node.
@@ -48,4 +49,28 @@ function countNodes(node: DocumentNode): number {
         count += countNodes(child);
     }
     return count;
+}
+
+/**
+ * Formats criteria as JSON for consistent presentation to AI models.
+ * This centralizes the criteria formatting logic used across the application.
+ * 
+ * @param criteria Array of quality criteria to format
+ * @returns JSON string representation of criteria or fallback message
+ */
+export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
+    if (!criteria || criteria.length === 0) {
+        return 'No criteria defined';
+    }
+    
+    const formattedCriteria = criteria.map(c => {
+        // Extract just the name part (before any period) for cleaner display
+        const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+        return {
+            name: shortName,
+            description: c.description || shortName
+        };
+    });
+    
+    return JSON.stringify(formattedCriteria, null, 2);
 } 

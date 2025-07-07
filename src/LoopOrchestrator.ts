@@ -5,6 +5,7 @@ import { EventEmitter } from './EventEmitter';
 import * as state from './state';
 import { promptExpansionService } from './services/PromptExpansionService.js';
 import { PromptContextBuilder } from './services/PromptContextBuilder.js';
+import { formatCriteriaAsJson } from './ProjectUtils';
 
 export interface LoopInput {
     prompt: string;
@@ -289,7 +290,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     { getLanguage: () => this.language, getCriteria: () => [] } as any,
                     {
                         prompt: input.prompt,
-                        criteria: this.formatCriteriaAsJson(input.criteria),
+                        criteria: formatCriteriaAsJson(input.criteria),
                         language: this.language
                     }
                 );
@@ -601,24 +602,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         };
     }
 
-    /**
-     * Formats criteria as JSON for consistent presentation to AI models
-     */
-    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
-        const formattedCriteria = criteria.map(c => {
-            // Extract just the name part (before any period) for cleaner display
-            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
-            return {
-                name: shortName,
-                description: c.description || shortName
-            };
-        });
-        
-        return JSON.stringify(formattedCriteria, null, 2);
-    }
+
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        const criteriaJson = this.formatCriteriaAsJson(criteria);
+        const criteriaJson = formatCriteriaAsJson(criteria);
 
         if (!history) {
             const context = PromptContextBuilder.fromLegacyParams(
@@ -652,7 +639,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
-        const criteriaJson = this.formatCriteriaAsJson(criteria);
+        const criteriaJson = formatCriteriaAsJson(criteria);
         
         const context = PromptContextBuilder.fromLegacyParams(
             { getLanguage: () => this.language, getCriteria: () => [] } as any,

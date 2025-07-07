@@ -9,6 +9,7 @@ import { OpenRouterClient } from '../OpenRouterClient';
 import { SmartContentParser, ParsedContent } from './SmartContentParser';
 import { SettingsManager } from '../SettingsManager';
 import { QualityCriterion } from '../types';
+import { formatCriteriaAsJson } from '../ProjectUtils';
 
 export interface ProjectGenerationOptions {
     // Options for project generation - concepts are always detailed
@@ -90,7 +91,7 @@ export class AIProjectGenerator {
         const criteria = this.filterCriteriaForOutlineGeneration(allCriteria);
         
         // Format criteria as JSON (same as LoopOrchestrator)
-        const criteriaJson = this.formatCriteriaAsJson(criteria);
+        const criteriaJson = formatCriteriaAsJson(criteria);
         
         // Replace placeholders
         return promptTemplate
@@ -117,22 +118,7 @@ export class AIProjectGenerator {
         });
     }
 
-    /**
-     * Formats criteria as JSON for consistent presentation to AI models
-     * (Same format as LoopOrchestrator)
-     */
-    private formatCriteriaAsJson(criteria: QualityCriterion[]): string {
-        const formattedCriteria = criteria.map(c => {
-            // Extract just the name part (before any period) for cleaner display
-            const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
-            return {
-                name: shortName,
-                description: c.description || shortName
-            };
-        });
-        
-        return JSON.stringify(formattedCriteria, null, 2);
-    }
+
 
 
 
