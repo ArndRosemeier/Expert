@@ -522,27 +522,27 @@ export class PromptExpansionService {
 
         // Prompt-specific placeholders
         this.registerContextPlaceholder('prompt', (context) => ({
-            value: context.prompt!.userPrompt!,
+            value: context.custom?.['prompt'] || context.prompt!.userPrompt!,
             description: 'User prompt text'
         }));
         
         this.registerContextPlaceholder('lastResponse', (context) => ({
-            value: context.prompt!.lastResponse!,
+            value: context.custom?.['lastResponse'] || context.prompt!.lastResponse!,
             description: 'Previous AI response'
         }));
         
         this.registerContextPlaceholder('editorAdvice', (context) => ({
-            value: context.prompt!.editorAdvice!,
+            value: context.custom?.['editorAdvice'] || context.prompt!.editorAdvice!,
             description: 'Editor advice for improvement'
         }));
         
         this.registerContextPlaceholder('originalPrompt', (context) => ({
-            value: context.prompt!.originalPrompt!,
+            value: context.custom?.['originalPrompt'] || context.prompt!.originalPrompt!,
             description: 'Original user prompt'
         }));
         
         this.registerContextPlaceholder('response', (context) => ({
-            value: context.prompt!.response!,
+            value: context.custom?.['response'] || context.prompt!.response!,
             description: 'AI response text'
         }));
         
