@@ -897,10 +897,23 @@ label[for] {
     margin-bottom: 0.75rem;
 }
 
-.contradiction-header h4 {
-    margin: 0;
-    color: #dc2626;
+.contradiction-title-section {
     flex: 1;
+    margin-right: 1rem;
+}
+
+.contradiction-header h4 {
+    margin: 0 0 0.25rem 0;
+    color: #dc2626;
+}
+
+.justification-text {
+    font-size: 0.875rem;
+    font-weight: normal;
+    color: #6b7280;
+    font-style: italic;
+    line-height: 1.4;
+    margin-top: 0.25rem;
 }
 
 .contradiction-meta {
@@ -1051,13 +1064,6 @@ label[for] {
 .reject-fix-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-}
-
-.justification-text {
-    font-size: 0.75rem;
-    font-weight: normal;
-    color: #6b7280;
-    font-style: italic;
 }
 
 .contradiction-details {

@@ -219,7 +219,10 @@ export class CoherenceModal extends BaseModal {
             return `
                 <div class="contradiction-item" data-contradiction-index="${index}">
                     <div class="contradiction-header">
-                        <h4>Contradiction ${index + 1} <span class="justification-text">(${this.escapeHtml(contradiction.justification)})</span></h4>
+                        <div class="contradiction-title-section">
+                            <h4>Contradiction ${index + 1}</h4>
+                            <div class="justification-text">${this.escapeHtml(contradiction.justification)}</div>
+                        </div>
                         <div class="contradiction-meta">
                             <span class="child-title">In child: <strong>${this.escapeHtml(contradiction.offending_child_title)}</strong></span>
                             ${contradiction.offending_child_id ? `<button class="button ${buttonState} fix-btn" data-child-id="${contradiction.offending_child_id}" data-contradiction-index="${index}" ${buttonDisabled ? 'disabled' : ''}>${buttonText}</button>` : ''}
