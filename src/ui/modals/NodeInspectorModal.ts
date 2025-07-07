@@ -358,11 +358,11 @@ class ContentViewer extends UIComponent {
             
             return `
                 <div class="rating-item">
-                    <span class="rating-name">${this.escapeHtml(criterionName)}</span>
+                <span class="rating-name">${this.escapeHtml(criterionName)}</span>
                     <span class="rating-bar">
                         <span style="color: ${barColor};">${filledBar}</span><span style="color: #d1d5db;">${emptyBar}</span>
                     </span>
-                    <span class="rating-score">${score}/${goal}</span>
+                <span class="rating-score">${score}/${goal}</span>
                 </div>
             `;
         }).join('');

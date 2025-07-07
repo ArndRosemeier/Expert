@@ -49,6 +49,9 @@ export interface OrchestratorPrompts {
     
     // For text polishing
     text_polishing: string;
+    
+    // For batch updates
+    batch_update: string;
 }
 
 export interface PromptDefinition {
@@ -61,7 +64,7 @@ export interface PromptDefinition {
 export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefinition> = {
     content_generation_initial: {
         text: `
-            All output must be in the same language as the input prompt. Any structural elements (such as section headers) must always remain in English.
+            Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             Your task is to respond to the following user prompt: "{{prompt}}"
 
@@ -70,13 +73,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             Please generate a high-quality response that addresses these criteria.
         `.trim(),
-        placeholders: ['prompt', 'criteria'],
+        placeholders: ['prompt', 'criteria', 'language'],
         description: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process."
     },
 
     content_generation_iterative: {
         text: `
-            All output must be in the same language as the input prompt. Any structural elements (such as section headers) must always remain in English.
+            Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             The user's original prompt was: "{{prompt}}".
             Your last response was: "{{lastResponse}}".
@@ -85,13 +88,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Please generate a new response, incorporating the editor's advice. Remember, your response will be rated by a just and unforgiving rater on these criteria:
             - {{criteria}}
         `.trim(),
-        placeholders: ['prompt', 'lastResponse', 'editorAdvice', 'criteria'],
+        placeholders: ['prompt', 'lastResponse', 'editorAdvice', 'criteria', 'language'],
         description: "The system prompt for subsequent iterations in the loop. It's used to instruct the AI to revise its work based on feedback."
     },
 
     rater: {
         text: `
-            The 'justification' field in your JSON output must be written in the same language as the input prompt. All JSON field names must always remain in English.
+            Write your 'justification' field in {{language}}. All JSON field names must always remain in English.
             
             You are a just and unforgiving rating agent. Your response MUST be a single, valid JSON array and nothing else. Do not include any text before or after the JSON.
 
@@ -119,13 +122,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
                 { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." }
             ]
         `.trim(),
-        placeholders: ['originalPrompt', 'response', 'criteria'],
+        placeholders: ['originalPrompt', 'response', 'criteria', 'language'],
         description: "The system prompt for the 'Rater' AI. It scores the generated content against ALL provided criteria in a single call."
     },
 
     editor: {
         text: `
-            The advice you provide must be in the same language as the input. Any structural elements (such as section headers) must always remain in English.
+            Provide advice in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             A response was generated: "{{response}}"
             It was rated against several criteria:
@@ -134,13 +137,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Please provide concise, actionable advice for the Creator LLM on how to improve the response to better meet the rating goals.
             Focus on what needs to change.
         `.trim(),
-        placeholders: ['response', 'ratings'],
+        placeholders: ['response', 'ratings', 'language'],
         description: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings."
     },
 
     summarize_system: {
         text: `
-            The summary you provide must be in the same language as the content input. Any structural elements (such as section headers) must always remain in English.
+            Generate summary in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert at summarizing text for use as future context. Create a concise, factual summary of the following text, capturing the key points, main ideas, and any critical details.
 
@@ -148,13 +151,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             
             {{content}}
         `.trim(),
-        placeholders: ['content'],
+        placeholders: ['content', 'language'],
         description: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is."
     },
 
     expand_list_user: {
         text: `
-            The list of titles you generate must be in the same language as the parent content and context input. Any structural elements (such as bullet points) must always remain in English.
+            Generate titles in {{language}}. Any structural elements (such as bullet points) must always remain in English.
             
             You are working on the document path: "{{path}}".
 
@@ -170,13 +173,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow. Each title must be on a new line and start with a single asterisk (*).
         `.trim(),
-        placeholders: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content'],
+        placeholders: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content', 'language'],
         description: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop."
     },
 
     content_generation_user: {
         text: `
-            The content you generate must be in the same language as the node title and context input. Any structural elements (such as section headers) must always remain in English.
+            Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are writing the content for the node at the following path: "{{path}}".
             The title of this node is "{{title}}".
@@ -190,13 +193,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure content that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'title', 'content', 'draftorfresh'],
+        placeholders: ['path', 'context', 'title', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
     },
 
     branch_content_generation_user: {
         text: `
-            The outline you generate must be in the same language as the node title and context input. Any structural elements (such as section headers) must always remain in English.
+            Generate outline in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}" with the title "{{title}}".
             This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
@@ -212,13 +215,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, or additional formatting. Just provide the pure outline text that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh'],
+        placeholders: ['path', 'context', 'title', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
     },
 
     create_children_from_outline_user: {
         text: `
-            The "title" and "description" fields in your JSON output must be in the same language as the outline input. All JSON field names must always remain in English.
+            Write "title" and "description" fields in {{language}}. All JSON field names must always remain in English.
             
             You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and create '{{child_level_name}}' nodes that should be created from it.
 
@@ -254,13 +257,13 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Here is the outline to process:
             {{outline_content}}
         `.trim(),
-        placeholders: ['outline_content', 'child_level_name', 'context', 'content', 'count', 'generate_count'],
+        placeholders: ['outline_content', 'child_level_name', 'context', 'content', 'count', 'generate_count', 'language'],
         description: "Reads a node's free-form text content and asks an LLM to generate a structured JSON array of child titles with brief content descriptions."
     },
 
     context_extraction_user: {
         text: `
-            The extracted information you provide must be in the same language as the content and extraction request input. Any structural elements (such as section headers) must always remain in English.
+            Generate extracted information in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 
@@ -274,13 +277,13 @@ Content to analyze from "{{node_title}}":
 Please extract and list all instances of: {{extraction_request}}
 
 Format your response as a clear, organized summary that would be useful for reference.`,
-        placeholders: ['extraction_request', 'node_title', 'content'],
+        placeholders: ['extraction_request', 'node_title', 'content', 'language'],
         description: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization."
     },
 
     expand_text_user: {
         text: `
-            The expanded text you provide must be in the same language as the original content input. Any structural elements (such as section headers) must always remain in English.
+            Generate expanded text in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert at expanding and developing written content. Take the following text and create a more detailed, comprehensive version while maintaining the original meaning and tone.
 
@@ -291,13 +294,13 @@ Original text:
 
 Please expand this text to make it more detailed and complete. Focus on adding depth, examples, and clarity while preserving the core message and writing style.
         `.trim(),
-        placeholders: ['content', 'path', 'context', 'title'],
+        placeholders: ['content', 'path', 'context', 'title', 'language'],
         description: "Simple prompt for expanding any text with more detail and depth while preserving its structure. Can be used for project roots or any text that needs fleshing out."
     },
 
     child_node_suggestions: {
         text: `
-            The "title" and "draft" fields in your JSON output must be in the same language as the parent content and context input. All JSON field names must always remain in English.
+            Write "title" and "draft" fields in {{language}}. All JSON field names must always remain in English.
             
             You are helping expand a document by creating alternative approaches for the next child section.
 
@@ -324,13 +327,13 @@ Write the drafts using confident, definitive language. Avoid tentative phrases l
 
 Return as JSON array with "title" and "draft" properties.
         `.trim(),
-        placeholders: ['parent_title', 'parent_content', 'context'],
+        placeholders: ['parent_title', 'parent_content', 'context', 'language'],
         description: "Creates alternative suggestions for the next child section with different approaches or themes."
     },
 
     parent_content_update: {
         text: `
-            The updated content you provide must be in the same language as the parent content and context input. Any structural elements (such as section headers) must always remain in English.
+            Generate updated content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             A new child node titled "{{child_title}}" is being added to this parent node.
             
@@ -352,13 +355,13 @@ Only modify existing content if it's absolutely essential to create a smooth con
 
 Return the complete content with your addition.
         `.trim(),
-        placeholders: ['child_title', 'parent_content', 'context'],
+        placeholders: ['child_title', 'parent_content', 'context', 'language'],
         description: "Updates parent content to reference a newly added child section with minimal changes."
     },
 
     node_chat_system: {
         text: `
-            The chat response you provide must be in the same language as the node data input. Any structural elements (such as section headers) must always remain in English.
+            Respond in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an AI assistant helping a user work with their document structure. You have access to the following node data from their project:
 
@@ -374,13 +377,13 @@ The user can ask you questions about this content, request edits, analysis, or s
 
 You have full context about the document structure and content. Be helpful, specific, and actionable in your responses.
         `.trim(),
-        placeholders: ['node_data'],
+        placeholders: ['node_data', 'language'],
         description: "System prompt for the chat interface when chatting about specific nodes."
     },
 
     roleplay_adventure_system: {
         text: `
-            The adventure description and all narrative output must be in the same language as the node data and starting node input. Any structural elements (such as section headers) must always remain in English.
+            Generate adventure and narrative output in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are a skilled text adventure game master. You will create an immersive interactive experience where the user becomes a character in a living world.
 
@@ -429,13 +432,13 @@ This is completely free-form. The user can:
 Never break character or refer to this as a game, story, or roleplay. You are simply describing what happens in this world as the user lives as their chosen character.
 
 Remember: This is not multiple choice. The user types what their character does or says, and you describe what happens as a result. You do not present options, just ask what the user wants to do.`.trim(),
-        placeholders: ['node_data', 'starting_node'],
+        placeholders: ['node_data', 'starting_node', 'language'],
         description: "Creates an immersive roleplaying adventure where the user can play as characters from the story content. Analyzes the context to present character choices and facilitates free-form roleplay, starting from a specific chosen location/scene."
     },
 
     ai_project_generation: {
         text: `
-            The project structure and all section content you generate must be in the same language as the user description and criteria input. Any structural elements (such as section headers) must always remain in English.
+            Generate project structure and content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert project planner and creative writing consultant. Based on the user's description, create a comprehensive project structure.
 
@@ -531,13 +534,13 @@ Section: Concept
 [A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
 
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`.trim(),
-        placeholders: ['description', 'criteria'],
+        placeholders: ['description', 'criteria', 'language'],
         description: "System prompt for AI-powered project generation. Creates comprehensive project structures from natural language descriptions, including templates, content outlines, and contextual information."
     },
 
     text_import_analysis: {
         text: `
-            The analysis and all extracted summaries must be in the same language as the text content input. Any structural elements (such as section headers) must always remain in English.
+            Generate analysis and summaries in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert project analyst. Analyze the provided text content and extract a project structure from it.
 
@@ -599,13 +602,13 @@ Section: Concept
 [Concise summary/outline of the actual text content - not creative expansion]
 
 CRITICAL: Use exactly the section headers shown above. Base everything on the actual text content provided, not creative interpretations.`.trim(),
-        placeholders: ['file_name', 'text_content'],
+        placeholders: ['file_name', 'text_content', 'language'],
         description: "System prompt for analyzing text files and extracting project structure. Creates project templates and context from existing text content rather than generating new creative content."
     },
 
     coherence_analysis: {
         text: `
-            The "justification" field in your JSON output must be in the same language as the parent content, parent context, and children content input. All JSON field names must always remain in English.
+            Write your "justification" field in {{language}}. All JSON field names must always remain in English.
             
             You are analyzing the coherence between an outline and its expanded content.
 
@@ -647,13 +650,13 @@ EXAMPLE:
 ]
 
 JSON Response:`.trim(),
-        placeholders: ['parent_content', 'parent_context', 'children_content'],
+        placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],
         description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions and returns them in structured JSON format."
     },
 
     fix_contradiction: {
         text: `
-            The corrected content you provide must be in the same language as the parent content, parent context, and child content input. Any structural elements (such as section headers) must always remain in English.
+            Generate corrected content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert editor. Your job is to fix a contradiction in text content.
 
@@ -688,13 +691,13 @@ Provide the complete corrected content for this child node, no abbreviations. Th
 This is for an automated workflow, so do not add any additional text or comments or questions.
 Corrected text:
         `.trim(),
-        placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification'],
+        placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification', 'language'],
         description: "System prompt for fixing contradictions in child node content. Takes the contradiction details and rewrites the child content to resolve the issue while maintaining style and structure."
     },
 
     text_polishing: {
         text: `
-            The polished text you provide must be in the same language as the detail and criteria input. Any structural elements (such as section headers) must always remain in English.
+            Your default language is {{language}} if not specified otherwise later in this prompt. Generate polished text. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert text polisher and editor. Your task is to enhance the provided text to {{detail}}.
 
@@ -711,8 +714,23 @@ Your response will be evaluated against these criteria:
 Please provide the full enhanced version of the text, this is for an automated workflow, so no questions or comments please.
 Text:
         `.trim(),
-        placeholders: ['detail', 'criteria'],
+        placeholders: ['detail', 'criteria', 'language'],
         description: "System prompt for polishing and enhancing text content. Takes custom polishing instructions and quality criteria to improve writing quality, clarity, style, and other aspects."
+    },
+
+    batch_update: {
+        text: `
+            Your default language is {{language}} if the instruction does not specify otherwise.
+            
+            Please update the following text based on these instructions: {{instruction}}
+
+Original text:
+{{originalText}}
+
+IMPORTANT: Your response should contain ONLY the updated text, nothing more. Do not include any labels, prefixes, explanations, or meta-commentary. Just provide the pure updated content that replaces the original text.
+        `.trim(),
+        placeholders: ['instruction', 'originalText', 'language'],
+        description: "System prompt for batch updating text content. Takes user instructions and applies them to transform individual text strings during batch operations."
     }
 };
 

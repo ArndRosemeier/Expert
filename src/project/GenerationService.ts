@@ -387,10 +387,12 @@ export class GenerationService {
                     const modelName = profile.selectedModels?.[modelKey];
                     node.setContentFromGeneration(currentIterationContent, modelName);
                     
-                    // Set context for generated content
-                    const parentContext = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-                    if (parentContext) {
-                        node.setContext(parentContext, 'generated');
+                    // Set context for generated content - copy parent context directly (1:1)
+                    if (node.parentId) {
+                        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+                        if (parentNode && parentNode.context) {
+                            node.setContext(parentNode.context, 'generated');
+                        }
                     }
                 }
                 
@@ -416,10 +418,12 @@ export class GenerationService {
                         node.setContentFromGeneration(iteration.content, modelName, iteration.iteration);
                     });
                     
-                    // Set context for all generated content
-                    const parentContext = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-                    if (parentContext) {
-                        node.setContext(parentContext, 'generated');
+                    // Set context for all generated content - copy parent context directly (1:1)
+                    if (node.parentId) {
+                        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+                        if (parentNode && parentNode.context) {
+                            node.setContext(parentNode.context, 'generated');
+                        }
                     }
                 }
                 
@@ -565,7 +569,7 @@ export class GenerationService {
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
             const creatorModel = currentProfile?.selectedModels?.['creator'];
 
-                            nodeItems.forEach(item => {
+                                        nodeItems.forEach(item => {
                     const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
                     
                     // Set the content description as initial content if provided
@@ -1158,4 +1162,6 @@ export class GenerationService {
             })
             .filter(item => item.title.length > 0);
     }
+
+
 } 

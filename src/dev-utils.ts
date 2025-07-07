@@ -19,6 +19,8 @@ export function initDevUtils() {
     
     // Monitor for stale modules
     monitorModuleUpdates();
+    
+
 }
 
 function trackVersionChanges() {
@@ -82,6 +84,8 @@ function addDevKeyboardShortcuts() {
             console.log('🔄 Resetting settings to defaults...');
             window.location.href = window.location.pathname + '?reset=true';
         }
+        
+
     });
 }
 
@@ -157,6 +161,8 @@ function getCacheStatus() {
     
     return 'no-data';
 }
+
+
 
 // Auto-initialize if in development
 if (import.meta.env.DEV) {

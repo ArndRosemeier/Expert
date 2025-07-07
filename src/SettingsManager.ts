@@ -135,6 +135,7 @@ export interface SettingsProfile {
     selectedModels: Record<string, string>;
     webSearchEnabled?: Record<string, boolean>;
     contextExtractionPrompt: string;
+    language?: string; // Language setting for content generation (e.g., "English", "Spanish", "French")
     version?: string; // Version of the application when this profile was saved
 }
 
@@ -170,6 +171,8 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             (profile.webSearchEnabled === undefined || (typeof profile.webSearchEnabled === 'object' && profile.webSearchEnabled !== null)) &&
             // contextExtractionPrompt is optional for backward compatibility
             (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
+            // language is optional for backward compatibility
+            (profile.language === undefined || typeof profile.language === 'string') &&
             // version is optional for backward compatibility
             (profile.version === undefined || typeof profile.version === 'string')
         );
@@ -433,6 +436,32 @@ export class SettingsManager {
         }
     }
 
+    /**
+     * Get the language setting from the current profile or default to English
+     */
+    public getLanguage(): string {
+        const profile = this.getLastUsedProfile();
+        return profile?.language || 'English';
+    }
+
+    /**
+     * Set the language for the current profile
+     */
+    public async setLanguage(language: string): Promise<void> {
+        const profileName = this.getLastUsedProfileName();
+        if (!profileName) {
+            throw new Error('No active profile to update language setting');
+        }
+
+        const profile = this.getProfile(profileName);
+        if (!profile) {
+            throw new Error(`Profile '${profileName}' not found`);
+        }
+
+        const updatedProfile = { ...profile, language };
+        await this.saveProfile(profileName, updatedProfile);
+    }
+
     private async saveProfiles(): Promise<void> {
         try {
             const storage = await this.storageService;
@@ -463,7 +492,8 @@ export class SettingsManager {
                 criteria: profile.criteria,
                 maxIterations: profile.maxIterations,
                 selectedModels: profile.selectedModels,
-                contextExtractionPrompt: profile.contextExtractionPrompt
+                contextExtractionPrompt: profile.contextExtractionPrompt,
+                language: profile.language || 'English'
             },
             prompts: this.prompts
         };
@@ -519,7 +549,8 @@ export class SettingsManager {
                 criteria: profileData.criteria,
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
-                contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT
+                contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT,
+                language: profileData.language || 'English'
             };
 
             // Save the profile
@@ -706,6 +737,7 @@ export class SettingsManager {
             selectedModels: modelsToKeep,
             webSearchEnabled: webSearchToKeep,
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
+            language: 'English',
             version: VersionService.getBuildNumber()
         };
         

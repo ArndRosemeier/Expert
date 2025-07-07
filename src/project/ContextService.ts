@@ -67,6 +67,8 @@ export class ContextService {
         return contextParts.join('\n\n====================\n\n');
     }
 
+
+
     /**
      * Collects context from the immediate parent only.
      * Used for UI context summaries to show inheritance information.

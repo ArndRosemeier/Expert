@@ -7,12 +7,14 @@ import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { CoherenceService } from './modals/services/CoherenceService';
 import { CoherenceModal } from './modals/CoherenceModal';
+import { LanguageSelector } from './components/LanguageSelector';
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
+let headerLanguageSelector: LanguageSelector | null = null;
 
 // Persistent checkbox states
 let includeContentState: boolean = true;
@@ -2571,6 +2573,31 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 font-size: 1rem;
                 min-width: 200px;
             }
+            #profile-language-container {
+                display: flex;
+                align-items: center;
+                gap: 2rem;
+            }
+            #profile-language-container .language-selector {
+                margin-bottom: 0;
+            }
+            #profile-language-container .language-selector-label {
+                font-weight: bold;
+                font-size: 1.1rem;
+                color: #343a40;
+                white-space: nowrap;
+                margin-bottom: 0;
+            }
+            #profile-language-container .language-selector-description {
+                display: none;
+            }
+            #profile-language-container .language-selector-dropdown {
+                min-width: 140px;
+                padding: 0.5rem;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                font-size: 1rem;
+            }
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
             #project-tree { flex: 1; max-width: 400px; }
             #node-details { flex: 2; }
@@ -2614,9 +2641,13 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             @keyframes spin { to { transform: rotate(360deg); } }
         </style>
         <div id="global-profile-bar">
-            <label for="active-profile-selector">Active profile:</label>
-            <select id="active-profile-selector">${profileOptions}</select>
-            <span style="color: #6c757d; font-size: 0.9rem;">This profile will be used for all AI operations (Generate, Summarize, etc.)</span>
+            <div id="profile-language-container">
+                <div>
+                    <label for="active-profile-selector">Active profile:</label>
+                    <select id="active-profile-selector">${profileOptions}</select>
+                </div>
+                <div id="profile-language-selector"></div>
+            </div>
             <button id="open-reader-btn" class="button button-primary" style="margin-left: auto;">📖 Reader View</button>
         </div>
         <div id="project-container">
@@ -2627,6 +2658,23 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Render the multi-project tree (event listeners are set up once in main.ts)
     renderMultiProjectTree();
+    
+    // Initialize header language selector
+    const headerLanguageContainer = document.getElementById('profile-language-selector');
+    if (headerLanguageContainer && settingsManager) {
+        // Clean up existing language selector if it exists
+        if (headerLanguageSelector) {
+            headerLanguageSelector.destroy();
+        }
+        
+        headerLanguageSelector = new LanguageSelector(headerLanguageContainer, {
+            currentLanguage: settingsManager.getLanguage(),
+            onLanguageChange: async (language: string) => {
+                await settingsManager.setLanguage(language);
+                console.log(`🌍 Language changed to: ${language}`);
+            }
+        });
+    }
     
     // Global abort button is now always visible
     

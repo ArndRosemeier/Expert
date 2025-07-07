@@ -1,7 +1,7 @@
 import { DocumentNode } from '../../DocumentNode';
 import { SelectableNodeTree } from './SelectableNodeTree';
 import { OpenRouterClient } from '../../OpenRouterClient';
-
+import { getPromptText } from '../../PromptManager';
 
 const MODEL_PURPOSES = [
     { key: 'creator', label: 'Creator' },
@@ -14,11 +14,21 @@ interface BatchUpdateModalOptions {
     onClose?: () => void;
 }
 
+interface FieldUpdate {
+    field: 'title' | 'content' | 'context';
+    originalValue: string;
+    newValue?: string;
+}
+
+interface StringProcessingMap {
+    [originalString: string]: string; // originalString -> processedString
+}
+
 /**
- * BatchUpdateModal: Clean, TOC-compliant batch update modal with two panels.
- * Usage:
- *   const modal = new BatchUpdateModal(rootNode, container, { onClose });
- *   modal.render();
+ * BatchUpdateModal: 3-phase batch update modal with field selection checkboxes.
+ * Phase 1: Collect all unique strings to process
+ * Phase 2: Process strings through AI (deduplication)
+ * Phase 3: Apply results to create new versions
  */
 export class BatchUpdateModal {
     private rootNode: DocumentNode;
@@ -27,16 +37,18 @@ export class BatchUpdateModal {
     private tree: SelectableNodeTree;
     private leftPanel: HTMLElement;
     private rightPanel: HTMLElement;
-    private promptInput: HTMLTextAreaElement;
+    private instructionInput: HTMLTextAreaElement;
     private modelSelect: HTMLSelectElement;
     private batchTagInput: HTMLInputElement;
+    private titleCheckbox: HTMLInputElement;
+    private contentCheckbox: HTMLInputElement;
+    private contextCheckbox: HTMLInputElement;
     private runButton: HTMLButtonElement;
     private closeButton: HTMLButtonElement;
     private stopButton: HTMLButtonElement;
     private spinner: HTMLElement;
     private logPanel: HTMLElement;
     private openRouterClient: OpenRouterClient;
-    private defaultPrompt: string;
     private batchTag: string;
     private isRunning: boolean = false;
     private shouldAbort: boolean = false;
@@ -49,25 +61,17 @@ export class BatchUpdateModal {
         this.tree = new SelectableNodeTree(rootNode, document.createElement('div'));
         this.leftPanel = document.createElement('div');
         this.rightPanel = document.createElement('div');
-        this.promptInput = document.createElement('textarea');
+        this.instructionInput = document.createElement('textarea');
         this.modelSelect = document.createElement('select');
         this.batchTagInput = document.createElement('input');
+        this.titleCheckbox = document.createElement('input');
+        this.contentCheckbox = document.createElement('input');
+        this.contextCheckbox = document.createElement('input');
         this.runButton = document.createElement('button');
         this.closeButton = document.createElement('button');
         this.stopButton = document.createElement('button');
         this.spinner = document.createElement('span');
         this.logPanel = document.createElement('div');
-        // Default batch update prompt
-        this.defaultPrompt = `Please update the following node based on these instructions: ***your input here***
-
-For the node titled "{{title}}" with current content:
-{{content}}
-
-=== TITLE ===
-[Updated title here]
-
-=== CONTENT ===  
-[Updated content here]`;
         
         // Generate batch tag with exact datetime (evaluated once when dialog starts)
         const now = new Date();
@@ -80,491 +84,676 @@ For the node titled "{{title}}" with current content:
     render() {
         try {
             console.log('🔧 BatchUpdateModal render() starting...');
-            this.container.innerHTML = '';
+        this.container.innerHTML = '';
             // Layout: two panels, set container height with proper constraints
-            this.container.style.display = 'flex';
-            this.container.style.flexDirection = 'row';
-            this.container.style.gap = '0';
-            this.container.style.alignItems = 'stretch';
-            this.container.style.justifyContent = 'stretch';
-            this.container.style.boxSizing = 'border-box';
-            this.container.style.height = '90vh'; // Constrain to 90% of viewport height
-            this.container.style.maxHeight = '90vh'; // Ensure it never exceeds viewport
-            this.container.style.overflow = 'hidden'; // Prevent container overflow
+        this.container.style.display = 'flex';
+        this.container.style.flexDirection = 'row';
+        this.container.style.gap = '0';
+        this.container.style.alignItems = 'stretch';
+        this.container.style.justifyContent = 'stretch';
+        this.container.style.boxSizing = 'border-box';
+            this.container.style.height = '90vh';
+            this.container.style.maxHeight = '90vh';
+            this.container.style.overflow = 'hidden';
 
-            // --- Left Panel: Tree ---
-            this.leftPanel = document.createElement('div');
-            this.leftPanel.style.width = '25%';
-            this.leftPanel.style.minWidth = '18em';
-            this.leftPanel.style.maxWidth = '22em';
-            this.leftPanel.style.background = '#fff';
-            this.leftPanel.style.borderRight = '1.5px solid #e5e7eb';
-            this.leftPanel.style.display = 'flex';
-            this.leftPanel.style.flexDirection = 'column';
-            this.leftPanel.style.position = 'relative';
-            this.leftPanel.style.transition = 'width 0.3s';
-            this.leftPanel.style.overflow = 'hidden';
-            this.leftPanel.style.height = '100%';
-            this.leftPanel.style.minHeight = '0'; // Allow flex shrinking
+        // --- Left Panel: Tree ---
+        this.leftPanel = document.createElement('div');
+        this.leftPanel.style.width = '25%';
+        this.leftPanel.style.minWidth = '18em';
+        this.leftPanel.style.maxWidth = '22em';
+        this.leftPanel.style.background = '#fff';
+        this.leftPanel.style.borderRight = '1.5px solid #e5e7eb';
+        this.leftPanel.style.display = 'flex';
+        this.leftPanel.style.flexDirection = 'column';
+        this.leftPanel.style.position = 'relative';
+        this.leftPanel.style.transition = 'width 0.3s';
+        this.leftPanel.style.overflow = 'hidden';
+        this.leftPanel.style.height = '100%';
+            this.leftPanel.style.minHeight = '0';
 
-            // Tree selection - use flex instead of hardcoded height
-            this.tree = new SelectableNodeTree(this.rootNode, document.createElement('div'));
-            this.tree.render();
-            this.tree['container'].style.marginTop = '2em';
-            this.tree['container'].style.flex = '1 1 0%'; // Use flex instead of calc(90vh - 6em)
-            this.tree['container'].style.overflowY = 'auto';
-            this.tree['container'].style.background = '#fff';
-            this.tree['container'].style.minHeight = '0'; // Allow flex shrinking
-            this.leftPanel.appendChild(this.tree['container']);
-            // Add highlight style for batch active node
-            const highlightStyle = document.createElement('style');
-            highlightStyle.textContent = `
-                .tree-batch-active {
-                    background: #e0f2fe !important;
-                    border-left: 4px solid #2563eb !important;
-                    box-shadow: 0 0 0 2px #bae6fd;
-                }
-            `;
-            this.leftPanel.appendChild(highlightStyle);
+            // Tree selection
+        this.tree = new SelectableNodeTree(this.rootNode, document.createElement('div'));
+        this.tree.render();
+        this.tree['container'].style.marginTop = '2em';
+            this.tree['container'].style.flex = '1 1 0%';
+        this.tree['container'].style.overflowY = 'auto';
+        this.tree['container'].style.background = '#fff';
+            this.tree['container'].style.minHeight = '0';
+        this.leftPanel.appendChild(this.tree['container']);
+            
+        // Add highlight style for batch active node
+        const highlightStyle = document.createElement('style');
+        highlightStyle.textContent = `
+            .tree-batch-active {
+                background: #e0f2fe !important;
+                border-left: 4px solid #2563eb !important;
+                box-shadow: 0 0 0 2px #bae6fd;
+            }
+        `;
+        this.leftPanel.appendChild(highlightStyle);
 
-            // --- Right Panel: Controls and Log ---
-            this.rightPanel = document.createElement('div');
-            this.rightPanel.style.flex = '1 1 0%';
-            this.rightPanel.style.display = 'flex';
-            this.rightPanel.style.flexDirection = 'column';
-            this.rightPanel.style.height = '100%';
-            this.rightPanel.style.background = '#fff';
-            this.rightPanel.style.boxSizing = 'border-box';
-            this.rightPanel.style.padding = '2.5em 2em 2em 2em';
-            this.rightPanel.style.overflow = 'hidden'; // Prevent panel overflow
-            this.rightPanel.style.minHeight = '0'; // Allow flex shrinking
-            // Controls container (prompt, model selector, buttons)
-            const controlsContainer = document.createElement('div');
-            controlsContainer.style.display = 'flex';
-            controlsContainer.style.flexDirection = 'column';
-            controlsContainer.style.gap = '2em';
-            controlsContainer.style.flex = '0 1 auto'; // Allow shrinking if needed
-            controlsContainer.style.minHeight = '0'; // Allow flex shrinking
-            controlsContainer.style.overflow = 'hidden'; // Prevent overflow
-            // Get default prompt and placeholders (move up here for scope)
-            let defaultPrompt = this.defaultPrompt;
-            const placeholders: string[] = ['title', 'content'];
-            // --- Toggle-all buttons for each template level ---
-            const buttonBar = document.createElement('div');
-            buttonBar.style.display = 'flex';
-            buttonBar.style.flexWrap = 'wrap';
-            buttonBar.style.gap = '0.7em';
-            buttonBar.style.marginBottom = '1.2em';
-            buttonBar.style.alignItems = 'center';
-            (this.rootNode.template || []).forEach((levelName, idx) => {
-                const btn = document.createElement('button');
-                btn.textContent = `Toggle all ${this.getPluralLevelName(levelName)}`;
-                btn.style.padding = '0.5em 1.3em';
-                btn.style.fontSize = '1em';
-                btn.style.fontWeight = '500';
-                btn.style.borderRadius = '2em';
+        // --- Right Panel: Controls and Log ---
+        this.rightPanel = document.createElement('div');
+        this.rightPanel.style.flex = '1 1 0%';
+        this.rightPanel.style.display = 'flex';
+        this.rightPanel.style.flexDirection = 'column';
+        this.rightPanel.style.height = '100%';
+        this.rightPanel.style.background = '#fff';
+        this.rightPanel.style.boxSizing = 'border-box';
+        this.rightPanel.style.padding = '2.5em 2em 2em 2em';
+            this.rightPanel.style.overflow = 'hidden';
+            this.rightPanel.style.minHeight = '0';
+            
+            // Controls container
+        const controlsContainer = document.createElement('div');
+        controlsContainer.style.display = 'flex';
+        controlsContainer.style.flexDirection = 'column';
+        controlsContainer.style.gap = '2em';
+            controlsContainer.style.flex = '0 1 auto';
+            controlsContainer.style.minHeight = '0';
+            controlsContainer.style.overflow = 'hidden';
+            
+        // --- Toggle-all buttons for each template level ---
+        const buttonBar = document.createElement('div');
+        buttonBar.style.display = 'flex';
+        buttonBar.style.flexWrap = 'wrap';
+        buttonBar.style.gap = '0.7em';
+        buttonBar.style.marginBottom = '1.2em';
+        buttonBar.style.alignItems = 'center';
+        (this.rootNode.template || []).forEach((levelName, idx) => {
+            const btn = document.createElement('button');
+            btn.textContent = `Toggle all ${this.getPluralLevelName(levelName)}`;
+            btn.style.padding = '0.5em 1.3em';
+            btn.style.fontSize = '1em';
+            btn.style.fontWeight = '500';
+            btn.style.borderRadius = '2em';
+            btn.style.background = '#f3f4f6';
+            btn.style.border = '1.5px solid #d1d5db';
+            btn.style.color = '#374151';
+            btn.style.cursor = 'pointer';
+            btn.style.transition = 'background 0.18s, border-color 0.18s, color 0.18s';
+            btn.addEventListener('mouseenter', () => {
+                btn.style.background = '#e0e7ef';
+                btn.style.borderColor = '#3b82f6';
+                btn.style.color = '#2563eb';
+            });
+            btn.addEventListener('mouseleave', () => {
                 btn.style.background = '#f3f4f6';
-                btn.style.border = '1.5px solid #d1d5db';
+                btn.style.borderColor = '#d1d5db';
                 btn.style.color = '#374151';
-                btn.style.cursor = 'pointer';
-                btn.style.transition = 'background 0.18s, border-color 0.18s, color 0.18s';
-                btn.addEventListener('mouseenter', () => {
-                    btn.style.background = '#e0e7ef';
-                    btn.style.borderColor = '#3b82f6';
-                    btn.style.color = '#2563eb';
-                });
-                btn.addEventListener('mouseleave', () => {
-                    btn.style.background = '#f3f4f6';
-                    btn.style.borderColor = '#d1d5db';
-                    btn.style.color = '#374151';
-                });
-                btn.addEventListener('focus', () => {
-                    btn.style.background = '#e0e7ef';
-                    btn.style.borderColor = '#3b82f6';
-                    btn.style.color = '#2563eb';
-                });
-                btn.addEventListener('blur', () => {
-                    btn.style.background = '#f3f4f6';
-                    btn.style.borderColor = '#d1d5db';
-                    btn.style.color = '#374151';
-                });
-                btn.addEventListener('click', () => this.tree.toggleAllAtLevel(idx));
-                buttonBar.appendChild(btn);
             });
-            controlsContainer.appendChild(buttonBar);
-            // Enhanced header with better styling
-            const headerSection = document.createElement('div');
-            headerSection.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            headerSection.style.color = 'white';
-            headerSection.style.padding = '1.5em';
-            headerSection.style.borderRadius = '0.75em';
-            headerSection.style.marginBottom = '2em';
-            headerSection.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.15)';
+            btn.addEventListener('focus', () => {
+                btn.style.background = '#e0e7ef';
+                btn.style.borderColor = '#3b82f6';
+                btn.style.color = '#2563eb';
+            });
+            btn.addEventListener('blur', () => {
+                btn.style.background = '#f3f4f6';
+                btn.style.borderColor = '#d1d5db';
+                btn.style.color = '#374151';
+            });
+            btn.addEventListener('click', () => this.tree.toggleAllAtLevel(idx));
+            buttonBar.appendChild(btn);
+        });
+        controlsContainer.appendChild(buttonBar);
             
-            const headerTitle = document.createElement('h3');
-            headerTitle.textContent = 'Batch Node Update';
-            headerTitle.style.margin = '0 0 0.5em 0';
-            headerTitle.style.fontSize = '1.4em';
-            headerTitle.style.fontWeight = 'bold';
-            headerSection.appendChild(headerTitle);
-            
-            const headerDesc = document.createElement('p');
-            headerDesc.textContent = 'Update multiple nodes simultaneously with AI assistance. The system will modify title, content, and context based on your instructions.';
-            headerDesc.style.margin = '0';
-            headerDesc.style.opacity = '0.9';
-            headerDesc.style.fontSize = '1em';
-            headerSection.appendChild(headerDesc);
-            
-            controlsContainer.appendChild(headerSection);
+        // Enhanced header with better styling
+        const headerSection = document.createElement('div');
+        headerSection.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        headerSection.style.color = 'white';
+        headerSection.style.padding = '1.5em';
+        headerSection.style.borderRadius = '0.75em';
+            headerSection.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+        
+            const headerTitle = document.createElement('h2');
+            headerTitle.textContent = 'Smart Batch Update';
+        headerTitle.style.margin = '0 0 0.5em 0';
+            headerTitle.style.fontSize = '1.5em';
+            headerTitle.style.fontWeight = '700';
+        headerSection.appendChild(headerTitle);
+        
+        const headerDesc = document.createElement('p');
+            headerDesc.textContent = 'Select nodes and fields to update. AI will process unique content automatically.';
+        headerDesc.style.margin = '0';
+        headerDesc.style.fontSize = '1em';
+        headerDesc.style.opacity = '0.9';
+        headerSection.appendChild(headerDesc);
+        
+        controlsContainer.appendChild(headerSection);
 
-            // Placeholders header with better styling
-            const placeholderHeader = document.createElement('div');
-            placeholderHeader.style.fontSize = '0.95em';
-            placeholderHeader.style.fontStyle = 'italic';
-            placeholderHeader.style.marginBottom = '1em';
-            placeholderHeader.style.padding = '0.75em';
-            placeholderHeader.style.background = '#f8fafc';
-            placeholderHeader.style.border = '1px solid #e2e8f0';
-            placeholderHeader.style.borderRadius = '0.5em';
-            placeholderHeader.innerHTML = `<strong>Available placeholders:</strong> ${placeholders.map((p: string) => `<code style='background:#e2e8f0;padding:3px 6px;border-radius:4px;font-weight:500;color:#1e293b;'>{{${p}}}</code>`).join(', ')}`;
-            controlsContainer.appendChild(placeholderHeader);
-            // Batch tag section
-            const batchTagSection = document.createElement('div');
-            batchTagSection.style.marginBottom = '1.5em';
+            // Field selection checkboxes
+            const fieldSection = document.createElement('div');
+            fieldSection.style.background = '#f8fafc';
+            fieldSection.style.padding = '1.5em';
+            fieldSection.style.borderRadius = '0.75em';
+            fieldSection.style.border = '1px solid #e2e8f0';
             
-            const batchTagLabel = document.createElement('label');
-            batchTagLabel.textContent = 'Batch Tag:';
-            batchTagLabel.style.display = 'block';
-            batchTagLabel.style.fontWeight = 'bold';
-            batchTagLabel.style.marginBottom = '0.5em';
-            batchTagLabel.style.color = '#374151';
+            const fieldTitle = document.createElement('h3');
+            fieldTitle.textContent = 'Fields to Update';
+            fieldTitle.style.margin = '0 0 1em 0';
+            fieldTitle.style.fontSize = '1.1em';
+            fieldTitle.style.fontWeight = '600';
+            fieldTitle.style.color = '#374151';
+            fieldSection.appendChild(fieldTitle);
             
-            const batchTagInput = document.createElement('input');
-            batchTagInput.type = 'text';
-            batchTagInput.value = this.batchTag;
-            batchTagInput.style.width = '100%';
-            batchTagInput.style.padding = '0.75em';
-            batchTagInput.style.border = '1px solid #d1d5db';
-            batchTagInput.style.borderRadius = '0.5em';
-            batchTagInput.style.fontSize = '1em';
-            batchTagInput.style.boxSizing = 'border-box';
-            batchTagInput.style.background = '#f9fafb';
+            const checkboxContainer = document.createElement('div');
+            checkboxContainer.style.display = 'flex';
+            checkboxContainer.style.gap = '1.5em';
+            checkboxContainer.style.flexWrap = 'wrap';
             
-            // Store reference to batchTagInput for later use
-            this.batchTagInput = batchTagInput;
+            // Title checkbox
+            const titleLabel = this.createCheckboxLabel('Title', this.titleCheckbox, true);
+            checkboxContainer.appendChild(titleLabel);
             
-            // Update batch tag when changed
-            batchTagInput.addEventListener('input', () => {
-                this.batchTag = batchTagInput.value.trim() || this.batchTag;
-            });
+            // Content checkbox  
+            const contentLabel = this.createCheckboxLabel('Content', this.contentCheckbox, true);
+            checkboxContainer.appendChild(contentLabel);
             
-            batchTagSection.appendChild(batchTagLabel);
-            batchTagSection.appendChild(batchTagInput);
-            controlsContainer.appendChild(batchTagSection);
+            // Context checkbox
+            const contextLabel = this.createCheckboxLabel('Context', this.contextCheckbox, false);
+            checkboxContainer.appendChild(contextLabel);
+            
+            fieldSection.appendChild(checkboxContainer);
+            controlsContainer.appendChild(fieldSection);
 
-            // Enhanced prompt section
-            const promptSection = document.createElement('div');
-            promptSection.style.marginBottom = '2em';
+            // Instruction input section
+            const instructionSection = document.createElement('div');
+            instructionSection.style.background = '#f8fafc';
+            instructionSection.style.padding = '1.5em';
+            instructionSection.style.borderRadius = '0.75em';
+            instructionSection.style.border = '1px solid #e2e8f0';
             
-            const promptLabel = document.createElement('label');
-            promptLabel.textContent = 'Update Instructions:';
-            promptLabel.style.fontWeight = 'bold';
-            promptLabel.style.fontSize = '1.2em';
-            promptLabel.style.marginBottom = '0.75em';
-            promptLabel.style.display = 'block';
-            promptLabel.style.color = '#1f2937';
-            promptSection.appendChild(promptLabel);
+            const instructionTitle = document.createElement('h3');
+            instructionTitle.textContent = 'Update Instructions';
+            instructionTitle.style.margin = '0 0 1em 0';
+            instructionTitle.style.fontSize = '1.1em';
+            instructionTitle.style.fontWeight = '600';
+            instructionTitle.style.color = '#374151';
+            instructionSection.appendChild(instructionTitle);
             
-            const promptHelp = document.createElement('div');
-            promptHelp.style.fontSize = '0.9em';
-            promptHelp.style.color = '#6b7280';
-            promptHelp.style.marginBottom = '0.75em';
-            promptHelp.style.fontStyle = 'italic';
-            promptHelp.innerHTML = 'Replace <strong>***your input here***</strong> with your specific instructions. The AI will return sections with updated title and content for each selected node.';
-            promptSection.appendChild(promptHelp);
+            this.instructionInput.style.width = '100%';
+            this.instructionInput.style.minHeight = '6em';
+            this.instructionInput.style.padding = '0.75em';
+            this.instructionInput.style.border = '1px solid #d1d5db';
+            this.instructionInput.style.borderRadius = '0.5em';
+            this.instructionInput.style.fontSize = '1em';
+            this.instructionInput.style.fontFamily = 'inherit';
+            this.instructionInput.style.boxSizing = 'border-box';
+            this.instructionInput.style.resize = 'vertical';
+            this.instructionInput.placeholder = 'Describe how you want the selected fields to be updated...\n\nExample: "Make the text more formal and professional"';
+            instructionSection.appendChild(this.instructionInput);
             
-            // Enhanced textarea for prompt input
-            this.promptInput = document.createElement('textarea') as any;
-            this.promptInput.value = defaultPrompt;
-            this.promptInput.style.width = '100%';
-            this.promptInput.style.fontSize = '1.1em';
-            this.promptInput.style.padding = '1em';
-            this.promptInput.style.border = '2px solid #e5e7eb';
-            this.promptInput.style.borderRadius = '0.75em';
-            this.promptInput.style.marginBottom = '0';
-            this.promptInput.style.background = '#ffffff';
-            this.promptInput.style.boxSizing = 'border-box';
-            this.promptInput.style.minHeight = '8em';
-            this.promptInput.style.fontFamily = 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace';
-            this.promptInput.style.lineHeight = '1.5';
-            this.promptInput.style.resize = 'vertical';
-            this.promptInput.style.transition = 'border-color 0.2s, box-shadow 0.2s';
+            controlsContainer.appendChild(instructionSection);
+
+            // Model and batch settings section
+            const settingsSection = document.createElement('div');
+            settingsSection.style.display = 'flex';
+            settingsSection.style.gap = '1.5em';
+            settingsSection.style.alignItems = 'end';
             
-            // Add focus styling
-            this.promptInput.addEventListener('focus', () => {
-                this.promptInput.style.borderColor = '#3b82f6';
-                this.promptInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+            const modelContainer = document.createElement('div');
+            modelContainer.style.flex = '1';
+        
+        const modelLabel = document.createElement('label');
+            modelLabel.textContent = 'AI Model:';
+        modelLabel.style.display = 'block';
+            modelLabel.style.fontWeight = '600';
+            modelLabel.style.marginBottom = '0.5em';
+            modelLabel.style.color = '#374151';
+            modelContainer.appendChild(modelLabel);
+            
+        this.modelSelect.style.width = '100%';
+            this.modelSelect.style.padding = '0.75em';
+            this.modelSelect.style.border = '1px solid #d1d5db';
+            this.modelSelect.style.borderRadius = '0.5em';
+            this.modelSelect.style.fontSize = '1em';
+        this.modelSelect.style.boxSizing = 'border-box';
+            
+            // Populate model select
+            MODEL_PURPOSES.forEach(purpose => {
+                const option = document.createElement('option');
+                option.value = purpose.key;
+                option.textContent = purpose.label;
+                this.modelSelect.appendChild(option);
             });
-            this.promptInput.addEventListener('blur', () => {
-                this.promptInput.style.borderColor = '#e5e7eb';
-                this.promptInput.style.boxShadow = 'none';
-            });
+            this.modelSelect.value = 'editor'; // Default to editor model
             
-            promptSection.appendChild(this.promptInput);
-            controlsContainer.appendChild(promptSection);
-            // Enhanced model selector
-            const modelSection = document.createElement('div');
-            modelSection.style.marginBottom = '2em';
+            modelContainer.appendChild(this.modelSelect);
+            settingsSection.appendChild(modelContainer);
             
-            const modelLabel = document.createElement('label');
-            modelLabel.textContent = 'AI Model Purpose:';
-            modelLabel.style.fontWeight = 'bold';
-            modelLabel.style.fontSize = '1.2em';
-            modelLabel.style.marginBottom = '0.75em';
-            modelLabel.style.display = 'block';
-            modelLabel.style.color = '#1f2937';
-            modelSection.appendChild(modelLabel);
+            const tagContainer = document.createElement('div');
+            tagContainer.style.flex = '1';
             
-            this.modelSelect = document.createElement('select');
-            this.modelSelect.style.width = '100%';
-            this.modelSelect.style.fontSize = '1.1em';
-            this.modelSelect.style.padding = '1em';
-            this.modelSelect.style.border = '2px solid #e5e7eb';
-            this.modelSelect.style.borderRadius = '0.75em';
-            this.modelSelect.style.marginBottom = '0';
-            this.modelSelect.style.background = '#ffffff';
-            this.modelSelect.style.boxSizing = 'border-box';
-            this.modelSelect.style.cursor = 'pointer';
-            this.modelSelect.style.transition = 'border-color 0.2s, box-shadow 0.2s';
+            const tagLabel = document.createElement('label');
+            tagLabel.textContent = 'Batch Tag (optional):';
+            tagLabel.style.display = 'block';
+            tagLabel.style.fontWeight = '600';
+            tagLabel.style.marginBottom = '0.5em';
+            tagLabel.style.color = '#374151';
+            tagContainer.appendChild(tagLabel);
             
-            // Add focus styling
-            this.modelSelect.addEventListener('focus', () => {
-                this.modelSelect.style.borderColor = '#3b82f6';
-                this.modelSelect.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-            });
-            this.modelSelect.addEventListener('blur', () => {
-                this.modelSelect.style.borderColor = '#e5e7eb';
-                this.modelSelect.style.boxShadow = 'none';
-            });
+            this.batchTagInput.type = 'text';
+            this.batchTagInput.style.width = '100%';
+            this.batchTagInput.style.padding = '0.75em';
+            this.batchTagInput.style.border = '1px solid #d1d5db';
+            this.batchTagInput.style.borderRadius = '0.5em';
+            this.batchTagInput.style.fontSize = '1em';
+            this.batchTagInput.style.boxSizing = 'border-box';
+            this.batchTagInput.placeholder = 'Optional custom tag';
+            tagContainer.appendChild(this.batchTagInput);
             
-            MODEL_PURPOSES.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.key;
-                opt.textContent = p.label;
-                this.modelSelect.appendChild(opt);
-            });
+            settingsSection.appendChild(tagContainer);
+            controlsContainer.appendChild(settingsSection);
             
-            modelSection.appendChild(this.modelSelect);
-            controlsContainer.appendChild(modelSection);
+            // Action buttons section
+            const actionsSection = document.createElement('div');
+            actionsSection.style.display = 'flex';
+            actionsSection.style.gap = '1em';
+            actionsSection.style.justifyContent = 'flex-end';
+            actionsSection.style.alignItems = 'center';
+            actionsSection.style.paddingTop = '1em';
+            actionsSection.style.borderTop = '1px solid #e5e7eb';
             
-            console.log('🔧 About to create buttonRow...');
-            
-            // Enhanced buttons row
-            const buttonRow = document.createElement('div');
-            buttonRow.style.display = 'flex';
-            buttonRow.style.gap = '1.5em';
-            buttonRow.style.alignItems = 'center';
-            buttonRow.style.marginBottom = '1em';
-            buttonRow.style.justifyContent = 'flex-start';
-            
-            console.log('🔧 ButtonRow created, about to create buttons...');
-            
-            // Enhanced run button
-            this.runButton = document.createElement('button');
-            this.runButton.innerHTML = '<span style="margin-right: 0.5em;">🚀</span>Run Batch Update';
-            this.runButton.style.fontSize = '1.1em';
-            this.runButton.style.fontWeight = '600';
-            this.runButton.style.padding = '1em 2em';
-            this.runButton.style.borderRadius = '0.75em';
-            this.runButton.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-            this.runButton.style.color = '#fff';
-            this.runButton.style.border = 'none';
-            this.runButton.style.cursor = 'pointer';
-            this.runButton.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.25)';
-            this.runButton.style.transition = 'all 0.2s ease-in-out';
-            this.runButton.style.display = 'inline-flex';
-            this.runButton.style.alignItems = 'center';
-            this.runButton.addEventListener('mouseenter', () => {
-                this.runButton.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
-                this.runButton.style.transform = 'translateY(-2px)';
-                this.runButton.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.3)';
-            });
-            this.runButton.addEventListener('mouseleave', () => {
-                this.runButton.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-                this.runButton.style.transform = 'translateY(0)';
-                this.runButton.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.25)';
-            });
-            this.runButton.addEventListener('click', () => this.handleRun());
-            buttonRow.appendChild(this.runButton);
-            
-            console.log('🔧 Run button added to buttonRow');
-            
-            // Enhanced close button
-            this.closeButton = document.createElement('button');
-            this.closeButton.innerHTML = '<span style="margin-right: 0.5em;">✕</span>Close';
-            this.closeButton.style.fontSize = '1.1em';
-            this.closeButton.style.fontWeight = '600';
-            this.closeButton.style.padding = '1em 2em';
-            this.closeButton.style.borderRadius = '0.75em';
-            this.closeButton.style.background = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
-            this.closeButton.style.color = '#fff';
-            this.closeButton.style.border = 'none';
-            this.closeButton.style.cursor = 'pointer';
-            this.closeButton.style.boxShadow = '0 4px 12px rgba(107, 114, 128, 0.25)';
-            this.closeButton.style.transition = 'all 0.2s ease-in-out';
-            this.closeButton.style.display = 'inline-flex';
-            this.closeButton.style.alignItems = 'center';
-            this.closeButton.addEventListener('mouseenter', () => {
-                this.closeButton.style.background = 'linear-gradient(135deg, #4b5563 0%, #374151 100%)';
-                this.closeButton.style.transform = 'translateY(-2px)';
-                this.closeButton.style.boxShadow = '0 6px 16px rgba(107, 114, 128, 0.3)';
-            });
-            this.closeButton.addEventListener('mouseleave', () => {
-                this.closeButton.style.background = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
-                this.closeButton.style.transform = 'translateY(0)';
-                this.closeButton.style.boxShadow = '0 4px 12px rgba(107, 114, 128, 0.25)';
-            });
-            this.closeButton.addEventListener('click', () => {
-                // Warn if operation is running
-                if (this.isRunning) {
-                    const confirmClose = confirm('A batch operation is currently running. Are you sure you want to close? This will stop the operation.');
-                    if (!confirmClose) {
-                        return;
-                    }
-                    // Stop the operation before closing
-                    this.handleStop();
-                }
-                
-                if (this.options.onClose) {
-                    this.options.onClose();
-                }
-            });
-            buttonRow.appendChild(this.closeButton);
-            
-            // Enhanced stop button (initially hidden)
-            this.stopButton = document.createElement('button');
-            this.stopButton.innerHTML = '<span style="margin-right: 0.5em;">⏹️</span>Stop Batch';
-            this.stopButton.style.fontSize = '1.1em';
-            this.stopButton.style.fontWeight = '600';
-            this.stopButton.style.padding = '1em 2em';
-            this.stopButton.style.borderRadius = '0.75em';
-            this.stopButton.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-            this.stopButton.style.color = '#fff';
-            this.stopButton.style.border = 'none';
-            this.stopButton.style.cursor = 'pointer';
-            this.stopButton.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.25)';
-            this.stopButton.style.transition = 'all 0.2s ease-in-out';
-            this.stopButton.style.display = 'none'; // Initially hidden
-            this.stopButton.style.alignItems = 'center';
-            this.stopButton.addEventListener('mouseenter', () => {
-                this.stopButton.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
-                this.stopButton.style.transform = 'translateY(-2px)';
-                this.stopButton.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.3)';
-            });
-            this.stopButton.addEventListener('mouseleave', () => {
-                this.stopButton.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-                this.stopButton.style.transform = 'translateY(0)';
-                this.stopButton.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.25)';
-            });
-            this.stopButton.addEventListener('click', () => this.handleStop());
-            buttonRow.appendChild(this.stopButton);
-            
-            // Enhanced spinner with progress text
-            this.spinner = document.createElement('div');
+            // Spinner
+            this.spinner.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="60" stroke-dashoffset="60">
+                        <animateTransform attributeName="transform" type="rotate" values="0 12 12;360 12 12" dur="1s" repeatCount="indefinite"/>
+                    </circle>
+                </svg>
+            `;
             this.spinner.style.display = 'none';
             this.spinner.style.alignItems = 'center';
-            this.spinner.style.gap = '0.75em';
-            this.spinner.style.fontSize = '1em';
-            this.spinner.style.color = '#6b7280';
-            this.spinner.style.fontWeight = '500';
+            this.spinner.style.color = '#2563eb';
+            actionsSection.appendChild(this.spinner);
             
-            const spinnerIcon = document.createElement('span');
-            spinnerIcon.style.display = 'inline-block';
-            spinnerIcon.style.width = '1.5em';
-            spinnerIcon.style.height = '1.5em';
-            spinnerIcon.style.border = '3px solid #e5e7eb';
-            spinnerIcon.style.borderTop = '3px solid #3b82f6';
-            spinnerIcon.style.borderRadius = '50%';
-            spinnerIcon.style.animation = 'spin 1s linear infinite';
+            // Close button
+            this.closeButton.textContent = 'Close';
+            this.closeButton.style.padding = '0.75em 1.5em';
+            this.closeButton.style.background = '#6b7280';
+            this.closeButton.style.color = '#ffffff';
+        this.closeButton.style.border = 'none';
+            this.closeButton.style.borderRadius = '0.5em';
+        this.closeButton.style.cursor = 'pointer';
+            this.closeButton.style.fontWeight = '500';
+            this.closeButton.style.fontSize = '1em';
+            this.closeButton.style.transition = 'background 0.2s';
+        this.closeButton.addEventListener('click', () => {
+            if (this.options.onClose) {
+                this.options.onClose();
+            }
+        });
+            actionsSection.appendChild(this.closeButton);
             
-            const spinnerText = document.createElement('span');
-            spinnerText.textContent = 'Processing nodes...';
+            // Stop button  
+            this.stopButton.innerHTML = '<span style="margin-right: 0.5em;">⏹️</span>Stop Batch';
+            this.stopButton.style.padding = '0.75em 1.5em';
+            this.stopButton.style.background = '#dc2626';
+            this.stopButton.style.color = '#ffffff';
+            this.stopButton.style.border = 'none';
+            this.stopButton.style.borderRadius = '0.5em';
+            this.stopButton.style.cursor = 'pointer';
+            this.stopButton.style.fontWeight = '500';
+            this.stopButton.style.fontSize = '1em';
+            this.stopButton.style.transition = 'background 0.2s';
+            this.stopButton.style.display = 'none';
+            this.stopButton.addEventListener('click', () => this.handleStop());
+            actionsSection.appendChild(this.stopButton);
             
-            this.spinner.appendChild(spinnerIcon);
-            this.spinner.appendChild(spinnerText);
-            buttonRow.appendChild(this.spinner);
+            // Run button
+            this.runButton.innerHTML = '<span style="margin-right: 0.5em;">⚡</span>Run Batch Update';
+            this.runButton.style.padding = '0.75em 1.5em';
+            this.runButton.style.background = '#2563eb';
+            this.runButton.style.color = '#ffffff';
+            this.runButton.style.border = 'none';
+            this.runButton.style.borderRadius = '0.5em';
+            this.runButton.style.cursor = 'pointer';
+            this.runButton.style.fontWeight = '500';
+            this.runButton.style.fontSize = '1em';
+            this.runButton.style.transition = 'background 0.2s';
+            this.runButton.addEventListener('click', () => this.handleRun());
+            actionsSection.appendChild(this.runButton);
             
-            // Add CSS animation
-            const style = document.createElement('style');
-            style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
-            document.head.appendChild(style);
+            controlsContainer.appendChild(actionsSection);
             
-            controlsContainer.appendChild(buttonRow);
-            this.rightPanel.appendChild(controlsContainer);
+            // --- Log Panel ---
+        const logContainer = document.createElement('div');
+        logContainer.style.flex = '1 1 0%';
+        logContainer.style.minHeight = '0';
+            logContainer.style.marginTop = '2em';
+            logContainer.style.display = 'flex';
+            logContainer.style.flexDirection = 'column';
+            logContainer.style.overflow = 'hidden';
             
-            console.log('🔧 ButtonRow added to controlsContainer');
-            console.log('🔧 ControlsContainer added to rightPanel');
-            console.log('🔧 ControlsContainer children count:', controlsContainer.children.length);
+        const logHeader = document.createElement('div');
+            logHeader.style.background = '#f9fafb';
+            logHeader.style.padding = '1em 1.5em';
+            logHeader.style.borderRadius = '0.75em 0.75em 0 0';
+            logHeader.style.border = '1px solid #e5e7eb';
+            logHeader.style.borderBottom = 'none';
+            logHeader.style.fontWeight = '600';
+        logHeader.style.color = '#374151';
+        logHeader.textContent = 'Batch Update Log';
+            logContainer.appendChild(logHeader);
             
-            // --- Log panel ---
-            const logContainer = document.createElement('div');
-            logContainer.style.flex = '1 1 0%';
-            logContainer.style.overflowY = 'auto';
-            logContainer.style.minHeight = '0';
-            logContainer.style.maxHeight = '100%'; // Ensure it doesn't exceed remaining space
-            logContainer.style.overflowX = 'hidden'; // Prevent horizontal scrolling
-            // Log panel itself
             this.logPanel = document.createElement('div');
-            this.logPanel.style.background = '#f9fafb';
-            this.logPanel.style.border = '1.5px solid #e5e7eb';
-            this.logPanel.style.borderRadius = '0.7em';
-            this.logPanel.style.padding = '1.2em';
-            this.logPanel.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-            this.logPanel.style.fontSize = '1.1em';
-            this.logPanel.style.lineHeight = '1.5';
-            this.logPanel.style.whiteSpace = 'pre-wrap';
+            this.logPanel.style.flex = '1 1 0%';
+            this.logPanel.style.minHeight = '0';
+            this.logPanel.style.overflowY = 'auto';
+            this.logPanel.style.background = '#ffffff';
+            this.logPanel.style.border = '1px solid #e5e7eb';
+            this.logPanel.style.borderRadius = '0 0 0.75em 0.75em';
+            this.logPanel.style.padding = '1em';
+        logContainer.appendChild(this.logPanel);
             
-            // Add initial log header
-            const logHeader = document.createElement('div');
-            logHeader.style.fontWeight = 'bold';
-            logHeader.style.fontSize = '1.2em';
-            logHeader.style.marginBottom = '1em';
-            logHeader.style.color = '#374151';
-            logHeader.style.borderBottom = '2px solid #e5e7eb';
-            logHeader.style.paddingBottom = '0.5em';
-            logHeader.textContent = 'Batch Update Log';
-            this.logPanel.appendChild(logHeader);
-            logContainer.appendChild(this.logPanel);
-            this.rightPanel.appendChild(logContainer);
+            this.rightPanel.appendChild(controlsContainer);
+        this.rightPanel.appendChild(logContainer);
 
-            // --- Layout: Add panels to container ---
-            this.container.appendChild(this.leftPanel);
-            this.container.appendChild(this.rightPanel);
+            // Assemble layout
+        this.container.appendChild(this.leftPanel);
+        this.container.appendChild(this.rightPanel);
             
-            console.log('🔧 BatchUpdateModal render() completed successfully');
-            
+            console.log('✅ BatchUpdateModal render() completed');
         } catch (error) {
-            console.error('❌ Error in BatchUpdateModal render():', error);
-            throw error;
+            console.error('❌ BatchUpdateModal render() failed:', error);
+            this.container.innerHTML = `<div style="padding: 2em; color: #dc2626;">Error rendering batch update modal: ${error}</div>`;
         }
     }
 
+    private createCheckboxLabel(text: string, checkbox: HTMLInputElement, defaultChecked: boolean): HTMLElement {
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '0.5em';
+        label.style.cursor = 'pointer';
+        label.style.fontSize = '1em';
+        label.style.fontWeight = '500';
+        label.style.color = '#374151';
+        
+        checkbox.type = 'checkbox';
+        checkbox.checked = defaultChecked;
+        checkbox.style.width = '1.2em';
+        checkbox.style.height = '1.2em';
+        checkbox.style.cursor = 'pointer';
+        
+        const span = document.createElement('span');
+        span.textContent = text;
+        
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        
+        return label;
+    }
+
     /**
-     * Run the batch update for all selected nodes.
+     * Phase 1: Collect all unique strings from selected nodes and fields
+     */
+    private collectTargetStrings(): Map<string, FieldUpdate[]> {
+        const selectedNodes = this.tree.getSelectedNodes();
+        const stringMap = new Map<string, FieldUpdate[]>();
+        
+        for (const node of selectedNodes) {
+            const updates: FieldUpdate[] = [];
+            
+            if (this.titleCheckbox.checked && node.title) {
+                updates.push({
+                    field: 'title',
+                    originalValue: node.title
+                });
+            }
+            
+            if (this.contentCheckbox.checked && node.content) {
+                updates.push({
+                    field: 'content', 
+                    originalValue: node.content
+                });
+            }
+            
+            if (this.contextCheckbox.checked && node.context) {
+                updates.push({
+                    field: 'context',
+                    originalValue: node.context
+                });
+            }
+            
+            // Add updates to string map, grouping by original value
+            for (const update of updates) {
+                if (!stringMap.has(update.originalValue)) {
+                    stringMap.set(update.originalValue, []);
+                }
+                stringMap.get(update.originalValue)!.push(update);
+            }
+        }
+        
+        // Debug logging: Show all contexts from selected nodes
+        console.log('🔍 BatchUpdate Context Analysis:');
+        console.log(`Selected ${selectedNodes.length} nodes for batch update`);
+        
+        // Log each node's context
+        selectedNodes.forEach((node, index) => {
+            console.log(`\nNode ${index + 1}: "${node.title}"`);
+            console.log(`Context length: ${node.context?.length || 0}`);
+            if (node.context) {
+                const preview = node.context.substring(0, 100).replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+                console.log(`Context preview: "${preview}${node.context.length > 100 ? '...' : ''}"`);
+                console.log(`Context (first 200 chars): "${node.context.substring(0, 200)}"`);
+            } else {
+                console.log('Context: null/undefined');
+            }
+        });
+        
+        // Compare every context to every other context
+        console.log('\n🔍 Context Comparison Matrix:');
+        for (let i = 0; i < selectedNodes.length; i++) {
+            for (let j = i + 1; j < selectedNodes.length; j++) {
+                const nodeA = selectedNodes[i];
+                const nodeB = selectedNodes[j];
+                if (!nodeA || !nodeB) continue; // Safety check
+                
+                const contextA = nodeA.context || '';
+                const contextB = nodeB.context || '';
+                
+                const isIdentical = contextA === contextB;
+                const lengthDiff = Math.abs(contextA.length - contextB.length);
+                
+                console.log(`"${nodeA.title}" vs "${nodeB.title}": ${isIdentical ? '✅ IDENTICAL' : '❌ DIFFERENT'} (length diff: ${lengthDiff})`);
+                
+                if (!isIdentical && lengthDiff < 10) {
+                    // Show character-by-character comparison for similar-length strings
+                    console.log('  Character-by-character diff (first 50 chars):');
+                    const minLength = Math.min(contextA.length, contextB.length);
+                    for (let k = 0; k < Math.min(minLength, 50); k++) {
+                        if (contextA[k] !== contextB[k]) {
+                            console.log(`    Position ${k}: A="${contextA.charCodeAt(k)}" (${contextA[k]}) vs B="${contextB.charCodeAt(k)}" (${contextB[k]})`);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Debug logging: Show deduplication results
+        console.log('\n🔍 BatchUpdate String Deduplication Results:');
+        stringMap.forEach((fieldUpdates, originalString) => {
+            const preview = originalString.substring(0, 50).replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+            console.log(`  "${preview}${originalString.length > 50 ? '...' : ''}" → ${fieldUpdates.length} field(s) [length: ${originalString.length}]`);
+            fieldUpdates.forEach(fu => {
+                const nodeTitle = selectedNodes.find(n => 
+                    (fu.field === 'title' && n.title === originalString) ||
+                    (fu.field === 'content' && n.content === originalString) ||
+                    (fu.field === 'context' && n.context === originalString)
+                )?.title || 'Unknown';
+                console.log(`    - ${fu.field} from "${nodeTitle}"`);
+            });
+        });
+        
+        return stringMap;
+    }
+
+    /**
+     * Phase 2: Process unique strings through AI
+     */
+    private async processStrings(stringMap: Map<string, FieldUpdate[]>, instruction: string): Promise<StringProcessingMap> {
+        const processingMap: StringProcessingMap = {};
+        const uniqueStrings = Array.from(stringMap.keys());
+        
+        this.appendLog(`📋 Phase 2: Processing ${uniqueStrings.length} unique strings`, 'success', `Found ${uniqueStrings.length} unique strings to process`);
+        
+        for (let i = 0; i < uniqueStrings.length; i++) {
+            if (this.shouldAbort) break;
+            
+            const originalString = uniqueStrings[i];
+            if (!originalString) continue; // Skip if undefined
+            
+            const progress = `(${i + 1}/${uniqueStrings.length})`;
+            
+            try {
+                // Use prompt from PromptManager with placeholder replacement
+                const promptTemplate = getPromptText('batch_update');
+                const prompt = promptTemplate
+                    .replace('{{instruction}}', instruction)
+                    .replace('{{originalText}}', originalString);
+
+                this.appendLog(`🔄 Processing string ${progress}`, 'success', `Processing: "${originalString.substring(0, 100)}${originalString.length > 100 ? '...' : ''}"`);
+                
+                const result = await this.openRouterClient.chat(this.modelSelect.value, prompt);
+                
+                // Clean up the result (remove any extra formatting)
+                const processedString = result.trim();
+                processingMap[originalString] = processedString;
+                
+                this.appendLog(`✅ Completed ${progress}`, 'success', `Updated to: "${processedString.substring(0, 100)}${processedString.length > 100 ? '...' : ''}"`);
+                
+            } catch (error) {
+                if (!this.shouldAbort) {
+                    this.appendLog(`❌ Failed ${progress}`, 'error', `Error: ${error instanceof Error ? error.message : String(error)}`);
+                }
+                // Keep original string as fallback
+                processingMap[originalString] = originalString;
+            }
+        }
+        
+        return processingMap;
+    }
+
+    /**
+     * Phase 3: Apply processed strings to nodes, creating new versions
+     */
+    private async applyProcessedStrings(_stringMap: Map<string, FieldUpdate[]>, processingMap: StringProcessingMap, batchTag: string): Promise<void> {
+        const selectedNodes = this.tree.getSelectedNodes();
+        
+        this.appendLog(`📝 Phase 3: Applying updates to ${selectedNodes.length} nodes`, 'success', `Creating new versions with batch tag`);
+        
+        for (const node of selectedNodes) {
+            if (this.shouldAbort) break;
+            
+            try {
+                this.tree.highlightNode(node.id);
+                
+                // Collect all updates for this node
+                const nodeUpdates: { [field: string]: string } = {};
+                let hasChanges = false;
+                
+                if (this.titleCheckbox.checked && node.title) {
+                    const processedValue = processingMap[node.title];
+                    if (processedValue && processedValue !== node.title) {
+                        nodeUpdates['title'] = processedValue;
+                        hasChanges = true;
+                    }
+                }
+                
+                if (this.contentCheckbox.checked && node.content) {
+                    const processedValue = processingMap[node.content];
+                    if (processedValue && processedValue !== node.content) {
+                        nodeUpdates['content'] = processedValue;
+                        hasChanges = true;
+                    }
+                }
+                
+                if (this.contextCheckbox.checked && node.context) {
+                    const processedValue = processingMap[node.context];
+                    if (processedValue && processedValue !== node.context) {
+                        nodeUpdates['context'] = processedValue;
+                        hasChanges = true;
+                    }
+                }
+                
+                if (hasChanges) {
+                    // Determine tags to apply
+                    const tags = ['batch'];
+                    if (batchTag) {
+                        tags.push(batchTag);
+                    }
+                    
+                    console.log(`🔧 Creating batch version for "${node.title}" with changes:`, nodeUpdates);
+                    
+                    // Create new version with updates
+                    const versionId = node.addVersion(tags, {
+                        title: nodeUpdates['title'] || node.title,
+                        content: nodeUpdates['content'] || node.content,
+                        context: nodeUpdates['context'] || node.context
+                    });
+                    
+                    console.log(`🔧 Created version for "${node.title}": ${versionId ? 'SUCCESS' : 'FAILED'} (versionId: ${versionId})`);
+                    
+                    // Promote to master so changes become active
+                    if (versionId) {
+                        try {
+                            node.promoteToMaster(versionId);
+                            console.log(`🔧 Promoted to master for "${node.title}": SUCCESS`);
+                        } catch (error) {
+                            console.error(`🔧 Promotion failed for "${node.title}":`, error);
+                            this.appendLog(`⚠️ ${node.title}`, 'error', `Version created but promotion to master failed: ${error instanceof Error ? error.message : String(error)}`);
+                        }
+                    } else {
+                        console.warn(`🔧 No versionId returned for "${node.title}" - cannot promote to master`);
+                        this.appendLog(`⚠️ ${node.title}`, 'error', `Failed to create new version - addVersion returned null`);
+                        }
+                        
+                        // Persist changes immediately
+                        await this.persistNodeChanges();
+                        
+                    const changesSummary = Object.keys(nodeUpdates).join(', ');
+                    this.appendLog(`✅ ${node.title}`, 'success', `Updated fields: ${changesSummary}`);
+                        
+                    } else {
+                    this.appendLog(`⏭️ ${node.title}`, 'success', `No changes needed`);
+                }
+                
+            } catch (error) {
+                if (!this.shouldAbort) {
+                    this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
+                }
+            }
+        }
+        
+        this.tree.highlightNode('');
+    }
+
+    /**
+     * Run the 3-phase batch update process
      */
     private async handleRun() {
         const selectedNodes = this.tree.getSelectedNodes();
-        const prompt = this.promptInput.value.trim();
-        const currentBatchTag = this.batchTagInput.value.trim() || this.batchTag;
+        const instruction = this.instructionInput.value.trim();
+        const customBatchTag = this.batchTagInput.value.trim();
         
-        if (!selectedNodes.length || !prompt) {
-            alert('Please select nodes and enter a prompt.');
+        // Validation
+        if (!selectedNodes.length) {
+            alert('Please select at least one node.');
             return;
         }
-        if (prompt === this.defaultPrompt.trim()) {
-            alert('Please fill out the prompt with your instruction.');
+        
+        if (!instruction) {
+            alert('Please enter update instructions.');
             return;
         }
+        
+        const hasFieldSelected = this.titleCheckbox.checked || this.contentCheckbox.checked || this.contextCheckbox.checked;
+        if (!hasFieldSelected) {
+            alert('Please select at least one field to update.');
+            return;
+        }
+        
         // Set running state
         this.isRunning = true;
         this.shouldAbort = false;
@@ -575,108 +764,67 @@ For the node titled "{{title}}" with current content:
         this.stopButton.style.display = 'inline-flex';
         this.spinner.style.display = 'flex';
         
-        // Clear log but keep header
-        const logHeader = this.logPanel.querySelector('div');
+        // Clear log
         this.logPanel.innerHTML = '';
-        if (logHeader) {
-            this.logPanel.appendChild(logHeader);
-        }
         
-        for (const node of selectedNodes) {
-            // Check for abort request
+        try {
+            this.appendLog(`🚀 Starting 3-Phase Batch Update`, 'success', `Processing ${selectedNodes.length} nodes with instruction: "${instruction}"`);
+            
+            // Phase 1: Collect unique strings
+            this.appendLog(`📋 Phase 1: Collecting unique strings`, 'success', `Analyzing selected nodes and fields...`);
+            const stringMap = this.collectTargetStrings();
+            const uniqueCount = stringMap.size;
+            
+            if (uniqueCount === 0) {
+                this.appendLog(`⚠️ No content to process`, 'error', `Selected fields are empty in all selected nodes.`);
+                return;
+            }
+            
+            this.appendLog(`✅ Phase 1 Complete`, 'success', `Found ${uniqueCount} unique strings (deduplication saved ${this.getTotalStrings(stringMap) - uniqueCount} API calls)`);
+            
+            // Phase 2: Process strings
+            const processingMap = await this.processStrings(stringMap, instruction);
+            
             if (this.shouldAbort) {
                 this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
-                break;
+                return;
             }
-            try {
-                // Highlight the node in the tree view
-                this.tree.highlightNode(node.id);
-                const userPrompt = prompt
-                    .replace(/\{\{title\}\}/g, node.title)
-                    .replace(/\{\{content\}\}/g, node.content ?? '');
-                
-                // Check for abort before making API call
-                if (this.shouldAbort) {
-                    break;
-                }
-                
-                const result = await this.openRouterClient.chat(this.modelSelect.value, userPrompt);
-                
-                // Parse section-based response
-                try {
-                    const parsedResult = this.parseSectionResponse(result);
-                    
-                    if (parsedResult.success) {
-                        const updates: string[] = [];
-                        
-                        // Check if any changes were made
-                        const titleChanged = parsedResult.title && parsedResult.title !== node.title;
-                        const contentChanged = parsedResult.content && parsedResult.content !== node.content;
-                        
-                        if (titleChanged || contentChanged) {
-                            // Create single atomic update with both changes
-                            const newTitle = parsedResult.title || node.title;
-                            const newContent = parsedResult.content || node.content;
-                            
-                            // Create version with batch tag
-                            const versionId = node.addVersion([currentBatchTag], { 
-                                title: newTitle, 
-                                content: newContent, 
-                                context: node.context 
-                            });
-                            
-                            // Promote to master so changes become active
-                            if (versionId) {
-                                node.promoteToMaster(versionId);
-                            }
-                            
-                            // Track what was updated
-                            if (titleChanged) {
-                                updates.push(`Title: "${newTitle}"`);
-                            }
-                            if (contentChanged) {
-                                updates.push(`Content updated (${newContent.length} chars)`);
-                            }
-                        }
-                        
-                        // Persist changes immediately
-                        await this.persistNodeChanges();
-                        
-                        const updateSummary = updates.length > 0 ? updates.join('\n') : 'No changes made';
-                        this.appendLog(`✔️ ${node.title}`, 'success', updateSummary, {
-                            node: node,
-                            title: parsedResult.title || node.title,
-                            content: parsedResult.content || node.content
-                        });
-                        
-                    } else {
-                        throw new Error(parsedResult.error || 'Invalid section format');
-                    }
-                } catch (parseError) {
-                    // If section parsing fails, show error and do NOT update anything
-                    const errorMsg = parseError instanceof Error ? parseError.message : 'Invalid section format';
-                    this.appendLog(`❌ ${node.title}`, 'error', `Section parsing failed: ${errorMsg}\n\nReceived response:\n${result.substring(0, 300)}${result.length > 300 ? '...' : ''}`);
-                }
-                
-            } catch (err) {
-                // Don't log individual errors if we're aborting
-                if (!this.shouldAbort) {
-                    this.appendLog(`❌ ${node.title}`, 'error', err instanceof Error ? err.message : String(err));
-                }
+            
+            this.appendLog(`✅ Phase 2 Complete`, 'success', `Processed ${Object.keys(processingMap).length} strings`);
+            
+            // Phase 3: Apply updates
+            await this.applyProcessedStrings(stringMap, processingMap, customBatchTag || this.batchTag);
+            
+            if (this.shouldAbort) {
+                this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
+                return;
             }
+            
+            this.appendLog(`🎉 Batch Update Complete`, 'success', `Successfully processed all selected nodes. New versions created with 'batch' tag.`);
+            
+        } catch (error) {
+            if (!this.shouldAbort) {
+                this.appendLog(`❌ Batch Update Failed`, 'error', error instanceof Error ? error.message : String(error));
+            }
+        } finally {
+            // Reset UI state
+            this.isRunning = false;
+            this.shouldAbort = false;
+            this.runButton.style.display = 'inline-flex';
+            this.closeButton.disabled = false;
+            this.stopButton.style.display = 'none';
+            this.stopButton.innerHTML = '<span style="margin-right: 0.5em;">⏹️</span>Stop Batch';
+            this.stopButton.disabled = false;
+            this.spinner.style.display = 'none';
         }
-        // Remove highlight after batch is done
-        this.tree.highlightNode('');
-        
-        // Reset UI state
-        this.isRunning = false;
-        this.shouldAbort = false;
-        this.runButton.style.display = 'inline-flex';
-        this.closeButton.disabled = false;
-        this.stopButton.style.display = 'none';
-        this.stopButton.innerHTML = '<span style="margin-right: 0.5em;">⏹️</span>Stop Batch';
-        this.stopButton.disabled = false;
-        this.spinner.style.display = 'none';
+    }
+
+    private getTotalStrings(stringMap: Map<string, FieldUpdate[]>): number {
+        let total = 0;
+        for (const updates of stringMap.values()) {
+            total += updates.length;
+        }
+        return total;
     }
 
     /**
@@ -685,49 +833,11 @@ For the node titled "{{title}}" with current content:
     private handleStop() {
         if (this.isRunning) {
             this.shouldAbort = true;
-            this.appendLog(`🛑 Stop Requested`, 'error', 'Batch operation will stop after current node completes.');
+            this.appendLog(`🛑 Stop Requested`, 'error', 'Batch operation will stop after current processing completes.');
             
             // Update stop button to show it's been clicked
             this.stopButton.innerHTML = '<span style="margin-right: 0.5em;">⏳</span>Stopping...';
             this.stopButton.disabled = true;
-        }
-    }
-
-    private parseSectionResponse(response: string): { success: boolean; title?: string; content?: string; error?: string } {
-        try {
-            const trimmed = response.trim();
-            
-            // Find section markers
-            const titleMatch = trimmed.match(/=== TITLE ===\s*\n?(.*?)(?=\n=== CONTENT ===|$)/s);
-            const contentMatch = trimmed.match(/=== CONTENT ===\s*\n?(.*?)(?=\n=== TITLE ===|$)/s);
-            
-            // Validate that both sections are present
-            if (!titleMatch || !contentMatch) {
-                const missingSections = [];
-                if (!titleMatch) missingSections.push('TITLE');
-                if (!contentMatch) missingSections.push('CONTENT');
-                
-                return {
-                    success: false,
-                    error: `Missing required sections: ${missingSections.join(', ')}`
-                };
-            }
-            
-            // Extract and clean content
-            const title = titleMatch[1]?.trim() || '';
-            const content = contentMatch[1]?.trim() || '';
-            
-            return {
-                success: true,
-                title,
-                content
-            };
-            
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown parsing error'
-            };
         }
     }
 
@@ -741,7 +851,7 @@ For the node titled "{{title}}" with current content:
                 // Save the project to storage
                 await projectManager.saveToStorage();
                 
-                // Update the main GUI tree - use the exported renderNodeDetails instead
+                // Update the main GUI tree
                 const { renderNodeDetails } = await import('../project-ui');
                 renderNodeDetails();
             }
@@ -750,87 +860,39 @@ For the node titled "{{title}}" with current content:
         }
     }
 
-    private appendLog(title: string, type: 'success' | 'error', content: string, nodeData?: { node: any; title: string; content: string }) {
+    private appendLog(title: string, type: 'success' | 'error', content: string) {
         const entry = document.createElement('div');
-        entry.style.marginBottom = '1.5em';
-        entry.style.padding = '1em';
-        entry.style.borderRadius = '0.5em';
-        entry.style.border = '1px solid';
+        entry.style.marginBottom = '1em';
+        entry.style.paddingBottom = '1em';
+        entry.style.borderBottom = '1px solid #f3f4f6';
         
-        if (type === 'success') {
-            entry.style.backgroundColor = '#f0f9ff';
-            entry.style.borderColor = '#0ea5e9';
-        } else {
-            entry.style.backgroundColor = '#fef2f2';
-            entry.style.borderColor = '#ef4444';
-        }
-        
-        // Header with title and expand button
+        // Header
         const headerDiv = document.createElement('div');
         headerDiv.style.display = 'flex';
         headerDiv.style.justifyContent = 'space-between';
-        headerDiv.style.alignItems = 'center';
+        headerDiv.style.alignItems = 'flex-start';
         headerDiv.style.marginBottom = '0.5em';
         
-        const titleDiv = document.createElement('div');
-        titleDiv.style.fontWeight = 'bold';
-        titleDiv.style.fontSize = '1.1em';
-        titleDiv.style.color = type === 'success' ? '#0369a1' : '#dc2626';
-        titleDiv.textContent = title;
-        headerDiv.appendChild(titleDiv);
+        const titleSpan = document.createElement('span');
+        titleSpan.style.fontWeight = '600';
+        titleSpan.style.fontSize = '1em';
+        titleSpan.style.color = type === 'success' ? '#059669' : '#dc2626';
+        titleSpan.textContent = title;
+        headerDiv.appendChild(titleSpan);
         
-        // Add expand button for successful updates with node data
-        if (type === 'success' && nodeData) {
-            const expandButton = document.createElement('button');
-            expandButton.textContent = '📝 Edit';
-            expandButton.style.fontSize = '0.9em';
-            expandButton.style.padding = '0.25em 0.5em';
-            expandButton.style.border = '1px solid #0ea5e9';
-            expandButton.style.borderRadius = '0.25em';
-            expandButton.style.background = '#ffffff';
-            expandButton.style.color = '#0369a1';
-            expandButton.style.cursor = 'pointer';
-            expandButton.style.transition = 'all 0.2s';
-            
-            expandButton.addEventListener('mouseenter', () => {
-                expandButton.style.background = '#0ea5e9';
-                expandButton.style.color = '#ffffff';
-            });
-            expandButton.addEventListener('mouseleave', () => {
-                expandButton.style.background = '#ffffff';
-                expandButton.style.color = '#0369a1';
-            });
-            
-            let isExpanded = false;
-            let editView: HTMLElement | null = null;
-            
-            expandButton.addEventListener('click', () => {
-                if (!isExpanded) {
-                    // Create edit view
-                    editView = this.createEditView(nodeData);
-                    entry.appendChild(editView);
-                    expandButton.textContent = '📝 Collapse';
-                    isExpanded = true;
-                } else {
-                    // Remove edit view
-                    if (editView) {
-                        editView.remove();
-                        editView = null;
-                    }
-                    expandButton.textContent = '📝 Edit';
-                    isExpanded = false;
-                }
-            });
-            
-            headerDiv.appendChild(expandButton);
-        }
+        const timestampSpan = document.createElement('span');
+        timestampSpan.style.fontSize = '0.8em';
+        timestampSpan.style.color = '#6b7280';
+        timestampSpan.style.fontFamily = 'monospace';
+        timestampSpan.textContent = new Date().toLocaleTimeString();
+        headerDiv.appendChild(timestampSpan);
         
         entry.appendChild(headerDiv);
         
-        // Content summary
+        // Content
         const contentDiv = document.createElement('div');
         contentDiv.style.whiteSpace = 'pre-wrap';
-        contentDiv.style.fontSize = '1em';
+        contentDiv.style.fontSize = '0.9em';
         contentDiv.style.lineHeight = '1.4';
         contentDiv.style.color = '#374151';
         contentDiv.style.background = type === 'success' ? '#ffffff' : '#fef2f2';
@@ -843,160 +905,8 @@ For the node titled "{{title}}" with current content:
         
         this.logPanel.appendChild(entry);
         
-        // Scroll the container, not the panel itself
-        const logContainer = this.logPanel.parentElement;
-        if (logContainer) {
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
-    }
-
-    private createEditView(nodeData: { node: any; title: string; content: string }): HTMLElement {
-        const editContainer = document.createElement('div');
-        editContainer.style.marginTop = '1em';
-        editContainer.style.padding = '1em';
-        editContainer.style.background = '#f8fafc';
-        editContainer.style.border = '1px solid #e2e8f0';
-        editContainer.style.borderRadius = '0.5em';
-        
-        // Title section
-        const titleSection = document.createElement('div');
-        titleSection.style.marginBottom = '1em';
-        
-        const titleLabel = document.createElement('label');
-        titleLabel.textContent = 'Title:';
-        titleLabel.style.display = 'block';
-        titleLabel.style.fontWeight = 'bold';
-        titleLabel.style.marginBottom = '0.5em';
-        titleLabel.style.fontSize = '1em';
-        titleSection.appendChild(titleLabel);
-        
-        const titleInput = document.createElement('input');
-        titleInput.type = 'text';
-        titleInput.value = nodeData.title;
-        titleInput.style.width = '100%';
-        titleInput.style.padding = '0.5em';
-        titleInput.style.border = '1px solid #d1d5db';
-        titleInput.style.borderRadius = '0.25em';
-        titleInput.style.fontSize = '1em';
-        titleInput.style.boxSizing = 'border-box';
-        titleSection.appendChild(titleInput);
-        
-        editContainer.appendChild(titleSection);
-        
-        // Content section
-        const contentSection = document.createElement('div');
-        contentSection.style.marginBottom = '1em';
-        
-        const contentLabel = document.createElement('label');
-        contentLabel.textContent = 'Content:';
-        contentLabel.style.display = 'block';
-        contentLabel.style.fontWeight = 'bold';
-        contentLabel.style.marginBottom = '0.5em';
-        contentLabel.style.fontSize = '1em';
-        contentSection.appendChild(contentLabel);
-        
-        const contentTextarea = document.createElement('textarea');
-        contentTextarea.value = nodeData.content;
-        contentTextarea.style.width = '100%';
-        contentTextarea.style.minHeight = '8em';
-        contentTextarea.style.padding = '0.5em';
-        contentTextarea.style.border = '1px solid #d1d5db';
-        contentTextarea.style.borderRadius = '0.25em';
-        contentTextarea.style.fontSize = '1em';
-        contentTextarea.style.fontFamily = 'inherit';
-        contentTextarea.style.boxSizing = 'border-box';
-        contentTextarea.style.resize = 'vertical';
-        contentSection.appendChild(contentTextarea);
-        
-        editContainer.appendChild(contentSection);
-        
-        // Buttons
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '0.5em';
-        buttonContainer.style.justifyContent = 'flex-end';
-        
-        const applyButton = document.createElement('button');
-        applyButton.textContent = 'Apply Changes';
-        applyButton.style.padding = '0.5em 1em';
-        applyButton.style.background = '#10b981';
-        applyButton.style.color = '#ffffff';
-        applyButton.style.border = 'none';
-        applyButton.style.borderRadius = '0.25em';
-        applyButton.style.cursor = 'pointer';
-        applyButton.style.fontWeight = '500';
-        applyButton.style.transition = 'background 0.2s';
-        
-        applyButton.addEventListener('mouseenter', () => {
-            applyButton.style.background = '#059669';
-        });
-        applyButton.addEventListener('mouseleave', () => {
-            applyButton.style.background = '#10b981';
-        });
-        
-        applyButton.addEventListener('click', async () => {
-            // Apply changes to the node
-            const newTitle = titleInput.value.trim();
-            const newContent = contentTextarea.value.trim();
-            
-            if (newTitle !== nodeData.node.title || newContent !== nodeData.node.content) {
-                // Create comprehensive manual edit tag with timestamp
-                const now = new Date();
-                const manualEditTag = `ManualEdit_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
-                
-                // Create single atomic update for manual edit
-                const versionId = nodeData.node.addVersion(
-                    [manualEditTag, this.batchTag],
-                    { title: newTitle, content: newContent, context: nodeData.node.context }
-                );
-                
-                // Promote to master so changes become active
-                if (versionId) {
-                    nodeData.node.promoteToMaster(versionId);
-                }
-                
-                // Persist changes and update GUI
-                await this.persistNodeChanges();
-                
-                // Show confirmation
-                const originalText = applyButton.textContent;
-                applyButton.textContent = '✓ Applied';
-                applyButton.style.background = '#059669';
-                setTimeout(() => {
-                    applyButton.textContent = originalText;
-                    applyButton.style.background = '#10b981';
-                }, 1500);
-            }
-        });
-        
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Reset';
-        cancelButton.style.padding = '0.5em 1em';
-        cancelButton.style.background = '#6b7280';
-        cancelButton.style.color = '#ffffff';
-        cancelButton.style.border = 'none';
-        cancelButton.style.borderRadius = '0.25em';
-        cancelButton.style.cursor = 'pointer';
-        cancelButton.style.fontWeight = '500';
-        cancelButton.style.transition = 'background 0.2s';
-        
-        cancelButton.addEventListener('mouseenter', () => {
-            cancelButton.style.background = '#4b5563';
-        });
-        cancelButton.addEventListener('mouseleave', () => {
-            cancelButton.style.background = '#6b7280';
-        });
-        
-        cancelButton.addEventListener('click', () => {
-            titleInput.value = nodeData.title;
-            contentTextarea.value = nodeData.content;
-        });
-        
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(applyButton);
-        editContainer.appendChild(buttonContainer);
-        
-        return editContainer;
+        // Scroll to bottom
+        this.logPanel.scrollTop = this.logPanel.scrollHeight;
     }
 
     private getPluralLevelName(levelName: string): string {

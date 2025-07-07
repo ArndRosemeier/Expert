@@ -3,6 +3,7 @@ import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { EventEmitter } from './EventEmitter';
 import * as state from './state';
+import { SettingsManager } from './SettingsManager';
 
 export interface LoopInput {
     prompt: string;
@@ -83,10 +84,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private abortController: AbortController | null = null;
     private currentIteration = 0;
     private isRunning = false;
+    private settingsManager: SettingsManager;
 
-    constructor(client: OpenRouterClient, prompts?: OrchestratorPrompts) {
+    constructor(client: OpenRouterClient, settingsManager: SettingsManager, prompts?: OrchestratorPrompts) {
         super();
         this.client = client;
+        this.settingsManager = settingsManager;
         this.prompts = prompts || { ...defaultPrompts };
     }
 
@@ -603,11 +606,13 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
         const criteriaJson = this.formatCriteriaAsJson(criteria);
+        const language = this.settingsManager.getLanguage();
 
         if (!history) {
             return this.prompts.content_generation_initial
                 .replace(/{{prompt}}/g, originalPrompt)
-                .replace(/{{criteria}}/g, criteriaJson);
+                .replace(/{{criteria}}/g, criteriaJson)
+                .replace(/{{language}}/g, language);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -620,16 +625,20 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             .replace(/{{prompt}}/g, originalPrompt)
             .replace(/{{lastResponse}}/g, lastResponse || '')
             .replace(/{{editorAdvice}}/g, lastEditorAdvice)
-            .replace(/{{criteria}}/g, criteriaJson);
+            .replace(/{{criteria}}/g, criteriaJson)
+            .replace(/{{language}}/g, language);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
         const criteriaJson = this.formatCriteriaAsJson(criteria);
+        const language = this.settingsManager.getLanguage();
         
         return this.prompts.rater
             .replace(/{{originalPrompt}}/g, prompt)
+            .replace(/{{prompt}}/g, prompt)
             .replace(/{{response}}/g, response)
-            .replace(/{{criteria}}/g, criteriaJson);
+            .replace(/{{criteria}}/g, criteriaJson)
+            .replace(/{{language}}/g, language);
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -688,9 +697,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     private createEditorPrompt(response: string, ratings: Rating[]): string {
+        const language = this.settingsManager.getLanguage();
+        
         return this.prompts.editor
             .replace(/{{response}}/g, response)
-            .replace(/{{ratings}}/g, JSON.stringify(ratings, null, 2));
+            .replace(/{{ratings}}/g, JSON.stringify(ratings, null, 2))
+            .replace(/{{language}}/g, language);
     }
 
     /**
