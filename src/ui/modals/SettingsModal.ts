@@ -15,7 +15,6 @@ import { createElement } from './core/modal-utils';
 import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
-import { LanguageSelector } from '../components/LanguageSelector';
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -42,7 +41,6 @@ export class SettingsModal extends BaseModal {
     // Components
     private criteriaEditor?: CriteriaEditor;
     private profileSelector?: ProfileSelector;
-    private languageSelector?: LanguageSelector;
     
     // State
     private hasUnsavedChanges: boolean = false;
@@ -182,9 +180,7 @@ export class SettingsModal extends BaseModal {
         const modelsSection = this.createModelsSection();
         body.appendChild(modelsSection);
 
-        // Language Section
-        const languageSection = this.createLanguageSection();
-        body.appendChild(languageSection);
+
 
         // Criteria Section
         const criteriaSection = this.createCriteriaSection();
@@ -306,27 +302,7 @@ export class SettingsModal extends BaseModal {
         return section;
     }
 
-    /**
-     * Creates the language section
-     */
-    private createLanguageSection(): HTMLElement {
-        const section = createElement('div', {
-            classes: ['settings-section']
-        });
 
-        const title = createElement('h3', {
-            content: 'Language Settings'
-        });
-
-        const languageContainer = createElement('div', {
-            classes: ['language-container']
-        });
-
-        section.appendChild(title);
-        section.appendChild(languageContainer);
-
-        return section;
-    }
 
     /**
      * Creates the criteria section
@@ -556,19 +532,7 @@ export class SettingsModal extends BaseModal {
             modelsContainer.addEventListener('input', () => this.autoSave());
         }
 
-        // Initialize language selector
-        const languageContainer = this.element?.querySelector('.language-container') as HTMLElement;
-        if (languageContainer) {
-            this.languageSelector = new LanguageSelector(languageContainer, {
-                currentLanguage: this.settingsManager.getLanguage(),
-                onLanguageChange: (language: string) => {
-                    this.settingsManager.setLanguage(language);
-                    this.autoSave();
-                },
-                label: 'Content Generation Language',
-                description: 'Select the language for AI-generated content. This replaces language guessing and ensures consistent output.'
-            });
-        }
+
 
         // Initialize prompt management
         const promptsContainer = this.element?.querySelector('#settings-prompts-container') as HTMLElement;
@@ -627,11 +591,7 @@ export class SettingsModal extends BaseModal {
             this.maxIterationsInput.value = String(profile.maxIterations || DEFAULT_MAX_ITERATIONS);
         }
 
-        // Apply language setting
-        if (this.languageSelector) {
-            const language = profile.language || 'English';
-            this.languageSelector.setLanguage(language);
-        }
+
 
         this.updateUnsavedIndicator(false);
     }
@@ -760,10 +720,7 @@ export class SettingsModal extends BaseModal {
             window.clearTimeout(this.saveTimeout);
         }
         
-        // Clean up language selector
-        if (this.languageSelector) {
-            this.languageSelector.destroy();
-        }
+
         
         super.destroy();
     }

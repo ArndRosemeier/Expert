@@ -1,12 +1,14 @@
-import { ProjectManager } from '../ProjectManager';
-import { DocumentNode } from '../DocumentNode';
-import { OpenRouterClient } from '../OpenRouterClient';
-import { QualityCriterion } from '../types';
+import { ProjectManager } from '../ProjectManager.js';
+import { DocumentNode } from '../DocumentNode.js';
+import { OpenRouterClient } from '../OpenRouterClient.js';
+import { QualityCriterion } from '../types.js';
 import { 
     ReaderEditAction, 
     EditActionConfig, 
     EditContext 
 } from '../types/ReaderEditingTypes';
+import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 
 /**
  * ReaderEditManager handles AI-powered editing actions within the reader view.
@@ -238,177 +240,29 @@ export class ReaderEditManager {
      * Fill a prompt template with context data
      */
     private async fillPrompt(promptTemplate: string, context: EditContext): Promise<string> {
-        let filledPrompt = promptTemplate;
-        
-        // Handle {{input "Title with spaces"}} placeholders first (quoted)
-        const quotedInputMatches = filledPrompt.match(/\{\{input\s+"([^"]+)"\}\}/g);
-        if (quotedInputMatches) {
-            for (const match of quotedInputMatches) {
-                const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
-                if (titleMatch && titleMatch[1]) {
-                    const title = titleMatch[1];
-                    const userInput = await this.showInputModal(title);
-                    
-                    // Check if user canceled the input
-                    if (userInput === '__CANCELED__') {
-                        return '__CANCELED__'; // Return cancel signal instead of throwing
-                    }
-                    
-                    filledPrompt = filledPrompt.replace(match, userInput);
-                }
+        try {
+            // Build prompt context for centralized expansion
+            const placeholders = await this.buildPlaceholders(context.node);
+            const promptContext = PromptContextBuilder.fromLegacyParams(
+                context.node ? this.projectManager.getSettingsManager() : { getLanguage: () => 'English', getCriteria: () => [] } as any,
+                placeholders
+            );
+            
+            // Add selected text to UI context
+            if (context.selection?.text) {
+                promptContext.ui = { selected: context.selection.text };
             }
-        }
-        
-        // Handle {{input Title}} placeholders (unquoted single word)
-        const unquotedInputMatches = filledPrompt.match(/\{\{input\s+([^}"\s]+)\}\}/g);
-        if (unquotedInputMatches) {
-            for (const match of unquotedInputMatches) {
-                const titleMatch = match.match(/\{\{input\s+([^}"\s]+)\}\}/);
-                if (titleMatch && titleMatch[1]) {
-                    const title = titleMatch[1];
-                    const userInput = await this.showInputModal(title);
-                    
-                    // Check if user canceled the input
-                    if (userInput === '__CANCELED__') {
-                        return '__CANCELED__'; // Return cancel signal instead of throwing
-                    }
-                    
-                    filledPrompt = filledPrompt.replace(match, userInput);
-                }
+            
+            // Use centralized async expansion (handles both regular and interactive placeholders)
+            const filledPrompt = await promptExpansionService.expandPromptAsync(promptTemplate, promptContext);
+            return filledPrompt;
+            
+        } catch (error) {
+            if (error instanceof Error && error.message === 'USER_CANCELLED') {
+                return '__CANCELED__';
             }
+            throw error;
         }
-        
-        // Handle simple {{input}} placeholders (no title)
-        const simpleInputMatches = filledPrompt.match(/\{\{input\}\}/g);
-        if (simpleInputMatches) {
-            for (const match of simpleInputMatches) {
-                const userInput = await this.showInputModal('Enter your custom instructions');
-                
-                // Check if user canceled the input
-                if (userInput === '__CANCELED__') {
-                    return '__CANCELED__'; // Return cancel signal instead of throwing
-                }
-                
-                filledPrompt = filledPrompt.replace(match, userInput);
-            }
-        }
-        
-        // Replace {{selected}} with selected text or empty if no selection
-        const selectedText = context.selection?.text || '';
-        filledPrompt = filledPrompt.replace(/\{\{selected\}\}/g, selectedText);
-        
-        // Get all available placeholders by manually building them
-        const placeholders = await this.buildPlaceholders(context.node);
-        
-        // Replace each placeholder
-        for (const [placeholder, value] of Object.entries(placeholders)) {
-            const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
-            filledPrompt = filledPrompt.replace(regex, value as string);
-        }
-        
-        return filledPrompt;
-    }
-
-    /**
-     * Show an input modal and return the user's input
-     */
-    private async showInputModal(title: string): Promise<string> {
-        return new Promise((resolve) => {
-            // Import modal system dynamically to avoid circular dependencies
-            void import('./modals/index').then(({ showGenericModal }) => {
-                let isResolved = false; // Prevent multiple resolutions
-                
-                const resolveOnce = (value: string) => {
-                    if (!isResolved) {
-                        isResolved = true;
-                        resolve(value);
-                    }
-                };
-
-                const modal = showGenericModal(
-                    {
-                        content: `
-                            <div style="margin-bottom: 1.5rem;">
-                                <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 0.5rem;">
-                                    Please provide your input:
-                                </label>
-                                <input type="text" id="user-input" 
-                                       style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.875rem; transition: border-color 0.2s; box-sizing: border-box;" 
-                                       placeholder="Enter your instruction..." autofocus>
-                            </div>
-                        `,
-                        actions: [
-                            {
-                                id: 'cancel',
-                                label: 'Cancel',
-                                type: 'secondary',
-                                handler: async () => {
-                                    resolveOnce('__CANCELED__');
-                                    modal.close(); // Explicitly close the modal
-                                }
-                            },
-                            {
-                                id: 'submit',
-                                label: 'OK',
-                                type: 'primary',
-                                handler: async () => {
-                                    const input = document.getElementById('user-input') as HTMLInputElement;
-                                    const value = input?.value?.trim() || '';
-                                    if (value) {
-                                        resolveOnce(value);
-                                        modal.close(); // Explicitly close the modal
-                                    } else {
-                                        // Don't close if empty, just refocus
-                                        input?.focus();
-                                        // Don't close modal if input is empty, but don't throw error
-                                    }
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        title: title,
-                        maxWidth: '400px'
-                    },
-                    {
-                        onOpen: () => {
-                            // Set up input event handlers after modal opens
-                            setTimeout(() => {
-                                const input = document.getElementById('user-input') as HTMLInputElement;
-                                if (input) {
-                                    // Enter key to submit, Escape key to cancel
-                                    input.addEventListener('keydown', (e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            const value = input.value.trim();
-                                            if (value) {
-                                                resolveOnce(value);
-                                                modal.close();
-                                            } else {
-                                                input.focus();
-                                            }
-                                        } else if (e.key === 'Escape') {
-                                            e.preventDefault();
-                                            resolveOnce('__CANCELED__');
-                                            modal.close();
-                                        }
-                                    });
-
-                                    // Focus the input
-                                    input.focus();
-                                }
-                            }, 100);
-                        },
-                        onClose: () => {
-                            // If modal is closed without resolving, treat as cancel
-                            if (!isResolved) {
-                                resolveOnce('__CANCELED__');
-                            }
-                        }
-                    }
-                );
-            });
-        });
     }
 
     /**

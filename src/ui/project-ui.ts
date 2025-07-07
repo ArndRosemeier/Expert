@@ -7,14 +7,13 @@ import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { CoherenceService } from './modals/services/CoherenceService';
 import { CoherenceModal } from './modals/CoherenceModal';
-import { LanguageSelector } from './components/LanguageSelector';
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
+import { LanguageSelector } from './components/LanguageSelector';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
-let headerLanguageSelector: LanguageSelector | null = null;
 
 // Persistent checkbox states
 let includeContentState: boolean = true;
@@ -162,7 +161,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'polish-text': 'polish-text-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
-                            'batch-update': 'batch-update-btn'
+                            'batch-update': 'batch-update-btn',
+                            'tag-manager': 'tag-manager-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -432,6 +432,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="batch-update">
                         🔄 Batch Update
+                    </button>
+                    <button class="action-btn" data-action="tag-manager">
+                        🏷️ Tag Manager
                     </button>
                     <button class="action-btn" data-action="chat">
                         💬 Chat
@@ -968,7 +971,10 @@ export function renderNodeDetails() {
             }
         </style>
         <div class="node-details-header">
-            <h2 id="node-title-display" contenteditable="true">${node.title}</h2>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
+                <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+            </div>
             <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
             ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             
@@ -1160,7 +1166,6 @@ export function renderNodeDetails() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <label for="node-content">Content</label>
-                    <button id="node-inspector-btn" class="info-button" title="Inspect Node Versions" style="margin-left: 4px;">i</button>
                     <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ? node.creatorModel : 'user text, not generated'}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 1rem;">
@@ -1573,99 +1578,79 @@ function renderRatingsView() {
     const node = projectManager.findNodeById(selectedNodeId);
     if (!node) return;
     
-    // Get ratings from the currently selected version
-    const currentVersion = availableVersions[currentVersionIndex];
-    let versionRatings: any[] = [];
-    let versionLabel = 'Current';
-    let timestampToShow: Date | null = null;
-    
-    if (currentVersion && currentVersion.ratings) {
-        versionRatings = currentVersion.ratings;
-        versionLabel = currentVersion.label;
-        timestampToShow = currentVersion.timestamp;
-    } else if (currentVersion && currentVersion.isCurrent) {
-        // For current version, try to get ratings from chosen iteration
-        const chosenIteration = node.getChosenIteration();
-        if (chosenIteration && chosenIteration.ratings) {
-            versionRatings = chosenIteration.ratings;
-            timestampToShow = chosenIteration.timestamp;
-        }
-    }
-    
-    if (!versionRatings || versionRatings.length === 0) {
-        ratingsDisplay.innerHTML = `
-            <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-                <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
-                <p style="margin: 0 0 1rem 0; font-size: 0.9rem;">This ${versionLabel.toLowerCase()} content doesn't have any quality ratings yet.</p>
-                <p style="margin: 0 0 1.5rem 0; font-size: 0.85rem; color: #868e96;">
-                    Ratings are created when content is generated through the AI system. If you edited the content manually, 
-                    the previous ratings were cleared since they no longer apply to the modified text.
-                </p>
-                ${currentVersion && currentVersion.isCurrent ? `
-                    <button id="regenerate-ratings-btn" class="button button-primary">
-                        ${BUTTON_LABELS.GENERATE_RATINGS}
-                    </button>
-                ` : ''}
-            </div>
-        `;
-        return;
-    }
-    
-    const maxScore = Math.max(...versionRatings.map((r: any) => Math.max(r.score, r.goal)), 10); // Ensure minimum scale of 10
-    
-    let ratingsHtml = `
-        <div style="padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-            <h4 style="margin: 0 0 1rem 0; color: #495057;">Quality Ratings for ${versionLabel} Content</h4>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-    `;
-    
-    versionRatings.forEach((rating: any) => {
-        const scorePercentage = (rating.score / maxScore) * 100;
-        const goalPercentage = (rating.goal / maxScore) * 100;
-        const metGoal = rating.score >= rating.goal;
-        const statusColor = metGoal ? '#28a745' : '#dc3545';
-        const statusIcon = metGoal ? '✓' : '✗';
+    // Import RatingsRenderer dynamically
+    void import('./components/RatingsRenderer').then(({ RatingsRenderer }) => {
+        // Get ratings from the currently selected version
+        const currentVersion = availableVersions[currentVersionIndex];
+        let versionRatings: any[] = [];
+        let versionLabel = 'Current';
+        let timestampToShow: Date | null = null;
         
-        ratingsHtml += `
-            <div style="margin-bottom: 1rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <div style="font-weight: 600; color: #343a40;">${rating.criterion}</div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="color: ${statusColor}; font-size: 1.1rem;">${statusIcon}</span>
-                        <span style="font-weight: 600; color: ${statusColor};">${rating.score}/${rating.goal}</span>
-                    </div>
+        if (currentVersion && currentVersion.ratings) {
+            versionRatings = currentVersion.ratings;
+            versionLabel = currentVersion.label;
+            timestampToShow = currentVersion.timestamp;
+        } else if (currentVersion && currentVersion.isCurrent) {
+            // For current version, try to get ratings from chosen iteration
+            const chosenIteration = node.getChosenIteration();
+            if (chosenIteration && chosenIteration.ratings) {
+                versionRatings = chosenIteration.ratings;
+                timestampToShow = chosenIteration.timestamp;
+            }
+        }
+        
+        if (!versionRatings || versionRatings.length === 0) {
+            ratingsDisplay.innerHTML = `
+                <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
+                    <p style="margin: 0 0 1rem 0; font-size: 0.9rem;">This ${versionLabel.toLowerCase()} content doesn't have any quality ratings yet.</p>
+                    <p style="margin: 0 0 1.5rem 0; font-size: 0.85rem; color: #868e96;">
+                        Ratings are created when content is generated through the AI system. If you edited the content manually, 
+                        the previous ratings were cleared since they no longer apply to the modified text.
+                    </p>
+                    ${currentVersion && currentVersion.isCurrent ? `
+                        <button id="regenerate-ratings-btn" class="button button-primary">
+                            ${BUTTON_LABELS.GENERATE_RATINGS}
+                        </button>
+                    ` : ''}
                 </div>
-                
-                <div style="position: relative; background-color: #e9ecef; border-radius: 6px; height: 24px; overflow: hidden;">
-                    <!-- Goal line -->
-                    <div style="position: absolute; left: ${goalPercentage}%; top: 0; bottom: 0; width: 2px; background-color: #ffc107; z-index: 2;"></div>
-                    <!-- Score bar -->
-                    <div style="height: 100%; background: linear-gradient(90deg, ${metGoal ? '#28a745' : '#dc3545'} 0%, ${metGoal ? '#34ce57' : '#e74c3c'} 100%); width: ${scorePercentage}%; border-radius: 6px; transition: width 0.3s ease-in-out; position: relative;">
-                        <!-- Shine effect -->
-                        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%); animation: progress-shine 2s infinite;"></div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #6c757d; font-style: italic;">
-                    "${rating.justification}"
-                </div>
-            </div>
-        `;
-    });
-    
-    ratingsHtml += `
-            </div>
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dee2e6; font-size: 0.8rem; color: #6c757d;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                    <div style="width: 12px; height: 2px; background-color: #ffc107;"></div>
-                    <span>Goal threshold</span>
-                </div>
-                ${timestampToShow ? `Generated on: ${new Date(timestampToShow).toLocaleString()}` : 'Timestamp not available'}
-            </div>
-        </div>
-    `;
-    
-    ratingsDisplay.innerHTML = ratingsHtml;
+            `;
+            return;
+        }
+        
+        // Convert ratings to expected format
+        const formattedRatings = versionRatings.map((rating: any) => ({
+            score: rating.score,
+            goal: rating.goal,
+            criterion: rating.criterion,
+            justification: rating.justification
+        }));
+        
+        // Render using shared component
+        const options: any = {
+            title: `Quality Ratings for ${versionLabel} Content`,
+            showTimestamp: !!timestampToShow,
+            compact: false,
+            showGoalLine: true,
+            showJustification: true
+        };
+        
+        if (timestampToShow) {
+            options.timestamp = new Date(timestampToShow);
+        }
+        
+        const ratingsHtml = RatingsRenderer.renderRatings(formattedRatings, options);
+        
+        ratingsDisplay.innerHTML = ratingsHtml;
+        
+        // Add styles to head if not already present
+        if (!document.querySelector('#ratings-renderer-styles')) {
+            const styleElement = document.createElement('style');
+            styleElement.id = 'ratings-renderer-styles';
+            styleElement.textContent = RatingsRenderer.getStyles();
+            document.head.appendChild(styleElement);
+        }
+    }).catch(console.error);
 }
 
 // --- Helper Functions ---
@@ -2456,6 +2441,35 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'tag-manager-btn':
+            {
+                if (!projectManager || !selectedNodeId) return;
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Import and open tag manager modal
+                import('./modals/TagManagerModal').then(({ TagManagerModal }) => {
+                    if (!projectManager) return; // Additional null check after async import
+                    
+                    const tagModal = new TagManagerModal(node, {
+                        onClose: () => {
+                            // Refresh UI after tag operations
+                            if (projectManager) {
+                                renderMultiProjectTree();
+                                renderNodeDetails();
+                            }
+                        }
+                    });
+
+                    tagModal.open();
+                    
+                }).catch(error => {
+                    console.error('Failed to open tag manager modal:', error);
+                    alert('Failed to open tag manager. Please try again.');
+                });
+            }
+            break;
+
         default:
             console.warn('Unknown dropdown action:', buttonId);
     }
@@ -2543,8 +2557,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     const profileNames = settingsManager?.getProfileNames() || [];
     const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
     
-
-    
     const profileOptions = profileNames.map(name => 
         `<option value="${name}" ${activeProfileName === name ? 'selected' : ''}>${name}</option>`
     ).join('');
@@ -2573,30 +2585,22 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 font-size: 1rem;
                 min-width: 200px;
             }
-            #profile-language-container {
+            #global-language-selector {
                 display: flex;
                 align-items: center;
-                gap: 2rem;
+                gap: 0.5rem;
             }
-            #profile-language-container .language-selector {
-                margin-bottom: 0;
-            }
-            #profile-language-container .language-selector-label {
-                font-weight: bold;
-                font-size: 1.1rem;
-                color: #343a40;
-                white-space: nowrap;
-                margin-bottom: 0;
-            }
-            #profile-language-container .language-selector-description {
-                display: none;
-            }
-            #profile-language-container .language-selector-dropdown {
-                min-width: 140px;
-                padding: 0.5rem;
-                border: 1px solid var(--border-color);
-                border-radius: 8px;
+            #global-language-selector label {
                 font-size: 1rem;
+                font-weight: 500;
+            }
+            #global-language-selector .language-selector {
+                margin-bottom: 0;
+                min-width: 180px;
+            }
+            #global-language-selector .language-selector-dropdown {
+                min-width: 180px;
+                font-size: 0.9rem;
             }
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
             #project-tree { flex: 1; max-width: 400px; }
@@ -2641,12 +2645,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             @keyframes spin { to { transform: rotate(360deg); } }
         </style>
         <div id="global-profile-bar">
-            <div id="profile-language-container">
-                <div>
-                    <label for="active-profile-selector">Active profile:</label>
-                    <select id="active-profile-selector">${profileOptions}</select>
-                </div>
-                <div id="profile-language-selector"></div>
+            <label for="active-profile-selector">Active profile:</label>
+            <select id="active-profile-selector">${profileOptions}</select>
+            <span style="color: #6c757d; font-size: 0.9rem;">This profile will be used for all AI operations (Generate, Summarize, etc.)</span>
+            <div id="global-language-selector">
+                <div id="language-selector-container"></div>
             </div>
             <button id="open-reader-btn" class="button button-primary" style="margin-left: auto;">📖 Reader View</button>
         </div>
@@ -2656,25 +2659,20 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         </div>
     `;
     
-    // Render the multi-project tree (event listeners are set up once in main.ts)
-    renderMultiProjectTree();
-    
-    // Initialize header language selector
-    const headerLanguageContainer = document.getElementById('profile-language-selector');
-    if (headerLanguageContainer && settingsManager) {
-        // Clean up existing language selector if it exists
-        if (headerLanguageSelector) {
-            headerLanguageSelector.destroy();
-        }
-        
-        headerLanguageSelector = new LanguageSelector(headerLanguageContainer, {
+    // Initialize language selector
+    const languageContainer = getElementById('language-selector-container');
+    if (languageContainer && settingsManager) {
+        const languageSelector = new LanguageSelector(languageContainer, {
             currentLanguage: settingsManager.getLanguage(),
-            onLanguageChange: async (language: string) => {
-                await settingsManager.setLanguage(language);
-                console.log(`🌍 Language changed to: ${language}`);
+            onLanguageChange: (language: string) => {
+                settingsManager.setLanguage(language);
+                // No need to save manually as SettingsManager auto-saves
             }
         });
     }
+    
+    // Render the multi-project tree (event listeners are set up once in main.ts)
+    renderMultiProjectTree();
     
     // Global abort button is now always visible
     

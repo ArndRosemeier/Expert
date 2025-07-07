@@ -95,7 +95,8 @@ export class CoherenceService {
         const analysisPrompt = prompts.coherence_analysis
             .replace(/\{\{parent_content\}\}/g, request.parentContent)
             .replace(/\{\{parent_context\}\}/g, request.parentContext)
-            .replace(/\{\{children_content\}\}/g, request.childrenContent);
+            .replace(/\{\{children_content\}\}/g, request.childrenContent)
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
             // Use creator model for analysis
@@ -192,7 +193,8 @@ export class CoherenceService {
             .replace(/\{\{child_content\}\}/g, childNode.content || '')
             .replace(/\{\{fact_in_outline\}\}/g, contradiction.fact_in_outline)
             .replace(/\{\{fact_in_expansion\}\}/g, contradiction.fact_in_expansion)
-            .replace(/\{\{justification\}\}/g, contradiction.justification);
+            .replace(/\{\{justification\}\}/g, contradiction.justification)
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
             // Use appropriate model based on whether child is leaf or not

@@ -86,7 +86,8 @@ export class ContextExtractionService {
         return promptTemplate
             .replace(/\{\{extraction_request\}\}/g, extractionPrompt)
             .replace(/\{\{node_title\}\}/g, nodeTitle)
-            .replace(/\{\{content\}\}/g, content);
+            .replace(/\{\{content\}\}/g, content)
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
     }
 
     /**

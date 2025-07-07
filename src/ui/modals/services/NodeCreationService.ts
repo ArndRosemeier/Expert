@@ -65,7 +65,8 @@ export class NodeCreationService implements INodeCreationService {
             .replace(/\{\{parent_title\}\}/g, parentNode.title)
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
             .replace(/\{\{context\}\}/g, context || '')
-            .replace(/\{\{count\}\}/g, count.toString());
+            .replace(/\{\{count\}\}/g, count.toString())
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
             // Get the creator model from the profile's selected models
@@ -108,7 +109,8 @@ export class NodeCreationService implements INodeCreationService {
         const filledPrompt = promptTemplate
             .replace(/\{\{child_title\}\}/g, childTitle)
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
-            .replace(/\{\{context\}\}/g, context || '');
+            .replace(/\{\{context\}\}/g, context || '')
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
             // Get the creator model from the profile's selected models

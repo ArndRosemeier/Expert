@@ -3,6 +3,8 @@ import { DocumentNode } from '../../DocumentNode';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
 import { DiffTool } from '../../DiffTool';
+import { promptExpansionService } from '../../services/PromptExpansionService';
+import { PromptContextBuilder } from '../../services/PromptContextBuilder';
 
 export interface PolishingButton {
     id: string;
@@ -427,7 +429,7 @@ export class PolisherModal extends BaseModal {
                 const button = e.target as HTMLButtonElement;
                 const detail = button.dataset['detail'] || '';
                 
-                // Process {{input}} placeholders
+                // Process {{input}} placeholders using centralized system
                 const processedDetail = await this.processInputPlaceholders(detail);
                 
                 // Check if action was canceled
@@ -453,153 +455,23 @@ export class PolisherModal extends BaseModal {
     }
 
     /**
-     * Process {{input}} placeholders in detail text
+     * Process {{input}} placeholders in detail text using centralized system
      */
     private async processInputPlaceholders(detail: string): Promise<string> {
-        let processedDetail = detail;
-        
-        // Handle {{input "Title with spaces"}} placeholders first (quoted)
-        const quotedInputMatches = processedDetail.match(/\{\{input\s+"([^"]+)"\}\}/g);
-        if (quotedInputMatches) {
-            for (const match of quotedInputMatches) {
-                const titleMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
-                if (titleMatch && titleMatch[1]) {
-                    const title = titleMatch[1];
-                    const userInput = await this.showInputModal(title);
-                    
-                    // Check if user canceled the input
-                    if (userInput === '__CANCELED__') {
-                        return '__CANCELED__';
-                    }
-                    
-                    processedDetail = processedDetail.replace(match, userInput);
-                }
+        try {
+            // Build prompt context for centralized expansion
+            const promptContext = PromptContextBuilder.forUI(this.settingsManager);
+            
+            // Use centralized async expansion (handles all input variants)
+            const processedDetail = await promptExpansionService.expandPromptAsync(detail, promptContext);
+            return processedDetail;
+            
+        } catch (error) {
+            if (error instanceof Error && error.message === 'USER_CANCELLED') {
+                return '__CANCELED__';
             }
+            throw error;
         }
-        
-        // Handle {{input Title}} placeholders (unquoted single word)
-        const unquotedInputMatches = processedDetail.match(/\{\{input\s+([^}"\s]+)\}\}/g);
-        if (unquotedInputMatches) {
-            for (const match of unquotedInputMatches) {
-                const titleMatch = match.match(/\{\{input\s+([^}"\s]+)\}\}/);
-                if (titleMatch && titleMatch[1]) {
-                    const title = titleMatch[1];
-                    const userInput = await this.showInputModal(title);
-                    
-                    // Check if user canceled the input
-                    if (userInput === '__CANCELED__') {
-                        return '__CANCELED__';
-                    }
-                    
-                    processedDetail = processedDetail.replace(match, userInput);
-                }
-            }
-        }
-        
-        // Handle simple {{input}} placeholders (no title)
-        const simpleInputMatches = processedDetail.match(/\{\{input\}\}/g);
-        if (simpleInputMatches) {
-            for (const match of simpleInputMatches) {
-                const userInput = await this.showInputModal('Enter your custom polishing instructions');
-                
-                // Check if user canceled the input
-                if (userInput === '__CANCELED__') {
-                    return '__CANCELED__';
-                }
-                
-                processedDetail = processedDetail.replace(match, userInput);
-            }
-        }
-        
-        return processedDetail;
-    }
-
-    /**
-     * Show an input modal and return the user's input
-     */
-    private async showInputModal(title: string): Promise<string> {
-        return new Promise((resolve) => {
-            let isResolved = false; // Prevent multiple resolutions
-            
-            const resolveOnce = (value: string) => {
-                if (!isResolved) {
-                    isResolved = true;
-                    resolve(value);
-                }
-            };
-            
-            // Create modal overlay
-            const overlay = document.createElement('div');
-            overlay.className = 'polisher-edit-overlay';
-            overlay.innerHTML = `
-                <div class="polisher-edit-modal">
-                    <div class="polisher-edit-header">
-                        <h3>${this.escapeHtml(title)}</h3>
-                        <button class="polisher-edit-close">&times;</button>
-                    </div>
-                    <div class="polisher-edit-body">
-                        <input type="text" class="button-label-input" id="custom-input" placeholder="Enter your instruction..." style="width: 100%; margin-bottom: 1rem;">
-                    </div>
-                    <div class="polisher-edit-actions">
-                        <button class="button button-secondary" id="cancel-input">Cancel</button>
-                        <button class="button button-primary" id="submit-input">OK</button>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(overlay);
-            
-            // Focus the input
-            const input = overlay.querySelector('#custom-input') as HTMLInputElement;
-            if (input) {
-                input.focus();
-            }
-            
-            // Handle submit
-            const submitBtn = overlay.querySelector('#submit-input');
-            if (submitBtn) {
-                submitBtn.addEventListener('click', () => {
-                    const value = input?.value || '';
-                    document.body.removeChild(overlay);
-                    resolveOnce(value);
-                });
-            }
-            
-            // Handle cancel
-            const cancelBtn = overlay.querySelector('#cancel-input');
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', () => {
-                    document.body.removeChild(overlay);
-                    resolveOnce('__CANCELED__');
-                });
-            }
-            
-            // Handle close button
-            const closeBtn = overlay.querySelector('.polisher-edit-close');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', () => {
-                    document.body.removeChild(overlay);
-                    resolveOnce('__CANCELED__');
-                });
-            }
-            
-            // Handle enter key
-            if (input) {
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const value = input.value || '';
-                        document.body.removeChild(overlay);
-                        resolveOnce(value);
-                    }
-                    if (e.key === 'Escape') {
-                        e.preventDefault();
-                        document.body.removeChild(overlay);
-                        resolveOnce('__CANCELED__');
-                    }
-                });
-            }
-        });
     }
 
     /**
@@ -656,8 +528,6 @@ export class PolisherModal extends BaseModal {
             this.refresh();
         }
     }
-
-
 
     /**
      * Perform the actual polishing

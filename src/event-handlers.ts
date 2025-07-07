@@ -680,7 +680,8 @@ export async function initialize() {
                     const prompts = settingsManager.getPrompts();
                     const analysisPrompt = prompts.text_import_analysis
                         .replace(/\{\{file_name\}\}/g, fileName)
-                        .replace(/\{\{text_content\}\}/g, textContent);
+                        .replace(/\{\{text_content\}\}/g, textContent)
+                        .replace(/\{\{language\}\}/g, settingsManager.getLanguage());
                     
                     // Use creator model for analysis
                     const response = await openRouterClient.chat('creator', analysisPrompt);

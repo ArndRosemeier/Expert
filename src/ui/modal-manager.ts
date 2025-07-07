@@ -3,10 +3,10 @@ import { ProjectManager } from '../ProjectManager';
 import { ProjectTemplate } from '../ProjectTemplate';
 import * as state from '../state';
 
-
 import { DocumentNode } from '../DocumentNode';
 import { AILogService } from '../AILogService';
-
+import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 
 // --- Generic Modal Functions ---
 // TODO: Migrate to new modal system
@@ -1133,7 +1133,10 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                             
                             // Get the node chat system prompt
                             const prompts = projectManager.getSettingsManager().getPrompts();
-                            const systemPrompt = prompts.node_chat_system.replace('{{node_data}}', treeData);
+                            const promptContext = PromptContextBuilder.forUI(projectManager.getSettingsManager(), {
+                                nodeData: treeData
+                            });
+                            const systemPrompt = promptExpansionService.expandPrompt(prompts.node_chat_system, promptContext);
                             
                             // Close the modal first
                             if (modalInstance) {

@@ -3,7 +3,8 @@ import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { EventEmitter } from './EventEmitter';
 import * as state from './state';
-import { SettingsManager } from './SettingsManager';
+import { promptExpansionService } from './services/PromptExpansionService.js';
+import { PromptContextBuilder } from './services/PromptContextBuilder.js';
 
 export interface LoopInput {
     prompt: string;
@@ -84,13 +85,19 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private abortController: AbortController | null = null;
     private currentIteration = 0;
     private isRunning = false;
-    private settingsManager: SettingsManager;
+    private language: string = 'English'; // Default language
 
-    constructor(client: OpenRouterClient, settingsManager: SettingsManager, prompts?: OrchestratorPrompts) {
+    constructor(client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
         this.client = client;
-        this.settingsManager = settingsManager;
         this.prompts = prompts || { ...defaultPrompts };
+    }
+
+    /**
+     * Set the language for content generation
+     */
+    public setLanguage(language: string): void {
+        this.language = language;
     }
 
     /**
@@ -278,9 +285,15 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 });
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
-                initialPrompt = this.prompts.content_generation_initial
-                    .replace(/{{prompt}}/g, input.prompt)
-                    .replace(/{{criteria}}/g, this.formatCriteriaAsJson(input.criteria));
+                const context = PromptContextBuilder.fromLegacyParams(
+                    { getLanguage: () => this.language, getCriteria: () => [] } as any,
+                    {
+                        prompt: input.prompt,
+                        criteria: this.formatCriteriaAsJson(input.criteria),
+                        language: this.language
+                    }
+                );
+                initialPrompt = promptExpansionService.expandPrompt(this.prompts.content_generation_initial, context);
                 
                 if (this.stopRequested) {
                     aborted = true;
@@ -606,13 +619,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
         const criteriaJson = this.formatCriteriaAsJson(criteria);
-        const language = this.settingsManager.getLanguage();
 
         if (!history) {
-            return this.prompts.content_generation_initial
-                .replace(/{{prompt}}/g, originalPrompt)
-                .replace(/{{criteria}}/g, criteriaJson)
-                .replace(/{{language}}/g, language);
+            const context = PromptContextBuilder.fromLegacyParams(
+                { getLanguage: () => this.language, getCriteria: () => [] } as any,
+                {
+                    prompt: originalPrompt,
+                    criteria: criteriaJson,
+                    language: this.language
+                }
+            );
+            return promptExpansionService.expandPrompt(this.prompts.content_generation_initial, context);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -621,24 +638,32 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const lastEditorAdvice = (lastEditorAdviceItem?.payload as EditorPayload)?.advice || 'No advice was given.';
         const lastResponse = (lastCreatorResponseItem?.payload as CreatorPayload)?.response;
 
-        return this.prompts.content_generation_iterative
-            .replace(/{{prompt}}/g, originalPrompt)
-            .replace(/{{lastResponse}}/g, lastResponse || '')
-            .replace(/{{editorAdvice}}/g, lastEditorAdvice)
-            .replace(/{{criteria}}/g, criteriaJson)
-            .replace(/{{language}}/g, language);
+        const context = PromptContextBuilder.fromLegacyParams(
+            { getLanguage: () => this.language, getCriteria: () => [] } as any,
+            {
+                prompt: originalPrompt,
+                lastResponse: lastResponse || '',
+                editorAdvice: lastEditorAdvice,
+                criteria: criteriaJson,
+                language: this.language
+            }
+        );
+        return promptExpansionService.expandPrompt(this.prompts.content_generation_iterative, context);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
         const criteriaJson = this.formatCriteriaAsJson(criteria);
-        const language = this.settingsManager.getLanguage();
         
-        return this.prompts.rater
-            .replace(/{{originalPrompt}}/g, prompt)
-            .replace(/{{prompt}}/g, prompt)
-            .replace(/{{response}}/g, response)
-            .replace(/{{criteria}}/g, criteriaJson)
-            .replace(/{{language}}/g, language);
+        const context = PromptContextBuilder.fromLegacyParams(
+            { getLanguage: () => this.language, getCriteria: () => [] } as any,
+            {
+                originalPrompt: prompt,
+                response: response,
+                criteria: criteriaJson,
+                language: this.language
+            }
+        );
+        return promptExpansionService.expandPrompt(this.prompts.rater, context);
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -697,12 +722,15 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     private createEditorPrompt(response: string, ratings: Rating[]): string {
-        const language = this.settingsManager.getLanguage();
-        
-        return this.prompts.editor
-            .replace(/{{response}}/g, response)
-            .replace(/{{ratings}}/g, JSON.stringify(ratings, null, 2))
-            .replace(/{{language}}/g, language);
+        const context = PromptContextBuilder.fromLegacyParams(
+            { getLanguage: () => this.language, getCriteria: () => [] } as any,
+            {
+                response: response,
+                ratings: JSON.stringify(ratings, null, 2),
+                language: this.language
+            }
+        );
+        return promptExpansionService.expandPrompt(this.prompts.editor, context);
     }
 
     /**

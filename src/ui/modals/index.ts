@@ -22,6 +22,7 @@ export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
 export { PolisherModal } from './PolisherModal';
 export { NodeInspectorModal } from './NodeInspectorModal';
+export { TagManagerModal } from './TagManagerModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';

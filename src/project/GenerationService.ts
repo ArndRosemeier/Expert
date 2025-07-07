@@ -8,8 +8,8 @@ import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
-
-
+import { promptExpansionService } from '../services/PromptExpansionService';
+import { PromptContextBuilder } from '../services/PromptContextBuilder';
 
 interface GenerationDependencies {
     treeService: TreeService;
@@ -24,8 +24,6 @@ interface GenerationDependencies {
     rootNode: DocumentNode;
     getGenerationCoordinator?: () => any; // Optional for coordinator access
 }
-
-
 
 export class GenerationService {
     private deps: GenerationDependencies;
@@ -100,6 +98,9 @@ export class GenerationService {
             this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
             this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Rating content for "${node.title}"...`, current: 0, total: 1 });
 
+            // Set language for the orchestrator before using it
+            this.deps.loopOrchestrator.setLanguage(this.deps.settingsManager.getLanguage());
+            
             // Use the loop orchestrator's rateContent method
             const ratings = await this.deps.loopOrchestrator.rateContent(filledPrompt, node.content, filteredCriteria);
 
@@ -370,6 +371,9 @@ export class GenerationService {
             });
         };
         
+        // Set language for the orchestrator before using it
+        this.deps.loopOrchestrator.setLanguage(this.deps.settingsManager.getLanguage());
+        
         this.deps.loopOrchestrator.on('started', onStarted);
         this.deps.loopOrchestrator.on('iteration-started', onIterationStarted);
         this.deps.loopOrchestrator.on('phase-started', onPhaseStarted);
@@ -547,13 +551,19 @@ export class GenerationService {
             node,
             context,
             this.deps.treeService.getNodePath(nodeId, this.deps.rootNode)
-        ).replace(/{{outline_content}}/g, node.content);
+        );
+
+        // Apply remaining placeholder replacements using centralized service
+        const promptContext = PromptContextBuilder.forAnalysis(this.deps.settingsManager, {
+            outlineContent: node.content
+        });
+        const finalPrompt = promptExpansionService.expandPrompt(prompt, promptContext);
 
         // Prompt prepared for LLM
 
         try {
             // Using the 'creator' model as it's for generating new content/structure
-            const response = await this.deps.openRouterClient.chat('creator', prompt);
+            const response = await this.deps.openRouterClient.chat('creator', finalPrompt);
             const nodeItems = this.parseChildrenFromJSON(response);
 
             if (nodeItems.length === 0) {
@@ -569,33 +579,33 @@ export class GenerationService {
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
             const creatorModel = currentProfile?.selectedModels?.['creator'];
 
-                                        nodeItems.forEach(item => {
-                    const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
+            nodeItems.forEach(item => {
+                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
+                
+                // Set the content description as initial content if provided
+                if (item.description && item.description.trim()) {
+                    // Create a separate draft version instead of updating master
+                    const metadata: { [key: string]: any } = {};
+                    if (creatorModel) {
+                        metadata['creatorModel'] = creatorModel;
+                    }
                     
-                    // Set the content description as initial content if provided
-                    if (item.description && item.description.trim()) {
-                        // Create a separate draft version instead of updating master
-                        const metadata: { [key: string]: any } = {};
-                        if (creatorModel) {
-                            metadata['creatorModel'] = creatorModel;
-                        }
-                        
-                        newNode.addVersion(['generated', 'draft'], {
-                            content: `Draft: ${item.description}`,
-                            title: newNode.title,
-                            context: newNode.context
-                        }, metadata);
-                        
-                        // Set context for generated child content
-                        if (newNode.parentId) {
-                            const parent = this.deps.treeService.findNodeById(newNode.parentId, this.deps.rootNode);
-                            const parentContext = parent?.context || '';
-                            if (parentContext) {
-                                newNode.setContext(parentContext, 'generated');
-                            }
+                    newNode.addVersion(['generated', 'draft'], {
+                        content: `Draft: ${item.description}`,
+                        title: newNode.title,
+                        context: newNode.context
+                    }, metadata);
+                    
+                    // Set context for generated child content
+                    if (newNode.parentId) {
+                        const parent = this.deps.treeService.findNodeById(newNode.parentId, this.deps.rootNode);
+                        const parentContext = parent?.context || '';
+                        if (parentContext) {
+                            newNode.setContext(parentContext, 'generated');
                         }
                     }
-                });
+                }
+            });
 
             await this.deps.saveToStorage();
             
@@ -920,7 +930,8 @@ export class GenerationService {
         }
 
         const prompts = this.deps.settingsManager.getPrompts();
-        const systemPrompt = prompts.summarize_system.replace(/{{content}}/g, node.content);
+        const promptContext = PromptContextBuilder.forNode(node, this.deps.settingsManager);
+        const systemPrompt = promptExpansionService.expandPrompt(prompts.summarize_system, promptContext);
 
         try {
             node.isGenerating = true;
@@ -1077,8 +1088,6 @@ export class GenerationService {
         });
     }
 
-
-
     /**
      * Parses a JSON array from text containing child node information.
      * Returns array of objects with title and content description.
@@ -1162,6 +1171,4 @@ export class GenerationService {
             })
             .filter(item => item.title.length > 0);
     }
-
-
 } 

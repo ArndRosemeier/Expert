@@ -95,7 +95,8 @@ export class AIProjectGenerator {
         // Replace placeholders
         return promptTemplate
             .replace(/\{\{description\}\}/g, description)
-            .replace(/\{\{criteria\}\}/g, criteriaJson);
+            .replace(/\{\{criteria\}\}/g, criteriaJson)
+            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
     }
 
     /**

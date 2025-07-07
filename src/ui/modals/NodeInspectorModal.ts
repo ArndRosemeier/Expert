@@ -23,6 +23,7 @@ interface Rating {
         shortDisplay?: string;
         title?: string;
     } | string;
+    justification?: string;
 }
 
 // ============================================================================
@@ -107,6 +108,7 @@ abstract class UIComponent {
     protected eventBus: EventBus;
 
     constructor(eventBus: EventBus) {
+        this.eventBus = eventBus;
         this.element = this.createElement();
     }
 
@@ -325,56 +327,72 @@ class ContentViewer extends UIComponent {
     }
 
     private renderRatings(ratings: Rating[]): string {
-        const ratingsHtml = ratings.map(rating => {
-            const score = rating.score || 0;
-            const goal = rating.goal || 10;
+        // Import and use shared RatingsRenderer
+        try {
+            const { RatingsRenderer } = require('../components/RatingsRenderer');
             
-            // Extract criterion name
-            let criterionName = 'Unknown';
-            if (typeof rating.criterion === 'string') {
-                criterionName = rating.criterion;
-            } else if (rating.criterion) {
-                criterionName = rating.criterion.name || 
-                              rating.criterion.displayName ||
-                              rating.criterion.shortDisplay || 
-                              rating.criterion.title ||
-                              'Unknown';
-            }
+            // Convert ratings to expected format
+            const formattedRatings = ratings.map(rating => {
+                let criterionName = 'Unknown';
+                if (typeof rating.criterion === 'string') {
+                    criterionName = rating.criterion;
+                } else if (rating.criterion) {
+                    criterionName = rating.criterion.name || 
+                                  rating.criterion.displayName ||
+                                  rating.criterion.shortDisplay || 
+                                  rating.criterion.title ||
+                                  'Unknown';
+                }
+                
+                return {
+                    score: rating.score || 0,
+                    goal: rating.goal || 10,
+                    criterion: criterionName,
+                    justification: rating.justification
+                };
+            });
             
-            // Create progress bar
-            const percentage = Math.round((score / goal) * 100);
-            const segments = 40;
-            const filledSegments = Math.round((score / goal) * segments);
-            const emptySegments = segments - filledSegments;
-            
-            const filledBar = '█'.repeat(Math.max(0, filledSegments));
-            const emptyBar = '░'.repeat(Math.max(0, emptySegments));
-            
-            // Color based on percentage
-            let barColor = '#ef4444'; // red
-            if (percentage >= 80) barColor = '#22c55e'; // green
-            else if (percentage >= 60) barColor = '#f59e0b'; // yellow
-            else if (percentage >= 40) barColor = '#f97316'; // orange
+            // Use compact mode for modal display
+            return RatingsRenderer.renderRatings(formattedRatings, {
+                title: 'Ratings',
+                compact: true,
+                showGoalLine: true,
+                showJustification: false, // Keep compact in modal
+                showTimestamp: false
+            });
+        } catch (error) {
+            console.warn('RatingsRenderer not available, using fallback', error);
+            // Fallback to simple display
+            const ratingsHtml = ratings.map(rating => {
+                const score = rating.score || 0;
+                const goal = rating.goal || 10;
+                
+                let criterionName = 'Unknown';
+                if (typeof rating.criterion === 'string') {
+                    criterionName = rating.criterion;
+                } else if (rating.criterion) {
+                    criterionName = rating.criterion.name || 
+                                  rating.criterion.displayName ||
+                                  rating.criterion.shortDisplay || 
+                                  rating.criterion.title ||
+                                  'Unknown';
+                }
+                
+                return `
+                    <div style="margin-bottom: 0.5rem;">
+                        <span style="font-weight: 600;">${this.escapeHtml(criterionName)}</span>: 
+                        <span style="color: ${score >= goal ? '#28a745' : '#dc3545'};">${score}/${goal}</span>
+                    </div>
+                `;
+            }).join('');
             
             return `
-                <div class="rating-item">
-                <span class="rating-name">${this.escapeHtml(criterionName)}</span>
-                    <span class="rating-bar">
-                        <span style="color: ${barColor};">${filledBar}</span><span style="color: #d1d5db;">${emptyBar}</span>
-                    </span>
-                <span class="rating-score">${score}/${goal}</span>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="ratings-section">
-                <h4>Ratings</h4>
-                <div class="ratings-list">
+                <div style="padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 1rem;">Ratings</h4>
                     ${ratingsHtml}
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     private escapeHtml(text: string): string {
@@ -557,6 +575,10 @@ export class NodeInspectorModal extends BaseModal {
         // Select master by default, or first version
         const master = versions.find(v => v.tags.has('master'));
         this.selectedVersionId = master ? master.id : (versions[0]?.id ?? null);
+        
+        // Inject ratings styles
+        this.injectRatingsStyles();
+        
         this.open();
     }
 
@@ -636,9 +658,13 @@ export class NodeInspectorModal extends BaseModal {
                 // Add event listener for the promote button
                 const promoteBtn = promoteButton.querySelector('.promote-to-master-btn') as HTMLButtonElement;
                 if (promoteBtn) {
-                    promoteBtn.addEventListener('click', (e) => {
+                    promoteBtn.addEventListener('click', async (e) => {
                         e.stopPropagation(); // Prevent triggering version selection
-                        this.handlePromoteToMaster(version.id);
+                        try {
+                            await this.handlePromoteToMaster(version.id);
+                        } catch (error) {
+                            console.error('Error promoting version to master:', error);
+                        }
                     });
                 }
                 
@@ -688,11 +714,21 @@ export class NodeInspectorModal extends BaseModal {
             .map(tag => `<span class="content-version-tag ${tag}">${tag}</span>`)
             .join('');
             
+        // Check if this version has ratings
+        const hasRatings = version.ratings && version.ratings.length > 0;
+        let ratingsHtml = '';
+        
+        if (hasRatings) {
+            ratingsHtml = this.renderVersionRatings(version.ratings!);
+        }
+        
         wrapper.innerHTML = `
             <div class="content-header">
                 <div class="content-label"><strong>${this.getVersionLabel(version)}</strong> <span class="content-timestamp">${new Date(version.timestamp).toLocaleString()}</span></div>
                 ${contentTags ? `<div class="content-version-tags">${contentTags}</div>` : ''}
-            </div>
+                    </div>
+                    
+            ${hasRatings ? ratingsHtml : ''}
             
             <div class="version-sections">
                 <div class="version-section">
@@ -709,8 +745,8 @@ export class NodeInspectorModal extends BaseModal {
                     <h4 class="section-title">Context</h4>
                     <pre class="section-content context-content">${this.escapeHtml(version.context || 'No context')}</pre>
                 </div>
-            </div>
-        `;
+                </div>
+            `;
         
         return wrapper;
     }
@@ -749,7 +785,7 @@ export class NodeInspectorModal extends BaseModal {
 
 
 
-    private handlePromoteToMaster(versionId: string): void {
+    private async handlePromoteToMaster(versionId: string): Promise<void> {
         if (!this.node) return;
         
         try {
@@ -758,10 +794,34 @@ export class NodeInspectorModal extends BaseModal {
             
             // Update the selected version to show the newly promoted master
             this.selectedVersionId = versionId;
+            
+            // Persist changes to storage
+            await this.persistNodeChanges();
+            
             // Re-render the modal to reflect the changes
             this.rerender();
         } catch (error) {
             console.error('Failed to promote version to master:', error);
+        }
+    }
+
+    private async persistNodeChanges(): Promise<void> {
+        try {
+            // Get the active project manager
+            const { getActiveProject } = await import('../../state');
+            const projectManager = getActiveProject();
+            
+            if (projectManager) {
+                // Save the project to storage
+                await projectManager.saveToStorage();
+                
+                // Update both the project tree and node details to ensure all UI reflects changes
+                const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
+                renderMultiProjectTree(); // Updates tree titles and structure
+                renderNodeDetails();      // Updates details panel content
+            }
+        } catch (error) {
+            console.error('Failed to persist node changes:', error);
         }
     }
 
@@ -773,6 +833,69 @@ export class NodeInspectorModal extends BaseModal {
             if (modalRoot) {
                 modalRoot.innerHTML = '';
                 modalRoot.appendChild(modalContent);
+            }
+        }
+    }
+
+    private renderVersionRatings(ratings: Rating[]): string {
+        // Use 3-column layout with visual progress bars (0-10 scale)
+        const ratingsHtml = ratings.map(rating => {
+            const score = rating.score || 0;
+            const goal = rating.goal || 10;
+            const scorePercentage = Math.min((score / 10) * 100, 100); // Always scale to 10
+            const goalPercentage = Math.min((goal / 10) * 100, 100); // Goal indicator position
+            
+            let criterionName = 'Unknown';
+            if (typeof rating.criterion === 'string') {
+                criterionName = rating.criterion;
+            } else if (rating.criterion) {
+                criterionName = rating.criterion.name || 
+                              rating.criterion.displayName ||
+                              rating.criterion.shortDisplay || 
+                              rating.criterion.title ||
+                              'Unknown';
+            }
+            
+            const barColor = score >= goal ? '#28a745' : (score >= goal * 0.7 ? '#ffc107' : '#dc3545');
+            const textColor = score >= goal ? '#28a745' : '#dc3545';
+            
+            return `
+                <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; padding: 0.125rem 0;">
+                    <span style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${this.escapeHtml(criterionName)}</span>
+                    <div style="background: #e9ecef; border-radius: 4px; height: 12px; position: relative; min-width: 0;">
+                        <div style="background: ${barColor}; height: 100%; border-radius: 4px; width: ${scorePercentage}%; transition: width 0.3s ease;"></div>
+                        ${goal !== 10 ? `<div style="position: absolute; top: 0; left: ${goalPercentage}%; width: 2px; height: 12px; background: #6b7280; border-radius: 1px; transform: translateX(-50%);"></div>` : ''}
+                    </div>
+                    <span style="font-weight: 600; font-size: 0.8rem; color: ${textColor}; min-width: 3rem; text-align: right;">${score}/${goal}</span>
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div style="padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 1rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #374151;">Quality Ratings</h4>
+                <div style="font-size: 0.85rem;">
+                    ${ratingsHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    private injectRatingsStyles(): void {
+        // Add shared ratings renderer styles if not already present
+        if (!document.querySelector('#ratings-renderer-styles-modal')) {
+            try {
+                // Use dynamic import instead of require for browser compatibility
+                import('../components/RatingsRenderer').then(({ RatingsRenderer }) => {
+                    const styleElement = document.createElement('style');
+                    styleElement.id = 'ratings-renderer-styles-modal';
+                    styleElement.textContent = RatingsRenderer.getStyles();
+                    document.head.appendChild(styleElement);
+                }).catch(error => {
+                    console.warn('Could not load RatingsRenderer styles via import', error);
+                });
+            } catch (error) {
+                console.warn('Could not load RatingsRenderer styles', error);
             }
         }
     }

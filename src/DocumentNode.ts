@@ -531,6 +531,38 @@ export class DocumentNode {
     }
 
     /**
+     * Removes a version by its ID with safety checks.
+     * @param versionId The ID of the version to remove
+     * @returns true if version was removed, false if not found or cannot be removed
+     * @throws Error if trying to remove master version or the last remaining version
+     */
+    removeVersion(versionId: string): boolean {
+        const versionIndex = this.versions.findIndex(v => v.id === versionId);
+        if (versionIndex === -1) {
+            return false; // Version not found
+        }
+        
+        const version = this.versions[versionIndex];
+        if (!version) {
+            return false; // Should not happen, but TypeScript safety
+        }
+        
+        // Cannot remove master version
+        if (version.tags.has('master')) {
+            throw new Error('Cannot remove master version. Promote another version to master first.');
+        }
+        
+        // Cannot remove if it's the only version
+        if (this.versions.length <= 1) {
+            throw new Error('Cannot remove the last remaining version.');
+        }
+        
+        // Remove the version
+        this.versions.splice(versionIndex, 1);
+        return true;
+    }
+
+    /**
      * Sets content during generation process (does NOT promote to master automatically).
      */
     setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number): void {

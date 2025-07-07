@@ -523,6 +523,32 @@ label[for] {
     color: var(--secondary-700);
 }
 
+.node-inspector-button {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: #3b82f6;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.node-inspector-button:hover {
+    background: #2563eb;
+    transform: scale(1.05);
+}
+
+.node-inspector-button:active {
+    transform: scale(0.95);
+}
+
 .order-btn {
     background: var(--secondary-100);
     border: 1px solid var(--secondary-300);

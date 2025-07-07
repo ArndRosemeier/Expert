@@ -3,6 +3,8 @@ import { SettingsManager } from '../SettingsManager';
 import { StorageService } from '../StorageService';
 import { DocumentNode } from '../DocumentNode';
 import * as state from '../state';
+import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 
 export interface ChatMessage {
     id: string;
@@ -1102,10 +1104,12 @@ For each suggestion, provide clear justification for why the change would improv
             return;
         }
 
-        // Replace placeholders in the roleplay prompt
-        const roleplaySystemPrompt = roleplayPrompt
-            .replace('{{node_data}}', this.customSystemPrompt)
-            .replace(/\{\{starting_node\}\}/g, selectedStartingNode);
+        // Replace placeholders in the roleplay prompt using centralized service
+        const promptContext = PromptContextBuilder.forUI(this.settingsManager, {
+            nodeData: this.customSystemPrompt,
+            startingNode: selectedStartingNode
+        });
+        const roleplaySystemPrompt = promptExpansionService.expandPrompt(roleplayPrompt, promptContext);
 
         // Create roleplay message
         const roleplayMessage: ChatMessage = {

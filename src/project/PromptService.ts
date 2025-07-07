@@ -1,6 +1,8 @@
-import { DocumentNode } from '../DocumentNode';
-import { SettingsManager } from '../SettingsManager';
-import { QualityCriterion } from '../types';
+import { DocumentNode } from '../DocumentNode.js';
+import { SettingsManager } from '../SettingsManager.js';
+import { QualityCriterion } from '../types.js';
+import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 
 /**
  * PromptService handles all prompt generation, template processing, and criteria filtering.
@@ -42,11 +44,10 @@ export class PromptService {
         path: string, 
         count?: number
     ): string {
-        // Handle draftorfresh placeholder intelligently
-        let draftOrFresh = '';
-        if (node.content) {
+        let draftOrFresh: string;
+        if (node.content && node.content.trim() !== '') {
             if (node.content.startsWith('Draft:')) {
-                draftOrFresh = `You have this existing draft to build upon:
+                draftOrFresh = `You have an initial draft to work with:
 ---
 ${node.content}
 ---
@@ -64,14 +65,24 @@ Please improve and expand this content.`;
             draftOrFresh = 'Now, write the full content for this node.';
         }
 
-        let filledPrompt = promptTemplate
-            .replace(/\{\{path\}\}/g, path)
-            .replace(/\{\{context\}\}/g, context)
-            .replace(/\{\{title\}\}/g, node.title)
-            .replace(/\{\{child_level_name\}\}/g, node.childLevelName || '')
-            .replace(/\{\{content\}\}/g, node.content || '')
-            .replace(/\{\{draftorfresh\}\}/g, draftOrFresh)
-            .replace(/\{\{generate_count\}\}/g, this.getGenerateCountInstruction(node));
+        // Use centralized prompt expansion
+        const generationOptions: any = {
+            context: context,
+            draftOrFresh: draftOrFresh,
+            childLevelName: node.childLevelName || '',
+            generateCount: this.getGenerateCountInstruction(node)
+        };
+        
+        if (count !== undefined) {
+            generationOptions.count = count;
+        }
+        
+        const promptContext = PromptContextBuilder.forGeneration(node, this.settingsManager, generationOptions);
+        
+        // Add node path to context
+        promptContext.node!.path = path;
+        
+        let filledPrompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {
@@ -79,7 +90,7 @@ Please improve and expand this content.`;
         }
         
         if (!node.isLeaf && count) {
-            filledPrompt = filledPrompt.replace(/\{\{count\}\}/g, String(count));
+            // Count placeholder should already be handled by centralized service
         }
 
         return filledPrompt;

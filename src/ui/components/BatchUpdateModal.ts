@@ -1,7 +1,10 @@
-import { DocumentNode } from '../../DocumentNode';
-import { SelectableNodeTree } from './SelectableNodeTree';
-import { OpenRouterClient } from '../../OpenRouterClient';
-import { getPromptText } from '../../PromptManager';
+import { DocumentNode } from '../../DocumentNode.js';
+import { SelectableNodeTree } from './SelectableNodeTree.js';
+import { OpenRouterClient } from '../../OpenRouterClient.js';
+import * as state from '../../state.js';
+import { getPromptText } from '../../PromptManager.js';
+import { promptExpansionService } from '../../services/PromptExpansionService.js';
+import { PromptContextBuilder } from '../../services/PromptContextBuilder.js';
 
 const MODEL_PURPOSES = [
     { key: 'creator', label: 'Creator' },
@@ -215,7 +218,7 @@ export class BatchUpdateModal {
         const headerDesc = document.createElement('p');
             headerDesc.textContent = 'Select nodes and fields to update. AI will process unique content automatically.';
         headerDesc.style.margin = '0';
-        headerDesc.style.fontSize = '1em';
+            headerDesc.style.fontSize = '1em';
         headerDesc.style.opacity = '0.9';
         headerSection.appendChild(headerDesc);
         
@@ -607,11 +610,16 @@ export class BatchUpdateModal {
             const progress = `(${i + 1}/${uniqueStrings.length})`;
             
             try {
-                // Use prompt from PromptManager with placeholder replacement
+                // Use prompt from PromptManager with centralized placeholder replacement
                 const promptTemplate = getPromptText('batch_update');
-                const prompt = promptTemplate
-                    .replace('{{instruction}}', instruction)
-                    .replace('{{originalText}}', originalString);
+                const promptContext = PromptContextBuilder.forPrompt(
+                    state.getActiveProject()?.getSettingsManager() || { getLanguage: () => 'English', getCriteria: () => [] } as any,
+                    {
+                        instruction: instruction,
+                        originalText: originalString
+                    }
+                );
+                const prompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
 
                 this.appendLog(`🔄 Processing string ${progress}`, 'success', `Processing: "${originalString.substring(0, 100)}${originalString.length > 100 ? '...' : ''}"`);
                 
@@ -707,15 +715,15 @@ export class BatchUpdateModal {
                     } else {
                         console.warn(`🔧 No versionId returned for "${node.title}" - cannot promote to master`);
                         this.appendLog(`⚠️ ${node.title}`, 'error', `Failed to create new version - addVersion returned null`);
-                        }
+                    }
                         
-                        // Persist changes immediately
-                        await this.persistNodeChanges();
+                    // Persist changes immediately
+                    await this.persistNodeChanges();
                         
                     const changesSummary = Object.keys(nodeUpdates).join(', ');
                     this.appendLog(`✅ ${node.title}`, 'success', `Updated fields: ${changesSummary}`);
                         
-                    } else {
+                } else {
                     this.appendLog(`⏭️ ${node.title}`, 'success', `No changes needed`);
                 }
                 
