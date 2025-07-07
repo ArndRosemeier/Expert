@@ -619,7 +619,7 @@ PARENT OUTLINE:
 PARENT CONTEXT (background information):
 {{parent_context}}
 
-EXPANDED CONTENT (from child sections):
+CHILD NODES (numbered for reference):
 {{children_content}}
 
 TASK: Identify contradictions between the outline and the expanded content.
@@ -628,13 +628,14 @@ IMPORTANT INSTRUCTIONS:
 - Focus on factual contradictions, not minor style differences
 - Look for conflicts in: facts, dates, names, events, causation, logic, timelines
 - Use the parent context to better understand the intended meaning
+- Reference child nodes by their index number (0, 1, 2, etc.)
 
 RESPONSE FORMAT:
 Return a JSON array where each contradiction has exactly these fields:
 - "fact_in_outline": The specific fact or claim from the outline
 - "fact_in_expansion": The contradictory fact or claim from the expanded content  
 - "justification": Brief explanation of why this is a contradiction
-- "offending_child_title": Title of the child node that contains the contradictory content
+- "child_index": Index number (0, 1, 2, etc.) of the child node that contains the contradictory content
 
 If no contradictions found, return an empty array: []
 
@@ -644,7 +645,7 @@ EXAMPLE:
     "fact_in_outline": "The meeting was scheduled for Tuesday",
     "fact_in_expansion": "The meeting occurred on Wednesday morning",
     "justification": "Timeline contradiction - different days specified for the same event",
-    "offending_child_title": "Meeting Summary"
+    "child_index": 2
   }
 ]
 

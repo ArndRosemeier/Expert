@@ -59,7 +59,7 @@ export class CoherenceService {
         });
 
         const childrenContent = validChildren
-            .map(child => child.content)
+            .map((child, index) => `[${index}] "${child.title}"\n${child.content}`)
             .join('\n\n---\n\n');
 
         return {
@@ -132,55 +132,31 @@ export class CoherenceService {
                 throw new Error('Response is not an array');
             }
 
-            // Create a mapping from child title to child ID
-            const titleToIdMap = new Map<string, string>();
-            childNodes.forEach(child => {
-                titleToIdMap.set(child.title, child.id);
-            });
-
             // Validate and normalize contradictions
             return parsed.map((item, index) => {
                 if (!item || typeof item !== 'object') {
                     throw new Error(`Invalid contradiction at index ${index}`);
                 }
 
-                const offendingChildTitle = String(item.offending_child_title || '').trim();
+                const childIndex = Number(item.child_index);
+                
+                // Validate child index
+                if (isNaN(childIndex) || childIndex < 0 || childIndex >= childNodes.length) {
+                    throw new Error(`Invalid child_index ${item.child_index} at contradiction ${index}. Must be between 0 and ${childNodes.length - 1}`);
+                }
+
+                const childNode = childNodes[childIndex]!;
                 
                 const contradiction: CoherenceContradiction = {
                     fact_in_outline: String(item.fact_in_outline || '').trim(),
                     fact_in_expansion: String(item.fact_in_expansion || '').trim(),
                     justification: String(item.justification || '').trim(),
-                    offending_child_title: offendingChildTitle
+                    child_index: childIndex,
+                    offending_child_title: childNode.title,
+                    offending_child_id: childNode.id
                 };
 
-                // Add child ID using robust title matching
-                let childId = titleToIdMap.get(offendingChildTitle);
-                
-                // If exact match fails, try fuzzy matching
-                if (!childId) {
-                    const normalizedOffendingTitle = offendingChildTitle.toLowerCase().trim();
-                    for (const child of childNodes) {
-                        const normalizedChildTitle = child.title.toLowerCase().trim();
-                        if (normalizedChildTitle === normalizedOffendingTitle || 
-                            normalizedChildTitle.includes(normalizedOffendingTitle) ||
-                            normalizedOffendingTitle.includes(normalizedChildTitle)) {
-                            childId = child.id;
-                            break;
-                        }
-                    }
-                }
-                
-                // If still no match, use the first child as fallback (better than no fix button)
-                if (!childId && childNodes.length > 0) {
-                    console.warn(`Could not match offending child title "${offendingChildTitle}" to any child node. Using first child as fallback.`);
-                    childId = childNodes[0]!.id;
-                }
-                
-                if (childId) {
-                    contradiction.offending_child_id = childId;
-                }
-
-                if (!contradiction.fact_in_outline || !contradiction.fact_in_expansion || !contradiction.justification || !contradiction.offending_child_title) {
+                if (!contradiction.fact_in_outline || !contradiction.fact_in_expansion || !contradiction.justification) {
                     throw new Error(`Missing required fields in contradiction at index ${index}`);
                 }
 

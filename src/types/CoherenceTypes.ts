@@ -2,8 +2,9 @@ export interface CoherenceContradiction {
     fact_in_outline: string;
     fact_in_expansion: string;
     justification: string;
-    offending_child_title: string;
-    offending_child_id?: string; // Will be populated during analysis
+    child_index: number;
+    offending_child_title: string; // Populated from child_index during analysis
+    offending_child_id: string; // Populated from child_index during analysis
 }
 
 export interface CoherenceAnalysisResult {
