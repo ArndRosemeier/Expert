@@ -1830,7 +1830,7 @@ label[for] {
     left: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    background: rgba(0, 0, 0, 0.5) !important;
+    background: rgba(0, 0, 0, 0.3) !important;
     backdrop-filter: blur(2px) !important;
     z-index: 25000 !important;
     display: flex !important;
@@ -1843,18 +1843,18 @@ label[for] {
 #ai-interactions-overlay .ai-modal-content {
     width: 80vw !important;
     height: 80vh !important;
-    background: rgba(255, 255, 255, 0.9) !important;
-    border: 1px solid rgba(221, 221, 221, 0.8) !important;
+    background: rgba(255, 255, 255, 0.7) !important;
+    border: 1px solid rgba(221, 221, 221, 0.5) !important;
     border-radius: 8px !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    opacity: 0.9 !important;
+    opacity: 0.7 !important;
 }
 
 .ai-overlay-header {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%) !important;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.6) 0%, rgba(118, 75, 162, 0.6) 100%) !important;
     color: white !important;
     padding: 1rem !important;
     display: flex !important;
@@ -1915,8 +1915,8 @@ label[for] {
 
 .ai-content-box {
     flex: 1 !important;
-    background: rgba(248, 249, 250, 0.8) !important;
-    border: 1px solid rgba(229, 231, 235, 0.8) !important;
+    background: rgba(248, 249, 250, 0.6) !important;
+    border: 1px solid rgba(229, 231, 235, 0.5) !important;
     border-radius: 6px !important;
     padding: 1rem !important;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
@@ -1928,13 +1928,13 @@ label[for] {
 }
 
 #ai-prompt-content {
-    background: rgba(255, 247, 237, 0.8) !important;
-    border-color: rgba(254, 215, 170, 0.8) !important;
+    background: rgba(255, 247, 237, 0.6) !important;
+    border-color: rgba(254, 215, 170, 0.5) !important;
 }
 
 #ai-response-content {
-    background: rgba(240, 249, 255, 0.8) !important;
-    border-color: rgba(186, 230, 253, 0.8) !important;
+    background: rgba(240, 249, 255, 0.6) !important;
+    border-color: rgba(186, 230, 253, 0.5) !important;
 }
 
 /* Responsive design for AI overlay */

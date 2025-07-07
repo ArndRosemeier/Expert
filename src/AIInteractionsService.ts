@@ -1,4 +1,4 @@
-import { StorageService } from './StorageService';
+import { StorageService, IStorageService } from './StorageService';
 
 export class AIInteractionsService {
     private static instance: AIInteractionsService | null = null;
@@ -6,7 +6,7 @@ export class AIInteractionsService {
     private overlay: HTMLElement | null = null;
     private promptContent: HTMLElement | null = null;
     private responseContent: HTMLElement | null = null;
-    private storageService: StorageService | null = null;
+    private storageService: IStorageService | null = null;
 
     private constructor() {
         // Don't load settings in constructor - do it in initialize
@@ -123,17 +123,12 @@ export class AIInteractionsService {
             return;
         }
 
-        // Add a completion indicator and auto-close
+        // Add a completion indicator
         setTimeout(() => {
             if (this.responseContent && this.responseContent.textContent) {
                 this.responseContent.textContent += '\n\n--- Response Complete ---';
                 this.responseContent.scrollTop = this.responseContent.scrollHeight;
             }
-            
-            // Auto-close after 2 seconds
-            setTimeout(() => {
-                this.hideOverlay();
-            }, 2000);
         }, 500);
     }
 
@@ -177,7 +172,7 @@ export class AIInteractionsService {
                 console.warn('StorageService not initialized, cannot load AI interactions setting');
                 return;
             }
-            const saved = await this.storageService.get('ai_interactions_enabled');
+            const saved = await this.storageService.get<boolean>('ai_interactions_enabled');
             if (saved !== undefined) {
                 this.isEnabled = saved;
             }
