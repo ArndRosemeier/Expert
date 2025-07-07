@@ -1,12 +1,15 @@
+import { StorageService } from './StorageService';
+
 export class AIInteractionsService {
     private static instance: AIInteractionsService | null = null;
     private isEnabled: boolean = false;
     private overlay: HTMLElement | null = null;
     private promptContent: HTMLElement | null = null;
     private responseContent: HTMLElement | null = null;
+    private storageService: StorageService | null = null;
 
     private constructor() {
-        this.loadSettings();
+        // Don't load settings in constructor - do it in initialize
     }
 
     public static getInstance(): AIInteractionsService {
@@ -19,9 +22,18 @@ export class AIInteractionsService {
     /**
      * Initialize the service and set up event listeners
      */
-    public initialize(): void {
+    public async initialize(): Promise<void> {
+        await this.initializeStorage();
+        await this.loadSettings();
         this.setupCheckboxListener();
         this.setupOverlayElements();
+    }
+
+    /**
+     * Initialize storage service
+     */
+    private async initializeStorage(): Promise<void> {
+        this.storageService = await StorageService.getInstance();
     }
 
     /**
@@ -31,9 +43,9 @@ export class AIInteractionsService {
         const checkbox = document.getElementById('ai-interactions-checkbox') as HTMLInputElement;
         if (checkbox) {
             checkbox.checked = this.isEnabled;
-            checkbox.addEventListener('change', (e) => {
+            checkbox.addEventListener('change', async (e) => {
                 this.isEnabled = (e.target as HTMLInputElement).checked;
-                this.saveSettings();
+                await this.saveSettings();
             });
         }
     }
@@ -137,24 +149,32 @@ export class AIInteractionsService {
     }
 
     /**
-     * Save settings to localStorage
+     * Save settings to StorageService
      */
-    private saveSettings(): void {
+    private async saveSettings(): Promise<void> {
         try {
-            localStorage.setItem('ai_interactions_enabled', JSON.stringify(this.isEnabled));
+            if (!this.storageService) {
+                console.warn('StorageService not initialized, cannot save AI interactions setting');
+                return;
+            }
+            await this.storageService.set('ai_interactions_enabled', this.isEnabled);
         } catch (error) {
             console.warn('Failed to save AI interactions setting:', error);
         }
     }
 
     /**
-     * Load settings from localStorage
+     * Load settings from StorageService
      */
-    private loadSettings(): void {
+    private async loadSettings(): Promise<void> {
         try {
-            const saved = localStorage.getItem('ai_interactions_enabled');
-            if (saved !== null) {
-                this.isEnabled = JSON.parse(saved);
+            if (!this.storageService) {
+                console.warn('StorageService not initialized, cannot load AI interactions setting');
+                return;
+            }
+            const saved = await this.storageService.get('ai_interactions_enabled');
+            if (saved !== undefined) {
+                this.isEnabled = saved;
             }
         } catch (error) {
             console.warn('Failed to load AI interactions setting:', error);

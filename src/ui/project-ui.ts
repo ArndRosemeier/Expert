@@ -2715,7 +2715,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Initialize AI interactions service
     const aiInteractionsService = AIInteractionsService.getInstance();
-    aiInteractionsService.initialize();
+    await aiInteractionsService.initialize();
 }
 
 
