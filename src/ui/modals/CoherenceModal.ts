@@ -17,7 +17,7 @@ export class CoherenceModal extends BaseModal {
         super({ 
             id: 'coherence-modal',
             closable: true,
-            backdrop: true
+            backdrop: false
         });
     }
 
