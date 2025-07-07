@@ -117,6 +117,10 @@ export class BatchUpdateModal {
             // Tree selection
         this.tree = new SelectableNodeTree(this.rootNode, document.createElement('div'));
         this.tree.render();
+        
+        // Select all nodes by default
+        this.tree.selectAll();
+        
         this.tree['container'].style.marginTop = '2em';
             this.tree['container'].style.flex = '1 1 0%';
         this.tree['container'].style.overflowY = 'auto';

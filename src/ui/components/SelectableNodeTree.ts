@@ -193,4 +193,18 @@ export class SelectableNodeTree {
             }
         });
     }
+
+    /**
+     * Select all nodes in the tree.
+     */
+    public selectAll() {
+        this.setCheckedRecursive(this.rootNode, true);
+    }
+
+    /**
+     * Deselect all nodes in the tree.
+     */
+    public deselectAll() {
+        this.setCheckedRecursive(this.rootNode, false);
+    }
 } 
