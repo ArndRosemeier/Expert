@@ -94,6 +94,8 @@ export class AIInteractionsService {
 
         // Show overlay
         this.overlay.style.display = 'flex';
+        this.overlay.style.justifyContent = 'center';
+        this.overlay.style.alignItems = 'center';
     }
 
     /**
@@ -130,6 +132,11 @@ export class AIInteractionsService {
                 this.responseContent.scrollTop = this.responseContent.scrollHeight;
             }
         }, 500);
+
+        // Auto-hide overlay after completion
+        setTimeout(() => {
+            this.hideOverlay();
+        }, 1000); // Hide after 1 second
     }
 
     /**

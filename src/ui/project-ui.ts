@@ -2648,7 +2648,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         <div id="global-profile-bar">
             <label for="active-profile-selector">Active profile:</label>
             <select id="active-profile-selector">${profileOptions}</select>
-            <span style="color: #6c757d; font-size: 0.9rem;">This profile will be used for all AI operations (Generate, Summarize, etc.)</span>
             <div id="global-language-selector">
                 <div id="language-selector-container"></div>
             </div>
