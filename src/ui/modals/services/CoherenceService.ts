@@ -59,7 +59,10 @@ export class CoherenceService {
         });
 
         const childrenContent = validChildren
-            .map(child => child.content)
+            .map(child => {
+                const title = child.title ? `## ${child.title}\n\n` : '';
+                return title + child.content;
+            })
             .join('\n\n---\n\n');
 
         return {
