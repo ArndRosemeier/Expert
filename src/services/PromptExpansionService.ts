@@ -282,22 +282,14 @@ export class PromptExpansionService {
         
         // Global placeholders
         for (const [name, provider] of this.globalProviders) {
-            try {
-                const result = provider();
-                placeholders[name] = result.description || `Global placeholder: ${name}`;
-            } catch (e) {
-                placeholders[name] = `Global placeholder: ${name} (unavailable)`;
-            }
+            const result = provider();
+            placeholders[name] = result.description!;
         }
         
         // Context placeholders
         for (const [name, provider] of this.contextProviders) {
-            try {
-                const result = provider(context);
-                placeholders[name] = result.description || `Context placeholder: ${name}`;
-            } catch (e) {
-                placeholders[name] = `Context placeholder: ${name} (requires context)`;
-            }
+            const result = provider(context);
+            placeholders[name] = result.description!;
         }
         
         // Async placeholders
@@ -320,7 +312,7 @@ export class PromptExpansionService {
             ...this.globalProviders.keys(),
             ...this.contextProviders.keys(),
             ...this.asyncProviders.keys(),
-            ...(context.custom ? Object.keys(context.custom) : [])
+            ...Object.keys(context.custom!)
         ]);
         
         for (const match of matches) {
@@ -399,11 +391,7 @@ export class PromptExpansionService {
         }
         
         // Check custom placeholders
-        if (context.custom && context.custom[name]) {
-            return context.custom[name];
-        }
-        
-        return `[Unknown placeholder: ${name}]`;
+        return context.custom![name]!;
     }
     
     private escapeRegex(string: string): string {
@@ -446,28 +434,28 @@ export class PromptExpansionService {
 
         // Context-dependent placeholders
         this.registerContextPlaceholder('language', (context) => ({
-            value: context.project?.language || 'English',
+            value: context.project!.language!,
             description: 'Current project language setting'
         }));
         
         this.registerContextPlaceholder('project_title', (context) => ({
-            value: context.project?.title || 'Untitled Project',
+            value: context.project!.title!,
             description: 'Current project title'
         }));
         
         this.registerContextPlaceholder('criteria', (context) => ({
-            value: context.custom?.['criteria'] || formatCriteriaAsJson(context.project?.criteria || []),
+            value: context.custom?.['criteria'] || formatCriteriaAsJson(context.project!.criteria!),
             description: 'Project quality criteria'
         }));
         
         // Advanced node placeholders
         this.registerContextPlaceholder('title', (context) => ({
-            value: context.node?.title || '',
+            value: context.node!.title!,
             description: 'Current node title'
         }));
         
         this.registerContextPlaceholder('content', (context) => ({
-            value: context.node?.content || '',
+            value: context.node!.content!,
             description: 'Current node content'
         }));
         
@@ -477,187 +465,186 @@ export class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('node_depth', (context) => ({
-            value: (context.node ? '1' : '0'), // TODO: Implement proper depth calculation
+            value: '1', // TODO: Implement proper depth calculation
             description: 'Depth level of current node in hierarchy'
         }));
         
         this.registerContextPlaceholder('node_type', (context) => ({
-            value: context.node?.isLeaf ? 'leaf' : 'branch',
+            value: context.node!.isLeaf! ? 'leaf' : 'branch',
             description: 'Type of node: leaf (content) or branch (has children)'
         }));
         
         this.registerContextPlaceholder('content_length', (context) => ({
-            value: (context.node?.content?.length || 0).toString(),
+            value: context.node!.content!.length.toString(),
             description: 'Character count of current node content'
         }));
         
         this.registerContextPlaceholder('content_word_count', (context) => ({
-            value: context.node?.content ? context.node.content.split(/\s+/).filter(w => w.length > 0).length.toString() : '0',
+            value: context.node!.content!.split(/\s+/).filter(w => w.length > 0).length.toString(),
             description: 'Word count of current node content'
         }));
         
         this.registerContextPlaceholder('title_length', (context) => ({
-            value: (context.node?.title?.length || 0).toString(),
+            value: context.node!.title!.length.toString(),
             description: 'Character count of current node title'
         }));
 
         // Generation context placeholders
         this.registerContextPlaceholder('context', (context) => ({
-            value: context.generation?.context || '',
+            value: context.generation!.context!,
             description: 'Compiled contextual information'
         }));
         
         this.registerContextPlaceholder('child_level_name', (context) => ({
-            value: context.generation?.childLevelName || '',
+            value: context.generation!.childLevelName!,
             description: 'Name of child level for branch nodes'
         }));
         
         this.registerContextPlaceholder('count', (context) => ({
-            value: context.generation?.count?.toString() || '',
+            value: context.generation!.count!.toString(),
             description: 'Number of items to generate'
         }));
         
         this.registerContextPlaceholder('generate_count', (context) => ({
-            value: context.generation?.generateCount || 
-                   (context.generation?.count ? `exactly ${context.generation.count} entries` : 'as many entries as make logical sense'),
+            value: context.generation!.generateCount || `exactly ${context.generation!.count!} entries`,
             description: 'Smart count instruction for generation'
         }));
         
         this.registerContextPlaceholder('draftorfresh', (context) => ({
-            value: context.generation?.draftOrFresh || '',
+            value: context.generation!.draftOrFresh!,
             description: 'Draft or fresh content instruction'
         }));
         
         this.registerContextPlaceholder('parent_content', (context) => ({
-            value: context.generation?.parentContent || '',
+            value: context.generation!.parentContent!,
             description: 'Content of parent node'
         }));
 
         // Prompt-specific placeholders
         this.registerContextPlaceholder('prompt', (context) => ({
-            value: context.prompt?.userPrompt || '',
+            value: context.prompt!.userPrompt!,
             description: 'User prompt text'
         }));
         
         this.registerContextPlaceholder('lastResponse', (context) => ({
-            value: context.prompt?.lastResponse || '',
+            value: context.prompt!.lastResponse!,
             description: 'Previous AI response'
         }));
         
         this.registerContextPlaceholder('editorAdvice', (context) => ({
-            value: context.prompt?.editorAdvice || '',
+            value: context.prompt!.editorAdvice!,
             description: 'Editor advice for improvement'
         }));
         
         this.registerContextPlaceholder('originalPrompt', (context) => ({
-            value: context.prompt?.originalPrompt || '',
+            value: context.prompt!.originalPrompt!,
             description: 'Original user prompt'
         }));
         
         this.registerContextPlaceholder('response', (context) => ({
-            value: context.prompt?.response || '',
+            value: context.prompt!.response!,
             description: 'AI response text'
         }));
         
         this.registerContextPlaceholder('ratings', (context) => ({
-            value: context.prompt?.ratings ? JSON.stringify(context.prompt.ratings, null, 2) : '',
+            value: JSON.stringify(context.prompt!.ratings!, null, 2),
             description: 'Response ratings data'
         }));
         
         this.registerContextPlaceholder('instruction', (context) => ({
-            value: context.prompt?.instruction || '',
+            value: context.prompt!.instruction!,
             description: 'Processing instruction'
         }));
         
         this.registerContextPlaceholder('originalText', (context) => ({
-            value: context.prompt?.originalText || '',
+            value: context.prompt!.originalText!,
             description: 'Original text to be processed'
         }));
         
         this.registerContextPlaceholder('detail', (context) => ({
-            value: context.prompt?.detail || '',
+            value: context.prompt!.detail!,
             description: 'Detailed instruction or description'
         }));
 
         // Analysis placeholders
         this.registerContextPlaceholder('file_name', (context) => ({
-            value: context.analysis?.fileName || '',
+            value: context.analysis!.fileName!,
             description: 'Name of analyzed file'
         }));
         
         this.registerContextPlaceholder('text_content', (context) => ({
-            value: context.analysis?.textContent || '',
+            value: context.analysis!.textContent!,
             description: 'Content of analyzed text'
         }));
         
         this.registerContextPlaceholder('extraction_request', (context) => ({
-            value: context.analysis?.extractionRequest || '',
+            value: context.analysis!.extractionRequest!,
             description: 'What to extract from content'
         }));
         
         this.registerContextPlaceholder('node_title', (context) => ({
-            value: context.analysis?.nodeTitle || context.node?.title || '',
+            value: context.analysis!.nodeTitle || context.node!.title!,
             description: 'Title of analyzed node'
         }));
         
         this.registerContextPlaceholder('parent_title', (context) => ({
-            value: context.analysis?.parentTitle || '',
+            value: context.analysis!.parentTitle!,
             description: 'Title of parent node'
         }));
         
         this.registerContextPlaceholder('child_title', (context) => ({
-            value: context.analysis?.childTitle || '',
+            value: context.analysis!.childTitle!,
             description: 'Title of child node'
         }));
         
         this.registerContextPlaceholder('fact_in_outline', (context) => ({
-            value: context.analysis?.factInOutline || '',
+            value: context.analysis!.factInOutline!,
             description: 'Fact stated in outline'
         }));
         
         this.registerContextPlaceholder('fact_in_expansion', (context) => ({
-            value: context.analysis?.factInExpansion || '',
+            value: context.analysis!.factInExpansion!,
             description: 'Fact stated in expansion'
         }));
         
         this.registerContextPlaceholder('justification', (context) => ({
-            value: context.analysis?.justification || '',
+            value: context.analysis!.justification!,
             description: 'Justification for changes'
         }));
         
         this.registerContextPlaceholder('outline_content', (context) => ({
-            value: context.analysis?.outlineContent || '',
+            value: context.analysis!.outlineContent!,
             description: 'Content of outline'
         }));
         
         this.registerContextPlaceholder('description', (context) => ({
-            value: context.analysis?.description || '',
+            value: context.analysis!.description!,
             description: 'Project or content description'
         }));
         
         this.registerContextPlaceholder('children_content', (context) => ({
-            value: context.analysis?.childrenContent || '',
+            value: context.analysis!.childrenContent!,
             description: 'Content of child nodes'
         }));
         
         this.registerContextPlaceholder('parent_context', (context) => ({
-            value: context.analysis?.parentContext || '',
+            value: context.analysis!.parentContext!,
             description: 'Context of parent node'
         }));
 
         // UI placeholders
         this.registerContextPlaceholder('node_data', (context) => ({
-            value: context.ui?.nodeData || '',
+            value: context.ui!.nodeData!,
             description: 'Formatted node data for UI'
         }));
         
         this.registerContextPlaceholder('starting_node', (context) => ({
-            value: context.ui?.startingNode || '',
+            value: context.ui!.startingNode!,
             description: 'Starting node for adventures'
         }));
         
         this.registerContextPlaceholder('selected', (context) => ({
-            value: context.ui?.selected || '',
+            value: context.ui!.selected!,
             description: 'Currently selected text in UI'
         }));
         
