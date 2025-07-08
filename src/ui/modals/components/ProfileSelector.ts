@@ -265,7 +265,7 @@ export class ProfileSelector {
             classes: ['btn-secondary'],
             content: 'Export'
         });
-        exportButton.addEventListener('click', () => this.exportProfile());
+        exportButton.addEventListener('click', () => void this.exportProfile());
 
         const importButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -420,7 +420,7 @@ export class ProfileSelector {
     /**
      * Exports the selected profile
      */
-    private exportProfile(): void {
+    private async exportProfile(): Promise<void> {
         const profileName = this.getSelectedProfileName();
         if (!profileName) {
             alert('Please select a profile to export.');
@@ -428,7 +428,7 @@ export class ProfileSelector {
         }
 
         try {
-            const result = this.settingsService.exportProfile(profileName);
+            const result = await this.settingsService.exportProfile(profileName);
             
             this.emitAction({
                 action: 'exported',

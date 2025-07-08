@@ -218,7 +218,7 @@ export function setupEnhancedEventListeners(): void {
     );
 
     console.log('✅ Enhanced event listeners set up successfully');
-    console.log('📊 Event Manager status:', eventManager.getDebugInfo());
+    
 }
 
 /**

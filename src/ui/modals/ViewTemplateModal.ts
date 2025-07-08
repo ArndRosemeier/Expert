@@ -25,6 +25,34 @@ function updateAllNodeTemplates(rootNode: DocumentNode, newTemplate: string[]): 
     }
 }
 
+// Helper function to set up the template editor
+function setupViewTemplateEditor(
+    template: ProjectTemplate, 
+    setEditor: (editor: SingleTemplateEditor) => void,
+    setDirty: (dirty: boolean) => void
+): void {
+    // Create a copy of the template to avoid modifying the original until save
+    const templateCopy = new ProjectTemplate(
+        template.name,
+        [...template.hierarchyLevels],
+        [...template.scaffoldingDocuments]
+    );
+
+    const editor = new SingleTemplateEditor({
+        containerId: 'view-template-editor-container',
+        template: templateCopy,
+        onTemplateChange: (_updatedTemplate) => {
+            setDirty(true);
+        },
+        readonly: false,
+        showNameField: true
+    });
+
+    editor.render();
+    setEditor(editor);
+    setDirty(false);
+}
+
 export function showViewTemplateModal(rootNode: DocumentNode): void {
     try {
         const templateManager = state.getTemplateManager();
@@ -177,32 +205,14 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
             },
             {
                 onOpen: () => {
-                    setupViewTemplateEditor(template);
+                    setupViewTemplateEditor(
+                        template,
+                        (editor) => { singleTemplateEditor = editor; },
+                        (dirty) => { isDirty = dirty; }
+                    );
                 }
             }
         );
-
-        function setupViewTemplateEditor(template: ProjectTemplate): void {
-            // Create a copy of the template to avoid modifying the original until save
-            const templateCopy = new ProjectTemplate(
-                template.name,
-                [...template.hierarchyLevels],
-                [...template.scaffoldingDocuments]
-            );
-
-            singleTemplateEditor = new SingleTemplateEditor({
-                containerId: 'view-template-editor-container',
-                template: templateCopy,
-                onTemplateChange: (_updatedTemplate) => {
-                    isDirty = true;
-                },
-                readonly: false,
-                showNameField: true
-            });
-
-            singleTemplateEditor.render();
-            isDirty = false;
-        }
 
     } catch (error) {
         console.error('❌ Error in showViewTemplateModal:', error);

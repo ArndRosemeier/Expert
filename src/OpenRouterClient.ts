@@ -363,7 +363,7 @@ export class OpenRouterClient {
       const modelConfig = await this.getModelConfigForPurpose(purpose);
       const { model, webSearchEnabled, hasNativeWebSearch } = modelConfig;
       
-      console.log(`🚀 Starting AI generation for purpose: ${purpose}, model: ${model}, webSearch: ${webSearchEnabled}, operation: ${opId}`);
+      
       
       // Use streaming by default (more reliable across different systems)
       if (this.forceStreamingMode) {

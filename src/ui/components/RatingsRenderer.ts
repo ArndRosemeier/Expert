@@ -99,7 +99,7 @@ export class RatingsRenderer {
         `;
     }
 
-    private static renderNoRatings(title: string, compact: boolean): string {
+    private static renderNoRatings(_title: string, compact: boolean): string {
         const containerClass = compact ? 'ratings-container-compact' : 'ratings-container';
         const padding = compact ? '1rem' : '2rem';
         

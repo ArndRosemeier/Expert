@@ -21,12 +21,12 @@ export class AppKeyService {
      * Returns true if app can start, false if key validation is needed
      */
     public async checkAppAccess(): Promise<boolean> {
-        console.log('🔑 Checking application access...');
+
         
         // Check if we have a stored valid key
         const hasValidKey = await AppKeyStorage.hasValidKey();
         if (hasValidKey) {
-            console.log('✅ Valid key found in storage');
+
             return true;
         }
         

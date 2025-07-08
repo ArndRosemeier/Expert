@@ -48,7 +48,7 @@ export class ModalFactory {
             this.unsubscribeFromActiveProject = state.onActiveProjectChange((activeProject) => {
                 if (activeProject) {
                     this.dependencies.projectManager = activeProject;
-                    console.log(`🔄 ModalFactory updated to use project: ${activeProject.projectTitle}`);
+            
                 }
             });
         }).catch(error => {

@@ -7,6 +7,7 @@ import {
     STORAGE_KEYS, 
     DEFAULT_CONTEXT_EXTRACTION_PROMPT 
 } from './constants';
+import { FileDownloadService } from './utils/FileDownloadService';
 
 // Legacy constants - will be removed in favor of STORAGE_KEYS from constants.ts
 export const SETTINGS_PROFILES_KEY = STORAGE_KEYS.SETTINGS_PROFILES;
@@ -234,7 +235,7 @@ export class SettingsManager {
         await SettingsManager.instance.initializeAsync();
         SettingsManager.instance.initialized = true;
         
-        console.log('✅ SettingsManager singleton initialized');
+
         return SettingsManager.instance;
     }
 
@@ -264,7 +265,7 @@ export class SettingsManager {
                 const currentVersion = VersionService.getBuildNumber();
                 
                 // Check for version mismatches and update legacy profiles
-                console.log('🔍 Checking profiles for version mismatches...');
+        
                 Object.keys(this.profiles).forEach(profileName => {
                     const profile = this.profiles[profileName];
                     if (profile) {
@@ -273,7 +274,7 @@ export class SettingsManager {
                             hasVersionMismatch = true;
                             console.log(`📋 Profile "${profileName}" has version mismatch. Profile version: ${profile.version || 'unknown'}, Current version: ${currentVersion}`);
                         } else {
-                            console.log(`✅ Profile "${profileName}" version matches. Version: ${profile.version}`);
+        
                         }
                         
                         // Add default context extraction prompt and web search preferences to existing profiles that don't have them
@@ -614,24 +615,15 @@ export class SettingsManager {
      * Exports a profile to a downloadable JSON file
      * @param profileName The name of the profile to export
      */
-    public downloadProfileExport(profileName: string): void {
+    public async downloadProfileExport(profileName: string): Promise<void> {
         const exportData = this.exportProfile(profileName);
         if (!exportData) {
             alert(`Profile "${profileName}" not found.`);
             return;
         }
 
-        const json = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `expert-app-profile-${profileName}-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const filename = `expert-app-profile-${profileName}-${new Date().toISOString().split('T')[0]}.json`;
+        await FileDownloadService.downloadJson(exportData, filename, 'Expert Profile Export');
     }
 
     /**

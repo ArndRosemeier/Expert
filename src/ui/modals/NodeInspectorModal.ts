@@ -1,18 +1,11 @@
 import { BaseModal } from './core/BaseModal';
 import type { DocumentNode, ContentVersion } from '../../DocumentNode';
+import { analyzeTagsInHierarchy } from '../../ProjectUtils';
+import { getActiveProject } from '../../state';
 
 // ============================================================================
 // INTERFACES & TYPES
 // ============================================================================
-
-interface LayoutConfig {
-    type: 'split-panel';
-    orientation: 'horizontal';
-    sizes: [number, number]; // percentages
-    gap: string;
-}
-
-
 
 interface Rating {
     score: number;
@@ -63,42 +56,6 @@ class EventBus {
 }
 
 // ============================================================================
-// LAYOUT SYSTEM
-// ============================================================================
-
-class LayoutManager {
-    private container: HTMLElement;
-    private config: LayoutConfig;
-
-    constructor(container: HTMLElement, config: LayoutConfig) {
-        this.container = container;
-        this.config = config;
-        this.setupLayout();
-    }
-
-    private setupLayout(): void {
-        // Use CSS Grid for predictable, robust layout
-        this.container.style.display = 'grid';
-        this.container.style.height = '100%';
-        this.container.style.gap = this.config.gap;
-        
-        if (this.config.orientation === 'horizontal') {
-            this.container.style.gridTemplateColumns = 
-                `${this.config.sizes[0]}% ${this.config.sizes[1]}%`;
-            this.container.style.gridTemplateRows = '1fr';
-        }
-    }
-
-    updateSizes(sizes: [number, number]): void {
-        this.config.sizes = sizes;
-        this.container.style.gridTemplateColumns = 
-            `${sizes[0]}% ${sizes[1]}%`;
-    }
-}
-
-
-
-// ============================================================================
 // BASE COMPONENT SYSTEM
 // ============================================================================
 
@@ -135,6 +92,7 @@ abstract class UIComponent {
 // VERSIONS LIST COMPONENT
 // ============================================================================
 
+// @ts-ignore - Legacy class kept for potential future use
 class VersionsList extends UIComponent {
     private versions: ContentVersion[] = [];
     private selectedVersionId: string | null = null;
@@ -176,11 +134,6 @@ class VersionsList extends UIComponent {
             </div>
             <div class="versions-list-content">
                 ${this.versions.map(version => this.renderVersionItem(version)).join('')}
-            </div>
-            <div class="versions-list-actions">
-                <button class="btn btn-primary" id="promote-btn" disabled>
-                    Promote to Master
-                </button>
             </div>
         `;
 
@@ -230,16 +183,6 @@ class VersionsList extends UIComponent {
                 }
             });
         }
-
-        // Promote button
-        const promoteBtn = this.element.querySelector('#promote-btn');
-        if (promoteBtn) {
-            promoteBtn.addEventListener('click', () => {
-                if (this.selectedVersionId) {
-                    this.eventBus.emit('version:promote', this.selectedVersionId);
-                }
-            });
-        }
     }
 
     private updateSelection(): void {
@@ -253,14 +196,6 @@ class VersionsList extends UIComponent {
                 item.classList.remove('selected');
             }
         });
-
-        // Update promote button
-        const promoteBtn = this.element.querySelector('#promote-btn') as HTMLButtonElement;
-        if (promoteBtn) {
-            const selectedVersion = this.versions.find(v => v.id === this.selectedVersionId);
-            const isMaster = selectedVersion?.tags.has('master') || false;
-            promoteBtn.disabled = !this.selectedVersionId || isMaster;
-        }
     }
 
     private escapeHtml(text: string): string {
@@ -280,9 +215,10 @@ class VersionsList extends UIComponent {
 }
 
 // ============================================================================
-// CONTENT VIEWER COMPONENT
+// CONTENT VIEWER COMPONENT  
 // ============================================================================
 
+// @ts-ignore - Legacy class kept for potential future use
 class ContentViewer extends UIComponent {
     private version: ContentVersion | null = null;
 
@@ -411,139 +347,6 @@ class ContentViewer extends UIComponent {
 }
 
 // ============================================================================
-// MODEL (DATA LAYER)
-// ============================================================================
-
-class NodeInspectorModel {
-    private node: DocumentNode;
-    private versions: ContentVersion[] = [];
-    private selectedVersionId: string | null = null;
-
-    constructor(node: DocumentNode) {
-        this.node = node;
-        this.loadVersions();
-    }
-
-    private loadVersions(): void {
-        this.versions = this.node.getAllVersions();
-        
-        // Auto-select master version
-        const masterVersion = this.versions.find(v => v.tags.has('master'));
-        this.selectedVersionId = masterVersion ? masterVersion.id : (this.versions[0]?.id || null);
-    }
-
-    getVersions(): ContentVersion[] {
-        return this.versions;
-    }
-
-    getSelectedVersion(): ContentVersion | null {
-        return this.versions.find(v => v.id === this.selectedVersionId) || null;
-    }
-
-    selectVersion(versionId: string): void {
-        this.selectedVersionId = versionId;
-    }
-
-    promoteToMaster(versionId: string): boolean {
-        try {
-            this.node.promoteToMaster(versionId);
-            this.loadVersions(); // Reload to get updated versions
-            return true;
-        } catch (error) {
-            console.error('Failed to promote version to master:', error);
-            return false;
-        }
-    }
-
-    getNodeTitle(): string {
-        return this.node.title || 'Untitled Node';
-    }
-}
-
-// ============================================================================
-// VIEW (PRESENTATION LAYER)
-// ============================================================================
-
-class NodeInspectorView {
-    private container: HTMLElement;
-    private layoutManager: LayoutManager | null = null; // eslint-disable-line @typescript-eslint/no-unused-vars
-    private versionsList: VersionsList;
-    private contentViewer: ContentViewer;
-    private eventBus: EventBus; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-    constructor(eventBus: EventBus) {
-        this.eventBus = eventBus;
-        this.container = this.createContainer();
-        this.versionsList = new VersionsList(eventBus);
-        this.contentViewer = new ContentViewer(eventBus);
-        this.setupLayout();
-    }
-
-    private createContainer(): HTMLElement {
-        const container = document.createElement('div');
-        container.className = 'node-inspector-v2';
-        return container;
-    }
-
-    private setupLayout(): void {
-        // Create header
-        const header = document.createElement('div');
-        header.className = 'inspector-header';
-        header.innerHTML = `
-            <h2 id="inspector-title">Node Inspector</h2>
-            <p id="inspector-subtitle">View and manage content versions</p>
-        `;
-
-        // Create content area with proper height constraints
-        const content = document.createElement('div');
-        content.className = 'inspector-content';
-        
-        // Setup layout manager for 30/70 split
-        this.layoutManager = new LayoutManager(content, {
-            type: 'split-panel',
-            orientation: 'horizontal',
-            sizes: [30, 70],
-            gap: '1.5rem'
-        });
-
-        // Add components to content
-        content.appendChild(this.versionsList.render());
-        content.appendChild(this.contentViewer.render());
-
-        // Assemble view
-        this.container.appendChild(header);
-        this.container.appendChild(content);
-    }
-
-    updateTitle(title: string, versionCount: number): void {
-        const titleEl = this.container.querySelector('#inspector-title');
-        const subtitleEl = this.container.querySelector('#inspector-subtitle');
-        
-        if (titleEl) titleEl.textContent = `Node Inspector: ${title}`;
-        if (subtitleEl) subtitleEl.textContent = `View and manage content versions (${versionCount} versions)`;
-    }
-
-    updateVersions(versions: ContentVersion[]): void {
-        this.versionsList.setVersions(versions);
-    }
-
-    updateSelectedVersion(version: ContentVersion | null): void {
-        this.contentViewer.setVersion(version);
-        this.versionsList.setSelectedVersion(version?.id || null);
-    }
-
-    getElement(): HTMLElement {
-        return this.container;
-    }
-
-    destroy(): void {
-        this.versionsList.destroy();
-        this.contentViewer.destroy();
-        this.container.innerHTML = '';
-    }
-}
-
-// ============================================================================
 // CONTROLLER (BUSINESS LOGIC)
 // ============================================================================
 
@@ -605,8 +408,7 @@ export class NodeInspectorModal extends BaseModal {
         const header = document.createElement('div');
         header.className = 'inspector-header';
         header.innerHTML = `
-            <h2>Node Inspector V2</h2>
-            <p>${this.node ? this.node.title : ''}</p>
+            <h1 class="node-title-fat">${this.node ? this.escapeHtml(this.node.title) : 'Untitled Node'}</h1>
         `;
         container.appendChild(header);
 
@@ -628,8 +430,14 @@ export class NodeInspectorModal extends BaseModal {
         body.appendChild(right);
         container.appendChild(body);
 
-        // Styles
-        container.appendChild(this.createStyles());
+        // Styles - append to document head instead of container since BaseModal handles container
+        const existingStyles = document.querySelector('#node-inspector-styles');
+        if (!existingStyles) {
+            const styles = this.createStyles();
+            styles.id = 'node-inspector-styles';
+            document.head.appendChild(styles);
+        }
+
         return container;
     }
 
@@ -644,33 +452,8 @@ export class NodeInspectorModal extends BaseModal {
             if (b.tags.has('master')) return 1;
             return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
+        
         for (const version of versions) {
-            // Add promote button above the selected version if it's not master
-            if (version.id === this.selectedVersionId && !version.tags.has('master')) {
-                const promoteButton = document.createElement('div');
-                promoteButton.className = 'promote-button-container';
-                promoteButton.innerHTML = `
-                    <button class="promote-to-master-btn" data-version-id="${version.id}">
-                        ⭐ Promote to Master
-                    </button>
-                `;
-                
-                // Add event listener for the promote button
-                const promoteBtn = promoteButton.querySelector('.promote-to-master-btn') as HTMLButtonElement;
-                if (promoteBtn) {
-                    promoteBtn.addEventListener('click', async (e) => {
-                        e.stopPropagation(); // Prevent triggering version selection
-                        try {
-                            await this.handlePromoteToMaster(version.id);
-                        } catch (error) {
-                            console.error('Error promoting version to master:', error);
-                        }
-                    });
-                }
-                
-                wrapper.appendChild(promoteButton);
-            }
-            
             const item = document.createElement('div');
             item.className = 'version-list-item' + (version.id === this.selectedVersionId ? ' selected' : '') + (version.tags.has('master') ? ' master' : '');
             item.tabIndex = 0;
@@ -678,11 +461,24 @@ export class NodeInspectorModal extends BaseModal {
                 this.selectedVersionId = version.id;
                 this.rerender();
             };
+            
             // Generate tags display
             const tags = Array.from(version.tags)
                 .filter(tag => tag !== 'master') // Master gets special treatment with styling
-                .map(tag => `<span class="version-tag ${tag}">${tag}</span>`)
+                .map(tag => `<span class="version-tag ${tag} clickable-tag" data-tag="${tag}" data-version-id="${version.id}">${tag}</span>`)
                 .join('');
+            
+            // Generate action buttons for selected version
+            const actionButtons = version.id === this.selectedVersionId ? `
+                <div class="version-action-buttons-inline">
+                    <button class="version-action-btn tag-btn" data-version-id="${version.id}">
+                        🏷️ Tag
+                    </button>
+                    <button class="version-action-btn remove-btn" data-version-id="${version.id}">
+                        🗑️ Remove
+                    </button>
+                </div>
+            ` : '';
             
             item.innerHTML = `
                 <div class="version-label">${this.getVersionLabel(version)}</div>
@@ -693,7 +489,42 @@ export class NodeInspectorModal extends BaseModal {
                     <div class="preview-content"><strong>Content:</strong> ${this.escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
                     ${version.context ? `<div class="preview-context"><strong>Context:</strong> ${this.escapeHtml(version.context.substring(0, 40))}${version.context.length > 40 ? '…' : ''}</div>` : ''}
                 </div>
+                ${actionButtons}
             `;
+            
+            // Add event listeners for action buttons if they exist
+            if (version.id === this.selectedVersionId) {
+                const tagBtn = item.querySelector('.tag-btn') as HTMLButtonElement;
+                const removeBtn = item.querySelector('.remove-btn') as HTMLButtonElement;
+                
+                if (tagBtn) {
+                    tagBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation(); // Prevent triggering version selection
+                        await this.handleTagVersion(version.id);
+                    });
+                }
+                
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation(); // Prevent triggering version selection
+                        await this.handleRemoveVersion(version.id);
+                    });
+                }
+            }
+            
+            // Add event listeners for clickable tags
+            const clickableTags = item.querySelectorAll('.clickable-tag');
+            clickableTags.forEach(tagElement => {
+                tagElement.addEventListener('click', async (e) => {
+                    e.stopPropagation(); // Prevent triggering version selection
+                    const tagName = (tagElement as HTMLElement).dataset['tag'];
+                    const versionId = (tagElement as HTMLElement).dataset['versionId'];
+                    if (tagName && versionId) {
+                        await this.handleRemoveTagFromVersion(versionId, tagName);
+                    }
+                });
+            });
+            
             wrapper.appendChild(item);
         }
         return wrapper;
@@ -783,26 +614,118 @@ export class NodeInspectorModal extends BaseModal {
         return div.innerHTML;
     }
 
-
-
-    private async handlePromoteToMaster(versionId: string): Promise<void> {
+    private async handleTagVersion(versionId: string): Promise<void> {
         if (!this.node) return;
         
         try {
-            // Promote the version to master
-            this.node.promoteToMaster(versionId);
+            // Get the project root node to analyze all tags
+            const projectRoot = this.getProjectRoot();
             
-            // Update the selected version to show the newly promoted master
-            this.selectedVersionId = versionId;
+            // Get all tags in the project
+            const tagAnalysis = analyzeTagsInHierarchy(projectRoot);
+            const existingTags = tagAnalysis.allTags;
             
-            // Persist changes to storage
+            // Show tag selection modal
+            const tagModal = new TagSelectionModal(existingTags);
+            const selectedTag = await tagModal.showModal();
+            if (!selectedTag) return;
+            
+            // Find the version and add the tag
+            const version = this.node.getAllVersions().find(v => v.id === versionId);
+            if (!version) {
+                console.error('Version not found');
+                return;
+            }
+            
+            // Check if this would create a duplicate master
+            if (selectedTag === 'master' && !version.tags.has('master')) {
+                // Remove master tag from all other versions
+                this.node.getAllVersions().forEach(v => {
+                    if (v.id !== versionId) {
+                        v.tags.delete('master');
+                    }
+                });
+            }
+            
+            // Add the tag
+            version.tags.add(selectedTag);
+            version.timestamp = new Date();
+            
+            // Persist changes and re-render
             await this.persistNodeChanges();
-            
-            // Re-render the modal to reflect the changes
             this.rerender();
+            
         } catch (error) {
-            console.error('Failed to promote version to master:', error);
+            console.error('Error tagging version:', error);
+            alert('Failed to tag version. Please try again.');
         }
+    }
+
+    private async handleRemoveVersion(versionId: string): Promise<void> {
+        if (!this.node) return;
+        
+        try {
+            const version = this.node.getAllVersions().find(v => v.id === versionId);
+            if (!version) {
+                console.error('Version not found');
+                return;
+            }
+            
+            // Confirm removal
+            const versionLabel = this.getVersionLabel(version);
+            if (!confirm(`Are you sure you want to remove the version "${versionLabel}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+            
+            // Remove the version
+            const wasRemoved = this.node.removeVersion(versionId);
+            if (wasRemoved) {
+                // If this was the selected version, select another one
+                if (this.selectedVersionId === versionId) {
+                    const remainingVersions = this.node.getAllVersions();
+                    const masterVersion = remainingVersions.find(v => v.tags.has('master'));
+                    this.selectedVersionId = masterVersion ? masterVersion.id : (remainingVersions[0]?.id ?? null);
+                }
+                
+                // Persist changes and re-render
+                await this.persistNodeChanges();
+                this.rerender();
+            }
+            
+        } catch (error) {
+            console.error('Error removing version:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            alert(`Failed to remove version: ${errorMessage}`);
+        }
+    }
+
+    private async handleRemoveTagFromVersion(versionId: string, tagName: string): Promise<void> {
+        if (!this.node) return;
+        
+        try {
+            const version = this.node.getAllVersions().find(v => v.id === versionId);
+            if (!version) {
+                console.error('Version not found');
+                return;
+            }
+            
+            // Remove the tag
+            version.tags.delete(tagName);
+            version.timestamp = new Date();
+            
+            // Persist changes and re-render
+            await this.persistNodeChanges();
+            this.rerender();
+            
+        } catch (error) {
+            console.error('Error removing tag from version:', error);
+            alert('Failed to remove tag. Please try again.');
+        }
+    }
+
+    private getProjectRoot(): DocumentNode {
+        const projectManager = getActiveProject()!;
+        return projectManager.rootNode;
     }
 
     private async persistNodeChanges(): Promise<void> {
@@ -916,6 +839,15 @@ export class NodeInspectorModal extends BaseModal {
                 border-bottom: 1px solid #e5e7eb;
                 background: #f9fafb;
             }
+            .node-title-fat {
+                font-size: 1.875rem;
+                font-weight: 800;
+                color: #1f2937;
+                margin: 0;
+                line-height: 1.2;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                letter-spacing: -0.025em;
+            }
             .inspector-body {
                 flex: 1 1 0%;
                 min-height: 0;
@@ -971,7 +903,6 @@ export class NodeInspectorModal extends BaseModal {
                 color: #374151;
                 margin-bottom: 0.25rem;
             }
-
             .version-timestamp {
                 font-size: 0.85em;
                 color: #6b7280;
@@ -1042,6 +973,78 @@ export class NodeInspectorModal extends BaseModal {
                 color: white;
                 border-color: #111827;
                 font-size: 0.65rem;
+            }
+            .clickable-tag {
+                cursor: pointer;
+                transition: all 0.2s ease;
+                position: relative;
+            }
+            .clickable-tag:hover {
+                transform: scale(1.05);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                opacity: 0.8;
+            }
+            .clickable-tag:hover::after {
+                content: '×';
+                position: absolute;
+                top: -2px;
+                right: -2px;
+                background: #dc2626;
+                color: white;
+                border-radius: 50%;
+                width: 12px;
+                height: 12px;
+                font-size: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+            }
+            .version-action-buttons-inline {
+                margin-top: 0.75rem;
+                padding: 0.5rem;
+                background: rgba(248, 250, 252, 0.8);
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                display: flex;
+                gap: 0.5rem;
+            }
+            .version-action-btn {
+                flex: 1;
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 6px;
+                font-size: 0.875rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.25rem;
+            }
+            .version-action-btn.tag-btn {
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                color: white;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+            }
+            .version-action-btn.tag-btn:hover {
+                background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+            }
+            .version-action-btn.remove-btn {
+                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+                color: white;
+                box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+            }
+            .version-action-btn.remove-btn:hover {
+                background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(220, 38, 38, 0.4);
+            }
+            .version-action-btn:active {
+                transform: translateY(0);
             }
             .content-header {
                 margin-bottom: 1rem;
@@ -1165,40 +1168,178 @@ export class NodeInspectorModal extends BaseModal {
                 word-break: break-word;
                 margin: 0;
             }
-            .promote-button-container {
-                margin: 1rem 0 1.5rem 0;
-                padding: 0.75rem;
-                background: #fef3c7;
-                border: 1px solid #fbbf24;
-                border-radius: 8px;
-                display: flex;
-                justify-content: center;
-            }
-            .promote-to-master-btn {
-                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-                color: white;
-                border: none;
-                padding: 0.75rem 1.5rem;
-                border-radius: 6px;
-                font-size: 1rem;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-            }
-            .promote-to-master-btn:hover {
-                background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-                transform: translateY(-1px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            }
-            .promote-to-master-btn:active {
-                transform: translateY(0);
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
         `;
         return style;
+    }
+}
+
+// ============================================================================
+// TAG SELECTION MODAL
+// ============================================================================
+
+class TagSelectionModal extends BaseModal {
+    private existingTags: string[];
+    private resolvePromise: ((tag: string | null) => void) | null = null;
+    private selectedTag: string = '';
+
+    constructor(existingTags: string[]) {
+        super({
+            id: 'tag-selection-modal',
+            closable: true,
+            backdrop: true,
+            width: '400px',
+            height: 'auto',
+            maxWidth: '90vw',
+            maxHeight: '500px'
+        });
+        this.existingTags = existingTags;
+    }
+
+    public async showModal(): Promise<string | null> {
+        return new Promise((resolve) => {
+            this.resolvePromise = resolve;
+            this.open();
+        });
+    }
+
+    public render(): HTMLElement {
+        const container = document.createElement('div');
+        container.className = 'tag-selection-content';
+        
+        container.innerHTML = `
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem; color: #374151;">Select or Create Tag</h3>
+            <div style="margin-bottom: 1rem;">
+                <input type="text" id="tag-input" placeholder="Enter new tag name..." 
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s;">
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Or select existing tag:</div>
+                <div id="existing-tags" style="max-height: 200px; overflow-y: auto; border: 1px solid #d1d5db; border-radius: 6px; padding: 0.5rem; background: #f9fafb;">
+                    ${this.existingTags.map(tag => `
+                        <div class="tag-option" data-tag="${tag}" style="
+                            padding: 0.5rem 0.75rem;
+                            cursor: pointer;
+                            border-radius: 4px;
+                            margin-bottom: 0.25rem;
+                            transition: background-color 0.2s;
+                            font-size: 0.9rem;
+                            color: #374151;
+                        ">${tag}</div>
+                    `).join('')}
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                <button id="cancel-btn" style="
+                    padding: 0.5rem 1rem; 
+                    border: 1px solid #d1d5db; 
+                    background: white; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    color: #374151;
+                    transition: all 0.2s;
+                ">Cancel</button>
+                <button id="ok-btn" style="
+                    padding: 0.5rem 1rem; 
+                    border: none; 
+                    background: #3b82f6; 
+                    color: white; 
+                    border-radius: 6px; 
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    transition: all 0.2s;
+                ">OK</button>
+            </div>
+        `;
+
+        this.setupTagSelectionEvents(container);
+        return container;
+    }
+
+    private setupTagSelectionEvents(container: HTMLElement): void {
+        const tagInput = container.querySelector('#tag-input') as HTMLInputElement;
+        const existingTagsContainer = container.querySelector('#existing-tags') as HTMLElement;
+        const cancelBtn = container.querySelector('#cancel-btn') as HTMLButtonElement;
+        const okBtn = container.querySelector('#ok-btn') as HTMLButtonElement;
+
+        // Handle tag selection
+        existingTagsContainer.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            if (target.classList.contains('tag-option')) {
+                // Clear previous selection
+                existingTagsContainer.querySelectorAll('.tag-option').forEach(el => {
+                    (el as HTMLElement).style.backgroundColor = '';
+                });
+                
+                // Select this tag
+                target.style.backgroundColor = '#e3f2fd';
+                this.selectedTag = target.dataset['tag'] || '';
+                tagInput.value = this.selectedTag;
+            }
+        });
+
+        // Handle input changes
+        tagInput.addEventListener('input', () => {
+            this.selectedTag = tagInput.value.trim();
+            // Clear existing tag selection
+            existingTagsContainer.querySelectorAll('.tag-option').forEach(el => {
+                (el as HTMLElement).style.backgroundColor = '';
+            });
+        });
+
+        // Handle buttons
+        cancelBtn.addEventListener('click', () => {
+            this.resolveAndClose(null);
+        });
+        
+        okBtn.addEventListener('click', () => {
+            const finalTag = this.selectedTag || tagInput.value.trim();
+            this.resolveAndClose(finalTag || null);
+        });
+
+        // Handle Enter key
+        tagInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const finalTag = this.selectedTag || tagInput.value.trim();
+                this.resolveAndClose(finalTag || null);
+            }
+            if (e.key === 'Escape') {
+                this.resolveAndClose(null);
+            }
+        });
+
+        // Focus input after a brief delay to ensure modal is fully rendered
+        setTimeout(() => {
+            tagInput.focus();
+        }, 100);
+    }
+
+    private resolveAndClose(result: string | null): void {
+        if (this.resolvePromise) {
+            this.resolvePromise(result);
+            this.resolvePromise = null;
+        }
+        this.close();
+    }
+
+    protected override buildContentStyle(): string {
+        return `
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            max-width: 400px;
+            width: 90%;
+            max-height: 500px;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        `;
+    }
+
+    public override destroy(): void {
+        if (this.resolvePromise) {
+            this.resolvePromise(null);
+            this.resolvePromise = null;
+        }
+        super.destroy();
     }
 } 

@@ -26,7 +26,7 @@ if (urlParams.get('clean') === 'true') {
 document.addEventListener('DOMContentLoaded', () => {
     void (async () => {
         // Check for valid application key before starting the app
-        console.log('🔑 Expert Application starting - checking key validation...');
+    
         
         const appKeyService = AppKeyService.getInstance();
         
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (hasValidKey) {
                 // Valid key found - start the app normally
-                console.log('✅ Valid key found in keyValue/expert_app_key - starting application');
+    
                 await startApplication();
             } else {
                 // No valid key - AppKeyService will handle showing the validation modal
@@ -119,7 +119,7 @@ function addVersionInfoToHeader(): void {
  * Start the main application after key validation is complete
  */
 async function startApplication(): Promise<void> {
-    console.log('🚀 Initializing Expert application...');
+
     
     // ⚠️ IMPORTANT: Initialize localStorage blocker to prevent accidental usage
     // This must happen early to catch any localStorage attempts during app startup
@@ -132,7 +132,7 @@ async function startApplication(): Promise<void> {
                 verbose: true,
                 logAttempts: true
             });
-            console.log('🚫 localStorage usage is now blocked - use StorageService instead!');
+        
         }
     } catch (error) {
         console.error('❌ Failed to initialize localStorage blocker:', error);
@@ -144,16 +144,9 @@ async function startApplication(): Promise<void> {
         
         await initialize();
         
-        // 🔧 NEW: Initialize EventManager for robust event handling
-        console.log('🔧 Setting up EventManager for robust event handling...');
-        const { eventManager } = await import('./ui/event-manager');
-        
-        // Set up both regular and enhanced event listeners
+        // Set up event listeners
         setupEventListeners();
         
-        // Initialize EventManager for DOM mutation tracking
-        console.log('✅ EventManager initialized successfully');
-        console.log('📊 Event Manager status:', eventManager.getDebugInfo());
         
         // Add version info to the header
         addVersionInfoToHeader();
@@ -183,7 +176,7 @@ async function checkVersionMismatches(): Promise<void> {
         const modelSelector = state.getModelSelector();
         
         if (!settingsManager || !settingsManager.hasVersionMismatchDetected()) {
-            console.log('✅ Settings version is current - no migration needed');
+    
             return;
         }
 

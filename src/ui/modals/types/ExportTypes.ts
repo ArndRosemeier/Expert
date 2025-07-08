@@ -60,7 +60,7 @@ export interface ExportResult {
 export interface IExportService {
     export(node: DocumentNode, config: ExportConfig): Promise<ExportResult>;
     generateContent(nodes: DocumentNode[], format: ExportFormat, title?: string): string;
-    downloadFile(result: ExportResult): void;
+    downloadFile(result: ExportResult): Promise<void>;
 }
 
 /**

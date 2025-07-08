@@ -573,7 +573,7 @@ export function renderProjectUI(proj: ProjectManager) {
     renderNodeDetails();
     
     // Re-attach event listeners after DOM replacement in renderProjectUI
-    console.log('🔧 Re-setting up event listeners after renderProjectUI DOM replacement');
+
     setupEventListeners();
 }
 
@@ -1211,7 +1211,7 @@ export function renderNodeDetails() {
     contentArea.appendChild(detailsContainer);
     
     // Re-attach event listeners after DOM content replacement
-    console.log('🔧 Re-setting up event listeners after renderNodeDetails DOM replacement');
+
     setupEventListeners();
 
     // === DEBUGGING: Log dropdown HTML generation ===
@@ -1360,8 +1360,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    // Use version management system to update content
-                    node.setContent(contentTextArea.value, 'master');
+                    // Use version management system to update content with "Edited" tag
+                    node.setContent(contentTextArea.value, 'Edited');
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
                     (contentTextArea as any)._saveTimeout = setTimeout(() => {
@@ -1379,8 +1379,8 @@ export function renderNodeDetails() {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     const newContext = contextTextArea.value;
-                    // Use version management system to update context
-                    node.setContext(newContext, 'master');
+                    // Use version management system to update context with "Edited" tag
+                    node.setContext(newContext, 'Edited');
                 
                 // Always propagate context to all descendants
                 const propagateRecursively = (parentNode: DocumentNode) => {
@@ -1426,8 +1426,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    // Use version management system to update title
-                    node.setTitle(nodeTitleDisplay.textContent || '', 'master');
+                    // Use version management system to update title with "Edited" tag
+                    node.setTitle(nodeTitleDisplay.textContent || '', 'Edited');
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
                     (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {
@@ -2477,7 +2477,7 @@ This action cannot be undone.`;
 }
 
 export function setupEventListeners() {
-    console.log('🔧 Setting up simplified event listeners...');
+
     
     // Remove all existing listeners first
     removeAllListeners();
@@ -2688,7 +2688,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     // Initialize language selector
     const languageContainer = getElementById('language-selector-container');
     if (languageContainer && settingsManager) {
-        const languageSelector = new LanguageSelector(languageContainer, {
+        new LanguageSelector(languageContainer, {
             currentLanguage: settingsManager.getLanguage(),
             onLanguageChange: (language: string) => {
                 settingsManager.setLanguage(language);
@@ -2711,7 +2711,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     }
     
     // Re-setup event listeners after DOM replacement
-    console.log('🔧 Re-setting up event listeners after DOM replacement in initializeProjectUI');
+
     setupEventListeners();
     
     // Initialize AI interactions service
@@ -2886,10 +2886,7 @@ export function renderMultiProjectTree() {
     const treeContainer = getElementById('project-tree');
     const projects = state.getProjects();
     
-    console.log('🔄 Rendering multi-project tree:', { 
-        projectCount: projects.length, 
-        projectTitles: projects.map(p => p.rootNode.title)
-    });
+
     
     if (projects.length === 0) {
         treeContainer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;">No projects available. Create a new project to get started.</div>';
@@ -3491,7 +3488,7 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
  * Removes all event listeners from tracked buttons
  */
 function removeAllListeners() {
-    console.log('🧹 Removing all event listeners');
+
     
     // Remove click listeners from all tracked buttons
     Object.keys(buttonHandlers).forEach(buttonId => {
@@ -3518,7 +3515,7 @@ function removeAllListeners() {
  * Attaches event listeners to all present buttons
  */
 function attachAllListeners() {
-    console.log('🔧 Attaching event listeners to all buttons');
+
     
     // Attach listeners to all buttons that exist in the DOM
     Object.entries(buttonHandlers).forEach(([buttonId, handler]) => {

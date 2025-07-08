@@ -50,7 +50,6 @@ export class DocumentNode {
 
     // --- Version-based Content Management ---
     private versions: ContentVersion[] = [];
-    private isContextPropagating: boolean = false; // Flag to prevent infinite recursion
     
     // --- Template and Generation Properties ---
     template: string[];
@@ -435,82 +434,62 @@ export class DocumentNode {
     }
 
     /**
-     * Sets content for all versions with the given tag.
+     * Sets content. If tag provided, adds that tag to the master version.
      * @param content New content value
-     * @param tag Tag to match versions against
-     * @throws Error if no versions have the given tag
+     * @param tag Optional tag - if provided, adds this tag to the master version
      */
-    setContent(content: string, tag: string): void {
-        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
-        if (matchingVersions.length === 0) {
-            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+    setContent(content: string, tag?: string): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.content = content;
+            masterVersion.timestamp = new Date();
+            
+            // Add tag if provided
+            if (tag) {
+                masterVersion.tags.add(tag);
+            }
         }
-        
-        matchingVersions.forEach(version => {
-            version.content = content;
-            version.timestamp = new Date();
-        });
     }
 
     /**
-     * Sets context for all versions with the given tag.
+     * Sets context. If tag provided, adds that tag to the master version.
      * @param context New context value
-     * @param tag Tag to match versions against
-     * @throws Error if no versions have the given tag
+     * @param tag Optional tag - if provided, adds this tag to the master version
      */
-    setContext(context: string, tag: string): void {
-        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
-        if (matchingVersions.length === 0) {
-            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+    setContext(context: string, tag?: string): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.context = context;
+            masterVersion.timestamp = new Date();
+            
+            // Add tag if provided
+            if (tag) {
+                masterVersion.tags.add(tag);
+            }
         }
-        
-        matchingVersions.forEach(version => {
-            version.context = context;
-            version.timestamp = new Date();
-        });
     }
 
     /**
-     * Sets title for all versions with the given tag.
+     * Sets title. If tag provided, adds that tag to the master version.
      * @param title New title value
-     * @param tag Tag to match versions against
-     * @throws Error if no versions have the given tag
+     * @param tag Optional tag - if provided, adds this tag to the master version
      */
-    setTitle(title: string, tag: string): void {
-        const matchingVersions = this.versions.filter(v => v.tags.has(tag));
-        if (matchingVersions.length === 0) {
-            throw new Error(`No versions found with tag '${tag}'. Available tags: ${Array.from(new Set(this.versions.flatMap(v => Array.from(v.tags)))).join(', ')}`);
+    setTitle(title: string, tag?: string): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.title = title;
+            masterVersion.timestamp = new Date();
+            
+            // Add tag if provided
+            if (tag) {
+                masterVersion.tags.add(tag);
+            }
         }
-        
-        matchingVersions.forEach(version => {
-            version.title = title;
-            version.timestamp = new Date();
-        });
     }
 
 
 
-    /**
-     * Propagates context to all versions.
-     */
-    private propagateContextToAllVersions(context: string): void {
-        // Prevent infinite recursion
-        if (this.isContextPropagating) {
-            return;
-        }
-        
-        this.isContextPropagating = true;
-        try {
-            this.versions.forEach(version => {
-                if (version.context !== context) {
-                    version.context = context;
-                    // Don't update timestamp for non-master versions to preserve their original creation time
-                }
-            });
-        } finally {
-            this.isContextPropagating = false;
-        }
-    }
+
 
     /**
      * Promotes a version to master.

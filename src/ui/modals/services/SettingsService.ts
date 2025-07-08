@@ -201,13 +201,13 @@ export class SettingsService {
     /**
      * Exports a profile for download
      */
-    public exportProfile(profileName: string): { success: boolean; message: string } {
+    public async exportProfile(profileName: string): Promise<{ success: boolean; message: string }> {
         if (!profileName) {
             return { success: false, message: 'Please select a profile to export.' };
         }
 
         try {
-            this.settingsManager.downloadProfileExport(profileName);
+            await this.settingsManager.downloadProfileExport(profileName);
             return { success: true, message: `Profile "${profileName}" exported successfully.` };
         } catch (error) {
             console.error('Export failed:', error);

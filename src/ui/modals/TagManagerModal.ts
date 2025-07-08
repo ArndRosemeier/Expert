@@ -1,6 +1,7 @@
 import { DocumentNode } from '../../DocumentNode';
 import { SelectableNodeTree } from '../components/SelectableNodeTree';
 import { BaseModal } from './core/BaseModal';
+import { analyzeTagsInHierarchy, VersionInfo } from '../../ProjectUtils';
 
 interface TagManagerModalOptions {
     onClose?: () => void;
@@ -8,12 +9,6 @@ interface TagManagerModalOptions {
 
 interface TagNodeMapping {
     [tagName: string]: DocumentNode[];
-}
-
-interface VersionInfo {
-    node: DocumentNode;
-    versionId: string;
-    version: any; // ContentVersion
 }
 
 /**
@@ -239,51 +234,10 @@ export class TagManagerModal extends BaseModal {
         document.head.appendChild(style);
     }
 
-    private getAllDescendants(node: DocumentNode): DocumentNode[] {
-        const descendants: DocumentNode[] = [node];
-        
-        const traverse = (currentNode: DocumentNode) => {
-            for (const child of currentNode.children) {
-                descendants.push(child);
-                traverse(child);
-            }
-        };
-        
-        traverse(node);
-        return descendants;
-    }
-
     private initializeTagMappings(): void {
-        const allNodes = this.getAllDescendants(this.rootNode);
-        this.tagToNodesMap = {};
-        this.tagToVersionsMap = {};
-
-        // Collect all tags from all versions of all nodes
-        for (const node of allNodes) {
-            const versions = node.getAllVersions();
-            
-            for (const version of versions) {
-                for (const tag of version.tags) {
-                    // Map tag to nodes
-                    if (!this.tagToNodesMap[tag]) {
-                        this.tagToNodesMap[tag] = [];
-                    }
-                    if (!this.tagToNodesMap[tag].includes(node)) {
-                        this.tagToNodesMap[tag].push(node);
-                    }
-
-                    // Map tag to versions
-                    if (!this.tagToVersionsMap[tag]) {
-                        this.tagToVersionsMap[tag] = [];
-                    }
-                    this.tagToVersionsMap[tag].push({
-                        node,
-                        versionId: version.id,
-                        version
-                    });
-                }
-            }
-        }
+        const tagAnalysis = analyzeTagsInHierarchy(this.rootNode);
+        this.tagToNodesMap = tagAnalysis.tagToNodesMap;
+        this.tagToVersionsMap = tagAnalysis.tagToVersionsMap;
     }
 
     private renderTagList(): void {

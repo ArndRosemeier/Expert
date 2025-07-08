@@ -11,6 +11,7 @@
 import JSZip from 'jszip';
 import { StorageService } from '../../../StorageService';
 import { IndexedDBService } from '../../../IndexedDBService';
+import { FileDownloadService } from '../../../utils/FileDownloadService';
 
 export interface ComprehensiveExportResult {
     success: boolean;
@@ -111,7 +112,7 @@ export class ComprehensiveExportService {
                     level: 9  // Maximum compression (1-9, where 9 is best compression)
                 }
             });
-            await this.downloadBlob(zipBlob, filename);
+            await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
 
             return {
                 success: true,
@@ -165,46 +166,7 @@ export class ComprehensiveExportService {
         });
     }
 
-    /**
-     * Downloads a blob as a file with optional "Save As" dialog support
-     * Falls back to traditional download if File System Access API is not available
-     */
-    private static async downloadBlob(blob: Blob, filename: string): Promise<void> {
-        try {
-            // Try modern File System Access API first (Chrome/Edge 86+)
-            if ('showSaveFilePicker' in window) {
-                const fileHandle = await (window as any).showSaveFilePicker({
-                    suggestedName: filename,
-                    types: [{
-                        description: 'Expert Application Backup',
-                        accept: { 'application/zip': ['.zip'] }
-                    }]
-                });
-                
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                
-                console.log('✅ File saved using Save As dialog');
-                return;
-            }
-        } catch (error) {
-            // User cancelled or API not supported - fall back to download
-            console.log('💡 Save As not available or cancelled, using Downloads folder');
-        }
-        
-        // Fallback: Traditional download to Downloads folder
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        console.log('📁 File downloaded to Downloads folder');
-    }
+
 
     /**
      * Get a summary of what will be exported (simplified version)

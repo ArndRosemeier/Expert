@@ -6,6 +6,7 @@ import { DocumentNode } from '../../../DocumentNode';
 import { ProjectManager } from '../../../ProjectManager';
 import { IExportService, ExportConfig, ExportResult, NodeExportData, ExportScope, ExportFormat } from '../types/ExportTypes';
 import { sanitizeFilename, escapeHtml, formatContentAsHtml } from '../core/modal-utils';
+import { FileDownloadService } from '../../../utils/FileDownloadService';
 
 /**
  * Interface for hierarchical TOC structure
@@ -78,17 +79,32 @@ export class ExportService implements IExportService {
     /**
      * Downloads the export result as a file
      */
-    public downloadFile(result: ExportResult): void {
-        const blob = new Blob([result.content], { type: result.mimeType });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = result.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    public async downloadFile(result: ExportResult): Promise<void> {
+        await FileDownloadService.downloadExportResult(
+            result.content,
+            result.filename,
+            result.mimeType,
+            this.getFileDescription(result.filename)
+        );
+    }
+
+    /**
+     * Gets a user-friendly description for the file based on its extension
+     */
+    private getFileDescription(filename: string): string {
+        const extension = filename.split('.').pop()?.toLowerCase() || '';
+        switch (extension) {
+            case 'html':
+                return 'HTML Document Export';
+            case 'md':
+                return 'Markdown Document Export';
+            case 'txt':
+                return 'Plain Text Export';
+            case 'json':
+                return 'JSON Data Export';
+            default:
+                return 'Document Export';
+        }
     }
 
     /**
@@ -115,7 +131,7 @@ export class ExportService implements IExportService {
         }
 
         const result = await this.export(node, config, projectManager);
-        this.downloadFile(result);
+        await this.downloadFile(result);
         
         // Show success message
         alert(`Successfully exported "${node.title}" as ${result.filename}`);

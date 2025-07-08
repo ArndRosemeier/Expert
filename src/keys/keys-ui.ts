@@ -1,5 +1,6 @@
 import { KeyManager } from './KeyManager.js';
 import { KeyStorage, type StoredKey } from './KeyStorage.js';
+import { FileDownloadService } from '../utils/FileDownloadService';
 
 export class KeysUI {
     private container: HTMLElement;
@@ -172,7 +173,7 @@ export class KeysUI {
         cleanupBtn.addEventListener('click', () => void this.cleanupExpiredKeys());
 
         const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
-        exportBtn.addEventListener('click', () => this.exportKeys());
+        exportBtn.addEventListener('click', () => void this.exportKeys());
 
         const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
         importBtn.addEventListener('click', () => this.importKeys());
@@ -446,16 +447,11 @@ export class KeysUI {
     private async exportKeys(): Promise<void> {
         try {
             const exportData = await KeyStorage.exportKeys();
-            const blob = new Blob([exportData], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
+            const filename = `expert-keys-${new Date().toISOString().split('T')[0]}.json`;
             
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `expert-keys-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // Parse and re-stringify to ensure it's valid JSON for the centralized service
+            const parsedData = JSON.parse(exportData);
+            await FileDownloadService.downloadJson(parsedData, filename, 'Expert Keys Export');
             
             this.showSuccess('Keys exported successfully');
         } catch (error) {

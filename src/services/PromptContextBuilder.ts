@@ -1,5 +1,4 @@
 import { DocumentNode } from '../DocumentNode.js';
-import { ProjectManager } from '../ProjectManager.js';
 import { SettingsManager } from '../SettingsManager.js';
 import { PlaceholderContext } from './PromptExpansionService.js';
 

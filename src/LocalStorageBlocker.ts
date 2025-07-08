@@ -67,8 +67,7 @@ export class LocalStorageBlocker {
         LocalStorageBlocker.instance = new LocalStorageBlocker(fullConfig);
         LocalStorageBlocker.instance.blockLocalStorage();
         
-        console.log('🚫 LocalStorage blocker initialized - localStorage usage is now forbidden!');
-        console.log('✅ Use StorageService (IndexedDB) instead for all data storage');
+
         
         return LocalStorageBlocker.instance;
     }

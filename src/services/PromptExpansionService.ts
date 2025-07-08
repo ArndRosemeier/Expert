@@ -133,7 +133,6 @@ export class PromptExpansionService {
         // Handle custom placeholders
         if (context.custom) {
             for (const [name, value] of Object.entries(context.custom)) {
-                const placeholder = `{{${name}}}`;
                 expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
@@ -168,7 +167,6 @@ export class PromptExpansionService {
         // Handle custom placeholders
         if (context.custom) {
             for (const [name, value] of Object.entries(context.custom)) {
-                const placeholder = `{{${name}}}`;
                 expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
@@ -454,12 +452,12 @@ export class PromptExpansionService {
             description: 'Current node content'
         }));
         
-        this.registerContextPlaceholder('path', (context) => ({
+        this.registerContextPlaceholder('path', (_context) => ({
             value: 'Node Path', // TODO: Implement path computation using TreeService
             description: 'Hierarchical path to current node'
         }));
         
-        this.registerContextPlaceholder('node_depth', (context) => ({
+        this.registerContextPlaceholder('node_depth', (_context) => ({
             value: '1', // TODO: Implement proper depth calculation
             description: 'Depth level of current node in hierarchy'
         }));
@@ -644,7 +642,7 @@ export class PromptExpansionService {
         }));
         
         // Interactive placeholders - these can be easily extended
-        this.registerAsyncPlaceholder('input', async (context, match) => {
+        this.registerAsyncPlaceholder('input', async (_context, match) => {
             // Extract title from different input patterns
             let title = 'Enter your input';
             
@@ -669,7 +667,7 @@ export class PromptExpansionService {
         });
         
         // Future interactive placeholders - ready to be implemented
-        this.registerAsyncPlaceholder('select', async (context, match) => {
+        this.registerAsyncPlaceholder('select', async (_context, match) => {
             // {{select "Choose option" option1,option2,option3}}
             const selectMatch = match.match(/\{\{select\s+"([^"]+)"\s+([^}]+)\}\}/);
             if (selectMatch && selectMatch[1] && selectMatch[2]) {
@@ -684,7 +682,7 @@ export class PromptExpansionService {
             return { value: '', description: 'Invalid select placeholder' };
         });
         
-        this.registerAsyncPlaceholder('multiline', async (context, match) => {
+        this.registerAsyncPlaceholder('multiline', async (_context, match) => {
             // {{multiline "Enter description"}}
             const multilineMatch = match.match(/\{\{multiline\s+"([^"]+)"\}\}/);
             if (multilineMatch && multilineMatch[1]) {
@@ -698,7 +696,7 @@ export class PromptExpansionService {
             return { value: '', description: 'Invalid multiline placeholder' };
         });
         
-        this.registerAsyncPlaceholder('confirm', async (context, match) => {
+        this.registerAsyncPlaceholder('confirm', async (_context, match) => {
             // {{confirm "Are you sure?"}}
             const confirmMatch = match.match(/\{\{confirm\s+"([^"]+)"\}\}/);
             if (confirmMatch && confirmMatch[1]) {
@@ -1006,13 +1004,6 @@ export class PromptExpansionService {
                     if (!isResolved) {
                         isResolved = true;
                         resolve(value);
-                    }
-                };
-                
-                const rejectOnce = (error: Error) => {
-                    if (!isResolved) {
-                        isResolved = true;
-                        reject(error);
                     }
                 };
 

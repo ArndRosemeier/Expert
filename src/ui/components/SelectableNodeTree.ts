@@ -1,4 +1,5 @@
 import { DocumentNode } from '../../DocumentNode';
+import { getAllDescendants } from '../../ProjectUtils';
 
 /**
  * Reusable UI element for selecting nodes in a tree structure.
@@ -30,6 +31,12 @@ export class SelectableNodeTree {
         this.checkboxMap.clear();
         this.nodeMap.clear();
         this.container.innerHTML = '';
+
+        // Pre-populate nodeMap with all descendants for efficient lookups
+        const allNodes = getAllDescendants(this.rootNode);
+        allNodes.forEach(node => {
+            this.nodeMap.set(node.id, node);
+        });
 
         // Render the tree
         const treeRoot = document.createElement('div');
@@ -100,7 +107,7 @@ export class SelectableNodeTree {
         checkbox.type = 'checkbox';
         checkbox.dataset['nodeId'] = node.id;
         this.checkboxMap.set(node.id, checkbox);
-        this.nodeMap.set(node.id, node);
+        // Note: nodeMap is already populated in render() using getAllDescendants
 
         // Single click: toggle only this node
         checkbox.addEventListener('click', (e) => {
@@ -130,9 +137,14 @@ export class SelectableNodeTree {
     }
 
     private setCheckedRecursive(node: DocumentNode, checked: boolean) {
-        const cb = this.checkboxMap.get(node.id);
-        if (cb) cb.checked = checked;
-        node.children.forEach(child => this.setCheckedRecursive(child, checked));
+        // Get all descendants of this node using the centralized function
+        const descendants = getAllDescendants(node);
+        
+        // Set checkbox state for all descendants
+        descendants.forEach(descendant => {
+            const cb = this.checkboxMap.get(descendant.id);
+            if (cb) cb.checked = checked;
+        });
     }
 
     public toggleAllAtLevel(level: number) {

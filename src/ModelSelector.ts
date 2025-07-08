@@ -950,7 +950,7 @@ export class ModelSelector {
       const key = await storage.get<string>(STORAGE_KEY_API_KEY);
       if (key) {
         this.apiKey = key;
-        console.log('✅ OpenRouter API key loaded from IndexedDB');
+        
       } else {
         console.log('ℹ️ No OpenRouter API key found in IndexedDB');
       }
