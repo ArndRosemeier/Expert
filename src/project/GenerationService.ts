@@ -681,10 +681,8 @@ export class GenerationService {
                 if (alreadyAdjusted) {
                     console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
                 } else {
-                // Only emit progress if not part of a larger bulk operation
-                if (!hasBulkOperation) {
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
-                }
+                // Always show autoprune progress - users need to see AI is working
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
                 
                 try {
                     // Import the ContextAdjusterModal and run in automatic mode
@@ -716,10 +714,8 @@ export class GenerationService {
         // For nodes that already have children, we should skip this check
         if (node.children.length === 0 && node.getState() === 'Empty') {
             if (includeContent) {
-                // Auto-generate content for the parent node first (only emit progress if not part of a larger bulk operation)
-                if (!hasBulkOperation) {
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
-                }
+                // Auto-generate content for the parent node first - always show progress
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
                 
                 try {
                     await this.generateNodeContent(nodeId, node.getTemplateChildrenCount() ?? 5, false);
@@ -784,18 +780,14 @@ export class GenerationService {
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
-            // Only emit progress if not part of a larger bulk operation
-            if (!hasBulkOperation) {
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
-            }
+            // Always show children creation progress
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
             
             // Use the dedicated createChildrenFromOutline method instead of duplicating logic
             await this.createChildrenFromOutline(nodeId);
         } else {
-            // Only emit progress if not part of a larger bulk operation
-            if (!hasBulkOperation) {
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
-            }
+            // Always show skip message for clarity
+            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
         }
 
         // Step 2: Generate content for all children (if requested)
@@ -807,10 +799,8 @@ export class GenerationService {
             const total = childrenNeedingContent.length;
 
             if (total > 0) {
-                // Emit initial progress to show the bar at 0% from the start (only if not part of a larger bulk operation)
-                if (!hasBulkOperation) {
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
-                }
+                // Emit initial progress to show the bar at 0% from the start
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
                 
                 for (let i = 0; i < total; i++) {
                     const child = childrenNeedingContent[i];
@@ -825,10 +815,8 @@ export class GenerationService {
                         break;
                     }
                     
-                    // Starting content generation for child (only if not part of a larger bulk operation)
-                    if (!hasBulkOperation) {
-                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
-                    }
+                    // Starting content generation for child - always show progress
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
                     
                     try {
                         // Use coordinator for child content generation if available
@@ -885,10 +873,8 @@ export class GenerationService {
                     }
                 }
             } else {
-                // Only emit progress if not part of a larger bulk operation
-                if (!hasBulkOperation) {
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
-                }
+                // Always show skip message for clarity
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
             }
         }
 
@@ -902,8 +888,8 @@ export class GenerationService {
                 child.level < maxExpandLevel
             );
             
-            // Emit initial progress for recursive generation if there are children to expand (only if not part of a larger bulk operation)
-            if (childrenToExpand.length > 0 && !hasBulkOperation) {
+            // Emit initial progress for recursive generation if there are children to expand
+            if (childrenToExpand.length > 0) {
                 this.deps.eventEmitter.emit('high-level-progress', { 
                     nodeId, 
                     message: `Starting recursive generation for ${childrenToExpand.length} children...`, 
@@ -925,15 +911,13 @@ export class GenerationService {
                     break;
                 }
                 
-                // Only emit progress if not part of a larger bulk operation
-                if (!hasBulkOperation) {
-                    this.deps.eventEmitter.emit('high-level-progress', { 
-                        nodeId, 
-                        message: `Recursively generating children for: ${child.title}`, 
-                        current: i + 1, 
-                        total: childrenToExpand.length 
-                    });
-                }
+                // Always show recursive child generation progress
+                this.deps.eventEmitter.emit('high-level-progress', { 
+                    nodeId, 
+                    message: `Recursively generating children for: ${child.title}`, 
+                    current: i + 1, 
+                    total: childrenToExpand.length 
+                });
                 
                 try {
                     // Recursively call generateAllChildrenContent on each child
