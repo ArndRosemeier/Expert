@@ -25,6 +25,9 @@ let recursiveState: boolean = false;
 let checkCoherenceState: boolean = true;
 let autopruneState: boolean = false;
 
+// Simple bulk operation tracking
+let isBulkOperationActive: boolean = false;
+
 
 // Version navigation state
 let currentVersionIndex: number = 0;
@@ -646,6 +649,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
     const handleAborted = (_e: { nodeId: string, node: DocumentNode }) => {
         // Handle aborted generation - similar to completion but with different messaging
+        // Clear bulk operation flag in case of abort
+        isBulkOperationActive = false;
+        console.log(`🛑 BULK OPERATION ABORTED - flag set to false`);
+        
         const operationsInProgress = manager.isAnyNodeGenerating();
         
         if (!operationsInProgress) {
@@ -673,23 +680,17 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             hideGenerationOverlay();
             
             // Additional safety: check if any nodes are still generating
-            // But don't clear during bulk operations (they manage their own progress clearing)
+            // But don't clear during bulk operations (simple flag-based check)
             void void setTimeout(() => {
-                const coordinator = manager.getGenerationCoordinator();
-                const activeOperations = coordinator.getActiveOperations();
-                const hasBulkOperation = activeOperations.some(op => op.type === 'bulk-children');
-                const hasChildOperations = activeOperations.some(op => op.type === 'child-content');
-                const isBulkGenerationActive = hasBulkOperation || hasChildOperations;
+                console.log(`🔍 SAFETY CHECK: nodes generating=${manager.isAnyNodeGenerating()}, bulk active=${isBulkOperationActive}`);
                 
-                console.log(`🔍 SAFETY CHECK: nodes generating=${manager.isAnyNodeGenerating()}, bulk ops=${hasBulkOperation}, child ops=${hasChildOperations}, total ops=${activeOperations.length}`);
-                
-                if (!manager.isAnyNodeGenerating() && !isBulkGenerationActive) {
-                    console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operations)`);
+                if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
+                    console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operation)`);
                     updateProgressUI();
                     hideGenerationOverlay();
                     // Note: Global abort button is managed by GenerationCoordinator
                 } else {
-                    console.log(`⏭️ SKIP SAFETY CLEAR (bulk generation active: bulk=${hasBulkOperation}, child=${hasChildOperations})`);
+                    console.log(`⏭️ SKIP SAFETY CLEAR (bulk operation active: ${isBulkOperationActive})`);
                 }
             }, 100);
         } else {
@@ -765,6 +766,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
     const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: unknown; success: boolean }) => {
         console.log(`🎯 Bulk generation complete for node "${e.node.title}" (ID: ${e.nodeId})`);
+        
+        // Clear bulk operation flag
+        isBulkOperationActive = false;
+        console.log(`🏁 BULK OPERATION COMPLETED - flag set to false`);
         
         // Check if coherence check was requested for this generation
         if (e.node && (e.node as any)._pendingCoherenceCheck && e.success) {
@@ -3279,13 +3284,17 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         const countInput = getElementById('generation-count-input') as HTMLInputElement;
         const count = countInput?.value ? parseInt(countInput.value, 10) : node.getTemplateChildrenCount() || undefined;
         
-        console.log(`🚀 Starting children generation for node "${node.title}" with options:`, {
-            includeContent,
-            checkCoherence,
-            recursive,
-            autoprune,
-            count
-        });
+                        console.log(`🚀 Starting children generation for node "${node.title}" with options:`, {
+                    includeContent,
+                    checkCoherence,
+                    recursive,
+                    autoprune,
+                    count
+                });
+                
+                // Set bulk operation flag
+                isBulkOperationActive = true;
+                console.log(`🏁 BULK OPERATION STARTED - flag set to true`);
         
         // Store the coherence check state for this generation
         if (checkCoherence) {
