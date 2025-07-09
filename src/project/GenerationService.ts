@@ -592,17 +592,22 @@ export class GenerationService {
                 
                 // Set the content description as initial content if provided
                 if (item.description && item.description.trim()) {
-                    // Create a separate draft version instead of updating master
+                    // Create a draft version and promote it to master with draft tag
                     const metadata: { [key: string]: any } = {};
                     if (creatorModel) {
                         metadata['creatorModel'] = creatorModel;
                     }
                     
-                    newNode.addVersion(['generated', 'draft'], {
+                    const draftVersionId = newNode.addVersion(['generated', 'draft'], {
                         content: `Draft: ${item.description}`,
                         title: newNode.title,
                         context: newNode.context
                     }, metadata);
+                    
+                    // Promote the draft version to master (keeping the draft tag)
+                    if (draftVersionId) {
+                        newNode.promoteToMaster(draftVersionId, ['draft']);
+                    }
                     
                     // Set context for generated child content
                     if (newNode.parentId) {

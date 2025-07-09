@@ -441,12 +441,15 @@ export class DocumentNode {
     setContent(content: string, tag?: string): void {
         const masterVersion = this.getMasterVersion();
         if (masterVersion) {
-            masterVersion.content = content;
-            masterVersion.timestamp = new Date();
-            
-            // Add tag if provided
-            if (tag) {
-                masterVersion.tags.add(tag);
+            // Only proceed if content actually changed
+            if (masterVersion.content !== content) {
+                masterVersion.content = content;
+                masterVersion.timestamp = new Date();
+                
+                // Add tag if provided (only when content actually changed)
+                if (tag) {
+                    masterVersion.tags.add(tag);
+                }
             }
         }
     }
@@ -468,19 +471,22 @@ export class DocumentNode {
     }
 
     /**
-     * Sets context. If tag provided, adds that tag to the master version.
+     * Sets context. If tag provided, adds that tag to the master version only when context actually changes.
      * @param context New context value
-     * @param tag Optional tag - if provided, adds this tag to the master version
+     * @param tag Optional tag - if provided, adds this tag to the master version when context changes
      */
     setContext(context: string, tag?: string): void {
         const masterVersion = this.getMasterVersion();
         if (masterVersion) {
-            masterVersion.context = context;
-            masterVersion.timestamp = new Date();
-            
-            // Add tag if provided
-            if (tag) {
-                masterVersion.tags.add(tag);
+            // Only proceed if context actually changed
+            if (masterVersion.context !== context) {
+                masterVersion.context = context;
+                masterVersion.timestamp = new Date();
+                
+                // Add tag if provided (only when context actually changed)
+                if (tag) {
+                    masterVersion.tags.add(tag);
+                }
             }
         }
     }
@@ -502,19 +508,22 @@ export class DocumentNode {
     }
 
     /**
-     * Sets title. If tag provided, adds that tag to the master version.
+     * Sets title. If tag provided, adds that tag to the master version only when title actually changes.
      * @param title New title value
-     * @param tag Optional tag - if provided, adds this tag to the master version
+     * @param tag Optional tag - if provided, adds this tag to the master version when title changes
      */
     setTitle(title: string, tag?: string): void {
         const masterVersion = this.getMasterVersion();
         if (masterVersion) {
-            masterVersion.title = title;
-            masterVersion.timestamp = new Date();
-            
-            // Add tag if provided
-            if (tag) {
-                masterVersion.tags.add(tag);
+            // Only proceed if title actually changed
+            if (masterVersion.title !== title) {
+                masterVersion.title = title;
+                masterVersion.timestamp = new Date();
+                
+                // Add tag if provided (only when title actually changed)
+                if (tag) {
+                    masterVersion.tags.add(tag);
+                }
             }
         }
     }

@@ -586,6 +586,7 @@ export class NodeInspectorModal extends BaseModal {
                     </div>
                 </div>
                 </div>
+
             `;
         
         return wrapper;
@@ -1507,4 +1508,4 @@ class TagSelectionModal extends BaseModal {
         }
         super.destroy();
     }
-} 
+}

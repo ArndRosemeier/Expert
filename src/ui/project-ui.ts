@@ -1015,21 +1015,6 @@ export function renderNodeDetails() {
         </style>
 
         <div class="node-section generation-section">
-            <div class="prompt-header">
-                <label for="node-generation-prompt">Generation</label>
-                <div class="placeholder-buttons">
-                    <button class="placeholder-btn" data-placeholder="path" title="View path placeholder value">{{path}}</button>
-                    <button class="placeholder-btn" data-placeholder="context" title="View context placeholder value">{{context}}</button>
-                    <button class="placeholder-btn" data-placeholder="title" title="View title placeholder value">{{title}}</button>
-                    <button class="placeholder-btn" data-placeholder="content" title="View content placeholder value">{{content}}</button>
-                    <button class="placeholder-btn" data-placeholder="draftorfresh" title="View draftorfresh placeholder value">{{draftorfresh}}</button>
-                    ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="child_level_name" title="View child level name placeholder value">{{child_level_name}}</button>' : ''}
-                    ${!node.isLeaf ? '<button class="placeholder-btn" data-placeholder="count" title="View count placeholder value">{{count}}</button>' : ''}
-                    <button id="default-prompt-btn" class="button button-secondary">Default</button>
-                </div>
-            </div>
-            <textarea id="node-generation-prompt" class="large-textarea" rows="8" placeholder="Enter a prompt here to generate content from scratch...">${node.generationPrompt || ''}</textarea>
-            
             <!-- Generation Controls -->
             <div style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 1rem;">
                 <!-- Left side: Generation controls -->
@@ -1249,9 +1234,7 @@ export function renderNodeDetails() {
     // Actions dropdown rendered successfully
 
     // --- Populate and Set States (No Listeners Here!) ---
-    const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
     const generateBtn = getElementById('node-generate-btn') as HTMLButtonElement;
-    const defaultPromptBtn = getElementById('default-prompt-btn') as HTMLButtonElement;
     const showRatingsCheckbox = getElementById('show-ratings-checkbox') as HTMLInputElement;
 
     // Reset checkbox state when switching nodes
@@ -1267,24 +1250,10 @@ export function renderNodeDetails() {
     // Update the content display to show the current version
     updateVersionContentDisplay();
 
-    if (!node.generationPrompt) {
-        node.generationPrompt = projectManager.getRawGenerationPrompt(node);
-        // Don't auto-save - only save when user explicitly changes something
-    }
-    generationPromptTextArea.value = node.generationPrompt;
-
     // Check if any operation is currently running on this node or any other node in the project
     const isAnyNodeGenerating = projectManager.isAnyNodeGenerating();
     const isThisNodeGenerating = node.isGenerating;
     const shouldDisableButtons = isAnyNodeGenerating || node.isPromptGenerating;
-
-    if (node.isPromptGenerating) {
-        generationPromptTextArea.placeholder = "Generating detailed prompt...";
-    } else if (!node.generationPrompt) {
-        generationPromptTextArea.placeholder = "A detailed prompt was not generated. You can write one here or try expanding the parent node again.";
-    } else {
-        generationPromptTextArea.placeholder = "The prompt for generating content. You can edit it here.";
-    }
 
     // Update button states based on generation status  
     const isAnyOperationInProgress = projectManager.getGenerationService().canAbortGeneration();
@@ -1293,8 +1262,6 @@ export function renderNodeDetails() {
     generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     generateBtn.className = 'button button-primary';
     generateBtn.id = 'node-generate-btn';
-    
-    defaultPromptBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
     
     // Handle context buttons state
     const extractContextBtn = getElementById('node-extract-context-btn') as HTMLButtonElement;
@@ -1390,7 +1357,6 @@ export function renderNodeDetails() {
     // This must happen AFTER the DOM elements are created and appended above
     const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
     const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-    const nodeGenerationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
     const nodeTitleDisplay = getElementById('node-title-display') as HTMLElement;
 
     // Content textarea - save content changes to node
@@ -1452,22 +1418,7 @@ export function renderNodeDetails() {
         });
     }
 
-    // Generation prompt textarea - save prompt changes to node
-    if (nodeGenerationPromptTextArea) {
-        nodeGenerationPromptTextArea.addEventListener('input', () => {
-            if (projectManager && selectedNodeId) {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (node) {
-                    node.generationPrompt = nodeGenerationPromptTextArea.value;
-                    // Save to storage with debounced approach
-                    clearTimeout((nodeGenerationPromptTextArea as any)._saveTimeout);
-                    (nodeGenerationPromptTextArea as any)._saveTimeout = setTimeout(() => {
-                        void projectManager!.saveToStorage().catch(console.error);
-                    }, 1000); // Save after 1 second of no typing
-                }
-            }
-        });
-    }
+
 
     // Node title - save title changes to node
     if (nodeTitleDisplay) {
@@ -1745,118 +1696,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
 
 
 
-function showPlaceholderOverlay(placeholder: string, projectManager: ProjectManager, selectedNodeId: string) {
-    const node = projectManager.findNodeById(selectedNodeId);
-    if (!node) return;
 
-    // Get the generation prompt panel (section) to use as reference for initial sizing
-    const promptSection = document.querySelector('.generation-section') as HTMLElement;
-    if (!promptSection) return;
-
-    const sectionRect = promptSection.getBoundingClientRect();
-
-    // Get placeholder descriptions
-    const descriptions: { [key: string]: string } = {
-        'path': 'The hierarchical path from root to this node',
-        'context': 'Compiled contextual information from ancestors, siblings, and parent',
-        'title': 'The title of the current node',
-        'content': 'The current content of the node (if any)',
-        'draftorfresh': 'Instructions for handling existing content (draft improvement or new generation)',
-        'child_level_name': 'The name of the child level (for branch nodes)',
-        'count': 'The number of items to generate (for list generation)'
-    };
-
-    // Get the actual placeholder value
-    let value: string;
-    switch (placeholder) {
-        case 'path':
-            value = projectManager.getTreeService().getNodePath(selectedNodeId, projectManager.rootNode);
-            break;
-        case 'context':
-            value = projectManager.getContextService().compileNodeContext(selectedNodeId, projectManager.rootNode);
-            break;
-        case 'title':
-            value = node.title;
-            break;
-        case 'content':
-            value = node.content || '';
-            break;
-        case 'draftorfresh':
-            // Show what the draftorfresh placeholder would actually expand to
-            if (node.content) {
-                if (node.content.startsWith('Draft:')) {
-                    value = `You have this existing draft to build upon:
----
-${node.content}
----
-
-Please expand this draft into full, detailed content. Use the draft as a guide for what should be covered, but write complete, polished content that goes well beyond the brief draft description.`;
-                } else {
-                    value = `You have this existing content to revise or expand:
----
-${node.content}
----
-
-Please improve and expand this content.`;
-                }
-            } else {
-                value = 'Now, write the full content for this node.';
-            }
-            break;
-        case 'child_level_name':
-            value = node.childLevelName || '';
-            break;
-        case 'count':
-            value = '5'; // Default count for demonstration
-            break;
-        default:
-            value = '';
-    }
-
-    // No need to manually trim - DocumentNode setters handle this automatically
-    // value = value.trim();
-
-    // Create overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'placeholder-overlay';
-    overlay.innerHTML = `<div class="placeholder-content" style="width: min(90vw, ${sectionRect.width}px); height: min(85vh, ${sectionRect.height}px); max-width: 1200px; max-height: 800px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);"><div class="placeholder-header"><h3>{{${placeholder}}}</h3><button class="placeholder-close-btn" type="button">&times;</button></div><div class="placeholder-body"><div class="placeholder-description">${descriptions[placeholder] || 'Placeholder value'}</div><div class="placeholder-value ${value ? '' : 'placeholder-empty'}"></div></div></div>`;
-    
-    // Set the placeholder value using textContent to avoid whitespace issues
-    const valueElement = overlay.querySelector('.placeholder-value');
-    if (valueElement) {
-        valueElement.textContent = value || '(empty)';
-    }
-
-    // Add close functionality
-    const closeBtn = overlay.querySelector('.placeholder-close-btn');
-    
-    const closeOverlay = () => {
-        overlay.remove();
-    };
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeOverlay);
-    }
-
-    // Close on overlay background click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            closeOverlay();
-        }
-    });
-
-    // Close on Escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            closeOverlay();
-            document.removeEventListener('keydown', handleKeyDown);
-        }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Add to DOM
-    document.body.appendChild(overlay);
-}
 
 /**
  * Handle dropdown action by button ID
@@ -1935,9 +1775,6 @@ This action cannot be undone.`;
                 }
                 
                 const coordinator = projectManager.getGenerationCoordinator();
-                
-                const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                node.generationPrompt = generationPromptTextArea.value;
                 
                 // Get the count from the input
                 const countInput = getElementById('generation-count-input') as HTMLInputElement;
@@ -2034,17 +1871,7 @@ This action cannot be undone.`;
             }
             break;
 
-        case 'default-prompt-action':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
 
-                const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-                const defaultPrompt = projectManager.getRawGenerationPrompt(node);
-                generationPromptTextArea.value = defaultPrompt;
-                node.generationPrompt = defaultPrompt;
-            }
-            break;
 
         case 'add-child-node-btn':
             {
@@ -3407,16 +3234,7 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         handleUnifiedGeneration(node);
     },
     
-    'default-prompt-btn': (_e: Event) => {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        const generationPromptTextArea = getElementById('node-generation-prompt') as HTMLTextAreaElement;
-        const defaultPrompt = projectManager.getRawGenerationPrompt(node);
-        generationPromptTextArea.value = defaultPrompt;
-        node.generationPrompt = defaultPrompt;
-    },
+
     
     'node-propagate-context-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
@@ -3648,14 +3466,7 @@ function attachAllListeners() {
             const button = e.target.closest('button');
             if (!button) return;
             
-            // Handle placeholder buttons
-            if (button.classList.contains('placeholder-btn')) {
-                const placeholder = button.getAttribute('data-placeholder');
-                if (placeholder && projectManager && selectedNodeId) {
-                    showPlaceholderOverlay(placeholder, projectManager, selectedNodeId);
-                }
-                return;
-            }
+
         };
         
         mainContent.addEventListener('click', delegationHandler);

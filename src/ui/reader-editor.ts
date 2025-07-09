@@ -141,8 +141,8 @@ export class ReaderEditor {
                 const currentContent = this.currentActiveEditor.editor.getText();
                 const node = this.projectManager.findNodeById(this.currentActiveEditor.nodeId);
                 if (node) {
-                    // Use version management system to update content
-                    node.setContent(currentContent, 'master');
+                    // Use version management system to update content with Edited tag
+                    node.setContent(currentContent, 'Edited');
                     console.log(`📝 Updated node content before AI action: ${node.title}`);
                 }
             }
@@ -540,8 +540,8 @@ export class ReaderEditor {
             
             if (node) {
                 // Always update node content with current editor content using version management
-                // regardless of dirty state or how the content got there
-                node.setContent(currentContent, 'master');
+                // regardless of dirty state or how the content got there, mark as Edited
+                node.setContent(currentContent, 'Edited');
                 console.log(`📝 Copied content from reader to node: ${node.title}`);
             } else {
                 console.warn(`⚠️ Node not found for editor: ${nodeId}`);
