@@ -382,7 +382,7 @@ export class NodeInspectorModal extends BaseModal {
         // Inject ratings styles
         this.injectRatingsStyles();
         
-        this.open();
+        void this.open();
     }
 
     protected override buildContentStyle(): string {
@@ -1364,7 +1364,7 @@ class TagSelectionModal extends BaseModal {
     public async showModal(): Promise<string | null> {
         return new Promise((resolve) => {
             this.resolvePromise = resolve;
-            this.open();
+            void this.open();
         });
     }
 
@@ -1485,7 +1485,7 @@ class TagSelectionModal extends BaseModal {
             this.resolvePromise(result);
             this.resolvePromise = null;
         }
-        this.close();
+        void this.close();
     }
 
     protected override buildContentStyle(): string {

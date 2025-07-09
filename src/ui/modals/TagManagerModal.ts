@@ -481,7 +481,7 @@ export class TagManagerModal extends BaseModal {
 
         // Close button
         const closeBtn = this.createActionButton('✖️ Close', 'default', () => {
-            this.close();
+            void this.close();
             if (this.options.onClose) {
                 this.options.onClose();
             }
@@ -581,7 +581,7 @@ export class TagManagerModal extends BaseModal {
 
         if (addedCount > 0) {
             alert(`Added tag "${trimmedTag}" to ${addedCount} versions`);
-            this.persistChanges();
+            void this.persistChanges();
             this.initializeTagMappings();
             this.renderTagList();
             this.renderActions();
@@ -609,7 +609,7 @@ export class TagManagerModal extends BaseModal {
         });
 
         alert(`Removed tag "${this.selectedTag}" from ${versions.length} versions`);
-        this.persistChanges();
+        void this.persistChanges();
         
         // Clear selection and refresh
         this.selectedTag = null;
@@ -651,7 +651,7 @@ export class TagManagerModal extends BaseModal {
         });
 
         alert(`Promoted ${versions.length} versions to master`);
-        this.persistChanges();
+        void this.persistChanges();
         this.initializeTagMappings();
         this.renderTagList();
         this.renderActions();
@@ -698,7 +698,7 @@ export class TagManagerModal extends BaseModal {
         });
 
         alert(`Copied ${versions.length} versions with new tag "${trimmedTag}"`);
-        this.persistChanges();
+        void this.persistChanges();
         this.initializeTagMappings();
         this.renderTagList();
         this.renderActions();
@@ -748,7 +748,7 @@ export class TagManagerModal extends BaseModal {
 
         if (removedCount > 0) {
             alert(`Removed ${removedCount} versions with tag "${this.selectedTag}"`);
-            this.persistChanges();
+            void this.persistChanges();
             
             // Clear selection and refresh
             this.selectedTag = null;
