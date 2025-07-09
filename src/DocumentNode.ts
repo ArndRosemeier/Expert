@@ -333,7 +333,7 @@ export class DocumentNode {
 
     get creatorModel(): string | null {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.creatorModel || null;
+        return masterVersion?.metadata?.['creatorModel'] || null;
     }
 
     // --- Version Management Methods ---

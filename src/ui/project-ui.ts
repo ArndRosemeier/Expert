@@ -23,6 +23,7 @@ let selectedNodeId: string | null = null;
 let includeContentState: boolean = true;
 let recursiveState: boolean = false;
 let checkCoherenceState: boolean = true;
+let autopruneState: boolean = false;
 
 
 // Version navigation state
@@ -44,7 +45,8 @@ async function saveCheckboxStates() {
         await storage.set('expert_app_checkbox_states', {
             includeContent: includeContentState,
             recursive: recursiveState,
-            checkCoherence: checkCoherenceState
+            checkCoherence: checkCoherenceState,
+            autoprune: autopruneState
         });
     } catch (error) {
         console.warn('Failed to save checkbox states:', error);
@@ -55,11 +57,12 @@ async function loadCheckboxStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{includeContent: boolean, recursive: boolean, checkCoherence: boolean}>('expert_app_checkbox_states');
+        const saved = await storage.get<{includeContent: boolean, recursive: boolean, checkCoherence: boolean, autoprune: boolean}>('expert_app_checkbox_states');
         if (saved) {
             includeContentState = saved.includeContent;
             recursiveState = saved.recursive;
             checkCoherenceState = saved.checkCoherence ?? true; // Default to true if not saved
+            autopruneState = saved.autoprune ?? false; // Default to false if not saved
         }
     } catch (error) {
         console.warn('Failed to load checkbox states:', error);
@@ -1044,6 +1047,14 @@ export function renderNodeDetails() {
                         </label>
                     </div>
                     
+                    <!-- Autoprune Context Checkbox -->
+                    <div class="autoprune-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'block' : 'none'}; margin-bottom: 0.5rem;">
+                        <label for="autoprune-context-checkbox" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;">
+                            <input type="checkbox" id="autoprune-context-checkbox" ${autopruneState ? 'checked' : ''}>
+                            <span>Autoprune context</span>
+                        </label>
+                    </div>
+                    
                     <!-- Generation Controls Row -->
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <div class="count-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
@@ -1328,6 +1339,7 @@ export function renderNodeDetails() {
         const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
         const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
         const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+        const autopruneCheckbox = getElementById('autoprune-context-checkbox') as HTMLInputElement;
         
         if (includeContentCheckbox) {
             includeContentCheckbox.addEventListener('change', () => {
@@ -1359,6 +1371,13 @@ export function renderNodeDetails() {
                     }
                 }
                 
+                void saveCheckboxStates().catch(console.error);
+            });
+        }
+        
+        if (autopruneCheckbox) {
+            autopruneCheckbox.addEventListener('change', () => {
+                autopruneState = autopruneCheckbox.checked;
                 void saveCheckboxStates().catch(console.error);
             });
         }
@@ -3334,10 +3353,12 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
         const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
         const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
+        const autopruneCheckbox = getElementById('autoprune-context-checkbox') as HTMLInputElement;
         
         const includeContent = includeContentCheckbox?.checked ?? true;
         const checkCoherence = checkCoherenceCheckbox?.checked ?? false;
         const recursive = recursiveCheckbox?.checked ?? false;
+        const autoprune = autopruneCheckbox?.checked ?? false;
         
         // Get count from input
         const countInput = getElementById('generation-count-input') as HTMLInputElement;
@@ -3347,6 +3368,7 @@ function handleUnifiedGeneration(node: DocumentNode): void {
             includeContent,
             checkCoherence,
             recursive,
+            autoprune,
             count
         });
         
@@ -3356,7 +3378,7 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         }
         
         // Call the children generation method
-        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive);
+        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune);
         
     } else {
         // Generate this content

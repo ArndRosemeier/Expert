@@ -53,6 +53,48 @@ export class ContextAdjusterModal extends BaseModal {
     }
 
     /**
+     * Run context adjustment in automatic mode - analyze and remove all problematic items automatically
+     * Returns true if any changes were made, false otherwise
+     */
+    async runAutomaticMode(targetNode: DocumentNode): Promise<boolean> {
+        this.targetNode = targetNode;
+        this.isLoading = true;
+        this.analysisResult = null;
+        this.removedItems.clear();
+        
+        try {
+            const { getOpenRouterClient, getSettingsManager, getActiveProject } = await import('../../state');
+            const contextAdjusterService = new ContextAdjusterService(
+                getOpenRouterClient()!,
+                getSettingsManager()!
+            );
+            const projectManager = getActiveProject()!;
+            
+            // Analyze context
+            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager);
+            this.analysisResult = result;
+            this.isLoading = false;
+            
+            // If no issues found, return false (no changes made)
+            if (!result.hasIssues) {
+                return false;
+            }
+            
+            // Automatically remove all problematic items
+            this.removeAllItems();
+            
+            // Apply changes automatically (skip alert)
+            await this.applyChanges(true);
+            
+            return true; // Changes were made
+        } catch (error) {
+            console.error('Automatic context adjustment failed:', error);
+            this.isLoading = false;
+            throw error;
+        }
+    }
+
+    /**
      * Update modal with analysis results
      */
     updateWithResults(result: ContextAnalysisResult): void {
@@ -471,7 +513,7 @@ export class ContextAdjusterModal extends BaseModal {
     /**
      * Apply all changes to the context
      */
-    async applyChanges(): Promise<void> {
+    async applyChanges(skipAlert: boolean = false): Promise<void> {
         if (!this.targetNode || this.removedItems.size === 0) return;
 
         try {
@@ -492,8 +534,8 @@ export class ContextAdjusterModal extends BaseModal {
             // Create the new context
             const newContext = formatContextItems(filteredItems);
             
-            // Update the node's context using the proper method
-            this.targetNode.setContextWithTags(newContext, ['edited', 'context_edited']);
+            // Update the node's context using the proper method with AI adjustment tag
+            this.targetNode.setContextWithTags(newContext, ['edited', 'context_edited', 'context_ai_adjusted']);
             
             // Propagate context to all descendants (like in project-ui.ts)
             const propagateRecursively = (parentNode: DocumentNode) => {
@@ -534,12 +576,16 @@ export class ContextAdjusterModal extends BaseModal {
                 console.warn('⚠️ ContextAdjuster: Failed to refresh main UI:', uiError);
             }
             
-            // Show success message
-            alert(`Successfully removed ${this.removedItems.size} context item(s).`);
+            // Show success message (unless in automatic mode)
+            if (!skipAlert) {
+                alert(`Successfully removed ${this.removedItems.size} context item(s).`);
+            }
             
-            // Reset and close
+            // Reset and close (but don't close in automatic mode)
             this.removedItems.clear();
-            this.close();
+            if (!skipAlert) {
+                this.close();
+            }
             
         } catch (error) {
             console.error('Failed to apply changes:', error);
