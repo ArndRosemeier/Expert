@@ -203,7 +203,7 @@ export class CoherenceModal extends BaseModal {
             const fixData = this.fixedContradictions.get(index);
             
             let buttonState = 'button-warning';
-            let buttonText = '🔧 Fix It!';
+            let buttonText = '🔧 Generate Fix';
             let buttonDisabled = false;
             
             if (isApplied) {
@@ -589,7 +589,7 @@ export class CoherenceModal extends BaseModal {
             // Reset the fix button
             const fixButton = contradictionItem.querySelector('.fix-btn') as HTMLButtonElement;
             if (fixButton) {
-                fixButton.textContent = '🔧 Fix It!';
+                fixButton.textContent = '🔧 Generate Fix';
                 fixButton.classList.remove('button-secondary', 'button-success');
                 fixButton.classList.add('button-warning');
                 fixButton.disabled = false;

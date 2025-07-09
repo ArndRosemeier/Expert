@@ -42,15 +42,29 @@ export class ContextAdjusterService {
         return 'Node is not eligible for context analysis.';
     }
 
-
+    /**
+     * Check if node context differs from actual parent context
+     */
+    checkContextMismatch(node: DocumentNode, projectManager: ProjectManager): { hasMismatch: boolean; parentContext: string } {
+        const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : null;
+        const actualParentContext = parentNode?.context || '';
+        const nodeContext = node.context || '';
+        
+        return {
+            hasMismatch: actualParentContext !== nodeContext,
+            parentContext: actualParentContext
+        };
+    }
 
     /**
      * Prepare analysis request from node
      */
     private prepareAnalysisRequest(node: DocumentNode, projectManager: ProjectManager): ContextAnalysisRequest {
+        const contextCheck = this.checkContextMismatch(node, projectManager);
+        
         return {
             nodeContent: node.content || '',
-            parentContext: node.context || '',
+            parentContext: contextCheck.parentContext,
             nodeTitle: node.title || 'Untitled Node',
             nodeId: node.id
         };
@@ -65,12 +79,14 @@ export class ContextAdjusterService {
         }
 
         const request = this.prepareAnalysisRequest(node, projectManager);
+        const contextCheck = this.checkContextMismatch(node, projectManager);
         
         // Create analysis prompt
         const prompts = this.settingsManager.getPrompts();
         const analysisPrompt = prompts.context_analysis
             .replace(/\{\{node_title\}\}/g, request.nodeTitle)
             .replace(/\{\{node_content\}\}/g, request.nodeContent)
+            .replace(/\{\{context\}\}/g, node.context || '')
             .replace(/\{\{parent_context\}\}/g, request.parentContext)
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
@@ -86,7 +102,8 @@ export class ContextAdjusterService {
                 hasIssues: issues.length > 0,
                 analysisTimestamp: new Date(),
                 nodeId: node.id,
-                originalContext: node.context || ''
+                originalContext: node.context || '',
+                contextMismatch: contextCheck.hasMismatch
             };
         } catch (error) {
             console.error('Context analysis failed:', error);

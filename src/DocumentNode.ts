@@ -452,6 +452,22 @@ export class DocumentNode {
     }
 
     /**
+     * Sets content with multiple tags.
+     * @param content New content value
+     * @param tags Array of tags to add to the master version
+     */
+    setContentWithTags(content: string, tags: string[]): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.content = content;
+            masterVersion.timestamp = new Date();
+            
+            // Add all tags
+            tags.forEach(tag => masterVersion.tags.add(tag));
+        }
+    }
+
+    /**
      * Sets context. If tag provided, adds that tag to the master version.
      * @param context New context value
      * @param tag Optional tag - if provided, adds this tag to the master version
@@ -466,6 +482,22 @@ export class DocumentNode {
             if (tag) {
                 masterVersion.tags.add(tag);
             }
+        }
+    }
+
+    /**
+     * Sets context with multiple tags.
+     * @param context New context value
+     * @param tags Array of tags to add to the master version
+     */
+    setContextWithTags(context: string, tags: string[]): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.context = context;
+            masterVersion.timestamp = new Date();
+            
+            // Add all tags
+            tags.forEach(tag => masterVersion.tags.add(tag));
         }
     }
 
@@ -487,9 +519,21 @@ export class DocumentNode {
         }
     }
 
-
-
-
+    /**
+     * Sets title with multiple tags.
+     * @param title New title value
+     * @param tags Array of tags to add to the master version
+     */
+    setTitleWithTags(title: string, tags: string[]): void {
+        const masterVersion = this.getMasterVersion();
+        if (masterVersion) {
+            masterVersion.title = title;
+            masterVersion.timestamp = new Date();
+            
+            // Add all tags
+            tags.forEach(tag => masterVersion.tags.add(tag));
+        }
+    }
 
     /**
      * Promotes a version to master.

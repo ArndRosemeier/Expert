@@ -11,6 +11,7 @@ export interface ContextAnalysisResult {
     analysisTimestamp: Date;
     nodeId: string;
     originalContext: string;
+    contextMismatch?: boolean;
 }
 
 export interface ContextAnalysisRequest {

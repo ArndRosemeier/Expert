@@ -145,8 +145,12 @@ export class ContextAdjusterModal extends BaseModal {
             return '<div class="error-message">No analysis results available.</div>';
         }
 
+        // Add context mismatch warning at the top if present
+        const contextMismatchWarning = this.renderContextMismatchWarning();
+
         if (!this.analysisResult.hasIssues) {
             return `
+                ${contextMismatchWarning}
                 <div class="no-issues-message">
                     <h3>✅ Context Analysis Complete</h3>
                     <p>No problematic context items were found. The inherited context appears suitable for creating subnodes.</p>
@@ -160,6 +164,7 @@ export class ContextAdjusterModal extends BaseModal {
         }
 
         return `
+            ${contextMismatchWarning}
             <div class="analysis-results">
                 <h3>🎯 Context Analysis Results</h3>
                 <p>Found ${this.analysisResult.issues.length} potential issue(s) in the inherited context that might confuse subnode creation.</p>
@@ -167,6 +172,31 @@ export class ContextAdjusterModal extends BaseModal {
                 <div class="issues-container">
                     ${this.renderIssues(this.analysisResult.issues)}
                 </div>
+            </div>
+        `;
+    }
+
+    private renderContextMismatchWarning(): string {
+        if (!this.analysisResult?.contextMismatch || !this.targetNode) {
+            return '';
+        }
+
+        return `
+            <div class="info-message" style="
+                background: #e7f3ff;
+                border: 1px solid #b8daff;
+                border-radius: 4px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                color: #0c5460;
+            ">
+                <h4 style="margin: 0 0 0.5rem 0; color: #0c5460;">
+                    ℹ️ Context Status
+                </h4>
+                <p style="margin: 0;">
+                    <strong>This node's context appears to be edited already.</strong> 
+                    The context differs from the parent context, indicating it has been manually or automatically modified.
+                </p>
             </div>
         `;
     }
@@ -185,7 +215,7 @@ export class ContextAdjusterModal extends BaseModal {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                             <strong>Problematic Context Item:</strong>
                             <button class="fix-btn button button-warning" data-issue-index="${index}">
-                                🔧 Fix It!
+                                🔧 Generate Fix
                             </button>
                         </div>
                         <div class="code-block problematic">${this.formatText(issue.problematic_context_item)}</div>
@@ -500,7 +530,7 @@ export class ContextAdjusterModal extends BaseModal {
 
         try {
             // Apply the fix to the target node context
-            this.targetNode.setContext(fixData.fixedContext, 'master');
+            this.targetNode.setContextWithTags(fixData.fixedContext, ['edited', 'context_edited']);
             
             // Mark this fix as applied
             this.appliedFixes.add(issueIndex);
@@ -572,7 +602,7 @@ export class ContextAdjusterModal extends BaseModal {
             // Reset the fix button
             const fixButton = issueItem.querySelector('.fix-btn') as HTMLButtonElement;
             if (fixButton) {
-                fixButton.textContent = '🔧 Fix It!';
+                fixButton.textContent = '🔧 Generate Fix';
                 fixButton.classList.remove('button-secondary', 'button-success');
                 fixButton.classList.add('button-warning');
                 fixButton.disabled = false;
@@ -609,7 +639,7 @@ export class ContextAdjusterModal extends BaseModal {
                 
                 const fixButton = issueItem.querySelector('.fix-btn') as HTMLButtonElement;
                 if (fixButton) {
-                    fixButton.textContent = '🔧 Fix It!';
+                    fixButton.textContent = '🔧 Generate Fix';
                     fixButton.classList.remove('button-secondary', 'button-success');
                     fixButton.classList.add('button-warning');
                     fixButton.disabled = false;

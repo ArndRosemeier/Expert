@@ -669,8 +669,8 @@ JSON Response:`.trim(),
 Title: {{node_title}}
 Content: {{node_content}}
 
-**Inherited Context from Parent Nodes:**
-{{parent_context}}
+**Node Context:**
+{{context}}
 
 **Your Task:**
 Analyze the inherited context and identify items that might be problematic for creating subnodes of the current node. Look for:
@@ -701,7 +701,7 @@ Example:
 ]
 
 If no issues are found, return an empty array: []`.trim(),
-        placeholders: ['node_title', 'node_content', 'parent_context', 'language'],
+        placeholders: ['node_title', 'node_content', 'context', 'parent_context', 'language'],
         description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
     },
 

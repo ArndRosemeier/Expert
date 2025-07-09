@@ -1366,8 +1366,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    // Use version management system to update content with "Edited" tag
-                    node.setContent(contentTextArea.value, 'Edited');
+                    // Use version management system to update content with "edited" and "content_edited" tags
+                    node.setContentWithTags(contentTextArea.value, ['edited', 'content_edited']);
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
                     (contentTextArea as any)._saveTimeout = setTimeout(() => {
@@ -1385,8 +1385,8 @@ export function renderNodeDetails() {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     const newContext = contextTextArea.value;
-                    // Use version management system to update context with "Edited" tag
-                    node.setContext(newContext, 'Edited');
+                    // Use version management system to update context with "edited" and "context_edited" tags
+                    node.setContextWithTags(newContext, ['edited', 'context_edited']);
                 
                 // Always propagate context to all descendants
                 const propagateRecursively = (parentNode: DocumentNode) => {
@@ -1432,8 +1432,8 @@ export function renderNodeDetails() {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    // Use version management system to update title with "Edited" tag
-                    node.setTitle(nodeTitleDisplay.textContent || '', 'Edited');
+                    // Use version management system to update title with "edited" and "title_edited" tags
+                    node.setTitleWithTags(nodeTitleDisplay.textContent || '', ['edited', 'title_edited']);
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
                     (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {

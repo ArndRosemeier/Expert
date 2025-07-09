@@ -560,8 +560,8 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
         if (extractResult) {
             const currentContext = node.context || '';
             const newContext = currentContext + (currentContext ? '\n\n' : '') + extractResult.value;
-            // Update context using version management system with "Edited" tag
-            node.setContext(newContext, 'Edited');
+                        // Update context using version management system with "edited" and "context_edited" tags
+            node.setContextWithTags(newContext, ['edited', 'context_edited']);
             
             // Update the context textarea in the UI immediately
             const contextTextarea = document.getElementById('node-context') as HTMLTextAreaElement;
