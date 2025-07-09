@@ -1930,7 +1930,7 @@ This action cannot be undone.`;
                 }
 
                 // Start the bulk generation
-                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive)
+                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, false, false)
                     .then(() => {
                         coordinator.completeOperation(operationId, true);
                         if (projectManager) {
@@ -3283,7 +3283,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         }
         
         // Call the children generation method
-        await projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune);
+        await projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune, false);
         
     } else {
         // Generate this content

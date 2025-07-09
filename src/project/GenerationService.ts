@@ -649,8 +649,10 @@ export class GenerationService {
      * @param nodeId The ID of the parent node.
      * @param includeContent Whether to generate content for the children (default: true).
      * @param recursive Whether to recursively generate children down to max expand level (default: false).
+     * @param autoprune Whether to enable auto-pruning of context (default: false).
+     * @param isNestedCall Whether this is a recursive call (used to prevent progress override).
      */
-    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false, autoprune: boolean = false): Promise<void> {
+    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false, autoprune: boolean = false, isNestedCall: boolean = false): Promise<void> {
         let node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) {
             this.deps.eventEmitter.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
@@ -774,12 +776,18 @@ export class GenerationService {
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
-            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
+            // Only emit progress for top-level calls, not recursive calls
+            if (!isNestedCall) {
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
+            }
             
             // Use the dedicated createChildrenFromOutline method instead of duplicating logic
             await this.createChildrenFromOutline(nodeId);
         } else {
-            this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
+            // Only emit progress for top-level calls, not recursive calls
+            if (!isNestedCall) {
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
+            }
         }
 
         // Step 2: Generate content for all children (if requested)
@@ -791,8 +799,10 @@ export class GenerationService {
             const total = childrenNeedingContent.length;
 
             if (total > 0) {
-                // Emit initial progress to show the bar at 0% from the start
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
+                // Emit initial progress to show the bar at 0% from the start (only for top-level calls)
+                if (!isNestedCall) {
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
+                }
                 
                 for (let i = 0; i < total; i++) {
                     const child = childrenNeedingContent[i];
@@ -807,8 +817,10 @@ export class GenerationService {
                         break;
                     }
                     
-                    // Starting content generation for child
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
+                    // Starting content generation for child (only for top-level calls)
+                    if (!isNestedCall) {
+                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
+                    }
                     
                     try {
                         // Use coordinator for child content generation if available
@@ -865,7 +877,10 @@ export class GenerationService {
                     }
                 }
             } else {
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
+                // Only emit progress for top-level calls, not recursive calls
+                if (!isNestedCall) {
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
+                }
             }
         }
 
@@ -879,8 +894,8 @@ export class GenerationService {
                 child.level < maxExpandLevel
             );
             
-            // Emit initial progress for recursive generation if there are children to expand
-            if (childrenToExpand.length > 0) {
+            // Emit initial progress for recursive generation if there are children to expand (only for top-level calls)
+            if (childrenToExpand.length > 0 && !isNestedCall) {
                 this.deps.eventEmitter.emit('high-level-progress', { 
                     nodeId, 
                     message: `Starting recursive generation for ${childrenToExpand.length} children...`, 
@@ -902,17 +917,20 @@ export class GenerationService {
                     break;
                 }
                 
-                this.deps.eventEmitter.emit('high-level-progress', { 
-                    nodeId, 
-                    message: `Recursively generating children for: ${child.title}`, 
-                    current: i + 1, 
-                    total: childrenToExpand.length 
-                });
+                // Only emit progress for top-level calls, not recursive calls
+                if (!isNestedCall) {
+                    this.deps.eventEmitter.emit('high-level-progress', { 
+                        nodeId, 
+                        message: `Recursively generating children for: ${child.title}`, 
+                        current: i + 1, 
+                        total: childrenToExpand.length 
+                    });
+                }
                 
                 try {
                     // Recursively call generateAllChildrenContent on each child
-                    // Pass includeContent, recursive, and autoprune flags down
-                    await this.generateAllChildrenContent(child.id, includeContent, recursive, autoprune);
+                    // Pass includeContent, recursive, autoprune flags down, and mark as nested call
+                    await this.generateAllChildrenContent(child.id, includeContent, recursive, autoprune, true);
                 } catch (error: any) {
                     if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                         break;
@@ -933,8 +951,10 @@ export class GenerationService {
                 if (this.isAbortRequested()) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
                 } else {
-                    // Clear progress bars and emit the dedicated bulk completion event
-                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+                    // Clear progress bars and emit the dedicated bulk completion event (only for top-level calls)
+                    if (!isNestedCall) {
+                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
+                    }
                     
                     // Emit the dedicated bulk generation complete event
                     this.deps.eventEmitter.emit('bulkGenerationComplete', { 
