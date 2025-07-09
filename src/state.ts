@@ -7,7 +7,7 @@ import { OrchestratorPrompts } from "./PromptManager";
 import { TemplateManager } from "./TemplateManager";
 
 let orchestrator: LoopOrchestrator | null = null;
-let projects: ProjectManager[] = [];
+const projects: ProjectManager[] = [];
 let activeProjectId: string | null = null;
 let openRouterClient: OpenRouterClient | null = null;
 let settingsManager: SettingsManager | null = null;

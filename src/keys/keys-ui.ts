@@ -20,7 +20,7 @@ export class KeysUI {
     }
 
     private async init(): Promise<void> {
-        this.render();
+        void this.render();
         this.attachEventListeners();
         await this.loadStoredKeys();
         await this.updateKeysList();
@@ -150,7 +150,7 @@ export class KeysUI {
     private attachEventListeners(): void {
         // Form submission
         const form = document.getElementById('create-key-form') as HTMLFormElement;
-        form.addEventListener('submit', (e) => this.handleCreateKey(e));
+        form.addEventListener('submit', async (e) => this.handleCreateKey(e));
 
         // Random string button
         const randomBtn = document.getElementById('random-string-btn') as HTMLButtonElement;
@@ -162,7 +162,7 @@ export class KeysUI {
 
         // Validation button
         const validateBtn = document.getElementById('validate-btn') as HTMLButtonElement;
-        validateBtn.addEventListener('click', () => this.validateKey());
+        validateBtn.addEventListener('click', async () => this.validateKey());
 
         // Auto-validate on input
         const validateInput = document.getElementById('validate-key') as HTMLTextAreaElement;
@@ -357,7 +357,7 @@ export class KeysUI {
                         document.body.removeChild(textArea);
                         
                         target.textContent = '✅ Copied!';
-                        setTimeout(() => {
+                        void void setTimeout(() => {
                             target.textContent = '📋 Copy';
                         }, 2000);
                     } catch (error) {
@@ -420,13 +420,13 @@ export class KeysUI {
         
         document.body.appendChild(toast);
         
-        setTimeout(() => {
+        void void setTimeout(() => {
             toast.classList.add('show');
         }, 100);
         
-        setTimeout(() => {
+        void void setTimeout(() => {
             toast.classList.remove('show');
-            setTimeout(() => {
+            void void setTimeout(() => {
                 document.body.removeChild(toast);
             }, 300);
         }, 3000);

@@ -8,7 +8,7 @@ import { IModal, ModalRegistryEntry, ModalState, ModalEventEmitter, ModalEvents 
  * Simple event emitter for modal events
  */
 class SimpleEventEmitter implements ModalEventEmitter {
-    private handlers: Map<keyof ModalEvents, ((data: any) => void)[]> = new Map();
+    private handlers: Map<keyof ModalEvents, ((data: unknown) => void)[]> = new Map();
 
     emit<K extends keyof ModalEvents>(event: K, data: ModalEvents[K]): void {
         const eventHandlers = this.handlers.get(event);
@@ -179,7 +179,7 @@ export class ModalRegistry {
      */
     public async closeAll(): Promise<void> {
         const openModalIds = this.activeModals.slice(); // Copy array
-        await Promise.all(openModalIds.map(id => this.close(id)));
+        await Promise.all(openModalIds.map(async id => this.close(id)));
     }
 
     /**
@@ -214,7 +214,7 @@ export class ModalRegistry {
     /**
      * Emit a modal action event
      */
-    public emitAction(modalId: string, action: string, data?: any): void {
+    public emitAction(modalId: string, action: string, data?: unknown): void {
         this.eventEmitter.emit('modal:action', { id: modalId, action, data });
     }
 

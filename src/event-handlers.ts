@@ -102,7 +102,7 @@ async function extractTextFromPDF(file: File): Promise<string> {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-                .map((item: any) => item.str)
+                .map((item: unknown) => item.str)
                 .join(' ');
             fullText += pageText + '\n\n';
         }
@@ -163,7 +163,7 @@ function recreateAndReconfigureServices() {
     
 }
 
-function handleCreateProject(title: string, template: ProjectTemplate, aiData?: any) {
+function handleCreateProject(title: string, template: ProjectTemplate, aiData?: unknown) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -215,7 +215,7 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     void initializeProjectUI(project);
 }
 
-function handleImportProject(title: string, template: ProjectTemplate, importData: any) {
+function handleImportProject(title: string, template: ProjectTemplate, importData: unknown) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -256,7 +256,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
 
         // Import children recursively if they exist
         if (importData.children && Array.isArray(importData.children)) {
-            importData.children.forEach((childData: any, index: number) => {
+            importData.children.forEach((childData: unknown, index: number) => {
                 importChildNodeForProject(project, rootNode.id, childData, index);
             });
         }
@@ -280,7 +280,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
 
 // Removed unused function calculateImportDepth
 
-function importChildNodeForProject(project: ProjectManager, parentId: string, childData: any, index: number): void {
+function importChildNodeForProject(project: ProjectManager, parentId: string, childData: unknown, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -305,7 +305,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
 
     // Recursively import children
     if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+        childData.children.forEach((grandChildData: unknown, grandChildIndex: number) => {
             importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
         });
     }
@@ -349,7 +349,7 @@ async function loadPersistedProjects(): Promise<void> {
         console.error("Failed to load projects from storage:", error);
         // Try to clear any corrupted storage
         try {
-            const storage = await import('./StorageService').then(m => m.StorageService.getInstance());
+            const storage = await import('./StorageService').then(async m => m.StorageService.getInstance());
             await storage.delete(STORAGE_KEYS.CURRENT_PROJECT);
             await storage.delete(STORAGE_KEYS.PROJECTS);
             await storage.delete(STORAGE_KEYS.ACTIVE_PROJECT);
@@ -442,7 +442,7 @@ export async function initialize() {
     getElementById('newProjectBtn').addEventListener('click', () => {
         const settingsManager = state.getSettingsManager();
         if (settingsManager) {
-            NewProjectModal.open(handleCreateProject, settingsManager);
+            void NewProjectModal.open(handleCreateProject, settingsManager);
         }
     });
     } catch (error) {
@@ -451,7 +451,7 @@ export async function initialize() {
     
     try {
         getElementById('comprehensiveExportBtn').addEventListener('click', () => {
-            import('./ui/modals/ModalFactory').then(({ openComprehensiveExportModal }) => {
+            void import('./ui/modals/ModalFactory').then(({ openComprehensiveExportModal }) => {
                 openComprehensiveExportModal();
             }).catch(error => {
                 console.error('Failed to open comprehensive export modal:', error);
@@ -695,7 +695,7 @@ export async function initialize() {
                         abortBtn.disabled = true;
                         
                         // Reset button after 2 seconds (faster since it's simpler)
-                        setTimeout(() => {
+                        void setTimeout(() => {
                             abortBtn.textContent = originalText;
                             abortBtn.disabled = false;
                         }, 2000);
@@ -729,7 +729,7 @@ export async function initialize() {
     } else if (!state.getActiveProject()) {
         const settingsManager = state.getSettingsManager();
         if (settingsManager) {
-            NewProjectModal.open(handleCreateProject, settingsManager);
+            void NewProjectModal.open(handleCreateProject, settingsManager);
         }
     }
     

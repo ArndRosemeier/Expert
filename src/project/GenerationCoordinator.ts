@@ -150,7 +150,7 @@ export class GenerationCoordinator {
                 // Use safe button update to prevent listener loss
                 void import('../ui/event-manager').then(({ eventManager }) => {
                     eventManager.updateButtonContent('node-generate-btn', 
-                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating...',
+                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
                         { disabled: true, className: 'button button-primary' }
                     );
                 }).catch(console.error);
@@ -163,7 +163,7 @@ export class GenerationCoordinator {
                 // Use safe button update to prevent listener loss
                 void import('../ui/event-manager').then(({ eventManager }) => {
                     eventManager.updateButtonContent('node-generate-all-btn', 
-                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>Generating Children...',
+                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
                         { disabled: true, className: 'button' }
                     );
                 }).catch(console.error);

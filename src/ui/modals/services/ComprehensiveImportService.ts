@@ -360,7 +360,7 @@ export class ComprehensiveImportService {
     /**
      * Show file picker dialog for selecting backup file
      */
-    public static showFilePickerDialog(): Promise<File | null> {
+    public static async showFilePickerDialog(): Promise<File | null> {
         return new Promise((resolve) => {
             const input = document.createElement('input');
             input.type = 'file';

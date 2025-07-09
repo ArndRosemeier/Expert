@@ -280,7 +280,7 @@ export class VersionMismatchModal extends BaseModal {
             }
 
             // Close modal
-            this.close();
+            void this.close();
 
         } catch (error) {
             console.error('Failed to reset settings:', error);
@@ -306,7 +306,7 @@ export class VersionMismatchModal extends BaseModal {
         this.emit('resetDeclined', undefined);
 
         // Close modal
-        this.close();
+        void this.close();
     }
 
     /**
@@ -314,7 +314,7 @@ export class VersionMismatchModal extends BaseModal {
      */
     private handleClose(): void {
         this.emit('closed', undefined);
-        this.close();
+        void this.close();
     }
 
     /**

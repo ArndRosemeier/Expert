@@ -69,7 +69,7 @@ export class ReaderGUI {
     private boundHandleClick: (event: MouseEvent) => void;
     private boundHandleDoubleClick: (event: MouseEvent) => void;
     // Bound method references for project manager event listeners
-    private boundHandleNodeGenerationComplete: (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => void;
+    private boundHandleNodeGenerationComplete: (e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }) => void;
     private boundHandleNodeSummaryGenerated: (e: { nodeId: string, summary: string }) => void;
     private boundHandleProjectUpdate: () => void;
 
@@ -102,7 +102,7 @@ export class ReaderGUI {
         };
 
         this.setupEventListeners();
-        this.loadReaderConfig();
+        void this.loadReaderConfig();
     }
 
     /**
@@ -122,7 +122,7 @@ export class ReaderGUI {
         this.restoreFindInputState(findInputState);
         
         // Initialize the editor after DOM is ready (async)
-        this.readerEditor.initialize();
+        void this.readerEditor.initialize();
         
         // Mark this instance as having been rendered
         this.hasBeenRendered = true;
@@ -189,12 +189,12 @@ export class ReaderGUI {
         
         // Restore focus and cursor position
         if (state.findFocused) {
-            setTimeout(() => {
+            void void setTimeout(() => {
                 findInput.focus();
                 findInput.setSelectionRange(state.selectionStart, state.selectionEnd);
             }, 0);
         } else if (state.replaceFocused && replaceInput) {
-            setTimeout(() => {
+            void void setTimeout(() => {
                 replaceInput.focus();
             }, 0);
         }
@@ -233,7 +233,7 @@ export class ReaderGUI {
      * Refresh the reader content
      */
     public refresh(): void {
-        this.render();
+        void this.render();
     }
 
     /**
@@ -281,7 +281,7 @@ export class ReaderGUI {
             // Add a brief highlight effect to show which section was navigated to
             element.style.transition = 'box-shadow 0.3s ease';
             element.style.boxShadow = '0 0 20px rgba(66, 153, 225, 0.6)';
-            setTimeout(() => {
+            void void setTimeout(() => {
                 element.style.boxShadow = '';
             }, 1500);
         }
@@ -470,7 +470,7 @@ export class ReaderGUI {
             ? `${this.projectManager.projectTitle} - Reader View`
             : `${this.rootNode.title} - Reader View`;
         
-        let html = `
+        const html = `
             <div class="reader-container">
                 <div class="reader-header">
                     <h1>${readerTitle}</h1>
@@ -2782,7 +2782,7 @@ export class ReaderGUI {
                         saveBtn.textContent = '✅ Saved!';
                         saveBtn.disabled = true;
                         
-                        setTimeout(() => {
+                        void void setTimeout(() => {
                             saveBtn.textContent = originalText;
                             saveBtn.disabled = false;
                         }, 1500);
@@ -2894,7 +2894,7 @@ export class ReaderGUI {
             form.setAttribute('data-action-id', newActionId);
             
             // Auto-select the new action in the list
-            setTimeout(() => {
+            void void setTimeout(() => {
                 const actionElement = document.querySelector(`[data-action="select"][data-target="${newActionId}"]`) as HTMLElement;
                 if (actionElement) {
                     actionElement.click();
@@ -2927,7 +2927,7 @@ export class ReaderGUI {
         const actionId = await this.readerEditor.addAction(newAction);
         
         // Auto-select the new action by dispatching a click event
-        setTimeout(() => {
+        void void setTimeout(() => {
             const actionElement = document.querySelector(`[data-action="select"][data-target="${actionId}"]`) as HTMLElement;
             if (actionElement) {
                 actionElement.click();
@@ -3085,7 +3085,7 @@ export class ReaderGUI {
             // Focus the search input when opening
             const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
             if (findInput) {
-                setTimeout(() => findInput.focus(), 100);
+                void void setTimeout(() => findInput.focus(), 100);
             }
         } else {
             // Clear search results when closing
@@ -3152,7 +3152,7 @@ export class ReaderGUI {
         const nodeEditors = (this.readerEditor as any).nodeEditors;
         if (!nodeEditors) return results;
 
-        nodeEditors.forEach((editor: any, nodeId: string) => {
+        nodeEditors.forEach((editor: unknown, nodeId: string) => {
             const text = editor.editor.getText().toLowerCase();
             let index = 0;
             
@@ -3193,7 +3193,7 @@ export class ReaderGUI {
 
         // Focus the editor and set selection to the found text
         // Only if find input doesn't have focus (user is actively typing)
-        setTimeout(() => {
+        void void setTimeout(() => {
             if (!findInputHasFocus) {
                 editor.editor.focus();
             }
@@ -3414,7 +3414,7 @@ export class ReaderGUI {
      */
     private triggerMainUIRefresh(): void {
         // Import and call renderNodeDetails to refresh the main content UI
-        import('./project-ui').then(({ renderNodeDetails }) => {
+        void import('./project-ui').then(({ renderNodeDetails }) => {
             console.log('🔄 Refreshing main UI after reader close');
             renderNodeDetails();
         }).catch(console.error);
@@ -3496,7 +3496,7 @@ export class ReaderGUI {
     /**
      * Handle node generation completion - update reader content without breaking editor
      */
-    private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }): void {
+    private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }): void {
         // Check if any AI actions are in progress - block all updates if so
         if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
             console.log(`🚫 Reader update blocked - AI action in progress, skipping update for: "${e.node.title}" (${e.nodeId})`);

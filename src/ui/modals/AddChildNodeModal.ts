@@ -143,7 +143,7 @@ export class AddChildNodeModal extends BaseModal {
             e.preventDefault();
             e.stopPropagation();
             if (!this.childModalState.isCreating) {
-                this.close();
+                void this.close();
             }
         });
 
@@ -270,7 +270,7 @@ export class AddChildNodeModal extends BaseModal {
                 const cursorPosition = target.selectionStart;
                 this.refreshContent();
                 // Restore focus and cursor position after refresh
-                setTimeout(() => {
+                void void setTimeout(() => {
                     const newInput = this.element?.querySelector('[data-manual-input="true"]') as HTMLInputElement;
                     if (newInput) {
                         newInput.focus();
@@ -316,7 +316,7 @@ export class AddChildNodeModal extends BaseModal {
                 const cursorPosition = target.selectionStart;
                 this.refreshContent();
                 // Restore focus and cursor position after refresh
-                setTimeout(() => {
+                void void setTimeout(() => {
                     const newTextarea = this.element?.querySelector('[data-manual-draft="true"]') as HTMLTextAreaElement;
                     if (newTextarea) {
                         newTextarea.focus();
@@ -471,7 +471,7 @@ export class AddChildNodeModal extends BaseModal {
             attributes: { style: 'padding: 8px 16px;' }
         });
 
-        retryButton.addEventListener('click', () => this.generateSuggestions());
+        retryButton.addEventListener('click', async () => this.generateSuggestions());
         fallbackButton.addEventListener('click', () => this.switchMode('simple'));
 
         container.appendChild(errorMessage);
@@ -669,7 +669,7 @@ export class AddChildNodeModal extends BaseModal {
             this.childModalState.creationStep = 'Creating child node...';
             this.refreshContent();
             
-            const createConfig: any = {
+            const createConfig: unknown = {
                 parentNodeId: this.childModalConfig.parentNodeId,
                 title,
                 updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && this.childModalConfig.parentNode.content
@@ -692,7 +692,7 @@ export class AddChildNodeModal extends BaseModal {
             this.refreshContent();
 
             // Brief delay to show the final step
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => void void setTimeout(resolve, 500));
             
             // Reset creation state
             this.childModalState.isCreating = false;

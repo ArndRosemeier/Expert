@@ -11,7 +11,7 @@ import { SettingsManager } from '../../../SettingsManager';
 import { StorageService } from '../../../StorageService';
 
 export interface AIProjectCreatorConfig {
-    onCreate: (title: string, template: ProjectTemplate, aiData?: any) => void;
+    onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     settingsManager?: SettingsManager;
 }
 
@@ -279,7 +279,7 @@ export class AIProjectCreator {
         const cancelBtn = container.querySelector('#ai-cancel-btn') as HTMLButtonElement;
         
         if (generateBtn) {
-            const generateHandler = () => this.handleGenerate();
+            const generateHandler = async () => this.handleGenerate();
             generateBtn.addEventListener('click', generateHandler);
             this.cleanupHandlers.push(() => generateBtn.removeEventListener('click', generateHandler));
         }

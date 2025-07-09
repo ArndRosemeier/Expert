@@ -139,10 +139,10 @@ export class ComprehensiveExportModal extends BaseModal {
         }) as HTMLButtonElement;
 
         // Event listeners
-        this.exportButton.addEventListener('click', () => this.handleExport());
-        this.importButton.addEventListener('click', () => this.handleImport());
+        this.exportButton.addEventListener('click', async () => this.handleExport());
+        this.importButton.addEventListener('click', async () => this.handleImport());
 
-        cancelButton.addEventListener('click', () => this.close());
+        cancelButton.addEventListener('click', async () => this.close());
 
         footer.appendChild(cancelButton);
         footer.appendChild(this.importButton);
@@ -232,7 +232,7 @@ export class ComprehensiveExportModal extends BaseModal {
                 }
                 
                 // Close modal after short delay
-                setTimeout(() => {
+                void void setTimeout(() => {
                     void this.close();
                 }, 3000);
                 
@@ -355,7 +355,7 @@ export class ComprehensiveExportModal extends BaseModal {
                     // Don't reload - let user work with migrated data
                 } else {
                     // Reload the page after import to refresh all data
-                    setTimeout(() => {
+                    void void setTimeout(() => {
                         window.location.reload();
                     }, 3000);
                 }

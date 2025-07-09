@@ -418,7 +418,7 @@ export class BatchUpdateModal {
             this.runButton.style.fontWeight = '500';
             this.runButton.style.fontSize = '1em';
             this.runButton.style.transition = 'background 0.2s';
-            this.runButton.addEventListener('click', () => this.handleRun());
+            this.runButton.addEventListener('click', async () => this.handleRun());
             actionsSection.appendChild(this.runButton);
             
             controlsContainer.appendChild(actionsSection);

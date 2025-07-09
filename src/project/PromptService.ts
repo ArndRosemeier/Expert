@@ -90,7 +90,7 @@ Please improve and expand this content.`;
             promptContext.analysis = analysisContext.analysis!;
         }
         
-        let filledPrompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
+        const filledPrompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {

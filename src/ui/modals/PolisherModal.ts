@@ -503,7 +503,7 @@ export class PolisherModal extends BaseModal {
     private async generatePolishedContentWithDetail(detail: string): Promise<void> {
         try {
             this.isGenerating = true;
-            this.refresh();
+            void this.refresh();
             
             const modelTypeSelect = document.getElementById('polisher-model-type') as HTMLSelectElement;
             const modelType = (modelTypeSelect?.value || 'creator') as 'creator' | 'rater' | 'editor' | 'prose';
@@ -520,12 +520,12 @@ export class PolisherModal extends BaseModal {
             
             this.currentPolishedContent = polishedContent;
             this.isGenerating = false;
-            this.refresh();
+            void this.refresh();
             
         } catch (error) {
             console.error('Error generating polished content:', error);
             this.isGenerating = false;
-            this.refresh();
+            void this.refresh();
         }
     }
 
@@ -618,7 +618,7 @@ ${content}`;
     private retryPolishing(): void {
         // Clear current polished content and refresh
         this.currentPolishedContent = null;
-        this.refresh();
+        void this.refresh();
     }
 
     /**
@@ -627,7 +627,7 @@ ${content}`;
     private cancelPolishing(): void {
         // Clear current polished content and refresh
         this.currentPolishedContent = null;
-        this.refresh();
+        void this.refresh();
     }
 
     /**

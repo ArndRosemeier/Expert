@@ -142,12 +142,6 @@
     }
   },
   "src/event-handlers.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 6
-    },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -284,20 +278,8 @@
     }
   },
   "src/services/PromptExpansionService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 10
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 8
     }
   },
   "src/ui/Dropdown.ts": {
@@ -371,11 +353,8 @@
     }
   },
   "src/ui/modals/AddChildNodeModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "@typescript-eslint/no-floating-promises": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
@@ -389,7 +368,7 @@
   },
   "src/ui/modals/CoherenceModal.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 4
@@ -472,9 +451,6 @@
     }
   },
   "src/ui/modals/NewProjectModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
-    },
     "@typescript-eslint/no-floating-promises": {
       "count": 2
     },
@@ -487,7 +463,7 @@
   },
   "src/ui/modals/NodeInspectorModal.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 6
@@ -511,9 +487,6 @@
     }
   },
   "src/ui/modals/SettingsModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 4
     },
@@ -543,7 +516,7 @@
       "count": 1
     },
     "@typescript-eslint/no-floating-promises": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
@@ -567,9 +540,6 @@
     }
   },
   "src/ui/modals/components/AIProjectCreator.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "@typescript-eslint/no-floating-promises": {
       "count": 2
     },
@@ -582,7 +552,7 @@
   },
   "src/ui/modals/components/CriteriaEditor.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
@@ -597,9 +567,6 @@
     }
   },
   "src/ui/modals/components/ProfileSelector.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 6
     },
@@ -619,9 +586,6 @@
     }
   },
   "src/ui/modals/core/ModalRegistry.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     }
@@ -690,7 +654,7 @@
   },
   "src/ui/modals/services/SettingsService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
+      "count": 1
     },
     "@typescript-eslint/no-floating-promises": {
       "count": 4
@@ -722,10 +686,10 @@
   },
   "src/ui/project-ui.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 40
+      "count": 24
     },
     "@typescript-eslint/no-floating-promises": {
-      "count": 6
+      "count": 3
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
@@ -761,10 +725,10 @@
   },
   "src/ui/reader-gui.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 16
+      "count": 13
     },
     "@typescript-eslint/no-floating-promises": {
-      "count": 7
+      "count": 5
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
@@ -780,9 +744,6 @@
     }
   },
   "src/ui/template-editor.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
-    },
     "@typescript-eslint/no-floating-promises": {
       "count": 5
     },

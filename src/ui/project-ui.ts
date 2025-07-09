@@ -117,7 +117,7 @@ let actionsDropdownInstance: Dropdown | null = null;
 function showActionsDropdown(node: DocumentNode): void {
     // Close any existing dropdown first
     if (actionsDropdownInstance) {
-        actionsDropdownInstance.close();
+        void actionsDropdownInstance.close();
         actionsDropdownInstance = null;
     }
 
@@ -144,10 +144,9 @@ function showActionsDropdown(node: DocumentNode): void {
     });
 
     // Open the dropdown
-    actionsDropdownInstance.open();
-
+    void actionsDropdownInstance.open();
     // Add custom click handler for actions
-    setTimeout(() => {
+    void setTimeout(() => {
         const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
@@ -177,7 +176,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (handlerAction) {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                actionsDropdownInstance.close();
+                                void actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             // Execute action
@@ -605,7 +604,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
-    const handleCompletion = (_e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => {
+    const handleCompletion = (_e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }) => {
         // Check if any operations are still in progress
         const operationsInProgress = manager.isAnyNodeGenerating();
         
@@ -636,7 +635,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
         
         // Additional safety: Force clear progress after a delay if no operations are running
-        setTimeout(() => {
+        void void setTimeout(() => {
             if (!manager.isAnyNodeGenerating()) {
                 updateProgressUI();
                 hideGenerationOverlay();
@@ -672,7 +671,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             
             // Additional safety: check if any nodes are still generating
             // If not, force clear everything after a short delay
-            setTimeout(() => {
+            void void setTimeout(() => {
                 if (!manager.isAnyNodeGenerating()) {
                     updateProgressUI();
                     hideGenerationOverlay();
@@ -748,7 +747,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
-    const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }) => {
+    const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: unknown; success: boolean }) => {
         console.log(`🎯 Bulk generation complete for node "${e.node.title}" (ID: ${e.nodeId})`);
         
         // Check if coherence check was requested for this generation
@@ -760,9 +759,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             delete (completedNode as any)._pendingCoherenceCheck;
             
             // Open coherence check modal after a short delay
-            setTimeout(() => {
-                import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
-                    import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
+            void void setTimeout(() => {
+                void import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
+                    void import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
                         // Create coherence service instance
                         const coherenceService = new CoherenceService(
                             state.getOpenRouterClient()!,
@@ -789,13 +788,13 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                             .catch((error) => {
                                 console.error('Coherence analysis failed:', error);
                                 // Close loading modal and show error
-                                analysisModal.close();
+                                void analysisModal.close();
                                 alert('Coherence analysis failed: ' + error.message);
                             });
-                    }).catch((error: any) => {
+                    }).catch((error: unknown) => {
                         console.error('Failed to load CoherenceService:', error);
                     });
-                }).catch((error: any) => {
+                }).catch((error: unknown) => {
                     console.error('Failed to open coherence modal:', error);
                 });
             }, 1000);
@@ -973,13 +972,18 @@ export function renderNodeDetails() {
                 border: 1px solid #e9ecef;
                 border-radius: 6px;
                 padding: 0.75rem;
-                min-width: 300px;
+                width: fit-content;
+                max-width: 400px;
+            }
+            #node-generate-btn, #node-generate-all-btn {
+                min-width: 85px;
+                text-align: center;
             }
             .primary-controls {
                 display: flex;
-                justify-content: space-between;
+                justify-content: flex-start;
                 align-items: center;
-                gap: 1rem;
+                gap: 1.5rem;
                 margin-bottom: 0.5rem;
             }
             .generation-type-selector {
@@ -990,6 +994,7 @@ export function renderNodeDetails() {
                 display: flex;
                 align-items: center;
                 gap: 0.75rem;
+                margin-left: auto;
             }
             .secondary-controls {
                 border-top: 1px solid #f1f3f4;
@@ -1087,7 +1092,7 @@ export function renderNodeDetails() {
                 border: 1px solid var(--border-color);
                 border-radius: 8px;
                 padding: 0.75rem;
-                font-size: 1rem;
+                font-size: 0.85rem;
                 line-height: 1.5;
                 background-color: var(--input-bg);
                 resize: vertical;
@@ -1193,44 +1198,41 @@ export function renderNodeDetails() {
                             Leaf node (${node.template[node.level] || 'final level'}) - no children
                         </div>
                     ` : ''}
-                </div>
-                
-                <!-- Progress Container (initially hidden) -->
-                <div id="generation-progress-container" style="display: none; margin-top: 0.75rem;">
-                    <div style="background-color: #f1f3f4; border-radius: 6px; border: 1px solid #d1d5db; padding: 0.75rem;">
-                        <div class="progress-tier">
-                            <div id="progress-text-operations" style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.4rem;"></div>
-                            <div class="progress-bar-wrapper">
+                    
+                    <!-- Progress Container (compact, initially hidden) -->
+                    <div id="generation-progress-container" style="display: none; margin-top: 0.5rem; border-top: 1px solid #f1f3f4; padding-top: 0.5rem;">
+                        <div class="progress-tier" style="margin-bottom: 0.25rem;">
+                            <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: center;"></div>
+                            <div class="progress-bar-wrapper" style="height: 10px;">
                                 <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
                             </div>
                         </div>
                         
-                        <!-- Sub-progress bars -->
-                        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+                        <!-- Compact Sub-progress bars -->
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                             <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-iterations" style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.2rem;"></div>
-                                <div class="progress-bar-wrapper" style="height: 12px;">
+                                <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                                <div class="progress-bar-wrapper" style="height: 8px;">
                                     <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
                                 </div>
                             </div>
                             
                             <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-stages" style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.2rem;"></div>
-                                <div class="progress-bar-wrapper" style="height: 12px;">
+                                <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                                <div class="progress-bar-wrapper" style="height: 8px;">
                                     <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.7rem; margin-top: 0.4rem;"></div>
+                        <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: center;"></div>
+                    </div>
+                    
+                    <!-- Generation Status Display (compact) -->
+                    <div id="generation-status" style="display: none; margin-top: 0.5rem; padding: 0.4rem 0.5rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 4px; font-size: 0.7rem; color: #0c5460; font-style: italic; text-align: center;">
+                        <!-- Status messages will appear here -->
                     </div>
                 </div>
-                
-                <!-- Generation Status Display -->
-                <div id="generation-status" style="display: none; margin-top: 0.75rem; padding: 0.5rem 0.75rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 6px; font-size: 0.8rem; color: #0c5460; font-style: italic;">
-                    <!-- Status messages will appear here -->
-                </div>
-
             </div>
         </div>
 
@@ -1341,15 +1343,15 @@ export function renderNodeDetails() {
     if (isThisNodeGenerating) {
         // Import EventManager for safe button updates
         void import('./event-manager').then(({ eventManager }) => {
-            eventManager.updateButtonContent('node-generate-btn', 
-                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...',
+                        eventManager.updateButtonContent('node-generate-btn',
+            '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
         }).catch(console.error);
     } else if (isAnyOperationInProgress) {
         void import('./event-manager').then(({ eventManager }) => {
             eventManager.updateButtonContent('node-generate-btn', 
-                `${BUTTON_LABELS.GENERATE} (Operation in progress)`,
+                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
         }).catch(console.error);
@@ -1431,7 +1433,7 @@ export function renderNodeDetails() {
                     node.setContentWithTags(contentTextArea.value, ['edited', 'content_edited']);
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
-                    (contentTextArea as any)._saveTimeout = setTimeout(() => {
+                    (contentTextArea as any)._saveTimeout = void void setTimeout(() => {
                         void projectManager!.saveToStorage().catch(console.error);
                     }, 1000); // Save after 1 second of no typing
                 }
@@ -1472,7 +1474,7 @@ export function renderNodeDetails() {
                     
                     // Save to storage with debounced approach
                     clearTimeout((contextTextArea as any)._saveTimeout);
-                    (contextTextArea as any)._saveTimeout = setTimeout(() => {
+                    (contextTextArea as any)._saveTimeout = void void setTimeout(() => {
                         void projectManager!.saveToStorage().catch(console.error);
                     }, 1000); // Save after 1 second of no typing
                 }
@@ -1492,7 +1494,7 @@ export function renderNodeDetails() {
                     node.setTitleWithTags(nodeTitleDisplay.textContent || '', ['edited', 'title_edited']);
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
-                    (nodeTitleDisplay as any)._saveTimeout = setTimeout(() => {
+                    (nodeTitleDisplay as any)._saveTimeout = void void setTimeout(() => {
                         void projectManager!.saveToStorage().catch(console.error);
                         // Re-render tree to show updated title
                         renderMultiProjectTree();
@@ -1682,7 +1684,7 @@ function renderRatingsView() {
         }
         
         // Convert ratings to expected format
-        const formattedRatings = versionRatings.map((rating: any) => ({
+        const formattedRatings = versionRatings.map((rating: unknown) => ({
             score: rating.score,
             goal: rating.goal,
             criterion: rating.criterion,
@@ -1690,7 +1692,7 @@ function renderRatingsView() {
         }));
         
         // Render using shared component
-        const options: any = {
+        const options: unknown = {
             title: `Quality Ratings for ${versionLabel} Content`,
             showTimestamp: !!timestampToShow,
             compact: false,
@@ -1806,7 +1808,7 @@ function handleDropdownAction(buttonId: string): void {
                 }
 
                 // Import and open the view template modal
-                import('./modals/ViewTemplateModal').then(({ showViewTemplateModal }) => {
+                void import('./modals/ViewTemplateModal').then(({ showViewTemplateModal }) => {
                     showViewTemplateModal(node);
                 }).catch(error => {
                     console.error('Failed to open view template modal:', error);
@@ -1989,7 +1991,7 @@ This action cannot be undone.`;
                                     }
                                 } else {
                                     // First, explicitly remove the deleted project from IndexedDB
-                                    const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
+                                    const storage = await import('../StorageService').then(async m => m.StorageService.getInstance());
                                     if (storage.isIndexedDB()) {
                                         const indexedDBService = (storage as any).indexedDBService;
                                         if (indexedDBService) {
@@ -2102,7 +2104,7 @@ This action cannot be undone.`;
                 if (!node) return;
 
                 // Import and open export modal
-                import('./modal-manager').then(({ openExportModal }) => {
+                void import('./modal-manager').then(({ openExportModal }) => {
                     openExportModal(projectManager!, node);
                 }).catch(_error => {
                     alert('Failed to open export dialog. Please try again.');
@@ -2166,7 +2168,7 @@ This action cannot be undone.`;
                 if (!node) return;
                 
                 // Import and open chat modal
-                import('./modal-manager').then(({ openNodeChatModal }) => {
+                void import('./modal-manager').then(({ openNodeChatModal }) => {
                     openNodeChatModal(projectManager!, node);
                 }).catch(error => {
                     console.error('Failed to open chat modal:', error);
@@ -2187,7 +2189,7 @@ This action cannot be undone.`;
                 }
                 
                 // Import and open polisher modal
-                import('./modals/PolisherModal').then(async ({ PolisherModal }) => {
+                void import('./modals/PolisherModal').then(async ({ PolisherModal }) => {
                     const polisherModal = new PolisherModal(
                         state.getSettingsManager()!,
                         state.getOpenRouterClient()!
@@ -2250,9 +2252,9 @@ This action cannot be undone.`;
                 if (!node) return;
 
                 // Import and open extract context modal
-                import('./modal-manager').then(({ openExtractContextModal }) => {
+                void import('./modal-manager').then(({ openExtractContextModal }) => {
                     openExtractContextModal(projectManager!, node);
-                }).catch((error: any) => {
+                }).catch((error: unknown) => {
                     console.error('Failed to open extract context modal:', error);
                     alert('Failed to open extract context dialog. Please try again.');
                 });
@@ -2290,7 +2292,7 @@ This action cannot be undone.`;
                     .catch((error) => {
                         console.error('Coherence analysis failed:', error);
                         // Close loading modal and show error
-                        analysisModal.close();
+                        void analysisModal.close();
                         alert('Coherence analysis failed: ' + error.message);
                     });
             }
@@ -2327,7 +2329,7 @@ This action cannot be undone.`;
                     .catch((error) => {
                         console.error('Context analysis failed:', error);
                         // Close loading modal and show error
-                        analysisModal.close();
+                        void analysisModal.close();
                         alert('Context analysis failed: ' + error.message);
                     });
             }
@@ -2579,18 +2581,19 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 font-size: 0.9rem;
             }
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
-            #project-tree { flex: 1; max-width: 400px; }
+            #project-tree { flex: 1; max-width: 280px; font-size: 0.8rem; }
             #node-details { flex: 2; }
             .tree-item { display: flex; align-items: center; }
             .tree-expand-btn { 
                 color: #6c757d; 
                 font-weight: bold;
-                width: 16px;
+                width: 14px;
                 text-align: center;
+                font-size: 11px;
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
             .tree-node { 
-                padding: 0.25rem 0.5rem; 
+                padding: 0.075rem 0.5rem; 
                 border-radius: 4px; 
                 cursor: pointer; 
                 flex-grow: 1;
@@ -2744,14 +2747,8 @@ function updateProgressUI(data?: ProgressUIData) {
     if (data.stages) currentProgressState.stages = data.stages;
     if (data.detail !== undefined) currentProgressState.detail = data.detail;
     
-    // Show container and all progress bars whenever we have any progress data
+    // Show container whenever we have any progress data (let CSS handle element display)
     container.style.display = 'block';
-    operationsText.style.display = 'block';
-    operationsBar.style.display = 'block';
-    iterationsText.style.display = 'block';
-    iterationsBar.style.display = 'block';
-    stagesText.style.display = 'block';
-    stagesBar.style.display = 'block';
     
     // Helper function to calculate percentage and update custom progress bar
     const updateProgressBar = (bar: HTMLDivElement, current: number, total: number) => {
@@ -3029,7 +3026,7 @@ export function renderMultiProjectTree() {
 /**
  * Calculate the maximum depth of a hierarchy in import data
  */
-function calculateImportDataDepth(data: any): number {
+function calculateImportDataDepth(data: unknown): number {
     if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
         return 0; // No children = 0 additional depth
     }
@@ -3046,7 +3043,7 @@ function calculateImportDataDepth(data: any): number {
 /**
  * Import node data from JSON export and merge it into the specified target node
  */
-function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
+function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: unknown): void {
     const targetNode = projectManager.findNodeById(targetNodeId);
     if (!targetNode) {
         throw new Error('Target node not found');
@@ -3112,7 +3109,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 
     // Import children recursively
     if (importData.children && Array.isArray(importData.children)) {
-        importData.children.forEach((childData: any, index: number) => {
+        importData.children.forEach((childData: unknown, index: number) => {
             importChildNode(projectManager, importedNode.id, childData, index);
         });
     }
@@ -3127,7 +3124,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 /**
  * Recursively import a child node and its descendants
  */
-function importChildNode(projectManager: ProjectManager, parentId: string, childData: any, index: number): void {
+function importChildNode(projectManager: ProjectManager, parentId: string, childData: unknown, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -3168,7 +3165,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
 
     // Recursively import children
     if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+        childData.children.forEach((grandChildData: unknown, grandChildIndex: number) => {
             importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
         });
     }
@@ -3342,9 +3339,9 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        import('./modal-manager').then(({ openExtractContextModal }) => {
+        void import('./modal-manager').then(({ openExtractContextModal }) => {
             openExtractContextModal(projectManager!, node);
-        }).catch((error: any) => {
+        }).catch((error: unknown) => {
             console.error('Failed to open extract context modal:', error);
             alert('Failed to open extract context dialog. Please try again.');
         });
@@ -3355,10 +3352,10 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        import('./modals/ContextAdjusterModal').then(({ ContextAdjusterModal }) => {
+        void import('./modals/ContextAdjusterModal').then(({ ContextAdjusterModal }) => {
             const contextAdjusterModal = new ContextAdjusterModal();
             void contextAdjusterModal.openInLoadingState(node);
-        }).catch((error: any) => {
+        }).catch((error: unknown) => {
             console.error('Failed to open context adjuster modal:', error);
             alert('Failed to open context adjuster. Please try again.');
         });
@@ -3369,10 +3366,10 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
+        void import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
             const contextModal = new ContextItemsEditorModal(node);
             void contextModal.open();
-        }).catch((error: any) => {
+        }).catch((error: unknown) => {
             console.error('Failed to open context items editor modal:', error);
             alert('Failed to open context items editor. Please try again.');
         });
@@ -3384,7 +3381,7 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         if (!node) return;
         
         // Import and open node inspector modal (using V2 - the more recent version)
-                                import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
+                                void import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
                             const inspectorModal = new NodeInspectorModal();
             inspectorModal.openWithNode(node);
         }).catch(error => {
@@ -3401,7 +3398,7 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         openReaderView(projectManager, selectedNode, (nodeId: string) => {
             selectedNodeId = nodeId;
             renderNodeDetails();
-        }).catch((error: any) => {
+        }).catch((error: unknown) => {
             console.error('Failed to open reader view:', error);
             alert('Failed to open reader view. Please try again.');
         });

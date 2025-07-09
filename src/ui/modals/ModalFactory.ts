@@ -44,7 +44,7 @@ export class ModalFactory {
      */
     private setupActiveProjectSubscription(): void {
         // Import state dynamically to avoid circular dependencies
-        import('../../state').then(state => {
+        void import('../../state').then(state => {
             this.unsubscribeFromActiveProject = state.onActiveProjectChange((activeProject) => {
                 if (activeProject) {
                     this.dependencies.projectManager = activeProject;
@@ -279,7 +279,7 @@ export class ModalFactory {
         if (replaceExisting) {
             const existingIds = this.registry.getOpenModals()
                 .filter(id => id.startsWith('generic-modal-'));
-            existingIds.forEach(id => {
+            void existingIds.forEach(id => {
                 const modal = this.registry.get(id);
                 if (modal) void modal.close();
             });
@@ -306,7 +306,7 @@ export class ModalFactory {
     /**
      * Shows an alert dialog
      */
-    public alert(message: string, title: string = 'Alert'): Promise<void> {
+    public async alert(message: string, title: string = 'Alert'): Promise<void> {
         return new Promise((resolve) => {
             const modal = this.createGenericModal(
                 {
@@ -332,7 +332,7 @@ export class ModalFactory {
     /**
      * Shows a confirmation dialog
      */
-    public confirm(
+    public async confirm(
         message: string, 
         title: string = 'Confirm',
         confirmLabel: string = 'Confirm',
@@ -372,7 +372,7 @@ export class ModalFactory {
     /**
      * Shows a prompt dialog for user input
      */
-    public prompt(
+    public async prompt(
         message: string,
         defaultValue: string = '',
         title: string = 'Input Required'
@@ -416,7 +416,7 @@ export class ModalFactory {
 
             // Focus the input after modal opens
             // Note: GenericModal doesn't support events yet, so we'll use a timeout
-            setTimeout(() => {
+            void void setTimeout(() => {
                 const input = document.getElementById(inputId) as HTMLInputElement;
                 if (input) {
                     input.focus();
@@ -485,35 +485,35 @@ export function openSettingsModal(): SettingsModal {
 /**
  * Convenience function to open export modal using default factory
  */
-export function openExportModal(node: DocumentNode): Promise<ExportModal> {
+export async function openExportModal(node: DocumentNode): Promise<ExportModal> {
     return getDefaultModalFactory().createExportModal(node);
 }
 
 /**
  * Convenience function to show alert using default factory
  */
-export function showAlert(message: string, title?: string): Promise<void> {
+export async function showAlert(message: string, title?: string): Promise<void> {
     return getDefaultModalFactory().alert(message, title);
 }
 
 /**
  * Convenience function to show confirmation using default factory
  */
-export function showConfirm(message: string, title?: string): Promise<boolean> {
+export async function showConfirm(message: string, title?: string): Promise<boolean> {
     return getDefaultModalFactory().confirm(message, title);
 }
 
 /**
  * Convenience function to show prompt using default factory
  */
-export function showPrompt(message: string, defaultValue?: string, title?: string): Promise<string | null> {
+export async function showPrompt(message: string, defaultValue?: string, title?: string): Promise<string | null> {
     return getDefaultModalFactory().prompt(message, defaultValue, title);
 }
 
 /**
  * Convenience function to open add child node modal using default factory
  */
-export function openAddChildNodeModal(parentNode: DocumentNode, parentNodeId: string): Promise<AddChildNodeModal> {
+export async function openAddChildNodeModal(parentNode: DocumentNode, parentNodeId: string): Promise<AddChildNodeModal> {
     return getDefaultModalFactory().createAddChildNodeModal(parentNode, parentNodeId);
 }
 

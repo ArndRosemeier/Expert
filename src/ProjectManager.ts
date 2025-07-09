@@ -128,7 +128,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             settingsManager: this.settingsManager,
             openRouterClient: this.openRouterClient,
             eventEmitter: this,
-            saveToStorage: () => this.saveToStorage(),
+            saveToStorage: async () => this.saveToStorage(),
             rootNode: this.rootNode,
             getGenerationCoordinator: () => this.generationCoordinator
         });
@@ -418,7 +418,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             settingsManager: project.settingsManager,
             openRouterClient: project.openRouterClient,
             eventEmitter: project,
-            saveToStorage: () => project.saveToStorage(),
+            saveToStorage: async () => project.saveToStorage(),
             rootNode: project.rootNode // Use the updated rootNode
         });
         

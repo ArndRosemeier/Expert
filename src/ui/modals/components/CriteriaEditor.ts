@@ -18,7 +18,7 @@ export class CriteriaEditor {
     constructor(container: HTMLElement) {
         this.container = container;
         this.initializeStyles();
-        this.render();
+        void this.render();
     }
 
     /**
@@ -33,7 +33,7 @@ export class CriteriaEditor {
      */
     public setCriteria(criteria: QualityCriterion[]): void {
         this.criteria = this.migrateCriteriaFormat(criteria);
-        this.render();
+        void this.render();
         this.emitChange();
     }
 
@@ -200,13 +200,13 @@ export class CriteriaEditor {
             classes: ['btn-secondary'],
             content: 'Copy All'
         });
-        copyButton.addEventListener('click', () => this.copyCriteria());
+        copyButton.addEventListener('click', async () => this.copyCriteria());
 
         const pasteButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Paste'
         });
-        pasteButton.addEventListener('click', () => this.pasteCriteria());
+        pasteButton.addEventListener('click', async () => this.pasteCriteria());
 
         actionsBar.appendChild(addButton);
         actionsBar.appendChild(defaultsButton);
@@ -417,7 +417,7 @@ export class CriteriaEditor {
     /**
      * Validates if data is a criteria array
      */
-    private isCriteriaArray(data: any): data is QualityCriterion[] {
+    private isCriteriaArray(data: unknown): data is QualityCriterion[] {
         return Array.isArray(data) && data.every(item =>
             typeof item === 'object' &&
             item !== null &&

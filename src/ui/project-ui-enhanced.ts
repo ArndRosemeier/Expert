@@ -234,7 +234,7 @@ export function updateGenerateButton(
     switch (state) {
         case 'generating':
             eventManager.updateButtonContent(buttonId, 
-                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span> Generating...',
+                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
             break;
@@ -248,7 +248,7 @@ export function updateGenerateButton(
             
         case 'disabled':
             eventManager.updateButtonContent(buttonId, 
-                'Generate (Operation in progress)',
+                '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
             break;

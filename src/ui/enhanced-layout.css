@@ -54,11 +54,12 @@
 }
 
 #project-tree {
-    flex: 0 0 380px;
+    flex: 0 0 266px;
     background: white;
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-md);
     padding: var(--space-6);
+    font-size: 0.8rem;
 }
 
 #node-details {
@@ -141,7 +142,7 @@
     border: 2px solid var(--secondary-200);
     border-radius: var(--radius-lg);
     padding: var(--space-4);
-    font-size: 0.9375rem;
+    font-size: 0.8rem;
     line-height: 1.6;
     background-color: white;
     resize: vertical;
@@ -668,11 +669,7 @@ label[for] {
 
 /* Enhanced Progress Bars */
 #generation-progress-container {
-    background: linear-gradient(135deg, var(--secondary-50) 0%, white 100%);
-    border: 1px solid var(--secondary-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.05);
+    /* Remove conflicting styles - let inline styles in HTML handle compact layout */
 }
 
 .progress-bar-wrapper {
@@ -693,7 +690,7 @@ label[for] {
 
 /* Tree Styling Improvements */
 .tree-node {
-    padding: var(--space-3) var(--space-4);
+    padding: 0.225rem var(--space-4);
     border-radius: var(--radius-md);
     margin: var(--space-1) 0;
     transition: all 0.2s ease;
@@ -767,7 +764,7 @@ label[for] {
     }
     
     #project-tree {
-        flex: 0 0 320px;
+        flex: 0 0 224px;
     }
     
     .node-section {

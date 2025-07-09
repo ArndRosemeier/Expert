@@ -13,14 +13,14 @@ import { createElement } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
 
 export interface NewProjectModalConfig extends ModalConfig {
-    onCreate: (title: string, template: ProjectTemplate, aiData?: any) => void;
+    onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     settingsManager: SettingsManager;
 }
 
 type TabType = 'manual' | 'ai';
 
 export class NewProjectModal extends BaseModal {
-    private onCreate: (title: string, template: ProjectTemplate, aiData?: any) => void;
+    private onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     private activeTab: TabType = 'manual';
     private manualCreator: ManualProjectCreator;
     private aiCreator: AIProjectCreator;
@@ -45,7 +45,7 @@ export class NewProjectModal extends BaseModal {
         };
 
         const aiConfig: AIProjectCreatorConfig = {
-            onCreate: (title: string, template: ProjectTemplate, aiData?: any) => {
+            onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
                 this.handleProjectCreated(title, template, aiData);
             },
             settingsManager: this.settingsManager
@@ -316,8 +316,8 @@ export class NewProjectModal extends BaseModal {
         this.currentTabContent = contentContainer;
         
         // Set up cancel event handlers
-        contentContainer.addEventListener('manual-cancel', () => this.close());
-        contentContainer.addEventListener('ai-cancel', () => this.close());
+        contentContainer.addEventListener('manual-cancel', async () => this.close());
+        contentContainer.addEventListener('ai-cancel', async () => this.close());
     }
 
     private cleanupCurrentTab(): void {
@@ -329,7 +329,7 @@ export class NewProjectModal extends BaseModal {
         }
     }
 
-    private async handleProjectCreated(title: string, template: ProjectTemplate, aiData?: any): Promise<void> {
+    private async handleProjectCreated(title: string, template: ProjectTemplate, aiData?: unknown): Promise<void> {
         try {
             // Call the provided onCreate callback
             this.onCreate(title, template, aiData);
@@ -357,7 +357,7 @@ export class NewProjectModal extends BaseModal {
     /**
      * Static method to open the new project modal
      */
-    public static async open(onCreate: (title: string, template: ProjectTemplate, aiData?: any) => void, settingsManager: SettingsManager): Promise<NewProjectModal> {
+    public static async open(onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void, settingsManager: SettingsManager): Promise<NewProjectModal> {
         const modal = new NewProjectModal({
             id: 'new-project-modal',
             onCreate,

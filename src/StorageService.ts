@@ -245,7 +245,7 @@ export class StorageService {
   /**
    * Delete an IndexedDB database
    */
-  private static deleteDatabase(name: string): Promise<void> {
+  private static async deleteDatabase(name: string): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) {
         resolve(); // No IndexedDB support, nothing to delete

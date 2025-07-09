@@ -33,7 +33,7 @@ class EventBus {
         this.listeners.get(event)!.push(callback);
     }
 
-    emit(event: string, data?: any): void {
+    emit(event: string, data?: unknown): void {
         const callbacks = this.listeners.get(event);
         if (callbacks) {
             callbacks.forEach(callback => callback(data));
@@ -439,7 +439,7 @@ export class NodeInspectorModal extends BaseModal {
         }
 
         // Setup editor event listeners after container is created
-        setTimeout(() => this.setupEditorEventListeners(), 0);
+        void void setTimeout(() => this.setupEditorEventListeners(), 0);
 
         return container;
     }
@@ -830,7 +830,7 @@ export class NodeInspectorModal extends BaseModal {
             
             // Debounced save
             clearTimeout((this as any)._titleSaveTimeout);
-            (this as any)._titleSaveTimeout = setTimeout(async () => {
+            (this as any)._titleSaveTimeout = void void setTimeout(async () => {
                 await this.persistNodeChanges();
             }, 1000);
         } catch (error) {
@@ -847,7 +847,7 @@ export class NodeInspectorModal extends BaseModal {
             
             // Debounced save
             clearTimeout((this as any)._contentSaveTimeout);
-            (this as any)._contentSaveTimeout = setTimeout(async () => {
+            (this as any)._contentSaveTimeout = void void setTimeout(async () => {
                 await this.persistNodeChanges();
             }, 1000);
         } catch (error) {
@@ -873,7 +873,7 @@ export class NodeInspectorModal extends BaseModal {
             
             // Debounced save
             clearTimeout((this as any)._contextSaveTimeout);
-            (this as any)._contextSaveTimeout = setTimeout(async () => {
+            (this as any)._contextSaveTimeout = void void setTimeout(async () => {
                 await this.persistNodeChanges();
             }, 1000);
         } catch (error) {
@@ -930,7 +930,7 @@ export class NodeInspectorModal extends BaseModal {
         if (!document.querySelector('#ratings-renderer-styles-modal')) {
             try {
                 // Use dynamic import instead of require for browser compatibility
-                import('../components/RatingsRenderer').then(({ RatingsRenderer }) => {
+                void import('../components/RatingsRenderer').then(({ RatingsRenderer }) => {
                     const styleElement = document.createElement('style');
                     styleElement.id = 'ratings-renderer-styles-modal';
                     styleElement.textContent = RatingsRenderer.getStyles();
@@ -1475,7 +1475,7 @@ class TagSelectionModal extends BaseModal {
         });
 
         // Focus input after a brief delay to ensure modal is fully rendered
-        setTimeout(() => {
+        void setTimeout(() => {
             tagInput.focus();
         }, 100);
     }
@@ -1506,6 +1506,6 @@ class TagSelectionModal extends BaseModal {
             this.resolvePromise(null);
             this.resolvePromise = null;
         }
-        super.destroy();
+        void super.destroy();
     }
 }

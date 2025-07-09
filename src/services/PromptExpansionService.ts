@@ -33,7 +33,7 @@ export interface PlaceholderContext {
         editorAdvice?: string;
         originalPrompt?: string;
         response?: string;
-        ratings?: any;
+        ratings?: unknown;
         instruction?: string;
         originalText?: string;
         detail?: string;
@@ -452,12 +452,12 @@ export class PromptExpansionService {
             description: 'Current node content'
         }));
         
-        this.registerContextPlaceholder('path', (_context) => ({
+        this.registerContextPlaceholder('path', () => ({
             value: 'Node Path', // TODO: Implement path computation using TreeService
             description: 'Hierarchical path to current node'
         }));
         
-        this.registerContextPlaceholder('node_depth', (_context) => ({
+        this.registerContextPlaceholder('node_depth', () => ({
             value: '1', // TODO: Implement proper depth calculation
             description: 'Depth level of current node in hierarchy'
         }));
@@ -751,21 +751,21 @@ export class PromptExpansionService {
                                 id: 'cancel',
                                 label: 'Cancel',
                                 type: 'secondary',
-                                handler: async () => {
+                                handler: () => {
                                     rejectOnce(new Error('USER_CANCELLED'));
-                                    modal.close();
+                                    void modal.close();
                                 }
                             },
                             {
                                 id: 'submit',
                                 label: 'OK',
                                 type: 'primary',
-                                handler: async () => {
+                                handler: () => {
                                     const input = document.getElementById('user-input') as HTMLInputElement;
                                     const value = input?.value?.trim() || '';
                                     if (value) {
                                         resolveOnce(value);
-                                        modal.close();
+                                        void modal.close();
                                     } else {
                                         input?.focus();
                                     }
@@ -779,7 +779,7 @@ export class PromptExpansionService {
                     },
                     {
                         onOpen: () => {
-                            setTimeout(() => {
+                            void void setTimeout(() => {
                                 const input = document.getElementById('user-input') as HTMLInputElement;
                                 if (input) {
                                     input.addEventListener('keydown', (e) => {
@@ -788,14 +788,14 @@ export class PromptExpansionService {
                                             const value = input.value.trim();
                                             if (value) {
                                                 resolveOnce(value);
-                                                modal.close();
+                                                void modal.close();
                                             } else {
                                                 input.focus();
                                             }
                                         } else if (e.key === 'Escape') {
                                             e.preventDefault();
                                             rejectOnce(new Error('USER_CANCELLED'));
-                                            modal.close();
+                                            void modal.close();
                                         }
                                     });
                                     input.focus();
@@ -859,21 +859,21 @@ export class PromptExpansionService {
                                 id: 'cancel',
                                 label: 'Cancel',
                                 type: 'secondary',
-                                handler: async () => {
+                                handler: () => {
                                     rejectOnce(new Error('USER_CANCELLED'));
-                                    modal.close();
+                                    void modal.close();
                                 }
                             },
                             {
                                 id: 'submit',
                                 label: 'OK',
                                 type: 'primary',
-                                handler: async () => {
+                                handler: () => {
                                     const select = document.getElementById('user-select') as HTMLSelectElement;
                                     const value = select?.value || '';
                                     if (value) {
                                         resolveOnce(value);
-                                        modal.close();
+                                        void modal.close();
                                     }
                                 }
                             }
@@ -885,7 +885,7 @@ export class PromptExpansionService {
                     },
                     {
                         onOpen: () => {
-                            setTimeout(() => {
+                            void void setTimeout(() => {
                                 const select = document.getElementById('user-select') as HTMLSelectElement;
                                 if (select) {
                                     select.focus();
@@ -944,21 +944,21 @@ export class PromptExpansionService {
                                 id: 'cancel',
                                 label: 'Cancel',
                                 type: 'secondary',
-                                handler: async () => {
+                                handler: () => {
                                     rejectOnce(new Error('USER_CANCELLED'));
-                                    modal.close();
+                                    void modal.close();
                                 }
                             },
                             {
                                 id: 'submit',
                                 label: 'OK',
                                 type: 'primary',
-                                handler: async () => {
+                                handler: () => {
                                     const textarea = document.getElementById('user-textarea') as HTMLTextAreaElement;
                                     const value = textarea?.value?.trim() || '';
                                     if (value) {
                                         resolveOnce(value);
-                                        modal.close();
+                                        void modal.close();
                                     } else {
                                         textarea?.focus();
                                     }
@@ -972,7 +972,7 @@ export class PromptExpansionService {
                     },
                     {
                         onOpen: () => {
-                            setTimeout(() => {
+                            void void setTimeout(() => {
                                 const textarea = document.getElementById('user-textarea') as HTMLTextAreaElement;
                                 if (textarea) {
                                     textarea.focus();
@@ -1021,18 +1021,18 @@ export class PromptExpansionService {
                                 id: 'no',
                                 label: 'No',
                                 type: 'secondary',
-                                handler: async () => {
+                                handler: () => {
                                     resolveOnce(false);
-                                    modal.close();
+                                    void modal.close();
                                 }
                             },
                             {
                                 id: 'yes',
                                 label: 'Yes',
                                 type: 'primary',
-                                handler: async () => {
+                                handler: () => {
                                     resolveOnce(true);
-                                    modal.close();
+                                    void modal.close();
                                 }
                             }
                         ]

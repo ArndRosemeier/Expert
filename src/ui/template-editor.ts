@@ -169,7 +169,7 @@ function handleSave() {
         renderCurrentTemplateView();
         
         // Modal will be closed by the caller
-    } catch (error: any) {
+    } catch (error: unknown) {
         alert(`Error saving template: ${error.message}`);
         throw error; // Re-throw to prevent modal from closing on error
     }
@@ -199,7 +199,7 @@ function handleSaveAsNew() {
         currentTemplateName = newName;
         populateTemplateSelector();
         renderCurrentTemplateView();
-    } catch (error: any) {
+    } catch (error: unknown) {
         alert(`Error creating template: ${error.message}`);
     }
 }
@@ -218,7 +218,7 @@ function handleDelete() {
             populateTemplateSelector();
             renderCurrentTemplateView();
             alert("Template deleted.");
-        } catch (error: any) {
+        } catch (error: unknown) {
             alert(`Error deleting template: ${error.message}`);
         }
     }
@@ -237,7 +237,7 @@ function handleRestoreDefaults() {
             populateTemplateSelector();
             renderCurrentTemplateView();
             alert("Templates restored to defaults successfully.");
-        } catch (error: any) {
+        } catch (error: unknown) {
             alert(`Error restoring defaults: ${error.message}`);
         }
     }
@@ -245,7 +245,7 @@ function handleRestoreDefaults() {
 
 
 
-function handleSaveFromModal(modal: any) {
+function handleSaveFromModal(modal: unknown) {
     try {
         handleSave();
         void modal.close();

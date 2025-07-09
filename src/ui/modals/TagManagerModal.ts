@@ -786,6 +786,6 @@ export class TagManagerModal extends BaseModal {
         this.tree = null as any;
         this.tagToNodesMap = {};
         this.tagToVersionsMap = {};
-        super.destroy();
+        void super.destroy();
     }
 } 

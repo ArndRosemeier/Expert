@@ -102,7 +102,7 @@ export class ReaderEditManager {
      */
     private async loadConfig(): Promise<void> {
         try {
-            const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
+            const storage = await import('../StorageService').then(async m => m.StorageService.getInstance());
             const savedConfig = await storage.get<EditActionConfig>(ReaderEditManager.CONFIG_STORAGE_KEY);
             
             // TEMPORARY: Force reset to fix prompt issues - increment version to invalidate old configs
@@ -136,7 +136,7 @@ export class ReaderEditManager {
      */
     private async saveConfig(): Promise<void> {
         try {
-            const storage = await import('../StorageService').then(m => m.StorageService.getInstance());
+            const storage = await import('../StorageService').then(async m => m.StorageService.getInstance());
             await storage.set(ReaderEditManager.CONFIG_STORAGE_KEY, this.config);
             console.log('✅ Reader edit actions config saved successfully', {
                 actionCount: this.config.actions.length,

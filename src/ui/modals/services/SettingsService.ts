@@ -47,7 +47,7 @@ export interface MigrationAnalysis {
 
 export interface SettingsChangeEvent {
     type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging';
-    data: any;
+    data: unknown;
 }
 
 export class SettingsService {
@@ -301,7 +301,7 @@ export class SettingsService {
     /**
      * Validates profile data
      */
-    public validateProfile(profile: any): { valid: boolean; errors: string[] } {
+    public validateProfile(profile: unknown): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
 
         if (!profile) {
@@ -612,7 +612,7 @@ export class SettingsService {
             console.log('✅ Prompts saved successfully');
 
             // Force a longer delay to ensure storage operations complete
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => void setTimeout(resolve, 1000));
             
             // Double check the profile is still correctly saved
             const finalProfile = this.settingsManager.getProfile(profileName);

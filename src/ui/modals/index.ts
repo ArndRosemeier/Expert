@@ -92,7 +92,7 @@ export function closeGenericModal(): void {
 /**
  * Shows an alert dialog (enhanced version)
  */
-export function alert(message: string, title?: string): Promise<void> {
+export async function alert(message: string, title?: string): Promise<void> {
     return new Promise((resolve) => {
         showAlert(message, title, resolve);
     });
@@ -101,7 +101,7 @@ export function alert(message: string, title?: string): Promise<void> {
 /**
  * Shows a confirmation dialog (enhanced version)
  */
-export function confirm(message: string, title?: string): Promise<boolean> {
+export async function confirm(message: string, title?: string): Promise<boolean> {
     return new Promise((resolve) => {
         showConfirm(
             message, 

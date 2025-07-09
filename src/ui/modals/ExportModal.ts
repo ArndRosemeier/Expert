@@ -315,7 +315,7 @@ export class ExportModal extends BaseModal {
         });
 
         // Initialize format state after DOM setup
-        setTimeout(() => this.updateFormatState(), 0);
+        void void setTimeout(() => this.updateFormatState(), 0);
 
         option.appendChild(label);
         option.appendChild(this.scopeSelect);
@@ -419,7 +419,7 @@ export class ExportModal extends BaseModal {
      */
     private buildNodePath(node: DocumentNode): string {
         const parts: string[] = [];
-        let current: DocumentNode | null = node;
+        const current: DocumentNode | null = node;
         
         while (current) {
             parts.unshift(current.title);

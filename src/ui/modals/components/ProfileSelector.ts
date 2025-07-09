@@ -14,7 +14,7 @@ export interface ProfileSelectionEvent {
 export interface ProfileActionEvent {
     action: 'created' | 'deleted' | 'exported' | 'imported' | 'renamed' | 'duplicated';
     profileName: string;
-    data?: any;
+    data?: unknown;
 }
 
 export class ProfileSelector {
@@ -35,7 +35,7 @@ export class ProfileSelector {
         // Listen to settings service changes
         this.settingsService.onChange(this.handleSettingsChange.bind(this));
         
-        this.render();
+        void this.render();
         this.populate();
     }
 
@@ -232,7 +232,7 @@ export class ProfileSelector {
             content: 'Create Profile'
         });
 
-        createButton.addEventListener('click', () => this.createProfile());
+        createButton.addEventListener('click', async () => this.createProfile());
 
         creationSection.appendChild(creationLabel);
         const inputGroup = createElement('div', {
@@ -259,7 +259,7 @@ export class ProfileSelector {
             classes: ['btn-danger'],
             content: 'Delete'
         });
-        deleteButton.addEventListener('click', () => this.deleteProfile());
+        deleteButton.addEventListener('click', async () => this.deleteProfile());
 
         const exportButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -277,13 +277,13 @@ export class ProfileSelector {
             classes: ['btn-secondary'],
             content: 'Duplicate'
         });
-        duplicateButton.addEventListener('click', () => this.duplicateProfile());
+        duplicateButton.addEventListener('click', async () => this.duplicateProfile());
 
         const renameButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Rename'
         });
-        renameButton.addEventListener('click', () => this.renameProfile());
+        renameButton.addEventListener('click', async () => this.renameProfile());
 
         const resetToDefaultsButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -310,7 +310,7 @@ export class ProfileSelector {
             }
         }) as HTMLInputElement;
 
-        fileInput.addEventListener('change', (e) => this.handleFileImport(e));
+        fileInput.addEventListener('change', async (e) => this.handleFileImport(e));
 
         this.container.appendChild(selectionSection);
         this.container.appendChild(creationSection);
@@ -359,7 +359,7 @@ export class ProfileSelector {
             
             if (result.success) {
                 this.newProfileInput.value = '';
-                this.refresh();
+                void this.refresh();
                 this.setSelectedProfile(profileName);
                 
                 this.emitAction({
@@ -392,7 +392,7 @@ export class ProfileSelector {
             const result = await this.settingsService.deleteProfile(profileName);
             
             if (result.success) {
-                this.refresh();
+                void this.refresh();
                 
                 // Switch to default profile
                 const defaultProfile = this.settingsService.getProfile('default');
@@ -472,7 +472,7 @@ export class ProfileSelector {
             );
 
             if (result.success) {
-                this.refresh();
+                void this.refresh();
                 
                 // Switch to imported profile if available
                 if (result.profileName) {
@@ -520,7 +520,7 @@ export class ProfileSelector {
             const result = await this.settingsService.duplicateProfile(sourceProfileName, newProfileName);
             
             if (result.success) {
-                this.refresh();
+                void this.refresh();
                 this.setSelectedProfile(newProfileName);
                 
                 this.emitAction({
@@ -559,7 +559,7 @@ export class ProfileSelector {
             const result = await this.settingsService.renameProfile(oldName, newName);
             
             if (result.success) {
-                this.refresh();
+                void this.refresh();
                 this.setSelectedProfile(newName);
                 
                 this.emitAction({

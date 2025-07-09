@@ -362,13 +362,13 @@ export class CoherenceModal extends BaseModal {
         // Close button handler for results modal
         const closeModalBtn = document.getElementById('close-coherence-modal-btn');
         if (closeModalBtn) {
-            closeModalBtn.addEventListener('click', () => this.close());
+            closeModalBtn.addEventListener('click', async () => this.close());
         }
 
         // Copy to clipboard handler
         const copyBtn = document.getElementById('copy-coherence-results');
         if (copyBtn) {
-            copyBtn.addEventListener('click', () => this.copyToClipboard());
+            copyBtn.addEventListener('click', async () => this.copyToClipboard());
         }
 
         // Fix buttons handlers
@@ -397,7 +397,7 @@ export class CoherenceModal extends BaseModal {
      */
     private handleEscKey(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
-            this.close();
+            void this.close();
         }
     }
 
@@ -414,7 +414,7 @@ export class CoherenceModal extends BaseModal {
             if (copyBtn) {
                 const originalText = copyBtn.textContent;
                 copyBtn.textContent = '✅ Copied!';
-                setTimeout(() => {
+                void void setTimeout(() => {
                     copyBtn.textContent = originalText;
                 }, 2000);
             }
@@ -560,7 +560,7 @@ export class CoherenceModal extends BaseModal {
             button.classList.remove('button-success');
             button.classList.add('button-danger');
             
-            setTimeout(() => {
+            void void setTimeout(() => {
                 button.textContent = originalText;
                 button.classList.remove('button-danger');
                 button.classList.add('button-success');
@@ -666,7 +666,7 @@ export class CoherenceModal extends BaseModal {
             button.classList.remove('button-warning');
             button.classList.add('button-danger');
             
-            setTimeout(() => {
+            void void setTimeout(() => {
                 button.textContent = originalText;
                 button.classList.remove('button-danger');
                 button.classList.add('button-warning');

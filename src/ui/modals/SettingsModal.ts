@@ -23,7 +23,7 @@ export interface SettingsModalConfig extends ModalConfig {
 }
 
 export interface SettingsModalEvents {
-    settingsChanged: { type: string; data: any };
+    settingsChanged: { type: string; data: unknown };
     profileChanged: { profileName: string };
     saved: void;
     cancelled: void;
@@ -78,7 +78,7 @@ export class SettingsModal extends BaseModal {
     }
 
     // Simple emit method for compatibility
-    private emit(_eventName: string, _data?: any): void {
+    private emit(_eventName: string, _data?: unknown): void {
         // Silent event emitter stub
     }
 
@@ -110,7 +110,7 @@ export class SettingsModal extends BaseModal {
         container.appendChild(footer);
 
         // Initialize components after DOM is ready
-        setTimeout(async () => {
+        void setTimeout(async () => {
             await this.initializeComponents();
         }, 0);
 
@@ -567,7 +567,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Applies a profile to the UI components
      */
-    private applyProfileToUI(profile: any): void {
+    private applyProfileToUI(profile: unknown): void {
         if (!profile) return;
 
         // Clear pending auto-save to prevent race conditions
@@ -722,7 +722,7 @@ export class SettingsModal extends BaseModal {
         
 
         
-        super.destroy();
+        void super.destroy();
     }
 
     /**
