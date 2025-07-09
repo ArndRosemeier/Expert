@@ -664,8 +664,11 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     };
     
     const handleHighLevelProgress = (e: { nodeId: string; message: string; current: number; total: number }) => {
+        console.log(`🔄 HIGH-LEVEL PROGRESS: nodeId=${e.nodeId}, message="${e.message}", current=${e.current}, total=${e.total}`);
+        
         // If message is empty, it means we should clear the progress
         if (!e.message || e.message.trim() === '') {
+            console.log(`🧹 CLEARING PROGRESS (empty message)`);
             updateProgressUI();
             hideGenerationOverlay();
             
@@ -673,6 +676,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // If not, force clear everything after a short delay
             void void setTimeout(() => {
                 if (!manager.isAnyNodeGenerating()) {
+                    console.log(`🧹 SAFETY CLEAR (no nodes generating)`);
                     updateProgressUI();
                     hideGenerationOverlay();
                     // Note: Global abort button is managed by GenerationCoordinator
@@ -681,6 +685,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         } else {
         // Always show progress bars during any generation, regardless of selected node
         // This ensures consistency with the spinner behavior
+        console.log(`📊 UPDATING OPERATIONS PROGRESS: "${e.message}" (${e.current}/${e.total})`);
         updateProgressUI({
             operations: { message: e.message, current: e.current, total: e.total }
         });
@@ -731,6 +736,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 break;
         }
 
+        console.log(`🔄 LOOP PROGRESS: NOT updating operations progress, only iterations/stages`);
         updateProgressUI({
             iterations: iterationProgress,
             stages: stageProgress,
@@ -2738,13 +2744,24 @@ function updateProgressUI(data?: ProgressUIData) {
     
     if (!data) {
         // Clear all progress and hide container
+        console.log(`🧹 updateProgressUI: CLEARING ALL PROGRESS`);
         currentProgressState = { operations: null, iterations: null, stages: null, detail: '' };
         container.style.display = 'none';
         return;
     }
     
+    console.log(`📊 updateProgressUI: Called with data:`, {
+        operations: data.operations ? `"${data.operations.message}" (${data.operations.current}/${data.operations.total})` : 'undefined',
+        iterations: data.iterations ? `"${data.iterations.message}" (${data.iterations.current}/${data.iterations.total})` : 'undefined',
+        stages: data.stages ? `"${data.stages.message}" (${data.stages.current}/${data.stages.total})` : 'undefined',
+        detail: data.detail || 'undefined'
+    });
+    
     // Update the global state with new data (preserve existing values if not provided)
-    if (data.operations) currentProgressState.operations = data.operations;
+    if (data.operations) {
+        console.log(`⚡ OPERATIONS PROGRESS UPDATE: "${data.operations.message}" (${data.operations.current}/${data.operations.total})`);
+        currentProgressState.operations = data.operations;
+    }
     if (data.iterations) currentProgressState.iterations = data.iterations;
     if (data.stages) currentProgressState.stages = data.stages;
     if (data.detail !== undefined) currentProgressState.detail = data.detail;
