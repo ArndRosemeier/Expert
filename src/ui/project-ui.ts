@@ -611,9 +611,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Check if any operations are still in progress
         const operationsInProgress = manager.isAnyNodeGenerating();
         
-        if (!operationsInProgress) {
+        if (!operationsInProgress && !isBulkOperationActive) {
             // Most UI cleanup is now handled by the coordinator
             // Just do the final project UI refresh
+            console.log(`🏁 COMPLETION: Clearing progress (no operations, no bulk active)`);
             renderProjectUI(manager);
             
             // Force clear progress UI as additional safety measure
@@ -624,6 +625,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // This simplifies the completion handler and makes timing more reliable
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
+            console.log(`🔄 COMPLETION: Preserving progress (operations=${operationsInProgress}, bulk=${isBulkOperationActive})`);
             renderMultiProjectTree();
             // Update content and summary fields without destroying the entire details view
             if (selectedNodeId) {
@@ -639,10 +641,13 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         
         // Additional safety: Force clear progress after a delay if no operations are running
         void void setTimeout(() => {
-            if (!manager.isAnyNodeGenerating()) {
+            if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
+                console.log(`🏁 COMPLETION SAFETY: Clearing progress (no operations, no bulk active)`);
                 updateProgressUI();
                 hideGenerationOverlay();
                 // Note: Global abort button is managed by GenerationCoordinator
+            } else {
+                console.log(`🔄 COMPLETION SAFETY: Preserving progress (operations=${manager.isAnyNodeGenerating()}, bulk=${isBulkOperationActive})`);
             }
         }, 200);
     };
