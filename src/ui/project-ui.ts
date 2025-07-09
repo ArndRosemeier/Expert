@@ -600,10 +600,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Only refresh node details if we're looking at the node being generated
         // This prevents unnecessary UI re-rendering that can cause button disappearance
         if (selectedNodeId === e['nodeId']) {
-            console.log('🔄 Refreshing node details for generating node:', e['nodeId']);
             renderNodeDetails();
-        } else {
-            console.log('⏭️ Skipping node details refresh - different node selected');
         }
     };
 
@@ -614,18 +611,16 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         if (!operationsInProgress && !isBulkOperationActive) {
             // Most UI cleanup is now handled by the coordinator
             // Just do the final project UI refresh
-            console.log(`🏁 COMPLETION: Clearing progress (no operations, no bulk active)`);
-            renderProjectUI(manager);
-            
-            // Force clear progress UI as additional safety measure
-            clearProgressUI();
-            hideGenerationOverlay();
+                    renderProjectUI(manager);
+        
+        // Force clear progress UI as additional safety measure
+        clearProgressUI();
+        hideGenerationOverlay();
             
             // Coherence check is now handled by the dedicated bulkGenerationComplete event
             // This simplifies the completion handler and makes timing more reliable
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
-            console.log(`🔄 COMPLETION: Preserving progress (operations=${operationsInProgress}, bulk=${isBulkOperationActive})`);
             renderMultiProjectTree();
             // Update content and summary fields without destroying the entire details view
             if (selectedNodeId) {
@@ -642,12 +637,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Additional safety: Force clear progress after a delay if no operations are running
         void void setTimeout(() => {
             if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
-                console.log(`🏁 COMPLETION SAFETY: Clearing progress (no operations, no bulk active)`);
                 clearProgressUI();
                 hideGenerationOverlay();
                 // Note: Global abort button is managed by GenerationCoordinator
-            } else {
-                console.log(`🔄 COMPLETION SAFETY: Preserving progress (operations=${manager.isAnyNodeGenerating()}, bulk=${isBulkOperationActive})`);
             }
         }, 200);
     };
@@ -656,7 +648,6 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Handle aborted generation - similar to completion but with different messaging
         // Clear bulk operation flag in case of abort
         isBulkOperationActive = false;
-        console.log(`🛑 BULK OPERATION ABORTED - flag set to false`);
         
         const operationsInProgress = manager.isAnyNodeGenerating();
         
@@ -676,32 +667,23 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     };
     
     const handleHighLevelProgress = (e: { nodeId: string; message: string; current: number; total: number }) => {
-        console.log(`🔄 HIGH-LEVEL PROGRESS: nodeId=${e.nodeId}, message="${e.message}", current=${e.current}, total=${e.total}`);
-        
         // If message is empty, it means we should clear the progress
         if (!e.message || e.message.trim() === '') {
-            console.log(`🧹 CLEARING PROGRESS (empty message)`);
             clearProgressUI();
             hideGenerationOverlay();
             
             // Additional safety: check if any nodes are still generating
             // But don't clear during bulk operations (simple flag-based check)
             void void setTimeout(() => {
-                console.log(`🔍 SAFETY CHECK: nodes generating=${manager.isAnyNodeGenerating()}, bulk active=${isBulkOperationActive}`);
-                
                 if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
-                    console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operation)`);
                     clearProgressUI();
                     hideGenerationOverlay();
                     // Note: Global abort button is managed by GenerationCoordinator
-                } else {
-                    console.log(`⏭️ SKIP SAFETY CLEAR (bulk operation active: ${isBulkOperationActive})`);
                 }
             }, 100);
         } else {
         // Always show progress bars during any generation, regardless of selected node
         // This ensures consistency with the spinner behavior
-        console.log(`📊 UPDATING OPERATIONS PROGRESS: "${e.message}" (${e.current}/${e.total})`);
         updateProgressUI({
             operations: { message: e.message, current: e.current, total: e.total }
         });
@@ -752,7 +734,6 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 break;
         }
 
-        console.log(`🔄 LOOP PROGRESS: NOT updating operations progress, only iterations/stages`);
         updateProgressUI({
             iterations: iterationProgress,
             stages: stageProgress,
@@ -774,7 +755,6 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         
         // Clear bulk operation flag
         isBulkOperationActive = false;
-        console.log(`🏁 BULK OPERATION COMPLETED - flag set to false`);
         
         // Check if coherence check was requested for this generation
         if (e.node && (e.node as any)._pendingCoherenceCheck && e.success) {
@@ -2754,7 +2734,6 @@ function clearProgressUI() {
         return;
     }
     
-    console.log(`🧹 clearProgressUI: CLEARING ALL PROGRESS`);
     currentProgressState = { operations: null, iterations: null, stages: null, detail: '' };
     container.style.display = 'none';
 }
@@ -2773,16 +2752,8 @@ function updateProgressUI(data: ProgressUIData) {
     const stagesBar = getElementById('progress-bar-stages') as HTMLDivElement;
     const detailText = getElementById('progress-text-detail');
     
-    console.log(`📊 updateProgressUI: Called with data:`, {
-        operations: data.operations ? `"${data.operations.message}" (${data.operations.current}/${data.operations.total})` : 'undefined',
-        iterations: data.iterations ? `"${data.iterations.message}" (${data.iterations.current}/${data.iterations.total})` : 'undefined',
-        stages: data.stages ? `"${data.stages.message}" (${data.stages.current}/${data.stages.total})` : 'undefined',
-        detail: data.detail || 'undefined'
-    });
-    
     // Update the global state with new data (preserve existing values if not provided)
     if (data.operations) {
-        console.log(`⚡ OPERATIONS PROGRESS UPDATE: "${data.operations.message}" (${data.operations.current}/${data.operations.total})`);
         currentProgressState.operations = data.operations;
     }
     if (data.iterations) currentProgressState.iterations = data.iterations;
@@ -3293,17 +3264,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         const countInput = getElementById('generation-count-input') as HTMLInputElement;
         const count = countInput?.value ? parseInt(countInput.value, 10) : node.getTemplateChildrenCount() || undefined;
         
-                        console.log(`🚀 Starting children generation for node "${node.title}" with options:`, {
-                    includeContent,
-                    checkCoherence,
-                    recursive,
-                    autoprune,
-                    count
-                });
-                
-                // Set bulk operation flag
+                        // Set bulk operation flag
                 isBulkOperationActive = true;
-                console.log(`🏁 BULK OPERATION STARTED - flag set to true`);
         
         // Store the coherence check state for this generation
         if (checkCoherence) {
@@ -3315,8 +3277,6 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         
     } else {
         // Generate this content
-        console.log(`🚀 Starting content generation for node "${node.title}"`);
-        
         // Call the single content generation method
         await projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
     }
@@ -3333,7 +3293,6 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
  */
 const buttonHandlers: Record<string, (event: Event) => void> = {
     'node-generate-btn': (_e: Event) => {
-        console.log('🎯 Generate button clicked');
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
@@ -3502,7 +3461,6 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
     },
     
     'actions-dropdown-btn': (e: Event) => {
-        console.log('🎯 Actions button clicked');
         e.preventDefault();
         e.stopPropagation();
         
