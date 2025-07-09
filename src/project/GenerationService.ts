@@ -791,6 +791,9 @@ export class GenerationService {
             const total = childrenNeedingContent.length;
 
             if (total > 0) {
+                // Emit initial progress to show the bar at 0% from the start
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
+                
                 for (let i = 0; i < total; i++) {
                     const child = childrenNeedingContent[i];
                     
@@ -875,6 +878,16 @@ export class GenerationService {
             const childrenToExpand = children.filter(child => 
                 child.level < maxExpandLevel
             );
+            
+            // Emit initial progress for recursive generation if there are children to expand
+            if (childrenToExpand.length > 0) {
+                this.deps.eventEmitter.emit('high-level-progress', { 
+                    nodeId, 
+                    message: `Starting recursive generation for ${childrenToExpand.length} children...`, 
+                    current: 0, 
+                    total: childrenToExpand.length 
+                });
+            }
             
             for (let i = 0; i < childrenToExpand.length; i++) {
                 const child = childrenToExpand[i];
