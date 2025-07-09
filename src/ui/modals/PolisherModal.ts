@@ -419,7 +419,7 @@ export class PolisherModal extends BaseModal {
         // Close button
         const closeBtn = document.getElementById('close-polisher-btn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.close());
+            closeBtn.addEventListener('click', async () => this.close());
         }
 
         // Polishing style buttons
@@ -603,7 +603,7 @@ ${content}`;
         this.currentPolishedContent = null;
         
         // Close the modal
-        this.close();
+        void this.close();
         
         // Trigger UI update
         const event = new CustomEvent('nodeContentChanged', {
@@ -819,7 +819,7 @@ ${content}`;
      */
     private handleEscKey(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
-            this.close();
+            void this.close();
         }
     }
 
