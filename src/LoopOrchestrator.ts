@@ -459,6 +459,19 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
                     let editorAdvice: string;
                     
+                    // Emit progress BEFORE starting the editor API call to show model working state
+                    this.emit('progress', { 
+                        type: 'editor', 
+                        payload: { prompt: editorPrompt, advice: `${editorModelName} is generating recommendations...` }, 
+                        iteration: i, 
+                        maxIterations, 
+                        step: 3, 
+                        totalStepsInIteration,
+                        modelName: editorModelName,
+                        isRejected: true,
+                        contentType: contentType
+                    });
+                    
                     try {
                         editorAdvice = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
                     } catch(e: any) {
@@ -473,6 +486,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
                     history.push({ iteration: i, type: 'editor', payload: editorPayload });
 
+                    // Emit progress AFTER getting the response to show final result
                     this.emit('progress', { 
                         type: 'editor', 
                         payload: editorPayload, 
