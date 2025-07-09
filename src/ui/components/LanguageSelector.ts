@@ -23,7 +23,7 @@ export class LanguageSelector {
 
     // Common languages with Unicode flag emojis
     private static readonly LANGUAGES: LanguageOption[] = [
-        { code: 'English', name: 'English', flag: '🇺🇸' },
+        { code: 'English', name: 'English', flag: '🇬🇧' },
         { code: 'Spanish', name: 'Spanish', flag: '🇪🇸' },
         { code: 'French', name: 'French', flag: '🇫🇷' },
         { code: 'German', name: 'German', flag: '🇩🇪' },

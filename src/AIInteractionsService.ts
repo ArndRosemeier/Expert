@@ -7,6 +7,7 @@ export class AIInteractionsService {
     private promptContent: HTMLElement | null = null;
     private responseContent: HTMLElement | null = null;
     private storageService: IStorageService | null = null;
+    private autoCloseTimer: number | null = null;
 
     private constructor() {
         // Don't load settings in constructor - do it in initialize
@@ -80,6 +81,12 @@ export class AIInteractionsService {
             return;
         }
 
+        // Cancel any existing auto-close timer
+        if (this.autoCloseTimer !== null) {
+            clearTimeout(this.autoCloseTimer);
+            this.autoCloseTimer = null;
+        }
+
         // Update header with purpose
         const header = this.overlay.querySelector('.ai-overlay-header h3');
         if (header) {
@@ -133,16 +140,23 @@ export class AIInteractionsService {
             }
         }, 500);
 
-        // Auto-hide overlay after completion
-        setTimeout(() => {
+        // Set auto-close timer (will be cancelled if new interaction starts)
+        this.autoCloseTimer = window.setTimeout(() => {
             this.hideOverlay();
-        }, 1000); // Hide after 1 second
+            this.autoCloseTimer = null;
+        }, 3000); // Hide after 3 seconds (increased from 1 second for better UX)
     }
 
     /**
      * Hide the overlay
      */
     public hideOverlay(): void {
+        // Cancel any pending auto-close timer
+        if (this.autoCloseTimer !== null) {
+            clearTimeout(this.autoCloseTimer);
+            this.autoCloseTimer = null;
+        }
+        
         if (this.overlay) {
             this.overlay.style.display = 'none';
         }
