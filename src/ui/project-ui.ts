@@ -676,15 +676,20 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // But don't clear during bulk operations (they manage their own progress clearing)
             void void setTimeout(() => {
                 const coordinator = manager.getGenerationCoordinator();
-                const hasBulkOperation = coordinator.getActiveOperations().some(op => op.type === 'bulk-children');
+                const activeOperations = coordinator.getActiveOperations();
+                const hasBulkOperation = activeOperations.some(op => op.type === 'bulk-children');
+                const hasChildOperations = activeOperations.some(op => op.type === 'child-content');
+                const isBulkGenerationActive = hasBulkOperation || hasChildOperations;
                 
-                if (!manager.isAnyNodeGenerating() && !hasBulkOperation) {
-                    console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operation)`);
+                console.log(`🔍 SAFETY CHECK: nodes generating=${manager.isAnyNodeGenerating()}, bulk ops=${hasBulkOperation}, child ops=${hasChildOperations}, total ops=${activeOperations.length}`);
+                
+                if (!manager.isAnyNodeGenerating() && !isBulkGenerationActive) {
+                    console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operations)`);
                     updateProgressUI();
                     hideGenerationOverlay();
                     // Note: Global abort button is managed by GenerationCoordinator
-                } else if (hasBulkOperation) {
-                    console.log(`⏭️ SKIP SAFETY CLEAR (bulk operation active)`);
+                } else {
+                    console.log(`⏭️ SKIP SAFETY CLEAR (bulk generation active: bulk=${hasBulkOperation}, child=${hasChildOperations})`);
                 }
             }, 100);
         } else {
