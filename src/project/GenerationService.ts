@@ -678,7 +678,10 @@ export class GenerationService {
                 if (alreadyAdjusted) {
                     console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
                 } else {
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
+                // Only emit progress for top-level calls, not recursive calls
+                if (!isNestedCall) {
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
+                }
                 
                 try {
                     // Import the ContextAdjusterModal and run in automatic mode
@@ -710,8 +713,10 @@ export class GenerationService {
         // For nodes that already have children, we should skip this check
         if (node.children.length === 0 && node.getState() === 'Empty') {
             if (includeContent) {
-                // Auto-generate content for the parent node first
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
+                // Auto-generate content for the parent node first (only emit progress for top-level calls)
+                if (!isNestedCall) {
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
+                }
                 
                 try {
                     await this.generateNodeContent(nodeId, node.getTemplateChildrenCount() ?? 5, false);
