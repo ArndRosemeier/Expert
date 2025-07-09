@@ -1930,7 +1930,7 @@ This action cannot be undone.`;
                 }
 
                 // Start the bulk generation
-                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, false, false)
+                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, false)
                     .then(() => {
                         coordinator.completeOperation(operationId, true);
                         if (projectManager) {
@@ -3274,16 +3274,60 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         const countInput = getElementById('generation-count-input') as HTMLInputElement;
         const count = countInput?.value ? parseInt(countInput.value, 10) : node.getTemplateChildrenCount() || undefined;
         
-                        // Set bulk operation flag
-                isBulkOperationActive = true;
-        
         // Store the coherence check state for this generation
         if (checkCoherence) {
             (node as any)._pendingCoherenceCheck = true;
         }
         
-        // Call the children generation method
-        await projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune, false);
+        // Use the same coordinator system as the dropdown action for consistency
+        const coordinator = projectManager.getGenerationCoordinator();
+        
+        // Count how many nodes will be affected (same logic as dropdown action)
+        const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
+            const nodes: string[] = [];
+            
+            // If this node has no children, count it as needing children created
+            if (parentNode.children.length === 0) {
+                nodes.push(parentNode.id + '_children');
+            }
+            
+            // Check each child for content generation needs
+            for (const child of parentNode.children) {
+                if (includeContent && child.getState() !== 'Final') {
+                    nodes.push(child.id);
+                }
+                
+                // If recursive, check children too
+                if (recursive) {
+                    nodes.push(...getAllInvolvedNodes(child));
+                }
+            }
+            
+            return nodes;
+        };
+
+        const involvedNodes = getAllInvolvedNodes(node);
+        const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
+        if (!operationId) {
+            alert('Another generation operation is already in progress. Please wait for it to complete.');
+            return;
+        }
+
+        // Set bulk operation flag
+        isBulkOperationActive = true;
+        
+        // Start the bulk generation
+        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune)
+            .then(() => {
+                coordinator.completeOperation(operationId, true);
+                if (projectManager) {
+                    void projectManager.saveToStorage().catch(console.error);
+                }
+            })
+            .catch(error => {
+                coordinator.completeOperation(operationId, false, error);
+                console.error('Children generation failed:', error);
+            });
         
     } else {
         // Generate this content

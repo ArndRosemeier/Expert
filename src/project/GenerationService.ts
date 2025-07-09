@@ -650,14 +650,17 @@ export class GenerationService {
      * @param includeContent Whether to generate content for the children (default: true).
      * @param recursive Whether to recursively generate children down to max expand level (default: false).
      * @param autoprune Whether to enable auto-pruning of context (default: false).
-     * @param isNestedCall Whether this is a recursive call (used to prevent progress override).
      */
-    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false, autoprune: boolean = false, isNestedCall: boolean = false): Promise<void> {
+    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false, autoprune: boolean = false): Promise<void> {
         let node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) {
             this.deps.eventEmitter.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
             return;
         }
+
+        // Check if there's already a bulk operation running (used throughout the function)
+        const coordinator = this.deps.getGenerationCoordinator?.();
+        const hasBulkOperation = coordinator && Array.from(coordinator.operations.values()).some((op: any) => op.type === 'bulk-children');
 
         // Check for existing generation FIRST, before any operations
         // Allow recursive calls if we're already in a bulk operation
@@ -678,8 +681,8 @@ export class GenerationService {
                 if (alreadyAdjusted) {
                     console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
                 } else {
-                // Only emit progress for top-level calls, not recursive calls
-                if (!isNestedCall) {
+                // Only emit progress if not part of a larger bulk operation
+                if (!hasBulkOperation) {
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
                 }
                 
@@ -713,8 +716,8 @@ export class GenerationService {
         // For nodes that already have children, we should skip this check
         if (node.children.length === 0 && node.getState() === 'Empty') {
             if (includeContent) {
-                // Auto-generate content for the parent node first (only emit progress for top-level calls)
-                if (!isNestedCall) {
+                // Auto-generate content for the parent node first (only emit progress if not part of a larger bulk operation)
+                if (!hasBulkOperation) {
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for "${node.title}" first...`, current: 0, total: 1 });
                 }
                 
@@ -781,16 +784,16 @@ export class GenerationService {
 
         // Step 1: Create children from outline if they don't exist
         if (node.children.length === 0) {
-            // Only emit progress for top-level calls, not recursive calls
-            if (!isNestedCall) {
+            // Only emit progress if not part of a larger bulk operation
+            if (!hasBulkOperation) {
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Reading outline and generating child titles and drafts...', current: 0, total: 1 });
             }
             
             // Use the dedicated createChildrenFromOutline method instead of duplicating logic
             await this.createChildrenFromOutline(nodeId);
         } else {
-            // Only emit progress for top-level calls, not recursive calls
-            if (!isNestedCall) {
+            // Only emit progress if not part of a larger bulk operation
+            if (!hasBulkOperation) {
                 this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Child nodes already exist, skipping creation', current: 1, total: 1 });
             }
         }
@@ -804,8 +807,8 @@ export class GenerationService {
             const total = childrenNeedingContent.length;
 
             if (total > 0) {
-                // Emit initial progress to show the bar at 0% from the start (only for top-level calls)
-                if (!isNestedCall) {
+                // Emit initial progress to show the bar at 0% from the start (only if not part of a larger bulk operation)
+                if (!hasBulkOperation) {
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Starting content generation for ${total} children...`, current: 0, total });
                 }
                 
@@ -822,8 +825,8 @@ export class GenerationService {
                         break;
                     }
                     
-                    // Starting content generation for child (only for top-level calls)
-                    if (!isNestedCall) {
+                    // Starting content generation for child (only if not part of a larger bulk operation)
+                    if (!hasBulkOperation) {
                         this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: `Generating content for: ${child.title}`, current: i + 1, total });
                     }
                     
@@ -882,8 +885,8 @@ export class GenerationService {
                     }
                 }
             } else {
-                // Only emit progress for top-level calls, not recursive calls
-                if (!isNestedCall) {
+                // Only emit progress if not part of a larger bulk operation
+                if (!hasBulkOperation) {
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'All children already have content', current: 1, total: 1 });
                 }
             }
@@ -899,8 +902,8 @@ export class GenerationService {
                 child.level < maxExpandLevel
             );
             
-            // Emit initial progress for recursive generation if there are children to expand (only for top-level calls)
-            if (childrenToExpand.length > 0 && !isNestedCall) {
+            // Emit initial progress for recursive generation if there are children to expand (only if not part of a larger bulk operation)
+            if (childrenToExpand.length > 0 && !hasBulkOperation) {
                 this.deps.eventEmitter.emit('high-level-progress', { 
                     nodeId, 
                     message: `Starting recursive generation for ${childrenToExpand.length} children...`, 
@@ -922,8 +925,8 @@ export class GenerationService {
                     break;
                 }
                 
-                // Only emit progress for top-level calls, not recursive calls
-                if (!isNestedCall) {
+                // Only emit progress if not part of a larger bulk operation
+                if (!hasBulkOperation) {
                     this.deps.eventEmitter.emit('high-level-progress', { 
                         nodeId, 
                         message: `Recursively generating children for: ${child.title}`, 
@@ -934,8 +937,8 @@ export class GenerationService {
                 
                 try {
                     // Recursively call generateAllChildrenContent on each child
-                    // Pass includeContent, recursive, autoprune flags down, and mark as nested call
-                    await this.generateAllChildrenContent(child.id, includeContent, recursive, autoprune, true);
+                    // Pass includeContent, recursive, autoprune flags down
+                    await this.generateAllChildrenContent(child.id, includeContent, recursive, autoprune);
                 } catch (error: any) {
                     if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                         break;
@@ -956,8 +959,8 @@ export class GenerationService {
                 if (this.isAbortRequested()) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
                 } else {
-                    // Clear progress bars and emit the dedicated bulk completion event (only for top-level calls)
-                    if (!isNestedCall) {
+                    // Clear progress bars and emit the dedicated bulk completion event (only if not part of a larger bulk operation)
+                    if (!hasBulkOperation) {
                         this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
                     }
                     
