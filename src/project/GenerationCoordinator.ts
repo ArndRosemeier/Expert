@@ -250,7 +250,7 @@ export class GenerationCoordinator {
             }, 50); // Small delay to ensure DOM has been updated
 
             // Clear progress and overlays
-            this.updateProgressUI();
+            this.clearProgressUI();
             this.hideGenerationOverlay();
 
             // Handle errors - ALWAYS show them for debugging
@@ -265,9 +265,15 @@ export class GenerationCoordinator {
     /**
      * Helper methods for UI updates - these call existing functions
      */
-    private updateProgressUI(data?: any): void {
+    private updateProgressUI(data: any): void {
         if (typeof (window as any).updateProgressUI === 'function') {
             (window as any).updateProgressUI(data);
+        }
+    }
+
+    private clearProgressUI(): void {
+        if (typeof (window as any).clearProgressUI === 'function') {
+            (window as any).clearProgressUI();
         }
     }
 

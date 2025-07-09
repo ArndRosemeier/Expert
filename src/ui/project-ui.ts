@@ -618,7 +618,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             renderProjectUI(manager);
             
             // Force clear progress UI as additional safety measure
-            updateProgressUI();
+            clearProgressUI();
             hideGenerationOverlay();
             
             // Coherence check is now handled by the dedicated bulkGenerationComplete event
@@ -643,7 +643,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         void void setTimeout(() => {
             if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
                 console.log(`🏁 COMPLETION SAFETY: Clearing progress (no operations, no bulk active)`);
-                updateProgressUI();
+                clearProgressUI();
                 hideGenerationOverlay();
                 // Note: Global abort button is managed by GenerationCoordinator
             } else {
@@ -681,7 +681,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // If message is empty, it means we should clear the progress
         if (!e.message || e.message.trim() === '') {
             console.log(`🧹 CLEARING PROGRESS (empty message)`);
-            updateProgressUI();
+            clearProgressUI();
             hideGenerationOverlay();
             
             // Additional safety: check if any nodes are still generating
@@ -691,7 +691,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                 
                 if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
                     console.log(`🧹 SAFETY CLEAR (no nodes generating, no bulk operation)`);
-                    updateProgressUI();
+                    clearProgressUI();
                     hideGenerationOverlay();
                     // Note: Global abort button is managed by GenerationCoordinator
                 } else {
@@ -2748,7 +2748,18 @@ let currentProgressState = {
     detail: ''
 };
 
-function updateProgressUI(data?: ProgressUIData) {
+function clearProgressUI() {
+    const container = document.getElementById('generation-progress-container');
+    if (!container) {
+        return;
+    }
+    
+    console.log(`🧹 clearProgressUI: CLEARING ALL PROGRESS`);
+    currentProgressState = { operations: null, iterations: null, stages: null, detail: '' };
+    container.style.display = 'none';
+}
+
+function updateProgressUI(data: ProgressUIData) {
     const container = document.getElementById('generation-progress-container');
     if (!container) {
         return;
@@ -2761,14 +2772,6 @@ function updateProgressUI(data?: ProgressUIData) {
     const stagesText = getElementById('progress-text-stages');
     const stagesBar = getElementById('progress-bar-stages') as HTMLDivElement;
     const detailText = getElementById('progress-text-detail');
-    
-    if (!data) {
-        // Clear all progress and hide container
-        console.log(`🧹 updateProgressUI: CLEARING ALL PROGRESS`);
-        currentProgressState = { operations: null, iterations: null, stages: null, detail: '' };
-        container.style.display = 'none';
-        return;
-    }
     
     console.log(`📊 updateProgressUI: Called with data:`, {
         operations: data.operations ? `"${data.operations.message}" (${data.operations.current}/${data.operations.total})` : 'undefined',
@@ -2829,6 +2832,7 @@ function updateProgressUI(data?: ProgressUIData) {
 
 // Expose UI functions globally for the GenerationCoordinator
 (window as any).updateProgressUI = updateProgressUI;
+(window as any).clearProgressUI = clearProgressUI;
 (window as any).showGenerationOverlay = showGenerationOverlay;
 (window as any).hideGenerationOverlay = hideGenerationOverlay;
 
