@@ -914,10 +914,10 @@ export function renderNodeDetails() {
     detailsContainer.innerHTML = `
         <style>
             .node-details-container {
-                padding: 1rem;
+                padding: 0;
                 display: flex;
                 flex-direction: column;
-                gap: 1.5rem;
+                gap: 0.5rem;
                 height: 100%;
                 box-sizing: border-box;
             }
@@ -925,7 +925,7 @@ export function renderNodeDetails() {
                 background-color: #f8f9fa;
                 border-radius: 8px;
                 padding: 1rem;
-                margin-bottom: 1rem;
+                margin-bottom: 0;
                 border: 1px solid #e9ecef;
                 display: grid;
                 grid-template-columns: 1fr auto;
@@ -1733,11 +1733,11 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
+        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 2px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
 
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
-        html += `<span style="margin-right: 16px;"></span>`;
+        html += `<span style="margin-right: 12px;"></span>`;
     }
     
     // Add the node title with special styling for project roots
@@ -2544,11 +2544,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             #global-profile-bar {
                 background-color: #f8f9fa;
                 border-bottom: 1px solid var(--border-color);
-                padding: 1rem;
+                padding: 0.75rem;
                 display: flex;
                 align-items: center;
                 gap: 1rem;
-                margin-bottom: 1rem;
+                margin-bottom: 0;
             }
             #global-profile-bar label {
                 font-weight: bold;
@@ -2593,11 +2593,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
             .tree-node { 
-                padding: 0.075rem 0.5rem; 
+                padding: 1px 0.5rem; 
                 border-radius: 4px; 
                 cursor: pointer; 
                 flex-grow: 1;
-                margin-left: 2px;
+                margin-left: 1px;
             }
             .tree-node.selected { background-color: var(--primary-color); color: white; }
             .tree-node:hover:not(.selected) { background-color: #e9ecef; }
