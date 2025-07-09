@@ -184,13 +184,26 @@ export class GenerationCoordinator {
                 operations: { message: 'Preparing to generate children...', current: 0, total: 1 }
             });
         } else if (operation.type === 'child-content') {
-            // For child content, show detailed progress bars immediately
-            this.updateProgressUI({
-                operations: { message: `Generating content for child node...`, current: 0, total: 1 },
-                iterations: { message: 'Iteration: 0 / 1', current: 0, total: 1 },
-                stages: { message: 'Stage: Initializing...', current: 0, total: 3 },
-                detail: 'Preparing to generate content...'
-            });
+            // For child content, only update iteration/stage progress
+            // Don't override operations progress if there's a bulk operation running
+            const hasBulkOperation = Array.from(this.operations.values()).some(op => op.type === 'bulk-children');
+            
+            if (hasBulkOperation) {
+                // During bulk operations, only update iteration/stage progress
+                this.updateProgressUI({
+                    iterations: { message: 'Iteration: 0 / 1', current: 0, total: 1 },
+                    stages: { message: 'Stage: Initializing...', current: 0, total: 3 },
+                    detail: 'Preparing to generate content...'
+                });
+            } else {
+                // For standalone child content generation, show full progress
+                this.updateProgressUI({
+                    operations: { message: `Generating content for child node...`, current: 0, total: 1 },
+                    iterations: { message: 'Iteration: 0 / 1', current: 0, total: 1 },
+                    stages: { message: 'Stage: Initializing...', current: 0, total: 3 },
+                    detail: 'Preparing to generate content...'
+                });
+            }
         }
 
         // Global abort button is now always visible
