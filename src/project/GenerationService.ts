@@ -682,25 +682,39 @@ export class GenerationService {
                     console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
                 } else {
                 // Always show autoprune progress - users need to see AI is working
-                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 3 });
                 
                 try {
                     // Import the ContextAdjusterModal and run in automatic mode
                     const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
                     const contextAdjuster = new ContextAdjusterModal();
                     
+                    // Update progress for AI analysis phase
+                    this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Analyzing context with AI...', current: 1, total: 3 });
+                    
                     const contextChanged = await contextAdjuster.runAutomaticMode(node);
                     
                     if (contextChanged) {
+                        // Update progress for applying changes
+                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Applying context changes...', current: 2, total: 3 });
+                        
                         // Refresh node reference after context changes
                         const updatedNode = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
                         if (updatedNode) {
                             node = updatedNode;
                         }
                         console.log(`🔧 Auto-pruned context for "${node.title}"`);
+                        
+                        // Show completion
+                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Context auto-pruning completed', current: 3, total: 3 });
                     } else {
                         console.log(`✅ No context issues found for "${node.title}"`);
+                        // Show completion for no-changes case
+                        this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'No context issues found', current: 3, total: 3 });
                     }
+                    
+                    // Give users a moment to see the completion before moving to next step
+                    await new Promise(resolve => setTimeout(resolve, 800));
                 } catch (error) {
                     console.error('Auto-prune context failed:', error);
                     this.deps.eventEmitter.emit('error', `Auto-prune context failed for "${node.title}": ${error instanceof Error ? error.message : 'Unknown error'}`);
