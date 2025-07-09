@@ -13,6 +13,7 @@ import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
+import { AIProgressService } from '../AIProgressService';
 import { getContextItemCount } from '../ContextFormat';
 
 // --- State Variables ---
@@ -2638,10 +2639,15 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 <div id="language-selector-container"></div>
             </div>
             <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
-                    <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
-                    🤖 See AI interactions
-                </label>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
+                        <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
+                        🤖 See AI interactions
+                    </label>
+                    <div id="ai-progress-report" style="display: none; font-size: 0.75rem; color: #6c757d; padding-left: 1.75rem; margin-top: -0.125rem;">
+                        <!-- AI progress will appear here -->
+                    </div>
+                </div>
                 <button id="open-reader-btn" class="button button-primary">📖 Reader View</button>
             </div>
         </div>
@@ -2703,6 +2709,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     // Initialize AI interactions service
     const aiInteractionsService = AIInteractionsService.getInstance();
     await aiInteractionsService.initialize();
+    
+    // Initialize AI progress service
+    const aiProgressService = AIProgressService.getInstance();
+    aiProgressService.initialize();
 }
 
 

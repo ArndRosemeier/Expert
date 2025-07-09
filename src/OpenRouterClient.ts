@@ -45,6 +45,7 @@ import { AILogService } from './AILogService';
 import { SettingsManager } from './SettingsManager';
 import { StorageService } from './StorageService';
 import { AIInteractionsService } from './AIInteractionsService';
+import { AIProgressService } from './AIProgressService';
 import * as state from './state';
 
 export interface StreamingCallbacks {
@@ -671,8 +672,10 @@ export class OpenRouterClient {
 
       // Show AI interactions overlay if enabled
       const aiInteractionsService = AIInteractionsService.getInstance();
+      const aiProgressService = AIProgressService.getInstance();
       const promptText = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
       aiInteractionsService.showInteraction(purpose, promptText);
+      aiProgressService.startInteraction();
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -728,6 +731,7 @@ export class OpenRouterClient {
                   fullContent += content;
                   callbacks.onChunk?.(content);
                   aiInteractionsService.updateResponse(content);
+                  aiProgressService.updateCharacters(content);
                 }
               } catch (parseError) {
                 // Ignore JSON parse errors for partial chunks
@@ -758,6 +762,7 @@ export class OpenRouterClient {
         }
         
         aiInteractionsService.completeInteraction();
+        aiProgressService.completeInteraction();
         callbacks.onComplete?.(fullContent);
         
       } finally {
