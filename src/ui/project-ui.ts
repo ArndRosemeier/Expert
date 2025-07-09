@@ -13,6 +13,7 @@ import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
+import { getContextItemCount } from '../ContextFormat';
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -614,55 +615,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             updateProgressUI();
             hideGenerationOverlay();
             
-            // Check if coherence check was requested for this generation
-            // Use the node that actually completed generation, not the currently selected node
-            if (_e.node && ((_e.node as any)._pendingCoherenceCheck)) {
-                const completedNode = _e.node;
-                console.log(`🔍 Auto-starting coherence analysis for node "${completedNode.title}" (ID: ${completedNode.id})`);
-                // Clear the pending flag
-                delete (completedNode as any)._pendingCoherenceCheck;
-                
-                // Open coherence check modal after a short delay
-                setTimeout(() => {
-                    import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
-                        import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
-                            // Create coherence service instance
-                            const coherenceService = new CoherenceService(
-                                state.getOpenRouterClient()!,
-                                state.getSettingsManager()!
-                            );
-
-                            // Check if node is eligible for coherence analysis
-                            if (!coherenceService.isNodeEligible(completedNode)) {
-                                console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(completedNode));
-                                return;
-                            }
-
-                            // Create and show modal in loading state
-                            const analysisModal = new CoherenceModal();
-                            analysisModal.openInLoadingState(completedNode);
-                            
-                            // Perform analysis
-                            coherenceService.analyzeCoherence(completedNode)
-                                .then((result) => {
-                                    console.log('Coherence analysis completed, updating modal with results:', result);
-                                    // Update modal with results
-                                    analysisModal.updateWithResults(result);
-                                })
-                                .catch((error) => {
-                                    console.error('Coherence analysis failed:', error);
-                                    // Close loading modal and show error
-                                    analysisModal.close();
-                                    alert('Coherence analysis failed: ' + error.message);
-                                });
-                        }).catch((error: any) => {
-                            console.error('Failed to load CoherenceService:', error);
-                        });
-                    }).catch((error: any) => {
-                        console.error('Failed to open coherence modal:', error);
-                    });
-                }, 1000);
-            }
+            // Coherence check is now handled by the dedicated bulkGenerationComplete event
+            // This simplifies the completion handler and makes timing more reliable
         } else {
             // Just refresh the tree to show updated node states - DON'T re-render details during operations
             renderMultiProjectTree();
@@ -791,6 +745,60 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
+    const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }) => {
+        console.log(`🎯 Bulk generation complete for node "${e.node.title}" (ID: ${e.nodeId})`);
+        
+        // Check if coherence check was requested for this generation
+        if (e.node && (e.node as any)._pendingCoherenceCheck && e.success) {
+            const completedNode = e.node;
+            console.log(`🔍 Auto-starting coherence analysis for node "${completedNode.title}" (ID: ${completedNode.id})`);
+            
+            // Clear the pending flag
+            delete (completedNode as any)._pendingCoherenceCheck;
+            
+            // Open coherence check modal after a short delay
+            setTimeout(() => {
+                import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
+                    import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
+                        // Create coherence service instance
+                        const coherenceService = new CoherenceService(
+                            state.getOpenRouterClient()!,
+                            state.getSettingsManager()!
+                        );
+
+                        // Check if node is eligible for coherence analysis
+                        if (!coherenceService.isNodeEligible(completedNode)) {
+                            console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(completedNode));
+                            return;
+                        }
+
+                        // Create and show modal in loading state
+                        const analysisModal = new CoherenceModal();
+                        analysisModal.openInLoadingState(completedNode);
+                        
+                        // Perform analysis
+                        coherenceService.analyzeCoherence(completedNode)
+                            .then((result) => {
+                                console.log('Coherence analysis completed, updating modal with results:', result);
+                                // Update modal with results
+                                analysisModal.updateWithResults(result);
+                            })
+                            .catch((error) => {
+                                console.error('Coherence analysis failed:', error);
+                                // Close loading modal and show error
+                                analysisModal.close();
+                                alert('Coherence analysis failed: ' + error.message);
+                            });
+                    }).catch((error: any) => {
+                        console.error('Failed to load CoherenceService:', error);
+                    });
+                }).catch((error: any) => {
+                    console.error('Failed to open coherence modal:', error);
+                });
+            }, 1000);
+        }
+    };
+
     const handleProjectLoaded = () => {
         // Refresh the entire project UI when project structure changes (e.g., after bulk child generation)
         renderProjectUI(manager);
@@ -804,6 +812,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         manager.off('nodeGenerationStarted', manager._generationStartedListener);
         // @ts-ignore
         manager.off('nodeGenerationComplete', manager._completionListener);
+        // @ts-ignore
+        manager.off('bulkGenerationComplete', manager._bulkGenerationCompleteListener);
         // @ts-ignore
         manager.off('error', manager._errorListener);
         // @ts-ignore
@@ -821,6 +831,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     // @ts-ignore
     manager._completionListener = handleCompletion;
     // @ts-ignore
+    manager._bulkGenerationCompleteListener = handleBulkGenerationComplete;
+    // @ts-ignore
     manager._errorListener = handleError;
     // @ts-ignore
     manager._highLevelProgressListener = handleHighLevelProgress;
@@ -833,6 +845,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     
     manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
+    manager.on('bulkGenerationComplete', handleBulkGenerationComplete);
     manager.on('nodeGenerationAborted', handleAborted);
     manager.on('error', handleError);
     manager.on('high-level-progress', handleHighLevelProgress);
@@ -1199,9 +1212,10 @@ export function renderNodeDetails() {
         <div class="node-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <button id="context-adjuster-btn" class="info-button" title="Context Adjuster - Remove problematic context items" style="font-size: 0.8rem; padding: 2px 4px; margin-right: 2px;">🔧</button>
                     <label for="node-context">Context</label>
-                    <button id="context-info-btn" class="info-button" title="Learn about Context features" style="margin-left: 4px;">i</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">(Context will be copied to newly created child nodes.)</span>
+                    <button id="context-info-btn" class="info-button" title="Edit Context Items" style="margin-left: 4px;">📝</button>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">${getContextItemCount(node.context || '')} context items in context. Any paragraph is considered a context item.</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
@@ -1398,6 +1412,16 @@ export function renderNodeDetails() {
                 };
                 
                 propagateRecursively(node);
+                    
+                    // Update the context items count display
+                    const contextLabel = document.querySelector('label[for="node-context"]');
+                    if (contextLabel) {
+                        const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
+                        if (contextInfoSpan) {
+                            const itemCount = getContextItemCount(newContext);
+                            contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
+                        }
+                    }
                     
                     // Save to storage with debounced approach
                     clearTimeout((contextTextArea as any)._saveTimeout);
@@ -3424,13 +3448,31 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
+    'context-adjuster-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        import('./modals/ContextAdjusterModal').then(({ ContextAdjusterModal }) => {
+            const contextAdjusterModal = new ContextAdjusterModal();
+            void contextAdjusterModal.openInLoadingState(node);
+        }).catch((error: any) => {
+            console.error('Failed to open context adjuster modal:', error);
+            alert('Failed to open context adjuster. Please try again.');
+        });
+    },
+    
     'context-info-btn': (_e: Event) => {
-        import('./modals/ContextInfoModal').then(({ ContextInfoModal }) => {
-            const contextModal = new ContextInfoModal();
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
+            const contextModal = new ContextItemsEditorModal(node);
             void contextModal.open();
         }).catch((error: any) => {
-            console.error('Failed to open context info modal:', error);
-            alert('Failed to open context info dialog. Please try again.');
+            console.error('Failed to open context items editor modal:', error);
+            alert('Failed to open context items editor. Please try again.');
         });
     },
     

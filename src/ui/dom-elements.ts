@@ -14,7 +14,7 @@ export const modalContainer = () => getElementById<HTMLElement>('modal-container
 export const modalContent = () => getElementById<HTMLElement>('modal-content');
 export const testModalContainer = () => getElementById<HTMLElement>('test-modal-container');
 export const testModalContent = () => getElementById<HTMLElement>('test-modal-content');
-export const runTestsBtn = () => getElementById<HTMLButtonElement>('runTestsBtn');
+
 export const newProjectBtn = () => getElementById<HTMLButtonElement>('newProjectBtn');
 export const importProjectBtn = () => getElementById<HTMLButtonElement>('importProjectBtn');
 export const comprehensiveExportBtn = () => getElementById<HTMLButtonElement>('comprehensiveExportBtn');
@@ -25,7 +25,7 @@ export const newProjectModalContent = () => getElementById<HTMLElement>('new-pro
 export function validateDOMElements() {
     const elements = [
         'main-app', 'settingsBtn', 'modal-container', 'modal-content', 
-        'test-modal-container', 'test-modal-content', 'runTestsBtn', 
+        'test-modal-container', 'test-modal-content', 
         'newProjectBtn', 'importProjectBtn', 'comprehensiveExportBtn', 'new-project-modal-container', 
         'new-project-modal-content'
     ];

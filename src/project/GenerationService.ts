@@ -645,7 +645,7 @@ export class GenerationService {
      * @param includeContent Whether to generate content for the children (default: true).
      * @param recursive Whether to recursively generate children down to max expand level (default: false).
      */
-    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false): Promise<void> {
+    public async generateAllChildrenContent(nodeId: string, includeContent: boolean = true, recursive: boolean = false, autoprune: boolean = false): Promise<void> {
         let node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) {
             this.deps.eventEmitter.emit('error', `Could not find node with ID ${nodeId} to generate children content for.`);
@@ -656,6 +656,47 @@ export class GenerationService {
         // Allow recursive calls if we're already in a bulk operation
         if (this.deps.generationController.canAbortGeneration(this.deps.rootNode) && !this.isGeneratingAllChildren) {
             throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
+        }
+
+        // Step 0: Auto-prune context if requested (before any child generation)
+        if (autoprune) {
+            // Skip auto-pruning for project root nodes (no inherited context to clean)
+            if (node.level === 0 || !node.parentId) {
+                console.log(`⏭️ Skipping auto-prune for "${node.title}" - project root node`);
+            } else {
+                // Check if context has already been AI-adjusted (skip if so)
+                const masterVersion = node.getMasterVersion();
+                const alreadyAdjusted = masterVersion && masterVersion.tags.has('context_ai_adjusted');
+                
+                if (alreadyAdjusted) {
+                    console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
+                } else {
+                this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: 'Auto-pruning context...', current: 0, total: 1 });
+                
+                try {
+                    // Import the ContextAdjusterModal and run in automatic mode
+                    const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
+                    const contextAdjuster = new ContextAdjusterModal();
+                    
+                    const contextChanged = await contextAdjuster.runAutomaticMode(node);
+                    
+                    if (contextChanged) {
+                        // Refresh node reference after context changes
+                        const updatedNode = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+                        if (updatedNode) {
+                            node = updatedNode;
+                        }
+                        console.log(`🔧 Auto-pruned context for "${node.title}"`);
+                    } else {
+                        console.log(`✅ No context issues found for "${node.title}"`);
+                    }
+                } catch (error) {
+                    console.error('Auto-prune context failed:', error);
+                    this.deps.eventEmitter.emit('error', `Auto-prune context failed for "${node.title}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    // Continue with generation even if auto-prune fails
+                }
+                }
+            }
         }
 
         // Only check for content if we need to create children from outline (children.length === 0)
@@ -851,8 +892,8 @@ export class GenerationService {
                 
                 try {
                     // Recursively call generateAllChildrenContent on each child
-                    // Pass includeContent and recursive flags down
-                    await this.generateAllChildrenContent(child.id, includeContent, recursive);
+                    // Pass includeContent, recursive, and autoprune flags down
+                    await this.generateAllChildrenContent(child.id, includeContent, recursive, autoprune);
                 } catch (error: any) {
                     if (error.message === 'Generation aborted by user' || this.isAbortRequested()) {
                         break;
@@ -873,9 +914,20 @@ export class GenerationService {
                 if (this.isAbortRequested()) {
                     this.deps.eventEmitter.emit('nodeGenerationAborted', { nodeId, node });
                 } else {
-                    // Clear progress bars and emit completion event
+                    // Clear progress bars and emit the dedicated bulk completion event
                     this.deps.eventEmitter.emit('high-level-progress', { nodeId, message: '', current: 0, total: 1 });
-                    this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
+                    
+                    // Emit the dedicated bulk generation complete event
+                    this.deps.eventEmitter.emit('bulkGenerationComplete', { 
+                        nodeId, 
+                        node,
+                        operation: 'children-generation',
+                        options: {
+                            includeContent,
+                            recursive
+                        },
+                        success: true
+                    });
                     
                     // Small delay to ensure all async operations complete, then trigger UI cleanup
                     setTimeout(() => {
@@ -1101,52 +1153,45 @@ export class GenerationService {
      * Returns array of objects with title and content description.
      */
     private parseChildrenFromJSON(text: string): Array<{title: string, description: string}> {
-        try {
-            // Clean the text - remove any leading/trailing whitespace and non-JSON content
-            const cleanedText = text.trim();
-            
-            // Try to find JSON array in the response (in case there's extra text)
-            let jsonText = cleanedText;
-            const arrayStart = cleanedText.indexOf('[');
-            const arrayEnd = cleanedText.lastIndexOf(']');
-            
-            if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
-                jsonText = cleanedText.substring(arrayStart, arrayEnd + 1);
-            }
-            
-            // Parse the JSON
-            const parsed = JSON.parse(jsonText);
-            
-            // Validate that it's an array
-            if (!Array.isArray(parsed)) {
-                console.warn('Response is not a JSON array, falling back to bulleted list parsing. Response:', text);
-                return this.parseEnhancedBulletedList(text);
-            }
-            
-            // Validate and map each item
-            return parsed
-                .map((item, index) => {
-                    if (typeof item !== 'object' || item === null) {
-                        console.warn(`Item ${index} is not an object, skipping`);
-                        return null;
-                    }
-                    
-                    const title = typeof item.title === 'string' ? item.title.trim() : '';
-                    const description = typeof item.description === 'string' ? item.description.trim() : '';
-                    
-                    if (!title) {
-                        console.warn(`Item ${index} has no valid title, skipping`);
-                        return null;
-                    }
-                    
-                    return { title, description };
-                })
-                .filter((item): item is {title: string, description: string} => item !== null);
-                
-        } catch (error) {
-            console.warn('Failed to parse as JSON, falling back to bulleted list parsing. Error:', error, 'Response:', text);
-            return this.parseEnhancedBulletedList(text);
+        // Clean the text - remove any leading/trailing whitespace and non-JSON content
+        const cleanedText = text.trim();
+        
+        // Try to find JSON array in the response (in case there's extra text)
+        let jsonText = cleanedText;
+        const arrayStart = cleanedText.indexOf('[');
+        const arrayEnd = cleanedText.lastIndexOf(']');
+        
+        if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+            jsonText = cleanedText.substring(arrayStart, arrayEnd + 1);
         }
+        
+        // Parse the JSON - let errors bubble up
+        const parsed = JSON.parse(jsonText);
+        
+        // Validate that it's an array
+        if (!Array.isArray(parsed)) {
+            throw new Error(`Expected JSON array but got ${typeof parsed}. Response: ${text}`);
+        }
+        
+        // Validate and map each item
+        return parsed
+            .map((item, index) => {
+                if (typeof item !== 'object' || item === null) {
+                    console.warn(`Item ${index} is not an object, skipping`);
+                    return null;
+                }
+                
+                const title = typeof item.title === 'string' ? item.title.trim() : '';
+                const description = typeof item.description === 'string' ? item.description.trim() : '';
+                
+                if (!title) {
+                    console.warn(`Item ${index} has no valid title, skipping`);
+                    return null;
+                }
+                
+                return { title, description };
+            })
+            .filter((item): item is {title: string, description: string} => item !== null);
     }
 
     /**

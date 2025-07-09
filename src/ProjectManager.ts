@@ -27,6 +27,7 @@ type ProjectManagerEvents = {
     'node-selected': [node: DocumentNode | null];
     'nodeGenerationStarted': [e: { nodeId: string, node: DocumentNode }];
     'nodeGenerationComplete': [e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }];
+    'bulkGenerationComplete': [e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }];
     'nodeGenerationAborted': [e: { nodeId: string, node: DocumentNode }];
     'loop-progress': [e: { nodeId: string, progress: LoopProgress }];
     'high-level-progress': [e: { nodeId: string, message: string, current: number, total: number }];

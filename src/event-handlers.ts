@@ -1,7 +1,6 @@
 import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
-import { closeNewProjectModal, openTestModal, closeTestModal } from './ui/modal-manager';
+import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
-import { TestRunner } from './TestRunner';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
 import { DocumentNode } from './DocumentNode';
@@ -437,77 +436,7 @@ export async function initialize() {
         console.error('❌ Failed to attach settings button listener:', error);
     }
     
-    try {
-    getElementById('runTestsBtn').addEventListener('click', () => {
-        void (async () => {
-            const client = state.getOpenRouterClient();
-            if (!client) {
-                alert("API client not initialized. Cannot run tests.");
-                return;
-            }
-            
-            // Show test selection modal
-            const testSelectionHtml = `
-                <h2>Select Test Suite</h2>
-                <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
-                    <button id="runCoreTestsBtn" class="button button-primary button-lg">
-                        🧪 Core Functionality Tests
-                        <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
-                            Document nodes, project management, templates, tree operations
-                        </div>
-                    </button>
-                    <button id="runStorageTestsBtn" class="button button-primary button-lg">
-                        💾 Storage System Tests
-                        <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
-                            IndexedDB, storage abstraction, service layer storage
-                        </div>
-                    </button>
-                    <button id="runAllTestsBtn" class="button button-secondary button-lg">
-                        🚀 Run All Tests
-                        <div style="font-size: 0.875rem; opacity: 0.8; margin-top: 0.25rem;">
-                            Complete test suite (may take longer)
-                        </div>
-                    </button>
-                </div>
-            `;
-            
-            openTestModal(testSelectionHtml);
-            
-            // Add event listeners for test options
-            const runCoreTests = async () => {
-                const testRunner = new TestRunner(client);
-                const resultsHtml = await testRunner.runPhase1Tests();
-                openTestModal(resultsHtml);
-            };
-            
-            const runStorageTests = async () => {
-                const testRunner = new TestRunner(client);
-                const resultsHtml = await testRunner.runStorageTests();
-                openTestModal(resultsHtml);
-            };
-            
-            const runAllTests = async () => {
-                const testRunner = new TestRunner(client);
-                const coreResults = await testRunner.runPhase1Tests();
-                const storageResults = await testRunner.runStorageTests();
-                const combinedResults = `
-                    ${coreResults}
-                    <hr style="margin: 2rem 0;">
-                    ${storageResults}
-                `;
-                openTestModal(combinedResults);
-            };
-            
-            setTimeout(() => {
-                document.getElementById('runCoreTestsBtn')?.addEventListener('click', () => void runCoreTests());
-                document.getElementById('runStorageTestsBtn')?.addEventListener('click', () => void runStorageTests());
-                document.getElementById('runAllTestsBtn')?.addEventListener('click', () => void runAllTests());
-            }, 100);
-        })();
-    });
-    } catch (error) {
-        console.error('❌ Failed to attach run tests button listener:', error);
-    }
+
     
     try {
     getElementById('newProjectBtn').addEventListener('click', () => {

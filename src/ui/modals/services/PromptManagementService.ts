@@ -117,7 +117,7 @@ export class PromptManagementService {
         
         // Add header
         const header = createElement('p', {
-            content: 'Configure the templates used by AI agents. Changes are saved automatically.',
+            content: 'Configure the templates used by AI agents. Click on any prompt title to expand it. Changes are saved automatically.',
             attributes: {
                 style: 'color: #6b7280; font-size: 0.875rem; margin-bottom: 1rem;'
             }
@@ -144,14 +144,36 @@ export class PromptManagementService {
             classes: ['prompt-editor']
         });
 
-        // Label
-        const label = createElement('label', {
-            content: this.formatPromptName(promptKey),
+        // Create collapsible header
+        const header = createElement('div', {
+            classes: ['prompt-header'],
             attributes: {
-                for: `prompt-${promptKey}`
+                'data-prompt': promptKey
             }
         });
-        editorDiv.appendChild(label);
+
+        const title = createElement('span', {
+            content: this.formatPromptName(promptKey)
+        });
+
+        const toggle = createElement('span', {
+            classes: ['prompt-toggle'],
+            content: '▶'
+        });
+
+        header.appendChild(title);
+        header.appendChild(toggle);
+
+        // Create collapsible content
+        const content = createElement('div', {
+            classes: ['prompt-content'],
+            attributes: {
+                'data-prompt': promptKey
+            }
+        });
+        
+        // Ensure it's hidden by default
+        content.style.display = 'none';
 
         // Description
         if (this.config.showDescriptions) {
@@ -161,7 +183,7 @@ export class PromptManagementService {
                     classes: ['prompt-description'],
                     content: description
                 });
-                editorDiv.appendChild(descriptionEl);
+                content.appendChild(descriptionEl);
             }
         }
 
@@ -173,7 +195,7 @@ export class PromptManagementService {
                     classes: ['placeholders'],
                     innerHTML: `Available placeholders: ${placeholders.map(p => `<code>{{${p}}}</code>`).join(', ')}`
                 });
-                editorDiv.appendChild(placeholderText);
+                content.appendChild(placeholderText);
             }
         }
 
@@ -195,7 +217,29 @@ export class PromptManagementService {
         // Auto-resize on load
         setTimeout(() => autoResizeTextarea(textarea), 0);
 
-        editorDiv.appendChild(textarea);
+        content.appendChild(textarea);
+
+        // Add click handler to header
+        header.addEventListener('click', () => {
+            const isExpanded = content.style.display === 'block';
+            
+            if (isExpanded) {
+                // Collapse
+                content.style.display = 'none';
+                header.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+                toggle.textContent = '▶';
+            } else {
+                // Expand
+                content.style.display = 'block';
+                header.classList.add('expanded');
+                toggle.classList.add('expanded');
+                toggle.textContent = '▼';
+            }
+        });
+
+        editorDiv.appendChild(header);
+        editorDiv.appendChild(content);
         return editorDiv;
     }
 
@@ -227,13 +271,40 @@ export class PromptManagementService {
         const style = createElement('style', {
             innerHTML: `
                 .prompt-editor { 
-                    margin-bottom: 1.5rem; 
+                    margin-bottom: 1rem; 
+                    border: 1px solid #d1d5db; 
+                    border-radius: 8px; 
+                    overflow: hidden;
                 }
-                .prompt-editor label { 
-                    font-weight: 500; 
-                    display: block; 
-                    margin-bottom: 0.5rem; 
+                .prompt-header { 
+                    background-color: #f9fafb; 
+                    border-bottom: 1px solid #e5e7eb; 
+                    padding: 1rem; 
+                    cursor: pointer; 
+                    user-select: none;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-weight: 500;
+                    transition: background-color 0.2s;
                     color: #374151;
+                }
+                .prompt-header:hover { 
+                    background-color: #f3f4f6; 
+                }
+                .prompt-header.expanded { 
+                    background-color: #eff6ff; 
+                    border-color: #3b82f6;
+                }
+                .prompt-toggle { 
+                    font-size: 1.2rem; 
+                    transition: transform 0.2s; 
+                }
+                .prompt-toggle.expanded { 
+                    transform: rotate(90deg); 
+                }
+                .prompt-content { 
+                    padding: 1rem; 
                 }
                 .prompt-editor textarea { 
                     width: 100%; 
@@ -244,8 +315,9 @@ export class PromptManagementService {
                     border-radius: 8px;
                     resize: vertical;
                     line-height: 1.4;
-                    background-color: #f9fafb;
+                    background-color: #ffffff;
                     transition: border-color 0.2s, background-color 0.2s;
+                    margin-top: 0.5rem;
                 }
                 .prompt-editor textarea:focus {
                     outline: none;

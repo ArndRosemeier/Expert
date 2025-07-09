@@ -142,6 +142,8 @@ export class SingleTemplateEditor {
     }
 
     private handleAddLayer(): void {
+        // Update template with current input values before adding
+        this.updateTemplateFromInputs();
         this.template.hierarchyLevels.push('');
         this.renderHierarchyLevels();
         this.isDirty = true;
@@ -149,6 +151,8 @@ export class SingleTemplateEditor {
     }
 
     private handleRemoveLayer(index: number): void {
+        // Update template with current input values before removing
+        this.updateTemplateFromInputs();
         this.template.hierarchyLevels.splice(index, 1);
         this.renderHierarchyLevels();
         this.isDirty = true;
@@ -157,8 +161,27 @@ export class SingleTemplateEditor {
 
     private notifyChange(): void {
         if (this.onTemplateChange) {
+            // Update the internal template with current input values
+            this.updateTemplateFromInputs();
             const updatedTemplate = this.getTemplateFromUI();
             this.onTemplateChange(updatedTemplate);
+        }
+    }
+
+    private updateTemplateFromInputs(): void {
+        const nameInput = this.showNameField ? getElementById<HTMLInputElement>(`${this.containerId}-name`) : null;
+        const editor = getElementById(`${this.containerId}-hierarchy-editor`);
+        
+        if (nameInput && nameInput.value.trim()) {
+            this.template.name = nameInput.value.trim();
+        }
+        
+        if (editor) {
+            const currentLevels: string[] = [];
+            editor.querySelectorAll<HTMLInputElement>('.hierarchy-layer input').forEach(input => {
+                currentLevels.push(input.value);
+            });
+            this.template.hierarchyLevels = currentLevels;
         }
     }
 

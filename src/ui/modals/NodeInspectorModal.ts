@@ -438,6 +438,9 @@ export class NodeInspectorModal extends BaseModal {
             document.head.appendChild(styles);
         }
 
+        // Setup editor event listeners after container is created
+        setTimeout(() => this.setupEditorEventListeners(), 0);
+
         return container;
     }
 
@@ -564,17 +567,23 @@ export class NodeInspectorModal extends BaseModal {
             <div class="version-sections">
                 <div class="version-section">
                     <h4 class="section-title">Title</h4>
-                    <div class="section-content title-content">${this.escapeHtml(version.title || 'No title')}</div>
+                    <div class="section-content">
+                        <input type="text" class="title-editor" id="inspector-title-editor" value="${this.escapeHtml(version.title || '')}" placeholder="Enter title...">
+                    </div>
                 </div>
                 
                 <div class="version-section">
                     <h4 class="section-title">Content</h4>
-                    <pre class="section-content content-main">${this.escapeHtml(version.content || 'No content')}</pre>
+                    <div class="section-content">
+                        <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
+                    </div>
                 </div>
                 
                 <div class="version-section">
                     <h4 class="section-title">Context</h4>
-                    <pre class="section-content context-content">${this.escapeHtml(version.context || 'No context')}</pre>
+                    <div class="section-content">
+                        <textarea class="context-editor auto-resize" id="inspector-context-editor" placeholder="Enter context...">${this.escapeHtml(version.context || '')}</textarea>
+                    </div>
                 </div>
                 </div>
             `;
@@ -757,6 +766,117 @@ export class NodeInspectorModal extends BaseModal {
                 modalRoot.innerHTML = '';
                 modalRoot.appendChild(modalContent);
             }
+        }
+    }
+
+    private setupEditorEventListeners(): void {
+        if (!this.node) return;
+
+        const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
+        const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
+        const contextEditor = document.getElementById('inspector-context-editor') as HTMLTextAreaElement;
+
+        // Auto-resize textareas
+        this.setupAutoResize(contentEditor);
+        this.setupAutoResize(contextEditor);
+
+        // Title editor
+        if (titleEditor) {
+            titleEditor.addEventListener('input', () => {
+                this.saveTitle(titleEditor.value);
+            });
+        }
+
+        // Content editor
+        if (contentEditor) {
+            contentEditor.addEventListener('input', () => {
+                this.saveContent(contentEditor.value);
+            });
+        }
+
+        // Context editor
+        if (contextEditor) {
+            contextEditor.addEventListener('input', () => {
+                this.saveContext(contextEditor.value);
+            });
+        }
+    }
+
+    private setupAutoResize(textarea: HTMLTextAreaElement): void {
+        if (!textarea) return;
+
+        const resize = () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.max(100, textarea.scrollHeight) + 'px';
+        };
+
+        // Initial resize
+        resize();
+
+        // Resize on input
+        textarea.addEventListener('input', resize);
+
+        // Resize on window resize
+        window.addEventListener('resize', resize);
+    }
+
+    private saveTitle(newTitle: string): void {
+        if (!this.node) return;
+
+        try {
+            // Update the node title with proper tags
+            this.node.setTitleWithTags(newTitle, ['edited', 'title_edited']);
+            
+            // Debounced save
+            clearTimeout((this as any)._titleSaveTimeout);
+            (this as any)._titleSaveTimeout = setTimeout(async () => {
+                await this.persistNodeChanges();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to save title:', error);
+        }
+    }
+
+    private saveContent(newContent: string): void {
+        if (!this.node) return;
+
+        try {
+            // Update the node content with proper tags
+            this.node.setContentWithTags(newContent, ['edited', 'content_edited']);
+            
+            // Debounced save
+            clearTimeout((this as any)._contentSaveTimeout);
+            (this as any)._contentSaveTimeout = setTimeout(async () => {
+                await this.persistNodeChanges();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to save content:', error);
+        }
+    }
+
+    private saveContext(newContext: string): void {
+        if (!this.node) return;
+
+        try {
+            // Update the node context with proper tags
+            this.node.setContextWithTags(newContext, ['edited', 'context_edited']);
+            
+            // Propagate context to all descendants (like in main UI)
+            const propagateRecursively = (parentNode: DocumentNode) => {
+                for (const child of parentNode.children) {
+                    child.setContext(parentNode.context, 'master');
+                    propagateRecursively(child);
+                }
+            };
+            propagateRecursively(this.node);
+            
+            // Debounced save
+            clearTimeout((this as any)._contextSaveTimeout);
+            (this as any)._contextSaveTimeout = setTimeout(async () => {
+                await this.persistNodeChanges();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to save context:', error);
         }
     }
 
@@ -1154,6 +1274,51 @@ export class NodeInspectorModal extends BaseModal {
                 white-space: pre-wrap;
                 word-break: break-word;
                 margin: 0;
+            }
+            
+            .title-editor {
+                width: 100%;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: #111827;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 0.75rem;
+                font-family: inherit;
+                transition: border-color 0.2s ease;
+            }
+            
+            .title-editor:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            .content-editor, .context-editor {
+                width: 100%;
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 1rem;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+                font-size: 0.9em;
+                line-height: 1.5;
+                color: #374151;
+                resize: vertical;
+                transition: border-color 0.2s ease;
+                min-height: 100px;
+            }
+            
+            .content-editor:focus, .context-editor:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            .auto-resize {
+                overflow-y: hidden;
+                resize: none;
             }
             .content-main {
                 background: #f9fafb;

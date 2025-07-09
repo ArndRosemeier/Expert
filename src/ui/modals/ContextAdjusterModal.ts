@@ -3,18 +3,26 @@ import { ContextAdjusterService } from './services/ContextAdjusterService';
 import { ContextAnalysisResult, ContextIssue } from '../../types/ContextAdjusterTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { DiffTool } from '../../DiffTool';
+import { getContextItems, formatContextItems } from '../../ContextFormat';
 
 export class ContextAdjusterModal extends BaseModal {
     private contextAdjusterService: ContextAdjusterService | null = null;
     private analysisResult: ContextAnalysisResult | null = null;
     private targetNode: DocumentNode | null = null;
     private isLoading: boolean = false;
-    private fixedIssues: Map<number, { originalContext: string; fixedContext: string }> = new Map();
-    private appliedFixes: Set<number> = new Set();
-    private currentContext: string = ''; // Track the current context state
+    private removedItems: Set<number> = new Set();
 
     constructor() {
         super({ id: 'context-adjuster-modal' });
+    }
+
+    /**
+     * Renders the modal content - required by BaseModal
+     */
+    public render(): HTMLElement {
+        const container = document.createElement('div');
+        container.innerHTML = this.renderModalContent();
+        return container;
     }
 
     /**
@@ -24,8 +32,7 @@ export class ContextAdjusterModal extends BaseModal {
         this.targetNode = targetNode;
         this.isLoading = true;
         this.analysisResult = null;
-        this.fixedIssues.clear();
-        this.appliedFixes.clear();
+        this.removedItems.clear();
         
         this.open();
         
@@ -86,17 +93,10 @@ export class ContextAdjusterModal extends BaseModal {
         this.analysisResult = result;
         this.targetNode = targetNode;
         this.isLoading = false;
-        this.fixedIssues.clear();
-        this.appliedFixes.clear();
+        this.removedItems.clear();
         
         await this.open();
         this.setupEventListeners();
-    }
-
-    public render(): HTMLElement {
-        const modal = document.createElement('div');
-        modal.innerHTML = this.renderModalContent();
-        return modal;
     }
 
     private renderModalContent(): string {
@@ -120,20 +120,20 @@ export class ContextAdjusterModal extends BaseModal {
             <div class="loading-container">
                 <div class="loading-spinner"></div>
                 <h3>🔍 Analyzing Context...</h3>
-                <p>Examining inherited context from parent nodes to identify potential issues for subnode creation.</p>
+                <p>Examining inherited context items to identify potential issues for subnode creation.</p>
                 
                 <div class="analysis-steps">
                     <div class="step">
                         <span class="step-icon">📋</span>
-                        <span class="step-text">Collecting inherited context from parent chain</span>
+                        <span class="step-text">Breaking context into numbered items</span>
                     </div>
                     <div class="step">
                         <span class="step-icon">🔍</span>
-                        <span class="step-text">Analyzing context for potential issues</span>
+                        <span class="step-text">Analyzing each context item for potential issues</span>
                     </div>
                     <div class="step">
                         <span class="step-icon">📊</span>
-                        <span class="step-text">Identifying problematic items</span>
+                        <span class="step-text">Identifying problematic items with severity ratings</span>
                     </div>
                 </div>
             </div>
@@ -151,27 +151,105 @@ export class ContextAdjusterModal extends BaseModal {
         if (!this.analysisResult.hasIssues) {
             return `
                 ${contextMismatchWarning}
-                <div class="no-issues-message">
-                    <h3>✅ Context Analysis Complete</h3>
-                    <p>No problematic context items were found. The inherited context appears suitable for creating subnodes.</p>
+                <div class="no-issues-message" style="
+                    text-align: center;
+                    padding: 2rem;
+                    background: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    margin: 1rem 0;
+                ">
+                    <h3 style="
+                        color: #28a745;
+                        font-size: 1.2rem;
+                        margin: 0 0 1rem 0;
+                    ">✅ Context Analysis Complete</h3>
+                    <p style="
+                        color: #6c757d;
+                        margin: 0 0 1.5rem 0;
+                        line-height: 1.5;
+                    ">No problematic context items were found. The inherited context appears suitable for creating subnodes.</p>
                     
-                    <div class="context-summary">
-                        <h4>📋 Current Inherited Context:</h4>
-                        <div class="code-block">${this.formatText(this.analysisResult.originalContext || 'No inherited context')}</div>
+                    <div class="context-summary" style="
+                        background: #ffffff;
+                        border: 1px solid #e9ecef;
+                        border-radius: 6px;
+                        padding: 1rem;
+                        margin: 0 auto;
+                        max-width: 600px;
+                    ">
+                        <h4 style="
+                            color: #495057;
+                            font-size: 1rem;
+                            margin: 0 0 0.75rem 0;
+                        ">📋 Current Context Items:</h4>
+                        <div class="code-block" style="
+                            background: #f8f9fa;
+                            border: 1px solid #e9ecef;
+                            border-radius: 4px;
+                            padding: 0.75rem;
+                            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                            font-size: 0.85rem;
+                            line-height: 1.4;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            text-align: left;
+                            max-height: 300px;
+                            overflow-y: auto;
+                        ">${this.formatContextItems(this.analysisResult.originalContext || 'No context available')}</div>
                     </div>
                 </div>
             `;
         }
 
+        // Sort issues by severity (highest first)
+        const sortedIssues = [...this.analysisResult.issues].sort((a, b) => b.severity - a.severity);
+
         return `
             ${contextMismatchWarning}
-            <div class="analysis-results">
-                <h3>🎯 Context Analysis Results</h3>
-                <p>Found ${this.analysisResult.issues.length} potential issue(s) in the inherited context that might confuse subnode creation.</p>
+            <div class="analysis-results" style="
+                margin: 1rem 0;
+            ">
+                <div style="
+                    background: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    padding: 1.5rem;
+                    margin-bottom: 1.5rem;
+                ">
+                    <div style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 0.75rem;
+                    ">
+                        <h3 style="
+                            color: #495057;
+                            font-size: 1.2rem;
+                            margin: 0;
+                        ">🎯 Context Analysis Results</h3>
+                        <button class="button button-danger remove-all-btn" style="
+                            padding: 0.5rem 1rem;
+                            font-size: 0.9rem;
+                            border-radius: 6px;
+                            font-weight: 500;
+                        ">
+                            🗑️ Remove All
+                        </button>
+                    </div>
+                    <p style="
+                        color: #6c757d;
+                        margin: 0;
+                        line-height: 1.5;
+                        text-align: center;
+                    ">Found ${sortedIssues.length} potential issue(s) in the inherited context. Issues are sorted by severity (highest first).</p>
+                </div>
                 
                 <div class="issues-container">
-                    ${this.renderIssues(this.analysisResult.issues)}
+                    ${sortedIssues.map((issue, index) => this.renderIssueItem(issue, index)).join('')}
                 </div>
+                
+                ${this.removedItems.size > 0 ? this.renderApplyChangesSection() : ''}
             </div>
         `;
     }
@@ -201,512 +279,358 @@ export class ContextAdjusterModal extends BaseModal {
         `;
     }
 
-    private renderIssues(issues: ContextIssue[]): string {
-        return issues.map((issue, index) => `
-            <div class="issue-item" data-issue-index="${index}">
-                <div class="issue-header">
-                    <div class="severity-indicator ${issue.severity}">
-                        ${this.getSeverityIcon(issue.severity)} ${issue.severity.toUpperCase()}
+    private renderIssueItem(issue: ContextIssue, index: number): string {
+        const severityColor = this.getSeverityColor(issue.severity);
+        const isRemoved = this.removedItems.has(issue.item_number);
+
+        return `
+            <div class="issue-item${isRemoved ? ' removed' : ''}" data-issue-index="${index}" data-item-number="${issue.item_number}" style="
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                background: ${isRemoved ? '#f8f9fa' : '#ffffff'};
+                opacity: ${isRemoved ? '0.6' : '1'};
+                transition: all 0.3s ease;
+            ">
+                <div class="issue-header" style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.75rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 1px solid #f0f0f0;
+                ">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span class="issue-number" style="
+                            font-weight: 600;
+                            color: #495057;
+                            font-size: 0.9rem;
+                        ">Item #${issue.item_number}</span>
+                        <span class="severity-badge" style="
+                            background-color: ${severityColor};
+                            color: white;
+                            padding: 0.25rem 0.5rem;
+                            border-radius: 4px;
+                            font-size: 0.8rem;
+                            font-weight: 500;
+                        ">
+                            Severity ${issue.severity}/10
+                        </span>
+                    </div>
+                    
+                    <div class="issue-actions">
+                        ${isRemoved ? `
+                            <button class="button button-secondary undo-remove-btn" data-item-number="${issue.item_number}" style="
+                                padding: 0.4rem 0.8rem;
+                                font-size: 0.85rem;
+                                border-radius: 4px;
+                            ">
+                                ↶ Undo
+                            </button>
+                        ` : `
+                            <button class="button button-danger remove-item-btn" data-item-number="${issue.item_number}" style="
+                                padding: 0.4rem 0.8rem;
+                                font-size: 0.85rem;
+                                border-radius: 4px;
+                            ">
+                                🗑️ Remove
+                            </button>
+                        `}
                     </div>
                 </div>
                 
                 <div class="issue-content">
-                    <div class="problematic-item">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <strong>Problematic Context Item:</strong>
-                            <button class="fix-btn button button-warning" data-issue-index="${index}">
-                                🔧 Generate Fix
-                            </button>
-                        </div>
-                        <div class="code-block problematic">${this.formatText(issue.problematic_context_item)}</div>
+                    <div class="problematic-text" style="margin-bottom: 0.75rem;">
+                        <strong style="color: #495057; font-size: 0.9rem;">Problematic Text:</strong>
+                        <div class="code-block" style="
+                            background: #f8f9fa;
+                            border: 1px solid #e9ecef;
+                            border-radius: 4px;
+                            padding: 0.75rem;
+                            margin-top: 0.5rem;
+                            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                            font-size: 0.85rem;
+                            line-height: 1.4;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        ">${this.escapeHtml(issue.problematic_context_item)}</div>
                     </div>
                     
-                    <div class="problem-reason">
-                        <strong>Problem:</strong> ${this.escapeHtml(issue.reason_for_problem)}
+                    <div class="issue-reason" style="margin-bottom: 0.75rem;">
+                        <strong style="color: #495057; font-size: 0.9rem;">Problem:</strong> 
+                        <span style="color: #6c757d; line-height: 1.5;">${this.escapeHtml(issue.reason_for_problem)}</span>
                     </div>
                     
-                    <div class="justification">
-                        <strong>Why This Matters:</strong> ${this.escapeHtml(issue.justification)}
+                    <div class="issue-justification">
+                        <strong style="color: #495057; font-size: 0.9rem;">Justification:</strong> 
+                        <span style="color: #6c757d; line-height: 1.5;">${this.escapeHtml(issue.justification)}</span>
                     </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    private renderBeforeAfterComparison(index: number, fixData: { originalContext: string; fixedContext: string }, isApplied: boolean = false): string {
-        const diffResult = DiffTool.compare(fixData.originalContext, fixData.fixedContext);
-        const diffSummary = DiffTool.getSummary(diffResult);
-        
-        // Format the diff results to preserve line breaks and paragraphs
-        const formattedOriginal = this.formatDiffHtml(diffResult.originalHtml);
-        const formattedModified = this.formatDiffHtml(diffResult.modifiedHtml);
-        
-        return `
-            <div class="before-after-section">
-                <h4>📝 Proposed Context Fix</h4>
-                
-                <div class="diff-container">
-                    <p class="diff-stats">Changes: ${diffSummary}</p>
-                    <div class="diff-before">
-                        <h5>Before:</h5>
-                        <div class="code-block">${formattedOriginal}</div>
-                    </div>
-                    <div class="diff-after">
-                        <h5>After:</h5>
-                        <div class="code-block">${formattedModified}</div>
-                    </div>
-                </div>
-                
-                <div class="fix-actions">
-                    ${isApplied ? 
-                        '<span class="applied-indicator">✅ Fix has been applied to node context</span>' :
-                        `<button class="apply-fix-btn button button-success" data-issue-index="${index}">
-                            ✅ Apply Fix
-                        </button>
-                        <button class="reject-fix-btn button button-danger" data-issue-index="${index}">
-                            ❌ Reject Fix
-                        </button>`
-                    }
                 </div>
             </div>
         `;
     }
 
-    private getSeverityIcon(severity: string): string {
-        switch (severity) {
-            case 'high': return '🔴';
-            case 'medium': return '🟡';
-            case 'low': return '🟢';
-            default: return '🟡';
+    private renderApplyChangesSection(): string {
+        return `
+            <div class="apply-changes-section" style="
+                border: 2px solid #e3f2fd;
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin-top: 1.5rem;
+                background: #f8f9fa;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+                <h4 style="
+                    margin: 0 0 0.75rem 0;
+                    color: #495057;
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                ">📝 Apply Changes</h4>
+                <p style="
+                    margin: 0 0 1rem 0;
+                    color: #6c757d;
+                    line-height: 1.5;
+                ">You have marked ${this.removedItems.size} item(s) for removal. Click "Apply Changes" to update the context.</p>
+                
+                <div class="action-buttons" style="
+                    display: flex;
+                    gap: 0.75rem;
+                    align-items: center;
+                ">
+                    <button class="button button-primary apply-changes-btn" style="
+                        padding: 0.6rem 1.2rem;
+                        font-size: 0.9rem;
+                        font-weight: 500;
+                        border-radius: 6px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        ✅ Apply Changes
+                    </button>
+                    <button class="button button-secondary reset-changes-btn" style="
+                        padding: 0.6rem 1.2rem;
+                        font-size: 0.9rem;
+                        font-weight: 500;
+                        border-radius: 6px;
+                    ">
+                        ↶ Reset All
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    private getSeverityColor(severity: number): string {
+        if (severity >= 8) return '#dc3545'; // Red for high severity
+        if (severity >= 6) return '#fd7e14'; // Orange for medium-high
+        if (severity >= 4) return '#ffc107'; // Yellow for medium
+        return '#28a745'; // Green for low severity
+    }
+
+    private formatContextItems(context: string): string {
+        const items = getContextItems(context);
+        if (items.length === 0) {
+            return 'No context items available';
+        }
+        
+        return items.map((item, index) => 
+            `${index + 1}. ${this.escapeHtml(item)}`
+        ).join('\n\n');
+    }
+
+    /**
+     * Remove a context item
+     */
+    removeItem(itemNumber: number): void {
+        this.removedItems.add(itemNumber);
+        this.refreshContent();
+    }
+
+    /**
+     * Remove all context items
+     */
+    removeAllItems(): void {
+        if (!this.analysisResult || !this.analysisResult.hasIssues) return;
+        
+        // Add all issue item numbers to removedItems
+        this.analysisResult.issues.forEach(issue => {
+            this.removedItems.add(issue.item_number);
+        });
+        
+        this.refreshContent();
+    }
+
+    /**
+     * Undo removal of a context item
+     */
+    undoRemoveItem(itemNumber: number): void {
+        this.removedItems.delete(itemNumber);
+        this.refreshContent();
+    }
+
+    /**
+     * Apply all changes to the context
+     */
+    async applyChanges(): Promise<void> {
+        if (!this.targetNode || this.removedItems.size === 0) return;
+
+        try {
+            // Show loading state
+            const applyButton = document.querySelector('.apply-changes-btn') as HTMLButtonElement;
+            if (applyButton) {
+                applyButton.disabled = true;
+                applyButton.textContent = '🔄 Applying...';
+            }
+
+            const contextItems = getContextItems(this.targetNode.context || '');
+            
+            // Remove items (convert to 0-based indexing)
+            const filteredItems = contextItems.filter((_, index) => 
+                !this.removedItems.has(index + 1)
+            );
+            
+            // Create the new context
+            const newContext = formatContextItems(filteredItems);
+            
+            // Update the node's context using the proper method
+            this.targetNode.setContextWithTags(newContext, ['edited', 'context_edited']);
+            
+            // Propagate context to all descendants (like in project-ui.ts)
+            const propagateRecursively = (parentNode: DocumentNode) => {
+                for (const child of parentNode.children) {
+                    child.setContext(parentNode.context, 'master');
+                    propagateRecursively(child);
+                }
+            };
+            propagateRecursively(this.targetNode);
+            
+            // Update the context textarea in the main UI immediately
+            const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+            if (contextTextArea) {
+                contextTextArea.value = newContext;
+            }
+            
+            // Update the context items count display in main UI
+            const contextLabel = document.querySelector('label[for="node-context"]');
+            if (contextLabel) {
+                const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
+                if (contextInfoSpan) {
+                    const { getContextItemCount } = await import('../../ContextFormat');
+                    const itemCount = getContextItemCount(newContext);
+                    contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
+                }
+            }
+            
+            // Trigger project save
+            const { getActiveProject } = await import('../../state');
+            const projectManager = getActiveProject()!;
+            await projectManager.saveToStorage();
+            
+            // Trigger UI refresh to ensure all changes are reflected
+            try {
+                const { renderNodeDetails } = await import('../project-ui');
+                renderNodeDetails();
+            } catch (uiError) {
+                console.warn('⚠️ ContextAdjuster: Failed to refresh main UI:', uiError);
+            }
+            
+            // Show success message
+            alert(`Successfully removed ${this.removedItems.size} context item(s).`);
+            
+            // Reset and close
+            this.removedItems.clear();
+            this.close();
+            
+        } catch (error) {
+            console.error('Failed to apply changes:', error);
+            alert('Failed to apply changes. Please try again.');
+            
+            // Reset button state
+            const applyButton = document.querySelector('.apply-changes-btn') as HTMLButtonElement;
+            if (applyButton) {
+                applyButton.disabled = false;
+                applyButton.textContent = '✅ Apply Changes';
+            }
+        }
+    }
+
+    /**
+     * Reset all changes
+     */
+    resetChanges(): void {
+        this.removedItems.clear();
+        this.refreshContent();
+    }
+
+    /**
+     * Refresh the modal content
+     */
+    private refreshContent(): void {
+        const contentDiv = document.getElementById('context-adjuster-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = this.renderAnalysisContent();
+            // Setup event listeners after content is updated
+            this.setupEventListeners();
         }
     }
 
     private renderFooter(): string {
         return `
-            <div style="margin-top: 1.5rem;">
-                <button id="copy-context-results" class="button button-primary">
-                    📋 Copy Results
+            <div class="button-group">
+                <button class="button button-secondary" onclick="this.getRootNode().host.close()">
+                    Close
                 </button>
             </div>
         `;
     }
 
     private setupEventListeners(): void {
-        // Fix It buttons
-        const fixButtons = document.querySelectorAll('.fix-btn');
-        fixButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const button = e.target as HTMLButtonElement;
-                const issueIndex = parseInt(button.dataset['issueIndex'] || '0');
-                await this.handleFixIssue(issueIndex, button);
+        // Remove item buttons
+        const removeButtons = document.querySelectorAll('.remove-item-btn');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const itemNumber = parseInt((e.target as HTMLElement).getAttribute('data-item-number') || '0');
+                this.removeItem(itemNumber);
             });
         });
 
-        // Copy results button
-        const copyBtn = document.getElementById('copy-context-results');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => this.copyToClipboard());
-        }
-    }
-
-    /**
-     * Copy results to clipboard
-     */
-    private async copyToClipboard(): Promise<void> {
-        try {
-            const text = this.generateClipboardText();
-            await navigator.clipboard.writeText(text);
-            
-            // Show success feedback
-            const copyBtn = document.getElementById('copy-context-results');
-            if (copyBtn) {
-                const originalText = copyBtn.textContent;
-                copyBtn.textContent = '✅ Copied!';
-                setTimeout(() => {
-                    copyBtn.textContent = originalText;
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Failed to copy to clipboard:', error);
-            alert('Failed to copy to clipboard. Please try again.');
-        }
-    }
-
-    /**
-     * Generate clipboard text
-     */
-    private generateClipboardText(): string {
-        if (!this.analysisResult) return '';
-
-        const lines = [
-            '🎯 CONTEXT ADJUSTER ANALYSIS RESULTS',
-            '=' .repeat(50),
-            '',
-            `Node: ${this.targetNode?.title || 'Untitled'}`,
-            `Analysis Date: ${this.analysisResult.analysisTimestamp.toLocaleString()}`,
-            `Issues Found: ${this.analysisResult.issues.length}`,
-            ''
-        ];
-
-        if (this.analysisResult.hasIssues) {
-            this.analysisResult.issues.forEach((issue, index) => {
-                lines.push(`ISSUE #${index + 1} [${issue.severity.toUpperCase()}]`);
-                lines.push('-'.repeat(30));
-                lines.push(`Problematic Item: "${issue.problematic_context_item}"`);
-                lines.push(`Problem: ${issue.reason_for_problem}`);
-                lines.push(`Justification: ${issue.justification}`);
-                lines.push('');
+        // Remove all button
+        const removeAllButton = document.querySelector('.remove-all-btn');
+        if (removeAllButton) {
+            removeAllButton.addEventListener('click', () => {
+                this.removeAllItems();
             });
-        } else {
-            lines.push('✅ No context issues found.');
         }
 
-        return lines.join('\n');
-    }
-
-    /**
-     * Update a specific issue item to show the before/after comparison
-     */
-    private updateIssueItem(issueIndex: number): void {
-        if (!this.analysisResult) return;
-        
-        const issue = this.analysisResult.issues[issueIndex];
-        const fixData = this.fixedIssues.get(issueIndex);
-        
-        if (!issue || !fixData) return;
-        
-        // Find the issue item in the DOM
-        const issueItem = document.querySelector(`[data-issue-index="${issueIndex}"]`);
-        if (!issueItem) return;
-        
-        // Check if before/after section already exists
-        const existingBeforeAfter = issueItem.querySelector('.before-after-section');
-        if (existingBeforeAfter) {
-            existingBeforeAfter.remove();
-        }
-        
-        // Add the before/after comparison
-        const isApplied = this.appliedFixes.has(issueIndex);
-        const beforeAfterHtml = this.renderBeforeAfterComparison(issueIndex, fixData, isApplied);
-        issueItem.insertAdjacentHTML('beforeend', beforeAfterHtml);
-        
-        // Setup event listeners for the new action buttons
-        this.setupFixActionListeners();
-        
-        // Update the button state only if applied
-        if (isApplied) {
-            const button = issueItem.querySelector('.fix-btn') as HTMLButtonElement;
-            if (button) {
-                button.textContent = '✅ Applied!';
-                button.classList.remove('button-warning', 'button-secondary');
-                button.classList.add('button-success');
-                button.disabled = true;
-            }
-        }
-    }
-
-    /**
-     * Setup event listeners for apply/reject fix buttons
-     */
-    private setupFixActionListeners(): void {
-        // Apply fix buttons
-        const applyButtons = document.querySelectorAll('.apply-fix-btn');
-        applyButtons.forEach(btn => {
-            // Remove existing listeners to avoid duplicates
-            const newBtn = btn.cloneNode(true) as HTMLButtonElement;
-            btn.parentNode?.replaceChild(newBtn, btn);
-            
-            newBtn.addEventListener('click', async (e) => {
-                const button = e.target as HTMLButtonElement;
-                const issueIndex = parseInt(button.dataset['issueIndex'] || '0');
-                await this.applyFix(issueIndex, button);
+        // Undo remove buttons
+        const undoButtons = document.querySelectorAll('.undo-remove-btn');
+        undoButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const itemNumber = parseInt((e.target as HTMLElement).getAttribute('data-item-number') || '0');
+                this.undoRemoveItem(itemNumber);
             });
         });
 
-        // Reject fix buttons
-        const rejectButtons = document.querySelectorAll('.reject-fix-btn');
-        rejectButtons.forEach(btn => {
-            // Remove existing listeners to avoid duplicates
-            const newBtn = btn.cloneNode(true) as HTMLButtonElement;
-            btn.parentNode?.replaceChild(newBtn, btn);
-            
-            newBtn.addEventListener('click', (e) => {
-                const button = e.target as HTMLButtonElement;
-                const issueIndex = parseInt(button.dataset['issueIndex'] || '0');
-                this.rejectFix(issueIndex);
+        // Apply changes button
+        const applyButton = document.querySelector('.apply-changes-btn');
+        if (applyButton) {
+            applyButton.addEventListener('click', async () => {
+                await this.applyChanges();
             });
-        });
-    }
-
-    /**
-     * Get the current context that should be used as base for fixes
-     */
-    private getCurrentContextForFix(): string {
-        // If we have applied fixes, use the current node context
-        // Otherwise use the original context from analysis
-        if (this.appliedFixes.size > 0 && this.targetNode) {
-            return this.targetNode.context || '';
         }
-        return this.analysisResult?.originalContext || '';
-    }
 
-    /**
-     * Handle fixing a context issue
-     */
-    private async handleFixIssue(issueIndex: number, button: HTMLButtonElement): Promise<void> {
-        if (!this.analysisResult || !this.targetNode) return;
-
-        const issue = this.analysisResult.issues[issueIndex];
-        if (!issue) return;
-
-        // Show loading state
-        const originalText = button.textContent;
-        button.textContent = '🔄 Generating Fix...';
-        button.disabled = true;
-
-        try {
-            const { getOpenRouterClient, getSettingsManager } = await import('../../state');
-            const contextAdjusterService = new ContextAdjusterService(
-                getOpenRouterClient()!,
-                getSettingsManager()!
-            );
-            
-            // Use current context state as base for fix
-            const currentContextForFix = this.getCurrentContextForFix();
-            
-            const fixedContext = await contextAdjusterService.fixContextIssue(
-                this.targetNode,
-                issue,
-                currentContextForFix
-            );
-
-            // Store the fix data
-            this.fixedIssues.set(issueIndex, {
-                originalContext: currentContextForFix,
-                fixedContext: fixedContext
+        // Reset changes button
+        const resetButton = document.querySelector('.reset-changes-btn');
+        if (resetButton) {
+            resetButton.addEventListener('click', () => {
+                this.resetChanges();
             });
-
-            // Update the UI to show the before/after comparison
-            this.updateIssueItem(issueIndex);
-
-            // Reset button state
-            button.textContent = '🔧 Fix Generated!';
-            button.classList.remove('button-warning');
-            button.classList.add('button-secondary');
-            button.disabled = true;
-
-        } catch (error) {
-            console.error('Failed to generate fix:', error);
-            button.textContent = '❌ Fix Failed';
-            button.classList.remove('button-warning');
-            button.classList.add('button-danger');
-            
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.classList.remove('button-danger');
-                button.classList.add('button-warning');
-                button.disabled = false;
-            }, 3000);
-            
-            alert('Failed to generate fix. Please try again.');
         }
-    }
-
-    /**
-     * Apply a proposed fix to the target node
-     */
-    private async applyFix(issueIndex: number, button: HTMLButtonElement): Promise<void> {
-        if (!this.analysisResult || !this.targetNode) return;
-
-        const issue = this.analysisResult.issues[issueIndex];
-        const fixData = this.fixedIssues.get(issueIndex);
-        
-        if (!issue || !fixData) return;
-
-        // Show loading state
-        const originalText = button.textContent;
-        button.textContent = '🔄 Applying...';
-        button.disabled = true;
-
-        try {
-            // Apply the fix to the target node context
-            this.targetNode.setContextWithTags(fixData.fixedContext, ['edited', 'context_edited']);
-            
-            // Mark this fix as applied
-            this.appliedFixes.add(issueIndex);
-            
-            // Show success feedback
-            button.textContent = '✅ Applied!';
-            button.classList.remove('button-success');
-            button.classList.add('button-success');
-            button.disabled = true;
-            
-            // Update the issue item to show it's been applied
-            this.updateIssueItem(issueIndex);
-            
-            console.log('✅ Applied context fix to node:', this.targetNode.title);
-            
-            // Save the project after applying the fix
-            try {
-                const { getActiveProject } = await import('../../state');
-                const activeProject = getActiveProject();
-                if (activeProject) {
-                    await activeProject.saveToStorage();
-                    console.log('✅ Project saved after applying context fix');
-                } else {
-                    console.warn('⚠️ No active project found to save after applying fix');
-                }
-            } catch (saveError) {
-                console.warn('⚠️ Failed to save project after applying fix:', saveError);
-                // Don't fail the fix application if save fails
-            }
-            
-        } catch (error) {
-            console.error('Failed to apply fix:', error);
-            button.textContent = '❌ Apply Failed';
-            button.classList.remove('button-success');
-            button.classList.add('button-danger');
-            
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.classList.remove('button-danger');
-                button.classList.add('button-success');
-                button.disabled = false;
-            }, 3000);
-            
-            alert('Failed to apply fix. Please try again.');
-        }
-    }
-
-    /**
-     * Reject a proposed fix and invalidate subsequent fixes
-     */
-    private rejectFix(issueIndex: number): void {
-        // Remove the proposed fix
-        this.fixedIssues.delete(issueIndex);
-        
-        // If this fix was applied, we need to invalidate subsequent fixes
-        // because they were based on a context state that included this fix
-        if (this.appliedFixes.has(issueIndex)) {
-            this.invalidateSubsequentFixes(issueIndex);
-        }
-        
-        // Find and remove the before/after section
-        const issueItem = document.querySelector(`[data-issue-index="${issueIndex}"]`);
-        if (issueItem) {
-            const beforeAfterSection = issueItem.querySelector('.before-after-section');
-            if (beforeAfterSection) {
-                beforeAfterSection.remove();
-            }
-            
-            // Reset the fix button
-            const fixButton = issueItem.querySelector('.fix-btn') as HTMLButtonElement;
-            if (fixButton) {
-                fixButton.textContent = '🔧 Generate Fix';
-                fixButton.classList.remove('button-secondary', 'button-success');
-                fixButton.classList.add('button-warning');
-                fixButton.disabled = false;
-            }
-        }
-        
-        console.log('Rejected proposed fix for issue:', issueIndex);
-    }
-
-    /**
-     * Invalidate fixes that were generated after a rejected applied fix
-     */
-    private invalidateSubsequentFixes(rejectedIssueIndex: number): void {
-        if (!this.analysisResult) return;
-
-        // Get all issue indices that come after the rejected one
-        const subsequentIndices = [];
-        for (let i = rejectedIssueIndex + 1; i < this.analysisResult.issues.length; i++) {
-            if (this.fixedIssues.has(i) && !this.appliedFixes.has(i)) {
-                subsequentIndices.push(i);
-            }
-        }
-
-        // Remove subsequent fixes and reset their UI
-        subsequentIndices.forEach(index => {
-            this.fixedIssues.delete(index);
-            
-            const issueItem = document.querySelector(`[data-issue-index="${index}"]`);
-            if (issueItem) {
-                const beforeAfterSection = issueItem.querySelector('.before-after-section');
-                if (beforeAfterSection) {
-                    beforeAfterSection.remove();
-                }
-                
-                const fixButton = issueItem.querySelector('.fix-btn') as HTMLButtonElement;
-                if (fixButton) {
-                    fixButton.textContent = '🔧 Generate Fix';
-                    fixButton.classList.remove('button-secondary', 'button-success');
-                    fixButton.classList.add('button-warning');
-                    fixButton.disabled = false;
-                }
-            }
-        });
-
-        if (subsequentIndices.length > 0) {
-            console.log(`Invalidated ${subsequentIndices.length} subsequent fixes due to rejection of fix ${rejectedIssueIndex}`);
-        }
-    }
-
-    override async close(): Promise<void> {
-        // Reset state
-        this.analysisResult = null;
-        this.targetNode = null;
-        this.isLoading = false;
-        this.fixedIssues.clear();
-        this.appliedFixes.clear();
-        this.currentContext = '';
-        
-        super.close();
     }
 
     private escapeHtml(text: string): string {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
-
-    /**
-     * Format text preserving line breaks and paragraphs
-     */
-    private formatText(text: string): string {
-        if (!text) return '';
-        
-        // First escape HTML to prevent XSS
-        const escaped = this.escapeHtml(text);
-        
-        // Convert line breaks to <br> tags and double line breaks to paragraphs
-        return escaped
-            .split('\n\n')  // Split on double line breaks (paragraphs)
-            .map(paragraph => paragraph.trim())
-            .filter(paragraph => paragraph.length > 0)
-            .map(paragraph => {
-                // Convert single line breaks within paragraphs to <br>
-                const withBreaks = paragraph.replace(/\n/g, '<br>');
-                return `<p>${withBreaks}</p>`;
-            })
-            .join('');
-    }
-
-    /**
-     * Format diff HTML that already contains spans with background colors
-     * while preserving line breaks and paragraphs
-     */
-    private formatDiffHtml(diffHtml: string): string {
-        if (!diffHtml) return '';
-        
-        // The diff HTML already contains escaped text with spans for highlighting
-        // We need to convert line breaks to <br> tags while preserving the spans
-        return diffHtml
-            .replace(/\n\n/g, '</p><p>')  // Convert double line breaks to paragraph breaks
-            .replace(/\n/g, '<br>')       // Convert single line breaks to <br>
-            .replace(/^/, '<p>')          // Add opening paragraph tag at start
-            .replace(/$/, '</p>')         // Add closing paragraph tag at end
-            .replace(/<p><\/p>/g, '')     // Remove empty paragraphs
-            .replace(/<p>\s*<\/p>/g, ''); // Remove paragraphs with only whitespace
     }
 } 

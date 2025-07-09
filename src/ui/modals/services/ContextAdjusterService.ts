@@ -3,6 +3,7 @@ import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode } from '../../../DocumentNode';
 import { ContextAnalysisRequest, ContextAnalysisResult, ContextIssue } from '../../../types/ContextAdjusterTypes';
 import { ProjectManager } from '../../../ProjectManager';
+import { getContextItems } from '../../../ContextFormat';
 
 export class ContextAdjusterService {
     private openRouterClient: OpenRouterClient;
@@ -81,13 +82,18 @@ export class ContextAdjusterService {
         const request = this.prepareAnalysisRequest(node, projectManager);
         const contextCheck = this.checkContextMismatch(node, projectManager);
         
+        // Format context items as numbered list
+        const contextItems = getContextItems(node.context || '');
+        const numberedContextItems = contextItems.length > 0 
+            ? contextItems.map((item, index) => `${index + 1}: ${item}`).join('\n\n')
+            : 'No context items available';
+        
         // Create analysis prompt
         const prompts = this.settingsManager.getPrompts();
         const analysisPrompt = prompts.context_analysis
             .replace(/\{\{node_title\}\}/g, request.nodeTitle)
             .replace(/\{\{node_content\}\}/g, request.nodeContent)
-            .replace(/\{\{context\}\}/g, node.context || '')
-            .replace(/\{\{parent_context\}\}/g, request.parentContext)
+            .replace(/\{\{numbered_context_items\}\}/g, numberedContextItems)
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
@@ -110,8 +116,6 @@ export class ContextAdjusterService {
             throw new Error('Failed to analyze context. Please try again.');
         }
     }
-
-
 
     /**
      * Parse AI response and extract context issues
@@ -136,16 +140,42 @@ export class ContextAdjusterService {
                     throw new Error(`Invalid context issue at index ${index}`);
                 }
 
+                // Handle possible field name variations for AI typos
+                const problematicItem = item.problematic_context_item || 
+                                      item.problem_context_item || 
+                                      item.problematic_item || 
+                                      item.context_item || 
+                                      '';
+
+                const reasonForProblem = item.reason_for_problem || 
+                                       item.problem_reason || 
+                                       item.reason || 
+                                       '';
+
+                const justification = item.justification || 
+                                    item.explanation || 
+                                    item.details || 
+                                    '';
+
                 const issue: ContextIssue = {
-                    problematic_context_item: String(item.problematic_context_item || '').trim(),
-                    reason_for_problem: String(item.reason_for_problem || '').trim(),
-                    justification: String(item.justification || '').trim(),
-                    severity: item.severity === 'high' || item.severity === 'medium' || item.severity === 'low' 
-                        ? item.severity 
-                        : 'medium'
+                    item_number: Number(item.item_number) || Number(item.number) || 0,
+                    problematic_context_item: String(problematicItem).trim(),
+                    reason_for_problem: String(reasonForProblem).trim(),
+                    justification: String(justification).trim(),
+                    severity: Number(item.severity) || 1
                 };
 
+                // Validate severity is between 1-10
+                if (issue.severity < 1 || issue.severity > 10) {
+                    issue.severity = Math.max(1, Math.min(10, issue.severity));
+                }
+
+                // Check if we have the essential fields (allow for AI typos)
                 if (!issue.problematic_context_item || !issue.reason_for_problem || !issue.justification) {
+                    console.warn(`Missing required fields in context issue at index ${index}:`, {
+                        originalItem: item,
+                        parsedIssue: issue
+                    });
                     throw new Error(`Missing required fields in context issue at index ${index}`);
                 }
 

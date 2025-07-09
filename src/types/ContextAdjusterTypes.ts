@@ -1,8 +1,9 @@
 export interface ContextIssue {
+    item_number: number;
     problematic_context_item: string;
     reason_for_problem: string;
     justification: string;
-    severity: 'high' | 'medium' | 'low';
+    severity: number; // 1-10, where 10 is most severe
 }
 
 export interface ContextAnalysisResult {

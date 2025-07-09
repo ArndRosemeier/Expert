@@ -58,6 +58,9 @@ export interface OrchestratorPrompts {
     
     // For batch updates
     batch_update: string;
+    
+    // For context transformation
+    context_transformation: string;
 }
 
 export interface PromptDefinition {
@@ -478,10 +481,13 @@ TEMPLATE RULES:
 
 CONTEXT GUIDELINES:
 - Include information that helps maintain project consistency
+- Format as separate paragraphs where each paragraph is a distinct context item
+- Use double newlines to separate each context item (paragraph breaks)
 - For narratives: must include SPECIFIC character details (names, ages, personalities, backgrounds, motivations, relationships), world-building, themes, style guide
 - For business: may include target market, financial considerations, strategy, style guide
 - For research: may include methodology, variables, ethical considerations, style guide
 - Always include a style guide appropriate to the project type
+- Each category should be its own paragraph (context item) when applicable
 - Only include what's actually relevant to the specific project
 - Be comprehensive but focused - aim for actionable information
 
@@ -533,7 +539,7 @@ Hierarchy: [Level1|Level2|Level3] (use pipe separators)
 Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
 
 Section: Context
-[All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc.]
+[All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc., formatted as separate paragraphs where each paragraph is a distinct context item separated by double newlines]
 
 Section: Concept
 [A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
@@ -573,10 +579,13 @@ TEMPLATE RULES:
 - Layer names WITHOUT numbers = flexible count: "Chapter" means any number of chapters
 - Layer names WITH numbers = fixed count: "Chapter 5" means exactly 5 chapters
 - Use pipe (|) to separate hierarchy levels in the template
-- Keep hierarchy levels to 3-4 levels max for usability
+- Keep hierarchy levels to 3-5 levels max for usability
+- Include a Scene layer to break up chapters into scenes
 
 CONTEXT REQUIREMENTS:
 - Must be specific to the actual text content provided
+- Format as separate paragraphs where each paragraph is a distinct context item
+- Use double newlines to separate each context item (paragraph breaks)
 - Include key themes, concepts, or elements that appear in the text
 - For narratives: extract comprehensive story context including:
   * CHARACTERS: Full names, ages, personalities, backgrounds, motivations, relationships, speech patterns, and distinctive traits
@@ -587,6 +596,7 @@ CONTEXT REQUIREMENTS:
   * THEMES: Central themes and concepts explored in the text
 - For technical content: include methodologies, frameworks, or concepts mentioned
 - For business content: include strategies, markets, or approaches described
+- Each category should be its own paragraph (context item) when applicable
 - DO NOT add creative elements not present in the original text
 
 RESPONSE FORMAT:
@@ -601,10 +611,10 @@ Hierarchy: [Level1|Level2|Level3] (use pipe separators)
 Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
 
 Section: Context
-[Specific contextual information derived from the actual text content]
+[Specific contextual information derived from the actual text content, formatted as separate paragraphs where each paragraph is a distinct context item separated by double newlines]
 
 Section: Concept
-[Concise summary/outline of the actual text content - not creative expansion]
+[Concise outline of the actual text content - not creative expansion. Chronological extensive summary included.]
 
 CRITICAL: Use exactly the section headers shown above. Base everything on the actual text content provided, not creative interpretations.`.trim(),
         placeholders: ['file_name', 'text_content', 'language'],
@@ -669,11 +679,11 @@ JSON Response:`.trim(),
 Title: {{node_title}}
 Content: {{node_content}}
 
-**Node Context:**
-{{context}}
+**Numbered Context Items:**
+{{numbered_context_items}}
 
 **Your Task:**
-Analyze the inherited context and identify items that might be problematic for creating subnodes of the current node. Look for:
+Analyze the numbered context items and identify those that might be problematic for creating subnodes of the current node. Look for:
 
 1. **Temporal references** that refer to earlier or later states of the document
 2. **Scope mismatches** where context items are too broad or too narrow for subnodes
@@ -681,27 +691,29 @@ Analyze the inherited context and identify items that might be problematic for c
 4. **Outdated assumptions** that no longer apply to this part of the document
 5. **Overly specific details** that would be confusing for subnode creation
 
-For each problematic context item, suggest a replacement that would be more appropriate.
-
 **Response Format:**
-Return a JSON array of context issues. Each issue should have:
-- problematic_context_item: The specific text from the inherited context that's problematic
+Return a JSON array of context issues. Each issue MUST have these EXACT field names:
+- item_number: The number of the problematic context item (from the numbered list above)
+- problematic_context_item: The specific text from the context item that's problematic
 - reason_for_problem: Why this context item would be bad for subnode creation
 - justification: Detailed explanation of the problem and why it needs fixing
-- severity: "high", "medium", or "low" based on how much this would confuse subnode creation
+- severity: A number from 1-10 (where 10 is most severe) based on how much this would confuse subnode creation
+
+**CRITICAL: Use these EXACT field names - do not abbreviate or change them!**
 
 Example:
 [
   {
+    "item_number": 3,
     "problematic_context_item": "This document is in the early planning phase",
     "reason_for_problem": "Temporal reference that may not apply to current section",
     "justification": "This temporal reference assumes the document is still in planning, but the current section is about implementation details, making this context misleading for subnode creation",
-    "severity": "medium"
+    "severity": 7
   }
 ]
 
 If no issues are found, return an empty array: []`.trim(),
-        placeholders: ['node_title', 'node_content', 'context', 'parent_context', 'language'],
+        placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
         description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
     },
 
@@ -821,6 +833,47 @@ IMPORTANT: Your response should contain ONLY the updated text, nothing more. Do 
         `.trim(),
         placeholders: ['instruction', 'originalText', 'language'],
         description: "System prompt for batch updating text content. Takes user instructions and applies them to transform individual text strings during batch operations."
+    },
+
+    context_transformation: {
+        text: `
+            Your default language is {{language}} if not specified otherwise.
+            
+            You are an expert text analyzer. Your task is to transform existing context text into a properly formatted context that follows the paragraph-based context item format.
+
+ORIGINAL CONTEXT:
+{{original_context}}
+
+TASK:
+Transform the above context into a properly formatted context where each distinct piece of information is separated into its own paragraph (context item).
+
+FORMATTING REQUIREMENTS:
+1. Each context item should be a separate paragraph
+2. Use double newlines (two line breaks) to separate each context item
+3. Group related information logically into coherent paragraphs
+4. Each paragraph should contain one main concept or piece of information
+5. Preserve all important information from the original context
+6. Do not add new information that wasn't in the original context
+7. For narratives, organize by categories like: Characters, Setting, Plot Elements, Themes, etc.
+8. For technical content, organize by: Concepts, Methods, Tools, Requirements, etc.
+9. For business content, organize by: Strategy, Market, Goals, Resources, etc.
+
+EXAMPLE INPUT:
+"Marcus is a 28-year-old software engineer who works at TechCorp. He has social anxiety and dreams of becoming a chef. The story takes place in modern-day Seattle. The themes include personal growth and pursuing dreams. The writing style is third-person limited with a focus on internal monologue."
+
+EXAMPLE OUTPUT:
+"Marcus is a 28-year-old software engineer who works at TechCorp. He has social anxiety and dreams of becoming a chef.
+
+The story takes place in modern-day Seattle.
+
+The themes include personal growth and pursuing dreams.
+
+The writing style is third-person limited with a focus on internal monologue."
+
+IMPORTANT: Your response should contain ONLY the transformed context text, nothing more. Do not include any labels, prefixes, explanations, or meta-commentary. Just provide the pure transformed context that can be directly used.
+        `.trim(),
+        placeholders: ['original_context', 'language'],
+        description: "System prompt for transforming arbitrary context text into the properly formatted paragraph-based context item format. Preserves all information while organizing it into separate paragraphs."
     }
 };
 
@@ -844,105 +897,22 @@ export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
     return defaultPromptDefinitions[promptKey]?.text || '';
 }
 
+// Simple prompt manager class for specific use cases (like context transformation)
+// For the main settings UI, use PromptManagementService instead
 export class PromptManager {
     private prompts: OrchestratorPrompts;
-    private onSave: (prompts: OrchestratorPrompts) => void;
-    private root: HTMLElement;
     private settingsManager: SettingsManager;
 
     constructor(
-        root: HTMLElement, 
-        onSave: (prompts: OrchestratorPrompts) => void,
+        _root: HTMLElement, 
+        _onSave: (prompts: OrchestratorPrompts) => void,
         settingsManager: SettingsManager
     ) {
-        this.root = root;
-        this.onSave = onSave;
         this.settingsManager = settingsManager;
         this.prompts = this.settingsManager.getPrompts();
-        this.render();
-    }
-
-    private async saveToStorage() {
-        await this.settingsManager.savePrompts(this.prompts);
-        this.onSave(this.prompts);
-    }
-
-    private revertToDefaults() {
-        if (confirm('Are you sure you want to revert all prompts to their default values? Any unsaved changes will be lost.')) {
-            this.prompts = { ...defaultPrompts };
-            this.render();
-        }
     }
 
     public getPrompts(): OrchestratorPrompts {
         return this.prompts;
-    }
-
-    render() {
-        this.root.innerHTML = `
-            <style>
-                .prompt-editor { margin-bottom: 1.5rem; }
-                .prompt-editor label { font-weight: bold; display: block; margin-bottom: 0.25rem; }
-                .prompt-editor textarea { width: 100%; min-height: 200px; font-family: monospace; }
-                .placeholders { font-size: 0.8rem; font-style: italic; margin-bottom: 0.5rem; color: #555; }
-                .placeholders code { background-color: #eee; padding: 2px 4px; border-radius: 3px; }
-                .prompt-description { font-size: 0.9rem; margin-bottom: 0.75rem; color: #333; }
-            </style>
-            <h2>Configure Prompts</h2>
-            <p>Edit the templates used by the LLM agents.</p>
-        `;
-
-        Object.keys(this.prompts).forEach(key => {
-            const k = key as keyof OrchestratorPrompts;
-            const editorDiv = document.createElement('div');
-            editorDiv.className = 'prompt-editor';
-            
-            const label = document.createElement('label');
-            label.textContent = `${k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Prompt Template`;
-
-            editorDiv.appendChild(label);
-
-            const description = getPromptDescription(k);
-            if (description) {
-                const descriptionEl = document.createElement('p');
-                descriptionEl.className = 'prompt-description';
-                descriptionEl.textContent = description;
-                editorDiv.appendChild(descriptionEl);
-            }
-
-            const availablePlaceholders = getPromptPlaceholders(k);
-            if (availablePlaceholders && availablePlaceholders.length > 0) {
-                const placeholderText = document.createElement('div');
-                placeholderText.className = 'placeholders';
-                placeholderText.innerHTML = `Available placeholders: ${availablePlaceholders.map(p => `<code>{{${p}}}</code>`).join(', ')}`;
-                editorDiv.appendChild(placeholderText);
-            }
-            
-            const textarea = document.createElement('textarea');
-            textarea.value = this.prompts[k];
-            textarea.addEventListener('input', () => {
-                this.prompts[k] = textarea.value;
-            });
-
-            editorDiv.appendChild(textarea);
-            this.root.appendChild(editorDiv);
-        });
-
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.marginTop = '1.5rem';
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '1rem';
-
-        const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save and Close';
-        saveButton.addEventListener('click', () => void this.saveToStorage());
-        buttonContainer.appendChild(saveButton);
-        
-        const revertButton = document.createElement('button');
-        revertButton.textContent = 'Revert to Default';
-        revertButton.addEventListener('click', () => this.revertToDefaults());
-        buttonContainer.appendChild(revertButton);
-
-        this.root.appendChild(buttonContainer);
     }
 } 
