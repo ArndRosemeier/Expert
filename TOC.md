@@ -46,18 +46,13 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `getUsage()` - Get storage quota/usage info
   - `getIndexedDBService()` - Get underlying IndexedDB service
 
-### ⚠️ localStorage Policy
-**CRITICAL**: localStorage is **FORBIDDEN** and **BLOCKED** in this application!
-
-**LocalStorage Blocker**:
+### localStorage Policy
 - **File**: `src/LocalStorageBlocker.ts`
 - **Class**: `LocalStorageBlocker`
 - **Functions**:
   - `initialize(config)` - Initialize blocking system
   - `withLocalStorageAccess(operation, reason)` - Temporary access for legitimate operations
   - `isKeyAllowed(key)` - Check if key is allowed
-- **Behavior**: All localStorage methods throw educational errors directing to StorageService
-- **Allowed Keys**: Only `expert_generated_keys` (for app security)
 
 **Legacy Cleanup**:
 - **File**: `src/ui/modals/services/LocalStorageCleanupService.ts`
@@ -82,7 +77,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
 
 ### Core Project Management
 - **File**: `src/ProjectManager.ts`
-- **Class**: `ProjectManager`
+- **Class**: `ProjectManager` (extends `EventEmitter<ProjectManagerEvents>`)
 - **Functions**:
   - `createProject(title, template)` - Create new project
   - `loadProject(data)` - Load existing project
@@ -93,6 +88,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `generateContent(nodeId)` - Generate content for node
   - `findNodeById(nodeId)` - Find node by ID
   - `rehydrateNode(nodeData, template)` - Restore node from data
+- **Events**: See `ProjectManagerEvents` type definition in same file
 
 ### Project Templates
 - **File**: `src/TemplateManager.ts`
@@ -152,33 +148,11 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `removeTagsFromVersion(versionId, tags)` - Remove tags from version
 
 ### Version Tags System
-**Automatic Tags**:
-- `master` - Current active content (only one version can have this)
-- `generated` - AI-generated content
-- `iteration{N}` - Generation iteration number (e.g., iteration1, iteration2)
-- `generatedWinner` - Chosen winner from generation iterations
-- `draft` - Draft content (often combined with generated)
-- `legacy` - Content converted from old system
-
-**User-Triggered Tags**:
-- `imported` - Content imported from external files
-- `polished` - Content processed through polisher modal
-- `coherenceFix` - Content fixed through coherence modal
-- `ManualEdit_YYYY-MM-DD_HH-MM-SS` - Manual edits with timestamp
-- `Batch_YYYY-MM-DD_HH-MM-SS` - Batch operations with timestamp
-- `Restored_YYYY-MM-DD_HH-MM-SS` - Restored from version navigation
+**Standard Tags**: `master`, `generated`, `iteration{N}`, `generatedWinner`, `draft`, `legacy`, `imported`, `polished`, `coherenceFix`, `ManualEdit_YYYY-MM-DD_HH-MM-SS`, `Batch_YYYY-MM-DD_HH-MM-SS`, `Restored_YYYY-MM-DD_HH-MM-SS`
 
 ### Content Assignment Safety
-- **Enforced Tagging**: Direct `node.content = value` assignment **REMOVED** - causes TypeScript compiler errors
-- **Required Methods**: Must use `setContentWithTags()` or `setMasterContentDirect()` for all content changes
-- **Developer Safety**: Prevents accidental content overwrites without proper version tracking
-- **Clear Intent**: Forces explicit choice of tagging strategy for each content modification
-
-### Legacy Compatibility
-- **Automatic Conversion**: Old `_content` and `generationSessions` automatically converted to tagged versions
-- **Metadata Preservation**: Legacy `creatorModel` and ratings preserved in version metadata
-- **Backward Compatibility**: All existing APIs continue to work unchanged
-- **Seamless Migration**: Legacy projects load automatically with full version history preserved
+- **Required Methods**: Use `setContentWithTags()` or `setMasterContentDirect()` for content changes
+- **Enforcement**: Direct `node.content = value` assignment causes TypeScript errors
 
 ### Context Management
 - **File**: `src/project/ContextService.ts`
@@ -195,6 +169,19 @@ This document provides a comprehensive mapping of all functionality in the Exper
 - **Functions**:
   - `extractContext(node, request)` - Extract context from node
   - `parseExtractionResult(result)` - Parse extraction results
+
+### Context Adjustment
+- **File**: `src/ui/modals/ContextAdjusterModal.ts`
+- **Class**: `ContextAdjusterModal`
+- **Functions**:
+  - `openInLoadingState(node)` - Open modal and start AI analysis
+  - `analyzeContext(node)` - Analyze context for problematic items
+  - `removeItem(itemNumber)` - Remove specific context item
+  - `removeAllItems()` - Remove all problematic context items
+  - `undoRemoveItem(itemNumber)` - Undo item removal
+  - `applyChanges()` - Apply all changes to node and save
+  - `resetChanges()` - Reset all pending changes
+- **UI Integration**: Button handler `'context-adjuster-btn'` in `src/ui/project-ui.ts`
 
 ## 🎯 Content Generation
 
@@ -220,6 +207,8 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `summarizeNodeContent(nodeId)` - Generate node summary
   - `abortCurrentGeneration()` - Abort ongoing generation
   - `canAbortGeneration()` - Check if generation can be aborted
+  - `parseChildrenFromJSON(text)` - Parse JSON response (no fallback parsing)
+- **Events Emitted**: `nodeGenerationComplete`, `bulkGenerationComplete`, `nodeGenerationStarted`, `nodeGenerationAborted`
 
 ### Generation Coordination
 - **File**: `src/project/GenerationCoordinator.ts`
@@ -360,27 +349,17 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `renderNodeDetails(nodeId)` - Render node details panel
   - `renderMultiProjectTree()` - Render project tree
   - `updateGenerateButton(nodeId, state)` - Update generation button state
+  - `handleUnifiedGeneration(node)` - Handle generate button clicks
+  - `handleBulkGenerationComplete(event)` - Handle bulk generation completion
+- **Button Handlers**: `buttonHandlers` object maps button IDs to event handlers
 
 ### Version Navigation UI
 - **File**: `src/ui/project-ui.ts`
-- **Location**: Content panel of selected node
 - **Functions**:
   - `initializeVersionNavigation(node)` - Initialize version navigation for node
   - `updateVersionNavigationUI()` - Update navigation controls and indicators
   - `updateVersionContentDisplay()` - Update content display for selected version
-- **Features**:
-  - **Smart Labels**: Contextual version labels based on tags (Master, Generated Winner, Polished, etc.)
-  - **Chronological Sorting**: Versions sorted by timestamp (newest first), master always on top
-  - **Comprehensive Coverage**: Shows ALL versions (generated, manual edits, imports, batch updates, etc.)
-  - **Timestamp Display**: Shows creation time for non-current versions
-  - **Version Counter**: Displays "1/5: Current (Master)" format
-  - **Restore Functionality**: "Use This Version" button creates restored version with audit trail
-- **UI Elements**:
-  - Previous/Next navigation buttons
-  - Version indicator with count and label
-  - Timestamp information for historical versions
-  - "Use This Version" button (hidden for current master)
-  - Integration with ratings view
+- **Variables**: `currentVersionIndex`, `availableVersions`
 
 ### Enhanced Event Management
 - **File**: `src/ui/event-manager.ts`
@@ -400,70 +379,14 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `close()` - Close modal
   - `render()` - Render modal content
 
-### Modal Scrolling & Layout Best Practices
-**Critical for scrollable content in modals:**
-- Modal content containers use `max-height: 90vh` and `overflow: hidden`
-- For flex children to use `height: 100%`, parent must have defined height
-- Scrollable flex children need `flex: 1 1 0%`, `overflow-y: auto`, and `min-height: 0`
-- Avoid mixing hardcoded viewport heights (`calc(90vh - 6em)`) with flex layouts
-- Both panels in multi-panel modals should use consistent height strategies
-
-### Making Controls Fill Available Space - Critical CSS Patterns
-**⚠️ COMMON PROBLEM**: Controls not expanding to fill available vertical space in modals
-
-**🔑 THE MAGIC COMBINATION**: 
-- `flex: 1` - to expand and fill space
-- `overflow-y: auto` - to handle content overflow properly
-- **Both properties are required!** Without `overflow-y: auto`, flex containers won't expand properly.
-
-**📏 HEIGHT CONSTRAINT CHAIN**: Every container in the chain must have proper height constraints:
+### Modal Layout Patterns
+**Key CSS patterns for modal layouts:**
 ```css
-.modal-container { height: 100%; }
-.inspector-body { flex: 1; min-height: 0; }
-.column { flex: 1; min-height: 0; }
-.content-area { flex: 1; overflow-y: auto; }
+/* Container pattern */
+.modal-container { height: 100%; display: flex; flex-direction: column; }
+.modal-body { flex: 1; min-height: 0; overflow: hidden; }
+.scrollable-content { flex: 1; overflow-y: auto; }
 ```
-
-**🚫 THE `min-height: 0` RULE**: Flex children need `min-height: 0` to shrink below their content size. Without this, they grow beyond their container.
-
-**🔒 OVERFLOW CONSTRAINTS**: When content can overflow, parent containers need `overflow: hidden` to prevent children from pushing beyond bounds:
-```css
-.inspector-body { overflow: hidden; }
-.columns { max-height: 100%; overflow: hidden; }
-```
-
-**❌ WHAT DOESN'T WORK**:
-- Hardcoded heights like `calc(90vh - 6em)`
-- Mixing hardcoded heights with flex layouts
-- `height: 100%` on flex children (use `flex: 1` instead)
-- Complex nested height calculations
-- Missing `overflow-y: auto` on scrollable areas
-
-**✅ THE WORKING PATTERN**:
-```css
-.container { 
-    height: 100%; 
-    display: flex; 
-    flex-direction: column; 
-}
-.body { 
-    flex: 1; 
-    min-height: 0; 
-    overflow: hidden; 
-}
-.scrollable-content { 
-    flex: 1; 
-    overflow-y: auto; 
-}
-```
-
-**🔍 DEBUGGING CHECKLIST**: When a control doesn't fill space, check:
-1. Does it have `flex: 1`?
-2. Does it have `overflow-y: auto` if scrollable?
-3. Does the parent have `min-height: 0`?
-4. Is there a height constraint break in the chain?
-
-**💡 KEY INSIGHT**: `flex: 1` + `overflow-y: auto` is the magic combination for filling available space with scrollable content!
 
 ### Modal Registry
 - **File**: `src/ui/modals/core/ModalRegistry.ts`
@@ -480,6 +403,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `openExportModal(options)` - Open export modal
   - `openAddChildNodeModal(parentNode, parentNodeId)` - Open add child modal
   - `openCoherenceModal(nodeId)` - Open coherence check modal
+  - `openContextAdjusterModal(node)` - Open context adjuster modal
 
 ## 📤 Export Services
 
