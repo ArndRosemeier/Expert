@@ -1776,7 +1776,7 @@ function handleDropdownAction(buttonId: string): void {
                     return;
                 }
 
-                handleNewTopLayer(node);
+                void handleNewTopLayer(node);
             }
             break;
 
@@ -1788,7 +1788,7 @@ function handleDropdownAction(buttonId: string): void {
                     return;
                 }
 
-                handleCopyToNewProject(node);
+                void handleCopyToNewProject(node);
             }
             break;
 
@@ -2187,13 +2187,13 @@ This action cannot be undone.`;
                 }
                 
                 // Import and open polisher modal
-                import('./modals/PolisherModal').then(({ PolisherModal }) => {
+                import('./modals/PolisherModal').then(async ({ PolisherModal }) => {
                     const polisherModal = new PolisherModal(
                         state.getSettingsManager()!,
                         state.getOpenRouterClient()!
                     );
-                    polisherModal.initialize();
-                    polisherModal.openWithNode(node);
+                    await polisherModal.initialize();
+                    await polisherModal.openWithNode(node);
                 }).catch(error => {
                     console.error('Failed to open polisher modal:', error);
                     alert('Failed to open text polisher. Please try again.');
@@ -2278,7 +2278,7 @@ This action cannot be undone.`;
 
                 // Create and show modal in loading state
                 const analysisModal = new CoherenceModal();
-                analysisModal.openInLoadingState(node);
+                void analysisModal.openInLoadingState(node);
                 
                 // Perform analysis
                 coherenceService.analyzeCoherence(node)
@@ -2315,7 +2315,7 @@ This action cannot be undone.`;
 
                 // Create and show modal in loading state
                 const analysisModal = new ContextAdjusterModal();
-                analysisModal.openInLoadingState(node);
+                void analysisModal.openInLoadingState(node);
                 
                 // Perform analysis
                 contextService.analyzeContext(node, projectManager)
@@ -2437,7 +2437,7 @@ This action cannot be undone.`;
                         }
                     });
 
-                    tagModal.open();
+                    void tagModal.open();
                     
                 }).catch(error => {
                     console.error('Failed to open tag manager modal:', error);
@@ -2666,7 +2666,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         new LanguageSelector(languageContainer, {
             currentLanguage: settingsManager.getLanguage(),
             onLanguageChange: (language: string) => {
-                settingsManager.setLanguage(language);
+                void settingsManager.setLanguage(language);
                 // No need to save manually as SettingsManager auto-saves
             }
         });
