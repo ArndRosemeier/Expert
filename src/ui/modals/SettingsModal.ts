@@ -144,7 +144,7 @@ export class SettingsModal extends BaseModal {
         });
 
         // Load key information asynchronously
-        this.loadKeyInfo(keyInfo);
+        void this.loadKeyInfo(keyInfo);
 
         const closeButton = createElement('button', {
             classes: ['close-button'],
@@ -479,7 +479,7 @@ export class SettingsModal extends BaseModal {
         });
 
         saveButton.addEventListener('click', () => {
-            this.handleSave();
+            void this.handleSave();
         });
 
         rightSection.appendChild(cancelButton);
@@ -578,7 +578,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply to model selector
         if (profile.selectedModels) {
-            this.modelSelector.setSelectedModels(profile.selectedModels);
+            void this.modelSelector.setSelectedModels(profile.selectedModels);
         }
 
         // Apply to criteria editor
