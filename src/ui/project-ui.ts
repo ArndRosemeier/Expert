@@ -7,6 +7,8 @@ import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { CoherenceService } from './modals/services/CoherenceService';
 import { CoherenceModal } from './modals/CoherenceModal';
+import { ContextAdjusterService } from './modals/services/ContextAdjusterService';
+import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
@@ -162,6 +164,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'polish-text': 'polish-text-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
+                            'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn'
                         };
@@ -451,6 +454,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                             🔍 Check Coherence
                         </button>
                     ` : ''}
+                    <button class="action-btn" data-action="context-adjuster">
+                        🎯 Context Adjuster
+                    </button>
                 </div>
             </div>
         </div>
@@ -2354,6 +2360,43 @@ This action cannot be undone.`;
                         // Close loading modal and show error
                         analysisModal.close();
                         alert('Coherence analysis failed: ' + error.message);
+                    });
+            }
+            break;
+
+        case 'context-adjuster-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Create context adjuster service instance
+                const contextService = new ContextAdjusterService(
+                    state.getOpenRouterClient()!,
+                    state.getSettingsManager()!
+                );
+
+                // Check if node is eligible for context analysis
+                if (!contextService.isNodeEligible(node, projectManager)) {
+                    alert(contextService.getIneligibilityReason(node, projectManager));
+                    return;
+                }
+
+                // Create and show modal in loading state
+                const analysisModal = new ContextAdjusterModal();
+                analysisModal.openInLoadingState(node);
+                
+                // Perform analysis
+                contextService.analyzeContext(node, projectManager)
+                    .then((result) => {
+                        console.log('Context analysis completed, updating modal with results:', result);
+                        // Update modal with results
+                        analysisModal.updateWithResults(result);
+                    })
+                    .catch((error) => {
+                        console.error('Context analysis failed:', error);
+                        // Close loading modal and show error
+                        analysisModal.close();
+                        alert('Context analysis failed: ' + error.message);
                     });
             }
             break;

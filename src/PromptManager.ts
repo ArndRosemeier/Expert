@@ -44,6 +44,12 @@ export interface OrchestratorPrompts {
     // For coherence analysis
     coherence_analysis: string;
     
+    // For context analysis
+    context_analysis: string;
+    
+    // For fixing context issues
+    context_fix: string;
+    
     // For fixing contradictions
     fix_contradiction: string;
     
@@ -651,6 +657,91 @@ EXAMPLE:
 JSON Response:`.trim(),
         placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],
         description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions and returns them in structured JSON format."
+    },
+
+    context_analysis: {
+        text: `
+            Write your "justification" field in {{language}}. All JSON field names must always remain in English.
+            
+            You are analyzing inherited context for potential issues when creating subnodes.
+
+**Current Node:**
+Title: {{node_title}}
+Content: {{node_content}}
+
+**Inherited Context from Parent Nodes:**
+{{parent_context}}
+
+**Your Task:**
+Analyze the inherited context and identify items that might be problematic for creating subnodes of the current node. Look for:
+
+1. **Temporal references** that refer to earlier or later states of the document
+2. **Scope mismatches** where context items are too broad or too narrow for subnodes
+3. **Contradictory information** that conflicts with the current node's content
+4. **Outdated assumptions** that no longer apply to this part of the document
+5. **Overly specific details** that would be confusing for subnode creation
+
+For each problematic context item, suggest a replacement that would be more appropriate.
+
+**Response Format:**
+Return a JSON array of context issues. Each issue should have:
+- problematic_context_item: The specific text from the inherited context that's problematic
+- reason_for_problem: Why this context item would be bad for subnode creation
+- justification: Detailed explanation of the problem and why it needs fixing
+- severity: "high", "medium", or "low" based on how much this would confuse subnode creation
+
+Example:
+[
+  {
+    "problematic_context_item": "This document is in the early planning phase",
+    "reason_for_problem": "Temporal reference that may not apply to current section",
+    "justification": "This temporal reference assumes the document is still in planning, but the current section is about implementation details, making this context misleading for subnode creation",
+    "severity": "medium"
+  }
+]
+
+If no issues are found, return an empty array: []`.trim(),
+        placeholders: ['node_title', 'node_content', 'parent_context', 'language'],
+        description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
+    },
+
+    context_fix: {
+        text: `
+            Generate corrected context in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            
+            You are an expert context editor. Your job is to fix a problematic context item for better subnode creation.
+
+CURRENT NODE:
+Title: {{node_title}}
+Content: {{node_content}}
+
+CURRENT INHERITED CONTEXT:
+{{current_context}}
+
+PROBLEMATIC CONTEXT ITEM:
+"{{problematic_item}}"
+
+PROBLEM DESCRIPTION:
+{{problem_reason}}
+
+INSTRUCTIONS:
+1. Take the current inherited context above
+2. Fix the problematic context item to make it more suitable for creating subnodes
+3. Consider the current node's content and scope when making the fix
+4. If the item should be removed entirely, remove it and clean up any resulting formatting issues
+5. Ensure the fixed context flows naturally and maintains coherence
+6. Return the complete corrected context
+
+EXAMPLE:
+If the problematic item is "This document is in early planning phase" and the problem is "temporal reference that doesn't apply to implementation section", you might change it to "This section covers implementation details" or remove it entirely if it adds no value.
+
+YOUR RESPONSE:
+Provide the complete corrected context that will replace the current inherited context. This is for an automated workflow, so do not add any additional text, comments, or questions.
+
+Corrected context:
+        `.trim(),
+        placeholders: ['node_title', 'node_content', 'current_context', 'problematic_item', 'problem_reason', 'language'],
+        description: "System prompt for fixing problematic context items. Takes the issue details and rewrites the inherited context to resolve the problem while maintaining coherence."
     },
 
     fix_contradiction: {

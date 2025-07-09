@@ -20,6 +20,7 @@ export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
+export { ContextAdjusterModal } from './ContextAdjusterModal';
 export { PolisherModal } from './PolisherModal';
 export { NodeInspectorModal } from './NodeInspectorModal';
 export { TagManagerModal } from './TagManagerModal';
@@ -33,11 +34,13 @@ export * from './services/PromptManagementService';
 export * from './services/SettingsService';
 export * from './services/ProjectGenerationService';
 export * from './services/CoherenceService';
+export * from './services/ContextAdjusterService';
 
 // Types
 export * from './types/ModalTypes';
 export * from './types/ExportTypes';
 export * from '../../types/CoherenceTypes';
+export * from '../../types/ContextAdjusterTypes';
 
 // Factory
 export * from './ModalFactory';
