@@ -785,6 +785,7 @@ export class GenerationService {
         // Step 2: Generate content for all children (if requested)
         if (includeContent) {
             const children = node.children;
+            
             // Filter to only children that need content (Empty or Draft, but not Final)
             const childrenNeedingContent = children.filter(child => child.getState() !== 'Final');
             const total = childrenNeedingContent.length;

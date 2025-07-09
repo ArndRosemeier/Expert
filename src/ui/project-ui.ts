@@ -923,18 +923,149 @@ export function renderNodeDetails() {
                 box-sizing: border-box;
             }
             .node-details-header {
-                padding-bottom: 1rem;
-                border-bottom: 1px solid var(--border-color);
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                border: 1px solid #e9ecef;
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 1.5rem;
+                align-items: start;
             }
             .node-details-header h2 {
-                font-size: 2rem;
-                font-weight: bold;
+                font-size: 1.4rem;
+                font-weight: 600;
+                color: #212529;
+                border: none;
+                outline: none;
+                background: transparent;
+                cursor: text;
                 margin: 0;
+            }
+            .node-details-header h2:focus {
+                background-color: white;
+                padding: 0.25rem 0.5rem;
+                border-radius: 4px;
+                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
             }
             .node-details-header .node-path {
                 font-size: 0.9rem;
                 color: #6c757d;
+                font-family: 'Courier New', monospace;
+                background-color: #fff;
+                padding: 0.25rem 0.5rem;
+                border-radius: 4px;
+                display: inline-block;
                 margin-top: 0.25rem;
+            }
+            .header-left {
+                min-width: 0;
+            }
+            .header-right {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.75rem;
+            }
+            .generation-controls-compact {
+                background-color: #fff;
+                border: 1px solid #e9ecef;
+                border-radius: 6px;
+                padding: 0.75rem;
+                min-width: 300px;
+            }
+            .primary-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1rem;
+                margin-bottom: 0.5rem;
+            }
+            .generation-type-selector {
+                display: flex;
+                gap: 1rem;
+            }
+            .generation-actions {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            }
+            .secondary-controls {
+                border-top: 1px solid #f1f3f4;
+                padding-top: 0.5rem;
+                justify-content: center;
+            }
+            .generation-options {
+                display: flex;
+                gap: 1rem;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .leaf-node-info {
+                border-top: 1px solid #f1f3f4;
+                padding-top: 0.5rem;
+            }
+            .progress-tier {
+                margin-bottom: 0.25rem;
+            }
+            .progress-tier:last-of-type {
+                margin-bottom: 0;
+            }
+            .progress-bar-wrapper {
+                background-color: #e9ecef;
+                border-radius: 6px;
+                height: 16px;
+                overflow: hidden;
+                position: relative;
+            }
+            .progress-bar {
+                background: linear-gradient(90deg, var(--primary-500) 0%, var(--primary-600) 100%);
+                height: 100%;
+                border-radius: 6px;
+                transition: width 0.3s ease-in-out;
+                position: relative;
+                min-width: 0;
+            }
+            .progress-bar::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+                animation: progress-shine 2s infinite;
+            }
+            @keyframes progress-shine {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+            .version-nav-btn {
+                background: #f8f9fa;
+                border: 1px solid #dee2e6;
+                color: #495057;
+                border-radius: 4px;
+                width: 28px;
+                height: 28px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                font-weight: bold;
+                transition: all 0.2s;
+            }
+            .version-nav-btn:hover:not(:disabled) {
+                background: #e9ecef;
+                border-color: #adb5bd;
+                color: #343a40;
+            }
+            .version-nav-btn:disabled {
+                background: #f8f9fa;
+                border-color: #e9ecef;
+                color: #adb5bd;
+                cursor: not-allowed;
             }
             .node-section {
                 background-color: #ffffff;
@@ -994,19 +1125,112 @@ export function renderNodeDetails() {
             }
         </style>
         <div class="node-details-header">
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
-                <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+            <!-- Left Side: Title and Path -->
+            <div class="header-left">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                    <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
+                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+                    <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                        ⚡ Actions
+                        <span style="font-size: 0.7em;">▼</span>
+                    </button>
+                </div>
+                <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
+                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             </div>
-            <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
-            ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             
-            <!-- Actions Button -->
-            <div style="margin-top: 1rem;">
-                <button id="actions-dropdown-btn" class="button button-primary" style="display: flex; align-items: center; gap: 0.5rem;">
-                    ⚡ Actions
-                    <span style="font-size: 0.8em;">▼</span>
-                </button>
+            <!-- Right Side: Generation Controls -->
+            <div class="header-right">
+                <div class="generation-controls-compact">
+                    <!-- Primary Controls Row -->
+                    <div class="primary-controls">
+                        <div class="generation-type-selector">
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem;">
+                                <input type="radio" name="generation-type" value="content" ${node.getState() !== 'Final' || node.isLeaf ? 'checked' : ''} style="margin: 0;">
+                                <span>This ${getCurrentLevelName(node).toLowerCase()}</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem; ${node.isLeaf ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
+                                <input type="radio" name="generation-type" value="children" ${node.isLeaf ? 'disabled' : (node.getState() === 'Final' ? 'checked' : '')} style="margin: 0;">
+                                <span>All ${getPluralChildLevelName(node).toLowerCase()}</span>
+                            </label>
+                        </div>
+                        
+                        <div class="generation-actions">
+                            <div class="count-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'}; align-items: center; gap: 0.4rem;">
+                                <label for="generation-count-input" style="font-size: 0.85rem; white-space: nowrap;">Count:</label>
+                                <input type="number" id="generation-count-input" min="1" max="20" value="${node.getTemplateChildrenCount() ?? ''}" style="width: 60px; padding: 0.4rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.85rem;">
+                            </div>
+                            <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
+                                ⚡ Generate
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Secondary Controls Row (expandable) -->
+                    <div class="secondary-controls" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'};">
+                        <div class="generation-options">
+                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
+                                <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''} style="margin: 0;">
+                                <span>Include content</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
+                                <input type="checkbox" id="check-coherence-checkbox" ${checkCoherenceState && !recursiveState ? 'checked' : ''} ${recursiveState ? 'disabled' : ''} style="margin: 0;">
+                                <span>Check coherence</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
+                                <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''} style="margin: 0;">
+                                <span>Recursive</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
+                                <input type="checkbox" id="autoprune-context-checkbox" ${autopruneState ? 'checked' : ''} style="margin: 0;">
+                                <span>Autoprune context</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    ${node.isLeaf ? `
+                        <div class="leaf-node-info" style="font-size: 0.8rem; color: #6c757d; font-style: italic; text-align: center; margin-top: 0.5rem;">
+                            Leaf node (${node.template[node.level] || 'final level'}) - no children
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <!-- Progress Container (initially hidden) -->
+                <div id="generation-progress-container" style="display: none; margin-top: 0.75rem;">
+                    <div style="background-color: #f1f3f4; border-radius: 6px; border: 1px solid #d1d5db; padding: 0.75rem;">
+                        <div class="progress-tier">
+                            <div id="progress-text-operations" style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.4rem;"></div>
+                            <div class="progress-bar-wrapper">
+                                <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sub-progress bars -->
+                        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+                            <div class="progress-tier" style="flex: 1;">
+                                <div id="progress-text-iterations" style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.2rem;"></div>
+                                <div class="progress-bar-wrapper" style="height: 12px;">
+                                    <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="progress-tier" style="flex: 1;">
+                                <div id="progress-text-stages" style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.2rem;"></div>
+                                <div class="progress-bar-wrapper" style="height: 12px;">
+                                    <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.7rem; margin-top: 0.4rem;"></div>
+                    </div>
+                </div>
+                
+                <!-- Generation Status Display -->
+                <div id="generation-status" style="display: none; margin-top: 0.75rem; padding: 0.5rem 0.75rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 6px; font-size: 0.8rem; color: #0c5460; font-style: italic;">
+                    <!-- Status messages will appear here -->
+                </div>
+
             </div>
         </div>
 
@@ -1014,169 +1238,7 @@ export function renderNodeDetails() {
         /* Actions modal now uses proper BaseModal system */
         </style>
 
-        <div class="node-section generation-section">
-            <!-- Generation Controls -->
-            <div style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 1rem;">
-                <!-- Left side: Generation controls -->
-                <div style="display: flex; flex-direction: column; gap: 0.75rem; min-width: 280px;">
-                    <!-- Generation Type Selection -->
-                    <div style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 0.5rem;">
-                        <label style="font-weight: 600; color: #495057;">Generate:</label>
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="radio" name="generation-type" value="content" ${node.getState() !== 'Final' || node.isLeaf ? 'checked' : ''} style="margin: 0;">
-                            <span>This ${getCurrentLevelName(node).toLowerCase()}</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; ${node.isLeaf ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
-                            <input type="radio" name="generation-type" value="children" ${node.isLeaf ? 'disabled' : (node.getState() === 'Final' ? 'checked' : '')} style="margin: 0;">
-                            <span>All ${getPluralChildLevelName(node).toLowerCase()}</span>
-                        </label>
-                    </div>
-                    
-                    <!-- Autoprune Context Checkbox -->
-                    <div class="autoprune-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'block' : 'none'}; margin-bottom: 0.5rem;">
-                        <label for="autoprune-context-checkbox" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;">
-                            <input type="checkbox" id="autoprune-context-checkbox" ${autopruneState ? 'checked' : ''}>
-                            <span>Autoprune context</span>
-                        </label>
-                    </div>
-                    
-                    <!-- Generation Controls Row -->
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <div class="count-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'}; align-items: center; gap: 0.5rem;">
-                            <label for="generation-count-input" style="font-size: 0.9rem; white-space: nowrap;">Count:</label>
-                            <input type="number" id="generation-count-input" min="1" max="20" value="${node.getTemplateChildrenCount() ?? ''}" style="width: 70px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                        </div>
-                        <button id="node-generate-btn" class="button button-primary">Generate</button>
-                    </div>
-                    
-                    <!-- Additional Options for Children Generation -->
-                    <div id="children-generation-options" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'block' : 'none'}; border-top: 1px solid #e9ecef; padding-top: 0.75rem;">
-                        <div style="display: flex; gap: 1rem; font-size: 0.9rem; align-items: center;">
-                            <label for="include-content-checkbox">
-                                <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''}>
-                                Include content
-                            </label>
-                            <label for="check-coherence-checkbox">
-                                <input type="checkbox" id="check-coherence-checkbox" ${checkCoherenceState && !recursiveState ? 'checked' : ''} ${recursiveState ? 'disabled' : ''}>
-                                Check coherence
-                            </label>
-                            <label for="recursive-checkbox">
-                                <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''}>
-                                Recursive
-                            </label>
-                        </div>
-                    </div>
-                    
-                    ${node.isLeaf ? `
-                        <div style="font-size: 0.9rem; color: #6c757d; font-style: italic;">
-                            This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <!-- Right side: Progress bars -->
-                <div id="generation-progress-container" style="flex: 1; display: none; min-width: 300px;">
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
-                        <div class="progress-tier">
-                            <div id="progress-text-operations" style="font-size: 0.9rem; font-weight: 600; color: #495057; margin-bottom: 0.25rem;"></div>
-                            <div class="progress-bar-wrapper">
-                                <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Middle and Bottom Level: Iterations and Stages side by side -->
-                        <div style="display: flex; gap: 1rem;">
-                            <!-- Left: LoopOrchestrator iterations -->
-                            <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-iterations" style="font-size: 0.85rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
-                                <div class="progress-bar-wrapper">
-                                    <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
-                                </div>
-                            </div>
-                            
-                            <!-- Right: Stage within iteration -->
-                            <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-stages" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 0.25rem;"></div>
-                                <div class="progress-bar-wrapper">
-                                    <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="progress-text-detail" style="font-style: italic; color: #6c757d; font-size: 0.75rem; margin-top: 0.25rem;"></div>
-                    </div>
-                </div>
-                
-                <style>
-                .progress-tier {
-                    margin-bottom: 0.25rem;
-                }
-                .progress-tier:last-of-type {
-                    margin-bottom: 0;
-                }
-                .progress-bar-wrapper {
-                    background-color: #e9ecef;
-                    border-radius: 6px;
-                    height: 16px;
-                    overflow: hidden;
-                    position: relative;
-                }
-                .progress-bar {
-                    background: linear-gradient(90deg, var(--primary-500) 0%, var(--primary-600) 100%);
-                    height: 100%;
-                    border-radius: 6px;
-                    transition: width 0.3s ease-in-out;
-                    position: relative;
-                    min-width: 0;
-                }
-                .progress-bar::after {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
-                    animation: progress-shine 2s infinite;
-                }
-                @keyframes progress-shine {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(100%); }
-                }
-                .version-nav-btn {
-                    background: #f8f9fa;
-                    border: 1px solid #dee2e6;
-                    color: #495057;
-                    border-radius: 4px;
-                    width: 28px;
-                    height: 28px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 1.1rem;
-                    font-weight: bold;
-                    transition: all 0.2s;
-                }
-                .version-nav-btn:hover:not(:disabled) {
-                    background: #e9ecef;
-                    border-color: #adb5bd;
-                    color: #343a40;
-                }
-                .version-nav-btn:disabled {
-                    background: #f8f9fa;
-                    border-color: #e9ecef;
-                    color: #adb5bd;
-                    cursor: not-allowed;
-                }
-                </style>
-            </div>
-            
-            <!-- Generation Status Display -->
-            <div id="generation-status" style="display: none; margin-top: 0.75rem; padding: 0.5rem 0.75rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 6px; font-size: 0.9rem; color: #0c5460; font-style: italic;">
-                <!-- Status messages will appear here -->
-            </div>
-        </div>
+
 
         <div class="node-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -3155,7 +3217,7 @@ function propagateTemplateToSubtree(rootNode: DocumentNode): void {
 /**
  * Unified generation handler that checks radio button state and calls appropriate generation method
  */
-function handleUnifiedGeneration(node: DocumentNode): void {
+async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     if (!projectManager) return;
 
     // Get the selected generation type from radio buttons
@@ -3205,14 +3267,14 @@ function handleUnifiedGeneration(node: DocumentNode): void {
         }
         
         // Call the children generation method
-        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune);
+        await projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune);
         
     } else {
         // Generate this content
         console.log(`🚀 Starting content generation for node "${node.title}"`);
         
         // Call the single content generation method
-        projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
+        await projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
     }
 }
 
@@ -3231,7 +3293,7 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
-        handleUnifiedGeneration(node);
+        void handleUnifiedGeneration(node);
     },
     
 
