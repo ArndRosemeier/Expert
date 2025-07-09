@@ -1712,15 +1712,15 @@ function renderRatingsView() {
         }
         
         // Convert ratings to expected format
-        const formattedRatings = versionRatings.map((rating: unknown) => ({
-            score: rating.score,
-            goal: rating.goal,
-            criterion: rating.criterion,
-            justification: rating.justification
+        const formattedRatings = versionRatings.map((rating: any) => ({
+            score: rating.score as number,
+            goal: rating.goal as number,
+            criterion: rating.criterion as string,
+            justification: rating.justification as string
         }));
         
         // Render using shared component
-        const options: unknown = {
+        const options: any = {
             title: `Quality Ratings for ${versionLabel} Content`,
             showTimestamp: !!timestampToShow,
             compact: false,
@@ -3069,7 +3069,7 @@ export function renderMultiProjectTree() {
 /**
  * Calculate the maximum depth of a hierarchy in import data
  */
-function calculateImportDataDepth(data: unknown): number {
+function calculateImportDataDepth(data: any): number {
     if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
         return 0; // No children = 0 additional depth
     }
@@ -3086,7 +3086,7 @@ function calculateImportDataDepth(data: unknown): number {
 /**
  * Import node data from JSON export and merge it into the specified target node
  */
-function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: unknown): void {
+function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
     const targetNode = projectManager.findNodeById(targetNodeId);
     if (!targetNode) {
         throw new Error('Target node not found');
@@ -3152,7 +3152,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 
     // Import children recursively
     if (importData.children && Array.isArray(importData.children)) {
-        importData.children.forEach((childData: unknown, index: number) => {
+        importData.children.forEach((childData: any, index: number) => {
             importChildNode(projectManager, importedNode.id, childData, index);
         });
     }
@@ -3167,7 +3167,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 /**
  * Recursively import a child node and its descendants
  */
-function importChildNode(projectManager: ProjectManager, parentId: string, childData: unknown, index: number): void {
+function importChildNode(projectManager: ProjectManager, parentId: string, childData: any, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -3208,7 +3208,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
 
     // Recursively import children
     if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: unknown, grandChildIndex: number) => {
+        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
             importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
         });
     }
