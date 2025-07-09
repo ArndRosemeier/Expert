@@ -988,7 +988,8 @@ export function renderNodeDetails() {
             }
             .generation-type-selector {
                 display: flex;
-                gap: 1rem;
+                flex-direction: column;
+                gap: 0.5rem;
             }
             .generation-actions {
                 display: flex;
@@ -999,13 +1000,14 @@ export function renderNodeDetails() {
             .secondary-controls {
                 border-top: 1px solid #f1f3f4;
                 padding-top: 0.5rem;
-                justify-content: center;
+                display: flex;
+                justify-content: flex-end;
             }
             .generation-options {
-                display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-                justify-content: center;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.4rem 0.8rem;
+                width: 100%;
             }
             .leaf-node-info {
                 border-top: 1px solid #f1f3f4;
@@ -1140,7 +1142,36 @@ export function renderNodeDetails() {
                         <span style="font-size: 0.7em;">▼</span>
                     </button>
                 </div>
-                <div class="node-path">Path: ${projectManager.getNodePath(node.id)}</div>
+                
+                <!-- Progress Container (prominent, initially hidden) -->
+                <div id="generation-progress-container" style="display: none; margin-top: 0.5rem;">
+                    <div class="progress-tier" style="margin-bottom: 0.25rem;">
+                        <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: left;"></div>
+                        <div class="progress-bar-wrapper" style="height: 20px;">
+                            <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sub-progress bars -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                        <div class="progress-tier" style="flex: 1;">
+                            <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                            <div class="progress-bar-wrapper" style="height: 16px;">
+                                <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-tier" style="flex: 1;">
+                            <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                            <div class="progress-bar-wrapper" style="height: 16px;">
+                                <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
+                </div>
+                
                 ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
             </div>
             
@@ -1198,35 +1229,6 @@ export function renderNodeDetails() {
                             Leaf node (${node.template[node.level] || 'final level'}) - no children
                         </div>
                     ` : ''}
-                    
-                    <!-- Progress Container (compact, initially hidden) -->
-                    <div id="generation-progress-container" style="display: none; margin-top: 0.5rem; border-top: 1px solid #f1f3f4; padding-top: 0.5rem;">
-                        <div class="progress-tier" style="margin-bottom: 0.25rem;">
-                            <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: center;"></div>
-                            <div class="progress-bar-wrapper" style="height: 10px;">
-                                <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Compact Sub-progress bars -->
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
-                            <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
-                                <div class="progress-bar-wrapper" style="height: 8px;">
-                                    <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
-                                </div>
-                            </div>
-                            
-                            <div class="progress-tier" style="flex: 1;">
-                                <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
-                                <div class="progress-bar-wrapper" style="height: 8px;">
-                                    <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: center;"></div>
-                    </div>
                     
                     <!-- Generation Status Display (compact) -->
                     <div id="generation-status" style="display: none; margin-top: 0.5rem; padding: 0.4rem 0.5rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 4px; font-size: 0.7rem; color: #0c5460; font-style: italic; text-align: center;">
