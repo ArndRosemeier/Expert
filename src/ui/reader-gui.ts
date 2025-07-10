@@ -814,6 +814,27 @@ export class ReaderGUI {
                 flex: 1;
                 overflow-y: auto;
                 padding: 0;
+                scrollbar-width: thin;
+                scrollbar-color: #cbd5e1 #f8fafc;
+            }
+
+            .reader-content-area::-webkit-scrollbar {
+                width: 12px;
+            }
+
+            .reader-content-area::-webkit-scrollbar-track {
+                background: #f8fafc;
+                border-radius: 6px;
+            }
+
+            .reader-content-area::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 6px;
+                border: 2px solid #f8fafc;
+            }
+
+            .reader-content-area::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
             }
 
             .reader-content {
@@ -1140,11 +1161,45 @@ export class ReaderGUI {
                 color: #5c4b37;
             }
 
+            .reader-theme-sepia .reader-content-area {
+                scrollbar-color: #d4b895 #f7f3e9;
+            }
+
+            .reader-theme-sepia .reader-content-area::-webkit-scrollbar-track {
+                background: #f7f3e9;
+            }
+
+            .reader-theme-sepia .reader-content-area::-webkit-scrollbar-thumb {
+                background: #d4b895;
+                border-color: #f7f3e9;
+            }
+
+            .reader-theme-sepia .reader-content-area::-webkit-scrollbar-thumb:hover {
+                background: #c0a47a;
+            }
+
             /* Dark theme settings panel */
             .reader-theme-dark .reader-settings-panel {
                 background: #1f2937;
                 border-color: #374151;
                 color: #f9fafb;
+            }
+
+            .reader-theme-dark .reader-content-area {
+                scrollbar-color: #4b5563 #1f2937;
+            }
+
+            .reader-theme-dark .reader-content-area::-webkit-scrollbar-track {
+                background: #1f2937;
+            }
+
+            .reader-theme-dark .reader-content-area::-webkit-scrollbar-thumb {
+                background: #4b5563;
+                border-color: #1f2937;
+            }
+
+            .reader-theme-dark .reader-content-area::-webkit-scrollbar-thumb:hover {
+                background: #6b7280;
             }
 
             .reader-theme-dark .settings-panel-content h3 {
@@ -3397,6 +3452,9 @@ export class ReaderGUI {
         this.container.innerHTML = '';
         this.container.style.display = 'none';
         
+        // Restore the main page scrollbar
+        document.body.style.overflow = '';
+        
         // Reset render flag
         this.hasBeenRendered = false;
         
@@ -3425,6 +3483,10 @@ export class ReaderGUI {
      */
     public async show(): Promise<void> {
         this.container.style.display = 'block';
+        
+        // Hide the main page scrollbar so only the reader's scrollbar is visible
+        document.body.style.overflow = 'hidden';
+        
         await this.loadReaderConfig();
         
         // Only render if this instance has never been rendered before
@@ -3441,6 +3503,10 @@ export class ReaderGUI {
      */
     public async hide(): Promise<void> {
         this.container.style.display = 'none';
+        
+        // Restore the main page scrollbar
+        document.body.style.overflow = '';
+        
         this.stopListeningForUpdates();
         
         // Cleanup reader editor and save any pending changes
