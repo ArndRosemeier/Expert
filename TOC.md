@@ -196,34 +196,34 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `getCurrentIteration()` - Get current iteration number
   - `getModelNameForPurpose(purpose)` - Get friendly model name
 
-### Generation Services
-- **File**: `src/project/GenerationService.ts`
-- **Class**: `GenerationService`
+### Unified Generation Service
+- **File**: `src/project/UnifiedGenerationService.ts`
+- **Class**: `UnifiedGenerationService`
 - **Functions**:
-  - `generateNodeContent(nodeId, count, isChildGeneration)` - Generate content for node
-  - `generateAllChildrenContent(nodeId, includeContent, recursive)` - Generate bulk child content
-  - `createChildrenFromOutline(nodeId)` - Create children from outline
-  - `rateNodeContent(nodeId)` - Rate existing node content
-  - `summarizeNodeContent(nodeId)` - Generate node summary
+  - `generateWithLevels(startNodeId, levels)` - Start level-based generation
   - `abortCurrentGeneration()` - Abort ongoing generation
-  - `canAbortGeneration()` - Check if generation can be aborted
-  - `parseChildrenFromJSON(text)` - Parse JSON response (no fallback parsing)
-- **Events Emitted**: `nodeGenerationComplete`, `bulkGenerationComplete`, `nodeGenerationStarted`, `nodeGenerationAborted`
+- **Level Configuration**:
+  - `draftLevel` - Deepest level for which children are created
+  - `contentLevel` - Which levels get content generated (must be ≤ draftLevel)
+  - `contextPruneLevel` - Which levels get context auto-pruned
+  - `coherenceLevel` - Which levels get coherence checking (must be < draftLevel)
+- **Events Emitted**: `unified-progress`, `tree-update-needed`, `nodeGenerationComplete`, `nodeGenerationStarted`
 
 ### Generation Coordination
 - **File**: `src/project/GenerationCoordinator.ts`
 - **Class**: `GenerationCoordinator`
 - **Functions**:
-  - `coordinateGeneration(operation)` - Coordinate generation process
-  - `handleGenerationError(error)` - Handle generation errors
+  - `startOperation(type, nodeId)` - Start tracked operation
+  - `completeOperation(operationId, success, error)` - Complete operation
+  - `isOperationRunning()` - Check if operation is running
 
 ### Generation Controller
 - **File**: `src/project/GenerationController.ts`
 - **Class**: `GenerationController`
 - **Functions**:
-  - `startGeneration(nodeId, type)` - Start generation process
-  - `stopGeneration()` - Stop current generation
-  - `getGenerationStatus()` - Get current status
+  - `setupSingleNodeGeneration(nodeId)` - Setup generation context
+  - `clearGenerationContext()` - Clear generation state
+  - `canAbortGeneration(rootNode)` - Check if generation can be aborted
 
 ## 🎯 Node Creation & Management
 
@@ -349,7 +349,7 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `renderNodeDetails(nodeId)` - Render node details panel
   - `renderMultiProjectTree()` - Render project tree
   - `updateGenerateButton(nodeId, state)` - Update generation button state
-  - `handleUnifiedGeneration(node)` - Handle generate button clicks
+  - `handleGenerateClick(node)` - Handle generate button clicks with level-based generation
   - `handleBulkGenerationComplete(event)` - Handle bulk generation completion
 - **Button Handlers**: `buttonHandlers` object maps button IDs to event handlers
 

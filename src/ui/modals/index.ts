@@ -20,6 +20,7 @@ export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
+export { GenerationLevelsHelpModal } from './GenerationLevelsHelpModal';
 export { ContextAdjusterModal } from './ContextAdjusterModal';
 export { PolisherModal } from './PolisherModal';
 export { NodeInspectorModal } from './NodeInspectorModal';

@@ -21,10 +21,11 @@ let projectManager: ProjectManager | null = null;
 let selectedNodeId: string | null = null;
 
 // Persistent checkbox states
-let includeContentState: boolean = true;
-let recursiveState: boolean = false;
-let checkCoherenceState: boolean = true;
-let autopruneState: boolean = false;
+// Level-based generation state
+let draftLevelState: number = -1;
+let contentLevelState: number = -1;
+let contextPruneLevelState: number = -1;
+let coherenceLevelState: number = -1;
 
 // Simple bulk operation tracking
 let isBulkOperationActive: boolean = false;
@@ -42,34 +43,59 @@ const BUTTON_LABELS = {
 
 // Global abort button is now always visible - no show/hide functions needed
 
-async function saveCheckboxStates() {
+async function saveLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        await storage.set('expert_app_checkbox_states', {
-            includeContent: includeContentState,
-            recursive: recursiveState,
-            checkCoherence: checkCoherenceState,
-            autoprune: autopruneState
+        await storage.set('expert_app_level_states', {
+            draftLevel: draftLevelState,
+            contentLevel: contentLevelState,
+            contextPruneLevel: contextPruneLevelState,
+            coherenceLevel: coherenceLevelState
         });
     } catch (error) {
-        console.warn('Failed to save checkbox states:', error);
+        console.warn('Failed to save level states:', error);
     }
 }
 
-async function loadCheckboxStates() {
+async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{includeContent: boolean, recursive: boolean, checkCoherence: boolean, autoprune: boolean}>('expert_app_checkbox_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number}>('expert_app_level_states');
         if (saved) {
-            includeContentState = saved.includeContent;
-            recursiveState = saved.recursive;
-            checkCoherenceState = saved.checkCoherence ?? true; // Default to true if not saved
-            autopruneState = saved.autoprune ?? false; // Default to false if not saved
+            draftLevelState = saved.draftLevel ?? -1;
+            contentLevelState = saved.contentLevel ?? -1;
+            contextPruneLevelState = saved.contextPruneLevel ?? -1;
+            coherenceLevelState = saved.coherenceLevel ?? -1;
         }
     } catch (error) {
-        console.warn('Failed to load checkbox states:', error);
+        console.warn('Failed to load level states:', error);
+    }
+}
+
+// Function to capture current dropdown values from DOM
+function captureCurrentDropdownValues() {
+    try {
+        const draftSelector = document.getElementById('draft-level-selector') as HTMLSelectElement;
+        const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
+        const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
+        const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
+        
+        if (draftSelector) {
+            draftLevelState = parseInt(draftSelector.value);
+        }
+        if (contentSelector) {
+            contentLevelState = parseInt(contentSelector.value);
+        }
+        if (contextPruneSelector) {
+            contextPruneLevelState = parseInt(contextPruneSelector.value);
+        }
+        if (coherenceSelector) {
+            coherenceLevelState = parseInt(coherenceSelector.value);
+        }
+    } catch (error) {
+        console.warn('Failed to capture dropdown values:', error);
     }
 }
 
@@ -667,79 +693,18 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderProjectUI(manager);
     };
     
-    const handleHighLevelProgress = (e: { nodeId: string; message: string; current: number; total: number }) => {
-        // If message is empty, it means we should clear the progress
-        if (!e.message || e.message.trim() === '') {
-            clearProgressUI();
-            hideGenerationOverlay();
+    const handleUnifiedProgress = (e: { nodeId: string; operations?: ProgressInfo; iterations?: ProgressInfo; stages?: ProgressInfo; detail?: string }) => {
+        try {
+            const progressData: ProgressUIData = {};
+            if (e.operations) progressData.operations = e.operations;
+            if (e.iterations) progressData.iterations = e.iterations;
+            if (e.stages) progressData.stages = e.stages;
+            if (e.detail) progressData.detail = e.detail;
             
-            // Additional safety: check if any nodes are still generating
-            // But don't clear during bulk operations (simple flag-based check)
-            void void setTimeout(() => {
-                if (!manager.isAnyNodeGenerating() && !isBulkOperationActive) {
-                    clearProgressUI();
-                    hideGenerationOverlay();
-                    // Note: Global abort button is managed by GenerationCoordinator
-                }
-            }, 100);
-        } else {
-        // Always show progress bars during any generation, regardless of selected node
-        // This ensures consistency with the spinner behavior
-        updateProgressUI({
-            operations: { message: e.message, current: e.current, total: e.total }
-        });
+            updateProgressUI(progressData);
+        } catch (error) {
+            console.error('Error updating unified progress:', error);
         }
-    };
-
-    const handleLoopProgress = (e: { nodeId: string; progress: LoopProgress }) => {
-        // Always show progress bars during any generation, regardless of selected node
-        // This ensures consistency with the spinner behavior
-        const { progress } = e;
-        
-        // Map LoopProgress to the three progress bars
-        const iterationProgress: ProgressInfo = {
-            message: `Iteration: ${progress.iteration} / ${progress.maxIterations}`,
-            current: progress.iteration,
-            total: progress.maxIterations
-        };
-
-        const stageProgress: ProgressInfo = {
-            message: `Stage: ${progress.type.charAt(0).toUpperCase() + progress.type.slice(1)} (${progress.step} / ${progress.totalStepsInIteration})`,
-            current: progress.step,
-            total: progress.totalStepsInIteration
-        };
-
-        let detailText = '';
-        const modelName = progress.modelName || 'AI';
-        const contentType = progress.contentType || 'content';
-        
-        switch (progress.type) {
-            case 'creator':
-                if (progress.isCompletion) {
-                    detailText = progress.allCriteriaSatisfied 
-                        ? `Done! All criteria satisfied.`
-                        : `Done! Not all criteria satisfied, best version selected.`;
-                } else if (progress.isFirstCreation) {
-                    detailText = `${modelName} is creating ${contentType}...`;
-                } else if (progress.isRevision) {
-                    detailText = `${modelName} is revising ${contentType} based on recommendations...`;
-                } else {
-                    detailText = `${modelName} is generating content...`;
-                }
-                break;
-            case 'rater':
-                detailText = `${modelName} is rating the ${contentType}...`;
-                break;
-            case 'editor':
-                detailText = `${contentType} rejected! ${modelName} is generating recommendations...`;
-                break;
-        }
-
-        updateProgressUI({
-            iterations: iterationProgress,
-            stages: stageProgress,
-            detail: detailText,
-        });
     };
 
     const handleSummaryGenerated = (e: { nodeId: string; summary: string }) => {
@@ -813,6 +778,43 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderProjectUI(manager);
     };
 
+    const handleTreeUpdateNeeded = (e: { nodeId: string; reason: string }) => {
+        // Refresh the project UI when tree update is needed (e.g., after node generation)
+        console.log(`🌲 RECEIVED tree-update-needed event for node ${e.nodeId}: ${e.reason}`);
+        
+        // Capture current dropdown values before re-rendering to preserve user selections
+        captureCurrentDropdownValues();
+        
+        renderProjectUI(manager);
+    };
+
+    const handleCoherenceAnalysisStarted = (e: { nodeId: string, node: DocumentNode }) => {
+        console.log(`🔍 Coherence analysis started for node "${e.node.title}"`);
+        
+        // Update progress UI to show coherence analysis in progress
+        updateProgressUI({
+            operations: {
+                message: `Analyzing coherence for "${e.node.title}"`,
+                current: 1,
+                total: 1
+            },
+            detail: 'Checking for contradictions between outline and expanded content...'
+        });
+    };
+
+    const handleCoherenceAnalysisComplete = (e: { nodeId: string, node: DocumentNode, hasContradictions: boolean, contradictionCount: number }) => {
+        console.log(`🔍 Coherence analysis completed for node "${e.node.title}": ${e.hasContradictions ? `${e.contradictionCount} contradictions found` : 'No contradictions found'}`);
+        
+        // Clear progress UI
+        clearProgressUI();
+        
+        // Optionally show a brief notification
+        if (e.hasContradictions) {
+            // The modal will be shown by the service, so we don't need to show additional UI here
+            console.log(`⚠️ Coherence modal will be shown for ${e.contradictionCount} contradictions`);
+        }
+    };
+
     // We need to store the listeners so we can remove them correctly.
     // A more robust solution might use a map on the project instance itself.
     // @ts-ignore - attaching to the object for simplicity to ensure removal
@@ -826,13 +828,17 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // @ts-ignore
         manager.off('error', manager._errorListener);
         // @ts-ignore
-        manager.off('high-level-progress', manager._highLevelProgressListener);
-        // @ts-ignore
-        manager.off('loop-progress', manager._loopProgressListener);
+        manager.off('unified-progress', manager._unifiedProgressListener);
         // @ts-ignore
         manager.off('nodeSummaryGenerated', manager._summaryGeneratedListener);
         // @ts-ignore
         manager.off('project-loaded', manager._projectLoadedListener);
+        // @ts-ignore
+        manager.off('tree-update-needed', manager._treeUpdateNeededListener);
+        // @ts-ignore
+        manager.off('coherenceAnalysisStarted', manager._coherenceAnalysisStartedListener);
+        // @ts-ignore
+        manager.off('coherenceAnalysisComplete', manager._coherenceAnalysisCompleteListener);
     }
 
     // @ts-ignore
@@ -844,23 +850,29 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     // @ts-ignore
     manager._errorListener = handleError;
     // @ts-ignore
-    manager._highLevelProgressListener = handleHighLevelProgress;
-    // @ts-ignore
-    manager._loopProgressListener = handleLoopProgress;
+    manager._unifiedProgressListener = handleUnifiedProgress;
     // @ts-ignore
     manager._summaryGeneratedListener = handleSummaryGenerated;
     // @ts-ignore
     manager._projectLoadedListener = handleProjectLoaded;
+    // @ts-ignore
+    manager._treeUpdateNeededListener = handleTreeUpdateNeeded;
+    // @ts-ignore
+    manager._coherenceAnalysisStartedListener = handleCoherenceAnalysisStarted;
+    // @ts-ignore
+    manager._coherenceAnalysisCompleteListener = handleCoherenceAnalysisComplete;
     
     manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
     manager.on('bulkGenerationComplete', handleBulkGenerationComplete);
     manager.on('nodeGenerationAborted', handleAborted);
     manager.on('error', handleError);
-    manager.on('high-level-progress', handleHighLevelProgress);
-    manager.on('loop-progress', handleLoopProgress);
+    manager.on('unified-progress', handleUnifiedProgress);
     manager.on('nodeSummaryGenerated', handleSummaryGenerated);
     manager.on('project-loaded', handleProjectLoaded);
+    manager.on('tree-update-needed', handleTreeUpdateNeeded);
+    manager.on('coherenceAnalysisStarted', handleCoherenceAnalysisStarted);
+    manager.on('coherenceAnalysisComplete', handleCoherenceAnalysisComplete);
 }
 
 
@@ -980,7 +992,89 @@ export function renderNodeDetails() {
                 border-radius: 6px;
                 padding: 0.75rem;
                 width: fit-content;
-                max-width: 400px;
+                max-width: 450px;
+            }
+            
+            .level-controls {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .level-controls-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.5rem 0.75rem;
+            }
+            
+            .level-selector {
+                display: flex;
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+            
+            .level-selector label {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.8rem;
+                font-weight: 600;
+                color: #374151;
+                cursor: help;
+            }
+            
+            .level-icon {
+                font-size: 0.9rem;
+                flex-shrink: 0;
+            }
+            
+            .level-dropdown {
+                padding: 0.4rem 0.5rem;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 0.8rem;
+                background-color: #fff;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .level-dropdown:hover {
+                border-color: #9ca3af;
+            }
+            
+            .level-dropdown:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+            }
+            
+            .level-dropdown:disabled {
+                background-color: #f9fafb;
+                color: #6b7280;
+                cursor: not-allowed;
+            }
+            
+            .level-validation-message {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding: 0.4rem 0.5rem;
+                background-color: #fef3c7;
+                border: 1px solid #f59e0b;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                color: #92400e;
+            }
+            
+            .validation-icon {
+                font-size: 0.8rem;
+                flex-shrink: 0;
+            }
+            
+            .generation-actions {
+                display: flex;
+                justify-content: center;
+                margin-top: 0.25rem;
             }
             #node-generate-btn, #node-generate-all-btn {
                 min-width: 85px;
@@ -1137,6 +1231,15 @@ export function renderNodeDetails() {
                 align-items: center;
                 margin-bottom: 0.75rem;
             }
+            .help-button:hover {
+                background: #e9ecef !important;
+                border-color: #495057 !important;
+                color: #495057 !important;
+                transform: scale(1.05);
+            }
+            .help-button:active {
+                transform: scale(0.95);
+            }
         </style>
         <div class="node-details-header">
             <!-- Left Side: Title and Path -->
@@ -1144,10 +1247,6 @@ export function renderNodeDetails() {
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                     <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
                     <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
-                    <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
-                        ⚡ Actions
-                        <span style="font-size: 0.7em;">▼</span>
-                    </button>
                 </div>
                 
                 <!-- Progress Container (prominent, initially hidden) -->
@@ -1180,54 +1279,93 @@ export function renderNodeDetails() {
                 </div>
                 
                 ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
+                
+                <!-- Actions dropdown positioned at bottom left of title panel -->
+                <div style="margin-top: 0.5rem;">
+                    <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                        ⚡ Actions
+                        <span style="font-size: 0.7em;">▼</span>
+                    </button>
+                </div>
             </div>
             
             <!-- Right Side: Generation Controls -->
             <div class="header-right">
                 <div class="generation-controls-compact">
-                    <!-- Primary Controls Row -->
-                    <div class="primary-controls">
-                        <div class="generation-type-selector">
-                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem;">
-                                <input type="radio" name="generation-type" value="content" ${node.getState() !== 'Final' || node.isLeaf ? 'checked' : ''} style="margin: 0;">
-                                <span>This ${getCurrentLevelName(node).toLowerCase()}</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem; ${node.isLeaf ? 'opacity: 0.6; cursor: not-allowed;' : ''}">
-                                <input type="radio" name="generation-type" value="children" ${node.isLeaf ? 'disabled' : (node.getState() === 'Final' ? 'checked' : '')} style="margin: 0;">
-                                <span>All ${getPluralChildLevelName(node).toLowerCase()}</span>
-                            </label>
+                    <!-- Level-Based Generation Controls -->
+                    <div class="level-controls">
+                        <div class="level-controls-grid">
+                            <!-- Draft Level -->
+                            <div class="level-selector">
+                                <label for="draft-level-selector" title="Deepest level for which children (drafts) are created">
+                                    <span class="level-icon">📝</span>
+                                    Draft Level:
+                                </label>
+                                <select id="draft-level-selector" class="level-dropdown">
+                                    <option value="-1" ${draftLevelState === -1 ? 'selected' : ''}>None</option>
+                                    ${node.template.map((levelName, index) => 
+                                        `<option value="${index}" ${draftLevelState === index ? 'selected' : ''}>${levelName}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            
+                            <!-- Content Level -->
+                            <div class="level-selector">
+                                <label for="content-level-selector" title="Which levels get content generated">
+                                    <span class="level-icon">✍️</span>
+                                    Content Level:
+                                </label>
+                                <select id="content-level-selector" class="level-dropdown">
+                                    <option value="-1" ${contentLevelState === -1 ? 'selected' : ''}>None</option>
+                                    ${node.template.map((levelName, index) => 
+                                        `<option value="${index}" ${contentLevelState === index ? 'selected' : ''}>${levelName}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            
+                            <!-- Context Prune Level -->
+                            <div class="level-selector">
+                                <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
+                                    <span class="level-icon">🔧</span>
+                                    Prune Level:
+                                </label>
+                                <select id="context-prune-level-selector" class="level-dropdown">
+                                    <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
+                                    ${node.template.map((levelName, index) => 
+                                        `<option value="${index}" ${contextPruneLevelState === index ? 'selected' : ''}>${levelName}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            
+                            <!-- Coherence Level -->
+                            <div class="level-selector">
+                                <label for="coherence-level-selector" title="Which levels get coherence checking">
+                                    <span class="level-icon">🔍</span>
+                                    Coherence Level:
+                                </label>
+                                <select id="coherence-level-selector" class="level-dropdown">
+                                    <option value="-1" ${coherenceLevelState === -1 ? 'selected' : ''}>None</option>
+                                    ${node.template.slice(0, -1).map((levelName, index) => 
+                                        `<option value="${index}" ${coherenceLevelState === index ? 'selected' : ''}>${levelName}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
                         </div>
                         
-                        <div class="generation-actions">
-                            <div class="count-container" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'}; align-items: center; gap: 0.4rem;">
-                                <label for="generation-count-input" style="font-size: 0.85rem; white-space: nowrap;">Count:</label>
-                                <input type="number" id="generation-count-input" min="1" max="20" value="${node.getTemplateChildrenCount() ?? ''}" style="width: 60px; padding: 0.4rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.85rem;">
-                            </div>
+                        <!-- Validation Messages -->
+                        <div id="level-validation-message" class="level-validation-message" style="display: none;">
+                            <span class="validation-icon">⚠️</span>
+                            <span id="validation-text"></span>
+                        </div>
+                        
+                        <!-- Generate Button with Help -->
+                        <div class="generation-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button id="generation-levels-help-btn" class="help-button" title="Learn about generation levels" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
+                                ?
+                            </button>
                             <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
                                 ⚡ Generate
                             </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Secondary Controls Row (expandable) -->
-                    <div class="secondary-controls" style="display: ${!node.isLeaf && node.getState() === 'Final' ? 'flex' : 'none'};">
-                        <div class="generation-options">
-                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
-                                <input type="checkbox" id="include-content-checkbox" ${includeContentState ? 'checked' : ''} style="margin: 0;">
-                                <span>Include content</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
-                                <input type="checkbox" id="check-coherence-checkbox" ${checkCoherenceState && !recursiveState ? 'checked' : ''} ${recursiveState ? 'disabled' : ''} style="margin: 0;">
-                                <span>Check coherence</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
-                                <input type="checkbox" id="recursive-checkbox" ${recursiveState ? 'checked' : ''} style="margin: 0;">
-                                <span>Recursive</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem;">
-                                <input type="checkbox" id="autoprune-context-checkbox" ${autopruneState ? 'checked' : ''} style="margin: 0;">
-                                <span>Autoprune context</span>
-                            </label>
                         </div>
                     </div>
                     
@@ -1373,55 +1511,67 @@ export function renderNodeDetails() {
         }).catch(console.error);
     }
 
-    // Set up button tooltips and event listeners for generate all children button (now inline)
-    if (!node.isLeaf) {
-        // Set up checkbox event listeners to save state
-        const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
-        const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
-        const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
-        const autopruneCheckbox = getElementById('autoprune-context-checkbox') as HTMLInputElement;
-        
-        if (includeContentCheckbox) {
-            includeContentCheckbox.addEventListener('change', () => {
-                includeContentState = includeContentCheckbox.checked;
-                void saveCheckboxStates().catch(console.error);
-            });
+    // Set up event listeners for level-based generation controls
+    const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
+    const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
+    const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
+    const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
+    const validationMessage = getElementById('level-validation-message') as HTMLDivElement;
+    const validationText = getElementById('validation-text') as HTMLSpanElement;
+    
+    // Validation function
+    const validateLevels = (): boolean => {
+        if (!draftLevelSelector || !contentLevelSelector || !coherenceLevelSelector) {
+            return true; // Skip validation if elements not found
         }
         
-        if (checkCoherenceCheckbox) {
-            checkCoherenceCheckbox.addEventListener('change', () => {
-                checkCoherenceState = checkCoherenceCheckbox.checked;
-                void saveCheckboxStates().catch(console.error);
-            });
+        const draftLevel = parseInt(draftLevelSelector.value);
+        const contentLevel = parseInt(contentLevelSelector.value);
+        const coherenceLevel = parseInt(coherenceLevelSelector.value);
+        
+        let isValid = true;
+        let errorMessage = '';
+        
+        // Content level cannot be higher than draft level
+        if (contentLevel > draftLevel) {
+            isValid = false;
+            errorMessage = 'Content level cannot be higher than draft level';
         }
         
-        if (recursiveCheckbox) {
-            recursiveCheckbox.addEventListener('change', () => {
-                recursiveState = recursiveCheckbox.checked;
-                
-                // When recursive is checked, uncheck and disable coherence check
-                if (checkCoherenceCheckbox) {
-                    if (recursiveState) {
-                        checkCoherenceCheckbox.checked = false;
-                        checkCoherenceCheckbox.disabled = true;
-                        checkCoherenceState = false;
-                    } else {
-                        checkCoherenceCheckbox.disabled = false;
-                        checkCoherenceCheckbox.checked = checkCoherenceState;
-                    }
-                }
-                
-                void saveCheckboxStates().catch(console.error);
-            });
+        // Coherence level must be less than draft level
+        if (coherenceLevel >= draftLevel && draftLevel !== -1) {
+            isValid = false;
+            errorMessage = 'Coherence level must be less than draft level';
         }
         
-        if (autopruneCheckbox) {
-            autopruneCheckbox.addEventListener('change', () => {
-                autopruneState = autopruneCheckbox.checked;
-                void saveCheckboxStates().catch(console.error);
+        // Show/hide validation message
+        if (validationMessage && validationText) {
+            if (isValid) {
+                validationMessage.style.display = 'none';
+            } else {
+                validationText.textContent = errorMessage;
+                validationMessage.style.display = 'flex';
+            }
+        }
+        
+        return isValid;
+    };
+    
+    // Add validation event listeners
+    const levelSelectors = [draftLevelSelector, contentLevelSelector, contextPruneLevelSelector, coherenceLevelSelector];
+    
+    levelSelectors.forEach(selector => {
+        if (selector) {
+            selector.addEventListener('change', () => {
+                validateLevels();
+                // Save level states to storage
+                void saveLevelStates().catch(console.error);
             });
         }
-    }
+    });
+    
+    // Initial validation
+    validateLevels();
 
     // Set up auto propagate checkbox listener (outside the if block since it's always present)
 
@@ -2501,6 +2651,22 @@ export function setupEventListeners() {
         } else if (e.target.id === 'show-ratings-checkbox') {
             const checkbox = e.target as HTMLInputElement;
             toggleRatingsView(checkbox.checked);
+        } else if (e.target.id === 'draft-level-selector') {
+            const select = e.target as HTMLSelectElement;
+            draftLevelState = parseInt(select.value);
+            void saveLevelStates();
+        } else if (e.target.id === 'content-level-selector') {
+            const select = e.target as HTMLSelectElement;
+            contentLevelState = parseInt(select.value);
+            void saveLevelStates();
+        } else if (e.target.id === 'context-prune-level-selector') {
+            const select = e.target as HTMLSelectElement;
+            contextPruneLevelState = parseInt(select.value);
+            void saveLevelStates();
+        } else if (e.target.id === 'coherence-level-selector') {
+            const select = e.target as HTMLSelectElement;
+            coherenceLevelState = parseInt(select.value);
+            void saveLevelStates();
         } else if ((e.target as HTMLInputElement).name === 'generation-type') {
             // Handle generation type radio button changes
             const radio = e.target as HTMLInputElement;
@@ -2535,7 +2701,21 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     }
     
     // Load the checkbox states from storage
-    await loadCheckboxStates();
+    await loadLevelStates();
+    
+    // Set sensible defaults for first-time usage if no states were loaded
+    if (draftLevelState === -1 && contentLevelState === -1 && contextPruneLevelState === -1 && coherenceLevelState === -1) {
+        // First time - set some sensible defaults
+        if (activeProject) {
+            const currentNode = activeProject.findNodeById(selectedNodeId || activeProject.rootNode.id);
+            if (currentNode) {
+                draftLevelState = currentNode.level; // Create children at current level
+                contentLevelState = currentNode.level; // Generate content at current level
+                contextPruneLevelState = -1; // No context pruning by default
+                coherenceLevelState = -1; // No coherence checking by default
+            }
+        }
+    }
 
     const mainContent = getElementById('main-content');
     
@@ -2921,9 +3101,7 @@ export function renderMultiProjectTree() {
                 }
                 
                 if (node && nodeProject) {
-                    // Prevent interaction while a node is generating
-                    if (node.isGenerating) return;
-
+                    // Allow selection of nodes even when they're generating
                     selectedNodeId = id;
                     projectManager = nodeProject; // Update the active project manager
                     state.setActiveProject(nodeProject.rootNode.id); // Update the active project in state
@@ -3241,98 +3419,85 @@ function propagateTemplateToSubtree(rootNode: DocumentNode): void {
 async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     if (!projectManager) return;
 
-    // Get the selected generation type from radio buttons
-    const contentRadio = document.querySelector('input[name="generation-type"][value="content"]') as HTMLInputElement;
-    const childrenRadio = document.querySelector('input[name="generation-type"][value="children"]') as HTMLInputElement;
+    // Get level values from dropdowns
+    const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
+    const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
+    const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
+    const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     
-    if (!contentRadio || !childrenRadio) {
-        console.error('Generation type radio buttons not found');
+    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector) {
+        console.error('Level selector dropdowns not found');
         return;
     }
 
-    const generateChildren = childrenRadio.checked;
+    // Get level values
+    const draftLevel = parseInt(draftLevelSelector.value);
+    const contentLevel = parseInt(contentLevelSelector.value);
+    const contextPruneLevel = parseInt(contextPruneLevelSelector.value);
+    const coherenceLevel = parseInt(coherenceLevelSelector.value);
     
-    if (generateChildren) {
-        // Generate all children
-        if (node.isLeaf) {
-            alert('This node is a leaf node and cannot have children.');
-            return;
-        }
+    // Validate levels
+    if (contentLevel > draftLevel) {
+        alert('Content level cannot be higher than draft level');
+        return;
+    }
+    
+    if (coherenceLevel >= draftLevel && draftLevel !== -1) {
+        alert('Coherence level must be less than draft level');
+        return;
+    }
+    
+    // Check if any work needs to be done
+    if (draftLevel === -1 && contentLevel === -1 && contextPruneLevel === -1 && coherenceLevel === -1) {
+        alert('Please select at least one level for generation');
+        return;
+    }
+    
+    // Show generation overlay at start
+    showGenerationOverlay();
+    
+    try {
+        // Import UnifiedGenerationService
+        const { UnifiedGenerationService } = await import('../project/UnifiedGenerationService');
         
-        // Get checkbox states for children generation
-        const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
-        const checkCoherenceCheckbox = getElementById('check-coherence-checkbox') as HTMLInputElement;
-        const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
-        const autopruneCheckbox = getElementById('autoprune-context-checkbox') as HTMLInputElement;
+        // Create service dependencies using existing projectManager services
+        const unifiedService = new UnifiedGenerationService({
+            treeService: projectManager.getTreeService(),
+            contextService: projectManager.getContextService(),
+            promptService: projectManager.getPromptService(),
+            generationController: projectManager.getGenerationController(),
+            generationCoordinator: projectManager.getGenerationCoordinator(),
+            loopOrchestrator: (projectManager as any).loopOrchestrator,
+            settingsManager: projectManager.getSettingsManager(),
+            openRouterClient: (projectManager as any).openRouterClient,
+            eventEmitter: projectManager,
+            saveToStorage: () => projectManager!.saveToStorage(),
+            rootNode: projectManager.rootNode
+        });
         
-        const includeContent = includeContentCheckbox?.checked ?? true;
-        const checkCoherence = checkCoherenceCheckbox?.checked ?? false;
-        const recursive = recursiveCheckbox?.checked ?? false;
-        const autoprune = autopruneCheckbox?.checked ?? false;
-        
-        // Get count from input
-        const countInput = getElementById('generation-count-input') as HTMLInputElement;
-        const count = countInput?.value ? parseInt(countInput.value, 10) : node.getTemplateChildrenCount() || undefined;
-        
-        // Store the coherence check state for this generation
-        if (checkCoherence) {
-            (node as any)._pendingCoherenceCheck = true;
-        }
-        
-        // Use the same coordinator system as the dropdown action for consistency
-        const coordinator = projectManager.getGenerationCoordinator();
-        
-        // Count how many nodes will be affected (same logic as dropdown action)
-        const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
-            const nodes: string[] = [];
-            
-            // If this node has no children, count it as needing children created
-            if (parentNode.children.length === 0) {
-                nodes.push(parentNode.id + '_children');
-            }
-            
-            // Check each child for content generation needs
-            for (const child of parentNode.children) {
-                if (includeContent && child.getState() !== 'Final') {
-                    nodes.push(child.id);
-                }
-                
-                // If recursive, check children too
-                if (recursive) {
-                    nodes.push(...getAllInvolvedNodes(child));
-                }
-            }
-            
-            return nodes;
+        // Define generation levels
+        const levels = {
+            draftLevel,
+            contentLevel,
+            contextPruneLevel,
+            coherenceLevel
         };
-
-        const involvedNodes = getAllInvolvedNodes(node);
-        const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
-        if (!operationId) {
-            alert('Another generation operation is already in progress. Please wait for it to complete.');
-            return;
-        }
-
-        // Set bulk operation flag
-        isBulkOperationActive = true;
         
-        // Start the bulk generation
-        projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, autoprune)
-            .then(() => {
-                coordinator.completeOperation(operationId, true);
-                if (projectManager) {
-                    void projectManager.saveToStorage().catch(console.error);
-                }
-            })
-            .catch(error => {
-                coordinator.completeOperation(operationId, false, error);
-                console.error('Children generation failed:', error);
-            });
+        // Start unified generation
+        await unifiedService.generateWithLevels(node.id, levels);
         
-    } else {
-        // Generate this content
-        // Call the single content generation method
-        await projectManager.getGenerationService().generateNodeContent(node.id, undefined, false);
+        // Save to storage
+        await projectManager.saveToStorage();
+        
+        console.log('✅ Unified generation completed successfully');
+        
+    } catch (error) {
+        console.error('Unified generation failed:', error);
+        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+        // Clear progress UI and hide overlay
+        clearProgressUI();
+        hideGenerationOverlay();
     }
 }
 
@@ -3353,6 +3518,15 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         void handleUnifiedGeneration(node);
     },
     
+    'generation-levels-help-btn': (_e: Event) => {
+        void import('./modals/GenerationLevelsHelpModal').then(({ GenerationLevelsHelpModal }) => {
+            const helpModal = new GenerationLevelsHelpModal();
+            void helpModal.open();
+        }).catch((error: unknown) => {
+            console.error('Failed to open generation levels help modal:', error);
+            alert('Failed to open generation levels help. Please try again.');
+        });
+    },
 
     
     'node-propagate-context-btn': (_e: Event) => {
