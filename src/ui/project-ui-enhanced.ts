@@ -146,13 +146,6 @@ export function setupEnhancedEventListeners(): void {
     eventManager.addDelegatedEvent(
         mainContent,
         'change',
-        '#show-ratings-checkbox',
-        handleShowRatingsChange
-    );
-
-    eventManager.addDelegatedEvent(
-        mainContent,
-        'change',
         '#include-content-checkbox',
         handleIncludeContentChange
     );
@@ -348,11 +341,6 @@ function handleVersionNextClick(_event: Event): void {
 function handleUseVersionClick(_event: Event): void {
     // Note: Version navigation is now handled in project-ui.ts
     // This handler is no longer needed but kept for compatibility
-}
-
-function handleShowRatingsChange(_event: Event): void {
-    console.log('📊 Show ratings changed');
-    // TODO: Extract implementation from original code
 }
 
 function handleIncludeContentChange(_event: Event): void {

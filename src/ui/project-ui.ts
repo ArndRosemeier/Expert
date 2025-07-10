@@ -1410,17 +1410,11 @@ export function renderNodeDetails() {
                         <button id="version-next-btn" class="version-nav-btn" title="Next version">›</button>
                         <button id="use-this-version-btn" class="button button-primary button-sm" style="display: none;">Use This Version</button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="show-ratings-checkbox" style="margin: 0;">
-                        <label for="show-ratings-checkbox" style="font-weight: normal; font-size: 0.9rem; margin: 0;">Show ratings</label>
-                    </div>
+
                 </div>
             </div>
             <div id="content-display-area">
                 <textarea id="node-content" class="large-textarea" rows="15" placeholder="Node content will be generated or can be written here...">${node.content || ''}</textarea>
-                <div id="ratings-display" style="display: none;">
-                    <!-- Ratings will be populated here -->
-                </div>
             </div>
         </div>
         
@@ -1454,14 +1448,6 @@ export function renderNodeDetails() {
 
     // --- Populate and Set States (No Listeners Here!) ---
     const generateBtn = getElementById('node-generate-btn') as HTMLButtonElement;
-    const showRatingsCheckbox = getElementById('show-ratings-checkbox') as HTMLInputElement;
-
-    // Reset checkbox state when switching nodes
-    if (showRatingsCheckbox) {
-        showRatingsCheckbox.checked = false;
-        // Ensure content view is shown by default
-        toggleRatingsView(false);
-    }
 
     // Initialize version navigation
     initializeVersionNavigation(node);
@@ -2656,9 +2642,6 @@ export function setupEventListeners() {
                     renderNodeDetails();
                 }
             }
-        } else if (e.target.id === 'show-ratings-checkbox') {
-            const checkbox = e.target as HTMLInputElement;
-            toggleRatingsView(checkbox.checked);
         } else if (e.target.id === 'draft-level-selector') {
             const select = e.target as HTMLSelectElement;
             draftLevelState = parseInt(select.value);
