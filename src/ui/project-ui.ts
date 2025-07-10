@@ -1246,7 +1246,7 @@ export function renderNodeDetails() {
             <div class="header-left">
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                     <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
-                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title} <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span></h2>
                 </div>
                 
                 <!-- Progress Container (prominent, initially hidden) -->
@@ -1303,9 +1303,10 @@ export function renderNodeDetails() {
                                 </label>
                                 <select id="draft-level-selector" class="level-dropdown">
                                     <option value="-1" ${draftLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.map((levelName, index) => 
-                                        `<option value="${index}" ${draftLevelState === index ? 'selected' : ''}>${levelName}</option>`
-                                    ).join('')}
+                                    ${node.template.map((levelName, index) => {
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${index}" ${draftLevelState === index ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
                                 </select>
                             </div>
                             
@@ -1317,9 +1318,10 @@ export function renderNodeDetails() {
                                 </label>
                                 <select id="content-level-selector" class="level-dropdown">
                                     <option value="-1" ${contentLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.map((levelName, index) => 
-                                        `<option value="${index}" ${contentLevelState === index ? 'selected' : ''}>${levelName}</option>`
-                                    ).join('')}
+                                    ${node.template.map((levelName, index) => {
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${index}" ${contentLevelState === index ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
                                 </select>
                             </div>
                             
@@ -1331,9 +1333,10 @@ export function renderNodeDetails() {
                                 </label>
                                 <select id="context-prune-level-selector" class="level-dropdown">
                                     <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.map((levelName, index) => 
-                                        `<option value="${index}" ${contextPruneLevelState === index ? 'selected' : ''}>${levelName}</option>`
-                                    ).join('')}
+                                    ${node.template.map((levelName, index) => {
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${index}" ${contextPruneLevelState === index ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
                                 </select>
                             </div>
                             
@@ -1345,9 +1348,10 @@ export function renderNodeDetails() {
                                 </label>
                                 <select id="coherence-level-selector" class="level-dropdown">
                                     <option value="-1" ${coherenceLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.slice(0, -1).map((levelName, index) => 
-                                        `<option value="${index}" ${coherenceLevelState === index ? 'selected' : ''}>${levelName}</option>`
-                                    ).join('')}
+                                    ${node.template.slice(0, -1).map((levelName, index) => {
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${index}" ${coherenceLevelState === index ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
                                 </select>
                             </div>
                         </div>
