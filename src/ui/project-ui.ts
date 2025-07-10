@@ -1246,7 +1246,8 @@ export function renderNodeDetails() {
             <div class="header-left">
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                     <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
-                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title} <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span></h2>
+                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+                    <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
                 </div>
                 
                 <!-- Progress Container (prominent, initially hidden) -->

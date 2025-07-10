@@ -554,6 +554,16 @@ export class CoherenceModal extends BaseModal {
                 // Don't fail the fix application if save fails
             }
             
+            // Refresh the main UI to show the updated content
+            try {
+                const { renderNodeDetails } = await import('../project-ui');
+                renderNodeDetails();
+                console.log('✅ Main UI refreshed after applying coherence fix');
+            } catch (refreshError) {
+                console.warn('⚠️ Failed to refresh main UI after applying fix:', refreshError);
+                // Don't fail the fix application if UI refresh fails
+            }
+            
         } catch (error) {
             console.error('Failed to apply fix:', error);
             button.textContent = '❌ Apply Failed';
