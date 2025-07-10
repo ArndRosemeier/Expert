@@ -3,8 +3,7 @@ import { EventEmitter } from '../EventEmitter';
 
 // Button labels - centralized for consistency (shared with project-ui.ts)
 const BUTTON_LABELS = {
-    GENERATE: 'Generate',
-    GENERATE_ALL: 'Generate All Children'
+    GENERATE: 'Generate'
 } as const;
 
 export interface GenerationOperation {
@@ -138,39 +137,22 @@ export class GenerationCoordinator {
         // Add a small delay to ensure UI has been re-rendered after renderNodeDetails() call
         setTimeout(() => {
             // Get fresh references to buttons after potential UI re-render
-        const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
-        const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+            const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
             
             console.log('🔘 Generation UI update - Generate button exists:', !!generateBtn);
-            console.log('🔘 Generation UI update - Generate All button exists:', !!generateAllBtn);
         
-        if (generateBtn) {
-            generateBtn.disabled = true;
-            if (operation.type === 'single-content') {
-                // Use safe button update to prevent listener loss
-                void import('../ui/event-manager').then(({ eventManager }) => {
-                    eventManager.updateButtonContent('node-generate-btn', 
-                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
-                        { disabled: true, className: 'button button-primary' }
-                    );
-                }).catch(console.error);
+            if (generateBtn) {
+                generateBtn.disabled = true;
+                if (operation.type === 'single-content') {
+                    // Use safe button update to prevent listener loss
+                    void import('../ui/event-manager').then(({ eventManager }) => {
+                        eventManager.updateButtonContent('node-generate-btn', 
+                            '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
+                            { disabled: true, className: 'button button-primary' }
+                        );
+                    }).catch(console.error);
+                }
             }
-        }
-        
-        if (generateAllBtn) {
-            generateAllBtn.disabled = true;
-            if (operation.type === 'bulk-children') {
-                // Use safe button update to prevent listener loss
-                void import('../ui/event-manager').then(({ eventManager }) => {
-                    eventManager.updateButtonContent('node-generate-all-btn', 
-                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
-                        { disabled: true, className: 'button' }
-                    );
-                }).catch(console.error);
-            }
-            } else if (operation.type === 'bulk-children') {
-                console.warn('⚠️ Generate All Children button not found during bulk generation start!');
-        }
         }, 50); // Small delay to ensure DOM has been updated
 
         // Show progress UI based on operation type
@@ -218,35 +200,20 @@ export class GenerationCoordinator {
             // Add a small delay to ensure UI has been re-rendered if renderNodeDetails() was called
             setTimeout(() => {
                 // Get fresh references to buttons after potential UI re-render
-            const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
-            const generateAllBtn = document.getElementById('node-generate-all-btn') as HTMLButtonElement;
+                const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
                 
                 console.log('✅ Generation complete - Generate button exists:', !!generateBtn);
-                console.log('✅ Generation complete - Generate All button exists:', !!generateAllBtn);
             
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                // Use safe button update to prevent listener loss
-                void import('../ui/event-manager').then(({ eventManager }) => {
-                    eventManager.updateButtonContent('node-generate-btn', 
-                        BUTTON_LABELS.GENERATE,
-                        { disabled: false, className: 'button button-primary' }
-                    );
-                }).catch(console.error);
-            }
-            
-            if (generateAllBtn) {
-                generateAllBtn.disabled = false;
-                // Use safe button update to prevent listener loss
-                void import('../ui/event-manager').then(({ eventManager }) => {
-                    eventManager.updateButtonContent('node-generate-all-btn', 
-                        BUTTON_LABELS.GENERATE_ALL,
-                        { disabled: false, className: 'button' }
-                    );
-                }).catch(console.error);
-                } else {
-                    console.warn('⚠️ Generate All Children button not found during cleanup!');
-            }
+                if (generateBtn) {
+                    generateBtn.disabled = false;
+                    // Use safe button update to prevent listener loss
+                    void import('../ui/event-manager').then(({ eventManager }) => {
+                        eventManager.updateButtonContent('node-generate-btn', 
+                            BUTTON_LABELS.GENERATE,
+                            { disabled: false, className: 'button button-primary' }
+                        );
+                    }).catch(console.error);
+                }
             }, 50); // Small delay to ensure DOM has been updated
 
             // Clear progress and overlays

@@ -10,6 +10,7 @@ import { EventEmitter } from '../EventEmitter';
 import { PromptContextBuilder } from '../services/PromptContextBuilder';
 import { promptExpansionService } from '../services/PromptExpansionService';
 import { CoherenceService } from '../ui/modals/services/CoherenceService';
+import { GenerationErrorService } from '../ui/modals/services/GenerationErrorService';
 import { GenerationCoordinator } from './GenerationCoordinator';
 import { QualityCriterion, CreatorPayload } from '../types';
 import { LoopProgress, RaterProgressPayload, Rating } from '../LoopOrchestrator';
@@ -59,6 +60,7 @@ export interface UnifiedProgressEvent {
         total: number;
     };
     detail?: string;
+    model?: string; // Current model being used (e.g., "Grok 4", "GPT-4")
 }
 
 /**
@@ -277,8 +279,8 @@ export class UnifiedGenerationService {
                 }
             }
 
-            // 4. Coherence Check (if this was the last child)
-            if (item.isLastChild && item.parentId) {
+            // 4. Coherence Check (if this was the last child and coherence is enabled)
+            if (item.isLastChild && item.parentId && levels.coherenceLevel !== -1) {
                 const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
                 if (parentNode && levels.coherenceLevel >= parentNode.level) {
                     await this.handleCoherenceCheck(item.parentId!);
@@ -291,7 +293,15 @@ export class UnifiedGenerationService {
             }
 
         } catch (error) {
-            console.error(`Error processing work item ${item.nodeId}:`, error);
+            // Show error through the error service (includes console logging)
+            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
+            const nodeTitle = node?.title || 'Unknown Node';
+            await GenerationErrorService.getInstance().showContentGenerationError(
+                error as Error, 
+                nodeTitle, 
+                'Node Processing'
+            );
+            
             // Make sure to clear spinner even on error
             this.clearCurrentWorkingNode(item.nodeId);
             // Continue with next item rather than stopping entire generation
@@ -314,21 +324,44 @@ export class UnifiedGenerationService {
         }
 
         // Check if context has already been AI-adjusted (skip if so)
-        const masterVersion = node.getMasterVersion();
-        const alreadyAdjusted = masterVersion && masterVersion.tags.has('context_ai_adjusted');
-        
-        if (alreadyAdjusted) {
-            console.log(`⏭️ Skipping auto-prune for "${node.title}" - already AI-adjusted`);
+        if (this.isMasterContextAlreadyAdjusted(node)) {
+            console.log(`⏭️ Skipping auto-prune for "${node.title}" - master context already AI-adjusted`);
             return;
         }
 
         try {
+            // Emit start progress
+            this.currentOperationProgress = {
+                current: 1,
+                total: 3,
+                message: `Auto-pruning context for "${node.title}"`
+            };
+            this.currentNodeId = nodeId;
+            this.emitUnifiedProgress();
+            
             // Import the ContextAdjusterModal and run in automatic mode
             const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
             const contextAdjuster = new ContextAdjusterModal();
             
             console.log(`🔧 Auto-pruning context for "${node.title}"`);
+            
+            // Update progress mid-way
+            this.currentOperationProgress = {
+                current: 2,
+                total: 3,
+                message: `Analyzing context for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+            
             const contextChanged = await contextAdjuster.runAutomaticMode(node);
+            
+            // Emit completion progress
+            this.currentOperationProgress = {
+                current: 3,
+                total: 3,
+                message: contextChanged ? `Auto-pruned context for "${node.title}"` : `No context issues found for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
             
             if (contextChanged) {
                 console.log(`🔧 Auto-pruned context for "${node.title}"`);
@@ -392,7 +425,13 @@ export class UnifiedGenerationService {
             await this.runContentLoop(nodeId, loopInput);
             
         } catch (error) {
-            console.error(`Content generation failed for node "${node.title}":`, error);
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showContentGenerationError(
+                error as Error, 
+                node.title, 
+                'Content Generation'
+            );
+            
             throw error;
         } finally {
             // Restore original profile if we used an override
@@ -416,6 +455,15 @@ export class UnifiedGenerationService {
         }
 
         try {
+            // Emit start progress
+            this.currentOperationProgress = {
+                current: 1,
+                total: 3,
+                message: `Generating children for "${node.title}"`
+            };
+            this.currentNodeId = nodeId;
+            this.emitUnifiedProgress();
+
             // Get the outline prompt template
             const prompts = this.deps.settingsManager.getPrompts();
             const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
@@ -432,6 +480,14 @@ export class UnifiedGenerationService {
                 outlineContent: node.content
             });
             const finalPrompt = promptExpansionService.expandPrompt(prompt, promptContext);
+
+            // Update progress mid-way
+            this.currentOperationProgress = {
+                current: 2,
+                total: 3,
+                message: `AI generating children for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
 
             // Generate children using AI
             const response = await this.deps.openRouterClient.chat('creator', finalPrompt);
@@ -481,6 +537,15 @@ export class UnifiedGenerationService {
             });
 
             await this.deps.saveToStorage();
+            
+            // Emit completion progress
+            this.currentOperationProgress = {
+                current: 3,
+                total: 3,
+                message: `Created ${childIds.length} children for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+            
             console.log(`✅ Created ${childIds.length} children for "${node.title}"`);
             
             // Update tree immediately after children are created
@@ -490,7 +555,13 @@ export class UnifiedGenerationService {
             return childIds;
             
         } catch (error) {
-            console.error(`Draft creation failed for node "${node.title}":`, error);
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showContentGenerationError(
+                error as Error, 
+                node.title, 
+                'Draft Creation'
+            );
+            
             throw error;
         }
     }
@@ -539,13 +610,30 @@ export class UnifiedGenerationService {
                         await coherenceModal.openWithData(result, parentNode);
                         console.log(`📋 Coherence modal opened for "${parentNode.title}"`);
                     } catch (error) {
-                        console.error(`Failed to open coherence modal for "${parentNode.title}":`, error);
+                        // Show error through the error service (includes console logging)
+                        await GenerationErrorService.getInstance().showAIError(
+                            error as Error,
+                            {
+                                title: 'Coherence Modal Error',
+                                operation: `Opening coherence modal for "${parentNode.title}"`,
+                                purpose: 'Coherence Analysis'
+                            }
+                        );
                     }
                 }, 500);
             }
             
         } catch (error) {
-            console.error(`Coherence check failed for node "${parentNode.title}":`, error);
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showAIError(
+                error as Error,
+                {
+                    title: 'Coherence Check Failed',
+                    operation: `Coherence check for "${parentNode.title}"`,
+                    purpose: 'Coherence Analysis'
+                }
+            );
+            
             // Continue with generation even if coherence check fails
         }
     }
@@ -595,6 +683,55 @@ export class UnifiedGenerationService {
     }
 
     /**
+     * Get current model information for progress display
+     */
+    private getCurrentModelInfo(): string | undefined {
+        const profile = this.deps.settingsManager.getLastUsedProfile();
+        if (!profile?.selectedModels?.['creator']) return undefined;
+        
+        return this.formatModelName(profile.selectedModels['creator']);
+    }
+
+    /**
+     * Format model name for user display (e.g., "x-ai/grok-4" -> "Grok 4")
+     */
+    private formatModelName(modelId: string): string {
+        // Map of model patterns to friendly names
+        const modelMap: { [key: string]: string } = {
+            'x-ai/grok-4': 'Grok 4',
+            'x-ai/grok-2': 'Grok 2',
+            'anthropic/claude-3.5-sonnet': 'Claude 3.5 Sonnet',
+            'anthropic/claude-3-opus': 'Claude 3 Opus',
+            'anthropic/claude-3-sonnet': 'Claude 3 Sonnet',
+            'anthropic/claude-3-haiku': 'Claude 3 Haiku',
+            'openai/gpt-4o': 'GPT-4o',
+            'openai/gpt-4': 'GPT-4',
+            'openai/gpt-4-turbo': 'GPT-4 Turbo',
+            'openai/gpt-3.5-turbo': 'GPT-3.5 Turbo',
+            'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
+            'google/gemini-pro': 'Gemini Pro',
+            'meta-llama/llama-3.1-405b-instruct': 'Llama 3.1 405B',
+            'meta-llama/llama-3.1-70b-instruct': 'Llama 3.1 70B',
+            'meta-llama/llama-3.1-8b-instruct': 'Llama 3.1 8B'
+        };
+
+        // Check for exact match first
+        if (modelMap[modelId]) {
+            return modelMap[modelId];
+        }
+
+        // Extract readable name from model ID if no exact match
+        let name = modelId.replace(/^[^/]+\//, ''); // Remove provider prefix
+        name = name.replace(/-instruct$/, ''); // Remove -instruct suffix
+        name = name.replace(/-/g, ' '); // Replace hyphens with spaces
+        
+        // Capitalize words
+        return name.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+    }
+
+    /**
      * Emit unified progress event that combines all three layers
      */
     private emitUnifiedProgress(): void {
@@ -614,6 +751,12 @@ export class UnifiedGenerationService {
 
         if (this.currentStageProgress) {
             unifiedProgress.stages = this.currentStageProgress;
+        }
+
+        // Add current model information
+        const modelInfo = this.getCurrentModelInfo();
+        if (modelInfo) {
+            unifiedProgress.model = modelInfo;
         }
 
         this.deps.eventEmitter.emit('unified-progress', unifiedProgress);
@@ -808,7 +951,12 @@ export class UnifiedGenerationService {
                 throw new Error(`Content generation failed for node: ${node.title}`);
             }
         } catch (error) {
-            console.error(`Content generation error for "${node.title}":`, error);
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showContentGenerationError(
+                error as Error, 
+                node.title, 
+                'Content Loop'
+            );
             
             // End the generation session with failure if it's still active
             if (node.currentGenerationSession) {
@@ -878,6 +1026,41 @@ export class UnifiedGenerationService {
     }
 
 
+
+    /**
+     * Check if the master context has already been AI-adjusted by comparing with previous adjustments
+     */
+    private isMasterContextAlreadyAdjusted(node: DocumentNode): boolean {
+        const masterVersion = node.getMasterVersion();
+        if (!masterVersion) {
+            return false; // No master version means no context to check
+        }
+
+        const masterContext = masterVersion.context;
+        
+        // Find all versions that have been context AI-adjusted
+        const adjustedVersions = node.getAllVersions().filter(version => 
+            version.tags.has('context_ai_adjusted')
+        );
+
+        // If no versions have been AI-adjusted, then master context needs adjustment
+        if (adjustedVersions.length === 0) {
+            return false;
+        }
+
+        // Check if ALL AI-adjusted versions have the same context as the master
+        // If any differs, we should re-adjust to be safe
+        for (const adjustedVersion of adjustedVersions) {
+            if (adjustedVersion.context !== masterContext) {
+                console.log(`🔍 Master context differs from AI-adjusted version (${adjustedVersion.id.substring(0, 8)}...), needs adjustment`);
+                return false;
+            }
+        }
+
+        // Master context matches ALL AI-adjusted versions, so it's already properly adjusted
+        console.log(`🔍 Master context matches all ${adjustedVersions.length} AI-adjusted version(s), skipping adjustment`);
+        return true;
+    }
 
     /**
      * Extract settings override from node context (copied from GenerationService)

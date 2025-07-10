@@ -46,6 +46,7 @@ import { SettingsManager } from './SettingsManager';
 import { StorageService } from './StorageService';
 import { AIInteractionsService } from './AIInteractionsService';
 import { AIProgressService } from './AIProgressService';
+import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
 
 export interface StreamingCallbacks {
@@ -450,6 +451,13 @@ export class OpenRouterClient {
         }
       }
       
+      // Show detailed error modal
+      if (error instanceof Error) {
+        const errorService = GenerationErrorService.getInstance();
+        const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
+        void errorService.showOpenRouterError(error, purpose, modelForError);
+      }
+      
       throw error;
     } finally {
       this.activeOperations.delete(opId);
@@ -794,6 +802,13 @@ export class OpenRouterClient {
         } catch (logError) {
           console.error('Failed to log AI interaction error:', logError);
         }
+      }
+      
+      // Show detailed error modal for streaming errors
+      if (error instanceof Error && error.name !== 'AbortError') {
+        const errorService = GenerationErrorService.getInstance();
+        const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
+        void errorService.showStreamingError(error, purpose, modelForError);
       }
       
       callbacks.onError?.(error);

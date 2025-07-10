@@ -86,11 +86,12 @@ export class SettingsService {
      * Gets the last used profile
      */
     public getLastUsedProfile(): SettingsProfile | null {
-        return this.settingsManager.getLastUsedProfile() || null;
+        const profile = this.settingsManager.getLastUsedProfile();
+        return profile || null;
     }
 
     /**
-     * Creates a new profile with current settings
+     * Creates a new profile by copying the currently active profile
      */
     public async createProfile(name: string): Promise<{ success: boolean; message: string }> {
         if (!name.trim()) {
@@ -103,17 +104,27 @@ export class SettingsService {
         }
 
         try {
-            // Get current settings
-            const currentSettings: SettingsProfile = {
-                selectedModels: this.modelSelector.getSelectedModels(),
-                criteria: [], // Will be filled by the UI component
-                maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
-                prompt: '', // Legacy field
-                contextExtractionPrompt: '' // Legacy field
-            };
+            // Get the current active profile to copy from
+            const currentProfile = this.getLastUsedProfile();
+            
+            let newProfileSettings: SettingsProfile;
+            
+            if (currentProfile && currentProfile.criteria) {
+                // Copy all settings from the current profile
+                newProfileSettings = { ...currentProfile };
+            } else {
+                // Fallback: create with current component settings if no active profile
+                newProfileSettings = {
+                    selectedModels: this.modelSelector.getSelectedModels(),
+                    criteria: [], // Will be filled by the UI component
+                    maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
+                    prompt: '', // Legacy field
+                    contextExtractionPrompt: '' // Legacy field
+                };
+            }
 
             // Save the new profile
-            await this.settingsManager.saveProfile(name, currentSettings);
+            await this.settingsManager.saveProfile(name, newProfileSettings);
             await this.settingsManager.setLastUsedProfile(name);
 
             this.emitChange({
@@ -121,7 +132,8 @@ export class SettingsService {
                 data: { action: 'created', profileName: name }
             });
 
-            return { success: true, message: `Profile "${name}" created and activated.` };
+            const sourceMessage = currentProfile ? ` (copied from "${this.getLastUsedProfileName()}")` : '';
+            return { success: true, message: `Profile "${name}" created and activated${sourceMessage}.` };
         } catch (error) {
             console.error('Failed to create profile:', error);
             return { success: false, message: 'Failed to create profile. Please try again.' };

@@ -30,6 +30,102 @@ let coherenceLevelState: number = -1;
 // Simple bulk operation tracking
 let isBulkOperationActive: boolean = false;
 
+// Helper function to get all nodes recursively
+function getAllNodesRecursively(node: DocumentNode): DocumentNode[] {
+    const result: DocumentNode[] = [node];
+    node.children.forEach((child: DocumentNode) => {
+        result.push(...getAllNodesRecursively(child));
+    });
+    return result;
+}
+
+// Event handler for expand button clicks with modifier key support
+const handleExpandButtonClick = async (e: Event) => {
+    const mouseEvent = e as MouseEvent;
+    const target = (e.target as HTMLElement).closest('.tree-expand-btn') as HTMLElement;
+    if (!target) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
+    if (!nodeId) {
+        console.error('❌ No nodeId found on expand button', target);
+        return;
+    }
+
+    const projects = state.getProjects();
+    
+    // Find the node and project
+    let targetNode: DocumentNode | null = null;
+    let nodeProject: ProjectManager | null = null;
+    for (const project of projects) {
+        targetNode = project.findNodeById(nodeId);
+        if (targetNode) {
+            nodeProject = project;
+            break;
+        }
+    }
+    
+    if (!targetNode || !nodeProject) {
+        console.error('❌ No node found with ID:', nodeId);
+        return;
+    }
+
+    // Determine scope based on modifier keys
+    if (mouseEvent.altKey) {
+        // Alt+Click: Toggle all nodes in all projects
+        targetNode.collapsed = !targetNode.collapsed;
+        const targetState = targetNode.collapsed;
+        
+        for (const project of projects) {
+            const allNodes = getAllNodesRecursively(project.rootNode);
+            allNodes.forEach((node: DocumentNode) => {
+                if (node.children.length > 0) {
+                    node.collapsed = targetState;
+                }
+            });
+            await project.saveToStorage();
+        }
+        
+    } else if (mouseEvent.ctrlKey) {
+        // Ctrl+Click: Toggle all nodes in this project
+        targetNode.collapsed = !targetNode.collapsed;
+        const targetState = targetNode.collapsed;
+        
+        const allNodes = getAllNodesRecursively(nodeProject.rootNode);
+        const nodesWithChildren = allNodes.filter((n: DocumentNode) => n.children.length > 0);
+        
+        nodesWithChildren.forEach((node: DocumentNode) => {
+            node.collapsed = targetState;
+        });
+        
+        await nodeProject.saveToStorage();
+        
+    } else if (mouseEvent.shiftKey) {
+        // Shift+Click: Toggle all nodes at this level
+        targetNode.collapsed = !targetNode.collapsed;
+        const targetState = targetNode.collapsed;
+        
+        const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtLevel(targetNode.level, nodeProject.rootNode);
+        const nodesWithChildren = nodesAtSameLevel.filter(n => n.children.length > 0);
+        
+        nodesWithChildren.forEach(levelNode => {
+            levelNode.collapsed = targetState;
+        });
+        
+        await nodeProject.saveToStorage();
+        
+    } else {
+        // Regular click: Toggle individual node
+        targetNode.collapsed = !targetNode.collapsed;
+        await nodeProject.saveToStorage();
+    }
+    
+    // Re-render the tree
+    renderMultiProjectTree();
+};
+
 
 // Version navigation state
 let currentVersionIndex: number = 0;
@@ -623,7 +719,7 @@ export function renderProjectUI(proj: ProjectManager) {
     projectTree.innerHTML = ''; // Clear previous content
     nodeDetails.innerHTML = ''; // Clear previous content
 
-    refreshGlobalProfileSelector(); // Keep the profile selector up-to-date
+    void refreshGlobalProfileSelector(); // Keep the profile selector up-to-date
     renderMultiProjectTree();
     renderNodeDetails();
     
@@ -657,10 +753,10 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Capture current dropdown values before re-rendering to preserve user selections
             captureCurrentDropdownValues();
             renderProjectUI(manager);
-        
-        // Force clear progress UI as additional safety measure
+            
+            // Force clear progress UI as additional safety measure
         clearProgressUI();
-        hideGenerationOverlay();
+            hideGenerationOverlay();
             
             // Coherence check is now handled by the dedicated bulkGenerationComplete event
             // This simplifies the completion handler and makes timing more reliable
@@ -715,13 +811,14 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderProjectUI(manager);
     };
     
-    const handleUnifiedProgress = (e: { nodeId: string; operations?: ProgressInfo; iterations?: ProgressInfo; stages?: ProgressInfo; detail?: string }) => {
+    const handleUnifiedProgress = (e: { nodeId: string; operations?: ProgressInfo; iterations?: ProgressInfo; stages?: ProgressInfo; detail?: string; model?: string }) => {
         try {
             const progressData: ProgressUIData = {};
             if (e.operations) progressData.operations = e.operations;
             if (e.iterations) progressData.iterations = e.iterations;
             if (e.stages) progressData.stages = e.stages;
             if (e.detail) progressData.detail = e.detail;
+            if (e.model) progressData.model = e.model;
             
             updateProgressUI(progressData);
         } catch (error) {
@@ -902,11 +999,17 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
 // --- Component Renders ---
 
-export function refreshGlobalProfileSelector() {
+export async function refreshGlobalProfileSelector() {
     const selector = document.getElementById('active-profile-selector') as HTMLSelectElement;
     if (!selector) return;
 
     const settingsManager = state.getSettingsManager();
+    
+    // Wait for SettingsManager initialization to complete before reading profile data
+    if (settingsManager) {
+        await settingsManager.waitForInitialization();
+    }
+    
     const profileNames = settingsManager?.getProfileNames() || [];
     const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
     
@@ -1269,10 +1372,10 @@ export function renderNodeDetails() {
             <!-- Left Side: Title and Path -->
             <div class="header-left">
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                    <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
-                    <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
+                <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
+                <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
-                </div>
+            </div>
                 
                 <!-- Progress Container (prominent, initially hidden) -->
                 <div id="generation-progress-container" style="display: none; margin-top: 0.5rem;">
@@ -1280,17 +1383,17 @@ export function renderNodeDetails() {
                         <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: left;"></div>
                         <div class="progress-bar-wrapper" style="height: 20px;">
                             <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
+            </div>
+        </div>
+
                     <!-- Sub-progress bars -->
                     <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
                         <div class="progress-tier" style="flex: 1;">
                             <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
                             <div class="progress-bar-wrapper" style="height: 16px;">
                                 <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
+                </div>
+            </div>
                         
                         <div class="progress-tier" style="flex: 1;">
                             <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
@@ -1301,8 +1404,8 @@ export function renderNodeDetails() {
                     </div>
                     
                     <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
-                </div>
-                
+                    </div>
+                    
                 ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
                 
                 <!-- Actions dropdown positioned at bottom left of title panel -->
@@ -1311,9 +1414,9 @@ export function renderNodeDetails() {
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
                     </button>
-                </div>
-            </div>
-            
+                        </div>
+                    </div>
+                    
             <!-- Right Side: Generation Controls -->
             <div class="header-right">
                 <div class="generation-controls-compact">
@@ -1325,7 +1428,7 @@ export function renderNodeDetails() {
                                 <label for="draft-level-selector" title="Deepest level for which children (drafts) are created">
                                     <span class="level-icon">📝</span>
                                     Draft Level:
-                                </label>
+                            </label>
                                 <select id="draft-level-selector" class="level-dropdown">
                                     ${node.template.slice(node.level).map((levelName, index) => {
                                         const actualLevel = node.level + index;
@@ -1340,7 +1443,7 @@ export function renderNodeDetails() {
                                 <label for="content-level-selector" title="Which levels get content generated">
                                     <span class="level-icon">✍️</span>
                                     Content Level:
-                                </label>
+                            </label>
                                 <select id="content-level-selector" class="level-dropdown">
                                     <option value="-1" ${contentLevelState === -1 ? 'selected' : ''}>None</option>
                                     ${node.template.slice(node.level).map((levelName, index) => {
@@ -1356,7 +1459,7 @@ export function renderNodeDetails() {
                                 <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
                                     <span class="level-icon">🔧</span>
                                     Prune Level:
-                                </label>
+                            </label>
                                 <select id="context-prune-level-selector" class="level-dropdown">
                                     <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
                                     ${node.template.slice(node.level).map((levelName, index) => {
@@ -1365,8 +1468,8 @@ export function renderNodeDetails() {
                                         return `<option value="${actualLevel}" ${contextPruneLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
                                 </select>
-                            </div>
-                            
+                    </div>
+                    
                             <!-- Coherence Level -->
                             <div class="level-selector">
                                 <label for="coherence-level-selector" title="Which levels get coherence checking">
@@ -1381,9 +1484,9 @@ export function renderNodeDetails() {
                                         return `<option value="${actualLevel}" ${coherenceLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
                                 </select>
-                            </div>
                         </div>
-                        
+                </div>
+                
                         <!-- Validation Messages -->
                         <div id="level-validation-message" class="level-validation-message" style="display: none;">
                             <span class="validation-icon">⚠️</span>
@@ -1398,26 +1501,26 @@ export function renderNodeDetails() {
                             <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
                                 ⚡ Generate
                             </button>
-                        </div>
-                    </div>
-                    
+                                </div>
+                            </div>
+                            
                     ${node.isLeaf ? `
                         <div class="leaf-node-info" style="font-size: 0.8rem; color: #6c757d; font-style: italic; text-align: center; margin-top: 0.5rem;">
                             Leaf node (${node.template[node.level] || 'final level'}) - no children
-                        </div>
+                                </div>
                     ` : ''}
                     
                     <!-- Generation Status Display (compact) -->
                     <div id="generation-status" style="display: none; margin-top: 0.5rem; padding: 0.4rem 0.5rem; background-color: #e8f4fd; border: 1px solid #bee5eb; border-radius: 4px; font-size: 0.7rem; color: #0c5460; font-style: italic; text-align: center;">
                         <!-- Status messages will appear here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <style>
+                
+                <style>
         /* Actions modal now uses proper BaseModal system */
-        </style>
+                </style>
 
 
 
@@ -1508,7 +1611,7 @@ export function renderNodeDetails() {
     if (isThisNodeGenerating) {
         // Import EventManager for safe button updates
         void import('./event-manager').then(({ eventManager }) => {
-                        eventManager.updateButtonContent('node-generate-btn',
+            eventManager.updateButtonContent('node-generate-btn', 
             '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
@@ -1566,7 +1669,7 @@ export function renderNodeDetails() {
         if (validationMessage && validationText) {
             if (isValid) {
                 validationMessage.style.display = 'none';
-            } else {
+                    } else {
                 validationText.textContent = errorMessage;
                 validationMessage.style.display = 'flex';
             }
@@ -1910,7 +2013,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 2px; user-select: none; font-size: 12px;" title="Click: toggle this node | Double-click: toggle all nodes at this level">${expandIcon}</span>`;
+        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 2px; user-select: none; font-size: 12px;" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
 
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
@@ -2736,6 +2839,12 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Get profile information for the global selector
     const settingsManager = state.getSettingsManager();
+    
+    // Wait for SettingsManager initialization to complete before reading profile data
+    if (settingsManager) {
+        await settingsManager.waitForInitialization();
+    }
+    
     const profileNames = settingsManager?.getProfileNames() || [];
     const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
     
@@ -2835,10 +2944,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             </div>
             <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
-                        <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
-                        🤖 See AI interactions
-                    </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
+                    <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
+                    🤖 See AI interactions
+                </label>
                     <div id="ai-progress-report" style="display: none; font-size: 0.75rem; color: #6c757d; padding-left: 1.75rem; margin-top: -0.125rem;">
                         <!-- AI progress will appear here -->
                     </div>
@@ -2923,6 +3032,7 @@ interface ProgressUIData {
     iterations?: ProgressInfo;    // Middle level: LoopOrchestrator iterations (e.g., "Iteration 2 of 5")
     stages?: ProgressInfo;        // Bottom level: Stage within iteration (Create, Rate, Edit)
     detail?: string;              // Detail text below all progress bars
+    model?: string;               // Current model being used (e.g., "Grok 4")
 }
 
 // Global progress state to maintain all three progress bars
@@ -2930,7 +3040,8 @@ let currentProgressState = {
     operations: null as ProgressInfo | null,
     iterations: null as ProgressInfo | null,
     stages: null as ProgressInfo | null,
-    detail: ''
+    detail: '',
+    model: ''
 };
 
 function clearProgressUI() {
@@ -2939,7 +3050,7 @@ function clearProgressUI() {
         return;
     }
     
-    currentProgressState = { operations: null, iterations: null, stages: null, detail: '' };
+    currentProgressState = { operations: null, iterations: null, stages: null, detail: '', model: '' };
     container.style.display = 'none';
 }
 
@@ -2956,6 +3067,27 @@ function updateProgressUI(data: ProgressUIData) {
     const stagesText = getElementById('progress-text-stages');
     const stagesBar = getElementById('progress-bar-stages') as HTMLDivElement;
     const detailText = getElementById('progress-text-detail');
+    let modelText = document.getElementById('progress-text-model');
+    if (!modelText) {
+        // Create model text element if it doesn't exist
+        modelText = document.createElement('div');
+        modelText.id = 'progress-text-model';
+        modelText.style.cssText = `
+            font-size: 0.9rem;
+            color: #6c757d;
+            text-align: center;
+            font-style: italic;
+            margin-top: 0.5rem;
+            padding: 0.25rem;
+        `;
+        // Insert after detail text if it exists, otherwise append to container
+        const detailText = document.getElementById('progress-text-detail');
+        if (detailText && detailText.parentNode) {
+            detailText.parentNode.insertBefore(modelText, detailText.nextSibling);
+        } else {
+            container.appendChild(modelText);
+        }
+    }
     
     // Update the global state with new data (preserve existing values if not provided)
     if (data.operations) {
@@ -2964,6 +3096,7 @@ function updateProgressUI(data: ProgressUIData) {
     if (data.iterations) currentProgressState.iterations = data.iterations;
     if (data.stages) currentProgressState.stages = data.stages;
     if (data.detail !== undefined) currentProgressState.detail = data.detail;
+    if (data.model !== undefined) currentProgressState.model = data.model;
     
     // Show container whenever we have any progress data (let CSS handle element display)
     container.style.display = 'block';
@@ -3004,6 +3137,15 @@ function updateProgressUI(data: ProgressUIData) {
     // Update Detail Text
     detailText.textContent = currentProgressState.detail || '';
     detailText.style.display = currentProgressState.detail ? 'block' : 'none';
+
+    // Update Model Text
+    if (currentProgressState.model) {
+        modelText.textContent = `${currentProgressState.model} is thinking...`;
+        modelText.style.display = 'block';
+    } else {
+        modelText.textContent = '';
+        modelText.style.display = 'none';
+    }
 }
 
 // Expose UI functions globally for the GenerationCoordinator
@@ -3092,10 +3234,6 @@ export function renderMultiProjectTree() {
     
 
     treeContainer.innerHTML = html;
-
-    // Count expand buttons before attaching listeners
-    const expandButtons = treeContainer.querySelectorAll('.tree-expand-btn');
-
     
     // Attach event listeners for node selection
     treeContainer.querySelectorAll('.tree-node').forEach(el => {
@@ -3127,117 +3265,10 @@ export function renderMultiProjectTree() {
         });
     });
 
-    // Attach event listeners for expand/collapse buttons
-    expandButtons.forEach((el, _index) => {
-
-        
-        // Single click for individual expand/collapse
-        el.addEventListener('click', async (e) => {
-            e.stopPropagation(); // Prevent event bubbling
-            e.preventDefault(); // Prevent any default behavior
-            
-            const target = e.currentTarget as HTMLElement;
-            const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
-            
-
-            
-            if (nodeId) {
-                // Find the node in all projects
-                let targetNode: DocumentNode | null = null;
-                for (const project of projects) {
-                    targetNode = project.findNodeById(nodeId);
-                    if (targetNode) break;
-                }
-                
-                if (targetNode) {
-
-                    
-                    // Toggle the node's collapsed state
-                    targetNode.collapsed = !targetNode.collapsed;
-                    
-
-                    
-                    // Save the project containing this node
-                    for (const project of projects) {
-                        if (project.findNodeById(nodeId)) {
-                            await project.saveToStorage();
-                            break;
-                        }
-                    }
-                    
-
-                    
-                    // Use requestAnimationFrame to ensure DOM updates are processed properly
-                    requestAnimationFrame(() => {
-                        renderMultiProjectTree(); // Re-render tree to update expand/collapse state
-                    });
-                } else {
-                    console.error('❌ No node found with ID:', nodeId);
-                }
-            } else {
-                console.error('❌ No nodeId found on expand button', target);
-            }
-        });
-
-        // Double click for expand/collapse all nodes at the same level
-        el.addEventListener('dblclick', async (e) => {
-            e.stopPropagation(); // Prevent event bubbling
-            e.preventDefault(); // Prevent any default behavior
-            
-            const target = e.currentTarget as HTMLElement;
-            const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
-            
-
-            
-            if (nodeId) {
-                // Find which project this node belongs to
-                let nodeProject: ProjectManager | null = null;
-                let node: DocumentNode | null = null;
-                
-                for (const project of projects) {
-                    node = project.findNodeById(nodeId);
-                    if (node) {
-                        nodeProject = project;
-                        break;
-                    }
-                }
-                
-                if (node && nodeProject) {
-                    // Get all nodes at the same hierarchy level
-                    const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtLevel(node.level, nodeProject.rootNode);
-                    
-                    // Determine action based on current node's state
-                    const isCurrentNodeCollapsed = node.collapsed;
-                    
-
-                    
-                    if (isCurrentNodeCollapsed) {
-                        // Current node is collapsed, so expand all nodes at this level
-                        nodesAtSameLevel.forEach(levelNode => {
-                            if (levelNode.children.length > 0) { // Only nodes with children can be expanded
-                                levelNode.collapsed = false;
-                            }
-                        });
-                    } else {
-                        // Current node is expanded, so collapse all nodes at this level
-                        nodesAtSameLevel.forEach(levelNode => {
-                            if (levelNode.children.length > 0) { // Only nodes with children can be collapsed
-                                levelNode.collapsed = true;
-                            }
-                        });
-                    }
-                    
-                    // Save the project
-                    await nodeProject.saveToStorage();
-                    
-                    // Use requestAnimationFrame to ensure DOM updates are processed properly
-                    requestAnimationFrame(() => {
-                        renderMultiProjectTree(); // Re-render tree to update expand/collapse state
-                    });
-                }
-            }
-        });
-    });
+    // Remove any existing delegated listener to avoid duplicates
+    treeContainer.removeEventListener('click', handleExpandButtonClick);
+    // Add event delegation listener to tree container (survives re-renders)
+    treeContainer.addEventListener('click', handleExpandButtonClick);
 }
 
 /**
@@ -3454,9 +3485,9 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     // Validate levels
     if (contentLevel > draftLevel) {
         alert('Content level cannot be higher than draft level');
-        return;
-    }
-    
+            return;
+        }
+        
     if (coherenceLevel >= draftLevel && draftLevel !== -1) {
         alert('Coherence level must be less than draft level');
         return;

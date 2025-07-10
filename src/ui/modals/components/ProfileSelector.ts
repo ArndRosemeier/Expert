@@ -273,12 +273,6 @@ export class ProfileSelector {
         });
         importButton.addEventListener('click', () => this.importProfile());
 
-        const duplicateButton = createElement('button', {
-            classes: ['btn-secondary'],
-            content: 'Duplicate'
-        });
-        duplicateButton.addEventListener('click', async () => this.duplicateProfile());
-
         const renameButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Rename'
@@ -294,7 +288,6 @@ export class ProfileSelector {
         actionsGroup.appendChild(deleteButton);
         actionsGroup.appendChild(exportButton);
         actionsGroup.appendChild(importButton);
-        actionsGroup.appendChild(duplicateButton);
         actionsGroup.appendChild(renameButton);
         actionsGroup.appendChild(resetToDefaultsButton);
 
@@ -500,44 +493,7 @@ export class ProfileSelector {
         fileInput.value = '';
     }
 
-    /**
-     * Duplicates the selected profile
-     */
-    private async duplicateProfile(): Promise<void> {
-        const sourceProfileName = this.getSelectedProfileName();
-        if (!sourceProfileName) return;
 
-        const newProfileName = prompt(`Enter a name for the duplicate of "${sourceProfileName}":`);
-        if (!newProfileName) return;
-
-        const validation = this.validateProfileName(newProfileName);
-        if (!validation.valid) {
-            alert(validation.error);
-            return;
-        }
-
-        try {
-            const result = await this.settingsService.duplicateProfile(sourceProfileName, newProfileName);
-            
-            if (result.success) {
-                void this.refresh();
-                this.setSelectedProfile(newProfileName);
-                
-                this.emitAction({
-                    action: 'duplicated',
-                    profileName: newProfileName,
-                    data: { sourceProfileName, newProfileName }
-                });
-                
-                alert(result.message);
-            } else {
-                alert(result.message);
-            }
-        } catch (error) {
-            console.error('Failed to duplicate profile:', error);
-            alert('Failed to duplicate profile. Please try again.');
-        }
-    }
 
     /**
      * Renames the selected profile

@@ -368,12 +368,17 @@ export class AIProjectCreator {
         } catch (error) {
             console.error('❌ AI Generation failed:', error);
             
-            // Show the actual error message instead of a generic one
-            const errorMessage = error instanceof Error 
-                ? error.message 
-                : 'Unknown error occurred during project generation';
-                
-            alert(`Project generation failed:\n\n${errorMessage}\n\nCheck the browser console for detailed debugging information.`);
+            // Show detailed error modal instead of alert
+            if (error instanceof Error) {
+                import('../').then(({ GenerationErrorService }) => {
+                    const errorService = GenerationErrorService.getInstance();
+                    void errorService.showProjectGenerationError(error, this.getDescription());
+                }).catch(console.error);
+            } else {
+                // Fallback for non-Error objects
+                const errorMessage = 'Unknown error occurred during project generation';
+                alert(`Project generation failed:\n\n${errorMessage}\n\nCheck the browser console for detailed debugging information.`);
+            }
         } finally {
             this.isGenerating = false;
             this.hideProgress();

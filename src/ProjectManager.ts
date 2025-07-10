@@ -138,22 +138,25 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         });
 
         // Ensure we have a valid profile set globally, but preserve user's choice
-        const currentProfile = this.settingsManager.getLastUsedProfileName();
-        const currentProfileData = currentProfile ? this.settingsManager.getProfile(currentProfile) : null;
-        
-        // Only change the profile if the current one is invalid
-        if (!currentProfileData || !currentProfileData.criteria || currentProfileData.criteria.length === 0) {
-            const availableProfiles = this.settingsManager.getProfileNames();
-            const firstValidProfile = availableProfiles.find(name => {
-                const p = this.settingsManager.getProfile(name);
-                return p && p.criteria && p.criteria.length > 0;
-            });
+        // Wait for SettingsManager to be fully initialized before validating profiles
+        void this.settingsManager.waitForInitialization().then(() => {
+            const currentProfile = this.settingsManager.getLastUsedProfileName();
+            const currentProfileData = currentProfile ? this.settingsManager.getProfile(currentProfile) : null;
             
-            if (firstValidProfile) {
-                void this.settingsManager.setLastUsedProfile(firstValidProfile);
+            // Only change the profile if the current one is invalid
+            if (!currentProfileData || !currentProfileData.criteria || currentProfileData.criteria.length === 0) {
+                const availableProfiles = this.settingsManager.getProfileNames();
+                const firstValidProfile = availableProfiles.find(name => {
+                    const p = this.settingsManager.getProfile(name);
+                    return p && p.criteria && p.criteria.length > 0;
+                });
+                
+                if (firstValidProfile) {
+                    void this.settingsManager.setLastUsedProfile(firstValidProfile);
+                }
+                // If no valid profile exists, the error will be caught during generation
             }
-            // If no valid profile exists, the error will be caught during generation
-        }
+        });
     }
 
     /**

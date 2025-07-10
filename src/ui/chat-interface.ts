@@ -677,6 +677,12 @@ export class ChatInterface {
                 this.currentStreamingMessageId = null;
                 this.toggleButtons(false);
                 this.updateSendButtonState();
+                
+                // Show detailed error modal for chat errors
+                import('./modals').then(({ GenerationErrorService }) => {
+                    const errorService = GenerationErrorService.getInstance();
+                    void errorService.showStreamingError(error, this.selectedModelPurpose);
+                }).catch(console.error);
             }
         };
 
@@ -1182,6 +1188,12 @@ For each suggestion, provide clear justification for why the change would improv
                 this.currentStreamingMessageId = null;
                 this.toggleButtons(false);
                 this.updateSendButtonState();
+                
+                // Show detailed error modal for roleplay errors
+                import('./modals').then(({ GenerationErrorService }) => {
+                    const errorService = GenerationErrorService.getInstance();
+                    void errorService.showStreamingError(error, this.selectedModelPurpose);
+                }).catch(console.error);
             }
         };
 

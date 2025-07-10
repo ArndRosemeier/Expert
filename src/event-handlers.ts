@@ -405,7 +405,7 @@ export async function initialize() {
         refreshGlobalProfileSelector: () => {
             // Import the function dynamically to avoid circular dependencies
             void import('./ui/project-ui').then(({ refreshGlobalProfileSelector }) => {
-                refreshGlobalProfileSelector();
+                void refreshGlobalProfileSelector();
             });
         }
     });
