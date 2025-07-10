@@ -408,8 +408,8 @@ export class UnifiedGenerationService {
             const path = this.deps.treeService.getNodePath(nodeId, this.deps.rootNode);
             const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
             
-            // Filter criteria appropriately
-            const isLeafNode = node.children.length === 0;
+            // Filter criteria appropriately - use template-based leaf detection, not children count
+            const isLeafNode = node.isLeaf;
             const filteredCriteria = this.filterCriteriaForNodeType(profile.criteria, isLeafNode);
             
             // Create loop input
