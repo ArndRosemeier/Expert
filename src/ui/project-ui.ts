@@ -83,16 +83,32 @@ function captureCurrentDropdownValues() {
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
         
         if (draftSelector) {
+            const oldValue = draftLevelState;
             draftLevelState = parseInt(draftSelector.value);
+            if (oldValue !== draftLevelState) {
+                console.log(`🔄 Captured draft level: ${draftLevelState} (was ${oldValue})`);
+            }
         }
         if (contentSelector) {
+            const oldValue = contentLevelState;
             contentLevelState = parseInt(contentSelector.value);
+            if (oldValue !== contentLevelState) {
+                console.log(`🔄 Captured content level: ${contentLevelState} (was ${oldValue})`);
+            }
         }
         if (contextPruneSelector) {
+            const oldValue = contextPruneLevelState;
             contextPruneLevelState = parseInt(contextPruneSelector.value);
+            if (oldValue !== contextPruneLevelState) {
+                console.log(`🔄 Captured context prune level: ${contextPruneLevelState} (was ${oldValue})`);
+            }
         }
         if (coherenceSelector) {
+            const oldValue = coherenceLevelState;
             coherenceLevelState = parseInt(coherenceSelector.value);
+            if (oldValue !== coherenceLevelState) {
+                console.log(`🔄 Captured coherence level: ${coherenceLevelState} (was ${oldValue})`);
+            }
         }
     } catch (error) {
         console.warn('Failed to capture dropdown values:', error);
@@ -638,7 +654,9 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         if (!operationsInProgress && !isBulkOperationActive) {
             // Most UI cleanup is now handled by the coordinator
             // Just do the final project UI refresh
-                    renderProjectUI(manager);
+            // Capture current dropdown values before re-rendering to preserve user selections
+            captureCurrentDropdownValues();
+            renderProjectUI(manager);
         
         // Force clear progress UI as additional safety measure
         clearProgressUI();
@@ -680,6 +698,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         
         if (!operationsInProgress) {
             // UI cleanup is now handled by the coordinator
+            // Capture current dropdown values before re-rendering to preserve user selections
+            captureCurrentDropdownValues();
             renderProjectUI(manager);
         } else {
             renderMultiProjectTree();
@@ -690,6 +710,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // UI cleanup is now handled by the coordinator for generation errors
         // This handler mainly deals with non-generation errors
         alert(`An error occurred: ${message}`);
+        // Capture current dropdown values before re-rendering to preserve user selections
+        captureCurrentDropdownValues();
         renderProjectUI(manager);
     };
     
@@ -775,6 +797,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
     const handleProjectLoaded = () => {
         // Refresh the entire project UI when project structure changes (e.g., after bulk child generation)
+        // Capture current dropdown values before re-rendering to preserve user selections
+        captureCurrentDropdownValues();
         renderProjectUI(manager);
     };
 
