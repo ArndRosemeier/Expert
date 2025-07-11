@@ -1028,7 +1028,7 @@ export class UnifiedGenerationService {
 
 
     /**
-     * Check if the master context has already been AI-adjusted by comparing with previous adjustments
+     * Check if the master context has already been AI-adjusted
      */
     private isMasterContextAlreadyAdjusted(node: DocumentNode): boolean {
         const masterVersion = node.getMasterVersion();
@@ -1036,30 +1036,14 @@ export class UnifiedGenerationService {
             return false; // No master version means no context to check
         }
 
-        const masterContext = masterVersion.context;
-        
-        // Find all versions that have been context AI-adjusted
-        const adjustedVersions = node.getAllVersions().filter(version => 
-            version.tags.has('context_ai_adjusted')
-        );
-
-        // If no versions have been AI-adjusted, then master context needs adjustment
-        if (adjustedVersions.length === 0) {
-            return false;
+        // Simple check: if master version has the context_ai_adjusted tag, skip analysis
+        if (masterVersion.tags.has('context_ai_adjusted')) {
+            console.log(`🔍 Master version already has context_ai_adjusted tag, skipping analysis for "${node.title}"`);
+            return true;
         }
 
-        // Check if ALL AI-adjusted versions have the same context as the master
-        // If any differs, we should re-adjust to be safe
-        for (const adjustedVersion of adjustedVersions) {
-            if (adjustedVersion.context !== masterContext) {
-                console.log(`🔍 Master context differs from AI-adjusted version (${adjustedVersion.id.substring(0, 8)}...), needs adjustment`);
-                return false;
-            }
-        }
-
-        // Master context matches ALL AI-adjusted versions, so it's already properly adjusted
-        console.log(`🔍 Master context matches all ${adjustedVersions.length} AI-adjusted version(s), skipping adjustment`);
-        return true;
+        console.log(`🔍 Master version does not have context_ai_adjusted tag, analysis needed for "${node.title}"`);
+        return false;
     }
 
     /**
