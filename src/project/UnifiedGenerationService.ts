@@ -589,7 +589,8 @@ export class UnifiedGenerationService {
         try {
             // Check if node is eligible for coherence analysis
             if (!this.coherenceService.isNodeEligible(parentNode)) {
-                console.log(`⏭️ Skipping coherence check for "${parentNode.title}" - not eligible`);
+                const reason = this.coherenceService.getIneligibilityReason(parentNode);
+                console.log(`⏭️ Skipping coherence check for "${parentNode.title}" - ${reason}`);
                 return;
             }
 

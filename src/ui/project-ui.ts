@@ -861,7 +861,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
                         // Check if node is eligible for coherence analysis
                         if (!coherenceService.isNodeEligible(completedNode)) {
-                            console.log('Node not eligible for coherence analysis:', coherenceService.getIneligibilityReason(completedNode));
+                            const reason = coherenceService.getIneligibilityReason(completedNode);
+                            console.log(`⏭️ Skipping auto-coherence check for "${completedNode.title}" - ${reason}`);
                             return;
                         }
 
@@ -2554,7 +2555,8 @@ This action cannot be undone.`;
 
                 // Check if node is eligible for coherence analysis
                 if (!coherenceService.isNodeEligible(node)) {
-                    alert(coherenceService.getIneligibilityReason(node));
+                    const reason = coherenceService.getIneligibilityReason(node);
+                    alert(`Cannot analyze coherence: ${reason}`);
                     return;
                 }
 

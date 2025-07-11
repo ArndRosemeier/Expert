@@ -20,10 +20,16 @@ export class CoherenceService {
             return false;
         }
 
-        // Check if any child has non-empty, non-draft content
+        // Check if any child has non-empty, non-draft content AND is not already tagged as consistent
         const hasValidChildren = node.children.some(child => {
             const content = child.content?.trim();
-            return content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            const hasValidContent = content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            
+            // Exclude children that are already tagged as consistent to parent
+            const masterVersion = child.getMasterVersion();
+            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            
+            return hasValidContent && !isAlreadyConsistent;
         });
 
         return hasValidChildren;
@@ -46,6 +52,27 @@ export class CoherenceService {
             return 'All child nodes are empty or contain draft content.';
         }
 
+        // Check if all valid children are already tagged as consistent
+        const alreadyConsistentChildren = validChildren.filter(child => {
+            const masterVersion = child.getMasterVersion();
+            return masterVersion && masterVersion.tags.has('consistent_to_parent');
+        });
+
+        if (alreadyConsistentChildren.length === validChildren.length) {
+            return 'All child nodes are already marked as consistent to parent.';
+        }
+
+        // Check if there are any children left to analyze after filtering
+        const analyzeableChildren = validChildren.filter(child => {
+            const masterVersion = child.getMasterVersion();
+            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            return !isAlreadyConsistent;
+        });
+
+        if (analyzeableChildren.length === 0) {
+            return 'No child nodes need coherence analysis (all are empty, draft, or already consistent).';
+        }
+
         return 'Node is not eligible for coherence analysis.';
     }
 
@@ -55,7 +82,13 @@ export class CoherenceService {
     private prepareAnalysisRequest(node: DocumentNode): CoherenceAnalysisRequest {
         const validChildren = node.children.filter(child => {
             const content = child.content?.trim();
-            return content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            const hasValidContent = content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            
+            // Exclude children that are already tagged as consistent to parent
+            const masterVersion = child.getMasterVersion();
+            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            
+            return hasValidContent && !isAlreadyConsistent;
         });
 
         const childrenContent = validChildren
