@@ -92,10 +92,17 @@ export class UnifiedGenerationService {
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
     // Add contradiction collection system
-    private collectedContradictions: Array<{
-        parentNode: DocumentNode;
-        analysisResult: any; // Will import proper type later
-    }> = [];
+    private accumulatedContradictions: {
+        hasContradictions: boolean;
+        contradictions: any[];
+        analyzedNodes: DocumentNode[];
+        totalAnalyzed: number;
+    } = {
+        hasContradictions: false,
+        contradictions: [],
+        analyzedNodes: [],
+        totalAnalyzed: 0
+    };
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -106,8 +113,13 @@ export class UnifiedGenerationService {
      * Main entry point for unified generation
      */
     public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
-        // Clear any previous collected contradictions
-        this.collectedContradictions = [];
+        // Clear any previous accumulated contradictions
+        this.accumulatedContradictions = {
+            hasContradictions: false,
+            contradictions: [],
+            analyzedNodes: [],
+            totalAnalyzed: 0
+        };
         
         // Validate levels
         this.validateLevels(levels);
@@ -180,8 +192,13 @@ export class UnifiedGenerationService {
         } finally {
             // Always cleanup generation context
             this.deps.generationController.clearGenerationContext();
-            // Clear collected contradictions
-            this.collectedContradictions = [];
+            // Clear accumulated contradictions
+            this.accumulatedContradictions = {
+                hasContradictions: false,
+                contradictions: [],
+                analyzedNodes: [],
+                totalAnalyzed: 0
+            };
         }
     }
 
@@ -624,6 +641,9 @@ export class UnifiedGenerationService {
             
             if (!result.hasContradictions) {
                 console.log(`✅ Coherence check passed for "${parentNode.title}" (no contradictions found)`);
+                // Track nodes that were analyzed (even if no contradictions found)
+                this.accumulatedContradictions.analyzedNodes.push(parentNode);
+                this.accumulatedContradictions.totalAnalyzed++;
             } else {
                 // Detect if we're doing multi-level generation
                 const isMultiLevelGeneration = levels.draftLevel > levels.coherenceLevel + 1;
@@ -636,15 +656,16 @@ export class UnifiedGenerationService {
                     
                     console.log(`✅ Coherence modal closed for "${parentNode.title}" - continuing with next level`);
                 } else {
-                    // Single-level generation: Collect for batch display at end
-                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - collecting for batch display`);
+                    // Single-level generation: Merge contradictions into accumulated result
+                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - merging into accumulated result`);
                     
-                    this.collectedContradictions.push({
-                        parentNode: parentNode,
-                        analysisResult: result
-                    });
+                    // Merge new contradictions into accumulated result
+                    this.accumulatedContradictions.contradictions.push(...result.contradictions);
+                    this.accumulatedContradictions.analyzedNodes.push(parentNode);
+                    this.accumulatedContradictions.totalAnalyzed++;
+                    this.accumulatedContradictions.hasContradictions = true;
                     
-                    console.log(`📋 Collected contradictions for "${parentNode.title}" - total collected: ${this.collectedContradictions.length}`);
+                    console.log(`📋 Merged contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
                 }
             }
             
@@ -720,47 +741,49 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Show all collected contradictions by opening CoherenceModal for each node
+     * Show all accumulated contradictions in one comprehensive modal
      */
     private async showCollectedContradictions(): Promise<void> {
-        if (this.collectedContradictions.length === 0) {
+        if (!this.accumulatedContradictions.hasContradictions) {
             console.log('📋 No contradictions found during generation');
             return;
         }
 
-        console.log(`📋 Showing collected contradictions: ${this.collectedContradictions.length} nodes with issues`);
+        console.log(`📋 Showing accumulated contradictions: ${this.accumulatedContradictions.contradictions.length} total issues from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
 
         try {
-            const totalContradictions = this.collectedContradictions.reduce((sum, item) => 
-                sum + item.analysisResult.contradictions.length, 0);
+            const totalContradictions = this.accumulatedContradictions.contradictions.length;
             
-            const nodeList = this.collectedContradictions.map((item, index) => 
-                `${index + 1}. ${item.parentNode.title} (${item.analysisResult.contradictions.length} issues)`
+            const nodeList = this.accumulatedContradictions.analyzedNodes.map((node, index) => 
+                `${index + 1}. ${node.title}`
             ).join('\n');
             
             // Show summary first
-            const proceedWithFixes = confirm(`⚠️ Coherence Analysis Results\n\nFound contradictions in ${this.collectedContradictions.length} node(s):\n\n${nodeList}\n\nTotal contradictions: ${totalContradictions}\n\nWould you like to review and fix these issues now?\n\n(Click OK to open each modal one by one, or Cancel to skip fixes)`);
+            const proceedWithFixes = confirm(`⚠️ Coherence Analysis Results\n\nFound ${totalContradictions} contradictions across ${this.accumulatedContradictions.totalAnalyzed} node(s):\n\n${nodeList}\n\nWould you like to review and fix these issues now?\n\n(Click OK to open comprehensive coherence modal, or Cancel to skip fixes)`);
             
             if (proceedWithFixes) {
-                console.log(`📋 User chose to fix contradictions - showing modals for ${this.collectedContradictions.length} nodes`);
+                console.log(`📋 User chose to fix contradictions - showing comprehensive modal with ${totalContradictions} issues`);
                 
-                // Show CoherenceModal for each node with issues, one by one
-                for (let i = 0; i < this.collectedContradictions.length; i++) {
-                    const collected = this.collectedContradictions[i];
-                    if (!collected) {
-                        console.warn(`⚠️ Skipping undefined collected contradiction at index ${i}`);
-                        continue;
-                    }
-                    
-                    console.log(`🔍 Showing coherence modal ${i + 1}/${this.collectedContradictions.length} for "${collected.parentNode.title}" (${collected.analysisResult.contradictions.length} contradictions)`);
+                // Create a comprehensive analysis result with all accumulated contradictions
+                const comprehensiveResult = {
+                    hasContradictions: true,
+                    contradictions: this.accumulatedContradictions.contradictions,
+                    analyzedNodes: this.accumulatedContradictions.analyzedNodes,
+                    totalAnalyzed: this.accumulatedContradictions.totalAnalyzed
+                };
+                
+                // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
+                const representativeNode = this.accumulatedContradictions.analyzedNodes[0];
+                if (representativeNode) {
+                    console.log(`🔍 Showing comprehensive coherence modal with ${totalContradictions} contradictions from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
                     
                     // Show modal and wait for user to close it
-                    await this.showCoherenceModalAndWait(collected.parentNode, collected.analysisResult);
+                    await this.showCoherenceModalAndWait(representativeNode, comprehensiveResult);
                     
-                    console.log(`✅ Coherence modal ${i + 1}/${this.collectedContradictions.length} closed for "${collected.parentNode.title}"`);
+                    console.log(`✅ Comprehensive coherence modal closed - user reviewed ${totalContradictions} contradictions`);
                 }
                 
-                console.log(`✅ All coherence modals completed - user reviewed ${this.collectedContradictions.length} nodes`);
+                console.log(`✅ Comprehensive coherence modal completed - user reviewed all accumulated issues`);
             } else {
                 console.log(`⏭️ User chose to skip fixing contradictions - leaving nodes untagged for future review`);
                 
@@ -768,7 +791,7 @@ export class UnifiedGenerationService {
                 // They can manually access coherence analysis later via node actions menu
             }
             
-            console.log(`📋 Batch coherence processing completed for ${this.collectedContradictions.length} nodes with ${totalContradictions} total contradictions`);
+            console.log(`📋 Batch coherence processing completed for ${totalContradictions} contradictions from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
             
         } catch (error) {
             // Show error through the error service (includes console logging)
@@ -776,7 +799,7 @@ export class UnifiedGenerationService {
                 error as Error,
                 {
                     title: 'Coherence Modal Error',
-                    operation: 'Opening batch coherence modals',
+                    operation: 'Opening comprehensive coherence modal',
                     purpose: 'Coherence Analysis'
                 }
             );
@@ -790,12 +813,11 @@ export class UnifiedGenerationService {
      * Tag all analyzed nodes' subnodes as consistent to parent
      */
     private tagAnalyzedSubnodesAsConsistent(): void {
-        console.log(`🏷️ Tagging subnodes from batch coherence analysis as consistent to parent`);
+        console.log(`🏷️ Tagging subnodes from accumulated coherence analysis as consistent to parent`);
         
         let totalTaggedCount = 0;
         
-        for (const collected of this.collectedContradictions) {
-            const parentNode = collected.parentNode;
+        for (const parentNode of this.accumulatedContradictions.analyzedNodes) {
             console.log(`🏷️ Tagging subnodes of "${parentNode.title}" as consistent to parent`);
             
             let nodeTaggedCount = 0;
