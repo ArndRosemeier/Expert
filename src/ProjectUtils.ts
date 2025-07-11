@@ -85,22 +85,6 @@ export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
 }
 
 /**
- * Formats criteria as simple text for prompt templates that expect bullet points.
- * This format is used in prompts like content_generation_initial where criteria
- * are expected to be formatted as simple text lines.
- * 
- * @param criteria Array of quality criteria to format
- * @returns Simple text representation of criteria, one per line
- */
-export function formatCriteriaAsText(criteria: QualityCriterion[]): string {
-    if (!criteria || criteria.length === 0) {
-        return 'No criteria defined';
-    }
-    
-    return criteria.map(c => c.name + (c.description ? ': ' + c.description : '')).join('\n');
-}
-
-/**
  * Get all descendant nodes from a given root node (including the root node itself)
  * 
  * @param rootNode The root node to start traversal from

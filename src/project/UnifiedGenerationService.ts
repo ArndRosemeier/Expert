@@ -1470,12 +1470,21 @@ export class UnifiedGenerationService {
      * Filter criteria for node type (copied from GenerationService)
      */
     private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
-        return criteria.filter(criterion => {
+        console.log(`🔍 UnifiedGenerationService: Filtering criteria for ${isLeafNode ? 'leaf' : 'branch'} node`);
+        console.log(`📋 Original criteria count: ${criteria.length}`);
+        
+        const filtered = criteria.filter(criterion => {
             if (criterion.leaf === undefined) {
+                console.log(`  ✅ "${criterion.name}" (no leaf restriction)`);
                 return true;
             }
-            return criterion.leaf === isLeafNode;
+            const include = criterion.leaf === isLeafNode;
+            console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf})`);
+            return include;
         });
+        
+        console.log(`📋 Filtered criteria count: ${filtered.length}`);
+        return filtered;
     }
 
     /**

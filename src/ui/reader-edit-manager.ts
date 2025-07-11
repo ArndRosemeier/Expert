@@ -9,7 +9,7 @@ import {
 } from '../types/ReaderEditingTypes';
 import { promptExpansionService } from '../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
-import { formatCriteriaAsText } from '../ProjectUtils';
+import { formatCriteriaAsJson } from '../ProjectUtils';
 
 /**
  * ReaderEditManager handles AI-powered editing actions within the reader view.
@@ -304,7 +304,7 @@ export class ReaderEditManager {
             'parent_content': node.parentId ? 
                 this.projectManager.findNodeById(node.parentId)?.content || '' : '',
             'child_level_name': node.childLevelName || '',
-            'criteria': formatCriteriaAsText(criteria)
+            'criteria': formatCriteriaAsJson(criteria)
         };
     }
 

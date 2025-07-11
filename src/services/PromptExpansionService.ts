@@ -1,5 +1,5 @@
 import { QualityCriterion } from '../types.js';
-import { formatCriteriaAsJson, formatCriteriaAsText } from '../ProjectUtils';
+import { formatCriteriaAsJson } from '../ProjectUtils';
 
 export interface PlaceholderContext {
     // Node-specific context
@@ -442,7 +442,7 @@ export class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('criteria', (context) => ({
-            value: context.custom?.['criteria'] || formatCriteriaAsText(context.project!.criteria!),
+            value: context.custom?.['criteria'] || formatCriteriaAsJson(context.project!.criteria!),
             description: 'Project quality criteria'
         }));
         
