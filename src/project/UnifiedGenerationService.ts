@@ -1474,12 +1474,22 @@ export class UnifiedGenerationService {
         console.log(`📋 Original criteria count: ${criteria.length}`);
         
         const filtered = criteria.filter(criterion => {
-            if (criterion.leaf === undefined) {
-                console.log(`  ✅ "${criterion.name}" (no leaf restriction)`);
+            // If both outline and leaf are undefined, include by default (legacy criteria)
+            if (criterion.outline === undefined && criterion.leaf === undefined) {
+                console.log(`  ✅ "${criterion.name}" (no node type restrictions - legacy)`);
                 return true;
             }
-            const include = criterion.leaf === isLeafNode;
-            console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf})`);
+            
+            // For leaf nodes, include criteria where leaf is true
+            if (isLeafNode) {
+                const include = criterion.leaf === true;
+                console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf}, outline: ${criterion.outline})`);
+                return include;
+            }
+            
+            // For outline/branch nodes, include criteria where outline is true
+            const include = criterion.outline === true;
+            console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf}, outline: ${criterion.outline})`);
             return include;
         });
         
