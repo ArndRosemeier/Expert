@@ -4,14 +4,17 @@ import { DocumentNode } from '../../../DocumentNode';
 import { ContextAnalysisRequest, ContextAnalysisResult, ContextIssue } from '../../../types/ContextAdjusterTypes';
 import { ProjectManager } from '../../../ProjectManager';
 import { getContextItems } from '../../../ContextFormat';
+import { TaskModelService } from '../../../services/TaskModelService';
 
 export class ContextAdjusterService {
     private openRouterClient: OpenRouterClient;
     private settingsManager: SettingsManager;
+    private taskModelService: TaskModelService;
 
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
+        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
     }
 
     /**
@@ -97,8 +100,13 @@ export class ContextAdjusterService {
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
-            // Use creator model for analysis
-            const response = await this.openRouterClient.chat('creator', analysisPrompt);
+            // Use configurable model based on whether node is leaf or not
+            const isLeaf = !node.children || node.children.length === 0;
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeaf);
+            
+            console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'leaf' : 'branch'} node "${node.title}"`);
+            
+            const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
             // Parse JSON response
             const issues = this.parseAnalysisResponse(response);
@@ -185,36 +193,6 @@ export class ContextAdjusterService {
             console.error('Failed to parse context analysis response:', error);
             console.error('Response content:', response);
             throw new Error('Failed to parse analysis results. The AI response may be malformed.');
-        }
-    }
-
-    /**
-     * Fix a context issue using AI
-     */
-    async fixContextIssue(
-        node: DocumentNode,
-        issue: ContextIssue,
-        currentContext: string
-    ): Promise<string> {
-        const prompts = this.settingsManager.getPrompts();
-        
-        // Create fix prompt
-        const fixPrompt = prompts.context_fix
-            .replace(/\{\{node_title\}\}/g, node.title || 'Untitled Node')
-            .replace(/\{\{node_content\}\}/g, node.content || '')
-            .replace(/\{\{current_context\}\}/g, currentContext)
-            .replace(/\{\{problematic_item\}\}/g, issue.problematic_context_item)
-            .replace(/\{\{problem_reason\}\}/g, issue.reason_for_problem)
-            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
-
-        try {
-            // Use creator model for context editing
-            const response = await this.openRouterClient.chat('creator', fixPrompt);
-            
-            return response.trim();
-        } catch (error) {
-            console.error('Failed to fix context issue:', error);
-            throw new Error('Failed to fix context issue. Please try again.');
         }
     }
 } 

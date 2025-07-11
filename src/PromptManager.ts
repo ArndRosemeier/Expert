@@ -47,9 +47,6 @@ export interface OrchestratorPrompts {
     // For context analysis
     context_analysis: string;
     
-    // For fixing context issues
-    context_fix: string;
-    
     // For fixing contradictions
     fix_contradiction: string;
     
@@ -644,6 +641,13 @@ IMPORTANT INSTRUCTIONS:
 - Focus on factual contradictions, not minor style differences
 - Look for conflicts in: facts, dates, names, events, causation, logic, timelines
 - Use the parent context to better understand the intended meaning
+- Rate each contradiction's severity based on how much it undermines the content's coherence
+
+SEVERITY SCALE:
+- 1-3: Minor inconsistencies that don't affect overall meaning
+- 4-6: Moderate contradictions that create confusion
+- 7-9: Major contradictions that significantly undermine coherence
+- 10: Critical contradictions that completely invalidate the content
 
 RESPONSE FORMAT:
 Return a JSON array where each contradiction has exactly these fields:
@@ -651,6 +655,7 @@ Return a JSON array where each contradiction has exactly these fields:
 - "fact_in_expansion": The contradictory fact or claim from the expanded content  
 - "justification": Brief explanation of why this is a contradiction
 - "offending_child_title": Title of the child node that contains the contradictory content
+- "severity": A number from 1-10 based on how severely this contradiction undermines coherence
 
 If no contradictions found, return an empty array: []
 
@@ -660,13 +665,14 @@ EXAMPLE:
     "fact_in_outline": "The meeting was scheduled for Tuesday",
     "fact_in_expansion": "The meeting occurred on Wednesday morning",
     "justification": "Timeline contradiction - different days specified for the same event",
-    "offending_child_title": "Meeting Summary"
+    "offending_child_title": "Meeting Summary",
+    "severity": 7
   }
 ]
 
 JSON Response:`.trim(),
         placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],
-        description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions and returns them in structured JSON format."
+        description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions with severity ratings and returns them in structured JSON format."
     },
 
     context_analysis: {
@@ -715,45 +721,6 @@ Example:
 If no issues are found, return an empty array: []`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
         description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
-    },
-
-    context_fix: {
-        text: `
-            Generate corrected context in {{language}}. Any structural elements (such as section headers) must always remain in English.
-            
-            You are an expert context editor. Your job is to fix a problematic context item for better subnode creation.
-
-CURRENT NODE:
-Title: {{node_title}}
-Content: {{node_content}}
-
-CURRENT INHERITED CONTEXT:
-{{current_context}}
-
-PROBLEMATIC CONTEXT ITEM:
-"{{problematic_item}}"
-
-PROBLEM DESCRIPTION:
-{{problem_reason}}
-
-INSTRUCTIONS:
-1. Take the current inherited context above
-2. Fix the problematic context item to make it more suitable for creating subnodes
-3. Consider the current node's content and scope when making the fix
-4. If the item should be removed entirely, remove it and clean up any resulting formatting issues
-5. Ensure the fixed context flows naturally and maintains coherence
-6. Return the complete corrected context
-
-EXAMPLE:
-If the problematic item is "This document is in early planning phase" and the problem is "temporal reference that doesn't apply to implementation section", you might change it to "This section covers implementation details" or remove it entirely if it adds no value.
-
-YOUR RESPONSE:
-Provide the complete corrected context that will replace the current inherited context. This is for an automated workflow, so do not add any additional text, comments, or questions.
-
-Corrected context:
-        `.trim(),
-        placeholders: ['node_title', 'node_content', 'current_context', 'problematic_item', 'problem_reason', 'language'],
-        description: "System prompt for fixing problematic context items. Takes the issue details and rewrites the inherited context to resolve the problem while maintaining coherence."
     },
 
     fix_contradiction: {

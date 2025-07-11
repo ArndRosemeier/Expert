@@ -712,22 +712,44 @@ export class UnifiedGenerationService {
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
             } else {
-                // Always accumulate contradictions for level-transition display
-                console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - accumulating for level transition`);
+                // When autofix is enabled, only accumulate contradictions that need user intervention
+                // (not those that were logged below the threshold)
+                let contradictionsToAccumulate = result.contradictions;
                 
-                // Merge new contradictions into accumulated result with parent node context
-                const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
-                    ...contradiction,
-                    parentNodeTitle: parentNode.title,
-                    parentNodeId: parentNode.id
-                }));
+                if (levels.autofixSeverity !== -1 && result.autofixSummary) {
+                    // Only accumulate contradictions that are above the threshold 
+                    // (these are the ones that should have been fixed but may have failed)
+                    // Filter out contradictions that were logged below threshold
+                    contradictionsToAccumulate = result.contradictions.filter(c => 
+                        c.severity >= levels.autofixSeverity
+                    );
+                    
+                    console.log(`🤖 Autofix enabled (threshold: ${levels.autofixSeverity}): ${result.autofixSummary.loggedCount} contradictions logged, ${contradictionsToAccumulate.length} need user intervention`);
+                }
                 
-                this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
-                this.accumulatedContradictions.analyzedNodes.push(parentNode);
-                this.accumulatedContradictions.totalAnalyzed++;
-                this.accumulatedContradictions.hasContradictions = true;
-                
-                console.log(`📋 Accumulated contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
+                if (contradictionsToAccumulate.length > 0) {
+                    // Accumulate contradictions that need user intervention
+                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${contradictionsToAccumulate.length} contradictions need user intervention) - accumulating for level transition`);
+                    
+                    // Merge new contradictions into accumulated result with parent node context
+                    const contradictionsWithContext = contradictionsToAccumulate.map((contradiction: any) => ({
+                        ...contradiction,
+                        parentNodeTitle: parentNode.title,
+                        parentNodeId: parentNode.id
+                    }));
+                    
+                    this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
+                    this.accumulatedContradictions.analyzedNodes.push(parentNode);
+                    this.accumulatedContradictions.totalAnalyzed++;
+                    this.accumulatedContradictions.hasContradictions = true;
+                    
+                    console.log(`📋 Accumulated contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
+                } else {
+                    console.log(`✅ Coherence check handled for "${parentNode.title}" (all contradictions were logged or auto-fixed)`);
+                    // Track nodes that were analyzed (even if no contradictions need user intervention)
+                    this.accumulatedContradictions.analyzedNodes.push(parentNode);
+                    this.accumulatedContradictions.totalAnalyzed++;
+                }
             }
             
         } catch (error) {

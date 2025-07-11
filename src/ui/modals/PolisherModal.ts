@@ -1,8 +1,9 @@
 import { BaseModal } from './core/BaseModal';
 import { DocumentNode } from '../../DocumentNode';
-import { OpenRouterClient } from '../../OpenRouterClient';
-import { SettingsManager } from '../../SettingsManager';
 import { DiffTool } from '../../DiffTool';
+import { SettingsManager } from '../../SettingsManager';
+import { OpenRouterClient } from '../../OpenRouterClient';
+import { TaskModelService } from '../../services/TaskModelService';
 import { promptExpansionService } from '../../services/PromptExpansionService';
 import { PromptContextBuilder } from '../../services/PromptContextBuilder';
 
@@ -13,7 +14,6 @@ export interface PolishingButton {
 }
 
 export interface PolishingOptions {
-    modelType: 'creator' | 'rater' | 'editor' | 'prose';
     detail: string;
     criteria: string;
 }
@@ -22,6 +22,7 @@ export class PolisherModal extends BaseModal {
     private node: DocumentNode | null = null;
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
+    private taskModelService: TaskModelService;
     private currentPolishedContent: string | null = null;
     private isGenerating: boolean = false;
     
@@ -52,6 +53,7 @@ export class PolisherModal extends BaseModal {
         });
         this.settingsManager = settingsManager;
         this.openRouterClient = openRouterClient;
+        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
         this.polishingButtons = [...this.defaultButtons];
     }
 
@@ -153,6 +155,41 @@ export class PolisherModal extends BaseModal {
                     margin-bottom: 0;
                 }
                 
+                .polisher-control-section {
+                    margin-bottom: 1.5rem;
+                }
+                
+                .polisher-control-section h3 {
+                    margin: 0 0 0.75rem 0;
+                    font-size: 1.1rem;
+                    color: #374151;
+                }
+                
+                .task-config-display {
+                    background: #f9fafb;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0.5rem;
+                    padding: 1rem;
+                    margin-bottom: 1rem;
+                }
+                
+                .config-item {
+                    margin-bottom: 0.5rem;
+                    font-size: 0.875rem;
+                    color: #374151;
+                }
+                
+                .config-item:last-child {
+                    margin-bottom: 0;
+                }
+                
+                .config-note {
+                    margin-top: 0.75rem;
+                    padding-top: 0.75rem;
+                    border-top: 1px solid #e5e7eb;
+                    color: #6b7280;
+                }
+                
                 .polisher-content {
                     display: grid;
                     grid-template-rows: auto 1fr;
@@ -251,21 +288,22 @@ export class PolisherModal extends BaseModal {
      * Render control panel
      */
     private renderControls(): string {
-        const currentProfile = this.settingsManager.getLastUsedProfile();
-        const models = currentProfile?.selectedModels || {};
+        const taskConfig = this.taskModelService.getTaskConfigDisplay('text_polishing');
         
         return `
             <div class="polisher-controls">
                 <div class="polisher-control-section">
-                    <h3>Model Selection</h3>
-                    <div class="model-selector">
-                        <label for="polisher-model-type">Model Type:</label>
-                        <select id="polisher-model-type" class="polisher-select">
-                            <option value="creator">Creator (${models['creator'] || 'Not set'})</option>
-                            <option value="rater">Rater (${models['rater'] || 'Not set'})</option>
-                            <option value="editor">Editor (${models['editor'] || 'Not set'})</option>
-                            <option value="prose">Prose (${models['prose'] || 'Not set'})</option>
-                        </select>
+                    <h3>Model Configuration</h3>
+                    <div class="task-config-display">
+                        <div class="config-item">
+                            <strong>Outline Nodes:</strong> ${taskConfig.outline.purpose} (${taskConfig.outline.model})
+                        </div>
+                        <div class="config-item">
+                            <strong>Prose Nodes:</strong> ${taskConfig.prose.purpose} (${taskConfig.prose.model})
+                        </div>
+                        <div class="config-note">
+                            <small>💡 Configure these settings in Settings → Task Model Configuration</small>
+                        </div>
                     </div>
                 </div>
                 
@@ -505,13 +543,9 @@ export class PolisherModal extends BaseModal {
             this.isGenerating = true;
             void this.refresh();
             
-            const modelTypeSelect = document.getElementById('polisher-model-type') as HTMLSelectElement;
-            const modelType = (modelTypeSelect?.value || 'creator') as 'creator' | 'rater' | 'editor' | 'prose';
-            
             const criteria = this.formatCriteriaAsText();
             
             const options: PolishingOptions = {
-                modelType,
                 detail,
                 criteria
             };
@@ -541,8 +575,14 @@ export class PolisherModal extends BaseModal {
         console.log('Polishing prompt:', prompt);
 
         try {
+            // Use configurable model based on whether node is leaf or not
+            const isLeaf = !this.node.children || this.node.children.length === 0;
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('text_polishing', isLeaf);
+            
+            console.log(`🎨 Using ${modelPurpose} model for polishing ${isLeaf ? 'leaf' : 'branch'} node "${this.node.title}"`);
+
             const response = await this.openRouterClient.chat(
-                options.modelType,
+                modelPurpose,
                 prompt
             );
 

@@ -15,6 +15,8 @@ import { createElement } from './core/modal-utils';
 import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
+import { TaskModelEditor } from '../components/TaskModelEditor';
+import { OpenRouterClient } from '../../OpenRouterClient';
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -41,6 +43,7 @@ export class SettingsModal extends BaseModal {
     // Components
     private criteriaEditor?: CriteriaEditor;
     private profileSelector?: ProfileSelector;
+    private taskModelEditor?: TaskModelEditor;
     
     // State
     private hasUnsavedChanges: boolean = false;
@@ -180,7 +183,9 @@ export class SettingsModal extends BaseModal {
         const modelsSection = this.createModelsSection();
         body.appendChild(modelsSection);
 
-
+        // Task Model Configuration Section
+        const taskModelSection = this.createTaskModelSection();
+        body.appendChild(taskModelSection);
 
         // Criteria Section
         const criteriaSection = this.createCriteriaSection();
@@ -298,6 +303,28 @@ export class SettingsModal extends BaseModal {
 
         section.appendChild(title);
         section.appendChild(modelsContainer);
+
+        return section;
+    }
+
+    /**
+     * Creates the task model configuration section
+     */
+    private createTaskModelSection(): HTMLElement {
+        const section = createElement('div', {
+            classes: ['settings-section']
+        });
+
+        const title = createElement('h3', {
+            content: 'Task Model Configuration'
+        });
+
+        const taskModelContainer = createElement('div', {
+            attributes: { id: 'settings-task-models-container' }
+        });
+
+        section.appendChild(title);
+        section.appendChild(taskModelContainer);
 
         return section;
     }
@@ -532,7 +559,20 @@ export class SettingsModal extends BaseModal {
             modelsContainer.addEventListener('input', () => this.autoSave());
         }
 
-
+        // Initialize task model editor
+        const taskModelContainer = this.element?.querySelector('#settings-task-models-container') as HTMLElement;
+        if (taskModelContainer) {
+            this.taskModelEditor = new TaskModelEditor(
+                taskModelContainer,
+                this.settingsManager,
+                OpenRouterClient.getInstance(),
+                {
+                    onChange: () => this.autoSave(),
+                    showDescriptions: true
+                }
+            );
+            this.taskModelEditor.render();
+        }
 
         // Initialize prompt management
         const promptsContainer = this.element?.querySelector('#settings-prompts-container') as HTMLElement;
@@ -567,7 +607,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Applies a profile to the UI components
      */
-    private applyProfileToUI(profile: unknown): void {
+    private applyProfileToUI(profile: any): void {
         if (!profile) return;
 
         // Clear pending auto-save to prevent race conditions
@@ -591,7 +631,10 @@ export class SettingsModal extends BaseModal {
             this.maxIterationsInput.value = String(profile.maxIterations || DEFAULT_MAX_ITERATIONS);
         }
 
-
+        // Refresh task model editor
+        if (this.taskModelEditor) {
+            this.taskModelEditor.render();
+        }
 
         this.updateUnsavedIndicator(false);
     }

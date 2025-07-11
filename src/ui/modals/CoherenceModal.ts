@@ -154,13 +154,259 @@ export class CoherenceModal extends BaseModal {
         `;
 
         return `
-            ${headerContent}
-            <div class="modal-body">
-                ${statusContent}
-                ${infoContent}
-                ${contradictionsContent}
-            </div>
-            ${actionsContent}
+            <style>
+                .coherence-modal {
+                    max-width: 1200px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                }
+                
+                .modal-body {
+                    flex: 1;
+                    overflow-y: auto;
+                }
+                
+                .analysis-status {
+                    padding: 1rem;
+                    border-radius: 4px;
+                    margin-bottom: 1rem;
+                    font-size: 1.1rem;
+                }
+                
+                .analysis-status.success {
+                    background-color: #d4edda;
+                    color: #155724;
+                    border: 1px solid #c3e6cb;
+                }
+                
+                .analysis-status.error {
+                    background-color: #f8d7da;
+                    color: #721c24;
+                    border: 1px solid #f5c6cb;
+                }
+                
+                .analysis-status.coherence-loading {
+                    background-color: #e2e3e5;
+                    color: #495057;
+                    border: 1px solid #d6d8db;
+                }
+                
+                .analysis-info {
+                    background-color: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                            border-radius: 4px;
+                            padding: 1rem;
+                            margin-bottom: 1rem;
+                        }
+                        
+                        .analysis-info p {
+                            margin: 0.5rem 0;
+                        }
+                        
+                        .analysis-info p:first-child {
+                            margin-top: 0;
+                        }
+                        
+                        .analysis-info p:last-child {
+                            margin-bottom: 0;
+                        }
+                        
+                        .contradictions-section {
+                            margin-top: 1rem;
+                        }
+                        
+                        .contradiction-item {
+                            border: 1px solid #dee2e6;
+                            border-radius: 8px;
+                            margin-bottom: 1rem;
+                            background-color: #ffffff;
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                        }
+                        
+                        .contradiction-header {
+                            padding: 1rem;
+                            background-color: #f8f9fa;
+                            border-bottom: 1px solid #dee2e6;
+                            border-radius: 8px 8px 0 0;
+                        }
+                        
+                        .contradiction-title-section {
+                            margin-bottom: 0.5rem;
+                        }
+                        
+                        .contradiction-title-section h4 {
+                            margin: 0 0 0.5rem 0;
+                            color: #495057;
+                        }
+                        
+                        .severity-badge {
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 0.5rem;
+                            padding: 0.25rem 0.75rem;
+                            border-radius: 12px;
+                            font-size: 0.875rem;
+                            font-weight: 500;
+                            margin-bottom: 0.5rem;
+                        }
+                        
+                        .severity-badge.severity-high {
+                            background-color: #f8d7da;
+                            color: #721c24;
+                            border: 1px solid #f5c6cb;
+                        }
+                        
+                        .severity-badge.severity-medium {
+                            background-color: #fff3cd;
+                            color: #856404;
+                            border: 1px solid #ffeaa7;
+                        }
+                        
+                        .severity-badge.severity-low {
+                            background-color: #d4edda;
+                            color: #155724;
+                            border: 1px solid #c3e6cb;
+                        }
+                        
+                        .severity-icon {
+                            font-size: 1rem;
+                        }
+                        
+                        .severity-number {
+                            font-weight: 600;
+                            font-size: 0.8rem;
+                        }
+                        
+                        .justification-text {
+                            color: #6c757d;
+                            font-style: italic;
+                        }
+                        
+                        .contradiction-meta {
+                            display: flex;
+                            align-items: center;
+                            gap: 1rem;
+                            flex-wrap: wrap;
+                        }
+                        
+                        .contradiction-details {
+                            padding: 1rem;
+                        }
+                        
+                        .outline-fact, .expansion-fact {
+                            margin-bottom: 1rem;
+                        }
+                        
+                        .outline-fact strong, .expansion-fact strong {
+                            color: #495057;
+                        }
+                        
+                        .outline-fact p, .expansion-fact p {
+                            margin: 0.5rem 0;
+                            padding: 0.5rem;
+                            background-color: #f8f9fa;
+                            border-radius: 4px;
+                        }
+                        
+                        .before-after-section {
+                            margin-top: 1rem;
+                            border-top: 1px solid #dee2e6;
+                            padding-top: 1rem;
+                        }
+                        
+                        .before-after-details {
+                            background-color: #f8f9fa;
+                            border: 1px solid #dee2e6;
+                            border-radius: 4px;
+                            padding: 1rem;
+                        }
+                        
+                        .before-after-summary {
+                            cursor: pointer;
+                            font-weight: 500;
+                            color: #495057;
+                        }
+                        
+                        .before-after-content {
+                            display: grid;
+                            grid-template-columns: 1fr 1fr;
+                            gap: 1rem;
+                            margin-top: 1rem;
+                        }
+                        
+                        .content-box {
+                            background-color: #ffffff;
+                            border: 1px solid #dee2e6;
+                            border-radius: 4px;
+                            padding: 1rem;
+                            font-family: monospace;
+                            font-size: 0.9rem;
+                            line-height: 1.4;
+                        }
+                        
+                        .diff-content {
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        }
+                        
+                        .diff-content ins {
+                            background-color: #d4edda;
+                            color: #155724;
+                            text-decoration: none;
+                        }
+                        
+                        .diff-content del {
+                            background-color: #f8d7da;
+                            color: #721c24;
+                            text-decoration: line-through;
+                        }
+                        
+                        .fix-actions {
+                            margin-top: 1rem;
+                            display: flex;
+                            gap: 0.5rem;
+                        }
+                        
+                        .loading-spinner {
+                            display: inline-block;
+                            width: 20px;
+                            height: 20px;
+                            border: 2px solid #f3f3f3;
+                            border-top: 2px solid #007bff;
+                            border-radius: 50%;
+                            animation: spin 1s linear infinite;
+                            margin-right: 0.5rem;
+                        }
+                        
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                        
+                        @media (max-width: 768px) {
+                            .before-after-content {
+                                grid-template-columns: 1fr;
+                            }
+                            
+                            .contradiction-meta {
+                                flex-direction: column;
+                                align-items: flex-start;
+                            }
+                            
+                            .severity-badge {
+                                margin-bottom: 0.75rem;
+                            }
+                        }
+                    </style>
+                    ${headerContent}
+                    <div class="modal-body">
+                        ${statusContent}
+                        ${infoContent}
+                        ${contradictionsContent}
+                    </div>
+                    ${actionsContent}
         `;
     }
 
@@ -202,10 +448,14 @@ export class CoherenceModal extends BaseModal {
      * Render contradictions list
      */
     private renderContradictions(contradictions: CoherenceContradiction[]): string {
-        const contradictionItems = contradictions.map((contradiction, index) => {
-            const hasProposedFix = this.fixedContradictions.has(index);
-            const isApplied = this.appliedFixes.has(index);
-            const fixData = this.fixedContradictions.get(index);
+        // Sort contradictions by severity (highest to lowest)
+        const sortedContradictions = [...contradictions].sort((a, b) => b.severity - a.severity);
+        
+        const contradictionItems = sortedContradictions.map((contradiction, index) => {
+            const originalIndex = contradictions.indexOf(contradiction);
+            const hasProposedFix = this.fixedContradictions.has(originalIndex);
+            const isApplied = this.appliedFixes.has(originalIndex);
+            const fixData = this.fixedContradictions.get(originalIndex);
             
             let buttonState = 'button-warning';
             let buttonText = '🔧 Generate Fix';
@@ -221,17 +471,25 @@ export class CoherenceModal extends BaseModal {
                 buttonDisabled = true;
             }
             
+            // Determine severity styling and label
+            const severityInfo = this.getSeverityInfo(contradiction.severity);
+            
             return `
-                <div class="contradiction-item" data-contradiction-index="${index}">
+                <div class="contradiction-item" data-contradiction-index="${originalIndex}">
                     <div class="contradiction-header">
                         <div class="contradiction-title-section">
                             <h4>Contradiction ${index + 1}</h4>
+                            <div class="severity-badge ${severityInfo.className}">
+                                <span class="severity-icon">${severityInfo.icon}</span>
+                                <span class="severity-label">${severityInfo.label}</span>
+                                <span class="severity-number">(${contradiction.severity}/10)</span>
+                            </div>
                             <div class="justification-text">${this.escapeHtml(contradiction.justification)}</div>
                         </div>
                         <div class="contradiction-meta">
                             ${contradiction.parentNodeTitle ? `<span class="parent-title" style="color: #666; font-size: 0.9em; margin-right: 1rem;">From parent: <strong>${this.escapeHtml(contradiction.parentNodeTitle)}</strong></span>` : ''}
                             <span class="child-title">In child: <strong>${this.escapeHtml(contradiction.offending_child_title)}</strong></span>
-                            ${contradiction.offending_child_id ? `<button class="button ${buttonState} fix-btn" data-child-id="${contradiction.offending_child_id}" data-contradiction-index="${index}" ${buttonDisabled ? 'disabled' : ''}>${buttonText}</button>` : ''}
+                            ${contradiction.offending_child_id ? `<button class="button ${buttonState} fix-btn" data-child-id="${contradiction.offending_child_id}" data-contradiction-index="${originalIndex}" ${buttonDisabled ? 'disabled' : ''}>${buttonText}</button>` : ''}
                         </div>
                     </div>
                     <div class="contradiction-details">
@@ -244,7 +502,7 @@ export class CoherenceModal extends BaseModal {
                             <p>${this.escapeHtml(contradiction.fact_in_expansion)}</p>
                         </div>
                     </div>
-                    ${hasProposedFix && fixData ? this.renderBeforeAfterComparison(index, fixData, isApplied) : ''}
+                    ${hasProposedFix && fixData ? this.renderBeforeAfterComparison(originalIndex, fixData, isApplied) : ''}
                 </div>
             `;
         }).join('');
@@ -330,12 +588,19 @@ export class CoherenceModal extends BaseModal {
         if (hasContradictions) {
             text += `STATUS: ⚠️ Found ${contradictions.length} contradiction${contradictions.length === 1 ? '' : 's'}\n\n`;
             
-            contradictions.forEach((contradiction, index) => {
-                const hasProposedFix = this.fixedContradictions.has(index);
-                const isApplied = this.appliedFixes.has(index);
-                const fixData = this.fixedContradictions.get(index);
+            // Sort contradictions by severity (highest to lowest)
+            const sortedContradictions = [...contradictions].sort((a, b) => (b.severity || 5) - (a.severity || 5));
+            
+            sortedContradictions.forEach((contradiction, index) => {
+                const originalIndex = contradictions.indexOf(contradiction);
+                const hasProposedFix = this.fixedContradictions.has(originalIndex);
+                const isApplied = this.appliedFixes.has(originalIndex);
+                const fixData = this.fixedContradictions.get(originalIndex);
+                
+                const severityInfo = this.getSeverityInfo(contradiction.severity || 5);
                 
                 text += `CONTRADICTION ${index + 1}: ${contradiction.justification}\n`;
+                text += `Severity: ${severityInfo.label} (${contradiction.severity || 5}/10)\n`;
                 text += `Child Node: ${contradiction.offending_child_title}\n`;
                 text += `${'-'.repeat(20)}\n`;
                 text += `In Outline: ${contradiction.fact_in_outline}\n`;
@@ -780,20 +1045,22 @@ export class CoherenceModal extends BaseModal {
         
         const isComprehensiveMode = this.analysisResult.analyzedNodes && this.analysisResult.analyzedNodes.length > 1;
         
-        if (isComprehensiveMode) {
+        if (isComprehensiveMode && this.analysisResult.analyzedNodes) {
             console.log(`🏷️ Tagging subnodes from comprehensive analysis (${this.analysisResult.analyzedNodes.length} parent nodes)`);
             
             let taggedCount = 0;
             
             // Tag children from all analyzed parent nodes
             for (const parentNode of this.analysisResult.analyzedNodes) {
-                for (const childNode of parentNode.children) {
-                    const masterVersion = childNode.getMasterVersion();
-                    if (masterVersion) {
-                        masterVersion.tags.add('consistent_to_parent');
-                        masterVersion.timestamp = new Date();
-                        taggedCount++;
-                        console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
+                if (parentNode.children) {
+                    for (const childNode of parentNode.children) {
+                        const masterVersion = childNode.getMasterVersion();
+                        if (masterVersion && masterVersion.tags) {
+                            masterVersion.tags.add('consistent_to_parent');
+                            masterVersion.timestamp = new Date();
+                            taggedCount++;
+                            console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
+                        }
                     }
                 }
             }
@@ -805,16 +1072,18 @@ export class CoherenceModal extends BaseModal {
             let taggedCount = 0;
             
             // Tag all children's master versions
-            for (const childNode of this.parentNode.children) {
-                const masterVersion = childNode.getMasterVersion();
-                if (masterVersion) {
-                    // Add the consistent_to_parent tag
-                    masterVersion.tags.add('consistent_to_parent');
-                    masterVersion.timestamp = new Date(); // Update timestamp
-                    taggedCount++;
-                    console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
-                } else {
-                    console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+            if (this.parentNode.children) {
+                for (const childNode of this.parentNode.children) {
+                    const masterVersion = childNode.getMasterVersion();
+                    if (masterVersion && masterVersion.tags) {
+                        // Add the consistent_to_parent tag
+                        masterVersion.tags.add('consistent_to_parent');
+                        masterVersion.timestamp = new Date(); // Update timestamp
+                        taggedCount++;
+                        console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+                    } else {
+                        console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+                    }
                 }
             }
             
@@ -845,7 +1114,20 @@ export class CoherenceModal extends BaseModal {
     }
 
     /**
-     * Escape HTML content
+     * Get severity info for a given severity level
+     */
+    private getSeverityInfo(severity: number): { className: string; icon: string; label: string } {
+        if (severity >= 8) {
+            return { className: 'severity-high', icon: '⚠️', label: 'High Severity' };
+        } else if (severity >= 5) {
+            return { className: 'severity-medium', icon: '⚡', label: 'Medium Severity' };
+        } else {
+            return { className: 'severity-low', icon: '✅', label: 'Low Severity' };
+        }
+    }
+
+    /**
+     * Escape HTML characters
      */
     private escapeHtml(text: string): string {
         const div = document.createElement('div');

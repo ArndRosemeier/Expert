@@ -138,6 +138,7 @@ export interface SettingsProfile {
     contextExtractionPrompt: string;
     language?: string; // Language setting for content generation (e.g., "English", "Spanish", "French")
     version?: string; // Version of the application when this profile was saved
+    taskModelConfigs?: import('./services/TaskModelService').AllTaskModelConfigs; // Task-based model configurations
 }
 
 function areValidSettingsProfiles(data: any): data is Record<string, SettingsProfile> {
@@ -175,7 +176,9 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             // language is optional for backward compatibility
             (profile.language === undefined || typeof profile.language === 'string') &&
             // version is optional for backward compatibility
-            (profile.version === undefined || typeof profile.version === 'string')
+            (profile.version === undefined || typeof profile.version === 'string') &&
+            // taskModelConfigs is optional for backward compatibility
+            (profile.taskModelConfigs === undefined || (typeof profile.taskModelConfigs === 'object' && profile.taskModelConfigs !== null))
         );
     });
 }
@@ -284,6 +287,28 @@ export class SettingsManager {
                         if (!profile.webSearchEnabled) {
                             profile.webSearchEnabled = {};
                         }
+                        // Add default task model configs to existing profiles that don't have them
+                        if (!profile.taskModelConfigs) {
+                            profile.taskModelConfigs = {
+                                coherence_analysis: {
+                                    outline: 'creator' as const,
+                                    prose: 'prose' as const
+                                },
+                                fix_contradiction: {
+                                    outline: 'creator' as const,
+                                    prose: 'prose' as const
+                                },
+                                text_polishing: {
+                                    outline: 'creator' as const,
+                                    prose: 'prose' as const
+                                },
+                                context_adjustment: {
+                                    outline: 'creator' as const,
+                                    prose: 'prose' as const
+                                }
+                            };
+                            console.log(`📋 Added default task model configs to profile "${profileName}"`);
+                        }
                     }
                 });
                 
@@ -311,7 +336,25 @@ export class SettingsManager {
                 maxIterations: DEFAULT_MAX_ITERATIONS,
                 selectedModels: {},
                 webSearchEnabled: {},
-                contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
+                contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
+                taskModelConfigs: {
+                    coherence_analysis: {
+                        outline: 'creator' as const,
+                        prose: 'prose' as const
+                    },
+                    fix_contradiction: {
+                        outline: 'creator' as const,
+                        prose: 'prose' as const
+                    },
+                    text_polishing: {
+                        outline: 'creator' as const,
+                        prose: 'prose' as const
+                    },
+                    context_adjustment: {
+                        outline: 'creator' as const,
+                        prose: 'prose' as const
+                    }
+                }
             };
             this.profiles = { default: defaultProfile };
             await this.setLastUsedProfile('default');
@@ -607,7 +650,9 @@ export class SettingsManager {
             typeof profile.selectedModels === 'object' &&
             profile.selectedModels !== null &&
             // contextExtractionPrompt is optional for backward compatibility
-            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string')
+            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
+            // taskModelConfigs is optional for backward compatibility
+            (profile.taskModelConfigs === undefined || (typeof profile.taskModelConfigs === 'object' && profile.taskModelConfigs !== null))
         );
     }
 
@@ -730,7 +775,25 @@ export class SettingsManager {
             webSearchEnabled: webSearchToKeep,
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
             language: 'English',
-            version: VersionService.getBuildNumber()
+            version: VersionService.getBuildNumber(),
+            taskModelConfigs: {
+                coherence_analysis: {
+                    outline: 'creator' as const,
+                    prose: 'prose' as const
+                },
+                fix_contradiction: {
+                    outline: 'creator' as const,
+                    prose: 'prose' as const
+                },
+                text_polishing: {
+                    outline: 'creator' as const,
+                    prose: 'prose' as const
+                },
+                context_adjustment: {
+                    outline: 'creator' as const,
+                    prose: 'prose' as const
+                }
+            }
         };
         
         // Reset profiles to just the default

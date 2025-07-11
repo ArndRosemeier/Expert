@@ -5,6 +5,7 @@ export interface CoherenceContradiction {
     fact_in_expansion: string;
     justification: string;
     offending_child_title: string;
+    severity: number; // 1-10 scale where 10 is most severe
     offending_child_id?: string; // Will be populated during analysis
     parentNodeTitle?: string; // Added for comprehensive multi-node analysis
     parentNodeId?: string; // Added for comprehensive multi-node analysis
@@ -19,6 +20,15 @@ export interface CoherenceAnalysisResult {
     // Additional properties for comprehensive multi-parent analysis
     analyzedNodes?: DocumentNode[];
     totalAnalyzed?: number;
+    // Autofix summary for automatic coherence fixing
+    autofixSummary?: {
+        enabled: boolean;
+        severityThreshold: number;
+        totalContradictions: number;
+        fixedCount: number;
+        failedCount: number;
+        loggedCount: number;
+    };
 }
 
 export interface CoherenceAnalysisRequest {

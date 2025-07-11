@@ -148,13 +148,27 @@ export class SettingsService {
         criteria: QualityCriterion[],
         maxIterations: number
     ): Promise<void> {
+        // Get the existing profile to preserve fields we're not updating
+        const existingProfile = this.settingsManager.getProfile(profileName);
+        
         const currentSettings: SettingsProfile = {
             selectedModels: this.modelSelector.getSelectedModels(),
             criteria,
             maxIterations,
-            prompt: '', // Legacy field
-            contextExtractionPrompt: '' // Legacy field
+            prompt: existingProfile?.prompt || '', // Preserve existing prompt
+            contextExtractionPrompt: existingProfile?.contextExtractionPrompt || '' // Preserve existing context extraction prompt
         };
+
+        // Add optional properties only if they exist
+        if (existingProfile?.language) {
+            currentSettings.language = existingProfile.language;
+        }
+        if (existingProfile?.webSearchEnabled) {
+            currentSettings.webSearchEnabled = existingProfile.webSearchEnabled;
+        }
+        if (existingProfile?.taskModelConfigs) {
+            currentSettings.taskModelConfigs = existingProfile.taskModelConfigs;
+        }
 
         await this.settingsManager.saveProfile(profileName, currentSettings);
         
@@ -316,20 +330,22 @@ export class SettingsService {
     public validateProfile(profile: unknown): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
 
-        if (!profile) {
-            errors.push('Profile data is missing');
+        if (!profile || typeof profile !== 'object') {
+            errors.push('Profile data is missing or invalid');
             return { valid: false, errors };
         }
 
-        if (!Array.isArray(profile.selectedModels)) {
-            errors.push('Selected models must be an array');
+        const p = profile as any;
+
+        if (!p.selectedModels || typeof p.selectedModels !== 'object') {
+            errors.push('Selected models must be an object');
         }
 
-        if (!Array.isArray(profile.criteria)) {
+        if (!Array.isArray(p.criteria)) {
             errors.push('Criteria must be an array');
         }
 
-        if (typeof profile.maxIterations !== 'number' || profile.maxIterations < 1) {
+        if (typeof p.maxIterations !== 'number' || p.maxIterations < 1) {
             errors.push('Max iterations must be a positive number');
         }
 

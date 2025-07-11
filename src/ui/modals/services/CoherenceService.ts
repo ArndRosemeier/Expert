@@ -1,15 +1,19 @@
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode } from '../../../DocumentNode';
+import { TaskModelService } from '../../../services/TaskModelService';
 import { CoherenceAnalysisRequest, CoherenceAnalysisResult, CoherenceContradiction } from '../../../types/CoherenceTypes';
+import { CoherenceLog } from '../../../CoherenceLog';
 
 export class CoherenceService {
     private openRouterClient: OpenRouterClient;
     private settingsManager: SettingsManager;
+    private taskModelService: TaskModelService;
 
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
+        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
     }
 
     /**
@@ -141,8 +145,13 @@ export class CoherenceService {
         try {
             console.log(`🔍 Starting coherence analysis for "${node.title}" with ${request.childNodes.length} child nodes`);
             
-            // Use creator model for analysis
-            const response = await this.openRouterClient.chat('creator', analysisPrompt);
+            // Use configurable model for analysis based on whether node is leaf or not
+            const isLeafNode = !node.children || node.children.length === 0;
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
+            
+            console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'leaf' : 'branch'} node "${node.title}"`);
+            
+            const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
             console.log(`✅ Coherence analysis API call completed for "${node.title}"`);
             
@@ -219,7 +228,8 @@ export class CoherenceService {
                     fact_in_outline: String(item.fact_in_outline || '').trim(),
                     fact_in_expansion: String(item.fact_in_expansion || '').trim(),
                     justification: String(item.justification || '').trim(),
-                    offending_child_title: offendingChildTitle
+                    offending_child_title: offendingChildTitle,
+                    severity: this.parseSeverity(item.severity)
                 };
 
                 // Add child ID using robust title matching
@@ -260,6 +270,21 @@ export class CoherenceService {
     }
 
     /**
+     * Parse and validate severity from AI response
+     */
+    private parseSeverity(severity: any): number {
+        // Convert to number and validate
+        const severityNum = Number(severity);
+        
+        if (isNaN(severityNum) || severityNum < 1 || severityNum > 10) {
+            console.warn(`Invalid severity value: ${severity}, defaulting to 5`);
+            return 5; // Default to medium severity
+        }
+        
+        return Math.round(severityNum); // Ensure it's an integer
+    }
+
+    /**
      * Fix a contradiction in a child node
      */
     async fixContradiction(
@@ -281,16 +306,119 @@ export class CoherenceService {
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
-            // Use appropriate model based on whether child is leaf or not
+            // Use configurable model based on whether child is leaf or not
             const isLeaf = !childNode.children || childNode.children.length === 0;
-            const model = isLeaf ? 'prose' : 'creator';
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('fix_contradiction', isLeaf);
             
-            const response = await this.openRouterClient.chat(model, fixPrompt);
+            console.log(`🔧 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'leaf' : 'branch'} node "${childNode.title}"`);
+            
+            const response = await this.openRouterClient.chat(modelPurpose, fixPrompt);
             
             return response.trim();
         } catch (error) {
             console.error('Failed to fix contradiction:', error);
             throw new Error('Failed to fix contradiction. Please try again.');
         }
+    }
+
+    /**
+     * Analyze coherence and automatically fix contradictions if autofix is enabled
+     */
+    async analyzeCoherenceWithAutofix(
+        node: DocumentNode,
+        autofixSeverity: number, // -1 = disabled, 1-10 = threshold
+        isAutomaticMode: boolean = false,
+        projectId?: string
+    ): Promise<CoherenceAnalysisResult> {
+        // First, perform the regular coherence analysis
+        const analysisResult = await this.analyzeCoherence(node);
+        
+        // If no contradictions found, return the result
+        if (!analysisResult.hasContradictions) {
+            return analysisResult;
+        }
+        
+        // If autofix is disabled, log all contradictions and return
+        if (autofixSeverity === -1) {
+            if (isAutomaticMode && projectId) {
+                const coherenceLog = CoherenceLog.getInstance();
+                analysisResult.contradictions.forEach(contradiction => {
+                    coherenceLog.logCoherenceIssue(projectId, node, contradiction, 'autofix_disabled');
+                });
+            }
+            return analysisResult;
+        }
+        
+        // Separate contradictions into autofix and log categories
+        const toAutofix = analysisResult.contradictions.filter(c => c.severity >= autofixSeverity);
+        const toLog = analysisResult.contradictions.filter(c => c.severity < autofixSeverity);
+        
+        console.log(`🤖 Autofix processing: ${toAutofix.length} contradictions to fix (severity ${autofixSeverity}+), ${toLog.length} to log`);
+        
+        // Log contradictions below the threshold
+        if (isAutomaticMode && projectId && toLog.length > 0) {
+            const coherenceLog = CoherenceLog.getInstance();
+            toLog.forEach(contradiction => {
+                coherenceLog.logCoherenceIssue(projectId, node, contradiction, 'below_autofix_threshold', autofixSeverity);
+            });
+        }
+        
+        // If no contradictions need fixing, return the result
+        if (toAutofix.length === 0) {
+            return analysisResult;
+        }
+        
+        // Apply automatic fixes
+        const fixedContradictions: CoherenceContradiction[] = [];
+        const failedContradictions: CoherenceContradiction[] = [];
+        
+        for (const contradiction of toAutofix) {
+            try {
+                // Find the child node
+                const childNode = node.children.find(child => child.id === contradiction.offending_child_id);
+                if (!childNode) {
+                    console.error(`Child node not found for contradiction: ${contradiction.offending_child_id}`);
+                    failedContradictions.push(contradiction);
+                    continue;
+                }
+                
+                // Generate the fix
+                const fixedContent = await this.fixContradiction(node, childNode, contradiction);
+                
+                // Apply the fix automatically
+                childNode.setContent(fixedContent, 'autofix');
+                
+                console.log(`✅ Automatically fixed contradiction in "${childNode.title}" (severity ${contradiction.severity})`);
+                fixedContradictions.push(contradiction);
+                
+            } catch (error) {
+                console.error(`Failed to automatically fix contradiction in "${contradiction.offending_child_title}":`, error);
+                failedContradictions.push(contradiction);
+                
+                // Log the failed fix
+                if (isAutomaticMode && projectId) {
+                    const coherenceLog = CoherenceLog.getInstance();
+                    coherenceLog.logCoherenceIssue(projectId, node, contradiction, 'autofix_failed', autofixSeverity);
+                }
+            }
+        }
+        
+        // Update the analysis result to reflect the fixes
+        const remainingContradictions = [...toLog, ...failedContradictions];
+        
+        return {
+            ...analysisResult,
+            contradictions: remainingContradictions,
+            hasContradictions: remainingContradictions.length > 0,
+            // Add metadata about the autofix process
+            autofixSummary: {
+                enabled: true,
+                severityThreshold: autofixSeverity,
+                totalContradictions: analysisResult.contradictions.length,
+                fixedCount: fixedContradictions.length,
+                failedCount: failedContradictions.length,
+                loggedCount: toLog.length
+            }
+        };
     }
 } 
