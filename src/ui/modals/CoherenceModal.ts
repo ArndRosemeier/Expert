@@ -224,6 +224,7 @@ export class CoherenceModal extends BaseModal {
                             <div class="justification-text">${this.escapeHtml(contradiction.justification)}</div>
                         </div>
                         <div class="contradiction-meta">
+                            ${contradiction.parentNodeTitle ? `<span class="parent-title" style="color: #666; font-size: 0.9em; margin-right: 1rem;">From parent: <strong>${this.escapeHtml(contradiction.parentNodeTitle)}</strong></span>` : ''}
                             <span class="child-title">In child: <strong>${this.escapeHtml(contradiction.offending_child_title)}</strong></span>
                             ${contradiction.offending_child_id ? `<button class="button ${buttonState} fix-btn" data-child-id="${contradiction.offending_child_id}" data-contradiction-index="${index}" ${buttonDisabled ? 'disabled' : ''}>${buttonText}</button>` : ''}
                         </div>

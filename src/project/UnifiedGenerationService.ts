@@ -103,6 +103,9 @@ export class UnifiedGenerationService {
         analyzedNodes: [],
         totalAnalyzed: 0
     };
+    
+    // Track which parents have already been coherence-analyzed to prevent duplicates
+    private analyzedParents: Set<string> = new Set();
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -113,13 +116,14 @@ export class UnifiedGenerationService {
      * Main entry point for unified generation
      */
     public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
-        // Clear any previous accumulated contradictions
+        // Clear any previous accumulated contradictions and analyzed parents
         this.accumulatedContradictions = {
             hasContradictions: false,
             contradictions: [],
             analyzedNodes: [],
             totalAnalyzed: 0
         };
+        this.analyzedParents.clear();
         
         // Validate levels
         this.validateLevels(levels);
@@ -192,13 +196,14 @@ export class UnifiedGenerationService {
         } finally {
             // Always cleanup generation context
             this.deps.generationController.clearGenerationContext();
-            // Clear accumulated contradictions
+            // Clear accumulated contradictions and analyzed parents
             this.accumulatedContradictions = {
                 hasContradictions: false,
                 contradictions: [],
                 analyzedNodes: [],
                 totalAnalyzed: 0
             };
+            this.analyzedParents.clear();
         }
     }
 
@@ -288,22 +293,23 @@ export class UnifiedGenerationService {
             }
 
             // 3. Draft Creation (Children)
+            let draftResult: { childIds: string[]; childrenCreated: boolean } | null = null;
             if (node.level < levels.draftLevel) {
-                const childIds = await this.handleDraftCreation(item.nodeId);
+                draftResult = await this.handleDraftCreation(item.nodeId);
                 
                 // Add any newly created children to work queue if they might need work
                 // Check against ALL level settings to see if children could need any type of work
                 const maxWorkLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
                 
-                for (let i = 0; i < childIds.length; i++) {
-                    const childId = childIds[i]!; // Non-null assertion: guaranteed to be within bounds
+                for (let i = 0; i < draftResult.childIds.length; i++) {
+                    const childId = draftResult.childIds[i]!; // Non-null assertion: guaranteed to be within bounds
                     const child = this.deps.treeService.findNodeById(childId, this.deps.rootNode);
                     if (child && child.level <= maxWorkLevel) {
                         newWorkItems.push({
                             nodeId: childId,
                             level: child.level,
                             parentId: item.nodeId,
-                            isLastChild: i === childIds.length - 1
+                            isLastChild: i === draftResult.childIds.length - 1
                         });
                     }
                 }
@@ -313,18 +319,23 @@ export class UnifiedGenerationService {
             if (item.isLastChild && item.parentId && levels.coherenceLevel !== -1) {
                 const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
                 if (parentNode && levels.coherenceLevel >= parentNode.level) {
-                    // Only run coherence check after draft creation if content generation won't happen for children
-                    // This prevents duplicate coherence analysis when both draft + content generation occur
-                    const justCompletedDraftCreation = node.level < levels.draftLevel;
-                    const contentWillGenerateForChildren = levels.contentLevel >= node.level + 1; // children are one level deeper
-                    
-                    const shouldRunCoherenceCheck = !justCompletedDraftCreation || !contentWillGenerateForChildren;
-                    
-                    if (shouldRunCoherenceCheck) {
-                        console.log(`🔍 Running coherence check for "${parentNode.title}" (justCompletedDraftCreation: ${justCompletedDraftCreation}, contentWillGenerateForChildren: ${contentWillGenerateForChildren})`);
-                        await this.handleCoherenceCheck(item.parentId!, levels);
+                    // Prevent duplicate analysis - only analyze each parent once
+                    if (this.analyzedParents.has(item.parentId)) {
+                        console.log(`⏭️ Skipping coherence check for "${parentNode.title}" - already analyzed during this generation`);
                     } else {
-                        console.log(`⏭️ Skipping coherence check for "${parentNode.title}" after draft creation - content generation will trigger it later`);
+                        // Only run coherence after draft creation if children were actually created
+                        const justCompletedDraftCreation = draftResult && draftResult.childrenCreated;
+                        const contentWillGenerateForChildren = levels.contentLevel >= node.level + 1; // children are one level deeper
+                        
+                        const shouldRunCoherenceCheck = !justCompletedDraftCreation || !contentWillGenerateForChildren;
+                        
+                        if (shouldRunCoherenceCheck) {
+                            console.log(`🔍 Running coherence check for "${parentNode.title}" (draftCreated: ${justCompletedDraftCreation}, contentWillGenerate: ${contentWillGenerateForChildren})`);
+                            this.analyzedParents.add(item.parentId);
+                            await this.handleCoherenceCheck(item.parentId!, levels);
+                        } else {
+                            console.log(`⏭️ Skipping coherence check for "${parentNode.title}" after draft creation - content generation will trigger it later`);
+                        }
                     }
                 }
             }
@@ -485,15 +496,16 @@ export class UnifiedGenerationService {
 
     /**
      * Handle draft creation (children) for a node
+     * Returns object with childIds and whether children were actually created
      */
-    private async handleDraftCreation(nodeId: string): Promise<string[]> {
+    private async handleDraftCreation(nodeId: string): Promise<{ childIds: string[]; childrenCreated: boolean }> {
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) return [];
+        if (!node) return { childIds: [], childrenCreated: false };
 
         // Check if node already has children
         if (node.children.length > 0) {
             console.log(`⏭️ Skipping draft creation for "${node.title}" - already has children`);
-            return node.children.map(child => child.id);
+            return { childIds: node.children.map(child => child.id), childrenCreated: false };
         }
 
         try {
@@ -537,7 +549,7 @@ export class UnifiedGenerationService {
 
             if (nodeItems.length === 0) {
                 console.warn(`No children generated for "${node.title}"`);
-                return [];
+                return { childIds: [], childrenCreated: false };
             }
 
             // Get the creator model name for tracking
@@ -594,7 +606,7 @@ export class UnifiedGenerationService {
             console.log(`📢 EMITTING tree-update-needed event for node ${nodeId}: children-created`);
             this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'children-created' });
             
-            return childIds;
+            return { childIds, childrenCreated: true };
             
         } catch (error) {
             // Show error through the error service (includes console logging)
@@ -659,8 +671,14 @@ export class UnifiedGenerationService {
                     // Single-level generation: Merge contradictions into accumulated result
                     console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - merging into accumulated result`);
                     
-                    // Merge new contradictions into accumulated result
-                    this.accumulatedContradictions.contradictions.push(...result.contradictions);
+                    // Merge new contradictions into accumulated result with parent node context
+                    const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
+                        ...contradiction,
+                        parentNodeTitle: parentNode.title,
+                        parentNodeId: parentNode.id
+                    }));
+                    
+                    this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
                     this.accumulatedContradictions.hasContradictions = true;

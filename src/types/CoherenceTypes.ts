@@ -4,6 +4,8 @@ export interface CoherenceContradiction {
     justification: string;
     offending_child_title: string;
     offending_child_id?: string; // Will be populated during analysis
+    parentNodeTitle?: string; // Added for comprehensive multi-node analysis
+    parentNodeId?: string; // Added for comprehensive multi-node analysis
 }
 
 export interface CoherenceAnalysisResult {
