@@ -297,7 +297,7 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Process all nodes at a given level in phases (context -> content -> draft -> coherence)
+     * Process all nodes at a given level in phases (context -> content -> coherence for parents -> draft)
      */
     private async processLevelInPhases(levelItems: WorkItem[], levels: GenerationLevels, baseProgress: number, totalItems: number): Promise<WorkItem[]> {
         const newWorkItems: WorkItem[] = [];
@@ -344,7 +344,35 @@ export class UnifiedGenerationService {
             }
         }
 
-        // Phase 3: Draft Creation for all nodes at this level
+        // Phase 3: Coherence Check for parent nodes (after content generation for this level)
+        // Check parents of current level nodes that now have content
+        const parentsToCheck = new Set<string>();
+        levelItems.forEach(item => {
+            if (item.parentId && levels.coherenceLevel !== -1) {
+                const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
+                if (parentNode && levels.coherenceLevel >= parentNode.level) {
+                    parentsToCheck.add(item.parentId);
+                }
+            }
+        });
+
+        for (const parentId of parentsToCheck) {
+            if (this.abortRequested) {
+                throw new Error('Generation was aborted by user');
+            }
+
+            const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
+            if (!parentNode || parentNode.children.length === 0) continue;
+
+            // Prevent duplicate analysis
+            if (!this.analyzedParents.has(parentId)) {
+                console.log(`🔍 Running coherence check for "${parentNode.title}" (children now have content)`);
+                this.analyzedParents.add(parentId);
+                await this.handleCoherenceCheck(parentId, levels);
+            }
+        }
+
+        // Phase 4: Draft Creation for all nodes at this level
         const draftResults = new Map<string, { childIds: string[]; childrenCreated: boolean }>();
         
         for (let i = 0; i < levelItems.length; i++) {
@@ -381,34 +409,6 @@ export class UnifiedGenerationService {
                             parentId: item.nodeId,
                             isLastChild: j === draftResult.childIds.length - 1
                         });
-                    }
-                }
-            }
-        }
-
-        // Phase 4: Coherence Check for all nodes at this level
-        for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested) {
-                throw new Error('Generation was aborted by user');
-            }
-
-            const item = levelItems[i];
-            if (!item) continue;
-            
-            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-            if (!node) continue;
-
-            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
-
-            // Check for coherence analysis if this node has children and coherence is enabled
-            if (levels.coherenceLevel !== -1 && node.children.length > 0) {
-                const parentNode = node;
-                if (levels.coherenceLevel >= parentNode.level) {
-                    // Prevent duplicate analysis
-                    if (!this.analyzedParents.has(item.nodeId)) {
-                        console.log(`🔍 Running coherence check for "${parentNode.title}"`);
-                        this.analyzedParents.add(item.nodeId);
-                        await this.handleCoherenceCheck(item.nodeId, levels);
                     }
                 }
             }
