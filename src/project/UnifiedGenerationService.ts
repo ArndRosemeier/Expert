@@ -296,7 +296,19 @@ export class UnifiedGenerationService {
             if (item.isLastChild && item.parentId && levels.coherenceLevel !== -1) {
                 const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
                 if (parentNode && levels.coherenceLevel >= parentNode.level) {
-                    await this.handleCoherenceCheck(item.parentId!, levels);
+                    // Only run coherence check after draft creation if content generation won't happen for children
+                    // This prevents duplicate coherence analysis when both draft + content generation occur
+                    const justCompletedDraftCreation = node.level < levels.draftLevel;
+                    const contentWillGenerateForChildren = levels.contentLevel >= node.level + 1; // children are one level deeper
+                    
+                    const shouldRunCoherenceCheck = !justCompletedDraftCreation || !contentWillGenerateForChildren;
+                    
+                    if (shouldRunCoherenceCheck) {
+                        console.log(`🔍 Running coherence check for "${parentNode.title}" (justCompletedDraftCreation: ${justCompletedDraftCreation}, contentWillGenerateForChildren: ${contentWillGenerateForChildren})`);
+                        await this.handleCoherenceCheck(item.parentId!, levels);
+                    } else {
+                        console.log(`⏭️ Skipping coherence check for "${parentNode.title}" after draft creation - content generation will trigger it later`);
+                    }
                 }
             }
 
