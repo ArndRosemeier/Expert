@@ -91,6 +91,11 @@ export class UnifiedGenerationService {
     private currentIterationProgress: { current: number; total: number; message: string } | null = null;
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
+    // Add contradiction collection system
+    private collectedContradictions: Array<{
+        parentNode: DocumentNode;
+        analysisResult: any; // Will import proper type later
+    }> = [];
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -101,6 +106,9 @@ export class UnifiedGenerationService {
      * Main entry point for unified generation
      */
     public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
+        // Clear any previous collected contradictions
+        this.collectedContradictions = [];
+        
         // Validate levels
         this.validateLevels(levels);
 
@@ -159,6 +167,9 @@ export class UnifiedGenerationService {
             console.log(`✅ UnifiedGenerationService: Generation completed successfully for "${startNode.title}" (${startNodeId})`);
 
             console.log('🎉 Unified generation completed successfully');
+            
+            // After generation completes, check for collected contradictions
+            await this.showCollectedContradictions();
         } catch (error) {
             console.error('Unified generation failed:', error);
             
@@ -169,6 +180,8 @@ export class UnifiedGenerationService {
         } finally {
             // Always cleanup generation context
             this.deps.generationController.clearGenerationContext();
+            // Clear collected contradictions
+            this.collectedContradictions = [];
         }
     }
 
@@ -567,7 +580,7 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Handle coherence check for a parent node
+     * Handle coherence check for a parent node - collect contradictions instead of showing immediately
      */
     private async handleCoherenceCheck(parentId: string): Promise<void> {
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
@@ -597,30 +610,15 @@ export class UnifiedGenerationService {
             if (!result.hasContradictions) {
                 console.log(`✅ Coherence check passed for "${parentNode.title}" (no contradictions found)`);
             } else {
-                console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions)`);
+                console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - collecting for batch display`);
                 
-                // Show coherence modal with the results
-                console.log(`🔍 Opening coherence modal for "${parentNode.title}" with ${result.contradictions.length} contradictions`);
+                // Collect contradictions instead of showing immediately
+                this.collectedContradictions.push({
+                    parentNode: parentNode,
+                    analysisResult: result
+                });
                 
-                // Use setTimeout to ensure the modal opens after the current generation completion
-                setTimeout(async () => {
-                    try {
-                        const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
-                        const coherenceModal = new CoherenceModal();
-                        await coherenceModal.openWithData(result, parentNode);
-                        console.log(`📋 Coherence modal opened for "${parentNode.title}"`);
-                    } catch (error) {
-                        // Show error through the error service (includes console logging)
-                        await GenerationErrorService.getInstance().showAIError(
-                            error as Error,
-                            {
-                                title: 'Coherence Modal Error',
-                                operation: `Opening coherence modal for "${parentNode.title}"`,
-                                purpose: 'Coherence Analysis'
-                            }
-                        );
-                    }
-                }, 500);
+                console.log(`📋 Collected contradictions for "${parentNode.title}" - total collected: ${this.collectedContradictions.length}`);
             }
             
         } catch (error) {
@@ -635,6 +633,44 @@ export class UnifiedGenerationService {
             );
             
             // Continue with generation even if coherence check fails
+        }
+    }
+
+    /**
+     * Show all collected contradictions in a single modal at the end of generation
+     */
+    private async showCollectedContradictions(): Promise<void> {
+        if (this.collectedContradictions.length === 0) {
+            console.log('📋 No contradictions found during generation');
+            return;
+        }
+
+        console.log(`📋 Showing collected contradictions: ${this.collectedContradictions.length} nodes with issues`);
+
+        try {
+            // Show a simple alert for now summarizing all contradictions
+            // TODO: Create a proper batch modal that can handle multiple nodes at once
+            
+            const totalContradictions = this.collectedContradictions.reduce((sum, item) => 
+                sum + item.analysisResult.contradictions.length, 0);
+            
+            const nodeList = this.collectedContradictions.map(item => 
+                `• ${item.parentNode.title} (${item.analysisResult.contradictions.length} issues)`
+            ).join('\n');
+            
+            alert(`⚠️ Coherence Analysis Results\n\nFound contradictions in ${this.collectedContradictions.length} node(s):\n\n${nodeList}\n\nTotal contradictions: ${totalContradictions}\n\nDetailed analysis can be accessed individually through the node actions menu.`);
+            
+            console.log(`📋 Showed batch coherence summary for ${this.collectedContradictions.length} nodes with ${totalContradictions} total contradictions`);
+        } catch (error) {
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showAIError(
+                error as Error,
+                {
+                    title: 'Coherence Modal Error',
+                    operation: 'Opening batch coherence modal',
+                    purpose: 'Coherence Analysis'
+                }
+            );
         }
     }
 
