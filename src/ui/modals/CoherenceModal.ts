@@ -125,11 +125,14 @@ export class CoherenceModal extends BaseModal {
                 <p>The outline and expanded content are coherent.</p>
                </div>`;
 
+        const isComprehensiveMode = this.analysisResult.contradictions.some(c => c.parentNodeId);
+        
         const infoContent = `
             <div class="analysis-info">
                 <p><strong>Analyzed Node:</strong> ${this.escapeHtml(nodeTitle)}</p>
                 <p><strong>Analysis Time:</strong> ${analysisTimestamp.toLocaleString()}</p>
                 <p><strong>Child Nodes:</strong> ${this.analysisResult.childNodeIds.length}</p>
+                ${isComprehensiveMode ? '<p><strong>Note:</strong> This is a comprehensive view showing contradictions from multiple parent nodes.</p>' : ''}
             </div>
         `;
 
@@ -625,11 +628,39 @@ export class CoherenceModal extends BaseModal {
             return;
         }
 
-        // Find the child node
-        const childNode = this.parentNode.children.find(child => child.id === childId);
-        if (!childNode) {
-            console.error('Child node not found:', childId);
-            alert('Child node not found. Please try again.');
+        // Find the child node and its parent - handle both single and multi-parent scenarios
+        let childNode: DocumentNode | undefined;
+        let actualParentNode: DocumentNode | undefined;
+        
+        if (contradiction.parentNodeId) {
+            // Multi-parent comprehensive mode: find the actual parent for this contradiction
+            const { getActiveProject } = await import('../../state');
+            const activeProject = getActiveProject();
+            if (activeProject && activeProject.rootNode) {
+                // Search for the actual parent node
+                const findNodeById = (node: DocumentNode, targetId: string): DocumentNode | null => {
+                    if (node.id === targetId) return node;
+                    for (const child of node.children) {
+                        const found = findNodeById(child, targetId);
+                        if (found) return found;
+                    }
+                    return null;
+                };
+                
+                actualParentNode = findNodeById(activeProject.rootNode, contradiction.parentNodeId) || undefined;
+                if (actualParentNode) {
+                    childNode = actualParentNode.children.find(child => child.id === childId);
+                }
+            }
+        } else {
+            // Single-parent mode: use the modal's parent node
+            actualParentNode = this.parentNode;
+            childNode = this.parentNode.children.find(child => child.id === childId);
+        }
+        
+        if (!childNode || !actualParentNode) {
+            console.error('Child node or parent node not found:', { childId, parentId: contradiction.parentNodeId });
+            alert('Child node not found. This may be due to using the comprehensive coherence modal with multiple parents. Please try individual coherence checks instead.');
             return;
         }
 
@@ -649,7 +680,7 @@ export class CoherenceModal extends BaseModal {
             
             // Generate the proposed fix (but don't apply it yet)
             const fixedContent = await coherenceService.fixContradiction(
-                this.parentNode,
+                actualParentNode,
                 childNode,
                 contradiction
             );
@@ -711,29 +742,53 @@ export class CoherenceModal extends BaseModal {
 
     /**
      * Tag all subnodes' master versions with "consistent_to_parent"
+     * In comprehensive mode, tags all children from all analyzed parent nodes
      */
     private tagSubnodesAsConsistent(): void {
-        if (!this.parentNode) return;
+        if (!this.parentNode || !this.analysisResult) return;
         
-        console.log(`🏷️ Tagging subnodes of "${this.parentNode.title}" as consistent to parent`);
+        const isComprehensiveMode = this.analysisResult.analyzedNodes && this.analysisResult.analyzedNodes.length > 1;
         
-        let taggedCount = 0;
-        
-        // Tag all children's master versions
-        for (const childNode of this.parentNode.children) {
-            const masterVersion = childNode.getMasterVersion();
-            if (masterVersion) {
-                // Add the consistent_to_parent tag
-                masterVersion.tags.add('consistent_to_parent');
-                masterVersion.timestamp = new Date(); // Update timestamp
-                taggedCount++;
-                console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
-            } else {
-                console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+        if (isComprehensiveMode) {
+            console.log(`🏷️ Tagging subnodes from comprehensive analysis (${this.analysisResult.analyzedNodes.length} parent nodes)`);
+            
+            let taggedCount = 0;
+            
+            // Tag children from all analyzed parent nodes
+            for (const parentNode of this.analysisResult.analyzedNodes) {
+                for (const childNode of parentNode.children) {
+                    const masterVersion = childNode.getMasterVersion();
+                    if (masterVersion) {
+                        masterVersion.tags.add('consistent_to_parent');
+                        masterVersion.timestamp = new Date();
+                        taggedCount++;
+                        console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
+                    }
+                }
             }
+            
+            console.log(`✅ Tagged ${taggedCount} subnodes from comprehensive analysis`);
+        } else {
+            console.log(`🏷️ Tagging subnodes of "${this.parentNode.title}" as consistent to parent`);
+            
+            let taggedCount = 0;
+            
+            // Tag all children's master versions
+            for (const childNode of this.parentNode.children) {
+                const masterVersion = childNode.getMasterVersion();
+                if (masterVersion) {
+                    // Add the consistent_to_parent tag
+                    masterVersion.tags.add('consistent_to_parent');
+                    masterVersion.timestamp = new Date(); // Update timestamp
+                    taggedCount++;
+                    console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+                } else {
+                    console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+                }
+            }
+            
+            console.log(`✅ Tagged ${taggedCount} subnodes as consistent to parent: "${this.parentNode.title}"`);
         }
-        
-        console.log(`✅ Tagged ${taggedCount} subnodes as consistent to parent: "${this.parentNode.title}"`);
         
         // Save the project after tagging
         this.saveProjectAfterTagging();

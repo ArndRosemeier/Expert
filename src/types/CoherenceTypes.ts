@@ -1,3 +1,5 @@
+import { DocumentNode } from '../DocumentNode';
+
 export interface CoherenceContradiction {
     fact_in_outline: string;
     fact_in_expansion: string;
@@ -14,6 +16,9 @@ export interface CoherenceAnalysisResult {
     analysisTimestamp: Date;
     parentNodeId: string;
     childNodeIds: string[];
+    // Additional properties for comprehensive multi-parent analysis
+    analyzedNodes?: DocumentNode[];
+    totalAnalyzed?: number;
 }
 
 export interface CoherenceAnalysisRequest {
