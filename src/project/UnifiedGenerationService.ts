@@ -296,7 +296,7 @@ export class UnifiedGenerationService {
             if (item.isLastChild && item.parentId && levels.coherenceLevel !== -1) {
                 const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
                 if (parentNode && levels.coherenceLevel >= parentNode.level) {
-                    await this.handleCoherenceCheck(item.parentId!);
+                    await this.handleCoherenceCheck(item.parentId!, levels);
                 }
             }
 
@@ -580,9 +580,11 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Handle coherence check for a parent node - collect contradictions instead of showing immediately
+     * Handle coherence check for a parent node
+     * In multi-level generation, show modal immediately and wait for user to resolve
+     * In single-level generation, collect contradictions for batch display at end
      */
-    private async handleCoherenceCheck(parentId: string): Promise<void> {
+    private async handleCoherenceCheck(parentId: string, levels: GenerationLevels): Promise<void> {
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
         if (!parentNode) return;
 
@@ -611,15 +613,27 @@ export class UnifiedGenerationService {
             if (!result.hasContradictions) {
                 console.log(`✅ Coherence check passed for "${parentNode.title}" (no contradictions found)`);
             } else {
-                console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - collecting for batch display`);
+                // Detect if we're doing multi-level generation
+                const isMultiLevelGeneration = levels.draftLevel > levels.coherenceLevel + 1;
                 
-                // Collect contradictions instead of showing immediately
-                this.collectedContradictions.push({
-                    parentNode: parentNode,
-                    analysisResult: result
-                });
-                
-                console.log(`📋 Collected contradictions for "${parentNode.title}" - total collected: ${this.collectedContradictions.length}`);
+                if (isMultiLevelGeneration) {
+                    // Multi-level generation: Show modal immediately and wait for user to resolve
+                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - showing modal and waiting for resolution`);
+                    
+                    await this.showCoherenceModalAndWait(parentNode, result);
+                    
+                    console.log(`✅ Coherence modal closed for "${parentNode.title}" - continuing with next level`);
+                } else {
+                    // Single-level generation: Collect for batch display at end
+                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - collecting for batch display`);
+                    
+                    this.collectedContradictions.push({
+                        parentNode: parentNode,
+                        analysisResult: result
+                    });
+                    
+                    console.log(`📋 Collected contradictions for "${parentNode.title}" - total collected: ${this.collectedContradictions.length}`);
+                }
             }
             
         } catch (error) {
@@ -635,6 +649,62 @@ export class UnifiedGenerationService {
             
             // Continue with generation even if coherence check fails
         }
+    }
+
+    /**
+     * Show coherence modal and wait for user to close it
+     */
+    private async showCoherenceModalAndWait(parentNode: DocumentNode, result: any): Promise<void> {
+        try {
+            // Import and create the coherence modal
+            const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
+            const coherenceModal = new CoherenceModal();
+            
+            // Open modal in loading state first
+            await coherenceModal.openInLoadingState(parentNode);
+            
+            // Update with results
+            coherenceModal.updateWithResults(result);
+            
+            console.log(`🔍 Coherence modal opened for "${parentNode.title}" with ${result.contradictions.length} contradictions - waiting for user to close`);
+            
+            // Wait for the modal to be closed by the user
+            // The modal's close() method is called when user clicks close, backdrop, or escape
+            // We need to wait for it to actually close
+            await this.waitForModalClose(coherenceModal);
+            
+        } catch (error) {
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showAIError(
+                error as Error,
+                {
+                    title: 'Coherence Modal Error',
+                    operation: `Opening coherence modal for "${parentNode.title}"`,
+                    purpose: 'Coherence Analysis'
+                }
+            );
+        }
+    }
+
+    /**
+     * Wait for modal to be closed by the user
+     */
+    private async waitForModalClose(modal: any): Promise<void> {
+        return new Promise<void>((resolve) => {
+            // Set up an interval to check if the modal is closed
+            const checkClosed = setInterval(() => {
+                if (!modal.isOpen()) {
+                    clearInterval(checkClosed);
+                    resolve();
+                }
+            }, 100);
+            
+            // Also set up a maximum timeout to prevent infinite waiting
+            setTimeout(() => {
+                clearInterval(checkClosed);
+                resolve();
+            }, 5 * 60 * 1000); // 5 minutes max wait time
+        });
     }
 
     /**
