@@ -720,7 +720,7 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Show all collected contradictions in a single modal at the end of generation
+     * Show all collected contradictions by opening CoherenceModal for each node
      */
     private async showCollectedContradictions(): Promise<void> {
         if (this.collectedContradictions.length === 0) {
@@ -731,32 +731,58 @@ export class UnifiedGenerationService {
         console.log(`📋 Showing collected contradictions: ${this.collectedContradictions.length} nodes with issues`);
 
         try {
-            // Show a simple alert for now summarizing all contradictions
-            // TODO: Create a proper batch modal that can handle multiple nodes at once
-            
             const totalContradictions = this.collectedContradictions.reduce((sum, item) => 
                 sum + item.analysisResult.contradictions.length, 0);
             
-            const nodeList = this.collectedContradictions.map(item => 
-                `• ${item.parentNode.title} (${item.analysisResult.contradictions.length} issues)`
+            const nodeList = this.collectedContradictions.map((item, index) => 
+                `${index + 1}. ${item.parentNode.title} (${item.analysisResult.contradictions.length} issues)`
             ).join('\n');
             
-            alert(`⚠️ Coherence Analysis Results\n\nFound contradictions in ${this.collectedContradictions.length} node(s):\n\n${nodeList}\n\nTotal contradictions: ${totalContradictions}\n\nDetailed analysis can be accessed individually through the node actions menu.`);
+            // Show summary first
+            const proceedWithFixes = confirm(`⚠️ Coherence Analysis Results\n\nFound contradictions in ${this.collectedContradictions.length} node(s):\n\n${nodeList}\n\nTotal contradictions: ${totalContradictions}\n\nWould you like to review and fix these issues now?\n\n(Click OK to open each modal one by one, or Cancel to skip fixes)`);
             
-            console.log(`📋 Showed batch coherence summary for ${this.collectedContradictions.length} nodes with ${totalContradictions} total contradictions`);
+            if (proceedWithFixes) {
+                console.log(`📋 User chose to fix contradictions - showing modals for ${this.collectedContradictions.length} nodes`);
+                
+                // Show CoherenceModal for each node with issues, one by one
+                for (let i = 0; i < this.collectedContradictions.length; i++) {
+                    const collected = this.collectedContradictions[i];
+                    if (!collected) {
+                        console.warn(`⚠️ Skipping undefined collected contradiction at index ${i}`);
+                        continue;
+                    }
+                    
+                    console.log(`🔍 Showing coherence modal ${i + 1}/${this.collectedContradictions.length} for "${collected.parentNode.title}" (${collected.analysisResult.contradictions.length} contradictions)`);
+                    
+                    // Show modal and wait for user to close it
+                    await this.showCoherenceModalAndWait(collected.parentNode, collected.analysisResult);
+                    
+                    console.log(`✅ Coherence modal ${i + 1}/${this.collectedContradictions.length} closed for "${collected.parentNode.title}"`);
+                }
+                
+                console.log(`✅ All coherence modals completed - user reviewed ${this.collectedContradictions.length} nodes`);
+            } else {
+                console.log(`⏭️ User chose to skip fixing contradictions - leaving nodes untagged for future review`);
+                
+                // Don't tag nodes as consistent if user chose to skip fixing issues
+                // They can manually access coherence analysis later via node actions menu
+            }
             
-            // Tag all analyzed nodes' subnodes as consistent to parent after showing summary
-            this.tagAnalyzedSubnodesAsConsistent();
+            console.log(`📋 Batch coherence processing completed for ${this.collectedContradictions.length} nodes with ${totalContradictions} total contradictions`);
+            
         } catch (error) {
             // Show error through the error service (includes console logging)
             await GenerationErrorService.getInstance().showAIError(
                 error as Error,
                 {
                     title: 'Coherence Modal Error',
-                    operation: 'Opening batch coherence modal',
+                    operation: 'Opening batch coherence modals',
                     purpose: 'Coherence Analysis'
                 }
             );
+            
+            // On error, still tag nodes to prevent them from being stuck in inconsistent state
+            this.tagAnalyzedSubnodesAsConsistent();
         }
     }
 
