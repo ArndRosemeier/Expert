@@ -5,7 +5,7 @@ import { EventEmitter } from './EventEmitter';
 import * as state from './state';
 import { promptExpansionService } from './services/PromptExpansionService.js';
 import { PromptContextBuilder } from './services/PromptContextBuilder.js';
-import { formatCriteriaAsJson } from './ProjectUtils';
+import { formatCriteriaAsText } from './ProjectUtils';
 
 export interface LoopInput {
     prompt: string;
@@ -290,7 +290,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     { getLanguage: () => this.language, getCriteria: () => [] } as any,
                     {
                         prompt: input.prompt,
-                        criteria: formatCriteriaAsJson(input.criteria),
+                        criteria: formatCriteriaAsText(input.criteria),
                         language: this.language
                     }
                 );
@@ -619,14 +619,14 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        const criteriaJson = formatCriteriaAsJson(criteria);
+        const criteriaText = formatCriteriaAsText(criteria);
 
         if (!history) {
             const context = PromptContextBuilder.fromLegacyParams(
                 { getLanguage: () => this.language, getCriteria: () => [] } as any,
                 {
                     prompt: originalPrompt,
-                    criteria: criteriaJson,
+                    criteria: criteriaText,
                     language: this.language
                 }
             );
@@ -645,7 +645,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 prompt: originalPrompt,
                 lastResponse: lastResponse || '',
                 editorAdvice: lastEditorAdvice,
-                criteria: criteriaJson,
+                criteria: criteriaText,
                 language: this.language
             }
         );
@@ -653,14 +653,14 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
-        const criteriaJson = formatCriteriaAsJson(criteria);
+        const criteriaText = formatCriteriaAsText(criteria);
         
         const context = PromptContextBuilder.fromLegacyParams(
             { getLanguage: () => this.language, getCriteria: () => [] } as any,
             {
                 originalPrompt: prompt,
                 response: response,
-                criteria: criteriaJson,
+                criteria: criteriaText,
                 language: this.language
             }
         );
