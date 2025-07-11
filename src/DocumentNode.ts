@@ -797,4 +797,24 @@ export class DocumentNode {
         const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
         return match && match[1] ? match[1] : rawChildLevelName;
     }
+
+    /**
+     * Find a descendant node by ID recursively searching through the tree.
+     * @param targetId The ID of the node to find
+     * @returns The found node or null if not found
+     */
+    findDescendantById(targetId: string): DocumentNode | null {
+        if (this.id === targetId) {
+            return this;
+        }
+        
+        for (const child of this.children) {
+            const found = child.findDescendantById(targetId);
+            if (found) {
+                return found;
+            }
+        }
+        
+        return null;
+    }
 }

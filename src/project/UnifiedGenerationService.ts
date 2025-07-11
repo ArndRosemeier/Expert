@@ -224,6 +224,7 @@ export class UnifiedGenerationService {
      */
     private async processWorkQueue(workQueue: WorkItem[], levels: GenerationLevels): Promise<void> {
         let position = 0;
+        let currentLevel = -1; // Track the current level being processed
 
         while (position < workQueue.length) {
             // Check for abort request
@@ -244,6 +245,17 @@ export class UnifiedGenerationService {
                 position++;
                 continue;
             }
+
+            // Check if we're transitioning to a deeper level
+            if (currentLevel !== -1 && currentNode.level > currentLevel) {
+                // We're leaving the current level and going deeper
+                // Show any accumulated contradictions from the current level before proceeding
+                console.log(`🔄 Level transition detected: leaving level ${currentLevel}, entering level ${currentNode.level}`);
+                await this.showAccumulatedContradictionsForLevelTransition(currentLevel, currentNode.level);
+            }
+
+            // Update current level
+            currentLevel = currentNode.level;
 
             // Update top-level progress
             this.updateTopLevelProgress(position + 1, workQueue.length, currentNode);
@@ -622,8 +634,7 @@ export class UnifiedGenerationService {
 
     /**
      * Handle coherence check for a parent node
-     * In multi-level generation, show modal immediately and wait for user to resolve
-     * In single-level generation, collect contradictions for batch display at end
+     * Always accumulate contradictions for level-transition display
      */
     private async handleCoherenceCheck(parentId: string, levels: GenerationLevels): Promise<void> {
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
@@ -657,34 +668,22 @@ export class UnifiedGenerationService {
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
             } else {
-                // Detect if we're doing multi-level generation
-                const isMultiLevelGeneration = levels.draftLevel > levels.coherenceLevel + 1;
+                // Always accumulate contradictions for level-transition display
+                console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - accumulating for level transition`);
                 
-                if (isMultiLevelGeneration) {
-                    // Multi-level generation: Show modal immediately and wait for user to resolve
-                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - showing modal and waiting for resolution`);
-                    
-                    await this.showCoherenceModalAndWait(parentNode, result);
-                    
-                    console.log(`✅ Coherence modal closed for "${parentNode.title}" - continuing with next level`);
-                } else {
-                    // Single-level generation: Merge contradictions into accumulated result
-                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - merging into accumulated result`);
-                    
-                    // Merge new contradictions into accumulated result with parent node context
-                    const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
-                        ...contradiction,
-                        parentNodeTitle: parentNode.title,
-                        parentNodeId: parentNode.id
-                    }));
-                    
-                    this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
-                    this.accumulatedContradictions.analyzedNodes.push(parentNode);
-                    this.accumulatedContradictions.totalAnalyzed++;
-                    this.accumulatedContradictions.hasContradictions = true;
-                    
-                    console.log(`📋 Merged contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
-                }
+                // Merge new contradictions into accumulated result with parent node context
+                const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
+                    ...contradiction,
+                    parentNodeTitle: parentNode.title,
+                    parentNodeId: parentNode.id
+                }));
+                
+                this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
+                this.accumulatedContradictions.analyzedNodes.push(parentNode);
+                this.accumulatedContradictions.totalAnalyzed++;
+                this.accumulatedContradictions.hasContradictions = true;
+                
+                console.log(`📋 Accumulated contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
             }
             
         } catch (error) {
@@ -703,13 +702,85 @@ export class UnifiedGenerationService {
     }
 
     /**
+     * Show accumulated contradictions when transitioning between levels
+     */
+    private async showAccumulatedContradictionsForLevelTransition(fromLevel: number, toLevel: number): Promise<void> {
+        if (!this.accumulatedContradictions.hasContradictions) {
+            console.log(`🔍 No accumulated contradictions found when transitioning from level ${fromLevel} to level ${toLevel}`);
+            return;
+        }
+
+        const totalContradictions = this.accumulatedContradictions.contradictions.length;
+        const totalNodes = this.accumulatedContradictions.totalAnalyzed;
+        
+        console.log(`🔄 Showing accumulated contradictions for level transition (${fromLevel} → ${toLevel}): ${totalContradictions} contradictions from ${totalNodes} nodes`);
+
+        try {
+            // Create a comprehensive analysis result with all accumulated contradictions
+            const representativeNode = this.accumulatedContradictions.analyzedNodes[0];
+            const comprehensiveResult = {
+                hasContradictions: true,
+                contradictions: this.accumulatedContradictions.contradictions,
+                analyzedNodes: this.accumulatedContradictions.analyzedNodes,
+                totalAnalyzed: this.accumulatedContradictions.totalAnalyzed,
+                analysisTimestamp: new Date(),
+                parentNodeId: representativeNode?.id || '',
+                childNodeIds: this.accumulatedContradictions.analyzedNodes.map(node => node.id)
+            };
+            
+            // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
+            if (representativeNode) {
+                console.log(`🔍 Showing level transition coherence modal with ${totalContradictions} contradictions from ${totalNodes} nodes`);
+                
+                // Import and create the coherence modal
+                const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
+                const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
+                
+                // Open modal in loading state first
+                await coherenceModal.openInLoadingState(representativeNode);
+                
+                // Update with results
+                coherenceModal.updateWithResults(comprehensiveResult);
+                
+                console.log(`🔍 Level transition coherence modal opened with ${totalContradictions} contradictions - waiting for user to close`);
+                
+                // Wait for the modal to be closed by the user
+                await this.waitForModalClose(coherenceModal);
+                
+                console.log(`✅ Level transition coherence modal closed - user reviewed ${totalContradictions} contradictions`);
+            }
+            
+        } catch (error) {
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showAIError(
+                error as Error,
+                {
+                    title: 'Level Transition Coherence Modal Error',
+                    operation: `Showing accumulated contradictions for level transition (${fromLevel} → ${toLevel})`,
+                    purpose: 'Coherence Analysis'
+                }
+            );
+        }
+        
+        // Clear accumulated contradictions after showing them
+        this.accumulatedContradictions = {
+            hasContradictions: false,
+            contradictions: [],
+            analyzedNodes: [],
+            totalAnalyzed: 0
+        };
+        
+        console.log(`✅ Cleared accumulated contradictions after level transition display`);
+    }
+
+    /**
      * Show coherence modal and wait for user to close it
      */
     private async showCoherenceModalAndWait(parentNode: DocumentNode, result: any): Promise<void> {
         try {
             // Import and create the coherence modal
             const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
-            const coherenceModal = new CoherenceModal();
+            const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
             
             // Open modal in loading state first
             await coherenceModal.openInLoadingState(parentNode);
@@ -760,14 +831,15 @@ export class UnifiedGenerationService {
 
     /**
      * Show all accumulated contradictions in one comprehensive modal
+     * This is only called at the end if there are remaining contradictions that weren't shown during level transitions
      */
     private async showCollectedContradictions(): Promise<void> {
         if (!this.accumulatedContradictions.hasContradictions) {
-            console.log('📋 No contradictions found during generation');
+            console.log('📋 No remaining contradictions found at end of generation');
             return;
         }
 
-        console.log(`📋 Showing accumulated contradictions: ${this.accumulatedContradictions.contradictions.length} total issues from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
+        console.log(`📋 Showing remaining accumulated contradictions: ${this.accumulatedContradictions.contradictions.length} total issues from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
 
         try {
             const totalContradictions = this.accumulatedContradictions.contradictions.length;
@@ -777,7 +849,7 @@ export class UnifiedGenerationService {
             ).join('\n');
             
             // Show summary first
-            const proceedWithFixes = confirm(`⚠️ Coherence Analysis Results\n\nFound ${totalContradictions} contradictions across ${this.accumulatedContradictions.totalAnalyzed} node(s):\n\n${nodeList}\n\nWould you like to review and fix these issues now?\n\n(Click OK to open comprehensive coherence modal, or Cancel to skip fixes)`);
+            const proceedWithFixes = confirm(`⚠️ Remaining Coherence Issues\n\nFound ${totalContradictions} remaining contradictions across ${this.accumulatedContradictions.totalAnalyzed} node(s):\n\n${nodeList}\n\nWould you like to review and fix these remaining issues now?\n\n(Click OK to open comprehensive coherence modal, or Cancel to skip fixes)`);
             
             if (proceedWithFixes) {
                 console.log(`📋 User chose to fix contradictions - showing comprehensive modal with ${totalContradictions} issues`);

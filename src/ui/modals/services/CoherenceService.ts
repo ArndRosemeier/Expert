@@ -123,8 +123,15 @@ export class CoherenceService {
 
         const request = this.prepareAnalysisRequest(node);
         
-        // Create analysis prompt
+        // Create analysis prompt with better error handling
         const prompts = this.settingsManager.getPrompts();
+        
+        // Check if prompts are properly loaded
+        if (!prompts || !prompts.coherence_analysis) {
+            console.error('Coherence analysis prompts not available. Current prompts:', prompts);
+            throw new Error('Coherence analysis prompts not available. This may be due to settings being modified during analysis.');
+        }
+        
         const analysisPrompt = prompts.coherence_analysis
             .replace(/\{\{parent_content\}\}/g, request.parentContent)
             .replace(/\{\{parent_context\}\}/g, request.parentContext)
@@ -132,11 +139,17 @@ export class CoherenceService {
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
+            console.log(`🔍 Starting coherence analysis for "${node.title}" with ${request.childNodes.length} child nodes`);
+            
             // Use creator model for analysis
             const response = await this.openRouterClient.chat('creator', analysisPrompt);
             
+            console.log(`✅ Coherence analysis API call completed for "${node.title}"`);
+            
             // Parse JSON response
             const contradictions = this.parseAnalysisResponse(response, request.childNodes);
+            
+            console.log(`📊 Coherence analysis parsing completed for "${node.title}": ${contradictions.length} contradictions found`);
             
             return {
                 contradictions,
@@ -146,7 +159,27 @@ export class CoherenceService {
                 childNodeIds: node.children.map(child => child.id)
             };
         } catch (error) {
-            console.error('Coherence analysis failed:', error);
+            // Log detailed error information
+            console.error('Coherence analysis failed for node:', node.title);
+            console.error('Error details:', error);
+            console.error('Current settings state:', {
+                hasPrompts: !!prompts,
+                hasCoherencePrompt: !!(prompts && prompts.coherence_analysis),
+                language: this.settingsManager.getLanguage(),
+                requestChildCount: request.childNodes.length
+            });
+            
+            // Provide more specific error message based on error type
+            if (error instanceof Error) {
+                if (error.message.includes('API key') || error.message.includes('authentication')) {
+                    throw new Error('Coherence analysis failed due to API authentication issues. Please check your API key settings.');
+                } else if (error.message.includes('parse') || error.message.includes('JSON')) {
+                    throw new Error('Coherence analysis failed due to malformed AI response. Please try again.');
+                } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                    throw new Error('Coherence analysis failed due to network issues. Please check your connection and try again.');
+                }
+            }
+            
             throw new Error('Failed to analyze coherence. Please try again.');
         }
     }

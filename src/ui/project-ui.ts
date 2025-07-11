@@ -866,8 +866,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                             return;
                         }
 
-                        // Create and show modal in loading state
-                        const analysisModal = new CoherenceModal();
+                        // Create and show modal in loading state - pass the project root
+                        const analysisModal = new CoherenceModal(manager.rootNode);
                         analysisModal.openInLoadingState(completedNode);
                         
                         // Perform analysis
@@ -2560,8 +2560,8 @@ This action cannot be undone.`;
                     return;
                 }
 
-                // Create and show modal in loading state
-                const analysisModal = new CoherenceModal();
+                // Create and show modal in loading state - pass the active project root
+                const analysisModal = new CoherenceModal(projectManager.rootNode);
                 void analysisModal.openInLoadingState(node);
                 
                 // Perform analysis

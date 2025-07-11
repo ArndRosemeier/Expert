@@ -12,13 +12,15 @@ export class CoherenceModal extends BaseModal {
     private isLoading: boolean = false;
     private fixedContradictions: Map<number, { originalContent: string; fixedContent: string }> = new Map();
     private appliedFixes: Set<number> = new Set();
+    private generationProject: DocumentNode | null = null; // The project root to use for node searching
 
-    constructor() {
+    constructor(generationProject?: DocumentNode) {
         super({ 
             id: 'coherence-modal',
             closable: true,
             backdrop: false
         });
+        this.generationProject = generationProject || null;
     }
 
     /**
@@ -513,8 +515,26 @@ export class CoherenceModal extends BaseModal {
         
         if (!contradiction || !fixData || !contradiction.offending_child_id) return;
 
-        // Find the child node
-        const childNode = this.parentNode.children.find(child => child.id === contradiction.offending_child_id);
+        // Find the child node using the same logic as handleFixContradiction
+        let childNode: DocumentNode | undefined;
+        
+        // Determine which project root to use for searching
+        if (this.generationProject) {
+            // Use the generation project (passed from generation loop)
+            childNode = this.generationProject.findDescendantById(contradiction.offending_child_id) || undefined;
+        } else {
+            // Fallback to active project (for direct action button calls)
+            const { getActiveProject } = await import('../../state');
+            const activeProject = getActiveProject();
+            const projectRoot = activeProject?.rootNode;
+            if (projectRoot) {
+                childNode = projectRoot.findDescendantById(contradiction.offending_child_id) || undefined;
+            } else {
+                // Final fallback to old logic
+                childNode = this.parentNode?.children.find(child => child.id === contradiction.offending_child_id);
+            }
+        }
+        
         if (!childNode) {
             alert('Child node not found. Please try again.');
             return;
@@ -628,34 +648,45 @@ export class CoherenceModal extends BaseModal {
             return;
         }
 
-        // Find the child node and its parent - handle both single and multi-parent scenarios
+        // Find the child node and its parent - use generationProject if available, otherwise activeProject
         let childNode: DocumentNode | undefined;
         let actualParentNode: DocumentNode | undefined;
         
-        if (contradiction.parentNodeId) {
-            // Multi-parent comprehensive mode: find the actual parent for this contradiction
+        // Determine which project root to use for searching
+        let projectRoot: DocumentNode | null = null;
+        
+        if (this.generationProject) {
+            // Use the generation project (passed from generation loop)
+            projectRoot = this.generationProject;
+        } else {
+            // Fallback to active project (for direct action button calls)
             const { getActiveProject } = await import('../../state');
             const activeProject = getActiveProject();
-            if (activeProject && activeProject.rootNode) {
-                // Search for the actual parent node
-                const findNodeById = (node: DocumentNode, targetId: string): DocumentNode | null => {
-                    if (node.id === targetId) return node;
-                    for (const child of node.children) {
-                        const found = findNodeById(child, targetId);
-                        if (found) return found;
-                    }
-                    return null;
-                };
-                
-                actualParentNode = findNodeById(activeProject.rootNode, contradiction.parentNodeId) || undefined;
-                if (actualParentNode) {
-                    childNode = actualParentNode.children.find(child => child.id === childId);
+            projectRoot = activeProject?.rootNode || null;
+        }
+        
+        if (projectRoot) {
+            // Use the centralized findDescendantById method
+            childNode = projectRoot.findDescendantById(childId) || undefined;
+            
+            // Find the actual parent node for this contradiction
+            if (contradiction.parentNodeId) {
+                // Multi-parent comprehensive mode: find the specific parent for this contradiction
+                actualParentNode = projectRoot.findDescendantById(contradiction.parentNodeId) || undefined;
+            } else {
+                // Single-parent mode: use the modal's parent node (but validate it exists in project)
+                if (this.parentNode?.id) {
+                    actualParentNode = projectRoot.findDescendantById(this.parentNode.id) || this.parentNode;
+                } else {
+                    actualParentNode = this.parentNode || undefined;
                 }
             }
         } else {
-            // Single-parent mode: use the modal's parent node
-            actualParentNode = this.parentNode;
-            childNode = this.parentNode.children.find(child => child.id === childId);
+            // Fallback to old logic if no project root available
+            actualParentNode = this.parentNode || undefined;
+            if (this.parentNode && this.parentNode.children) {
+                childNode = this.parentNode.children.find(child => child.id === childId);
+            }
         }
         
         if (!childNode || !actualParentNode) {
