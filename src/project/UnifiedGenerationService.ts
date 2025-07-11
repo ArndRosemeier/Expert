@@ -14,6 +14,7 @@ import { GenerationErrorService } from '../ui/modals/services/GenerationErrorSer
 import { GenerationCoordinator } from './GenerationCoordinator';
 import { QualityCriterion, CreatorPayload } from '../types';
 import { LoopProgress, RaterProgressPayload, Rating } from '../LoopOrchestrator';
+import { TaskModelService } from '../services/TaskModelService';
 
 /**
  * Configuration for generation levels
@@ -27,6 +28,8 @@ export interface GenerationLevels {
     contextPruneLevel: number;
     /** Which levels get coherence checking (must be < draftLevel) */
     coherenceLevel: number;
+    /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
+    autofixSeverity: number;
 }
 
 /**
@@ -87,10 +90,12 @@ export class UnifiedGenerationService {
     private deps: UnifiedGenerationDependencies;
     private abortRequested: boolean = false;
     private coherenceService: CoherenceService;
+    private taskModelService: TaskModelService;
     private currentOperationProgress: { current: number; total: number; message: string } | null = null;
     private currentIterationProgress: { current: number; total: number; message: string } | null = null;
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
+    private currentOperationType: 'content' | 'draft' | 'context' | 'coherence' | null = null;
     // Add contradiction collection system
     private accumulatedContradictions: {
         hasContradictions: boolean;
@@ -110,6 +115,7 @@ export class UnifiedGenerationService {
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
         this.coherenceService = new CoherenceService(dependencies.openRouterClient, dependencies.settingsManager);
+        this.taskModelService = new TaskModelService(dependencies.settingsManager, dependencies.openRouterClient);
     }
 
     /**
@@ -220,160 +226,177 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Process the work queue using breadth-first traversal
+     * Process the work queue using true breadth-first traversal by level and phase
      */
     private async processWorkQueue(workQueue: WorkItem[], levels: GenerationLevels): Promise<void> {
-        let position = 0;
-        let currentLevel = -1; // Track the current level being processed
+        // Group work items by level for true breadth-first processing
+        const workItemsByLevel = new Map<number, WorkItem[]>();
+        
+        // Initial grouping
+        workQueue.forEach(item => {
+            const levelItems = workItemsByLevel.get(item.level) || [];
+            levelItems.push(item);
+            workItemsByLevel.set(item.level, levelItems);
+        });
 
-        while (position < workQueue.length) {
-            // Check for abort request
-            if (this.abortRequested) {
-                throw new Error('Generation was aborted by user');
-            }
+        // Process levels in order (breadth-first)
+        const sortedLevels = Array.from(workItemsByLevel.keys()).sort((a, b) => a - b);
+        let totalProcessed = 0;
+        const totalItems = workQueue.length;
 
-            const currentItem = workQueue[position];
-            if (!currentItem) {
-                position++;
-                continue;
-            }
+        const firstLevel = sortedLevels[0];
+        if (firstLevel === undefined) {
+            console.log('No work items to process');
+            return;
+        }
 
-            const currentNode = this.deps.treeService.findNodeById(currentItem.nodeId, this.deps.rootNode);
+        for (const level of sortedLevels) {
+            const levelItems = workItemsByLevel.get(level) || [];
+            if (levelItems.length === 0) continue;
+
+            console.log(`🔄 Processing level ${level} (${levelItems.length} nodes)`);
             
-            if (!currentNode) {
-                console.error(`Node not found: ${currentItem.nodeId}`);
-                position++;
-                continue;
+            // Show any accumulated contradictions from the previous level before proceeding
+            if (level > firstLevel) {
+                await this.showAccumulatedContradictionsForLevelTransition(level - 1, level);
             }
 
-            // Check if we're transitioning to a deeper level
-            if (currentLevel !== -1 && currentNode.level > currentLevel) {
-                // We're leaving the current level and going deeper
-                // Show any accumulated contradictions from the current level before proceeding
-                console.log(`🔄 Level transition detected: leaving level ${currentLevel}, entering level ${currentNode.level}`);
-                await this.showAccumulatedContradictionsForLevelTransition(currentLevel, currentNode.level);
-            }
+            // Process this level in phases for true breadth-first
+            const newWorkItems = await this.processLevelInPhases(levelItems, levels, totalProcessed, totalItems);
+            
+            // Add any new work items (children) to the appropriate level groups
+            newWorkItems.forEach(item => {
+                const levelItems = workItemsByLevel.get(item.level) || [];
+                levelItems.push(item);
+                workItemsByLevel.set(item.level, levelItems);
+            });
 
-            // Update current level
-            currentLevel = currentNode.level;
-
-            // Update top-level progress
-            this.updateTopLevelProgress(position + 1, workQueue.length, currentNode);
-
-            // Process current work item
-            const newWorkItems = await this.processWorkItem(currentItem, levels);
-
-            // Add new work items to END of queue (breadth-first)
-            workQueue.push(...newWorkItems);
-
-            position++;
+            totalProcessed += levelItems.length;
         }
     }
 
     /**
-     * Process a single work item
+     * Process all nodes at a given level in phases (context -> content -> draft -> coherence)
      */
-    private async processWorkItem(item: WorkItem, levels: GenerationLevels): Promise<WorkItem[]> {
-        const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-        if (!node) {
-            console.error(`Node not found: ${item.nodeId}`);
-            return [];
+    private async processLevelInPhases(levelItems: WorkItem[], levels: GenerationLevels, baseProgress: number, totalItems: number): Promise<WorkItem[]> {
+        const newWorkItems: WorkItem[] = [];
+        
+        // Phase 1: Context Pruning for all nodes at this level
+        for (let i = 0; i < levelItems.length; i++) {
+            if (this.abortRequested) {
+                throw new Error('Generation was aborted by user');
+            }
+
+            const item = levelItems[i];
+            if (!item) continue;
+            
+            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
+            if (!node) continue;
+
+            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
+
+            if (levels.contextPruneLevel >= node.level) {
+                this.setCurrentWorkingNode(item.nodeId);
+                await this.handleContextPruning(item.nodeId);
+                this.clearCurrentWorkingNode(item.nodeId);
+            }
         }
 
-        const newWorkItems: WorkItem[] = [];
-
-        try {
-            // Determine if this node will actually need work
-            const willDoWork = 
-                (levels.contextPruneLevel >= node.level) ||
-                (levels.contentLevel >= node.level && this.shouldGenerateContent(node)) ||
-                (node.level < levels.draftLevel);
-
-            // Move spinner to current node if it will do work
-            if (willDoWork) {
-                this.setCurrentWorkingNode(item.nodeId);
+        // Phase 2: Content Generation for all nodes at this level
+        for (let i = 0; i < levelItems.length; i++) {
+            if (this.abortRequested) {
+                throw new Error('Generation was aborted by user');
             }
 
-            // 1. Context Pruning
-            if (levels.contextPruneLevel >= node.level) {
-                await this.handleContextPruning(item.nodeId);
-            }
+            const item = levelItems[i];
+            if (!item) continue;
+            
+            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
+            if (!node) continue;
 
-            // 2. Content Generation
+            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
+
             if (levels.contentLevel >= node.level && this.shouldGenerateContent(node)) {
+                this.setCurrentWorkingNode(item.nodeId);
                 await this.handleContentGeneration(item.nodeId);
+                this.clearCurrentWorkingNode(item.nodeId);
+            }
+        }
+
+        // Phase 3: Draft Creation for all nodes at this level
+        const draftResults = new Map<string, { childIds: string[]; childrenCreated: boolean }>();
+        
+        for (let i = 0; i < levelItems.length; i++) {
+            if (this.abortRequested) {
+                throw new Error('Generation was aborted by user');
             }
 
-            // 3. Draft Creation (Children)
-            let draftResult: { childIds: string[]; childrenCreated: boolean } | null = null;
+            const item = levelItems[i];
+            if (!item) continue;
+            
+            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
+            if (!node) continue;
+
+            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
+
             if (node.level < levels.draftLevel) {
-                draftResult = await this.handleDraftCreation(item.nodeId);
+                this.setCurrentWorkingNode(item.nodeId);
+                const draftResult = await this.handleDraftCreation(item.nodeId);
+                draftResults.set(item.nodeId, draftResult);
+                this.clearCurrentWorkingNode(item.nodeId);
                 
-                // Add any newly created children to work queue if they might need work
-                // Check against ALL level settings to see if children could need any type of work
+                // Add newly created children to work queue
                 const maxWorkLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
                 
-                for (let i = 0; i < draftResult.childIds.length; i++) {
-                    const childId = draftResult.childIds[i]!; // Non-null assertion: guaranteed to be within bounds
+                for (let j = 0; j < draftResult.childIds.length; j++) {
+                    const childId = draftResult.childIds[j];
+                    if (!childId) continue;
+                    
                     const child = this.deps.treeService.findNodeById(childId, this.deps.rootNode);
                     if (child && child.level <= maxWorkLevel) {
                         newWorkItems.push({
                             nodeId: childId,
                             level: child.level,
                             parentId: item.nodeId,
-                            isLastChild: i === draftResult.childIds.length - 1
+                            isLastChild: j === draftResult.childIds.length - 1
                         });
                     }
                 }
             }
+        }
 
-            // 4. Coherence Check (if this was the last child and coherence is enabled)
-            if (item.isLastChild && item.parentId && levels.coherenceLevel !== -1) {
-                const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
-                if (parentNode && levels.coherenceLevel >= parentNode.level) {
-                    // Prevent duplicate analysis - only analyze each parent once
-                    if (this.analyzedParents.has(item.parentId)) {
-                        console.log(`⏭️ Skipping coherence check for "${parentNode.title}" - already analyzed during this generation`);
-                    } else {
-                        // Only run coherence after draft creation if children were actually created
-                        const justCompletedDraftCreation = draftResult && draftResult.childrenCreated;
-                        const contentWillGenerateForChildren = levels.contentLevel >= node.level + 1; // children are one level deeper
-                        
-                        const shouldRunCoherenceCheck = !justCompletedDraftCreation || !contentWillGenerateForChildren;
-                        
-                        if (shouldRunCoherenceCheck) {
-                            console.log(`🔍 Running coherence check for "${parentNode.title}" (draftCreated: ${justCompletedDraftCreation}, contentWillGenerate: ${contentWillGenerateForChildren})`);
-                            this.analyzedParents.add(item.parentId);
-                            await this.handleCoherenceCheck(item.parentId!, levels);
-                        } else {
-                            console.log(`⏭️ Skipping coherence check for "${parentNode.title}" after draft creation - content generation will trigger it later`);
-                        }
+        // Phase 4: Coherence Check for all nodes at this level
+        for (let i = 0; i < levelItems.length; i++) {
+            if (this.abortRequested) {
+                throw new Error('Generation was aborted by user');
+            }
+
+            const item = levelItems[i];
+            if (!item) continue;
+            
+            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
+            if (!node) continue;
+
+            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
+
+            // Check for coherence analysis if this node has children and coherence is enabled
+            if (levels.coherenceLevel !== -1 && node.children.length > 0) {
+                const parentNode = node;
+                if (levels.coherenceLevel >= parentNode.level) {
+                    // Prevent duplicate analysis
+                    if (!this.analyzedParents.has(item.nodeId)) {
+                        console.log(`🔍 Running coherence check for "${parentNode.title}"`);
+                        this.analyzedParents.add(item.nodeId);
+                        await this.handleCoherenceCheck(item.nodeId, levels);
                     }
                 }
             }
-
-            // Clear spinner from current node if it did work
-            if (willDoWork) {
-                this.clearCurrentWorkingNode(item.nodeId);
-            }
-
-        } catch (error) {
-            // Show error through the error service (includes console logging)
-            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-            const nodeTitle = node?.title || 'Unknown Node';
-            await GenerationErrorService.getInstance().showContentGenerationError(
-                error as Error, 
-                nodeTitle, 
-                'Node Processing'
-            );
-            
-            // Make sure to clear spinner even on error
-            this.clearCurrentWorkingNode(item.nodeId);
-            // Continue with next item rather than stopping entire generation
         }
 
         return newWorkItems;
     }
+
+
 
     /**
      * Handle context pruning for a node
@@ -402,6 +425,7 @@ export class UnifiedGenerationService {
                 message: `Auto-pruning context for "${node.title}"`
             };
             this.currentNodeId = nodeId;
+            this.currentOperationType = 'context';
             this.emitUnifiedProgress();
             
             // Import the ContextAdjusterModal and run in automatic mode
@@ -446,63 +470,50 @@ export class UnifiedGenerationService {
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) return;
 
-        // Check for settings override from parent node
-        const settingsOverride = this.extractSettingsOverride(node);
-        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() || null : null;
+        // Set operation type for progress tracking
+        this.currentOperationType = 'content';
+        this.currentNodeId = nodeId;
         
-        if (settingsOverride) {
-            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride!);
-            if (overrideProfile) {
-                console.log(`🔧 Using settings override "${settingsOverride}" for node "${node.title}"`);
-                await this.deps.settingsManager.setLastUsedProfile(settingsOverride!);
-            }
+        // Only generate content if needed
+        if (!this.shouldGenerateContent(node)) {
+            console.log(`⏭️ Skipping content generation for "${node.title}" - node state: ${node.getState()}`);
+            return;
         }
 
         try {
-            const profile = this.deps.settingsManager.getLastUsedProfile();
-            
-            if (!profile || !profile.criteria || profile.criteria.length === 0) {
-                throw new Error(`Cannot generate content for node "${node.title}". The active profile is missing or has no criteria.`);
-            }
-
-            // Get the raw prompt from the node
-            const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node);
-
-            // Fill the placeholders
-            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
-            const path = this.deps.treeService.getNodePath(nodeId, this.deps.rootNode);
-            const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
-            
-            // Filter criteria appropriately - use template-based leaf detection, not children count
-            const isLeafNode = node.isLeaf;
-            const filteredCriteria = this.filterCriteriaForNodeType(profile.criteria, isLeafNode);
-            
-            // Create loop input
-            const loopInput: LoopInput = {
-                prompt: filledPrompt,
-                criteria: filteredCriteria,
-                maxIterations: profile.maxIterations || 3,
-                response: '', // Initial response is empty
-                isLeafNode: isLeafNode
+            // Update progress to show we're working on this node
+            this.currentOperationProgress = {
+                current: 1,
+                total: 1,
+                message: `Generating content for "${node.title}"`
             };
+            this.emitUnifiedProgress();
+
+            // Build loop input
+            const loopInput = this.buildLoopInput(node);
 
             // Run the content generation loop
             await this.runContentLoop(nodeId, loopInput);
+
+            console.log(`✅ Content generation completed for "${node.title}"`);
             
         } catch (error) {
             // Show error through the error service (includes console logging)
-            await GenerationErrorService.getInstance().showContentGenerationError(
-                error as Error, 
-                node.title, 
-                'Content Generation'
+            await GenerationErrorService.getInstance().showAIError(
+                error as Error,
+                {
+                    title: 'Content Generation Failed',
+                    operation: `Content generation for "${node.title}"`,
+                    purpose: 'Content Generation'
+                }
             );
             
+            // Let the error propagate to be handled by the caller
             throw error;
         } finally {
-            // Restore original profile if we used an override
-            if (settingsOverride && originalProfileName) {
-                await this.deps.settingsManager.setLastUsedProfile(originalProfileName!);
-            }
+            // Clear operation type after content generation
+            this.currentOperationType = null;
+            this.emitUnifiedProgress();
         }
     }
 
@@ -528,6 +539,7 @@ export class UnifiedGenerationService {
                 message: `Generating children for "${node.title}"`
             };
             this.currentNodeId = nodeId;
+            this.currentOperationType = 'draft';
             this.emitUnifiedProgress();
 
             // Get the outline prompt template
@@ -648,11 +660,22 @@ export class UnifiedGenerationService {
                 return;
             }
 
+            // Set operation type for progress tracking
+            this.currentOperationType = 'coherence';
+            this.currentNodeId = parentId;
+            this.emitUnifiedProgress();
+
             // Emit coherence analysis started event
             console.log(`🔍 Starting coherence analysis for "${parentNode.title}"`);
             this.deps.eventEmitter.emit('coherenceAnalysisStarted', { nodeId: parentId, node: parentNode });
 
-            const result = await this.coherenceService.analyzeCoherence(parentNode);
+            // Use autofix-enabled analysis if autofix severity is set
+            const result = await this.coherenceService.analyzeCoherenceWithAutofix(
+                parentNode,
+                levels.autofixSeverity,
+                true, // isAutomaticMode = true (triggered by generation)
+                this.deps.rootNode.id // projectId
+            );
             
             // Emit coherence analysis complete event
             this.deps.eventEmitter.emit('coherenceAnalysisComplete', { 
@@ -698,6 +721,10 @@ export class UnifiedGenerationService {
             );
             
             // Continue with generation even if coherence check fails
+        } finally {
+            // Clear operation type after coherence check
+            this.currentOperationType = null;
+            this.emitUnifiedProgress();
         }
     }
 
@@ -999,6 +1026,18 @@ export class UnifiedGenerationService {
      * Get current model information for progress display
      */
     private getCurrentModelInfo(): string | undefined {
+        if (this.currentOperationType === 'coherence' && this.currentNodeId) {
+            // For coherence analysis, use TaskModelService to get the correct model
+            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
+            if (node) {
+                const isLeafNode = !node.children || node.children.length === 0;
+                const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
+                const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
+                return this.formatModelName(modelName);
+            }
+        }
+        
+        // For other operations, use the creator model (default behavior)
         const profile = this.deps.settingsManager.getLastUsedProfile();
         if (!profile?.selectedModels?.['creator']) return undefined;
         
@@ -1454,5 +1493,56 @@ export class UnifiedGenerationService {
                 return [];
             }
         }
+    }
+
+    /**
+     * Build loop input for content generation
+     */
+    private buildLoopInput(node: DocumentNode): LoopInput {
+        // Check for settings override from parent node
+        const settingsOverride = this.extractSettingsOverride(node);
+        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() || null : null;
+        
+        if (settingsOverride) {
+            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride!);
+            if (overrideProfile) {
+                console.log(`🔧 Using settings override "${settingsOverride}" for node "${node.title}"`);
+                this.deps.settingsManager.setLastUsedProfile(settingsOverride!);
+            }
+        }
+
+        const profile = this.deps.settingsManager.getLastUsedProfile();
+        
+        if (!profile || !profile.criteria || profile.criteria.length === 0) {
+            throw new Error(`Cannot generate content for node "${node.title}". The active profile is missing or has no criteria.`);
+        }
+
+        // Get the raw prompt from the node
+        const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node);
+
+        // Fill the placeholders
+        const context = this.deps.contextService.compileNodeContext(node.id, this.deps.rootNode);
+        const path = this.deps.treeService.getNodePath(node.id, this.deps.rootNode);
+        const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
+        
+        // Filter criteria appropriately - use template-based leaf detection, not children count
+        const isLeafNode = node.isLeaf;
+        const filteredCriteria = this.filterCriteriaForNodeType(profile.criteria, isLeafNode);
+
+        // Create loop input
+        const loopInput: LoopInput = {
+            prompt: filledPrompt,
+            criteria: filteredCriteria,
+            maxIterations: profile.maxIterations || 3,
+            response: '', // Initial response is empty
+            isLeafNode: isLeafNode
+        };
+
+        // Restore original profile if we used an override
+        if (settingsOverride && originalProfileName) {
+            this.deps.settingsManager.setLastUsedProfile(originalProfileName!);
+        }
+
+        return loopInput;
     }
 } 
