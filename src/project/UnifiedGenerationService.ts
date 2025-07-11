@@ -1036,13 +1036,38 @@ export class UnifiedGenerationService {
             return false; // No master version means no context to check
         }
 
-        // Simple check: if master version has the context_ai_adjusted tag, skip analysis
+        // Primary check: if master version has the context_ai_adjusted tag, skip analysis
         if (masterVersion.tags.has('context_ai_adjusted')) {
             console.log(`🔍 Master version already has context_ai_adjusted tag, skipping analysis for "${node.title}"`);
             return true;
         }
 
-        console.log(`🔍 Master version does not have context_ai_adjusted tag, analysis needed for "${node.title}"`);
+        // Fallback check: if tag is missing, check if master context matches any previously AI-adjusted versions
+        // This handles cases where context was adjusted in a draft version that later became master
+        const masterContext = masterVersion.context;
+        
+        // Find all versions that have been context AI-adjusted
+        const adjustedVersions = node.getAllVersions().filter(version => 
+            version.tags.has('context_ai_adjusted')
+        );
+
+        // If no versions have been AI-adjusted, then master context needs adjustment
+        if (adjustedVersions.length === 0) {
+            console.log(`🔍 Master version has no context_ai_adjusted tag and no previously adjusted versions found, analysis needed for "${node.title}"`);
+            return false;
+        }
+
+        // Check if ANY AI-adjusted version has the same context as the master
+        // If so, the master context is effectively already adjusted
+        for (const adjustedVersion of adjustedVersions) {
+            if (adjustedVersion.context === masterContext) {
+                console.log(`🔍 Master context matches AI-adjusted version (${adjustedVersion.id.substring(0, 8)}...), skipping analysis for "${node.title}"`);
+                return true;
+            }
+        }
+
+        // Master context differs from all AI-adjusted versions, needs adjustment
+        console.log(`🔍 Master context differs from all ${adjustedVersions.length} AI-adjusted version(s), analysis needed for "${node.title}"`);
         return false;
     }
 
