@@ -769,7 +769,9 @@ export class UnifiedGenerationService {
                     hasContradictions: true,
                     contradictions: this.accumulatedContradictions.contradictions,
                     analyzedNodes: this.accumulatedContradictions.analyzedNodes,
-                    totalAnalyzed: this.accumulatedContradictions.totalAnalyzed
+                    totalAnalyzed: this.accumulatedContradictions.totalAnalyzed,
+                    analysisTimestamp: new Date(), // Add timestamp for modal rendering
+                    childNodeIds: this.accumulatedContradictions.analyzedNodes.map(node => node.id) // Add child node IDs
                 };
                 
                 // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
