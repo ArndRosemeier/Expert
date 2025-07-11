@@ -26,6 +26,7 @@ let draftLevelState: number = -1;
 let contentLevelState: number = -1;
 let contextPruneLevelState: number = -1;
 let coherenceLevelState: number = -1;
+let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
 
 // Simple bulk operation tracking
 let isBulkOperationActive: boolean = false;
@@ -147,7 +148,8 @@ async function saveLevelStates() {
             draftLevel: draftLevelState,
             contentLevel: contentLevelState,
             contextPruneLevel: contextPruneLevelState,
-            coherenceLevel: coherenceLevelState
+            coherenceLevel: coherenceLevelState,
+            autofixSeverity: autofixSeverityState
         });
     } catch (error) {
         console.warn('Failed to save level states:', error);
@@ -158,12 +160,13 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
             contextPruneLevelState = saved.contextPruneLevel ?? -1;
             coherenceLevelState = saved.coherenceLevel ?? -1;
+            autofixSeverityState = saved.autofixSeverity ?? -1;
         }
     } catch (error) {
         console.warn('Failed to load level states:', error);
@@ -177,6 +180,7 @@ function captureCurrentDropdownValues() {
         const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
         const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
+        const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
         
         if (draftSelector) {
             const oldValue = draftLevelState;
@@ -204,6 +208,13 @@ function captureCurrentDropdownValues() {
             coherenceLevelState = parseInt(coherenceSelector.value);
             if (oldValue !== coherenceLevelState) {
                 console.log(`🔄 Captured coherence level: ${coherenceLevelState} (was ${oldValue})`);
+            }
+        }
+        if (autofixSeveritySelector) {
+            const oldValue = autofixSeverityState;
+            autofixSeverityState = parseInt(autofixSeveritySelector.value);
+            if (oldValue !== autofixSeverityState) {
+                console.log(`🔄 Captured autofix severity: ${autofixSeverityState} (was ${oldValue})`);
             }
         }
     } catch (error) {
@@ -1120,7 +1131,7 @@ export function renderNodeDetails() {
                 border-radius: 6px;
                 padding: 0.75rem;
                 width: fit-content;
-                max-width: 450px;
+                max-width: 600px;
             }
             
             .level-controls {
@@ -1203,6 +1214,41 @@ export function renderNodeDetails() {
                 display: flex;
                 justify-content: center;
                 margin-top: 0.25rem;
+            }
+            
+            .prune-and-actions-row {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                margin-top: 0.5rem;
+            }
+            
+            .prune-level-container {
+                flex: 0 0 auto;
+                display: flex;
+                flex-direction: column;
+                gap: 0.25rem;
+                min-width: 0;
+            }
+            
+            .prune-level-container .level-dropdown {
+                width: 140px;
+            }
+            
+            .prune-level-container label {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.8rem;
+                font-weight: 600;
+                color: #374151;
+                cursor: help;
+            }
+            
+            .actions-container {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
             }
             #node-generate-btn, #node-generate-all-btn {
                 min-width: 85px;
@@ -1455,22 +1501,6 @@ export function renderNodeDetails() {
                                 </select>
                             </div>
                             
-                            <!-- Context Prune Level -->
-                            <div class="level-selector">
-                                <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
-                                    <span class="level-icon">🔧</span>
-                                    Prune Level:
-                            </label>
-                                <select id="context-prune-level-selector" class="level-dropdown">
-                                    <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.slice(node.level).map((levelName, index) => {
-                                        const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
-                                        return `<option value="${actualLevel}" ${contextPruneLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
-                                    }).join('')}
-                                </select>
-                    </div>
-                    
                             <!-- Coherence Level -->
                             <div class="level-selector">
                                 <label for="coherence-level-selector" title="Which levels get coherence checking">
@@ -1485,25 +1515,65 @@ export function renderNodeDetails() {
                                         return `<option value="${actualLevel}" ${coherenceLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
                                 </select>
-                        </div>
+                            </div>
+                            
+                            <!-- Autofix Severity -->
+                            <div class="level-selector">
+                                <label for="autofix-severity-selector" title="Auto-fix contradictions of this severity and higher during generation">
+                                    <span class="level-icon">🤖</span>
+                                    Autofix Severity:
+                                </label>
+                                <select id="autofix-severity-selector" class="level-dropdown">
+                                    <option value="-1" ${autofixSeverityState === -1 ? 'selected' : ''}>None</option>
+                                    <option value="1" ${autofixSeverityState === 1 ? 'selected' : ''}>1 (All)</option>
+                                    <option value="2" ${autofixSeverityState === 2 ? 'selected' : ''}>2+</option>
+                                    <option value="3" ${autofixSeverityState === 3 ? 'selected' : ''}>3+</option>
+                                    <option value="4" ${autofixSeverityState === 4 ? 'selected' : ''}>4+</option>
+                                    <option value="5" ${autofixSeverityState === 5 ? 'selected' : ''}>5+ (Medium)</option>
+                                    <option value="6" ${autofixSeverityState === 6 ? 'selected' : ''}>6+</option>
+                                    <option value="7" ${autofixSeverityState === 7 ? 'selected' : ''}>7+</option>
+                                    <option value="8" ${autofixSeverityState === 8 ? 'selected' : ''}>8+ (High)</option>
+                                    <option value="9" ${autofixSeverityState === 9 ? 'selected' : ''}>9+</option>
+                                    <option value="10" ${autofixSeverityState === 10 ? 'selected' : ''}>10 (Critical)</option>
+                                </select>
+                            </div>
                 </div>
+                
+                        <!-- Prune Level and Action Buttons Row -->
+                        <div class="prune-and-actions-row">
+                            <!-- Context Prune Level -->
+                            <div class="prune-level-container">
+                                <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
+                                    <span class="level-icon">🔧</span>
+                                    Prune Level:
+                                </label>
+                                <select id="context-prune-level-selector" class="level-dropdown">
+                                    <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
+                                    ${node.template.slice(node.level).map((levelName, index) => {
+                                        const actualLevel = node.level + index;
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${actualLevel}" ${contextPruneLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="actions-container">
+                                <button id="generation-levels-help-btn" class="help-button" title="Learn about generation levels" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
+                                    ?
+                                </button>
+                                <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
+                                    ⚡ Generate
+                                </button>
+                            </div>
+                        </div>
                 
                         <!-- Validation Messages -->
                         <div id="level-validation-message" class="level-validation-message" style="display: none;">
                             <span class="validation-icon">⚠️</span>
                             <span id="validation-text"></span>
                         </div>
-                        
-                        <!-- Generate Button with Help -->
-                        <div class="generation-actions" style="display: flex; gap: 0.5rem; align-items: center;">
-                            <button id="generation-levels-help-btn" class="help-button" title="Learn about generation levels" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
-                                ?
-                            </button>
-                            <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
-                                ⚡ Generate
-                            </button>
-                                </div>
-                            </div>
+                    </div>
                             
                     ${node.isLeaf ? `
                         <div class="leaf-node-info" style="font-size: 0.8rem; color: #6c757d; font-style: italic; text-align: center; margin-top: 0.5rem;">
@@ -2787,6 +2857,10 @@ export function setupEventListeners() {
             const select = e.target as HTMLSelectElement;
             coherenceLevelState = parseInt(select.value);
             void saveLevelStates();
+        } else if (e.target.id === 'autofix-severity-selector') {
+            const select = e.target as HTMLSelectElement;
+            autofixSeverityState = parseInt(select.value);
+            void saveLevelStates();
         } else if ((e.target as HTMLInputElement).name === 'generation-type') {
             // Handle generation type radio button changes
             const radio = e.target as HTMLInputElement;
@@ -3472,8 +3546,9 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
     const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
+    const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
     
-    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector) {
+    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector) {
         console.error('Level selector dropdowns not found');
         return;
     }
@@ -3483,6 +3558,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contentLevel = parseInt(contentLevelSelector.value);
     const contextPruneLevel = parseInt(contextPruneLevelSelector.value);
     const coherenceLevel = parseInt(coherenceLevelSelector.value);
+    const autofixSeverity = parseInt(autofixSeveritySelector.value);
     
     // Validate levels
     if (contentLevel > draftLevel) {
@@ -3528,7 +3604,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             draftLevel,
             contentLevel,
             contextPruneLevel,
-            coherenceLevel
+            coherenceLevel,
+            autofixSeverity
         };
         
         // Start unified generation
