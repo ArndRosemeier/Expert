@@ -661,6 +661,9 @@ export class UnifiedGenerationService {
             alert(`⚠️ Coherence Analysis Results\n\nFound contradictions in ${this.collectedContradictions.length} node(s):\n\n${nodeList}\n\nTotal contradictions: ${totalContradictions}\n\nDetailed analysis can be accessed individually through the node actions menu.`);
             
             console.log(`📋 Showed batch coherence summary for ${this.collectedContradictions.length} nodes with ${totalContradictions} total contradictions`);
+            
+            // Tag all analyzed nodes' subnodes as consistent to parent after showing summary
+            this.tagAnalyzedSubnodesAsConsistent();
         } catch (error) {
             // Show error through the error service (includes console logging)
             await GenerationErrorService.getInstance().showAIError(
@@ -671,6 +674,57 @@ export class UnifiedGenerationService {
                     purpose: 'Coherence Analysis'
                 }
             );
+        }
+    }
+
+    /**
+     * Tag all analyzed nodes' subnodes as consistent to parent
+     */
+    private tagAnalyzedSubnodesAsConsistent(): void {
+        console.log(`🏷️ Tagging subnodes from batch coherence analysis as consistent to parent`);
+        
+        let totalTaggedCount = 0;
+        
+        for (const collected of this.collectedContradictions) {
+            const parentNode = collected.parentNode;
+            console.log(`🏷️ Tagging subnodes of "${parentNode.title}" as consistent to parent`);
+            
+            let nodeTaggedCount = 0;
+            
+            // Tag all children's master versions
+            for (const childNode of parentNode.children) {
+                const masterVersion = childNode.getMasterVersion();
+                if (masterVersion) {
+                    // Add the consistent_to_parent tag
+                    masterVersion.tags.add('consistent_to_parent');
+                    masterVersion.timestamp = new Date(); // Update timestamp
+                    nodeTaggedCount++;
+                    totalTaggedCount++;
+                    console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+                } else {
+                    console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+                }
+            }
+            
+            console.log(`✅ Tagged ${nodeTaggedCount} subnodes as consistent to parent: "${parentNode.title}"`);
+        }
+        
+        console.log(`✅ Batch tagging completed: ${totalTaggedCount} total subnodes tagged as consistent`);
+        
+        // Save the project after tagging
+        this.saveProjectAfterBatchTagging();
+    }
+
+    /**
+     * Save project after batch tagging subnodes
+     */
+    private async saveProjectAfterBatchTagging(): Promise<void> {
+        try {
+            await this.deps.saveToStorage();
+            console.log('✅ Project saved after batch tagging subnodes as consistent');
+        } catch (error) {
+            console.warn('⚠️ Failed to save project after batch tagging subnodes:', error);
+            // Don't fail the operation if save fails
         }
     }
 

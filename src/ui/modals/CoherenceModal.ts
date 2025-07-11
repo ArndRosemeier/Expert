@@ -691,6 +691,11 @@ export class CoherenceModal extends BaseModal {
      * Close modal and cleanup
      */
     override async close(): Promise<void> {
+        // Tag all subnodes as consistent to parent before closing
+        if (this.parentNode) {
+            this.tagSubnodesAsConsistent();
+        }
+        
         // Remove event listeners
         document.removeEventListener('keydown', this.handleEscKey.bind(this));
         
@@ -701,6 +706,55 @@ export class CoherenceModal extends BaseModal {
         this.appliedFixes.clear();
         
         await super.close();
+    }
+
+    /**
+     * Tag all subnodes' master versions with "consistent_to_parent"
+     */
+    private tagSubnodesAsConsistent(): void {
+        if (!this.parentNode) return;
+        
+        console.log(`🏷️ Tagging subnodes of "${this.parentNode.title}" as consistent to parent`);
+        
+        let taggedCount = 0;
+        
+        // Tag all children's master versions
+        for (const childNode of this.parentNode.children) {
+            const masterVersion = childNode.getMasterVersion();
+            if (masterVersion) {
+                // Add the consistent_to_parent tag
+                masterVersion.tags.add('consistent_to_parent');
+                masterVersion.timestamp = new Date(); // Update timestamp
+                taggedCount++;
+                console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+            } else {
+                console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+            }
+        }
+        
+        console.log(`✅ Tagged ${taggedCount} subnodes as consistent to parent: "${this.parentNode.title}"`);
+        
+        // Save the project after tagging
+        this.saveProjectAfterTagging();
+    }
+
+    /**
+     * Save project after tagging subnodes
+     */
+    private async saveProjectAfterTagging(): Promise<void> {
+        try {
+            const { getActiveProject } = await import('../../state');
+            const activeProject = getActiveProject();
+            if (activeProject) {
+                await activeProject.saveToStorage();
+                console.log('✅ Project saved after tagging subnodes as consistent');
+            } else {
+                console.warn('⚠️ No active project found to save after tagging');
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to save project after tagging subnodes:', error);
+            // Don't fail the close operation if save fails
+        }
     }
 
     /**
