@@ -239,26 +239,39 @@ export class UnifiedGenerationService {
             workItemsByLevel.set(item.level, levelItems);
         });
 
-        // Process levels in order (breadth-first)
-        const sortedLevels = Array.from(workItemsByLevel.keys()).sort((a, b) => a - b);
         let totalProcessed = 0;
-        const totalItems = workQueue.length;
+        let totalItems = workQueue.length;
+        let processedLevels = new Set<number>();
 
-        const firstLevel = sortedLevels[0];
-        if (firstLevel === undefined) {
-            console.log('No work items to process');
-            return;
-        }
+        // Continue processing until no new levels are added
+        while (true) {
+            // Get levels that haven't been processed yet, sorted by level
+            const unprocessedLevels = Array.from(workItemsByLevel.keys())
+                .filter(level => !processedLevels.has(level))
+                .sort((a, b) => a - b);
 
-        for (const level of sortedLevels) {
+            if (unprocessedLevels.length === 0) {
+                console.log('No more levels to process');
+                break;
+            }
+
+            // Process the next level
+            const level = unprocessedLevels[0]!;
             const levelItems = workItemsByLevel.get(level) || [];
-            if (levelItems.length === 0) continue;
+            
+            if (levelItems.length === 0) {
+                processedLevels.add(level);
+                continue;
+            }
 
             console.log(`🔄 Processing level ${level} (${levelItems.length} nodes)`);
             
             // Show any accumulated contradictions from the previous level before proceeding
-            if (level > firstLevel) {
-                await this.showAccumulatedContradictionsForLevelTransition(level - 1, level);
+            if (processedLevels.size > 0) {
+                const previousLevel = Math.max(...Array.from(processedLevels));
+                if (level > previousLevel) {
+                    await this.showAccumulatedContradictionsForLevelTransition(previousLevel, level);
+                }
             }
 
             // Process this level in phases for true breadth-first
@@ -271,7 +284,15 @@ export class UnifiedGenerationService {
                 workItemsByLevel.set(item.level, levelItems);
             });
 
+            // Mark this level as processed
+            processedLevels.add(level);
             totalProcessed += levelItems.length;
+            
+            // Update total items count if new items were added
+            if (newWorkItems.length > 0) {
+                totalItems += newWorkItems.length;
+                console.log(`📋 Added ${newWorkItems.length} new work items from level ${level}`);
+            }
         }
     }
 
