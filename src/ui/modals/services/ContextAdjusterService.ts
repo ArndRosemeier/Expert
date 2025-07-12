@@ -124,13 +124,23 @@ export class ContextAdjusterService {
                 console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`);
                 
             } catch (error) {
+                // Check for abort conditions first (like LoopOrchestrator)
+                if (error instanceof Error && (
+                    error.message === 'Request was aborted' || 
+                    error.message.includes('aborted') ||
+                    error.name === 'AbortError'
+                )) {
+                    console.log(`🛑 ContextAdjusterService: Context analysis aborted during attempt ${attempt + 1} for node "${node.title}"`);
+                    throw new Error('Context analysis was aborted by user');
+                }
+                
                 // Check if this is a parsing error (our parseAnalysisResponse method throws)
                 if (error instanceof Error && error.message.includes('parse')) {
                     console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
                     continue; // Try again
                 }
                 
-                // If it's not a parsing error, it's likely a network/API error
+                // If it's not a parsing error or abort, it's likely a network/API error
                 console.warn(`Context analysis API call failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
                 
                 // Don't retry on the last attempt

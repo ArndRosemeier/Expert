@@ -495,6 +495,17 @@ export class UnifiedGenerationService {
                 console.log(`✅ No context issues found for "${node.title}"`);
             }
         } catch (error) {
+            // Check if this is an abort error - if so, propagate it immediately
+            if (error instanceof Error && (
+                error.message.includes('aborted by user') || 
+                error.message.includes('Request was aborted') ||
+                error.name === 'AbortError'
+            )) {
+                console.log(`🛑 UnifiedGenerationService: Context pruning aborted for "${node.title}"`);
+                throw error; // Propagate abort errors
+            }
+            
+            // For other errors, log but continue with generation
             console.error('Auto-prune context failed:', error);
             // Continue with generation even if auto-prune fails
         }
