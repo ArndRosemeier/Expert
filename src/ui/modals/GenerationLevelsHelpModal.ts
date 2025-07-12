@@ -339,7 +339,7 @@ export class GenerationLevelsHelpModal extends BaseModal {
             const closeBtn = document.getElementById('close-help-modal-btn') as HTMLButtonElement;
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => {
-                    this.close();
+                    void this.close();
                 });
             }
         }, 0);

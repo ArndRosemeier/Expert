@@ -21,16 +21,17 @@ export class ContextAdjusterService {
      * Check if a node is eligible for context analysis
      */
     isNodeEligible(node: DocumentNode): boolean {
-        // Nodes with children can have their context adjusted
-        return node.children.length > 0;
+        // Any node with a parent can have its inherited context analyzed and adjusted
+        // Root nodes don't inherit context, so they don't need context adjustment
+        return node.parentId !== null && node.parentId !== undefined;
     }
 
     /**
      * Get reason why a node is not eligible for context adjustment
      */
     getIneligibilityReason(node: DocumentNode): string {
-        if (node.children.length === 0) {
-            return 'Node has no children - context adjustment only applies to parent nodes';
+        if (!node.parentId) {
+            return 'Root nodes do not inherit context and therefore do not need context adjustment';
         }
         return 'Node is eligible for context adjustment';
     }
@@ -88,11 +89,11 @@ export class ContextAdjusterService {
             .replace(/\{\{numbered_context_items\}\}/g, numberedContextItems)
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
-        // Use configurable model based on whether node is leaf or not
-        const isLeaf = !node.children || node.children.length === 0;
+        // Use configurable model based on template-defined leaf status, not current children count
+        const isLeaf = node.isLeaf;
         const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeaf);
         
-        console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'leaf' : 'branch'} node "${node.title}"`);
+        console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
         
         // Retry logic (similar to LoopOrchestrator)
         const maxRetries = 3;

@@ -817,4 +817,37 @@ export class DocumentNode {
         
         return null;
     }
+
+    /**
+     * Checks if the node's context has been AI-adjusted.
+     * Returns true if the master version has the 'context_ai_adjusted' tag,
+     * or if all other versions with 'context_ai_adjusted' tag have the same context as the master.
+     */
+    ContextIsAdjusted(): boolean {
+        const masterVersion = this.getMasterVersion();
+        if (!masterVersion) {
+            return false;
+        }
+        
+        // First check if master version has context_ai_adjusted tag
+        if (masterVersion.tags.has('context_ai_adjusted')) {
+            return true;
+        }
+        
+        // Find all other versions with context_ai_adjusted tag
+        const adjustedVersions = this.getVersionsWithTag('context_ai_adjusted');
+        
+        // If no adjusted versions found, return false
+        if (adjustedVersions.length === 0) {
+            return false;
+        }
+        
+        // Check if all adjusted versions have the same context as master
+        const masterContext = masterVersion.context;
+        const allVersionsMatch = adjustedVersions.every(version => 
+            version.context === masterContext
+        );
+        
+        return allVersionsMatch;
+    }
 }

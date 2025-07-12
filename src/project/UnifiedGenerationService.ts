@@ -17,6 +17,49 @@ import { LoopProgress, RaterProgressPayload, Rating } from '../LoopOrchestrator'
 import { TaskModelService } from '../services/TaskModelService';
 
 /**
+ * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
+ * ================================================
+ * 
+ * This service uses a completely stateless approach where each node has a "target state"
+ * determined by the generation parameters. The system processes nodes until they reach
+ * their target state, then allows expansion when all siblings are ready.
+ * 
+ * TARGET STATE CALCULATION:
+ * - Each level has a target state based on generation parameters
+ * - If node.level <= contentLevel: target includes "needs_content"
+ * - If node.level <= contextPruneLevel: target includes "needs_context_pruning"
+ * - If node.level <= coherenceLevel: target includes "needs_coherence_check"
+ * - If node.level < draftLevel: target includes "can_expand"
+ * 
+ * PROCESSING RULES:
+ * 1. All nodes at the same level have the same target state
+ * 2. A node can only expand if ALL nodes at its level have reached their target state
+ * 3. Work is done in this order: context pruning → content generation → coherence check → expansion
+ * 4. The system loops until no more work can be done
+ * 
+ * EXPANSION LOGIC:
+ * - A node can expand only if:
+ *   a) It's below the draft level (can_expand in target state)
+ *   b) All siblings at its level have reached their target state
+ *   c) It has no children yet
+ * 
+ * LOOP STRUCTURE:
+ * 1. Collect all nodes in the affected range
+ * 2. Calculate target states for each level
+ * 3. Keep looping until no work is done in a pass:
+ *    - For each node, compare current state vs target state
+ *    - Do needed work (context pruning, content generation, coherence check)
+ *    - Check if node can expand and expand if ready
+ * 4. Repeat until max expansion level is reached
+ * 
+ * BENEFITS:
+ * - Completely stateless - no canExpand flags or similar state tracking
+ * - Clear separation of concerns - each node knows its target and current state
+ * - Prevents premature expansion - ensures all prep work is done first
+ * - Naturally handles context analysis before expansion
+ */
+
+/**
  * Configuration for generation levels
  */
 export interface GenerationLevels {
@@ -30,6 +73,37 @@ export interface GenerationLevels {
     coherenceLevel: number;
     /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
     autofixSeverity: number;
+}
+
+/**
+ * Target state for a node at a specific level
+ */
+export interface TargetState {
+    level: number;
+    needsContextPruning: boolean;
+    needsContent: boolean;
+    needsCoherenceCheck: boolean;
+    canExpand: boolean;
+}
+
+/**
+ * Current state of a node
+ */
+export interface CurrentState {
+    hasContextPruning: boolean;
+    hasContent: boolean;
+    hasCoherenceCheck: boolean;
+    hasChildren: boolean;
+}
+
+/**
+ * Work needed for a node
+ */
+export interface WorkNeeded {
+    contextPruning: boolean;
+    contentGeneration: boolean;
+    coherenceCheck: boolean;
+    expansion: boolean;
 }
 
 /**
@@ -66,9 +140,32 @@ export interface UnifiedProgressEvent {
     model?: string; // Current model being used (e.g., "Grok 4", "GPT-4")
 }
 
-/**
- * Dependencies for unified generation service
- */
+// Define proper types for contradictions and modals
+interface Contradiction {
+    fact_in_outline: string;
+    fact_in_expansion: string;
+    justification: string;
+    offending_child_title: string;
+    severity: number;
+    parentNodeTitle?: string;
+    parentNodeId?: string;
+}
+
+interface ModalLike {
+    isOpen(): boolean;
+    close(): void;
+}
+
+interface CoherenceResult {
+    hasContradictions: boolean;
+    contradictions: Contradiction[];
+    analysisTimestamp: Date;
+    parentNodeId: string;
+    childNodeIds: string[];
+    analyzedNodes?: DocumentNode[];
+    totalAnalyzed?: number;
+}
+
 export interface UnifiedGenerationDependencies {
     treeService: TreeService;
     contextService: ContextService;
@@ -78,13 +175,13 @@ export interface UnifiedGenerationDependencies {
     loopOrchestrator: LoopOrchestrator;
     settingsManager: SettingsManager;
     openRouterClient: OpenRouterClient;
-    eventEmitter: EventEmitter<any>;
+    eventEmitter: EventEmitter<Record<string, unknown[]>>;
     saveToStorage: () => Promise<void>;
     rootNode: DocumentNode;
 }
 
 /**
- * Unified generation service that processes all generation using a level-based work queue
+ * Unified generation service that processes all generation using a stateless target-state approach
  */
 export class UnifiedGenerationService {
     private deps: UnifiedGenerationDependencies;
@@ -99,7 +196,7 @@ export class UnifiedGenerationService {
     // Add contradiction collection system
     private accumulatedContradictions: {
         hasContradictions: boolean;
-        contradictions: any[];
+        contradictions: Contradiction[];
         analyzedNodes: DocumentNode[];
         totalAnalyzed: number;
     } = {
@@ -108,9 +205,6 @@ export class UnifiedGenerationService {
         analyzedNodes: [],
         totalAnalyzed: 0
     };
-    
-    // Track which parents have already been coherence-analyzed to prevent duplicates
-
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -119,10 +213,10 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Main entry point for unified generation
+     * Main entry point for unified generation using stateless target-state approach
      */
     public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
-        // Clear any previous accumulated contradictions and analyzed parents
+        // Clear any previous accumulated contradictions
         this.accumulatedContradictions = {
             hasContradictions: false,
             contradictions: [],
@@ -142,7 +236,7 @@ export class UnifiedGenerationService {
         this.abortRequested = false;
         this.deps.generationController.setupSingleNodeGeneration(startNodeId);
 
-        // Get the starting node and set up generation state
+        // Get the starting node
         const startNode = this.deps.treeService.findNodeById(startNodeId, this.deps.rootNode);
         if (!startNode) {
             throw new Error(`Node not found: ${startNodeId}`);
@@ -155,34 +249,13 @@ export class UnifiedGenerationService {
         }
 
         try {
-            // Initialize work queue with all nodes that might need work (KISS principle)
-            const workQueue: WorkItem[] = [];
-
-            // Collect all nodes from starting node down to the deepest level we might work on
-            const maxLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
-            const allNodes = this.collectNodesInLevelRange(startNodeId, startNode.level, maxLevel);
-            
-            // Add all collected nodes to work queue - let the workers decide if they need to do anything
-            allNodes.forEach((node: DocumentNode) => {
-                workQueue.push({
-                    nodeId: node.id,
-                    level: node.level,
-                    parentId: node.parentId,
-                    isLastChild: false // Will be updated by updateIsLastChildFlags
-                });
-            });
-
-
-
-            // Process work queue
-            await this.processWorkQueue(workQueue, levels);
+            // Process using stateless target-state approach
+            await this.processWithTargetStates(startNodeId, levels);
 
             // After generation completes, check for collected contradictions
-            // This may show a modal requiring user interaction
             await this.showCollectedContradictions();
             
-            // Tree updates now happen after each individual node completion
-            // Complete operation with coordinator for UI cleanup AFTER coherence interaction is done
+            // Complete operation with coordinator for UI cleanup
             this.deps.generationCoordinator.completeOperation(operationId, true);
         } catch (error) {
             console.error('Unified generation failed:', error);
@@ -194,7 +267,7 @@ export class UnifiedGenerationService {
         } finally {
             // Always cleanup generation context
             this.deps.generationController.clearGenerationContext();
-            // Clear accumulated contradictions and analyzed parents
+            // Clear accumulated contradictions
             this.accumulatedContradictions = {
                 hasContradictions: false,
                 contradictions: [],
@@ -211,246 +284,204 @@ export class UnifiedGenerationService {
         if (levels.contentLevel > levels.draftLevel) {
             throw new Error('Content level cannot be higher than draft level');
         }
-        if (levels.coherenceLevel >= levels.draftLevel) {
+        if (levels.coherenceLevel >= levels.draftLevel && levels.draftLevel !== -1) {
             throw new Error('Coherence level must be less than draft level');
         }
     }
 
     /**
-     * Process the work queue using simple breadth-first traversal with two-pass system
-     * Pass 1: Fix content, context, coherence (canExpand = false)
-     * Pass 2: Create children from finalized content (canExpand = true)
+     * Process nodes using stateless target-state approach
      */
-    private async processWorkQueue(workQueue: WorkItem[], levels: GenerationLevels): Promise<void> {
-        // Group work items by level for breadth-first processing
-        const workItemsByLevel = new Map<number, WorkItem[]>();
+    private async processWithTargetStates(startNodeId: string, levels: GenerationLevels): Promise<void> {
+        const startNode = this.deps.treeService.findNodeById(startNodeId, this.deps.rootNode);
+        if (!startNode) throw new Error(`Start node not found: ${startNodeId}`);
+
+        // Calculate maximum level we might work on
+        const maxLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
         
-        // Initial grouping
-        workQueue.forEach(item => {
-            const levelItems = workItemsByLevel.get(item.level) || [];
-            levelItems.push(item);
-            workItemsByLevel.set(item.level, levelItems);
-        });
-
-        let totalProcessed = 0;
-        let totalItems = workQueue.length;
-        let processedLevels = new Set<number>();
-
-        // Continue processing until no new levels are added
-        while (true) {
-            // Check for abort at the start of each main loop iteration
+        // Keep looping until no more work can be done
+        let workDone = true;
+        while (workDone) {
+            // Check for abort
             if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
                 throw new Error('Generation was aborted by user');
             }
 
-            // Get levels that haven't been processed yet, sorted by level
-            const unprocessedLevels = Array.from(workItemsByLevel.keys())
-                .filter(level => !processedLevels.has(level))
-                .sort((a, b) => a - b);
-
-            if (unprocessedLevels.length === 0) {
-                break;
-            }
-
-            // Process the next level
-            const level = unprocessedLevels[0]!;
-            const levelItems = workItemsByLevel.get(level) || [];
+            workDone = false;
             
-            if (levelItems.length === 0) {
-                processedLevels.add(level);
-                continue;
-            }
-
-            // Show any accumulated contradictions from the previous level before proceeding
-            if (processedLevels.size > 0) {
-                const previousLevel = Math.max(...Array.from(processedLevels));
-                if (level > previousLevel) {
-                    await this.showAccumulatedContradictionsForLevelTransition(previousLevel, level);
+            // Collect starting node and ALL its descendants in breadth-first order
+            const allNodes = this.collectAllDescendants(startNodeId);
+            console.log(`🔍 Found ${allNodes.length} nodes to process:`, allNodes.map(n => `"${n.title}" (Level ${n.level})`));
+            
+            // Calculate target states for each level
+            const targetStates = this.calculateTargetStates(levels, startNode.level, maxLevel);
+            console.log(`🎯 Target states calculated for levels ${startNode.level} to ${maxLevel}:`, targetStates);
+            
+            // Process each node
+            for (const node of allNodes) {
+                const targetState = targetStates[node.level];
+                if (!targetState) {
+                    throw new Error(`No target state found for node "${node.title}" at level ${node.level}. Available levels: ${Object.keys(targetStates).join(', ')}`);
                 }
-            }
 
-            // Two-pass processing for each level
-            // Pass 1: Process level with canExpand = false (no draft creation)
-            let newWorkItems = await this.processLevelSimple(levelItems, levels, totalProcessed, totalItems, false);
-            
-            // Pass 2: Go back to start of level with canExpand = true (allow draft creation)
-            const expansionWorkItems = await this.processLevelSimple(levelItems, levels, totalProcessed, totalItems, true);
-            
-            // Combine work items from both passes
-            newWorkItems.push(...expansionWorkItems);
-            
-            // Add any new work items (children) to the appropriate level groups
-            newWorkItems.forEach((item: WorkItem) => {
-                const levelItems = workItemsByLevel.get(item.level) || [];
-                levelItems.push(item);
-                workItemsByLevel.set(item.level, levelItems);
-            });
-
-            // Mark this level as processed
-            processedLevels.add(level);
-            totalProcessed += levelItems.length;
-            
-            // Update total items count if new items were added
-            if (newWorkItems.length > 0) {
-                totalItems += newWorkItems.length;
-            }
-        }
-    }
-
-    /**
-     * Process all nodes at a given level simply - each node decides what to do based on its state
-     */
-    private async processLevelSimple(levelItems: WorkItem[], levels: GenerationLevels, baseProgress: number, totalItems: number, canExpand: boolean = false): Promise<WorkItem[]> {
-        const newWorkItems: WorkItem[] = [];
-        
-        for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                throw new Error('Generation was aborted by user');
-            }
-
-            const item = levelItems[i];
-            if (!item) continue;
-            
-            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-            if (!node) continue;
-
-            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
-
-            // Each node decides what to do based on its current state
-            const nodeWorkItems = await this.processNodeBasedOnState(node, levels, canExpand);
-            newWorkItems.push(...nodeWorkItems);
-        }
-
-        return newWorkItems;
-    }
-
-
-
-    /**
-     * Process a single node based on its current state
-     */
-    private async processNodeBasedOnState(node: DocumentNode, levels: GenerationLevels, canExpand: boolean = false): Promise<WorkItem[]> {
-        const newWorkItems: WorkItem[] = [];
-
-        // 1. Context pruning (if needed and not already done) - only during finalization pass
-        if (!canExpand && this.needsContextPruning(node, levels)) {
-            this.setCurrentWorkingNode(node.id);
-            await this.handleContextPruning(node.id);
-            this.clearCurrentWorkingNode(node.id);
-        }
-
-        // 2. Content generation (if needed and not already done) - only during finalization pass
-        if (!canExpand && this.needsContentGeneration(node, levels)) {
-            this.setCurrentWorkingNode(node.id);
-            await this.handleContentGeneration(node.id);
-            this.clearCurrentWorkingNode(node.id);
-        }
-
-        // 3. Draft creation (if needed, not already done, AND canExpand is true)
-        if (canExpand && this.needsDraftCreation(node, levels)) {
-            this.setCurrentWorkingNode(node.id);
-            const draftResult = await this.handleDraftCreation(node.id);
-            this.clearCurrentWorkingNode(node.id);
-            
-            // Add newly created children to work queue
-            if (draftResult.childrenCreated) {
-                const maxWorkLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
+                // Determine what work is needed for this node
+                const currentState = this.getNodeCurrentState(node);
+                const workNeeded = this.getWorkNeeded(node, targetState);
+                console.log(`🔧 Node "${node.title}" (Level ${node.level}): Target state:`, targetState, `Current state:`, currentState, `Work needed:`, workNeeded);
                 
-                // Create work items for children
-                for (const childId of draftResult.childIds) {
-                    const child = this.deps.treeService.findNodeById(childId, this.deps.rootNode);
-                    if (child && child.level <= maxWorkLevel) {
-                        newWorkItems.push({
-                            nodeId: childId,
-                            level: child.level,
-                            parentId: node.id,
-                            isLastChild: false // No longer used, kept for interface compatibility
-                        });
+                // Do context pruning if needed
+                if (workNeeded.contextPruning) {
+                    console.log(`🧹 Performing context pruning for "${node.title}"`);
+                    await this.handleContextPruning(node.id);
+                    workDone = true;
+                }
+                
+                // Do content generation if needed
+                if (workNeeded.contentGeneration) {
+                    console.log(`✍️ Generating content for "${node.title}"`);
+                    await this.handleContentGeneration(node.id);
+                    workDone = true;
+                }
+                
+                // Do coherence check if needed (only for last sibling)
+                if (workNeeded.coherenceCheck) {
+                    console.log(`🔍 Node "${node.title}" needs coherence check. Is last sibling: ${this.isLastSibling(node)}`);
+                    if (this.isLastSibling(node)) {
+                        if (node.parentId) {
+                            console.log(`🔍 Performing coherence check for parent of "${node.title}"`);
+                            await this.handleCoherenceCheck(node.parentId, levels);
+                            workDone = true;
+                        }
+                    } else {
+                        console.log(`⏸️ Coherence check needed for "${node.title}" but it's not the last sibling - waiting`);
+                    }
+                }
+                
+                // Check if node can expand
+                if (workNeeded.expansion) {
+                    const canExpand = this.canNodeExpand(node, targetState, allNodes);
+                    console.log(`🌳 Node "${node.title}" expansion check: needed=${workNeeded.expansion}, canExpand=${canExpand}`);
+                    if (canExpand) {
+                        console.log(`🌳 Expanding node "${node.title}"`);
+                        const expansionResult = await this.handleDraftCreation(node.id);
+                        if (expansionResult.childrenCreated) {
+                            workDone = true;
+                        }
+                    } else {
+                        console.log(`⏸️ Cannot expand "${node.title}" - waiting for siblings to complete work`);
                     }
                 }
             }
+            
+            console.log(`🔄 Loop iteration completed. Work done: ${workDone}`);
         }
+        
+        console.log(`✅ Generation process completed. No more work needed.`);
+    }
 
-        // 4. Coherence checking (if this is the last child of a parent that needs checking) - only during finalization pass
-        if (!canExpand && this.needsCoherenceCheck(node, levels)) {
-            if (node.parentId) {
-                const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-                if (parentNode) {
-                    await this.handleCoherenceCheck(node.parentId, levels);
-                }
-            }
+    /**
+     * Calculate target states for each level based on generation parameters
+     */
+    private calculateTargetStates(levels: GenerationLevels, minLevel: number, maxLevel: number): TargetState[] {
+        const targetStates: TargetState[] = [];
+        
+        console.log(`🎯 Calculating target states for levels ${minLevel} to ${maxLevel} with generation levels:`, levels);
+        
+        for (let level = minLevel; level <= maxLevel; level++) {
+            // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed
+            const needsCoherenceCheck = (levels.coherenceLevel + 1) >= level && level > 0;
+            console.log(`   Level ${level}: coherenceLevel(${levels.coherenceLevel}) + 1 >= level(${level}) && level > 0 = ${needsCoherenceCheck}`);
+            
+            targetStates[level] = {
+                level,
+                needsContextPruning: levels.contextPruneLevel >= level && level > 0, // Skip root level
+                needsContent: levels.contentLevel >= level,
+                needsCoherenceCheck: needsCoherenceCheck, // Coherence checks parent-child relationship, so skip root level
+                canExpand: level < levels.draftLevel
+            };
         }
-
-        return newWorkItems;
+        
+        return targetStates;
     }
 
     /**
-     * Check if node needs context pruning
+     * Get the current state of a node
      */
-    private needsContextPruning(node: DocumentNode, levels: GenerationLevels): boolean {
-        if (levels.contextPruneLevel < node.level) return false;
-        if (node.level === 0 || !node.parentId) return false; // Skip root nodes
-        if (node.children.length === 0) return false; // Skip leaf nodes - context adjustment only applies to parent nodes
-        return !this.isMasterContextAlreadyAdjusted(node);
+    private getNodeCurrentState(node: DocumentNode): CurrentState {
+        const masterVersion = node.getMasterVersion();
+        
+        return {
+            hasContextPruning: node.ContextIsAdjusted(),
+            hasContent: this.nodeHasContent(node),
+            hasCoherenceCheck: masterVersion?.tags.has('consistent_to_parent') || false,
+            hasChildren: node.children.length > 0
+        };
     }
 
     /**
-     * Check if node needs content generation  
+     * Determine what work is needed for a node to reach its target state
      */
-    private needsContentGeneration(node: DocumentNode, levels: GenerationLevels): boolean {
-        if (levels.contentLevel < node.level) return false;
-        return this.shouldGenerateContent(node);
+    private getWorkNeeded(node: DocumentNode, targetState: TargetState): WorkNeeded {
+        const currentState = this.getNodeCurrentState(node);
+        
+        return {
+            contextPruning: targetState.needsContextPruning && !currentState.hasContextPruning,
+            contentGeneration: targetState.needsContent && !currentState.hasContent,
+            coherenceCheck: targetState.needsCoherenceCheck && !currentState.hasCoherenceCheck,
+            expansion: targetState.canExpand && !currentState.hasChildren
+        };
     }
 
     /**
-     * Check if node needs draft creation
+     * Check if a node can expand (all siblings at target state)
      */
-    private needsDraftCreation(node: DocumentNode, levels: GenerationLevels): boolean {
-        if (node.level >= levels.draftLevel) return false;
-        return node.children.length === 0; // Only create if no children exist
-    }
-
-    /**
-     * Check if coherence check is needed (when this is the last child of a parent)
-     */
-    private needsCoherenceCheck(node: DocumentNode, levels: GenerationLevels): boolean {
-        if (levels.coherenceLevel === -1) return false;
-        if (!node.parentId) return false;
-        
-        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-        if (!parentNode) return false;
-        
-        // Only check if coherence level covers the parent's level
-        if (levels.coherenceLevel < parentNode.level) return false;
-        
-        // New approach: Check if ALL children have "consistent_to_parent" tag
-        // If even one child doesn't have this tag, we need to check coherence
-        const allChildrenConsistent = parentNode.children.every(child => {
-            const masterVersion = child.getMasterVersion();
-            return masterVersion && masterVersion.tags.has('consistent_to_parent');
-        });
-        
-        // If all children are already consistent, no need to check
-        if (allChildrenConsistent) {
+    private canNodeExpand(node: DocumentNode, targetState: TargetState, allNodes: DocumentNode[]): boolean {
+        if (!targetState.canExpand) {
+            console.log(`❌ Cannot expand "${node.title}": targetState.canExpand = false`);
+            return false;
+        }
+        if (node.children.length > 0) {
+            console.log(`❌ Cannot expand "${node.title}": already has ${node.children.length} children`);
             return false;
         }
         
-        // Check if all siblings are "done" (have content or are drafts)
-        const allSiblingsReady = parentNode.children.every(child => {
-            const childContent = child.content && child.content.trim().length > 0;
-            return childContent;
+        // Get all siblings at the same level
+        const siblings = allNodes.filter(n => n.level === node.level);
+        console.log(`🔍 Checking ${siblings.length} siblings at level ${node.level}: ${siblings.map(s => s.title).join(', ')}`);
+        
+        // Check if all siblings have reached their target state
+        const allSiblingsReady = siblings.every(sibling => {
+            const siblingWorkNeeded = this.getWorkNeeded(sibling, targetState);
+            const isReady = !siblingWorkNeeded.contextPruning && 
+                           !siblingWorkNeeded.contentGeneration && 
+                           !siblingWorkNeeded.coherenceCheck;
+            console.log(`   📋 Sibling "${sibling.title}": work needed:`, siblingWorkNeeded, `ready: ${isReady}`);
+            return isReady;
         });
         
-        // Only trigger if this is actually the last child in the tree structure
-        const isLastChildInTree = parentNode.children.length > 0 && 
-                                 parentNode.children[parentNode.children.length - 1]?.id === node.id;
-        
-        return allSiblingsReady && isLastChildInTree;
+        console.log(`🎯 All siblings ready for expansion: ${allSiblingsReady}`);
+        return allSiblingsReady;
     }
 
+    /**
+     * Check if a node is the last sibling (for coherence check trigger)
+     */
+    private isLastSibling(node: DocumentNode): boolean {
+        if (!node.parentId) return false;
+        
+        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+        if (!parentNode) throw new Error(`Parent node not found for isLastSibling check: ${node.parentId}`);
+        
+        const siblings = parentNode.children;
+        return siblings.length > 0 && siblings[siblings.length - 1]?.id === node.id;
+    }
 
-
-
+    /**
+     * Check if node has meaningful content
+     */
+    private nodeHasContent(node: DocumentNode): boolean {
+        return node.getState() === 'Final';
+    }
 
     /**
      * Handle context pruning for a node
@@ -462,7 +493,7 @@ export class UnifiedGenerationService {
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) return;
+        if (!node) throw new Error(`Node not found for context pruning: ${nodeId}`);
 
         // Skip auto-pruning for project root nodes (no inherited context to clean)
         if (node.level === 0 || !node.parentId) {
@@ -470,7 +501,7 @@ export class UnifiedGenerationService {
         }
 
         // Check if context has already been AI-adjusted (skip if so)
-        if (this.isMasterContextAlreadyAdjusted(node)) {
+        if (node.ContextIsAdjusted()) {
             return;
         }
 
@@ -533,7 +564,7 @@ export class UnifiedGenerationService {
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) return;
+        if (!node) throw new Error(`Node not found for content generation: ${nodeId}`);
 
         // Set operation type for progress tracking
         this.currentOperationType = 'content';
@@ -565,7 +596,7 @@ export class UnifiedGenerationService {
         } catch (error) {
             // Show error through the error service (includes console logging)
             await GenerationErrorService.getInstance().showAIError(
-                error as Error,
+                error as Error, 
                 {
                     title: 'Content Generation Failed',
                     operation: `Content generation for "${node.title}"`,
@@ -594,7 +625,7 @@ export class UnifiedGenerationService {
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) return { childIds: [], childrenCreated: false };
+        if (!node) throw new Error(`Node not found for draft creation: ${nodeId}`);
 
         // Check if node already has children
         if (node.children.length > 0) {
@@ -650,7 +681,7 @@ export class UnifiedGenerationService {
 
             // Get the creator model name for tracking
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-            const creatorModel = currentProfile?.selectedModels?.['creator'];
+            const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
             const childIds: string[] = [];
 
             nodeItems.forEach(item => {
@@ -659,7 +690,8 @@ export class UnifiedGenerationService {
                 
                 // Set the content description as initial content if provided
                 if (item.description && item.description.trim()) {
-                    const metadata: { [key: string]: any } = {};
+                    // Fix metadata type
+                    const metadata: { [key: string]: unknown } = {};
                     if (creatorModel) {
                         metadata['creatorModel'] = creatorModel;
                     }
@@ -678,9 +710,8 @@ export class UnifiedGenerationService {
                     // Set context for generated child content
                     if (newNode.parentId) {
                         const parent = this.deps.treeService.findNodeById(newNode.parentId, this.deps.rootNode);
-                        const parentContext = parent?.context || '';
-                        if (parentContext) {
-                            newNode.setContext(parentContext, 'generated');
+                        if (parent && parent.context) {
+                            newNode.setContext(parent.context, 'generated');
                         }
                     }
                 }
@@ -728,7 +759,7 @@ export class UnifiedGenerationService {
         }
 
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
-        if (!parentNode) return;
+        if (!parentNode) throw new Error(`Parent node not found for coherence check: ${parentId}`);
 
         try {
             // Check if node is eligible for coherence analysis
@@ -785,34 +816,39 @@ export class UnifiedGenerationService {
             });
             
             if (!result.hasContradictions) {
-                // Track nodes that were analyzed (even if no contradictions found)
+                // Path 1: No contradictions found - tag children as consistent immediately
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
-                
-                // Immediately tag children as consistent since no contradictions were found
-                this.tagChildrenAsConsistent(parentNode);
+                await this.tagChildrenAsConsistent(parentNode);
             } else {
-                // When autofix is enabled, never accumulate contradictions - handle them all automatically
+                // Contradictions found
                 if (levels.autofixSeverity !== -1) {
-                    // Track nodes that were analyzed but don't accumulate contradictions
+                    // Path 2: Autofix enabled - contradictions were handled automatically
+                    // Tag children as consistent since autofix resolved all contradictions
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
-                    
-                    // Tag children as consistent since autofix handled all contradictions
-                    this.tagChildrenAsConsistent(parentNode);
+                    await this.tagChildrenAsConsistent(parentNode);
                 } else {
-                    // Only when autofix is disabled do we accumulate contradictions for modal display
-                    // Merge new contradictions into accumulated result with parent node context
-                    const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
-                        ...contradiction,
-                        parentNodeTitle: parentNode.title,
-                        parentNodeId: parentNode.id
-                    }));
+                    // Path 3: Autofix disabled - show modal immediately, then tag as consistent
+                    console.log(`🔍 Showing coherence modal for "${parentNode.title}" with ${result.contradictions.length} contradictions`);
                     
-                    this.accumulatedContradictions.contradictions.push(...contradictionsWithContext);
+                    // Create a comprehensive result for the modal
+                    const modalResult: CoherenceResult = {
+                        hasContradictions: true,
+                        contradictions: result.contradictions,
+                        analysisTimestamp: new Date(),
+                        parentNodeId: parentNode.id,
+                        childNodeIds: parentNode.children.map(child => child.id)
+                    };
+                    
+                    // Show the modal and wait for user to close it
+                    await this.showCoherenceModalAndWait(parentNode, modalResult);
+                    
+                    // After modal closes (regardless of what user did), tag children as consistent
+                    // This prevents the infinite loop - the user has seen the contradictions
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
-                    this.accumulatedContradictions.hasContradictions = true;
+                    await this.tagChildrenAsConsistent(parentNode);
                 }
             }
             
@@ -836,68 +872,12 @@ export class UnifiedGenerationService {
         }
     }
 
-    /**
-     * Show accumulated contradictions when transitioning between levels
-     */
-    private async showAccumulatedContradictionsForLevelTransition(fromLevel: number, toLevel: number): Promise<void> {
-        if (!this.accumulatedContradictions.hasContradictions) {
-            return;
-        }
 
-        try {
-            // Create a comprehensive analysis result with all accumulated contradictions
-            const representativeNode = this.accumulatedContradictions.analyzedNodes[0];
-            const comprehensiveResult = {
-                hasContradictions: true,
-                contradictions: this.accumulatedContradictions.contradictions,
-                analyzedNodes: this.accumulatedContradictions.analyzedNodes,
-                totalAnalyzed: this.accumulatedContradictions.totalAnalyzed,
-                analysisTimestamp: new Date(),
-                parentNodeId: representativeNode?.id || '',
-                childNodeIds: this.accumulatedContradictions.analyzedNodes.map(node => node.id)
-            };
-            
-            // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
-            if (representativeNode) {
-                // Import and create the coherence modal
-                const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
-                const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
-                
-                // Open modal in loading state first
-                await coherenceModal.openInLoadingState(representativeNode);
-                
-                // Update with results
-                coherenceModal.updateWithResults(comprehensiveResult);
-                
-                // Wait for the modal to be closed by the user
-                await this.waitForModalClose(coherenceModal);
-            }
-            
-        } catch (error) {
-            // Show error through the error service (includes console logging)
-            await GenerationErrorService.getInstance().showAIError(
-                error as Error,
-                {
-                    title: 'Level Transition Coherence Modal Error',
-                    operation: `Showing accumulated contradictions for level transition (${fromLevel} → ${toLevel})`,
-                    purpose: 'Coherence Analysis'
-                }
-            );
-        }
-        
-        // Clear accumulated contradictions after showing them
-        this.accumulatedContradictions = {
-            hasContradictions: false,
-            contradictions: [],
-            analyzedNodes: [],
-            totalAnalyzed: 0
-        };
-    }
 
     /**
      * Show coherence modal and wait for user to close it
      */
-    private async showCoherenceModalAndWait(parentNode: DocumentNode, result: any): Promise<void> {
+    private async showCoherenceModalAndWait(parentNode: DocumentNode, result: CoherenceResult): Promise<void> {
         try {
             // Import and create the coherence modal
             const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
@@ -930,7 +910,7 @@ export class UnifiedGenerationService {
     /**
      * Wait for modal to be closed by the user
      */
-    private async waitForModalClose(modal: any): Promise<void> {
+    private async waitForModalClose(modal: ModalLike): Promise<void> {
         return new Promise<void>((resolve) => {
             // Check if modal is already closed
             if (!modal.isOpen()) {
@@ -980,13 +960,14 @@ export class UnifiedGenerationService {
                 console.log(`📋 User chose to fix contradictions - showing comprehensive modal with ${totalContradictions} issues`);
                 
                 // Create a comprehensive analysis result with all accumulated contradictions
-                const comprehensiveResult = {
+                const comprehensiveResult: CoherenceResult = {
                     hasContradictions: true,
                     contradictions: this.accumulatedContradictions.contradictions,
-                    analyzedNodes: this.accumulatedContradictions.analyzedNodes,
-                    totalAnalyzed: this.accumulatedContradictions.totalAnalyzed,
                     analysisTimestamp: new Date(), // Add timestamp for modal rendering
-                    childNodeIds: this.accumulatedContradictions.analyzedNodes.map(node => node.id) // Add child node IDs
+                    parentNodeId: this.accumulatedContradictions.analyzedNodes[0]?.id || '',
+                    childNodeIds: this.accumulatedContradictions.analyzedNodes.flatMap(node => node.children.map(child => child.id)),
+                    analyzedNodes: this.accumulatedContradictions.analyzedNodes,
+                    totalAnalyzed: this.accumulatedContradictions.totalAnalyzed
                 };
                 
                 // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
@@ -1022,14 +1003,14 @@ export class UnifiedGenerationService {
             );
             
             // On error, still tag nodes to prevent them from being stuck in inconsistent state
-            this.tagAnalyzedSubnodesAsConsistent();
+            await this.tagAnalyzedSubnodesAsConsistent();
         }
     }
 
     /**
      * Tag children of a single parent node as consistent to parent
      */
-    private tagChildrenAsConsistent(parentNode: DocumentNode): void {
+    private async tagChildrenAsConsistent(parentNode: DocumentNode): Promise<void> {
         console.log(`🏷️ Tagging children of "${parentNode.title}" as consistent to parent (immediate after coherence check)`);
         
         let taggedCount = 0;
@@ -1050,13 +1031,13 @@ export class UnifiedGenerationService {
         console.log(`✅ Tagged ${taggedCount} children as consistent to parent: "${parentNode.title}"`);
         
         // Save the project after tagging
-        this.saveProjectAfterBatchTagging();
+        await this.saveProjectAfterBatchTagging();
     }
 
     /**
      * Tag all analyzed nodes' subnodes as consistent to parent
      */
-    private tagAnalyzedSubnodesAsConsistent(): void {
+    private async tagAnalyzedSubnodesAsConsistent(): Promise<void> {
         console.log(`🏷️ Tagging subnodes from accumulated coherence analysis as consistent to parent`);
         
         let totalTaggedCount = 0;
@@ -1087,7 +1068,7 @@ export class UnifiedGenerationService {
         console.log(`✅ Batch tagging completed: ${totalTaggedCount} total subnodes tagged as consistent`);
         
         // Save the project after tagging
-        this.saveProjectAfterBatchTagging();
+        await this.saveProjectAfterBatchTagging();
     }
 
     /**
@@ -1103,59 +1084,17 @@ export class UnifiedGenerationService {
         }
     }
 
-    /**
-     * Set the current working node and move the spinner to it
-     */
-    private setCurrentWorkingNode(nodeId: string): void {
-        // Clear spinner from previous node if any
-        if (this.currentNodeId) {
-            this.clearCurrentWorkingNode(this.currentNodeId);
-        }
 
-        // Set spinner on new node
-        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (node) {
-            node.isGenerating = true;
-            this.currentNodeId = nodeId;
-            this.deps.eventEmitter.emit('nodeGenerationStarted', { nodeId, node });
-        }
-    }
-
-    /**
-     * Clear the current working node and remove the spinner from it
-     */
-    private clearCurrentWorkingNode(nodeId: string): void {
-        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (node) {
-            node.isGenerating = false;
-            this.deps.eventEmitter.emit('nodeGenerationComplete', { nodeId, success: true, node });
-        }
-        
-        // Clear current node if it matches
-        if (this.currentNodeId === nodeId) {
-            this.currentNodeId = null;
-        }
-    }
-
-    private updateTopLevelProgress(position: number, total: number, currentNode: DocumentNode): void {
-        this.currentOperationProgress = {
-            current: position,
-            total: total,
-            message: `Processing: ${currentNode.title} (${position}/${total})`
-        };
-        this.currentNodeId = currentNode.id;
-        this.emitUnifiedProgress();
-    }
 
     /**
      * Get current model information for progress display
      */
     private getCurrentModelInfo(): string | undefined {
-        if (this.currentOperationType === 'coherence' && this.currentNodeId) {
+                if (this.currentOperationType === 'coherence' && this.currentNodeId) {
             // For coherence analysis, use TaskModelService to get the correct model
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
             if (node) {
-                const isLeafNode = !node.children || node.children.length === 0;
+                const isLeafNode = node.isLeaf;
                 const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
                 const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
                 return this.formatModelName(modelName);
@@ -1165,8 +1104,8 @@ export class UnifiedGenerationService {
         if (this.currentOperationType === 'context' && this.currentNodeId) {
             // For context adjustment, use TaskModelService to get the correct model
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
-            if (node) {
-                const isLeafNode = !node.children || node.children.length === 0;
+        if (node) {
+                const isLeafNode = node.isLeaf;
                 const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeafNode);
                 const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
                 return this.formatModelName(modelName);
@@ -1176,10 +1115,10 @@ export class UnifiedGenerationService {
         // For content generation operations, select appropriate model based on node type
         if (this.currentOperationType === 'content' && this.currentNodeId) {
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
-            if (node) {
+        if (node) {
                 const profile = this.deps.settingsManager.getLastUsedProfile();
                 const modelKey = node.isLeaf ? 'prose' : 'creator';
-                const modelName = profile?.selectedModels?.[modelKey];
+                const modelName = profile && profile.selectedModels && profile.selectedModels[modelKey];
                 if (modelName) {
                     return this.formatModelName(modelName);
                 }
@@ -1188,7 +1127,7 @@ export class UnifiedGenerationService {
         
         // For other operations, use the creator model (default behavior)
         const profile = this.deps.settingsManager.getLastUsedProfile();
-        if (!profile?.selectedModels?.['creator']) return undefined;
+        if (!profile || !profile.selectedModels || !profile.selectedModels['creator']) return undefined;
         
         return this.formatModelName(profile.selectedModels['creator']);
     }
@@ -1276,10 +1215,7 @@ export class UnifiedGenerationService {
      */
     private async runContentLoop(nodeId: string, loopInput: LoopInput): Promise<void> {
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
-        if (!node) {
-            console.error(`Node not found in runContentLoop: ${nodeId}`);
-            return;
-        }
+        if (!node) throw new Error(`Node not found in runContentLoop: ${nodeId}`);
 
         // Note: Individual content generation does not emit generation events
         // Only the main unified generation process emits those events
@@ -1339,7 +1275,8 @@ export class UnifiedGenerationService {
             }
         };
 
-        const onAborted = (_message: string) => {
+        // Fix unused parameter
+        const onAborted = (): void => {
             // Generation aborted - no additional action needed
         };
 
@@ -1483,17 +1420,16 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Collect all nodes within a level range starting from a specific node
-     * Uses breadth-first traversal to ensure proper ordering
+     * Collect starting node and ALL its descendants in breadth-first order
      */
-    private collectNodesInLevelRange(startNodeId: string, minLevel: number, maxLevel: number): DocumentNode[] {
+    private collectAllDescendants(startNodeId: string): DocumentNode[] {
         const result: DocumentNode[] = [];
         const queue: DocumentNode[] = [];
         const visited = new Set<string>();
         
         // Start with the starting node
         const startNode = this.deps.treeService.findNodeById(startNodeId, this.deps.rootNode);
-        if (!startNode) return result;
+        if (!startNode) throw new Error(`Start node not found for collection: ${startNodeId}`);
         
         queue.push(startNode);
         visited.add(startNode.id);
@@ -1501,24 +1437,22 @@ export class UnifiedGenerationService {
         while (queue.length > 0) {
             const currentNode = queue.shift()!;
             
-            // Add current node if it's within the level range
-            if (currentNode.level >= minLevel && currentNode.level <= maxLevel) {
+            // Add current node unconditionally
                 result.push(currentNode);
-            }
             
-            // Add children to queue if they could be within range
-            if (currentNode.level < maxLevel) {
+            // Add all children to queue
                 currentNode.children.forEach(child => {
                     if (!visited.has(child.id)) {
                         queue.push(child);
                         visited.add(child.id);
                     }
                 });
-            }
         }
         
         return result;
     }
+
+
 
     /**
      * Abort current generation
@@ -1534,45 +1468,7 @@ export class UnifiedGenerationService {
 
 
 
-    /**
-     * Check if the master context has already been AI-adjusted
-     */
-    private isMasterContextAlreadyAdjusted(node: DocumentNode): boolean {
-        const masterVersion = node.getMasterVersion();
-        if (!masterVersion) {
-            return false; // No master version means no context to check
-        }
 
-        // Primary check: if master version has the context_ai_adjusted tag, skip analysis
-        if (masterVersion.tags.has('context_ai_adjusted')) {
-            return true;
-        }
-
-        // Fallback check: if tag is missing, check if master context matches any previously AI-adjusted versions
-        // This handles cases where context was adjusted in a draft version that later became master
-        const masterContext = masterVersion.context;
-        
-        // Find all versions that have been context AI-adjusted
-        const adjustedVersions = node.getAllVersions().filter(version => 
-            version.tags.has('context_ai_adjusted')
-        );
-
-        // If no versions have been AI-adjusted, then master context needs adjustment
-        if (adjustedVersions.length === 0) {
-            return false;
-        }
-
-        // Check if ANY AI-adjusted version has the same context as the master
-        // If so, the master context is effectively already adjusted
-        for (const adjustedVersion of adjustedVersions) {
-            if (adjustedVersion.context === masterContext) {
-                return true;
-            }
-        }
-
-        // Master context differs from all AI-adjusted versions, needs adjustment
-        return false;
-    }
 
     /**
      * Extract settings override from node context (copied from GenerationService)
@@ -1612,7 +1508,7 @@ export class UnifiedGenerationService {
      */
     private parseChildrenFromJSON(text: string): Array<{title: string, description: string}> {
         // Remove any surrounding backticks/code blocks
-        let cleanText = text.replace(/^```(?:json)?\n?/gm, '').replace(/\n?```$/gm, '');
+        const cleanText = text.replace(/^```(?:json)?\n?/gm, '').replace(/\n?```$/gm, '');
         
         try {
             const parsed = JSON.parse(cleanText);
@@ -1627,12 +1523,12 @@ export class UnifiedGenerationService {
             return [];
         } catch (error) {
             // If JSON parsing fails, try to fix common issues with newlines in strings
-            console.warn('Initial JSON parse failed, attempting to fix newlines...');
+            console.warn('Initial JSON parse failed, attempting to fix newlines...', error);
             
             try {
                 // Simple approach: replace literal newlines within quoted strings with spaces
                 // Match patterns like: "text\nmore text" and replace \n with space
-                let fixedText = cleanText.replace(/"([^"]*\n[^"]*)"?/g, (_match, content) => {
+                const fixedText = cleanText.replace(/"([^"]*\n[^"]*)"?/g, (_match, content) => {
                     const fixedContent = content.replace(/\n\s*/g, ' ');
                     return `"${fixedContent}"`;
                 });
@@ -1665,10 +1561,10 @@ export class UnifiedGenerationService {
         const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() || null : null;
         
         if (settingsOverride) {
-            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride!);
+            const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
             if (overrideProfile) {
                 console.log(`🔧 Using settings override "${settingsOverride}" for node "${node.title}"`);
-                this.deps.settingsManager.setLastUsedProfile(settingsOverride!);
+                void this.deps.settingsManager.setLastUsedProfile(settingsOverride);
             }
         }
 
@@ -1701,7 +1597,7 @@ export class UnifiedGenerationService {
 
         // Restore original profile if we used an override
         if (settingsOverride && originalProfileName) {
-            this.deps.settingsManager.setLastUsedProfile(originalProfileName!);
+            void this.deps.settingsManager.setLastUsedProfile(originalProfileName);
         }
 
         return loopInput;

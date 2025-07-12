@@ -109,7 +109,7 @@ export class TaskModelEditor {
         // Add event listeners
         section.querySelectorAll('.model-purpose-select').forEach(select => {
             select.addEventListener('change', (e) => {
-                this.handleModelPurposeChange(e.target as HTMLSelectElement);
+                void this.handleModelPurposeChange(e.target as HTMLSelectElement);
             });
         });
 

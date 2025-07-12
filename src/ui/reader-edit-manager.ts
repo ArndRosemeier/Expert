@@ -299,7 +299,7 @@ export class ReaderEditManager {
         const allCriteria = profile?.criteria || [];
         
         // Filter criteria for leaf nodes (most editing actions are on leaf content)
-        const isLeafNode = !node.children || node.children.length === 0;
+        const isLeafNode = node.isLeaf;
         const criteria = this.filterCriteriaForNodeType(allCriteria, isLeafNode);
         
         return {

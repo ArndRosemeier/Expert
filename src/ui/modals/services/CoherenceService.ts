@@ -145,11 +145,11 @@ export class CoherenceService {
         try {
             console.log(`🔍 Starting coherence analysis for "${node.title}" with ${request.childNodes.length} child nodes`);
             
-            // Use configurable model for analysis based on whether node is leaf or not
-            const isLeafNode = !node.children || node.children.length === 0;
+            // Use configurable model for analysis based on template-defined leaf status
+            const isLeafNode = node.isLeaf;
             const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
             
-            console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'leaf' : 'branch'} node "${node.title}"`);
+            console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
             
             const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
@@ -319,11 +319,11 @@ export class CoherenceService {
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
         try {
-            // Use configurable model based on whether child is leaf or not
-            const isLeaf = !childNode.children || childNode.children.length === 0;
+            // Use configurable model based on template-defined leaf status
+            const isLeaf = childNode.isLeaf;
             const modelPurpose = this.taskModelService.getModelPurposeForTask('fix_contradiction', isLeaf);
             
-            console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'leaf' : 'branch'} node "${childNode.title}"`);
+            console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'template-leaf' : 'template-branch'} node "${childNode.title}"`);
             
             if (onProgress) {
                 onProgress(`Generating fix using ${modelPurpose} model...`);

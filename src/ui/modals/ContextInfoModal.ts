@@ -459,7 +459,7 @@ export class ContextItemsEditorModal extends BaseModal {
         
         // Save the project after propagation
         if (propagatedCount > 0) {
-            import('../../state').then(({ getActiveProject }) => {
+            void import('../../state').then(({ getActiveProject }) => {
                 const project = getActiveProject();
                 if (project) {
                     void project.saveToStorage();
@@ -503,7 +503,7 @@ export class ContextItemsEditorModal extends BaseModal {
         
         // Save the project after removal
         if (removedCount > 0) {
-            import('../../state').then(({ getActiveProject }) => {
+            void import('../../state').then(({ getActiveProject }) => {
                 const project = getActiveProject();
                 if (project) {
                     void project.saveToStorage();
@@ -641,7 +641,7 @@ export class ContextItemsEditorModal extends BaseModal {
         if (contextLabel) {
             const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
             if (contextInfoSpan) {
-                import('../../ContextFormat').then(({ getContextItemCount }) => {
+                void import('../../ContextFormat').then(({ getContextItemCount }) => {
                     const itemCount = getContextItemCount(newContext);
                     contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
                 });
@@ -649,7 +649,7 @@ export class ContextItemsEditorModal extends BaseModal {
         }
         
         // Save the project to storage
-        import('../../state').then(({ getActiveProject }) => {
+        void import('../../state').then(({ getActiveProject }) => {
             const project = getActiveProject();
             if (project) {
                 void project.saveToStorage();

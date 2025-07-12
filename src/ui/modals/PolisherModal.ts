@@ -583,11 +583,11 @@ export class PolisherModal extends BaseModal {
         console.log('Polishing prompt:', prompt);
 
         try {
-            // Use configurable model based on whether node is leaf or not
-            const isLeaf = !this.node.children || this.node.children.length === 0;
+            // Use configurable model based on template-defined leaf status, not current children count
+            const isLeaf = this.node.isLeaf;
             const modelPurpose = this.taskModelService.getModelPurposeForTask('text_polishing', isLeaf);
             
-            console.log(`🎨 Using ${modelPurpose} model for polishing ${isLeaf ? 'leaf' : 'branch'} node "${this.node.title}"`);
+            console.log(`🎨 Using ${modelPurpose} model for polishing ${isLeaf ? 'template-leaf' : 'template-branch'} node "${this.node.title}"`);
 
             const response = await this.openRouterClient.chat(
                 modelPurpose,

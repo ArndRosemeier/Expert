@@ -57,7 +57,7 @@ export class PromptManagementService {
 
         // Auto-save if enabled
         if (this.config.autoSave) {
-            this.saveToStorage();
+            void this.saveToStorage();
         }
     }
 
