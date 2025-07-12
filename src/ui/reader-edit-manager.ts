@@ -278,9 +278,8 @@ export class ReaderEditManager {
      * Get OpenRouterClient from the project manager
      */
     private getOpenRouterClient(): OpenRouterClient {
-        // Access via the generation service's dependencies or use reflection
-        const generationService = this.projectManager.getGenerationService();
-        return (generationService as any).deps.openRouterClient;
+        // Use the singleton instance directly
+        return OpenRouterClient.getInstance();
     }
 
     /**

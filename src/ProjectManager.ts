@@ -10,12 +10,10 @@ import { StorageService, IStorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import * as state from './state';
 import { 
-    GenerationService, 
     TreeService, 
     ContextService, 
     PromptService, 
     GenerationController, 
-
     ContextExtractionService
 } from './project';
 import { GenerationCoordinator } from './project/GenerationCoordinator';
@@ -69,7 +67,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private contextService: ContextService;
     private promptService: PromptService;
     private generationController: GenerationController;
-    private generationService: GenerationService;
+
     private contextExtractionService: ContextExtractionService;
     
     // Generation coordination
@@ -78,7 +76,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
     
     // Service accessors for UI
-    public getGenerationService(): GenerationService { return this.generationService; }
+
     public getTreeService(): TreeService { return this.treeService; }
     public getContextService(): ContextService { return this.contextService; }
     public getPromptService(): PromptService { return this.promptService; }
@@ -122,20 +120,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Initialize generation coordinator
         this.generationCoordinator = new GenerationCoordinator(this);
         
-        // Initialize GenerationService with all dependencies
-        this.generationService = new GenerationService({
-            treeService: this.treeService,
-            contextService: this.contextService,
-            promptService: this.promptService,
-            generationController: this.generationController,
-            loopOrchestrator: this.loopOrchestrator,
-            settingsManager: this.settingsManager,
-            openRouterClient: this.openRouterClient,
-            eventEmitter: this,
-            saveToStorage: async () => this.saveToStorage(),
-            rootNode: this.rootNode,
-            getGenerationCoordinator: () => this.generationCoordinator
-        });
+
 
         // Ensure we have a valid profile set globally, but preserve user's choice
         // Wait for SettingsManager to be fully initialized before validating profiles
@@ -415,19 +400,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // with the hydrated version of our saved node tree.
         project.rootNode = this.rehydrateNode(plainObject.rootNode);
         
-        // Update the GenerationService with the new rootNode reference
-        project.generationService = new GenerationService({
-            treeService: project.treeService,
-            contextService: project.contextService,
-            promptService: project.promptService,
-            generationController: project.generationController,
-            loopOrchestrator: project.loopOrchestrator,
-            settingsManager: project.settingsManager,
-            openRouterClient: project.openRouterClient,
-            eventEmitter: project,
-            saveToStorage: async () => project.saveToStorage(),
-            rootNode: project.rootNode // Use the updated rootNode
-        });
+        // The rootNode is now properly set - no need to recreate GenerationService
         
         // Restore selectedNodeId if it was saved
         if (plainObject.selectedNodeId) {

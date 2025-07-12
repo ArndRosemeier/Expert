@@ -1667,7 +1667,7 @@ export function renderNodeDetails() {
     const shouldDisableButtons = isAnyNodeGenerating || node.isPromptGenerating;
 
     // Update button states based on generation status  
-    const isAnyOperationInProgress = projectManager.getGenerationService().canAbortGeneration();
+    const isAnyOperationInProgress = projectManager.getGenerationController().canAbortGeneration(projectManager.rootNode);
     
     // Normal button states (no more button transformations)
     generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
@@ -2179,31 +2179,54 @@ This action cannot be undone.`;
                     }
                 }
                 
-                const coordinator = projectManager.getGenerationCoordinator();
-                
-                // Get the count from the input
-                const countInput = getElementById('generation-count-input') as HTMLInputElement;
-                const count = countInput ? parseInt(countInput.value, 10) : (node.getTemplateChildrenCount() ?? 5);
-                
-                // Start operation through coordinator
-                const operationId = coordinator.startOperation('single-content', node.id, [node.id]);
-                if (!operationId) {
-                    alert('Another generation operation is already in progress. Please wait for it to complete.');
-                    return;
-                }
-                
-                // Generate content for the single node
-                projectManager.getGenerationService().generateNodeContent(node.id, count, false)
-                    .then(() => {
-                        coordinator.completeOperation(operationId, true);
-                        if (projectManager) {
-                            void projectManager.saveToStorage().catch(console.error);
-                        }
-                    })
-                    .catch(error => {
-                        coordinator.completeOperation(operationId, false, error);
+                // Use unified generation system - content only for this node
+                void (async () => {
+                    try {
+                        showGenerationOverlay();
+                        
+                        // Import UnifiedGenerationService
+                        const { UnifiedGenerationService } = await import('../project/UnifiedGenerationService');
+                        
+                        // Create service dependencies using existing projectManager services  
+                        const unifiedService = new UnifiedGenerationService({
+                            treeService: projectManager.getTreeService(),
+                            contextService: projectManager.getContextService(),
+                            promptService: projectManager.getPromptService(),
+                            generationController: projectManager.getGenerationController(),
+                            generationCoordinator: projectManager.getGenerationCoordinator(),
+                            loopOrchestrator: (projectManager as any).loopOrchestrator,
+                            settingsManager: projectManager.getSettingsManager(),
+                            openRouterClient: (projectManager as any).openRouterClient,
+                            eventEmitter: projectManager,
+                            saveToStorage: () => projectManager!.saveToStorage(),
+                            rootNode: projectManager.rootNode
+                        });
+                        
+                        // Define generation levels - content only for this node
+                        const levels = {
+                            draftLevel: -1, // No children creation
+                            contentLevel: node.level, // Generate content only for this level  
+                            contextPruneLevel: -1, // No context pruning
+                            coherenceLevel: -1, // No coherence checking
+                            autofixSeverity: -1 // No autofix
+                        };
+                        
+                        // Start unified generation
+                        await unifiedService.generateWithLevels(node.id, levels);
+                        
+                        // Save to storage
+                        await projectManager.saveToStorage();
+                        
+                        console.log('✅ Content generation completed successfully');
+                        
+                    } catch (error) {
                         console.error('Content generation failed:', error);
-                    });
+                        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    } finally {
+                        clearProgressUI();
+                        hideGenerationOverlay();
+                    }
+                })();
             }
             break;
 
@@ -2222,57 +2245,54 @@ This action cannot be undone.`;
                     return;
                 }
 
-                const includeContentCheckbox = getElementById('include-content-checkbox') as HTMLInputElement;
-                const recursiveCheckbox = getElementById('recursive-checkbox') as HTMLInputElement;
-                
-                const includeContent = includeContentCheckbox ? includeContentCheckbox.checked : true;
-                const recursive = recursiveCheckbox ? recursiveCheckbox.checked : false;
-
-                const coordinator = projectManager.getGenerationCoordinator();
-                
-                // Count how many nodes will be affected
-                const getAllInvolvedNodes = (parentNode: DocumentNode): string[] => {
-                    const nodes: string[] = [];
-                    
-                    // If this node has no children, count it as needing children created
-                    if (parentNode.children.length === 0) {
-                        nodes.push(parentNode.id + '_children');
-                    }
-                    
-                    // Check each child for content generation needs
-                    for (const child of parentNode.children) {
-                        if (includeContent && child.getState() === 'Empty') {
-                            nodes.push(child.id);
-                        }
+                // Use unified generation system - create children and generate content for deeper levels
+                void (async () => {
+                    try {
+                        showGenerationOverlay();
                         
-                        // If recursive, check children too
-                        if (recursive) {
-                            nodes.push(...getAllInvolvedNodes(child));
-                        }
-                    }
-                    
-                    return nodes;
-                };
-
-                const involvedNodes = getAllInvolvedNodes(node);
-                const operationId = coordinator.startOperation('bulk-children', node.id, involvedNodes);
-                if (!operationId) {
-                    alert('Another generation operation is already in progress. Please wait for it to complete.');
-                    return;
-                }
-
-                // Start the bulk generation
-                projectManager.getGenerationService().generateAllChildrenContent(node.id, includeContent, recursive, false)
-                    .then(() => {
-                        coordinator.completeOperation(operationId, true);
-                        if (projectManager) {
-                            void projectManager.saveToStorage().catch(console.error);
-                        }
-                    })
-                    .catch(error => {
-                        coordinator.completeOperation(operationId, false, error);
+                        // Import UnifiedGenerationService
+                        const { UnifiedGenerationService } = await import('../project/UnifiedGenerationService');
+                        
+                        // Create service dependencies using existing projectManager services  
+                        const unifiedService = new UnifiedGenerationService({
+                            treeService: projectManager.getTreeService(),
+                            contextService: projectManager.getContextService(),
+                            promptService: projectManager.getPromptService(),
+                            generationController: projectManager.getGenerationController(),
+                            generationCoordinator: projectManager.getGenerationCoordinator(),
+                            loopOrchestrator: (projectManager as any).loopOrchestrator,
+                            settingsManager: projectManager.getSettingsManager(),
+                            openRouterClient: (projectManager as any).openRouterClient,
+                            eventEmitter: projectManager,
+                            saveToStorage: () => projectManager!.saveToStorage(),
+                            rootNode: projectManager.rootNode
+                        });
+                        
+                        // Define generation levels - create children and generate content for them
+                        const levels = {
+                            draftLevel: node.level + 1, // Create children one level down
+                            contentLevel: node.level + 1, // Generate content for the children
+                            contextPruneLevel: node.level + 1, // Prune context for children
+                            coherenceLevel: node.level, // Check coherence at parent level
+                            autofixSeverity: -1 // No autofix
+                        };
+                        
+                        // Start unified generation
+                        await unifiedService.generateWithLevels(node.id, levels);
+                        
+                        // Save to storage
+                        await projectManager.saveToStorage();
+                        
+                        console.log('✅ Bulk generation completed successfully');
+                        
+                    } catch (error) {
                         console.error('Bulk generation failed:', error);
-                    });
+                        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    } finally {
+                        clearProgressUI();
+                        hideGenerationOverlay();
+                    }
+                })();
             }
             break;
 

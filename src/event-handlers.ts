@@ -713,7 +713,7 @@ export async function initialize() {
     try {
     getElementById('globalAbortBtn').addEventListener('click', async () => {
         const activeProject = state.getActiveProject();
-        if (activeProject && activeProject.getGenerationService().canAbortGeneration()) {
+        if (activeProject && activeProject.getGenerationController().canAbortGeneration(activeProject.rootNode)) {
             const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
             if (confirmed) {
                 console.log('🛑 User confirmed abort - using simplified abort');
@@ -725,7 +725,7 @@ export async function initialize() {
                     openRouterClient.abortAllOperations();
                     
                     // 2. Set stopRequested flag for immediate loop exit
-                    activeProject.getGenerationService().abortCurrentGeneration();
+                    activeProject.getGenerationController().abortCurrentGeneration(activeProject.rootNode);
                     
                     console.log('🛑 Simplified abort completed successfully');
                     
