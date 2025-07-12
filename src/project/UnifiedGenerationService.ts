@@ -177,12 +177,13 @@ export class UnifiedGenerationService {
             // Process work queue
             await this.processWorkQueue(workQueue, levels);
 
-            // Tree updates now happen after each individual node completion
-            // Complete operation with coordinator for UI cleanup
-            this.deps.generationCoordinator.completeOperation(operationId, true);
-            
             // After generation completes, check for collected contradictions
+            // This may show a modal requiring user interaction
             await this.showCollectedContradictions();
+            
+            // Tree updates now happen after each individual node completion
+            // Complete operation with coordinator for UI cleanup AFTER coherence interaction is done
+            this.deps.generationCoordinator.completeOperation(operationId, true);
         } catch (error) {
             console.error('Unified generation failed:', error);
             
