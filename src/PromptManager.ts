@@ -77,7 +77,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Your response will be rated by a just and unforgiving rater on the following criteria:
             - {{criteria}}
 
-            Please generate a high-quality response that addresses these criteria.
+            Please generate a high-quality response in {{language}} that addresses these criteria.
         `.trim(),
         placeholders: ['prompt', 'criteria', 'language'],
         description: "The main system prompt for the iterative generation loop. It defines the AI's task and is combined with the 'User' prompt below to start the process."
@@ -91,7 +91,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             Your last response was: "{{lastResponse}}".
             It received feedback and the editor provided the following advice to improve it: "{{editorAdvice}}".
 
-            Please generate a new response, incorporating the editor's advice. Remember, your response will be rated by a just and unforgiving rater on these criteria:
+            Please generate a new response in {{language}}, incorporating the editor's advice. Remember, your response will be rated by a just and unforgiving rater on these criteria:
             - {{criteria}}
         `.trim(),
         placeholders: ['prompt', 'lastResponse', 'editorAdvice', 'criteria', 'language'],
@@ -177,7 +177,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             {{context}}
             ---
 
-            Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow. Each title must be on a new line and start with a single asterisk (*).
+            Based on this, generate a bullet point list of {{count}} titles for the '{{child_level_name}}' nodes that will follow in {{language}}. Each title must be on a new line and start with a single asterisk (*).
         `.trim(),
         placeholders: ['path', 'context', 'child_level_name', 'count', 'parent_content', 'content', 'language'],
         description: "The prompt for the 'Expand' action. It asks the AI to generate a bulleted list of titles for child nodes, which is then run through the quality loop."
@@ -196,7 +196,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure content that belongs in this section.
+            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure content in {{language}} that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
@@ -218,7 +218,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure outline text that belongs in this section.
+            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure outline text in {{language}} that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
@@ -252,7 +252,7 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
               }
             ]
 
-            Do not include any other text, explanations, or formatting. Only provide the JSON array.
+            Do not include any other text, explanations, or formatting. Only provide the JSON array with the titles and descriptions in {{language}}.
 
             Here is the context of the document so far:
             ---
