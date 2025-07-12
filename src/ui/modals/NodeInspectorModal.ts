@@ -822,11 +822,21 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private saveTitle(newTitle: string): void {
-        if (!this.node) return;
+        if (!this.node || !this.selectedVersionId) return;
 
         try {
-            // Update the node title with proper tags
-            this.node.setTitleWithTags(newTitle, ['edited', 'title_edited']);
+            // Find the specific version being edited
+            const selectedVersion = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
+            if (!selectedVersion) {
+                console.error('Selected version not found for editing');
+                return;
+            }
+
+            // Update the specific version's title
+            selectedVersion.title = newTitle;
+            selectedVersion.timestamp = new Date();
+            selectedVersion.tags.add('edited');
+            selectedVersion.tags.add('title_edited');
             
             // Debounced save
             clearTimeout((this as any)._titleSaveTimeout);
@@ -839,11 +849,21 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private saveContent(newContent: string): void {
-        if (!this.node) return;
+        if (!this.node || !this.selectedVersionId) return;
 
         try {
-            // Update the node content with proper tags
-            this.node.setContentWithTags(newContent, ['edited', 'content_edited']);
+            // Find the specific version being edited
+            const selectedVersion = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
+            if (!selectedVersion) {
+                console.error('Selected version not found for editing');
+                return;
+            }
+
+            // Update the specific version's content
+            selectedVersion.content = newContent;
+            selectedVersion.timestamp = new Date();
+            selectedVersion.tags.add('edited');
+            selectedVersion.tags.add('content_edited');
             
             // Debounced save
             clearTimeout((this as any)._contentSaveTimeout);
@@ -856,20 +876,32 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private saveContext(newContext: string): void {
-        if (!this.node) return;
+        if (!this.node || !this.selectedVersionId) return;
 
         try {
-            // Update the node context with proper tags
-            this.node.setContextWithTags(newContext, ['edited', 'context_edited']);
+            // Find the specific version being edited
+            const selectedVersion = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
+            if (!selectedVersion) {
+                console.error('Selected version not found for editing');
+                return;
+            }
+
+            // Update the specific version's context
+            selectedVersion.context = newContext;
+            selectedVersion.timestamp = new Date();
+            selectedVersion.tags.add('edited');
+            selectedVersion.tags.add('context_edited');
             
-            // Propagate context to all descendants (like in main UI)
-            const propagateRecursively = (parentNode: DocumentNode) => {
-                for (const child of parentNode.children) {
-                    child.setContext(parentNode.context, 'master');
-                    propagateRecursively(child);
-                }
-            };
-            propagateRecursively(this.node);
+            // Only propagate context to descendants if we're editing the master version
+            if (selectedVersion.tags.has('master')) {
+                const propagateRecursively = (parentNode: DocumentNode) => {
+                    for (const child of parentNode.children) {
+                        child.setContext(parentNode.context, 'master');
+                        propagateRecursively(child);
+                    }
+                };
+                propagateRecursively(this.node);
+            }
             
             // Debounced save
             clearTimeout((this as any)._contextSaveTimeout);
