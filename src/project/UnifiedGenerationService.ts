@@ -245,6 +245,12 @@ export class UnifiedGenerationService {
 
         // Continue processing until no new levels are added
         while (true) {
+            // Check for abort at the start of each main loop iteration
+            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+                console.log('🛑 UnifiedGenerationService: Abort detected in main loop');
+                throw new Error('Generation was aborted by user');
+            }
+
             // Get levels that haven't been processed yet, sorted by level
             const unprocessedLevels = Array.from(workItemsByLevel.keys())
                 .filter(level => !processedLevels.has(level))
@@ -304,7 +310,8 @@ export class UnifiedGenerationService {
         
         // Phase 1: Context Pruning for all nodes at this level
         for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested) {
+            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+                console.log('🛑 UnifiedGenerationService: Abort detected in context pruning phase');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -325,7 +332,8 @@ export class UnifiedGenerationService {
 
         // Phase 2: Content Generation for all nodes at this level
         for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested) {
+            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+                console.log('🛑 UnifiedGenerationService: Abort detected in content generation phase');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -357,7 +365,8 @@ export class UnifiedGenerationService {
         });
 
         for (const parentId of parentsToCheck) {
-            if (this.abortRequested) {
+            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+                console.log('🛑 UnifiedGenerationService: Abort detected in coherence check phase');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -376,7 +385,8 @@ export class UnifiedGenerationService {
         const draftResults = new Map<string, { childIds: string[]; childrenCreated: boolean }>();
         
         for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested) {
+            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+                console.log('🛑 UnifiedGenerationService: Abort detected in draft creation phase');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -423,6 +433,12 @@ export class UnifiedGenerationService {
      * Handle context pruning for a node
      */
     private async handleContextPruning(nodeId: string): Promise<void> {
+        // Check for abort at start of operation
+        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+            console.log('🛑 UnifiedGenerationService: Abort detected in handleContextPruning');
+            throw new Error('Generation was aborted by user');
+        }
+
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) return;
 
@@ -488,6 +504,12 @@ export class UnifiedGenerationService {
      * Handle content generation for a node
      */
     private async handleContentGeneration(nodeId: string): Promise<void> {
+        // Check for abort at start of operation
+        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+            console.log('🛑 UnifiedGenerationService: Abort detected in handleContentGeneration');
+            throw new Error('Generation was aborted by user');
+        }
+
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) return;
 
@@ -543,6 +565,12 @@ export class UnifiedGenerationService {
      * Returns object with childIds and whether children were actually created
      */
     private async handleDraftCreation(nodeId: string): Promise<{ childIds: string[]; childrenCreated: boolean }> {
+        // Check for abort at start of operation
+        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+            console.log('🛑 UnifiedGenerationService: Abort detected in handleDraftCreation');
+            throw new Error('Generation was aborted by user');
+        }
+
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) return { childIds: [], childrenCreated: false };
 
@@ -670,6 +698,12 @@ export class UnifiedGenerationService {
      * Always accumulate contradictions for level-transition display
      */
     private async handleCoherenceCheck(parentId: string, levels: GenerationLevels): Promise<void> {
+        // Check for abort at start of operation
+        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
+            console.log('🛑 UnifiedGenerationService: Abort detected in handleCoherenceCheck');
+            throw new Error('Generation was aborted by user');
+        }
+
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
         if (!parentNode) return;
 
@@ -1405,8 +1439,12 @@ export class UnifiedGenerationService {
      * Abort current generation
      */
     public abortCurrentGeneration(): void {
+        console.log('🛑 UnifiedGenerationService: Abort requested');
         this.abortRequested = true;
+        
+        // Request stop from both the loop orchestrator and the generation controller
         this.deps.loopOrchestrator.requestStop();
+        this.deps.generationController.abortCurrentGeneration(this.deps.rootNode);
     }
 
 
