@@ -448,9 +448,20 @@ export async function initialize() {
         console.log(`🔄 Initial profile consistency: "${initialProfileName}" set as loaded profile`);
     }
 
+    // Create minimal services for loading projects
+    const client = OpenRouterClient.getInstance();
+    if (settingsManager) {
+        client.setSettingsManager(settingsManager);
+    }
+    state.setOpenRouterClient(client);
+    
+    // Create a minimal orchestrator just for loading projects
+    const minimalOrchestrator = new LoopOrchestrator(settingsManager, client, state.getOrchestratorPrompts() || undefined);
+    state.setOrchestrator(minimalOrchestrator);
+    
     await loadPersistedProjects();
     
-    // Recreate and configure services only if there's an active project
+    // Recreate and configure services properly if there's an active project
     if (state.getActiveProject()) {
         recreateAndReconfigureServices();
     }
