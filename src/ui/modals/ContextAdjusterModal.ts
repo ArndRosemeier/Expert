@@ -73,9 +73,18 @@ export class ContextAdjusterModal extends BaseModal {
             this.analysisResult = result;
             this.isLoading = false;
             
-            // If no issues found, return false (no changes made)
+            // If no issues found, tag the node as context_ai_adjusted to prevent future analysis
             if (!result.hasIssues) {
-                return false;
+                // Tag the node as context_ai_adjusted even when no issues are found
+                this.targetNode.setContextWithTags(this.targetNode.context || '', ['context_ai_adjusted']);
+                
+                // Save the project after tagging
+                const { getActiveProject } = await import('../../state');
+                const projectManager = getActiveProject()!;
+                await projectManager.saveToStorage();
+                
+                console.log(`✅ No context issues found for "${this.targetNode.title}" - tagged as context_ai_adjusted`);
+                return false; // No changes made to context content
             }
             
             // Automatically remove all problematic items
