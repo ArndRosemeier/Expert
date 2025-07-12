@@ -1135,6 +1135,19 @@ export class UnifiedGenerationService {
             }
         }
         
+        // For content generation operations, select appropriate model based on node type
+        if (this.currentOperationType === 'content' && this.currentNodeId) {
+            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
+            if (node) {
+                const profile = this.deps.settingsManager.getLastUsedProfile();
+                const modelKey = node.isLeaf ? 'prose' : 'creator';
+                const modelName = profile?.selectedModels?.[modelKey];
+                if (modelName) {
+                    return this.formatModelName(modelName);
+                }
+            }
+        }
+        
         // For other operations, use the creator model (default behavior)
         const profile = this.deps.settingsManager.getLastUsedProfile();
         if (!profile?.selectedModels?.['creator']) return undefined;
@@ -1349,7 +1362,9 @@ export class UnifiedGenerationService {
             // Handle completion - properly end session and create versions like the old GenerationService
             if (result.finalResponse) {
                 const profile = this.deps.settingsManager.getLastUsedProfile();
-                const creatorModel = profile?.selectedModels?.['creator'];
+                // Select appropriate model based on node type - leaf nodes use 'prose', non-leaf use 'creator'
+                const modelKey = node.isLeaf ? 'prose' : 'creator';
+                const modelName = profile?.selectedModels?.[modelKey];
                 
                 // End the generation session with the final result
                 node.endGenerationSession(result.success, result.finalResponse);
@@ -1358,7 +1373,7 @@ export class UnifiedGenerationService {
                 const latestSession = node.getLatestGenerationSession();
                 if (latestSession && latestSession.iterations.length > 0) {
                     latestSession.iterations.forEach((iteration) => {
-                        node.setContentFromGeneration(iteration.content, creatorModel, iteration.iteration);
+                        node.setContentFromGeneration(iteration.content, modelName, iteration.iteration);
                     });
                 }
                 
