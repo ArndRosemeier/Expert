@@ -538,8 +538,11 @@ export class ProfileSelector {
      * Handles settings service changes
      */
     private handleSettingsChange(event: SettingsChangeEvent): void {
-        if (event.type === 'profile' && event.data.action === 'switched') {
-            this.updateCurrentProfileDisplay(event.data.profileName);
+        if (event.type === 'profile') {
+            const data = event.data as any; // Type assertion since data is unknown
+            if (data && data.action === 'switched' && data.profileName) {
+                this.updateCurrentProfileDisplay(data.profileName);
+            }
         }
     }
 

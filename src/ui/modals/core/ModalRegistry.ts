@@ -8,7 +8,7 @@ import { IModal, ModalRegistryEntry, ModalState, ModalEventEmitter, ModalEvents 
  * Simple event emitter for modal events
  */
 class SimpleEventEmitter implements ModalEventEmitter {
-    private handlers: Map<keyof ModalEvents, ((data: unknown) => void)[]> = new Map();
+    private handlers: Map<keyof ModalEvents, ((data: any) => void)[]> = new Map();
 
     emit<K extends keyof ModalEvents>(event: K, data: ModalEvents[K]): void {
         const eventHandlers = this.handlers.get(event);
@@ -21,13 +21,13 @@ class SimpleEventEmitter implements ModalEventEmitter {
         if (!this.handlers.has(event)) {
             this.handlers.set(event, []);
         }
-        this.handlers.get(event)!.push(handler);
+        this.handlers.get(event)!.push(handler as (data: any) => void);
     }
 
     off<K extends keyof ModalEvents>(event: K, handler: (data: ModalEvents[K]) => void): void {
         const eventHandlers = this.handlers.get(event);
         if (eventHandlers) {
-            const index = eventHandlers.indexOf(handler);
+            const index = eventHandlers.indexOf(handler as (data: any) => void);
             if (index > -1) {
                 eventHandlers.splice(index, 1);
             }

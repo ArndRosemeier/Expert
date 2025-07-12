@@ -16,7 +16,7 @@ import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
 import { TaskModelEditor } from '../components/TaskModelEditor';
-import { OpenRouterClient } from '../../OpenRouterClient';
+
 
 export interface SettingsModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -565,7 +565,6 @@ export class SettingsModal extends BaseModal {
             this.taskModelEditor = new TaskModelEditor(
                 taskModelContainer,
                 this.settingsManager,
-                OpenRouterClient.getInstance(),
                 {
                     onChange: () => this.autoSave(),
                     showDescriptions: true

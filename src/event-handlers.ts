@@ -103,7 +103,7 @@ async function extractTextFromPDF(file: File): Promise<string> {
             const textContent = await page.getTextContent();
             const pageText = textContent.items
                 .filter((item: any): item is { str: string } => item && typeof item === 'object' && 'str' in item)
-                .map((item: { str: string }) => item.str)
+                .map((item: any) => item.str)
                 .join(' ');
             fullText += pageText + '\n\n';
         }
@@ -178,7 +178,7 @@ interface AIGeneratedData {
     options?: any;
 }
 
-function handleCreateProject(title: string, template: ProjectTemplate, aiData?: AIGeneratedData) {
+function handleCreateProject(title: string, template: ProjectTemplate, aiData?: unknown) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -194,28 +194,29 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     AssertFlatTemplateCopy(project);
     
     // Apply AI-generated content and context to root node if provided
-    if (aiData && aiData.isAIGenerated) {
+    const typedAiData = aiData as AIGeneratedData | undefined;
+    if (typedAiData && typedAiData.isAIGenerated) {
         console.log('🤖 Applying AI-generated content and context to root node');
         const rootNode = project.rootNode;
         
         // Use version management system for content/context updates
 
         
-        if (aiData.content !== undefined) {
-            rootNode.setContent(aiData.content, 'master');
-            console.log('✅ Applied AI content to root node, length:', aiData.content.length);
+        if (typedAiData.content !== undefined) {
+            rootNode.setContent(typedAiData.content, 'master');
+            console.log('✅ Applied AI content to root node, length:', typedAiData.content.length);
         }
         
-        if (aiData.context !== undefined) {
-            rootNode.setContext(aiData.context, 'master');
-            console.log('✅ Applied AI context to root node, length:', aiData.context.length);
+        if (typedAiData.context !== undefined) {
+            rootNode.setContext(typedAiData.context, 'master');
+            console.log('✅ Applied AI context to root node, length:', typedAiData.context.length);
         }
         
         // Store AI metadata in content for reference
-        if (aiData.description) {
-            console.log('📝 AI project created from description:', aiData.description);
-            console.log('🎯 Project type:', aiData.projectType);
-            console.log('⚙️ Generation options:', aiData.options);
+        if (typedAiData.description) {
+            console.log('📝 AI project created from description:', typedAiData.description);
+            console.log('🎯 Project type:', typedAiData.projectType);
+            console.log('⚙️ Generation options:', typedAiData.options);
         }
     }
     

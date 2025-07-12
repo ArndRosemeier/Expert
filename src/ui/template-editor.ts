@@ -170,7 +170,8 @@ function handleSave() {
         
         // Modal will be closed by the caller
     } catch (error: unknown) {
-        alert(`Error saving template: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Error saving template: ${errorMessage}`);
         throw error; // Re-throw to prevent modal from closing on error
     }
 }
@@ -200,7 +201,8 @@ function handleSaveAsNew() {
         populateTemplateSelector();
         renderCurrentTemplateView();
     } catch (error: unknown) {
-        alert(`Error creating template: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Error creating template: ${errorMessage}`);
     }
 }
 
@@ -219,7 +221,8 @@ function handleDelete() {
             renderCurrentTemplateView();
             alert("Template deleted.");
         } catch (error: unknown) {
-            alert(`Error deleting template: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Error deleting template: ${errorMessage}`);
         }
     }
 }
@@ -238,7 +241,8 @@ function handleRestoreDefaults() {
             renderCurrentTemplateView();
             alert("Templates restored to defaults successfully.");
         } catch (error: unknown) {
-            alert(`Error restoring defaults: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            alert(`Error restoring defaults: ${errorMessage}`);
         }
     }
 }
@@ -248,7 +252,7 @@ function handleRestoreDefaults() {
 function handleSaveFromModal(modal: unknown) {
     try {
         handleSave();
-        void modal.close();
+        void (modal as any).close();
     } catch (error) {
         // Error already shown in handleSave, just keep modal open
         throw new Error('__KEEP_MODAL_OPEN__');

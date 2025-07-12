@@ -2,7 +2,7 @@ import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
-import { NodeCreationService, NodeSuggestion, INodeCreationService } from './services/NodeCreationService';
+import { NodeCreationService, NodeSuggestion, INodeCreationService, NodeCreationConfig } from './services/NodeCreationService';
 import { createElement } from './core/modal-utils';
 import { OpenRouterClient } from '../../OpenRouterClient';
 
@@ -669,10 +669,10 @@ export class AddChildNodeModal extends BaseModal {
             this.childModalState.creationStep = 'Creating child node...';
             this.refreshContent();
             
-            const createConfig: unknown = {
+            const createConfig: NodeCreationConfig = {
                 parentNodeId: this.childModalConfig.parentNodeId,
                 title,
-                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && this.childModalConfig.parentNode.content
+                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && !!this.childModalConfig.parentNode.content
             };
             
             if (draft) {

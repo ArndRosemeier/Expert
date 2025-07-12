@@ -3208,7 +3208,7 @@ export class ReaderGUI {
         if (!nodeEditors) return results;
 
         nodeEditors.forEach((editor: unknown, nodeId: string) => {
-            const text = editor.editor.getText().toLowerCase();
+            const text = (editor as any).editor.getText().toLowerCase();
             let index = 0;
             
             while ((index = text.indexOf(searchTerm, index)) !== -1) {
