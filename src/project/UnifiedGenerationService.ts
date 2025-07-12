@@ -390,6 +390,7 @@ export class UnifiedGenerationService {
     private needsContextPruning(node: DocumentNode, levels: GenerationLevels): boolean {
         if (levels.contextPruneLevel < node.level) return false;
         if (node.level === 0 || !node.parentId) return false; // Skip root nodes
+        if (node.children.length === 0) return false; // Skip leaf nodes - context adjustment only applies to parent nodes
         return !this.isMasterContextAlreadyAdjusted(node);
     }
 
