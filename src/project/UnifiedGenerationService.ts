@@ -786,12 +786,18 @@ export class UnifiedGenerationService {
                 // Track nodes that were analyzed (even if no contradictions found)
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
+                
+                // Immediately tag children as consistent since no contradictions were found
+                this.tagChildrenAsConsistent(parentNode);
             } else {
                 // When autofix is enabled, never accumulate contradictions - handle them all automatically
                 if (levels.autofixSeverity !== -1) {
                     // Track nodes that were analyzed but don't accumulate contradictions
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
+                    
+                    // Tag children as consistent since autofix handled all contradictions
+                    this.tagChildrenAsConsistent(parentNode);
                 } else {
                     // Only when autofix is disabled do we accumulate contradictions for modal display
                     // Merge new contradictions into accumulated result with parent node context
@@ -1010,6 +1016,33 @@ export class UnifiedGenerationService {
             // On error, still tag nodes to prevent them from being stuck in inconsistent state
             this.tagAnalyzedSubnodesAsConsistent();
         }
+    }
+
+    /**
+     * Tag children of a single parent node as consistent to parent
+     */
+    private tagChildrenAsConsistent(parentNode: DocumentNode): void {
+        console.log(`🏷️ Tagging children of "${parentNode.title}" as consistent to parent (immediate after coherence check)`);
+        
+        let taggedCount = 0;
+        
+        // Tag all children's master versions
+        for (const childNode of parentNode.children) {
+            const masterVersion = childNode.getMasterVersion();
+            if (masterVersion) {
+                // Add the consistent_to_parent tag
+                masterVersion.tags.add('consistent_to_parent');
+                masterVersion.timestamp = new Date(); // Update timestamp
+                taggedCount++;
+            } else {
+                console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+            }
+        }
+        
+        console.log(`✅ Tagged ${taggedCount} children as consistent to parent: "${parentNode.title}"`);
+        
+        // Save the project after tagging
+        this.saveProjectAfterBatchTagging();
     }
 
     /**
