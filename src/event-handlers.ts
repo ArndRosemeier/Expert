@@ -225,6 +225,9 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     // Set the new project as active and select its root node
     state.setActiveProject(project.rootNode.id);
     
+    // Recreate and configure services for the new project
+    recreateAndReconfigureServices();
+    
     void project.saveToStorage();
     
     closeNewProjectModal();
@@ -290,6 +293,9 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
         
         // Set the imported project as active and select its root node
         state.setActiveProject(project.rootNode.id);
+        
+        // Recreate and configure services for the imported project
+        recreateAndReconfigureServices();
         
         void project.saveToStorage();
         
@@ -435,8 +441,6 @@ export async function initialize() {
     });
     setDefaultModalFactory(modalFactory);
 
-    recreateAndReconfigureServices();
-    
     // Set initial loaded profile name to match what's in SettingsManager
     const initialProfileName = settingsManager.getLastUsedProfileName();
     if (initialProfileName) {
@@ -446,7 +450,10 @@ export async function initialize() {
 
     await loadPersistedProjects();
     
-
+    // Recreate and configure services only if there's an active project
+    if (state.getActiveProject()) {
+        recreateAndReconfigureServices();
+    }
     
     // Initialize the UI with projects (if any)
     void initializeProjectUI();
