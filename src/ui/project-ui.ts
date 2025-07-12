@@ -2,7 +2,7 @@ import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { getElementById } from './dom-elements';
 import * as state from '../state';
-import { LoopProgress } from '../LoopOrchestrator';
+
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { CoherenceService } from './modals/services/CoherenceService';
@@ -15,6 +15,8 @@ import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
 import { AIProgressService } from '../AIProgressService';
 import { getContextItemCount } from '../ContextFormat';
+import { ProjectTemplate } from '../ProjectTemplate';
+
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -262,7 +264,6 @@ function getPluralChildLevelName(node: DocumentNode): string {
  */
 // Import the reusable Dropdown class
 import { Dropdown } from './Dropdown';
-import { ProjectTemplate } from '../ProjectTemplate';
 
 // Store the dropdown instance for the actions button
 let actionsDropdownInstance: Dropdown | null = null;
@@ -1509,7 +1510,8 @@ export function renderNodeDetails() {
                                 </label>
                                 <select id="coherence-level-selector" class="level-dropdown">
                                     <option value="-1" ${coherenceLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.slice(node.level, -1).map((levelName, index) => {
+                                                                         // @ts-ignore - TypeScript incorrectly thinks map only expects 1 argument
+                                    ${node.template.slice(node.level, -1).map((_, index) => {
                                         const actualLevel = node.level + index;
                                         // Show the child level name (one level down) but keep the parent level as value
                                         const childLevelIndex = node.level + index + 1;
@@ -1973,25 +1975,7 @@ function updateVersionContentDisplay() {
 
 
 
-function toggleRatingsView(showRatings: boolean) {
-    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-    const ratingsDisplay = document.getElementById('ratings-display') as HTMLDivElement;
-    
-    if (!contentTextArea || !ratingsDisplay) return;
-    
-    if (showRatings) {
-        // Hide content textarea and show ratings
-        contentTextArea.style.display = 'none';
-        ratingsDisplay.style.display = 'block';
-        
-        // Populate ratings display
-        renderRatingsView();
-    } else {
-        // Show content textarea and hide ratings
-        contentTextArea.style.display = 'block';
-        ratingsDisplay.style.display = 'none';
-    }
-}
+
 
 function renderRatingsView() {
     const ratingsDisplay = document.getElementById('ratings-display') as HTMLDivElement;
@@ -2668,8 +2652,8 @@ This action cannot be undone.`;
                 );
 
                 // Check if node is eligible for context analysis
-                if (!contextService.isNodeEligible(node, projectManager)) {
-                    alert(contextService.getIneligibilityReason(node, projectManager));
+                if (!contextService.isNodeEligible(node)) {
+                    alert(contextService.getIneligibilityReason(node));
                     return;
                 }
 

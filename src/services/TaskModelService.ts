@@ -1,5 +1,4 @@
 import { SettingsManager } from '../SettingsManager';
-import { OpenRouterClient } from '../OpenRouterClient';
 
 /**
  * Available model purposes that users can select from
@@ -63,11 +62,9 @@ export const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
  */
 export class TaskModelService {
     private settingsManager: SettingsManager;
-    private openRouterClient: OpenRouterClient;
 
-    constructor(settingsManager: SettingsManager, openRouterClient: OpenRouterClient) {
+    constructor(settingsManager: SettingsManager) {
         this.settingsManager = settingsManager;
-        this.openRouterClient = openRouterClient;
     }
 
     /**

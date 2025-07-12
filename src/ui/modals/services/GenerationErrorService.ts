@@ -205,17 +205,6 @@ export class GenerationErrorService {
     }
 
     /**
-     * Helper method to extract model information from error context
-     */
-    private extractModelFromError(error: any): string | undefined {
-        // Try to extract model from various error formats
-        if (error?.model) return error.model;
-        if (error?.config?.model) return error.config.model;
-        if (error?.originalError?.model) return error.originalError.model;
-        return undefined;
-    }
-
-    /**
      * Helper method to format error messages for better readability
      */
     private formatErrorMessage(error: Error): string {

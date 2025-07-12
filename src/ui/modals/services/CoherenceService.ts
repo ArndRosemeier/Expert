@@ -13,7 +13,7 @@ export class CoherenceService {
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
-        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
+        this.taskModelService = new TaskModelService(settingsManager);
     }
 
     /**

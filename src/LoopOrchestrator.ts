@@ -88,12 +88,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private currentIteration = 0;
     private isRunning = false;
     private language: string = 'English'; // Default language
-    private settingsManager: SettingsManager;
     private expansionService: any;
 
     constructor(settingsManager: SettingsManager, client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
-        this.settingsManager = settingsManager;
         this.client = client;
         this.prompts = prompts || { ...defaultPrompts };
         this.expansionService = createPromptExpansionService(settingsManager);

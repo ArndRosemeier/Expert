@@ -1241,34 +1241,5 @@ export class GenerationService {
             .filter((item): item is {title: string, description: string} => item !== null);
     }
 
-    /**
-     * Parses a bulleted list from text with the new format "Title: X, Content: Y".
-     * Returns array of objects with title and content description.
-     * This is kept as a fallback for when JSON parsing fails.
-     */
-    private parseEnhancedBulletedList(text: string): Array<{title: string, description: string}> {
-        return text
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.startsWith('*') || line.startsWith('-'))
-            .map(line => {
-                const content = line.substring(1).trim();
-                
-                // Check for new format: "Title: X, Content: Y"
-                const titleMatch = content.match(/^Title:\s*([^,]+),\s*Content:\s*(.*)$/i);
-                if (titleMatch && titleMatch[1] && titleMatch[2]) {
-                    return {
-                        title: titleMatch[1].trim(),
-                        description: titleMatch[2].trim()
-                    };
-                }
-                
-                // Fallback to old format (just the title)
-                return {
-                    title: content,
-                    description: ''
-                };
-            })
-            .filter(item => item.title.length > 0);
-    }
+
 } 

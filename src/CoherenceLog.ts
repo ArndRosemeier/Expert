@@ -154,33 +154,18 @@ export class CoherenceLog {
      * Save coherence log to project storage
      * TODO: Implement proper project storage integration
      */
-    public async saveToProject(projectId: string, projectNode: DocumentNode): Promise<void> {
-        const logData = this.projectLogData.get(projectId);
-        if (!logData || logData.entries.length === 0) {
-            return;
-        }
-        
-        try {
-            // For now, just log that we would save - actual implementation depends on project storage system
-            console.log(`💾 Would save coherence log to project ${projectId} (${logData.entries.length} entries)`);
-            // TODO: Implement actual storage when project metadata system is available
-        } catch (error) {
-            console.error('Failed to save coherence log to project:', error);
-        }
+    public async saveToProject(projectId: string): Promise<void> {
+        // TODO: Implement saving coherence log to project storage
+        console.log('📝 Saving coherence log to project:', projectId);
     }
     
     /**
      * Load coherence log from project storage
      * TODO: Implement proper project storage integration
      */
-    public async loadFromProject(projectId: string, projectNode: DocumentNode): Promise<void> {
-        try {
-            // For now, just log that we would load - actual implementation depends on project storage system
-            console.log(`📂 Would load coherence log from project ${projectId}`);
-            // TODO: Implement actual loading when project metadata system is available
-        } catch (error) {
-            console.error('Failed to load coherence log from project:', error);
-        }
+    public async loadFromProject(projectId: string): Promise<void> {
+        // TODO: Implement loading coherence log from project storage
+        console.log('📖 Loading coherence log from project:', projectId);
     }
     
     private getOrCreateLogData(projectId: string): CoherenceLogData {

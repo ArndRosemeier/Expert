@@ -14,36 +14,25 @@ export class ContextAdjusterService {
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
-        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
+        this.taskModelService = new TaskModelService(settingsManager);
     }
 
     /**
      * Check if a node is eligible for context analysis
      */
-    isNodeEligible(node: DocumentNode, projectManager: ProjectManager): boolean {
-        // Node is eligible if it has both content and context to analyze
-        const hasContent = !!(node.content?.trim() && node.content.trim().length > 0);
-        const hasContext = !!(node.context?.trim() && node.context.trim().length > 0);
-        
-        return hasContent && hasContext;
+    isNodeEligible(node: DocumentNode): boolean {
+        // Nodes with children can have their context adjusted
+        return node.children.length > 0;
     }
 
     /**
-     * Get the reason why a node is not eligible (for user feedback)
+     * Get reason why a node is not eligible for context adjustment
      */
-    getIneligibilityReason(node: DocumentNode, projectManager: ProjectManager): string {
-        const hasContent = node.content?.trim() && node.content.trim().length > 0;
-        const hasContext = node.context?.trim() && node.context.trim().length > 0;
-
-        if (!hasContent) {
-            return 'This node has no content to analyze.';
+    getIneligibilityReason(node: DocumentNode): string {
+        if (node.children.length === 0) {
+            return 'Node has no children - context adjustment only applies to parent nodes';
         }
-
-        if (!hasContext) {
-            return 'This node has no context to analyze.';
-        }
-
-        return 'Node is not eligible for context analysis.';
+        return 'Node is eligible for context adjustment';
     }
 
     /**
@@ -78,8 +67,8 @@ export class ContextAdjusterService {
      * Perform context analysis using AI with retry logic
      */
     async analyzeContext(node: DocumentNode, projectManager: ProjectManager): Promise<ContextAnalysisResult> {
-        if (!this.isNodeEligible(node, projectManager)) {
-            throw new Error(this.getIneligibilityReason(node, projectManager));
+        if (!this.isNodeEligible(node)) {
+            throw new Error(this.getIneligibilityReason(node));
         }
 
         const request = this.prepareAnalysisRequest(node, projectManager);

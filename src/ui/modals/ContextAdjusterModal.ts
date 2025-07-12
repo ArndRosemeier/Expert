@@ -1,12 +1,10 @@
 import { BaseModal } from './core/BaseModal';
+import { DocumentNode } from '../../DocumentNode';
 import { ContextAdjusterService } from './services/ContextAdjusterService';
 import { ContextAnalysisResult, ContextIssue } from '../../types/ContextAdjusterTypes';
-import { DocumentNode } from '../../DocumentNode';
-import { DiffTool } from '../../DiffTool';
 import { getContextItems, formatContextItems } from '../../ContextFormat';
 
 export class ContextAdjusterModal extends BaseModal {
-    private contextAdjusterService: ContextAdjusterService | null = null;
     private analysisResult: ContextAnalysisResult | null = null;
     private targetNode: DocumentNode | null = null;
     private isLoading: boolean = false;

@@ -50,7 +50,6 @@ export class GenerationErrorModal extends BaseModal {
 
     private getModalContent(): string {
         const formattedTime = this.errorDetails.timestamp.toLocaleString();
-        const errorText = this.formatErrorForCopy();
 
         return `
             <div class="generation-error-content">

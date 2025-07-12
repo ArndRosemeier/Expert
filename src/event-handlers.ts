@@ -102,7 +102,8 @@ async function extractTextFromPDF(file: File): Promise<string> {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-                .map((item: unknown) => item.str)
+                .filter((item: any): item is { str: string } => item && typeof item === 'object' && 'str' in item)
+                .map((item: { str: string }) => item.str)
                 .join(' ');
             fullText += pageText + '\n\n';
         }
@@ -168,7 +169,16 @@ function recreateAndReconfigureServices() {
     
 }
 
-function handleCreateProject(title: string, template: ProjectTemplate, aiData?: unknown) {
+interface AIGeneratedData {
+    isAIGenerated: boolean;
+    content?: string;
+    context?: string;
+    description?: string;
+    projectType?: string;
+    options?: any;
+}
+
+function handleCreateProject(title: string, template: ProjectTemplate, aiData?: AIGeneratedData) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -220,7 +230,15 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     void initializeProjectUI(project);
 }
 
-function handleImportProject(title: string, template: ProjectTemplate, importData: unknown) {
+interface ImportNodeData {
+    title?: string;
+    content?: string;
+    context?: string;
+    generationPrompt?: string;
+    children?: ImportNodeData[];
+}
+
+function handleImportProject(title: string, template: ProjectTemplate, importData: ImportNodeData) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
     const client = state.getOpenRouterClient();
@@ -261,7 +279,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
 
         // Import children recursively if they exist
         if (importData.children && Array.isArray(importData.children)) {
-            importData.children.forEach((childData: unknown, index: number) => {
+            importData.children.forEach((childData: ImportNodeData, index: number) => {
                 importChildNodeForProject(project, rootNode.id, childData, index);
             });
         }
@@ -285,7 +303,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
 
 // Removed unused function calculateImportDepth
 
-function importChildNodeForProject(project: ProjectManager, parentId: string, childData: unknown, index: number): void {
+function importChildNodeForProject(project: ProjectManager, parentId: string, childData: ImportNodeData, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -309,11 +327,11 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
     }
 
     // Recursively import children
-    if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: unknown, grandChildIndex: number) => {
-            importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
-        });
-    }
+            if (childData.children && Array.isArray(childData.children)) {
+            childData.children.forEach((grandChildData: ImportNodeData, grandChildIndex: number) => {
+                importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
+            });
+        }
 }
 
 /**

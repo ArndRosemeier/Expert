@@ -1,6 +1,5 @@
-import { TaskModelService, AllTaskModelConfigs, TaskModelConfig, MODEL_PURPOSES } from '../../services/TaskModelService';
 import { SettingsManager } from '../../SettingsManager';
-import { OpenRouterClient } from '../../OpenRouterClient';
+import { TaskModelService, AllTaskModelConfigs, TaskModelConfig, MODEL_PURPOSES } from '../../services/TaskModelService';
 
 export interface TaskModelEditorOptions {
     onChange?: () => void;
@@ -17,13 +16,12 @@ export class TaskModelEditor {
     private options: TaskModelEditorOptions;
 
     constructor(
-        container: HTMLElement,
+        container: HTMLElement, 
         settingsManager: SettingsManager,
-        openRouterClient: OpenRouterClient,
-        options: TaskModelEditorOptions = {}
+        options: Partial<TaskModelEditorOptions> = {}
     ) {
         this.container = container;
-        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
+        this.taskModelService = new TaskModelService(settingsManager);
         this.options = {
             showDescriptions: true,
             ...options

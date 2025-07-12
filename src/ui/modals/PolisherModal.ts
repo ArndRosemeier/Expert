@@ -6,8 +6,6 @@ import { OpenRouterClient } from '../../OpenRouterClient';
 import { TaskModelService } from '../../services/TaskModelService';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { PromptContextBuilder } from '../../services/PromptContextBuilder';
-import { QualityCriterion } from '../../types';
-import { getPromptText } from '../../PromptManager';
 import * as state from '../../state';
 
 export interface PolishingButton {
@@ -56,7 +54,7 @@ export class PolisherModal extends BaseModal {
         });
         this.settingsManager = settingsManager;
         this.openRouterClient = openRouterClient;
-        this.taskModelService = new TaskModelService(settingsManager, openRouterClient);
+        this.taskModelService = new TaskModelService(settingsManager);
         this.polishingButtons = [...this.defaultButtons];
     }
 

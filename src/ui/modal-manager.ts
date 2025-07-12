@@ -7,7 +7,6 @@ import { DocumentNode } from '../DocumentNode';
 import { AILogService } from '../AILogService';
 import { createPromptExpansionService } from '../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
-import { getPromptText } from '../PromptManager.js';
 
 // --- Generic Modal Functions ---
 // TODO: Migrate to new modal system

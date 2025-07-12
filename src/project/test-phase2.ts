@@ -2,11 +2,7 @@ import { SettingsManager } from '../SettingsManager';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { LoopOrchestrator } from '../LoopOrchestrator';
 import { DocumentNode } from '../DocumentNode';
-import { ProjectManager } from '../ProjectManager';
 import { TreeService } from './TreeService';
-import { PromptService } from './PromptService';
-import { GenerationService } from './GenerationService';
-import { ContextExtractionService } from './ContextExtractionService';
 import { GenerationController } from './GenerationController';
 import { ProjectPersistenceService } from './ProjectPersistenceService';
 

@@ -115,7 +115,7 @@ export class UnifiedGenerationService {
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
         this.coherenceService = new CoherenceService(dependencies.openRouterClient, dependencies.settingsManager);
-        this.taskModelService = new TaskModelService(dependencies.settingsManager, dependencies.openRouterClient);
+        this.taskModelService = new TaskModelService(dependencies.settingsManager);
     }
 
     /**
