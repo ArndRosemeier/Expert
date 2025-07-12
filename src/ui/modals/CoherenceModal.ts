@@ -1032,7 +1032,7 @@ export class CoherenceModal extends BaseModal {
     override async close(): Promise<void> {
         // Tag all subnodes as consistent to parent before closing
         if (this.parentNode) {
-            this.tagSubnodesAsConsistent();
+            await this.tagSubnodesAsConsistent();
         }
         
         // Remove event listeners
@@ -1051,7 +1051,7 @@ export class CoherenceModal extends BaseModal {
      * Tag all subnodes' master versions with "consistent_to_parent"
      * In comprehensive mode, tags all children from all analyzed parent nodes
      */
-    private tagSubnodesAsConsistent(): void {
+    private async tagSubnodesAsConsistent(): Promise<void> {
         if (!this.parentNode || !this.analysisResult) return;
         
         const isComprehensiveMode = this.analysisResult.analyzedNodes && this.analysisResult.analyzedNodes.length > 1;
@@ -1102,7 +1102,7 @@ export class CoherenceModal extends BaseModal {
         }
         
         // Save the project after tagging
-        this.saveProjectAfterTagging();
+        await this.saveProjectAfterTagging();
     }
 
     /**

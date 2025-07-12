@@ -931,6 +931,12 @@ export class UnifiedGenerationService {
      */
     private async waitForModalClose(modal: any): Promise<void> {
         return new Promise<void>((resolve) => {
+            // Check if modal is already closed
+            if (!modal.isOpen()) {
+                resolve();
+                return;
+            }
+
             // Set up an interval to check if the modal is closed
             const checkClosed = setInterval(() => {
                 if (!modal.isOpen()) {
