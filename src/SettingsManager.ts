@@ -287,10 +287,6 @@ export class SettingsManager {
                         if (!profile.webSearchEnabled) {
                             profile.webSearchEnabled = {};
                         }
-                        // Add default language to existing profiles that don't have it
-                        if (!profile.language) {
-                            profile.language = 'English';
-                        }
                         // Add default task model configs to existing profiles that don't have them
                         if (!profile.taskModelConfigs) {
                             profile.taskModelConfigs = {
@@ -341,7 +337,6 @@ export class SettingsManager {
                 selectedModels: {},
                 webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-                language: 'English',
                 taskModelConfigs: {
                     coherence_analysis: {
                         outline: 'creator' as const,
