@@ -309,6 +309,12 @@ export class SettingsManager {
                             };
                             console.log(`📋 Added default task model configs to profile "${profileName}"`);
                         }
+                        
+                        // Add default language to existing profiles that don't have it
+                        if (!profile.language) {
+                            profile.language = 'English';
+                            console.log(`📋 Added default language to profile "${profileName}"`);
+                        }
                     }
                 });
                 
@@ -337,6 +343,7 @@ export class SettingsManager {
                 selectedModels: {},
                 webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
+                language: 'English', // Add default language
                 taskModelConfigs: {
                     coherence_analysis: {
                         outline: 'creator' as const,
