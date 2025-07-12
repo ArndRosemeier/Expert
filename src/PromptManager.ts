@@ -697,17 +697,19 @@ Analyze the numbered context items and identify those that might be problematic 
 4. **Outdated assumptions** that no longer apply to this part of the document
 5. **Overly specific details** that would be confusing for subnode creation
 
-**Response Format:**
-Return a JSON array of context issues. Each issue MUST have these EXACT field names:
+**RESPONSE FORMAT - CRITICAL:**
+Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+
+Each issue object MUST have these EXACT field names (no variations, abbreviations, or typos):
 - item_number: The number of the problematic context item (from the numbered list above)
 - problematic_context_item: The specific text from the context item that's problematic
 - reason_for_problem: Why this context item would be bad for subnode creation
 - justification: Detailed explanation of the problem and why it needs fixing
 - severity: A number from 1-10 (where 10 is most severe) based on how much this would confuse subnode creation
 
-**CRITICAL: Use these EXACT field names - do not abbreviate or change them!**
+**EXAMPLES:**
 
-Example:
+Example 1 (issues found):
 [
   {
     "item_number": 3,
@@ -715,10 +717,27 @@ Example:
     "reason_for_problem": "Temporal reference that may not apply to current section",
     "justification": "This temporal reference assumes the document is still in planning, but the current section is about implementation details, making this context misleading for subnode creation",
     "severity": 7
+  },
+  {
+    "item_number": 5,
+    "problematic_context_item": "Sarah will handle the marketing campaign next month",
+    "reason_for_problem": "Overly specific detail that doesn't apply to current content",
+    "justification": "This specific task assignment is unrelated to the current node's focus on technical architecture, making it confusing context for technical subnodes",
+    "severity": 4
   }
 ]
 
-If no issues are found, return an empty array: []`.trim(),
+Example 2 (no issues found):
+[]
+
+**CRITICAL INSTRUCTIONS:**
+- Use ONLY the exact field names shown above
+- Your response must be valid JSON that can be parsed by JSON.parse()
+- Do not add any text before or after the JSON array
+- If no issues are found, return exactly: []
+- Test your JSON mentally before responding to ensure it's valid
+
+Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
         description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
     },

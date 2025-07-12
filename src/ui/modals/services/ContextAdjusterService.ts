@@ -75,7 +75,7 @@ export class ContextAdjusterService {
     }
 
     /**
-     * Perform context analysis using AI
+     * Perform context analysis using AI with retry logic
      */
     async analyzeContext(node: DocumentNode, projectManager: ProjectManager): Promise<ContextAnalysisResult> {
         if (!this.isNodeEligible(node, projectManager)) {
@@ -99,53 +99,91 @@ export class ContextAdjusterService {
             .replace(/\{\{numbered_context_items\}\}/g, numberedContextItems)
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
-        try {
-            // Use configurable model based on whether node is leaf or not
-            const isLeaf = !node.children || node.children.length === 0;
-            const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeaf);
-            
-            console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'leaf' : 'branch'} node "${node.title}"`);
-            
-            const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
-            
-            // Parse JSON response
-            const issues = this.parseAnalysisResponse(response);
-            
-            return {
-                issues,
-                hasIssues: issues.length > 0,
-                analysisTimestamp: new Date(),
-                nodeId: node.id,
-                originalContext: node.context || '',
-                contextMismatch: contextCheck.hasMismatch
-            };
-        } catch (error) {
-            console.error('Context analysis failed:', error);
-            throw new Error('Failed to analyze context. Please try again.');
+        // Use configurable model based on whether node is leaf or not
+        const isLeaf = !node.children || node.children.length === 0;
+        const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeaf);
+        
+        console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'leaf' : 'branch'} node "${node.title}"`);
+        
+        // Retry logic (similar to LoopOrchestrator)
+        const maxRetries = 3;
+        let lastResponse = '';
+        let issues: ContextIssue[] | null = null;
+        
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
+                
+                // Parse JSON response
+                issues = this.parseAnalysisResponse(lastResponse);
+                
+                if (issues !== null) {
+                    break; // Success
+                }
+                
+                console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`);
+                
+            } catch (error) {
+                // Check if this is a parsing error (our parseAnalysisResponse method throws)
+                if (error instanceof Error && error.message.includes('parse')) {
+                    console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                    continue; // Try again
+                }
+                
+                // If it's not a parsing error, it's likely a network/API error
+                console.warn(`Context analysis API call failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                
+                // Don't retry on the last attempt
+                if (attempt === maxRetries - 1) {
+                    throw error;
+                }
+            }
         }
+        
+        // If we still don't have issues after all retries, throw an error
+        if (issues === null) {
+            throw new Error(`Context analysis failed after ${maxRetries} retries. The AI response may be malformed.\n\nLast AI Response:\n"${lastResponse}"`);
+        }
+        
+        return {
+            issues,
+            hasIssues: issues.length > 0,
+            analysisTimestamp: new Date(),
+            nodeId: node.id,
+            originalContext: node.context || '',
+            contextMismatch: contextCheck.hasMismatch
+        };
     }
 
     /**
      * Parse AI response and extract context issues
+     * Returns null if parsing fails (for retry logic)
      */
-    private parseAnalysisResponse(response: string): ContextIssue[] {
+    private parseAnalysisResponse(response: string): ContextIssue[] | null {
         try {
             // Try to extract JSON from response
             const jsonMatch = response.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-                throw new Error('No JSON array found in response');
+                console.warn('No JSON array found in response');
+                return null;
             }
 
             const parsed = JSON.parse(jsonMatch[0]);
             
             if (!Array.isArray(parsed)) {
-                throw new Error('Response is not an array');
+                console.warn('Response is not an array');
+                return null;
             }
 
             // Validate and normalize issues
-            return parsed.map((item, index) => {
+            const issues: ContextIssue[] = [];
+            
+            for (let index = 0; index < parsed.length; index++) {
+                const item = parsed[index];
+                
                 if (!item || typeof item !== 'object') {
-                    throw new Error(`Invalid context issue at index ${index}`);
+                    console.warn(`Invalid context issue at index ${index}`);
+                    return null;
                 }
 
                 // Handle possible field name variations for AI typos
@@ -184,15 +222,18 @@ export class ContextAdjusterService {
                         originalItem: item,
                         parsedIssue: issue
                     });
-                    throw new Error(`Missing required fields in context issue at index ${index}`);
+                    return null;
                 }
 
-                return issue;
-            });
+                issues.push(issue);
+            }
+            
+            return issues;
+            
         } catch (error) {
-            console.error('Failed to parse context analysis response:', error);
-            console.error('Response content:', response);
-            throw new Error('Failed to parse analysis results. The AI response may be malformed.');
+            console.warn('Failed to parse context analysis response:', error);
+            console.warn('Response content:', response);
+            return null;
         }
     }
 } 
