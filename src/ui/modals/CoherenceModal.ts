@@ -964,6 +964,13 @@ export class CoherenceModal extends BaseModal {
         const originalText = button.textContent;
         button.textContent = '🔄 Fixing...';
         button.disabled = true;
+        
+        // Log the problem that's about to be fixed
+        console.log(`🔧 MANUAL FIX REQUESTED for "${childNode.title}"`);
+        console.log(`   📋 Problem: ${contradiction.justification}`);
+        console.log(`   ⚖️ Severity: ${contradiction.severity}/10`);
+        console.log(`   📄 Parent says: "${contradiction.fact_in_outline}"`);
+        console.log(`   📝 Child says: "${contradiction.fact_in_expansion}"`);
 
         try {
             // Store original content before fixing
@@ -974,11 +981,15 @@ export class CoherenceModal extends BaseModal {
             const openRouterClient = OpenRouterClient.getInstance();
             const coherenceService = new CoherenceService(openRouterClient, settingsManager);
             
-            // Generate the proposed fix (but don't apply it yet)
+            // Generate the proposed fix (but don't apply it yet) with progress feedback
             const fixedContent = await coherenceService.fixContradiction(
                 actualParentNode,
                 childNode,
-                contradiction
+                contradiction,
+                (message) => {
+                    // Update button text with progress
+                    button.textContent = `🔄 ${message.substring(0, 20)}...`;
+                }
             );
 
             // Store the proposed fix for review
@@ -1080,7 +1091,7 @@ export class CoherenceModal extends BaseModal {
                         masterVersion.tags.add('consistent_to_parent');
                         masterVersion.timestamp = new Date(); // Update timestamp
                         taggedCount++;
-                        console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+    
                     } else {
                         console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
                     }

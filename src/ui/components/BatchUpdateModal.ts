@@ -711,7 +711,7 @@ export class BatchUpdateModal {
                     if (versionId) {
                         try {
                             node.promoteToMaster(versionId);
-                            console.log(`🔧 Promoted to master for "${node.title}": SUCCESS`);
+        
                         } catch (error) {
                             console.error(`🔧 Promotion failed for "${node.title}":`, error);
                             this.appendLog(`⚠️ ${node.title}`, 'error', `Version created but promotion to master failed: ${error instanceof Error ? error.message : String(error)}`);

@@ -290,8 +290,21 @@ export class CoherenceService {
     async fixContradiction(
         parentNode: DocumentNode,
         childNode: DocumentNode,
-        contradiction: CoherenceContradiction
+        contradiction: CoherenceContradiction,
+        onProgress?: (message: string) => void
     ): Promise<string> {
+        // Log the problem that's about to be fixed
+        console.log(`🔧 FIXING CONTRADICTION in "${childNode.title}"`);
+        console.log(`   📋 Problem: ${contradiction.justification}`);
+        console.log(`   ⚖️ Severity: ${contradiction.severity}/10`);
+        console.log(`   📄 Parent says: "${contradiction.fact_in_outline}"`);
+        console.log(`   📝 Child says: "${contradiction.fact_in_expansion}"`);
+        
+        // Emit progress feedback
+        if (onProgress) {
+            onProgress(`Analyzing contradiction in "${childNode.title}"...`);
+        }
+        
         const prompts = this.settingsManager.getPrompts();
         
         // Create fix prompt
@@ -310,13 +323,26 @@ export class CoherenceService {
             const isLeaf = !childNode.children || childNode.children.length === 0;
             const modelPurpose = this.taskModelService.getModelPurposeForTask('fix_contradiction', isLeaf);
             
-            console.log(`🔧 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'leaf' : 'branch'} node "${childNode.title}"`);
+            console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'leaf' : 'branch'} node "${childNode.title}"`);
+            
+            if (onProgress) {
+                onProgress(`Generating fix using ${modelPurpose} model...`);
+            }
             
             const response = await this.openRouterClient.chat(modelPurpose, fixPrompt);
+            
+            console.log(`✅ Generated fix for "${childNode.title}" (${response.length} characters)`);
+            
+            if (onProgress) {
+                onProgress(`Fix generated successfully for "${childNode.title}"`);
+            }
             
             return response.trim();
         } catch (error) {
             console.error('Failed to fix contradiction:', error);
+            if (onProgress) {
+                onProgress(`Failed to generate fix: ${error}`);
+            }
             throw new Error('Failed to fix contradiction. Please try again.');
         }
     }
@@ -372,7 +398,12 @@ export class CoherenceService {
         const fixedContradictions: CoherenceContradiction[] = [];
         const failedContradictions: CoherenceContradiction[] = [];
         
-        for (const contradiction of toAutofix) {
+        console.log(`🔧 Starting autofix process for ${toAutofix.length} contradiction(s) in "${node.title}"`);
+        
+        for (let i = 0; i < toAutofix.length; i++) {
+            const contradiction = toAutofix[i];
+            if (!contradiction) continue;
+            
             try {
                 // Find the child node
                 const childNode = node.children.find(child => child.id === contradiction.offending_child_id);
@@ -382,17 +413,21 @@ export class CoherenceService {
                     continue;
                 }
                 
-                // Generate the fix
-                const fixedContent = await this.fixContradiction(node, childNode, contradiction);
+                console.log(`🔧 [${i + 1}/${toAutofix.length}] Auto-fixing contradiction in "${childNode.title}"`);
+                
+                // Generate the fix with progress callback
+                const fixedContent = await this.fixContradiction(node, childNode, contradiction, (message) => {
+                    console.log(`   ⚡ ${message}`);
+                });
                 
                 // Apply the fix automatically
                 childNode.setContent(fixedContent, 'autofix');
                 
-                console.log(`✅ Automatically fixed contradiction in "${childNode.title}" (severity ${contradiction.severity})`);
+                console.log(`✅ [${i + 1}/${toAutofix.length}] Successfully auto-fixed contradiction in "${childNode.title}" (severity ${contradiction.severity})`);
                 fixedContradictions.push(contradiction);
                 
             } catch (error) {
-                console.error(`Failed to automatically fix contradiction in "${contradiction.offending_child_title}":`, error);
+                console.error(`❌ [${i + 1}/${toAutofix.length}] Failed to automatically fix contradiction in "${contradiction.offending_child_title}":`, error);
                 failedContradictions.push(contradiction);
                 
                 // Log the failed fix
@@ -401,6 +436,13 @@ export class CoherenceService {
                     coherenceLog.logCoherenceIssue(projectId, node, contradiction, 'autofix_failed', autofixSeverity);
                 }
             }
+        }
+        
+        if (fixedContradictions.length > 0) {
+            console.log(`✅ Autofix completed: ${fixedContradictions.length}/${toAutofix.length} contradictions fixed successfully`);
+        }
+        if (failedContradictions.length > 0) {
+            console.log(`⚠️ Autofix partial failure: ${failedContradictions.length}/${toAutofix.length} contradictions could not be fixed`);
         }
         
         // Update the analysis result to reflect the fixes

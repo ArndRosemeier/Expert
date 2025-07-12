@@ -110,7 +110,7 @@ export class UnifiedGenerationService {
     };
     
     // Track which parents have already been coherence-analyzed to prevent duplicates
-    private analyzedParents: Set<string> = new Set();
+
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -129,7 +129,6 @@ export class UnifiedGenerationService {
             analyzedNodes: [],
             totalAnalyzed: 0
         };
-        this.analyzedParents.clear();
         
         // Validate levels
         this.validateLevels(levels);
@@ -155,9 +154,6 @@ export class UnifiedGenerationService {
             throw new Error('Failed to start generation operation - another operation is already running');
         }
 
-        // Don't set spinner on initial node - let individual work items handle it
-        console.log(`🚀 UnifiedGenerationService: Starting generation for "${startNode.title}" (${startNodeId})`);
-
         try {
             // Initialize work queue with all nodes that might need work (KISS principle)
             const workQueue: WorkItem[] = [];
@@ -172,11 +168,11 @@ export class UnifiedGenerationService {
                     nodeId: node.id,
                     level: node.level,
                     parentId: node.parentId,
-                    isLastChild: false // Will be updated during processing
+                    isLastChild: false // Will be updated by updateIsLastChildFlags
                 });
             });
 
-            console.log(`📋 Added ${workQueue.length} nodes to work queue (levels ${startNode.level}-${maxLevel})`);
+
 
             // Process work queue
             await this.processWorkQueue(workQueue, levels);
@@ -184,11 +180,6 @@ export class UnifiedGenerationService {
             // Tree updates now happen after each individual node completion
             // Complete operation with coordinator for UI cleanup
             this.deps.generationCoordinator.completeOperation(operationId, true);
-            
-            // Emit generation complete event for success
-            console.log(`✅ UnifiedGenerationService: Generation completed successfully for "${startNode.title}" (${startNodeId})`);
-
-            console.log('🎉 Unified generation completed successfully');
             
             // After generation completes, check for collected contradictions
             await this.showCollectedContradictions();
@@ -209,7 +200,6 @@ export class UnifiedGenerationService {
                 analyzedNodes: [],
                 totalAnalyzed: 0
             };
-            this.analyzedParents.clear();
         }
     }
 
@@ -226,10 +216,12 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Process the work queue using true breadth-first traversal by level and phase
+     * Process the work queue using simple breadth-first traversal with two-pass system
+     * Pass 1: Fix content, context, coherence (canExpand = false)
+     * Pass 2: Create children from finalized content (canExpand = true)
      */
     private async processWorkQueue(workQueue: WorkItem[], levels: GenerationLevels): Promise<void> {
-        // Group work items by level for true breadth-first processing
+        // Group work items by level for breadth-first processing
         const workItemsByLevel = new Map<number, WorkItem[]>();
         
         // Initial grouping
@@ -247,7 +239,6 @@ export class UnifiedGenerationService {
         while (true) {
             // Check for abort at the start of each main loop iteration
             if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                console.log('🛑 UnifiedGenerationService: Abort detected in main loop');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -257,7 +248,6 @@ export class UnifiedGenerationService {
                 .sort((a, b) => a - b);
 
             if (unprocessedLevels.length === 0) {
-                console.log('No more levels to process');
                 break;
             }
 
@@ -270,8 +260,6 @@ export class UnifiedGenerationService {
                 continue;
             }
 
-            console.log(`🔄 Processing level ${level} (${levelItems.length} nodes)`);
-            
             // Show any accumulated contradictions from the previous level before proceeding
             if (processedLevels.size > 0) {
                 const previousLevel = Math.max(...Array.from(processedLevels));
@@ -280,11 +268,18 @@ export class UnifiedGenerationService {
                 }
             }
 
-            // Process this level in phases for true breadth-first
-            const newWorkItems = await this.processLevelInPhases(levelItems, levels, totalProcessed, totalItems);
+            // Two-pass processing for each level
+            // Pass 1: Process level with canExpand = false (no draft creation)
+            let newWorkItems = await this.processLevelSimple(levelItems, levels, totalProcessed, totalItems, false);
+            
+            // Pass 2: Go back to start of level with canExpand = true (allow draft creation)
+            const expansionWorkItems = await this.processLevelSimple(levelItems, levels, totalProcessed, totalItems, true);
+            
+            // Combine work items from both passes
+            newWorkItems.push(...expansionWorkItems);
             
             // Add any new work items (children) to the appropriate level groups
-            newWorkItems.forEach(item => {
+            newWorkItems.forEach((item: WorkItem) => {
                 const levelItems = workItemsByLevel.get(item.level) || [];
                 levelItems.push(item);
                 workItemsByLevel.set(item.level, levelItems);
@@ -297,21 +292,18 @@ export class UnifiedGenerationService {
             // Update total items count if new items were added
             if (newWorkItems.length > 0) {
                 totalItems += newWorkItems.length;
-                console.log(`📋 Added ${newWorkItems.length} new work items from level ${level}`);
             }
         }
     }
 
     /**
-     * Process all nodes at a given level in phases (context -> content -> coherence for parents -> draft)
+     * Process all nodes at a given level simply - each node decides what to do based on its state
      */
-    private async processLevelInPhases(levelItems: WorkItem[], levels: GenerationLevels, baseProgress: number, totalItems: number): Promise<WorkItem[]> {
+    private async processLevelSimple(levelItems: WorkItem[], levels: GenerationLevels, baseProgress: number, totalItems: number, canExpand: boolean = false): Promise<WorkItem[]> {
         const newWorkItems: WorkItem[] = [];
         
-        // Phase 1: Context Pruning for all nodes at this level
         for (let i = 0; i < levelItems.length; i++) {
             if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                console.log('🛑 UnifiedGenerationService: Abort detected in context pruning phase');
                 throw new Error('Generation was aborted by user');
             }
 
@@ -323,102 +315,76 @@ export class UnifiedGenerationService {
 
             this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
 
-            if (levels.contextPruneLevel >= node.level) {
-                this.setCurrentWorkingNode(item.nodeId);
-                await this.handleContextPruning(item.nodeId);
-                this.clearCurrentWorkingNode(item.nodeId);
-            }
+            // Each node decides what to do based on its current state
+            const nodeWorkItems = await this.processNodeBasedOnState(node, levels, canExpand);
+            newWorkItems.push(...nodeWorkItems);
         }
 
-        // Phase 2: Content Generation for all nodes at this level
-        for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                console.log('🛑 UnifiedGenerationService: Abort detected in content generation phase');
-                throw new Error('Generation was aborted by user');
-            }
+        return newWorkItems;
+    }
 
-            const item = levelItems[i];
-            if (!item) continue;
+
+
+    /**
+     * Process a single node based on its current state
+     */
+    private async processNodeBasedOnState(node: DocumentNode, levels: GenerationLevels, canExpand: boolean = false): Promise<WorkItem[]> {
+        const newWorkItems: WorkItem[] = [];
+
+        // 1. Context pruning (if needed and not already done) - only during finalization pass
+        if (!canExpand && this.needsContextPruning(node, levels)) {
+            this.setCurrentWorkingNode(node.id);
+            await this.handleContextPruning(node.id);
+            this.clearCurrentWorkingNode(node.id);
+        }
+
+        // 2. Content generation (if needed and not already done) - only during finalization pass
+        if (!canExpand && this.needsContentGeneration(node, levels)) {
+            this.setCurrentWorkingNode(node.id);
+            await this.handleContentGeneration(node.id);
+            this.clearCurrentWorkingNode(node.id);
+        }
+
+        // 3. Draft creation (if needed, not already done, AND canExpand is true)
+        if (canExpand && this.needsDraftCreation(node, levels)) {
+            this.setCurrentWorkingNode(node.id);
+            const draftResult = await this.handleDraftCreation(node.id);
+            this.clearCurrentWorkingNode(node.id);
             
-            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-            if (!node) continue;
-
-            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
-
-            if (levels.contentLevel >= node.level && this.shouldGenerateContent(node)) {
-                this.setCurrentWorkingNode(item.nodeId);
-                await this.handleContentGeneration(item.nodeId);
-                this.clearCurrentWorkingNode(item.nodeId);
-            }
-        }
-
-        // Phase 3: Coherence Check for parent nodes (after content generation for this level)
-        // Check parents of current level nodes that now have content
-        const parentsToCheck = new Set<string>();
-        levelItems.forEach(item => {
-            if (item.parentId && levels.coherenceLevel !== -1) {
-                const parentNode = this.deps.treeService.findNodeById(item.parentId, this.deps.rootNode);
-                if (parentNode && levels.coherenceLevel >= parentNode.level) {
-                    parentsToCheck.add(item.parentId);
-                }
-            }
-        });
-
-        for (const parentId of parentsToCheck) {
-            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                console.log('🛑 UnifiedGenerationService: Abort detected in coherence check phase');
-                throw new Error('Generation was aborted by user');
-            }
-
-            const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
-            if (!parentNode || parentNode.children.length === 0) continue;
-
-            // Prevent duplicate analysis
-            if (!this.analyzedParents.has(parentId)) {
-                console.log(`🔍 Running coherence check for "${parentNode.title}" (children now have content)`);
-                this.analyzedParents.add(parentId);
-                await this.handleCoherenceCheck(parentId, levels);
-            }
-        }
-
-        // Phase 4: Draft Creation for all nodes at this level
-        const draftResults = new Map<string, { childIds: string[]; childrenCreated: boolean }>();
-        
-        for (let i = 0; i < levelItems.length; i++) {
-            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                console.log('🛑 UnifiedGenerationService: Abort detected in draft creation phase');
-                throw new Error('Generation was aborted by user');
-            }
-
-            const item = levelItems[i];
-            if (!item) continue;
-            
-            const node = this.deps.treeService.findNodeById(item.nodeId, this.deps.rootNode);
-            if (!node) continue;
-
-            this.updateTopLevelProgress(baseProgress + i + 1, totalItems, node);
-
-            if (node.level < levels.draftLevel) {
-                this.setCurrentWorkingNode(item.nodeId);
-                const draftResult = await this.handleDraftCreation(item.nodeId);
-                draftResults.set(item.nodeId, draftResult);
-                this.clearCurrentWorkingNode(item.nodeId);
-                
-                // Add newly created children to work queue
+            // Add newly created children to work queue
+            if (draftResult.childrenCreated) {
                 const maxWorkLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
                 
-                for (let j = 0; j < draftResult.childIds.length; j++) {
-                    const childId = draftResult.childIds[j];
-                    if (!childId) continue;
-                    
+                // Create work items for children
+                for (const childId of draftResult.childIds) {
                     const child = this.deps.treeService.findNodeById(childId, this.deps.rootNode);
                     if (child && child.level <= maxWorkLevel) {
                         newWorkItems.push({
                             nodeId: childId,
                             level: child.level,
-                            parentId: item.nodeId,
-                            isLastChild: j === draftResult.childIds.length - 1
+                            parentId: node.id,
+                            isLastChild: false // No longer used, kept for interface compatibility
                         });
+                    }
+                }
+            }
+        }
+
+        // 4. Coherence checking (if this is the last child of a parent that needs checking) - only during finalization pass
+        if (!canExpand && this.needsCoherenceCheck(node, levels)) {
+            if (node.parentId) {
+                const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+                if (parentNode) {
+                    // Add coherence-checking tag to prevent duplicate checks
+                    parentNode.setContent(parentNode.content, 'coherence-checking');
+                    
+                    await this.handleCoherenceCheck(node.parentId, levels);
+                    
+                    // Replace coherence-checking tag with coherence-checked tag
+                    const masterVersion = parentNode.getMasterVersion();
+                    if (masterVersion) {
+                        masterVersion.tags.delete('coherence-checking');
+                        masterVersion.tags.add('coherence-checked');
                     }
                 }
             }
@@ -426,6 +392,65 @@ export class UnifiedGenerationService {
 
         return newWorkItems;
     }
+
+    /**
+     * Check if node needs context pruning
+     */
+    private needsContextPruning(node: DocumentNode, levels: GenerationLevels): boolean {
+        if (levels.contextPruneLevel < node.level) return false;
+        if (node.level === 0 || !node.parentId) return false; // Skip root nodes
+        return !this.isMasterContextAlreadyAdjusted(node);
+    }
+
+    /**
+     * Check if node needs content generation  
+     */
+    private needsContentGeneration(node: DocumentNode, levels: GenerationLevels): boolean {
+        if (levels.contentLevel < node.level) return false;
+        return this.shouldGenerateContent(node);
+    }
+
+    /**
+     * Check if node needs draft creation
+     */
+    private needsDraftCreation(node: DocumentNode, levels: GenerationLevels): boolean {
+        if (node.level >= levels.draftLevel) return false;
+        return node.children.length === 0; // Only create if no children exist
+    }
+
+    /**
+     * Check if coherence check is needed (when this is the last child of a parent)
+     */
+    private needsCoherenceCheck(node: DocumentNode, levels: GenerationLevels): boolean {
+        if (levels.coherenceLevel === -1) return false;
+        if (!node.parentId) return false;
+        
+        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+        if (!parentNode) return false;
+        
+        // Only check if coherence level covers the parent's level
+        if (levels.coherenceLevel < parentNode.level) return false;
+        
+        // Check if parent already has coherence check tag
+        const masterVersion = parentNode.getMasterVersion();
+        if (!masterVersion || masterVersion.tags.has('coherence-checked') || masterVersion.tags.has('coherence-checking')) {
+            return false;
+        }
+        
+        // Check if all siblings are "done" (have content or are drafts)
+        const allSiblingsReady = parentNode.children.every(child => {
+            const childContent = child.content && child.content.trim().length > 0;
+            return childContent;
+        });
+        
+        // Only trigger if this is actually the last child in the tree structure
+        const isLastChildInTree = parentNode.children.length > 0 && 
+                                 parentNode.children[parentNode.children.length - 1]?.id === node.id;
+        
+        return allSiblingsReady && isLastChildInTree;
+    }
+
+
 
 
 
@@ -435,7 +460,6 @@ export class UnifiedGenerationService {
     private async handleContextPruning(nodeId: string): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            console.log('🛑 UnifiedGenerationService: Abort detected in handleContextPruning');
             throw new Error('Generation was aborted by user');
         }
 
@@ -444,13 +468,11 @@ export class UnifiedGenerationService {
 
         // Skip auto-pruning for project root nodes (no inherited context to clean)
         if (node.level === 0 || !node.parentId) {
-            console.log(`⏭️ Skipping auto-prune for "${node.title}" - project root node`);
             return;
         }
 
         // Check if context has already been AI-adjusted (skip if so)
         if (this.isMasterContextAlreadyAdjusted(node)) {
-            console.log(`⏭️ Skipping auto-prune for "${node.title}" - master context already AI-adjusted`);
             return;
         }
 
@@ -469,8 +491,6 @@ export class UnifiedGenerationService {
             const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
             const contextAdjuster = new ContextAdjusterModal();
             
-            console.log(`🔧 Auto-pruning context for "${node.title}"`);
-            
             // Update progress mid-way
             this.currentOperationProgress = {
                 current: 2,
@@ -488,12 +508,6 @@ export class UnifiedGenerationService {
                 message: contextChanged ? `Auto-pruned context for "${node.title}"` : `No context issues found for "${node.title}"`
             };
             this.emitUnifiedProgress();
-            
-            if (contextChanged) {
-                console.log(`🔧 Auto-pruned context for "${node.title}"`);
-            } else {
-                console.log(`✅ No context issues found for "${node.title}"`);
-            }
         } catch (error) {
             // Check if this is an abort error - if so, propagate it immediately
             if (error instanceof Error && (
@@ -501,7 +515,6 @@ export class UnifiedGenerationService {
                 error.message.includes('Request was aborted') ||
                 error.name === 'AbortError'
             )) {
-                console.log(`🛑 UnifiedGenerationService: Context pruning aborted for "${node.title}"`);
                 throw error; // Propagate abort errors
             }
             
@@ -721,8 +734,6 @@ export class UnifiedGenerationService {
         try {
             // Check if node is eligible for coherence analysis
             if (!this.coherenceService.isNodeEligible(parentNode)) {
-                const reason = this.coherenceService.getIneligibilityReason(parentNode);
-                console.log(`⏭️ Skipping coherence check for "${parentNode.title}" - ${reason}`);
                 return;
             }
 
@@ -732,8 +743,15 @@ export class UnifiedGenerationService {
             this.emitUnifiedProgress();
 
             // Emit coherence analysis started event
-            console.log(`🔍 Starting coherence analysis for "${parentNode.title}"`);
             this.deps.eventEmitter.emit('coherenceAnalysisStarted', { nodeId: parentId, node: parentNode });
+
+            // Update progress for coherence analysis phase
+            this.currentStageProgress = {
+                current: 1,
+                total: levels.autofixSeverity !== -1 ? 2 : 1, // 2 stages if autofix enabled, 1 if not
+                message: 'Analyzing coherence...'
+            };
+            this.emitUnifiedProgress();
 
             // Use autofix-enabled analysis if autofix severity is set
             const result = await this.coherenceService.analyzeCoherenceWithAutofix(
@@ -742,6 +760,22 @@ export class UnifiedGenerationService {
                 true, // isAutomaticMode = true (triggered by generation)
                 this.deps.rootNode.id // projectId
             );
+            
+            // Update progress after analysis/fixing is complete
+            if (levels.autofixSeverity !== -1 && result.hasContradictions) {
+                this.currentStageProgress = {
+                    current: 2,
+                    total: 2,
+                    message: 'Coherence analysis and autofix completed'
+                };
+            } else {
+                this.currentStageProgress = {
+                    current: 1,
+                    total: 1,
+                    message: 'Coherence analysis completed'
+                };
+            }
+            this.emitUnifiedProgress();
             
             // Emit coherence analysis complete event
             this.deps.eventEmitter.emit('coherenceAnalysisComplete', { 
@@ -752,24 +786,17 @@ export class UnifiedGenerationService {
             });
             
             if (!result.hasContradictions) {
-                console.log(`✅ Coherence check passed for "${parentNode.title}" (no contradictions found)`);
                 // Track nodes that were analyzed (even if no contradictions found)
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
             } else {
                 // When autofix is enabled, never accumulate contradictions - handle them all automatically
                 if (levels.autofixSeverity !== -1) {
-                    console.log(`🤖 Autofix enabled: All contradictions for "${parentNode.title}" handled automatically (fixed or logged)`);
-                    if (result.autofixSummary) {
-                        console.log(`📊 Autofix summary: ${result.autofixSummary.fixedCount} fixed, ${result.autofixSummary.loggedCount} logged, ${result.autofixSummary.failedCount} failed fixes`);
-                    }
                     // Track nodes that were analyzed but don't accumulate contradictions
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
                 } else {
                     // Only when autofix is disabled do we accumulate contradictions for modal display
-                    console.log(`⚠️ Coherence issues found for "${parentNode.title}" (${result.contradictions.length} contradictions) - accumulating for level transition`);
-                    
                     // Merge new contradictions into accumulated result with parent node context
                     const contradictionsWithContext = result.contradictions.map((contradiction: any) => ({
                         ...contradiction,
@@ -781,8 +808,6 @@ export class UnifiedGenerationService {
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
                     this.accumulatedContradictions.hasContradictions = true;
-                    
-                    console.log(`📋 Accumulated contradictions for "${parentNode.title}" - total contradictions: ${this.accumulatedContradictions.contradictions.length} from ${this.accumulatedContradictions.totalAnalyzed} nodes`);
                 }
             }
             
@@ -799,8 +824,9 @@ export class UnifiedGenerationService {
             
             // Continue with generation even if coherence check fails
         } finally {
-            // Clear operation type after coherence check
+            // Clear operation type and stage progress after coherence check
             this.currentOperationType = null;
+            this.currentStageProgress = null;
             this.emitUnifiedProgress();
         }
     }
@@ -810,14 +836,8 @@ export class UnifiedGenerationService {
      */
     private async showAccumulatedContradictionsForLevelTransition(fromLevel: number, toLevel: number): Promise<void> {
         if (!this.accumulatedContradictions.hasContradictions) {
-            console.log(`🔍 No accumulated contradictions found when transitioning from level ${fromLevel} to level ${toLevel}`);
             return;
         }
-
-        const totalContradictions = this.accumulatedContradictions.contradictions.length;
-        const totalNodes = this.accumulatedContradictions.totalAnalyzed;
-        
-        console.log(`🔄 Showing accumulated contradictions for level transition (${fromLevel} → ${toLevel}): ${totalContradictions} contradictions from ${totalNodes} nodes`);
 
         try {
             // Create a comprehensive analysis result with all accumulated contradictions
@@ -834,8 +854,6 @@ export class UnifiedGenerationService {
             
             // Show one comprehensive modal - use the first analyzed node as the "parent" for modal purposes
             if (representativeNode) {
-                console.log(`🔍 Showing level transition coherence modal with ${totalContradictions} contradictions from ${totalNodes} nodes`);
-                
                 // Import and create the coherence modal
                 const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
                 const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
@@ -846,12 +864,8 @@ export class UnifiedGenerationService {
                 // Update with results
                 coherenceModal.updateWithResults(comprehensiveResult);
                 
-                console.log(`🔍 Level transition coherence modal opened with ${totalContradictions} contradictions - waiting for user to close`);
-                
                 // Wait for the modal to be closed by the user
                 await this.waitForModalClose(coherenceModal);
-                
-                console.log(`✅ Level transition coherence modal closed - user reviewed ${totalContradictions} contradictions`);
             }
             
         } catch (error) {
@@ -873,8 +887,6 @@ export class UnifiedGenerationService {
             analyzedNodes: [],
             totalAnalyzed: 0
         };
-        
-        console.log(`✅ Cleared accumulated contradictions after level transition display`);
     }
 
     /**
@@ -891,8 +903,6 @@ export class UnifiedGenerationService {
             
             // Update with results
             coherenceModal.updateWithResults(result);
-            
-            console.log(`🔍 Coherence modal opened for "${parentNode.title}" with ${result.contradictions.length} contradictions - waiting for user to close`);
             
             // Wait for the modal to be closed by the user
             // The modal's close() method is called when user clicks close, backdrop, or escape
@@ -1027,7 +1037,7 @@ export class UnifiedGenerationService {
                     masterVersion.timestamp = new Date(); // Update timestamp
                     nodeTaggedCount++;
                     totalTaggedCount++;
-                    console.log(`🏷️ Tagged "${childNode.title}" master version as consistent_to_parent`);
+
                 } else {
                     console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
                 }
@@ -1109,6 +1119,17 @@ export class UnifiedGenerationService {
             if (node) {
                 const isLeafNode = !node.children || node.children.length === 0;
                 const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
+                const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
+                return this.formatModelName(modelName);
+            }
+        }
+        
+        if (this.currentOperationType === 'context' && this.currentNodeId) {
+            // For context adjustment, use TaskModelService to get the correct model
+            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
+            if (node) {
+                const isLeafNode = !node.children || node.children.length === 0;
+                const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeafNode);
                 const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
                 return this.formatModelName(modelName);
             }
@@ -1360,9 +1381,9 @@ export class UnifiedGenerationService {
                 
                 // Log success or partial success
                 if (result.success) {
-                    console.log(`✅ Content generation completed for: "${node.title}" (all criteria met)`);
+                    // Content generation completed successfully
                 } else {
-                    console.log(`⚠️ Content generation completed for: "${node.title}" (best iteration selected)`);
+                    // Content generation completed with best iteration
                 }
                 
                 // Update tree after each node completion so user sees progress
@@ -1471,7 +1492,6 @@ export class UnifiedGenerationService {
 
         // Primary check: if master version has the context_ai_adjusted tag, skip analysis
         if (masterVersion.tags.has('context_ai_adjusted')) {
-            console.log(`🔍 Master version already has context_ai_adjusted tag, skipping analysis for "${node.title}"`);
             return true;
         }
 
@@ -1486,7 +1506,6 @@ export class UnifiedGenerationService {
 
         // If no versions have been AI-adjusted, then master context needs adjustment
         if (adjustedVersions.length === 0) {
-            console.log(`🔍 Master version has no context_ai_adjusted tag and no previously adjusted versions found, analysis needed for "${node.title}"`);
             return false;
         }
 
@@ -1494,13 +1513,11 @@ export class UnifiedGenerationService {
         // If so, the master context is effectively already adjusted
         for (const adjustedVersion of adjustedVersions) {
             if (adjustedVersion.context === masterContext) {
-                console.log(`🔍 Master context matches AI-adjusted version (${adjustedVersion.id.substring(0, 8)}...), skipping analysis for "${node.title}"`);
                 return true;
             }
         }
 
         // Master context differs from all AI-adjusted versions, needs adjustment
-        console.log(`🔍 Master context differs from all ${adjustedVersions.length} AI-adjusted version(s), analysis needed for "${node.title}"`);
         return false;
     }
 
@@ -1519,30 +1536,21 @@ export class UnifiedGenerationService {
      * Filter criteria for node type (copied from GenerationService)
      */
     private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
-        console.log(`🔍 UnifiedGenerationService: Filtering criteria for ${isLeafNode ? 'leaf' : 'branch'} node`);
-        console.log(`📋 Original criteria count: ${criteria.length}`);
-        
         const filtered = criteria.filter(criterion => {
             // If both outline and leaf are undefined, include by default (legacy criteria)
             if (criterion.outline === undefined && criterion.leaf === undefined) {
-                console.log(`  ✅ "${criterion.name}" (no node type restrictions - legacy)`);
                 return true;
             }
             
             // For leaf nodes, include criteria where leaf is true
             if (isLeafNode) {
-                const include = criterion.leaf === true;
-                console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf}, outline: ${criterion.outline})`);
-                return include;
+                return criterion.leaf === true;
             }
             
             // For outline/branch nodes, include criteria where outline is true
-            const include = criterion.outline === true;
-            console.log(`  ${include ? '✅' : '❌'} "${criterion.name}" (leaf: ${criterion.leaf}, outline: ${criterion.outline})`);
-            return include;
+            return criterion.outline === true;
         });
         
-        console.log(`📋 Filtered criteria count: ${filtered.length}`);
         return filtered;
     }
 

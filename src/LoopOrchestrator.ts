@@ -655,10 +655,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
         const criteriaJson = formatCriteriaAsJson(criteria);
         
-        // Log criteria information for debugging
-        console.log(`🔍 LoopOrchestrator: Creating rater prompt with ${criteria.length} criteria`);
-        console.log(`📋 Raw criteria:`, criteria.map(c => `${c.name} (goal: ${c.goal})`));
-        console.log(`🔤 Formatted criteria JSON for {{criteria}} placeholder:`, criteriaJson);
+
         
         const context = PromptContextBuilder.fromLegacyParams(
             { getLanguage: () => this.language, getCriteria: () => [] } as any,
