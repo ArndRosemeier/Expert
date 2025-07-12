@@ -109,6 +109,20 @@ export class ContextItemsEditorModal extends BaseModal {
                 .btn-success:hover {
                     background-color: #218838;
                 }
+                .btn-warning {
+                    background-color: #ffc107;
+                    color: #212529;
+                }
+                .btn-warning:hover {
+                    background-color: #e0a800;
+                }
+                .btn-info {
+                    background-color: #17a2b8;
+                    color: white;
+                }
+                .btn-info:hover {
+                    background-color: #138496;
+                }
                 .empty-state {
                     text-align: center;
                     padding: 2rem;
@@ -221,6 +235,12 @@ export class ContextItemsEditorModal extends BaseModal {
                         <button type="button" class="btn-danger btn-small" data-action="remove-item" data-index="${index}">
                             🗑️ Remove
                         </button>
+                        <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${index}">
+                            ↗️ Propagate
+                        </button>
+                        <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${index}">
+                            🗑️ Remove Recursively
+                        </button>
                     </div>
                 </div>
                 <textarea class="context-item-textarea" data-index="${index}" placeholder="Enter context item content...">${item}</textarea>
@@ -283,6 +303,28 @@ export class ContextItemsEditorModal extends BaseModal {
                 this.cleanupHandlers
             );
         });
+
+        // Add handlers for propagate buttons
+        const propagateButtons = this.element.querySelectorAll('[data-action="propagate"]');
+        propagateButtons.forEach(button => {
+            addEventListenerWithCleanup(
+                button,
+                'click',
+                (e) => this.handlePropagateItem(e),
+                this.cleanupHandlers
+            );
+        });
+
+        // Add handlers for remove recursively buttons
+        const removeRecursivelyButtons = this.element.querySelectorAll('[data-action="remove-recursively"]');
+        removeRecursivelyButtons.forEach(button => {
+            addEventListenerWithCleanup(
+                button,
+                'click',
+                (e) => this.handleRemoveRecursivelyItem(e),
+                this.cleanupHandlers
+            );
+        });
     }
 
     private autoResizeTextarea(textarea: HTMLTextAreaElement): void {
@@ -331,6 +373,145 @@ export class ContextItemsEditorModal extends BaseModal {
             this.isDirty = true;
             this.refreshItemsList();
         }
+    }
+
+    private handlePropagateItem(e: Event): void {
+        const button = e.target as HTMLButtonElement;
+        const index = parseInt(button.dataset['index'] || '0');
+        const itemToPropagateText = this.contextItems[index];
+        
+        if (!itemToPropagateText || !itemToPropagateText.trim()) {
+            alert('Cannot propagate empty context item.');
+            return;
+        }
+
+        // Confirm action
+        if (!confirm(`Are you sure you want to propagate this context item to all descendant nodes?\n\nItem: "${itemToPropagateText.substring(0, 100)}${itemToPropagateText.length > 100 ? '...' : ''}"`)) {
+            return;
+        }
+
+        // Propagate to all descendants
+        const propagatedCount = this.propagateItemToDescendants(itemToPropagateText.trim());
+        
+        if (propagatedCount > 0) {
+            alert(`Context item propagated to ${propagatedCount} descendant node(s).`);
+        } else {
+            alert('No descendant nodes found to propagate to.');
+        }
+    }
+
+    private handleRemoveRecursivelyItem(e: Event): void {
+        const button = e.target as HTMLButtonElement;
+        const index = parseInt(button.dataset['index'] || '0');
+        const itemToRemoveText = this.contextItems[index];
+        
+        if (!itemToRemoveText || !itemToRemoveText.trim()) {
+            alert('Cannot remove empty context item.');
+            return;
+        }
+
+        // Confirm action
+        if (!confirm(`Are you sure you want to remove this context item from all descendant nodes?\n\nItem: "${itemToRemoveText.substring(0, 100)}${itemToRemoveText.length > 100 ? '...' : ''}"`)) {
+            return;
+        }
+
+        // Remove from all descendants
+        const removedCount = this.removeItemFromDescendants(itemToRemoveText.trim());
+        
+        if (removedCount > 0) {
+            alert(`Context item removed from ${removedCount} descendant node(s).`);
+        } else {
+            alert('No descendant nodes found with this context item.');
+        }
+    }
+
+    private propagateItemToDescendants(itemText: string): number {
+        let propagatedCount = 0;
+        
+        // Recursively traverse all descendants
+        const propagateRecursively = (node: DocumentNode) => {
+            for (const child of node.children) {
+                // Get current context items from the child
+                const childContextItems = getContextItems(child.context || '');
+                
+                // Check if this item is already present (case-insensitive and trimmed comparison)
+                const normalizedItemText = itemText.toLowerCase().trim();
+                const alreadyPresent = childContextItems.some(existingItem => 
+                    existingItem.toLowerCase().trim() === normalizedItemText
+                );
+                
+                if (!alreadyPresent) {
+                    // Add the item to the child's context
+                    const updatedItems = [...childContextItems, itemText];
+                    const newContext = formatContextItems(updatedItems);
+                    
+                    // Update the child's context with proper tags
+                    child.setContextWithTags(newContext, ['edited', 'context_propagated']);
+                    propagatedCount++;
+                }
+                
+                // Continue recursively to grandchildren
+                propagateRecursively(child);
+            }
+        };
+        
+        propagateRecursively(this.node);
+        
+        // Save the project after propagation
+        if (propagatedCount > 0) {
+            import('../../state').then(({ getActiveProject }) => {
+                const project = getActiveProject();
+                if (project) {
+                    void project.saveToStorage();
+                }
+            });
+        }
+        
+        return propagatedCount;
+    }
+
+    private removeItemFromDescendants(itemText: string): number {
+        let removedCount = 0;
+        
+        // Recursively traverse all descendants
+        const removeRecursively = (node: DocumentNode) => {
+            for (const child of node.children) {
+                // Get current context items from the child
+                const childContextItems = getContextItems(child.context || '');
+                
+                // Filter out the item to remove (case-insensitive and trimmed comparison)
+                const normalizedItemText = itemText.toLowerCase().trim();
+                const filteredItems = childContextItems.filter(existingItem => 
+                    existingItem.toLowerCase().trim() !== normalizedItemText
+                );
+                
+                // If items were removed, update the context
+                if (filteredItems.length < childContextItems.length) {
+                    const newContext = formatContextItems(filteredItems);
+                    
+                    // Update the child's context with proper tags
+                    child.setContextWithTags(newContext, ['edited', 'context_removed']);
+                    removedCount++;
+                }
+                
+                // Continue recursively to grandchildren
+                removeRecursively(child);
+            }
+        };
+        
+        removeRecursively(this.node);
+        
+        // Save the project after removal
+        if (removedCount > 0) {
+            import('../../state').then(({ getActiveProject }) => {
+                const project = getActiveProject();
+                if (project) {
+                    void project.saveToStorage();
+                }
+            });
+        }
+        
+        return removedCount;
     }
 
     private handleAddItem(): void {

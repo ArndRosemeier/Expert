@@ -375,17 +375,7 @@ export class UnifiedGenerationService {
             if (node.parentId) {
                 const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
                 if (parentNode) {
-                    // Add coherence-checking tag to prevent duplicate checks
-                    parentNode.setContent(parentNode.content, 'coherence-checking');
-                    
                     await this.handleCoherenceCheck(node.parentId, levels);
-                    
-                    // Replace coherence-checking tag with coherence-checked tag
-                    const masterVersion = parentNode.getMasterVersion();
-                    if (masterVersion) {
-                        masterVersion.tags.delete('coherence-checking');
-                        masterVersion.tags.add('coherence-checked');
-                    }
                 }
             }
         }
@@ -431,9 +421,15 @@ export class UnifiedGenerationService {
         // Only check if coherence level covers the parent's level
         if (levels.coherenceLevel < parentNode.level) return false;
         
-        // Check if parent already has coherence check tag
-        const masterVersion = parentNode.getMasterVersion();
-        if (!masterVersion || masterVersion.tags.has('coherence-checked') || masterVersion.tags.has('coherence-checking')) {
+        // New approach: Check if ALL children have "consistent_to_parent" tag
+        // If even one child doesn't have this tag, we need to check coherence
+        const allChildrenConsistent = parentNode.children.every(child => {
+            const masterVersion = child.getMasterVersion();
+            return masterVersion && masterVersion.tags.has('consistent_to_parent');
+        });
+        
+        // If all children are already consistent, no need to check
+        if (allChildrenConsistent) {
             return false;
         }
         
