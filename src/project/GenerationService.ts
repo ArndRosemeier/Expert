@@ -1,15 +1,15 @@
 import { DocumentNode } from '../DocumentNode';
 import { LoopOrchestrator, LoopInput, LoopProgress, Rating, RaterProgressPayload } from '../LoopOrchestrator';
 import { SettingsManager } from '../SettingsManager';
-import { OpenRouterClient } from '../OpenRouterClient';
 import { CreatorPayload, QualityCriterion } from '../types';
 import { EventEmitter } from '../EventEmitter';
 import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 import { GenerationController } from './GenerationController';
-import { promptExpansionService } from '../services/PromptExpansionService';
 import { PromptContextBuilder } from '../services/PromptContextBuilder';
+import { createPromptExpansionService } from '../services/PromptExpansionService';
+import { OpenRouterClient } from '../OpenRouterClient';
 
 interface GenerationDependencies {
     treeService: TreeService;
@@ -565,7 +565,8 @@ export class GenerationService {
         const promptContext = PromptContextBuilder.forAnalysis(this.deps.settingsManager, {
             outlineContent: node.content
         });
-        const finalPrompt = promptExpansionService.expandPrompt(prompt, promptContext);
+        const expansionService = createPromptExpansionService(this.deps.settingsManager);
+        const finalPrompt = expansionService.expandPrompt(prompt, promptContext);
 
         // Prompt prepared for LLM
 
@@ -1036,7 +1037,8 @@ export class GenerationService {
 
         const prompts = this.deps.settingsManager.getPrompts();
         const promptContext = PromptContextBuilder.forNode(node, this.deps.settingsManager);
-        const systemPrompt = promptExpansionService.expandPrompt(prompts.summarize_system, promptContext);
+        const expansionService = createPromptExpansionService(this.deps.settingsManager);
+        const systemPrompt = expansionService.expandPrompt(prompts.summarize_system, promptContext);
 
         try {
             node.isGenerating = true;

@@ -8,7 +8,7 @@ import { SettingsManager } from '../SettingsManager';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { EventEmitter } from '../EventEmitter';
 import { PromptContextBuilder } from '../services/PromptContextBuilder';
-import { promptExpansionService } from '../services/PromptExpansionService';
+import { createPromptExpansionService } from '../services/PromptExpansionService';
 import { CoherenceService } from '../ui/modals/services/CoherenceService';
 import { GenerationErrorService } from '../ui/modals/services/GenerationErrorService';
 import { GenerationCoordinator } from './GenerationCoordinator';
@@ -626,7 +626,8 @@ export class UnifiedGenerationService {
             const promptContext = PromptContextBuilder.forAnalysis(this.deps.settingsManager, {
                 outlineContent: node.content
             });
-            const finalPrompt = promptExpansionService.expandPrompt(prompt, promptContext);
+            const expansionService = createPromptExpansionService(this.deps.settingsManager);
+            const finalPrompt = expansionService.expandPrompt(prompt, promptContext);
 
             // Update progress mid-way
             this.currentOperationProgress = {

@@ -1,26 +1,33 @@
+import { SettingsManager } from '../SettingsManager';
+import { OpenRouterClient } from '../OpenRouterClient';
+import { LoopOrchestrator } from '../LoopOrchestrator';
+import { DocumentNode } from '../DocumentNode';
+import { ProjectManager } from '../ProjectManager';
 import { TreeService } from './TreeService';
+import { PromptService } from './PromptService';
+import { GenerationService } from './GenerationService';
+import { ContextExtractionService } from './ContextExtractionService';
 import { GenerationController } from './GenerationController';
 import { ProjectPersistenceService } from './ProjectPersistenceService';
-import { DocumentNode } from '../DocumentNode';
-import { LoopOrchestrator } from '../LoopOrchestrator';
-
-import { OpenRouterClient } from '../OpenRouterClient';
 
 /**
  * Test script to verify Phase 2 services work correctly.
  */
-export function testPhase2Services(): void {
+export async function testPhase2Services(): Promise<void> {
     console.log('🧪 Testing Phase 2 Services...');
     
     // Create test dependencies
     const template = ['Book', 'Chapter', 'Scene'];
     const rootNode = new DocumentNode(0, 'Test Book', null, template);
     const openRouterClient = OpenRouterClient.getInstance();
-    const loopOrchestrator = new LoopOrchestrator(openRouterClient);
+    
+    // Mock SettingsManager for testing
+    const mockSettingsManager = await SettingsManager.getInstance();
+    const loopOrchestrator = new LoopOrchestrator(mockSettingsManager, openRouterClient);
 
     
     // Test GenerationController
-    console.log('🎮 Testing GenerationController...');
+    console.log('�� Testing GenerationController...');
     const treeService = new TreeService();
     const generationController = new GenerationController(loopOrchestrator, treeService);
     
@@ -102,7 +109,7 @@ export function testPhase2Services(): void {
 /**
  * Test integration between Phase 1 and Phase 2 services.
  */
-export function testServiceIntegration(): void {
+export async function testServiceIntegration(): Promise<void> {
     console.log('🔗 Testing Service Integration...');
     
     // Create test data
@@ -118,7 +125,10 @@ export function testServiceIntegration(): void {
     // Test TreeService + GenerationController integration
     const treeService = new TreeService();
     const openRouterClient2 = OpenRouterClient.getInstance();
-    const loopOrchestrator = new LoopOrchestrator(openRouterClient2);
+    
+    // Mock SettingsManager for testing
+    const mockSettingsManager = await SettingsManager.getInstance();
+    const loopOrchestrator = new LoopOrchestrator(mockSettingsManager, openRouterClient2);
     const generationController = new GenerationController(loopOrchestrator, treeService);
     
     // Simulate starting generation on a node

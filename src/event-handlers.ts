@@ -157,7 +157,12 @@ function recreateAndReconfigureServices() {
         client.setSettingsManager(settingsManager);
     }
     
-    const orchestrator = new LoopOrchestrator(client, state.getOrchestratorPrompts() || undefined);
+    const activeProject = state.getActiveProject();
+    if (!activeProject) {
+        throw new Error('No active project');
+    }
+    const projectSettings = activeProject.getSettingsManager();
+    const orchestrator = new LoopOrchestrator(projectSettings, client, state.getOrchestratorPrompts() || undefined);
     state.setOpenRouterClient(client);
     state.setOrchestrator(orchestrator);
     

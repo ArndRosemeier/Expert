@@ -1,10 +1,10 @@
-import { OpenRouterClient, OpenRouterMessage, StreamingCallbacks } from '../OpenRouterClient';
-import { SettingsManager } from '../SettingsManager';
 import { StorageService } from '../StorageService';
 import { DocumentNode } from '../DocumentNode';
-import * as state from '../state';
-import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { SettingsManager } from '../SettingsManager';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
+import { createPromptExpansionService } from '../services/PromptExpansionService.js';
+import { OpenRouterClient, OpenRouterMessage, StreamingCallbacks } from '../OpenRouterClient';
+import * as state from '../state.js';
 
 export interface ChatMessage {
     id: string;
@@ -1115,7 +1115,16 @@ For each suggestion, provide clear justification for why the change would improv
             nodeData: this.customSystemPrompt,
             startingNode: selectedStartingNode
         });
-        const roleplaySystemPrompt = promptExpansionService.expandPrompt(roleplayPrompt, promptContext);
+
+        // Get settings manager from active project
+        const activeProject = state.getActiveProject();
+        if (!activeProject) {
+            throw new Error('No active project for roleplay');
+        }
+        const settingsManager = activeProject.getSettingsManager();
+        const expansionService = createPromptExpansionService(settingsManager);
+        
+        const roleplaySystemPrompt = expansionService.expandPrompt(roleplayPrompt, promptContext);
 
         // Create roleplay message
         const roleplayMessage: ChatMessage = {

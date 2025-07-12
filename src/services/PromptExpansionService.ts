@@ -1,5 +1,6 @@
-import { QualityCriterion } from '../types.js';
+import { QualityCriterion } from '../types';
 import { formatCriteriaAsJson } from '../ProjectUtils';
+import { SettingsManager } from '../SettingsManager';
 
 export interface PlaceholderContext {
     // Node-specific context
@@ -80,8 +81,10 @@ export class PromptExpansionService {
     private globalProviders: Map<string, GlobalPlaceholderProvider> = new Map();
     private contextProviders: Map<string, ContextPlaceholderProvider> = new Map();
     private asyncProviders: Map<string, AsyncPlaceholderProvider> = new Map();
+    private settingsManager: SettingsManager;
     
-    constructor() {
+    constructor(settingsManager: SettingsManager) {
+        this.settingsManager = settingsManager;
         this.registerDefaultProviders();
     }
     
@@ -430,20 +433,13 @@ export class PromptExpansionService {
             description: 'Random UUID for unique identification'
         }));
 
+        // Language placeholder - now global for consistency across all prompts
+        this.registerGlobalPlaceholder('language', () => ({
+            value: this.settingsManager.getLanguage(),
+            description: 'Current project language setting'
+        }));
+
         // Context-dependent placeholders
-        this.registerContextPlaceholder('language', (context) => {
-            const language = context.project!.language!;
-            console.log('🔍 language placeholder expanded:', {
-                language,
-                contextProject: context.project,
-                settingsManagerLanguage: 'NOT_AVAILABLE_HERE'
-            });
-            return {
-                value: language,
-                description: 'Current project language setting'
-            };
-        });
-        
         this.registerContextPlaceholder('project_title', (context) => ({
             value: context.project!.title!,
             description: 'Current project title'
@@ -1065,4 +1061,11 @@ export class PromptExpansionService {
 }
 
 // Global singleton instance
-export const promptExpansionService = new PromptExpansionService(); 
+export let promptExpansionService: PromptExpansionService;
+
+export function createPromptExpansionService(settingsManager: SettingsManager): PromptExpansionService {
+    if (!promptExpansionService) {
+        promptExpansionService = new PromptExpansionService(settingsManager);
+    }
+    return promptExpansionService;
+} 

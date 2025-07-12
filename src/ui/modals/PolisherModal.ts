@@ -4,8 +4,11 @@ import { DiffTool } from '../../DiffTool';
 import { SettingsManager } from '../../SettingsManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { TaskModelService } from '../../services/TaskModelService';
-import { promptExpansionService } from '../../services/PromptExpansionService';
+import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { PromptContextBuilder } from '../../services/PromptContextBuilder';
+import { QualityCriterion } from '../../types';
+import { getPromptText } from '../../PromptManager';
+import * as state from '../../state';
 
 export interface PolishingButton {
     id: string;
@@ -500,8 +503,15 @@ export class PolisherModal extends BaseModal {
             // Build prompt context for centralized expansion
             const promptContext = PromptContextBuilder.forUI(this.settingsManager);
             
-            // Use centralized async expansion (handles all input variants)
-            const processedDetail = await promptExpansionService.expandPromptAsync(detail, promptContext);
+            // Get settings manager from active project
+            const activeProject = state.getActiveProject();
+            if (!activeProject) {
+                throw new Error('No active project for polishing');
+            }
+            const settingsManager = activeProject.getSettingsManager();
+            const expansionService = createPromptExpansionService(settingsManager);
+            
+            const processedDetail = await expansionService.expandPromptAsync(detail, promptContext);
             return processedDetail;
             
         } catch (error) {

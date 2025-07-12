@@ -3,7 +3,7 @@ import { SelectableNodeTree } from './SelectableNodeTree.js';
 import { OpenRouterClient } from '../../OpenRouterClient.js';
 import * as state from '../../state.js';
 import { getPromptText } from '../../PromptManager.js';
-import { promptExpansionService } from '../../services/PromptExpansionService.js';
+import { createPromptExpansionService } from '../../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../../services/PromptContextBuilder.js';
 
 const MODEL_PURPOSES = [
@@ -632,7 +632,7 @@ export class BatchUpdateModal {
                         originalText: originalString
                     }
                 );
-                const prompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
+                const prompt = createPromptExpansionService(settingsManager).expandPrompt(promptTemplate, promptContext);
 
                 this.appendLog(`🔄 Processing string ${progress}`, 'success', `Processing: "${originalString.substring(0, 100)}${originalString.length > 100 ? '...' : ''}"`);
                 

@@ -7,9 +7,10 @@ import {
     EditActionConfig, 
     EditContext 
 } from '../types/ReaderEditingTypes';
-import { promptExpansionService } from '../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 import { formatCriteriaAsJson } from '../ProjectUtils';
+import { createPromptExpansionService } from '../services/PromptExpansionService.js';
+import * as state from '../state.js';
 
 /**
  * ReaderEditManager handles AI-powered editing actions within the reader view.
@@ -254,8 +255,15 @@ export class ReaderEditManager {
                 promptContext.ui = { selected: context.selection.text };
             }
             
-            // Use centralized async expansion (handles both regular and interactive placeholders)
-            const filledPrompt = await promptExpansionService.expandPromptAsync(promptTemplate, promptContext);
+            // Get settings manager from active project
+            const activeProject = state.getActiveProject();
+            if (!activeProject) {
+                throw new Error('No active project for text expansion');
+            }
+            const settingsManager = activeProject.getSettingsManager();
+            const expansionService = createPromptExpansionService(settingsManager);
+            
+            const filledPrompt = await expansionService.expandPromptAsync(promptTemplate, promptContext);
             return filledPrompt;
             
         } catch (error) {

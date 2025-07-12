@@ -1,7 +1,7 @@
-import { DocumentNode } from '../DocumentNode.js';
+import { DocumentNode } from '../DocumentNode';
 import { SettingsManager } from '../SettingsManager.js';
 import { QualityCriterion } from '../types.js';
-import { promptExpansionService } from '../services/PromptExpansionService.js';
+import { createPromptExpansionService } from '../services/PromptExpansionService.js';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 
 /**
@@ -90,7 +90,8 @@ Please improve and expand this content.`;
             promptContext.analysis = analysisContext.analysis!;
         }
         
-        const filledPrompt = promptExpansionService.expandPrompt(promptTemplate, promptContext);
+        const expansionService = createPromptExpansionService(this.settingsManager);
+        const filledPrompt = expansionService.expandPrompt(promptTemplate, promptContext);
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {

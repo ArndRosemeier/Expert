@@ -1,11 +1,12 @@
-import { OpenRouterClient } from './OpenRouterClient';
-import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
-import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { EventEmitter } from './EventEmitter';
-import * as state from './state';
-import { promptExpansionService } from './services/PromptExpansionService.js';
 import { PromptContextBuilder } from './services/PromptContextBuilder.js';
 import { formatCriteriaAsJson } from './ProjectUtils';
+import { SettingsManager } from './SettingsManager';
+import { createPromptExpansionService } from './services/PromptExpansionService.js';
+import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
+import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
+import { OpenRouterClient } from './OpenRouterClient';
+import * as state from './state';
 
 export interface LoopInput {
     prompt: string;
@@ -87,11 +88,15 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private currentIteration = 0;
     private isRunning = false;
     private language: string = 'English'; // Default language
+    private settingsManager: SettingsManager;
+    private expansionService: any;
 
-    constructor(client: OpenRouterClient, prompts?: OrchestratorPrompts) {
+    constructor(settingsManager: SettingsManager, client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
+        this.settingsManager = settingsManager;
         this.client = client;
         this.prompts = prompts || { ...defaultPrompts };
+        this.expansionService = createPromptExpansionService(settingsManager);
     }
 
     /**
@@ -294,7 +299,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         language: this.language
                     }
                 );
-                initialPrompt = promptExpansionService.expandPrompt(this.prompts.content_generation_initial, context);
+                initialPrompt = this.expansionService.expandPrompt(this.prompts.content_generation_initial, context);
                 
                 if (this.stopRequested) {
                     aborted = true;
@@ -630,7 +635,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     language: this.language
                 }
             );
-            return promptExpansionService.expandPrompt(this.prompts.content_generation_initial, context);
+            return this.expansionService.expandPrompt(this.prompts.content_generation_initial, context);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -649,7 +654,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        return promptExpansionService.expandPrompt(this.prompts.content_generation_iterative, context);
+        return this.expansionService.expandPrompt(this.prompts.content_generation_iterative, context);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
@@ -666,7 +671,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        return promptExpansionService.expandPrompt(this.prompts.rater, context);
+        return this.expansionService.expandPrompt(this.prompts.rater, context);
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -733,7 +738,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        return promptExpansionService.expandPrompt(this.prompts.editor, context);
+        return this.expansionService.expandPrompt(this.prompts.editor, context);
     }
 
     /**
