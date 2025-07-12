@@ -7,6 +7,13 @@ export class PromptContextBuilder {
      * Build context for a specific node
      */
     static forNode(node: DocumentNode, settingsManager: SettingsManager): PlaceholderContext {
+        const language = settingsManager.getLanguage();
+        console.log('🔍 PromptContextBuilder.forNode() called:', {
+            nodeTitle: node.title,
+            language,
+            settingsManagerInstance: settingsManager.constructor.name
+        });
+        
         return {
             node: {
                 title: node.title,
@@ -15,7 +22,7 @@ export class PromptContextBuilder {
             },
             project: {
                 title: 'Current Project', // TODO: Get actual project title
-                language: settingsManager.getLanguage(),
+                language,
                 criteria: settingsManager.getLastUsedProfile()?.criteria || []
             }
         };

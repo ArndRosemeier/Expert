@@ -485,7 +485,13 @@ export class SettingsManager {
      */
     public getLanguage(): string {
         const profile = this.getLastUsedProfile();
-        return profile?.language || 'English';
+        const language = profile?.language || 'English';
+        console.log('🔍 getLanguage() called:', {
+            profileName: this.getLastUsedProfileName(),
+            profile: profile ? { ...profile, selectedModels: '[REDACTED]' } : null,
+            language
+        });
+        return language;
     }
 
     /**
@@ -493,6 +499,12 @@ export class SettingsManager {
      */
     public async setLanguage(language: string): Promise<void> {
         const profileName = this.getLastUsedProfileName();
+        console.log('🔧 setLanguage() called:', {
+            language,
+            profileName,
+            beforeProfile: profileName ? (this.getProfile(profileName) ? { ...this.getProfile(profileName)!, selectedModels: '[REDACTED]' } : null) : null
+        });
+        
         if (!profileName) {
             throw new Error('No active profile to update language setting');
         }
@@ -504,6 +516,12 @@ export class SettingsManager {
 
         const updatedProfile = { ...profile, language };
         await this.saveProfile(profileName, updatedProfile);
+        
+        console.log('✅ setLanguage() completed:', {
+            language,
+            profileName,
+            afterProfile: profileName ? (this.getProfile(profileName) ? { ...this.getProfile(profileName)!, selectedModels: '[REDACTED]' } : null) : null
+        });
     }
 
     private async saveProfiles(): Promise<void> {

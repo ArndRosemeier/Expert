@@ -431,10 +431,18 @@ export class PromptExpansionService {
         }));
 
         // Context-dependent placeholders
-        this.registerContextPlaceholder('language', (context) => ({
-            value: context.project!.language!,
-            description: 'Current project language setting'
-        }));
+        this.registerContextPlaceholder('language', (context) => {
+            const language = context.project!.language!;
+            console.log('🔍 language placeholder expanded:', {
+                language,
+                contextProject: context.project,
+                settingsManagerLanguage: 'NOT_AVAILABLE_HERE'
+            });
+            return {
+                value: language,
+                description: 'Current project language setting'
+            };
+        });
         
         this.registerContextPlaceholder('project_title', (context) => ({
             value: context.project!.title!,
