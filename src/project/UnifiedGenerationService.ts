@@ -506,6 +506,10 @@ export class UnifiedGenerationService {
         }
 
         try {
+            // Set isGenerating flag and update tree to show spinner
+            node.isGenerating = true;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'context-pruning-started' });
+            
             // Emit start progress
             this.currentOperationProgress = {
                 current: 1,
@@ -550,6 +554,14 @@ export class UnifiedGenerationService {
             // For other errors, log but continue with generation
             console.error('Auto-prune context failed:', error);
             // Continue with generation even if auto-prune fails
+        } finally {
+            // Clear isGenerating flag and update tree to hide spinner
+            node.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'context-pruning-completed' });
+            
+            // Clear operation type after context pruning
+            this.currentOperationType = null;
+            this.emitUnifiedProgress();
         }
     }
 
@@ -577,6 +589,10 @@ export class UnifiedGenerationService {
         }
 
         try {
+            // Set isGenerating flag and update tree to show spinner
+            node.isGenerating = true;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'generation-started' });
+            
             // Update progress to show we're working on this node
             this.currentOperationProgress = {
                 current: 1,
@@ -607,6 +623,10 @@ export class UnifiedGenerationService {
             // Let the error propagate to be handled by the caller
             throw error;
         } finally {
+            // Clear isGenerating flag and update tree to hide spinner
+            node.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'generation-completed' });
+            
             // Clear operation type after content generation
             this.currentOperationType = null;
             this.emitUnifiedProgress();
@@ -634,6 +654,10 @@ export class UnifiedGenerationService {
         }
 
         try {
+            // Set isGenerating flag and update tree to show spinner
+            node.isGenerating = true;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-started' });
+            
             // Emit start progress
             this.currentOperationProgress = {
                 current: 1,
@@ -744,6 +768,10 @@ export class UnifiedGenerationService {
             );
             
             throw error;
+        } finally {
+            // Clear isGenerating flag and update tree to hide spinner
+            node.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-completed' });
         }
     }
 
@@ -766,6 +794,10 @@ export class UnifiedGenerationService {
             if (!this.coherenceService.isNodeEligible(parentNode)) {
                 return;
             }
+
+            // Set isGenerating flag and update tree to show spinner
+            parentNode.isGenerating = true;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId: parentId, reason: 'coherence-check-started' });
 
             // Set operation type for progress tracking
             this.currentOperationType = 'coherence';
@@ -865,6 +897,10 @@ export class UnifiedGenerationService {
             
             // Continue with generation even if coherence check fails
         } finally {
+            // Clear isGenerating flag and update tree to hide spinner
+            parentNode.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId: parentId, reason: 'coherence-check-completed' });
+            
             // Clear operation type and stage progress after coherence check
             this.currentOperationType = null;
             this.currentStageProgress = null;
