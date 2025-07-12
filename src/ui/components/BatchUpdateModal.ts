@@ -616,8 +616,17 @@ export class BatchUpdateModal {
             try {
                 // Use prompt from PromptManager with centralized placeholder replacement
                 const promptTemplate = getPromptText('batch_update');
+                const activeProject = state.getActiveProject();
+                if (!activeProject) {
+                    throw new Error('No active project found - cannot perform batch update');
+                }
+                const settingsManager = activeProject.getSettingsManager();
+                if (!settingsManager) {
+                    throw new Error('Active project has no SettingsManager - cannot perform batch update');
+                }
+                
                 const promptContext = PromptContextBuilder.forPrompt(
-                    state.getActiveProject()?.getSettingsManager() || { getLanguage: () => 'English', getCriteria: () => [] } as any,
+                    settingsManager,
                     {
                         instruction: instruction,
                         originalText: originalString

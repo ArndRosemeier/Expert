@@ -485,7 +485,13 @@ export class SettingsManager {
      */
     public getLanguage(): string {
         const profile = this.getLastUsedProfile();
-        const language = profile?.language || 'English';
+        if (!profile) {
+            throw new Error('No active profile found - cannot get language setting');
+        }
+        if (!profile.language) {
+            throw new Error(`Active profile "${this.getLastUsedProfileName()}" is missing language property`);
+        }
+        const language = profile.language;
         console.log('🔍 getLanguage() called:', {
             profileName: this.getLastUsedProfileName(),
             profile: profile ? { ...profile, selectedModels: '[REDACTED]' } : null,
@@ -544,6 +550,10 @@ export class SettingsManager {
         if (!profile) {
             return null;
         }
+        
+        if (!profile.language) {
+            throw new Error(`Cannot export profile "${profileName}" - missing language property`);
+        }
 
         const exportData = {
             exportVersion: '1.0',
@@ -555,7 +565,7 @@ export class SettingsManager {
                 maxIterations: profile.maxIterations,
                 selectedModels: profile.selectedModels,
                 contextExtractionPrompt: profile.contextExtractionPrompt,
-                language: profile.language || 'English'
+                language: profile.language
             },
             prompts: this.prompts
         };
@@ -612,7 +622,7 @@ export class SettingsManager {
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
                 contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-                language: profileData.language || 'English'
+                language: profileData.language || 'English' // TODO: Remove fallback after fixing profiles
             };
 
             // Save the profile
