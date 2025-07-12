@@ -1503,7 +1503,7 @@ export function renderNodeDetails() {
                             
                             <!-- Coherence Level -->
                             <div class="level-selector">
-                                <label for="coherence-level-selector" title="Which levels get coherence checking">
+                                <label for="coherence-level-selector" title="Establish coherence down to this level">
                                     <span class="level-icon">🔍</span>
                                     Coherence Level:
                                 </label>
@@ -1511,9 +1511,15 @@ export function renderNodeDetails() {
                                     <option value="-1" ${coherenceLevelState === -1 ? 'selected' : ''}>None</option>
                                     ${node.template.slice(node.level, -1).map((levelName, index) => {
                                         const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
-                                        return `<option value="${actualLevel}" ${coherenceLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
-                                    }).join('')}
+                                        // Show the child level name (one level down) but keep the parent level as value
+                                        const childLevelIndex = node.level + index + 1;
+                                        const childLevelName = childLevelIndex < node.template.length ? node.template[childLevelIndex] : null;
+                                        if (childLevelName) {
+                                            const cleanChildLevelName = childLevelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || childLevelName;
+                                            return `<option value="${actualLevel}" ${coherenceLevelState === actualLevel ? 'selected' : ''}>${cleanChildLevelName}</option>`;
+                                        }
+                                        return ''; // Skip if no child level exists
+                                    }).filter(option => option !== '').join('')}
                                 </select>
                             </div>
                             
