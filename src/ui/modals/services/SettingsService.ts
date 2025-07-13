@@ -624,6 +624,13 @@ export class SettingsService {
                 selectedModels: preserveModels?.selectedModels || currentProfile.selectedModels || {},
                 webSearchEnabled: preserveModels?.webSearchEnabled || currentProfile.webSearchEnabled || {},
                 contextExtractionPrompt: currentProfile.contextExtractionPrompt || currentPrompts.context_extraction_user || '',
+                language: currentProfile.language || 'English', // Preserve user's language setting
+                taskModelConfigs: currentProfile.taskModelConfigs || {
+                    coherence_analysis: { outline: 'creator' as const, prose: 'prose' as const },
+                    fix_contradiction: { outline: 'creator' as const, prose: 'prose' as const },
+                    text_polishing: { outline: 'creator' as const, prose: 'prose' as const },
+                    context_adjustment: { outline: 'creator' as const, prose: 'prose' as const }
+                }, // Preserve task model configurations with fallback
                 version: analysis.currentVersion
             };
 

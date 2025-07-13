@@ -801,6 +801,10 @@ export class SettingsManager {
         const modelsToKeep = preserveModels?.selectedModels || {};
         const webSearchToKeep = preserveModels?.webSearchEnabled || {};
         
+        // Preserve the current language setting instead of resetting to English
+        const currentProfile = this.getLastUsedProfile();
+        const languageToKeep = currentProfile?.language || 'English';
+        
         // Create a new default profile with current version
         const defaultProfile: SettingsProfile = {
             prompt: "",
@@ -809,7 +813,7 @@ export class SettingsManager {
             selectedModels: modelsToKeep,
             webSearchEnabled: webSearchToKeep,
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-            language: 'English',
+            language: languageToKeep,
             version: VersionService.getBuildNumber(),
             taskModelConfigs: {
                 coherence_analysis: {
