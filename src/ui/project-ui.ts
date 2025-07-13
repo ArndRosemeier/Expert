@@ -614,9 +614,6 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
                     </button>
-                    <button class="action-btn" data-action="conversational-generation">
-                        🤖 Smart Generation
-                    </button>
                 </div>
             </div>
         </div>
@@ -1570,8 +1567,8 @@ export function renderNodeDetails() {
                             
                             <!-- Action Buttons -->
                             <div class="actions-container">
-                                <button id="generation-levels-help-btn" class="help-button" title="Learn about generation levels" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
-                                    ?
+                                <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
+                                    🤖
                                 </button>
                                 <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
                                     ⚡ Generate
@@ -2537,21 +2534,6 @@ This action cannot be undone.`;
                 }).catch(error => {
                     console.error('Failed to open chat modal:', error);
                     alert('Failed to open chat dialog. Please try again.');
-                });
-            }
-            break;
-
-        case 'conversational-generation-btn':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
-                
-                // Import and open conversational generation modal
-                void import('./modals/ModalFactory').then(({ openConversationalGenerationModal }) => {
-                    void openConversationalGenerationModal(node);
-                }).catch(error => {
-                    console.error('Failed to open conversational generation modal:', error);
-                    alert('Failed to open Smart Generation dialog. Please try again.');
                 });
             }
             break;
@@ -3672,12 +3654,15 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
     },
     
     'generation-levels-help-btn': (_e: Event) => {
-        void import('./modals/GenerationLevelsHelpModal').then(({ GenerationLevelsHelpModal }) => {
-            const helpModal = new GenerationLevelsHelpModal();
-            void helpModal.open();
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        void import('./modals/ModalFactory').then(({ openConversationalGenerationModal }) => {
+            void openConversationalGenerationModal(node);
         }).catch((error: unknown) => {
-            console.error('Failed to open generation levels help modal:', error);
-            alert('Failed to open generation levels help. Please try again.');
+            console.error('Failed to open Smart Generation modal:', error);
+            alert('Failed to open Smart Generation dialog. Please try again.');
         });
     },
 
