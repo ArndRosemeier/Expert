@@ -2210,22 +2210,18 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const hasChildren = node.children.length > 0;
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     
-    // Precise indentation calculation accounting for borders and consistent spacing
-    // Base: 18px per level + 1px border space per level (except root)
-    const baseIndentPerLevel = 18;
-    const borderSpacePerLevel = node.level > 0 ? node.level : 0; // 1px per level for child levels
-    const indent = (node.level * baseIndentPerLevel) + borderSpacePerLevel;
+    // Simple, consistent indentation: 20px per level
+    const indent = node.level * 20;
     
     let html = `<div class="tree-item" style="padding-left: ${indent}px;" data-depth="${node.level}">`;
     
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
-        // Standardized expand button: exactly 14px width + 4px margin for total 18px space
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px; width: 14px; text-align: center;" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
+        html += `<span class="tree-expand-btn" data-node-id="${node.id}" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
     } else {
-        // Perfect alignment spacer: exactly 18px to match expand button + margin
-        html += `<span style="display: inline-block; width: 18px;"></span>`;
+        // Spacer for alignment (14px width + 2px margin = 16px total)
+        html += `<span style="display: inline-block; width: 16px;"></span>`;
     }
     
     // Add the node title with status icon and enhanced styling
@@ -3251,38 +3247,20 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 font-size: 11px;
                 display: inline-block;
                 flex-shrink: 0;
+                margin-right: 2px;
+                cursor: pointer;
+                user-select: none;
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
             /* === Enhanced Tree Styling === */
             .tree-item {
                 position: relative;
                 transition: background-color 0.15s ease;
-                border-left: 1px solid transparent; /* Reserve space for border */
-                box-sizing: border-box;
             }
             
             .tree-item:hover {
                 background: linear-gradient(90deg, transparent 0%, #f8f9fa 20%, #f8f9fa 100%);
                 border-radius: 0 4px 4px 0;
-            }
-            
-            .tree-item::before {
-                content: '';
-                position: absolute;
-                left: 0px;
-                top: 50%;
-                width: 12px;
-                height: 1px;
-                background: #e9ecef;
-                display: none; /* Hidden by default */
-            }
-            
-            /* Show lines for child levels only - coordinated with new alignment */
-            .tree-item[data-depth]:not([data-depth="0"]) {
-                border-left: 1px solid #e9ecef;
-            }
-            .tree-item[data-depth]:not([data-depth="0"])::before {
-                display: block;
             }
             
             .tree-node { 
