@@ -2209,20 +2209,23 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const isSelected = node.id === selectedNodeId;
     const hasChildren = node.children.length > 0;
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
-    const indent = node.level * 20;
-    const isLeaf = !hasChildren;
+    
+    // Precise indentation calculation accounting for borders and consistent spacing
+    // Base: 18px per level, accounting for 1px border space per level after root
+    const baseIndentPerLevel = 18;
+    const borderSpacePerLevel = node.level > 0 ? 1 : 0; // 1px border space for child levels
+    const indent = (node.level * baseIndentPerLevel) + (node.level * borderSpacePerLevel);
     
     let html = `<div class="tree-item" style="padding-left: ${indent}px;" data-depth="${node.level}">`;
     
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
         const expandIcon = isCollapsed ? '▶' : '▼';
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 2px; user-select: none; font-size: 12px;" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
-
+        // Standardized expand button: exactly 14px width + 4px margin for total 18px space
+        html += `<span class="tree-expand-btn" data-node-id="${node.id}" style="cursor: pointer; margin-right: 4px; user-select: none; font-size: 12px; width: 14px; text-align: center;" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
     } else {
-        // Add spacing for nodes without children to align with those that have expand buttons
-        // Match the exact width: fine-tuned to 16px for perfect alignment
-        html += `<span style="display: inline-block; width: 16px;"></span>`;
+        // Perfect alignment spacer: exactly 18px to match expand button + margin
+        html += `<span style="display: inline-block; width: 18px;"></span>`;
     }
     
     // Add the node title with status icon and enhanced styling
@@ -3240,13 +3243,15 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
             #project-tree { flex: 1; max-width: 280px; font-size: 0.8rem; }
             #node-details { flex: 2; }
-            .tree-item { display: flex; align-items: center; }
+            .tree-item { display: flex; align-items: center; min-height: 24px; }
             .tree-expand-btn { 
                 color: #6c757d; 
                 font-weight: bold;
                 width: 14px;
                 text-align: center;
                 font-size: 11px;
+                display: inline-block;
+                flex-shrink: 0;
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
             /* === Enhanced Tree Styling === */
@@ -3254,6 +3259,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 position: relative;
                 transition: background-color 0.15s ease;
                 border-left: 1px solid transparent; /* Reserve space for border */
+                box-sizing: border-box;
             }
             
             .tree-item:hover {
@@ -3272,7 +3278,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 display: none; /* Hidden by default */
             }
             
-            /* Show lines for child levels only */
+            /* Show lines for child levels only - coordinated with new alignment */
             .tree-item[data-depth]:not([data-depth="0"]) {
                 border-left: 1px solid #e9ecef;
             }
@@ -3332,6 +3338,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 text-align: center;
                 display: inline-block;
                 transition: transform 0.15s ease;
+                flex-shrink: 0;
             }
             
             .tree-node:hover .node-status-icon {
