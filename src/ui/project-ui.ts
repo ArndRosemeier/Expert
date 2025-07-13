@@ -3090,43 +3090,152 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     mainContent.innerHTML = `
         <style>
             #global-profile-bar {
-                background-color: #f8f9fa;
-                border-bottom: 1px solid var(--border-color);
-                padding: 0.75rem;
+                background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+                border-bottom: 1px solid #e5e7eb;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                padding: 0;
                 display: flex;
                 align-items: center;
-                gap: 1rem;
                 margin-bottom: 0;
+                min-height: 60px;
             }
-            #global-profile-bar label {
-                font-weight: bold;
-                font-size: 1.1rem;
-                color: #343a40;
+            
+            /* Professional Top Bar Groups */
+            .top-bar-group {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                padding: 0.75rem 1.25rem;
+                border-right: 1px solid #e5e7eb;
+                height: 100%;
+                box-sizing: border-box;
+            }
+            
+            .top-bar-group:last-child {
+                border-right: none;
+                margin-left: auto;
+            }
+            
+            .top-bar-group.settings-group {
+                background: rgba(59, 130, 246, 0.02);
+            }
+            
+            .top-bar-group.monitoring-group {
+                background: rgba(16, 185, 129, 0.02);
+            }
+            
+            .top-bar-group.actions-group {
+                background: rgba(239, 68, 68, 0.02);
+            }
+            
+            /* Consistent Element Heights */
+            .top-bar-element {
+                height: 40px;
+                display: flex;
+                align-items: center;
+                border-radius: 6px;
+                transition: all 0.2s ease;
+            }
+            
+            /* Professional Labels */
+            .top-bar-label {
+                font-weight: 600;
+                font-size: 0.9rem;
+                color: #374151;
                 white-space: nowrap;
+                margin-right: 0.5rem;
             }
-            #global-profile-bar select {
-                padding: 0.5rem;
-                border: 1px solid var(--border-color);
-                border-radius: 8px;
-                font-size: 1rem;
-                min-width: 200px;
+            
+            /* Standardized Selects */
+            .top-bar-select {
+                height: 40px;
+                padding: 0 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-size: 0.9rem;
+                background: white;
+                color: #374151;
+                min-width: 180px;
+                transition: all 0.2s ease;
             }
+            
+            .top-bar-select:hover {
+                border-color: #9ca3af;
+            }
+            
+            .top-bar-select:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            /* Professional Checkbox Container */
+            .checkbox-container {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 0.75rem;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                user-select: none;
+            }
+            
+            .checkbox-container:hover {
+                background: rgba(59, 130, 246, 0.05);
+            }
+            
+            .checkbox-container input[type="checkbox"] {
+                margin: 0;
+                accent-color: #3b82f6;
+            }
+            
+            .checkbox-container label {
+                font-size: 0.9rem;
+                font-weight: 500;
+                color: #374151;
+                cursor: pointer;
+                margin: 0;
+            }
+            
+            /* Progress Report Styling */
+            .progress-report {
+                font-size: 0.75rem;
+                color: #6b7280;
+                font-style: italic;
+                margin-top: 0.25rem;
+                padding-left: 1.75rem;
+            }
+            
+            /* Group Titles */
+            .group-title {
+                font-size: 0.7rem;
+                font-weight: 700;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 0.25rem;
+                padding: 0 0.5rem;
+            }
+            
             #global-language-selector {
                 display: flex;
                 align-items: center;
                 gap: 0.5rem;
             }
-            #global-language-selector label {
-                font-size: 1rem;
-                font-weight: 500;
-            }
+            
             #global-language-selector .language-selector {
                 margin-bottom: 0;
-                min-width: 180px;
             }
+            
             #global-language-selector .language-selector-dropdown {
-                min-width: 180px;
+                height: 40px;
+                padding: 0 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
                 font-size: 0.9rem;
+                background: white;
+                min-width: 180px;
             }
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
             #project-tree { flex: 1; max-width: 280px; font-size: 0.8rem; }
@@ -3258,22 +3367,36 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             @keyframes spin { to { transform: rotate(360deg); } }
         </style>
         <div id="global-profile-bar">
-            <label for="active-profile-selector">Active profile:</label>
-            <select id="active-profile-selector">${profileOptions}</select>
-            <div id="global-language-selector">
-                <div id="language-selector-container"></div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
-                    <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
-                    ${AI_ASSISTANT_EMOJI} See AI interactions
-                </label>
-                    <div id="ai-progress-report" style="display: none; font-size: 0.75rem; color: #6c757d; padding-left: 1.75rem; margin-top: -0.125rem;">
-                        <!-- AI progress will appear here -->
+            <!-- Settings Group -->
+            <div class="top-bar-group settings-group">
+                <div class="top-bar-element">
+                    <label for="active-profile-selector" class="top-bar-label">Profile:</label>
+                    <select id="active-profile-selector" class="top-bar-select">${profileOptions}</select>
+                </div>
+                <div class="top-bar-element">
+                    <label class="top-bar-label">Language:</label>
+                    <div id="global-language-selector">
+                        <div id="language-selector-container"></div>
                     </div>
                 </div>
-                <button id="open-reader-btn" class="button button-primary">📖 Reader View</button>
+            </div>
+            
+            <!-- Monitoring Group -->
+            <div class="top-bar-group monitoring-group">
+                <div class="top-bar-element">
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="ai-interactions-checkbox">
+                        <label for="ai-interactions-checkbox">${AI_ASSISTANT_EMOJI} See AI interactions</label>
+                    </div>
+                </div>
+                <div id="ai-progress-report" class="progress-report" style="display: none;">
+                    <!-- AI progress will appear here -->
+                </div>
+            </div>
+            
+            <!-- Actions Group -->
+            <div class="top-bar-group actions-group">
+                <button id="open-reader-btn" class="button button-primary top-bar-element">📖 Reader View</button>
             </div>
         </div>
         <div id="project-container">
