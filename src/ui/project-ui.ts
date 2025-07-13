@@ -614,6 +614,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
                     </button>
+                    <button class="action-btn" data-action="conversational-generation">
+                        🤖 Smart Generation
+                    </button>
                 </div>
             </div>
         </div>
@@ -2534,6 +2537,21 @@ This action cannot be undone.`;
                 }).catch(error => {
                     console.error('Failed to open chat modal:', error);
                     alert('Failed to open chat dialog. Please try again.');
+                });
+            }
+            break;
+
+        case 'conversational-generation-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                // Import and open conversational generation modal
+                void import('./modals/ModalFactory').then(({ openConversationalGenerationModal }) => {
+                    void openConversationalGenerationModal(node);
+                }).catch(error => {
+                    console.error('Failed to open conversational generation modal:', error);
+                    alert('Failed to open Smart Generation dialog. Please try again.');
                 });
             }
             break;

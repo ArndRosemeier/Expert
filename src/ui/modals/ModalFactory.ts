@@ -6,6 +6,7 @@ import { SettingsModal, SettingsModalConfig } from './SettingsModal';
 import { ExportModal, ExportModalConfig } from './ExportModal';
 import { ComprehensiveExportModal, ComprehensiveExportModalConfig } from './ComprehensiveExportModal';
 import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal';
+import { ConversationalGenerationModal, ConversationalGenerationModalConfig } from './ConversationalGenerationModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
@@ -207,6 +208,30 @@ export class ModalFactory {
      */
     public updateDependencies(newDependencies: Partial<ModalFactoryDependencies>): void {
         this.dependencies = { ...this.dependencies, ...newDependencies };
+    }
+
+    /**
+     * Create a conversational generation modal for guided content generation
+     */
+    public async createConversationalGenerationModal(
+        node: DocumentNode,
+        options: ModalOptions = {}
+    ): Promise<ConversationalGenerationModal> {
+        const projectManager = await this.getCurrentProjectManager();
+        
+        const config: ConversationalGenerationModalConfig = {
+            projectManager,
+            node
+        };
+
+        const modal = new ConversationalGenerationModal(config);
+        this.setupModalCleanup(modal);
+
+        if (options.autoOpen) {
+            void modal.open();
+        }
+
+        return modal;
     }
 
     /**
@@ -519,4 +544,9 @@ export async function openAddChildNodeModal(parentNode: DocumentNode, parentNode
 
 export function openComprehensiveExportModal(): ComprehensiveExportModal {
     return getDefaultModalFactory().createComprehensiveExportModal();
+}
+
+export async function openConversationalGenerationModal(node: DocumentNode): Promise<ConversationalGenerationModal> {
+    const factory = getDefaultModalFactory();
+    return factory.createConversationalGenerationModal(node, { autoOpen: true });
 } 
