@@ -2211,10 +2211,10 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     
     // Precise indentation calculation accounting for borders and consistent spacing
-    // Base: 18px per level, accounting for 1px border space per level after root
+    // Base: 18px per level + 1px border space per level (except root)
     const baseIndentPerLevel = 18;
-    const borderSpacePerLevel = node.level > 0 ? 1 : 0; // 1px border space for child levels
-    const indent = (node.level * baseIndentPerLevel) + (node.level * borderSpacePerLevel);
+    const borderSpacePerLevel = node.level > 0 ? node.level : 0; // 1px per level for child levels
+    const indent = (node.level * baseIndentPerLevel) + borderSpacePerLevel;
     
     let html = `<div class="tree-item" style="padding-left: ${indent}px;" data-depth="${node.level}">`;
     
@@ -2232,11 +2232,10 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const nodeTypeClass = isProjectRoot ? 'project-root' : (hasChildren ? 'has-children' : 'leaf-node');
     const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${nodeTypeClass}`;
     const statusIcon = getNodeStatusIcon(node);
-    const statusIconHtml = statusIcon ? `<span class="node-status-icon">${statusIcon}</span>` : '';
     const statusTooltip = getNodeStatusTooltip(node);
     const tooltipAttr = statusTooltip ? ` title="${statusTooltip}"` : '';
     html += `<span class="${nodeClasses}" data-id="${node.id}"${tooltipAttr}>
-                ${statusIconHtml}<span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
+                <span class="node-status-icon">${statusIcon}</span><span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
              </span>`;
     
     html += `</div>`;
@@ -3295,6 +3294,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 display: flex;
                 align-items: center;
                 transition: all 0.15s ease;
+                min-width: 0; /* Prevent flex item overflow */
             }
             
             /* Typography Hierarchy */
@@ -3339,6 +3339,12 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 display: inline-block;
                 transition: transform 0.15s ease;
                 flex-shrink: 0;
+            }
+            
+            /* Hide space for empty status icons */
+            .node-status-icon:empty {
+                margin-right: 0;
+                width: 0;
             }
             
             .tree-node:hover .node-status-icon {
