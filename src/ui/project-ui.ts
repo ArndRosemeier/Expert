@@ -61,6 +61,104 @@ function getNodeStatusIcon(node: DocumentNode): string {
     return '🟣';
 }
 
+/**
+ * Counts status types in the entire tree starting from a root node
+ */
+function countStatusTypes(rootNode: DocumentNode): Map<string, number> {
+    const counts = new Map<string, number>();
+    
+    function countRecursively(node: DocumentNode) {
+        // Skip root nodes themselves
+        if (node.level !== 0 && node.parentId !== null) {
+            const icon = getNodeStatusIcon(node);
+            if (icon) {
+                const current = counts.get(icon) || 0;
+                counts.set(icon, current + 1);
+            }
+        }
+        
+        // Process children
+        node.children.forEach(child => countRecursively(child));
+    }
+    
+    countRecursively(rootNode);
+    return counts;
+}
+
+/**
+ * Gets a project root tooltip showing status summary
+ */
+function getProjectRootTooltip(rootNode: DocumentNode): string {
+    const statusCounts = countStatusTypes(rootNode);
+    
+    if (statusCounts.size === 0) {
+        return 'Project contains no child nodes';
+    }
+    
+    const statusLines: string[] = [];
+    
+    // Define the order and descriptions for each status type
+    const statusOrder = [
+        { icon: '⭐', description: 'Finished' },
+        { icon: '🟢', description: 'Content done with context adjusted' },
+        { icon: '🟡', description: 'Content done - basic state' },
+        { icon: '🟠', description: 'Draft with adjusted context' },
+        { icon: '🟣', description: 'Pure draft' }
+    ];
+    
+    statusOrder.forEach(({ icon, description }) => {
+        const count = statusCounts.get(icon);
+        if (count && count > 0) {
+            statusLines.push(`${icon} ${description}: ${count}`);
+        }
+    });
+    
+    return statusLines.join('\n');
+}
+
+/**
+ * Gets the appropriate tooltip text for a node based on its status
+ */
+function getNodeStatusTooltip(node: DocumentNode): string {
+    // Root nodes get project summary tooltip
+    if (node.level === 0 || node.parentId === null) {
+        return getProjectRootTooltip(node);
+    }
+    
+    const masterVersion = node.getMasterVersion();
+    if (!masterVersion) {
+        return 'Pure draft - no content version available';
+    }
+    
+    const hasContent = node.content && node.content.trim().length > 0;
+    const isDraft = masterVersion.tags.has('draft') || node.content?.startsWith('Draft:');
+    const isContextAdjusted = node.ContextIsAdjusted();
+    const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
+    
+    // Finished: all conditions met
+    if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
+        return 'Finished - content complete, context adjusted, and consistent with parent';
+    }
+    
+    // Content done, context adjusted (but no coherence check)
+    if (hasContent && !isDraft && isContextAdjusted) {
+        return 'Content done with context adjusted';
+    }
+    
+    // Content done, nothing much else
+    if (hasContent && !isDraft) {
+        return 'Content done - basic state';
+    }
+    
+    // Draft with adjusted context
+    if (hasContent && isDraft && isContextAdjusted) {
+        return 'Draft with adjusted context';
+    }
+    
+    // Pure draft
+    return 'Pure draft';
+}
+
 
 
 
@@ -2132,7 +2230,9 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${nodeTypeClass}`;
     const statusIcon = getNodeStatusIcon(node);
     const statusIconHtml = statusIcon ? `<span class="node-status-icon">${statusIcon}</span>` : '';
-    html += `<span class="${nodeClasses}" data-id="${node.id}">
+    const statusTooltip = getNodeStatusTooltip(node);
+    const tooltipAttr = statusTooltip ? ` title="${statusTooltip}"` : '';
+    html += `<span class="${nodeClasses}" data-id="${node.id}"${tooltipAttr}>
                 ${statusIconHtml}<span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
              </span>`;
     
