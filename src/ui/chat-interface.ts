@@ -46,6 +46,13 @@ export class ChatInterface {
     }
 
     /**
+     * Check if we're in manual support mode
+     */
+    private isManualSupportMode(): boolean {
+        return this.chatTitle === 'Manual Support Chat';
+    }
+
+    /**
      * Load the last used chat model from storage
      */
     private async loadLastUsedModel(): Promise<void> {
@@ -164,7 +171,53 @@ export class ChatInterface {
                                 margin-bottom: 0.75rem;
                                 text-transform: uppercase;
                                 letter-spacing: 0.5px;
-                            ">Standard Actions</div>
+                            ">${this.isManualSupportMode() ? 'Quick Help' : 'Standard Actions'}</div>
+                            ${this.isManualSupportMode() ? `
+                            <button id="getting-started-btn" style="
+                                width: 100%;
+                                background: #28a745;
+                                color: white;
+                                border: 1px solid #218838;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
+                                🚀 Getting Started Guide
+                            </button>
+                            <button id="features-overview-btn" style="
+                                width: 100%;
+                                background: #17a2b8;
+                                color: white;
+                                border: 1px solid #138496;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
+                                📋 Features Overview
+                            </button>
+                            <button id="troubleshooting-btn" style="
+                                width: 100%;
+                                background: #dc3545;
+                                color: white;
+                                border: 1px solid #c82333;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
+                                🔧 Troubleshooting Help
+                            </button>
+                            ` : `
                             <button id="consistency-check-btn" style="
                                 width: 100%;
                                 background: #17a2b8;
@@ -209,6 +262,7 @@ export class ChatInterface {
                             " onmouseover="this.style.backgroundColor='#5a2d91'" onmouseout="this.style.backgroundColor='#6f42c1'">
                                 🎭 Roleplay Adventure
                             </button>
+                            `}
                         </div>
                         ` : ''}
                         <div style="
@@ -217,7 +271,9 @@ export class ChatInterface {
                             line-height: 1.4;
                         ">
                             ${this.customSystemPrompt ? 
-                                '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>✓ Context Loaded</strong></p><p>This chat has specific context about your document structure. Ask questions about the content, request edits, or get suggestions.</p>' 
+                                (this.isManualSupportMode() ? 
+                                    '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>📚 Manual Support Ready</strong></p><p>I have access to the complete user manual and can help you understand how to use the Expert System. Ask me anything about the app features, workflows, or troubleshooting!</p>' 
+                                    : '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>✓ Context Loaded</strong></p><p>This chat has specific context about your document structure. Ask questions about the content, request edits, or get suggestions.</p>')
                                 : '<p>Select a model and start chatting. Your conversation will build context as you continue.</p>'
                             }
                         </div>
@@ -534,6 +590,28 @@ export class ChatInterface {
         if (roleplayButton) {
             roleplayButton.addEventListener('click', () => {
                 void this.startRoleplayAdventure();
+            });
+        }
+
+        // Manual support buttons
+        const gettingStartedButton = this.chatContainer?.querySelector('#getting-started-btn');
+        if (gettingStartedButton) {
+            gettingStartedButton.addEventListener('click', () => {
+                void this.sendPredefinedMessage('Can you provide a getting started guide for the Expert System? Walk me through the basic setup and first steps.');
+            });
+        }
+
+        const featuresOverviewButton = this.chatContainer?.querySelector('#features-overview-btn');
+        if (featuresOverviewButton) {
+            featuresOverviewButton.addEventListener('click', () => {
+                void this.sendPredefinedMessage('Can you give me an overview of the main features available in the Expert System? What are the key capabilities I should know about?');
+            });
+        }
+
+        const troubleshootingButton = this.chatContainer?.querySelector('#troubleshooting-btn');
+        if (troubleshootingButton) {
+            troubleshootingButton.addEventListener('click', () => {
+                void this.sendPredefinedMessage('I\'m having some issues with the Expert System. Can you help me troubleshoot common problems and provide solutions?');
             });
         }
     }

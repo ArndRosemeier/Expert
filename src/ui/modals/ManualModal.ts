@@ -361,6 +361,7 @@ export class ManualModal extends BaseModal {
                     </div>
                     <div class="manual-controls">
                         <button class="manual-btn" onclick="window.manualModal.toggleSidebar()">📑 TOC</button>
+                        <button class="manual-btn" onclick="window.manualModal.openManualChat()">💬 Chat Support</button>
                         <button class="manual-btn" onclick="window.manualModal.printManual()">🖨️ Print</button>
                         <button class="manual-btn" onclick="window.manualModal.openInNewWindow()">🔗 Open in Window</button>
                     </div>
@@ -688,6 +689,120 @@ export class ManualModal extends BaseModal {
 
     public openInNewWindow(): void {
         window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    }
+
+    public async openManualChat(): Promise<void> {
+        try {
+            // Import necessary modules
+            const { ChatInterface } = await import('../chat-interface');
+            const { OpenRouterClient } = await import('../../OpenRouterClient');
+            const stateModule = await import('../../state');
+            
+            // Get required services
+            const settingsManager = stateModule.getSettingsManager();
+            const modelSelector = stateModule.getModelSelector();
+            
+            if (!settingsManager || !modelSelector) {
+                alert('Settings or model selector not available.');
+                return;
+            }
+            
+            // Get OpenRouter API key from model selector
+            const apiKey = modelSelector.getApiKey();
+            if (!apiKey) {
+                alert('OpenRouter API key not configured. Please set it in the settings first.');
+                return;
+            }
+
+            // Get selected models from model selector
+            if (!modelSelector.areAllModelsSelected()) {
+                alert('Please configure all required models in the settings first.');
+                return;
+            }
+
+            // Create OpenRouter client with the configured models
+            const openRouterClient = OpenRouterClient.getInstance();
+            openRouterClient.setSettingsManager(settingsManager);
+            
+            // Create system prompt for manual support agent
+            const supportSystemPrompt = `You are a helpful support agent for the Expert System application. You have access to the complete user manual and can help users understand how to use the application.
+
+Here is the complete manual content for reference:
+
+${this.manualContent}
+
+Instructions:
+- Provide helpful, accurate answers based on the manual content above
+- Be friendly and professional in your responses  
+- If users ask about features not covered in the manual, let them know politely
+- Guide users step-by-step through procedures when possible
+- Reference specific sections of the manual when relevant
+- Help troubleshoot common issues based on the manual information`;
+
+            // Create modal overlay
+            const modalOverlay = document.createElement('div');
+            modalOverlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const modalContainer = document.createElement('div');
+            modalContainer.style.cssText = `
+                width: 90%;
+                height: 90%;
+                max-width: 90vw;
+                max-height: 90vh;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            `;
+            
+            modalOverlay.appendChild(modalContainer);
+            document.body.appendChild(modalOverlay);
+            
+            // Create chat interface with manual support prompt
+            const chatInterface = new ChatInterface(
+                openRouterClient, 
+                settingsManager, 
+                supportSystemPrompt, 
+                'Manual Support Chat',
+                undefined // No node structure needed for manual support
+            );
+            await chatInterface.initialize(modalContainer);
+            
+            // Close modal functionality
+            const closeModal = () => {
+                document.body.removeChild(modalOverlay);
+            };
+            
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) {
+                    closeModal();
+                }
+            });
+            
+            document.addEventListener('keydown', function escapeHandler(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error opening manual chat:', error);
+            alert('Failed to open manual support chat. Please try again.');
+        }
     }
 
     protected override cleanup(): void {
