@@ -2210,29 +2210,40 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const hasChildren = node.children.length > 0;
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     
-    // Simple, consistent indentation: 20px per level
-    const indent = node.level * 20;
+    // Grid-based layout: each level gets a column, plus expand/status/title columns
+    let html = `<div class="tree-row" data-depth="${node.level}" style="grid-column: 1 / -1;">`;
     
-    let html = `<div class="tree-item" style="padding-left: ${indent}px;" data-depth="${node.level}">`;
-    
-    // Add expand/collapse button for nodes with children
-    if (hasChildren) {
-        const expandIcon = isCollapsed ? '▶' : '▼';
-        html += `<span class="tree-expand-btn" data-node-id="${node.id}" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>`;
-    } else {
-        // Spacer for alignment (14px width + 2px margin = 16px total)
-        html += `<span style="display: inline-block; width: 16px;"></span>`;
+    // Create indentation columns (one per level)
+    for (let i = 0; i < node.level; i++) {
+        html += `<div class="tree-indent"></div>`;
     }
     
-    // Add the node title with status icon and enhanced styling
+    // Expand/collapse button column
+    if (hasChildren) {
+        const expandIcon = isCollapsed ? '▶' : '▼';
+        html += `<div class="tree-expand-column">
+                    <span class="tree-expand-btn" data-node-id="${node.id}" title="Click: toggle this node | Shift+Click: toggle this level | Ctrl+Click: toggle project | Alt+Click: toggle all">${expandIcon}</span>
+                 </div>`;
+    } else {
+        html += `<div class="tree-expand-column"></div>`;
+    }
+    
+    // Status icon column
+    const statusIcon = getNodeStatusIcon(node);
+    html += `<div class="tree-status-column">
+                <span class="node-status-icon">${statusIcon}</span>
+             </div>`;
+    
+    // Node title column
     const nodeTypeClass = isProjectRoot ? 'project-root' : (hasChildren ? 'has-children' : 'leaf-node');
     const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${nodeTypeClass}`;
-    const statusIcon = getNodeStatusIcon(node);
     const statusTooltip = getNodeStatusTooltip(node);
     const tooltipAttr = statusTooltip ? ` title="${statusTooltip}"` : '';
-    html += `<span class="${nodeClasses}" data-id="${node.id}"${tooltipAttr}>
-                <span class="node-status-icon">${statusIcon}</span><span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
-             </span>`;
+    html += `<div class="tree-title-column">
+                <span class="${nodeClasses}" data-id="${node.id}"${tooltipAttr}>
+                    <span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
+                </span>
+             </div>`;
     
     html += `</div>`;
     
@@ -3236,30 +3247,62 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 min-width: 180px;
             }
             #project-container { display: flex; gap: 1rem; align-items: flex-start; }
-            #project-tree { flex: 1; max-width: 280px; font-size: 0.8rem; }
+            #project-tree { 
+                flex: 1; 
+                max-width: 280px; 
+                font-size: 0.8rem;
+                display: grid;
+                grid-template-columns: repeat(10, 20px) 16px 22px 1fr; /* 10 indent columns + expand + status + title */
+                align-items: center;
+                gap: 0;
+            }
             #node-details { flex: 2; }
-            .tree-item { display: flex; align-items: center; min-height: 24px; }
+            
+            /* === Grid-based Tree Layout === */
+            .tree-row {
+                display: contents; /* Children participate in parent grid */
+                min-height: 24px;
+            }
+            
+            .tree-indent {
+                /* Empty space for indentation */
+            }
+            
+            .tree-expand-column {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 24px;
+            }
+            
             .tree-expand-btn { 
                 color: #6c757d; 
                 font-weight: bold;
                 width: 14px;
                 text-align: center;
                 font-size: 11px;
-                display: inline-block;
-                flex-shrink: 0;
-                margin-right: 2px;
                 cursor: pointer;
                 user-select: none;
+                display: inline-block;
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
-            /* === Enhanced Tree Styling === */
-            .tree-item {
-                position: relative;
-                transition: background-color 0.15s ease;
+            
+            .tree-status-column {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 24px;
             }
             
-            .tree-item:hover {
-                background: linear-gradient(90deg, transparent 0%, #f8f9fa 20%, #f8f9fa 100%);
+            .tree-title-column {
+                display: flex;
+                align-items: center;
+                height: 24px;
+                min-width: 0; /* Allow text truncation */
+            }
+            
+            .tree-row:hover .tree-title-column {
+                background: linear-gradient(90deg, #f8f9fa 0%, #f8f9fa 100%);
                 border-radius: 0 4px 4px 0;
             }
             
@@ -3267,12 +3310,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 padding: 1px 0.5rem; 
                 border-radius: 4px; 
                 cursor: pointer; 
-                flex-grow: 1;
-                margin-left: 1px;
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 transition: all 0.15s ease;
-                min-width: 0; /* Prevent flex item overflow */
+                min-width: 0; /* Prevent overflow */
+                width: 100%;
             }
             
             /* Typography Hierarchy */
@@ -3299,33 +3341,24 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 background: linear-gradient(90deg, #007bff 3px, #e3f2fd 3px, #e3f2fd 100%);
                 color: #0056b3;
                 font-weight: 500;
-                border-radius: 0 4px 4px 0;
+                border-radius: 4px;
                 box-shadow: 0 2px 4px rgba(0, 123, 255, 0.15);
             }
             
-            .tree-node:hover:not(.selected) { 
+            .tree-row:hover .tree-node:not(.selected) { 
                 background-color: #f8f9fa;
-                transform: translateX(2px);
             }
             
             /* Status Icon Styling */
             .node-status-icon {
-                margin-right: 6px;
                 font-size: 0.9rem;
                 width: 16px;
                 text-align: center;
                 display: inline-block;
                 transition: transform 0.15s ease;
-                flex-shrink: 0;
             }
             
-            /* Hide space for empty status icons */
-            .node-status-icon:empty {
-                margin-right: 0;
-                width: 0;
-            }
-            
-            .tree-node:hover .node-status-icon {
+            .tree-row:hover .node-status-icon {
                 transform: scale(1.1);
             }
             
