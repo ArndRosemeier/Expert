@@ -3,6 +3,7 @@ import { createElement } from './core/modal-utils';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { UnifiedGenerationService } from '../../project/UnifiedGenerationService';
+import { AI_ASSISTANT_EMOJI } from '../../constants';
 
 export interface ConversationalGenerationModalConfig {
     projectManager: ProjectManager;
@@ -12,7 +13,6 @@ export interface ConversationalGenerationModalConfig {
 export class ConversationalGenerationModal extends BaseModal {
     private projectManager: ProjectManager;
     private node: DocumentNode;
-    private isGenerating: boolean = false;
 
     // State for generation settings
     private draftLevel: number = -1;
@@ -24,7 +24,7 @@ export class ConversationalGenerationModal extends BaseModal {
     constructor(config: ConversationalGenerationModalConfig) {
         super({
             id: 'conversational-generation-modal',
-            title: '🤖 Smart Generation Assistant',
+            title: `${AI_ASSISTANT_EMOJI} Smart Generation Assistant`,
             closable: true,
             backdrop: true,
             width: '90vw',
@@ -36,12 +36,15 @@ export class ConversationalGenerationModal extends BaseModal {
         this.projectManager = config.projectManager;
         this.node = config.node;
 
-        // Initialize with sensible defaults
-        this.draftLevel = this.node.level;
-        this.contentLevel = this.node.level;
-        this.contextPruneLevel = -1;
-        this.coherenceLevel = -1;
-        this.autofixSeverity = -1;
+        // Initialize with intelligent defaults
+        const nextLevel = this.node.level + 1;
+        this.draftLevel = nextLevel < this.node.template.length ? nextLevel : this.node.level;
+        this.contentLevel = nextLevel < this.node.template.length ? nextLevel : this.node.level;
+        // Context cleaning: use nextLevel unless nextLevel is leaf level (less important at leaf level)
+        this.contextPruneLevel = nextLevel < this.node.template.length - 1 ? nextLevel : this.node.level;
+        // Enable quality checking by default if we have appropriate levels (must be less than draft level)
+        this.coherenceLevel = this.draftLevel > this.node.level ? this.node.level : -1;
+        this.autofixSeverity = 5; // Default autofix severity
     }
 
     /**
@@ -71,13 +74,36 @@ export class ConversationalGenerationModal extends BaseModal {
     }
 
     /**
-     * Get coherence levels (parent levels only)
+     * Get context cleaning levels (limited by draft level)
+     */
+    private getContextCleaningLevels(): Array<{ value: number; name: string }> {
+        const levels: Array<{ value: number; name: string }> = [];
+        
+        // Context cleaning can only go up to the draft level
+        const maxLevel = this.draftLevel === -1 ? this.node.level : this.draftLevel;
+        
+        for (let i = this.node.level; i <= maxLevel; i++) {
+            levels.push({
+                value: i,
+                name: this.getLevelDisplayName(i)
+            });
+        }
+        
+        return levels;
+    }
+
+    /**
+     * Get coherence levels (parent levels only, limited by draft level)
      */
     private getCoherenceLevels(): Array<{ value: number; name: string }> {
         const levels: Array<{ value: number; name: string }> = [];
         
-        // Coherence level must be less than draft level
-        for (let i = this.node.level; i < this.node.template.length - 1; i++) {
+        // Coherence level must be less than draft level and structure creation must be enabled
+        if (this.draftLevel === -1) return levels; // No coherence checking if no structure creation
+        
+        const maxLevel = Math.min(this.draftLevel - 1, this.node.template.length - 2);
+        
+        for (let i = this.node.level; i <= maxLevel; i++) {
             levels.push({
                 value: i,
                 name: this.getLevelDisplayName(i + 1) // Show child level name for UI
@@ -89,6 +115,7 @@ export class ConversationalGenerationModal extends BaseModal {
 
     public override render(): HTMLElement {
         const availableLevels = this.getAvailableLevels();
+        const contextCleaningLevels = this.getContextCleaningLevels();
         const coherenceLevels = this.getCoherenceLevels();
         const currentLevelName = this.getLevelDisplayName(this.node.level);
 
@@ -200,34 +227,8 @@ export class ConversationalGenerationModal extends BaseModal {
                         gap: 0.5rem;
                     }
 
-                    .advanced-toggle {
-                        margin: 1.5rem 0;
-                        text-align: center;
-                    }
-
-                    .advanced-toggle button {
-                        background: #f9fafb;
-                        border: 1px solid #d1d5db;
-                        color: #6b7280;
-                        padding: 0.5rem 1rem;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-size: 0.9rem;
-                        transition: all 0.2s;
-                    }
-
-                    .advanced-toggle button:hover {
-                        background: #f3f4f6;
-                        border-color: #9ca3af;
-                    }
-
                     .advanced-options {
-                        display: none;
                         animation: fadeIn 0.3s ease-in;
-                    }
-
-                    .advanced-options.show {
-                        display: block;
                     }
 
                     @keyframes fadeIn {
@@ -315,47 +316,6 @@ export class ConversationalGenerationModal extends BaseModal {
                     .validation-message.show {
                         display: block;
                     }
-
-                    .progress-overlay {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
-                        background: rgba(0, 0, 0, 0.8);
-                        display: none;
-                        align-items: center;
-                        justify-content: center;
-                        z-index: 10000;
-                    }
-
-                    .progress-overlay.show {
-                        display: flex;
-                    }
-
-                    .progress-content {
-                        background: white;
-                        border-radius: 12px;
-                        padding: 2rem;
-                        text-align: center;
-                        max-width: 400px;
-                        width: 90%;
-                    }
-
-                    .progress-spinner {
-                        width: 40px;
-                        height: 40px;
-                        border: 4px solid #e5e7eb;
-                        border-top: 4px solid #3b82f6;
-                        border-radius: 50%;
-                        animation: spin 1s linear infinite;
-                        margin: 0 auto 1rem;
-                    }
-
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
                 </style>
 
                 <!-- Current Node Information -->
@@ -415,17 +375,22 @@ export class ConversationalGenerationModal extends BaseModal {
                     
                     <div class="help-text">
                         💡 <strong>Content Writing</strong> means the AI will generate the actual written content for each node. This includes detailed paragraphs, dialogue, descriptions, etc. - the "meat" of your project.
+                        <br><br>
+                        📋 <strong>Recommendation:</strong> Set content level at the same level as structure creation, or one level below. It's not recommended to create structure (drafts) based on just other drafts.
                     </div>
                 </div>
 
-                <!-- Advanced Options Toggle -->
-                <div class="advanced-toggle">
-                    <button onclick="window.conversationalModal.toggleAdvanced()">
-                        🔧 Advanced Options (Optional)
-                    </button>
+                <!-- Advanced Options -->
+                <div class="conversation-text">
+                    <strong>🔧 Advanced Options for Better Quality</strong>
+                </div>
+                
+                <div class="help-text">
+                    💡 <strong>Advantages:</strong> Better coherence, higher quality, fewer errors and contradictions<br>
+                    ⚠️ <strong>Drawbacks:</strong> Slower generation, higher API costs, more complex processing
                 </div>
 
-                <div id="advanced-options" class="advanced-options">
+                <div id="advanced-options" class="advanced-options show">
                     <div class="control-section">
                         <div class="section-title">
                             🧹 Context Cleaning
@@ -435,7 +400,7 @@ export class ConversationalGenerationModal extends BaseModal {
                             <span class="inline-control ${this.contextPruneLevel === -1 ? 'none-selected' : ''}">
                                 <select id="context-prune-level-select" onchange="window.conversationalModal.updateContextPruneLevel(this.value)">
                                     <option value="-1">Don't clean context</option>
-                                    ${availableLevels.map(level => 
+                                    ${contextCleaningLevels.map(level => 
                                         `<option value="${level.value}" ${this.contextPruneLevel === level.value ? 'selected' : ''}>${level.name}</option>`
                                     ).join('')}
                                 </select>
@@ -469,6 +434,35 @@ export class ConversationalGenerationModal extends BaseModal {
                             💡 <strong>Quality Checking</strong> ensures that detailed content matches the original outline. If contradictions are found, you'll be shown them and can choose how to fix them.
                         </div>
                     </div>
+
+                    <div class="control-section">
+                        <div class="section-title">
+                            🔧 Automatic Fixing
+                        </div>
+                        <div class="conversation-text">
+                            When contradictions are found, automatically fix those with severity level 
+                            <span class="inline-control">
+                                <select id="autofix-severity-select" onchange="window.conversationalModal.updateAutofixSeverity(this.value)">
+                                    <option value="-1">Don't auto-fix</option>
+                                    <option value="1" ${this.autofixSeverity === 1 ? 'selected' : ''}>1+ (All issues)</option>
+                                    <option value="2" ${this.autofixSeverity === 2 ? 'selected' : ''}>2+</option>
+                                    <option value="3" ${this.autofixSeverity === 3 ? 'selected' : ''}>3+</option>
+                                    <option value="4" ${this.autofixSeverity === 4 ? 'selected' : ''}>4+</option>
+                                    <option value="5" ${this.autofixSeverity === 5 ? 'selected' : ''}>5+ (Moderate+)</option>
+                                    <option value="6" ${this.autofixSeverity === 6 ? 'selected' : ''}>6+</option>
+                                    <option value="7" ${this.autofixSeverity === 7 ? 'selected' : ''}>7+</option>
+                                    <option value="8" ${this.autofixSeverity === 8 ? 'selected' : ''}>8+ (High+)</option>
+                                    <option value="9" ${this.autofixSeverity === 9 ? 'selected' : ''}>9+</option>
+                                    <option value="10" ${this.autofixSeverity === 10 ? 'selected' : ''}>10 (Critical only)</option>
+                                </select>
+                            </span>
+                            and above.
+                        </div>
+                        
+                        <div class="help-text">
+                            💡 <strong>Automatic Fixing</strong> lets the AI automatically correct contradictions at or above a certain severity level (1-10). Level 5+ is recommended - it fixes moderate and higher severity issues. At level 0, you will be shown all issues and you can choose to fix them one by one with AI support.
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Validation Messages -->
@@ -481,21 +475,9 @@ export class ConversationalGenerationModal extends BaseModal {
                     <button class="btn-secondary" onclick="window.conversationalModal.close()">
                         Cancel
                     </button>
-                    <button id="start-generation-btn" class="btn-primary" onclick="window.conversationalModal.startGeneration()" ${this.isGenerating ? 'disabled' : ''}>
-                        ${this.isGenerating ? '⏳ Generating...' : '🚀 Start Generation'}
+                    <button id="apply-settings-btn" class="btn-primary" onclick="window.conversationalModal.applySettingsAndGenerate()">
+                        🚀 Apply Settings & Generate
                     </button>
-                </div>
-
-                <!-- Progress Overlay -->
-                <div id="progress-overlay" class="progress-overlay">
-                    <div class="progress-content">
-                        <div class="progress-spinner"></div>
-                        <h3>Generating Content...</h3>
-                        <p id="progress-message">Preparing generation process...</p>
-                        <button class="btn-secondary" onclick="window.conversationalModal.cancelGeneration()" style="margin-top: 1rem;">
-                            Stop Generation
-                        </button>
-                    </div>
                 </div>
             </div>
         `;
@@ -520,6 +502,22 @@ export class ConversationalGenerationModal extends BaseModal {
      */
     public updateDraftLevel(value: string): void {
         this.draftLevel = parseInt(value);
+        
+        // Adjust dependent levels if they're now invalid
+        const contextCleaningLevels = this.getContextCleaningLevels();
+        const coherenceLevels = this.getCoherenceLevels();
+        
+        // Reset context prune level if it's now invalid
+        if (this.contextPruneLevel !== -1 && !contextCleaningLevels.some(l => l.value === this.contextPruneLevel)) {
+            this.contextPruneLevel = -1;
+        }
+        
+        // Reset coherence level if it's now invalid
+        if (this.coherenceLevel !== -1 && !coherenceLevels.some(l => l.value === this.coherenceLevel)) {
+            this.coherenceLevel = -1;
+        }
+        
+        this.refreshDependentDropdowns();
         this.updateValidation();
         this.updateInlineControlStyles();
     }
@@ -552,12 +550,50 @@ export class ConversationalGenerationModal extends BaseModal {
     }
 
     /**
-     * Toggle advanced options
+     * Update autofix severity
+     */
+    public updateAutofixSeverity(value: string): void {
+        this.autofixSeverity = parseInt(value);
+        this.updateValidation();
+        this.updateInlineControlStyles();
+    }
+
+    /**
+     * Toggle advanced options (kept for backwards compatibility but not used)
      */
     public toggleAdvanced(): void {
-        const advancedOptions = document.getElementById('advanced-options');
-        if (advancedOptions) {
-            advancedOptions.classList.toggle('show');
+        // No longer used since advanced options are always visible
+    }
+
+    /**
+     * Refresh context cleaning and coherence dropdowns based on current draft level
+     */
+    private refreshDependentDropdowns(): void {
+        const contextCleaningLevels = this.getContextCleaningLevels();
+        const coherenceLevels = this.getCoherenceLevels();
+        
+        // Update context cleaning dropdown
+        const contextSelect = document.getElementById('context-prune-level-select') as HTMLSelectElement;
+        if (contextSelect) {
+            const currentValue = this.contextPruneLevel;
+            contextSelect.innerHTML = `
+                <option value="-1">Don't clean context</option>
+                ${contextCleaningLevels.map(level => 
+                    `<option value="${level.value}" ${currentValue === level.value ? 'selected' : ''}>${level.name}</option>`
+                ).join('')}
+            `;
+        }
+        
+        // Update coherence dropdown
+        const coherenceSelect = document.getElementById('coherence-level-select') as HTMLSelectElement;
+        if (coherenceSelect) {
+            const currentValue = this.coherenceLevel;
+            coherenceSelect.innerHTML = `
+                <option value="-1">Don't check coherence</option>
+                ${coherenceLevels.map(level => 
+                    `<option value="${level.value}" ${currentValue === level.value ? 'selected' : ''}>${level.name}</option>`
+                ).join('')}
+            `;
         }
     }
 
@@ -579,6 +615,7 @@ export class ConversationalGenerationModal extends BaseModal {
         updateControlStyle('content-level-select', this.contentLevel);
         updateControlStyle('context-prune-level-select', this.contextPruneLevel);
         updateControlStyle('coherence-level-select', this.coherenceLevel);
+        updateControlStyle('autofix-severity-select', this.autofixSeverity);
     }
 
     /**
@@ -586,9 +623,9 @@ export class ConversationalGenerationModal extends BaseModal {
      */
     private updateValidation(): void {
         const validationMessage = document.getElementById('validation-message');
-        const startButton = document.getElementById('start-generation-btn') as HTMLButtonElement;
+        const applyButton = document.getElementById('apply-settings-btn') as HTMLButtonElement;
         
-        if (!validationMessage || !startButton) return;
+        if (!validationMessage || !applyButton) return;
 
         let errors: string[] = [];
 
@@ -602,6 +639,11 @@ export class ConversationalGenerationModal extends BaseModal {
             errors.push('Quality checking level must be less than structure creation level.');
         }
 
+        // Check if context prune level > draft level
+        if (this.contextPruneLevel > this.draftLevel && this.draftLevel !== -1) {
+            errors.push('Context cleaning level cannot be higher than structure creation level.');
+        }
+
         // Check if any work needs to be done
         if (this.draftLevel === -1 && this.contentLevel === -1 && this.contextPruneLevel === -1 && this.coherenceLevel === -1) {
             errors.push('Please select at least one option for generation.');
@@ -610,125 +652,70 @@ export class ConversationalGenerationModal extends BaseModal {
         if (errors.length > 0) {
             validationMessage.innerHTML = errors.map(error => `⚠️ ${error}`).join('<br>');
             validationMessage.classList.add('show');
-            startButton.disabled = true;
+            applyButton.disabled = true;
         } else {
             validationMessage.classList.remove('show');
-            startButton.disabled = this.isGenerating;
+            applyButton.disabled = false;
         }
     }
 
     /**
-     * Start the generation process
+     * Apply settings to main UI and trigger generation
      */
-    public async startGeneration(): Promise<void> {
-        if (this.isGenerating) return;
-
-        this.isGenerating = true;
-        
-        // Show progress overlay
-        const progressOverlay = document.getElementById('progress-overlay');
-        if (progressOverlay) {
-            progressOverlay.classList.add('show');
-        }
-
-        // Update button state
-        const startButton = document.getElementById('start-generation-btn') as HTMLButtonElement;
-        if (startButton) {
-            startButton.disabled = true;
-            startButton.textContent = '⏳ Generating...';
-        }
-
+    public async applySettingsAndGenerate(): Promise<void> {
         try {
-            // Update progress message
-            this.updateProgressMessage('Starting generation process...');
-
-            // Import UnifiedGenerationService
-            const { UnifiedGenerationService } = await import('../../project/UnifiedGenerationService');
-
-            // Create service dependencies
-            const unifiedService = new UnifiedGenerationService({
-                treeService: this.projectManager.getTreeService(),
-                contextService: this.projectManager.getContextService(),
-                promptService: this.projectManager.getPromptService(),
-                generationController: this.projectManager.getGenerationController(),
-                generationCoordinator: this.projectManager.getGenerationCoordinator(),
-                loopOrchestrator: (this.projectManager as any).loopOrchestrator,
-                settingsManager: this.projectManager.getSettingsManager(),
-                openRouterClient: (this.projectManager as any).openRouterClient,
-                eventEmitter: this.projectManager,
-                saveToStorage: () => this.projectManager.saveToStorage(),
-                rootNode: this.projectManager.rootNode
-            });
-
-            // Define generation levels
-            const levels = {
-                draftLevel: this.draftLevel,
-                contentLevel: this.contentLevel,
-                contextPruneLevel: this.contextPruneLevel,
-                coherenceLevel: this.coherenceLevel,
-                autofixSeverity: this.autofixSeverity
-            };
-
-            this.updateProgressMessage('Generating content with AI...');
-
-            // Start unified generation
-            await unifiedService.generateWithLevels(this.node.id, levels);
-
-            // Save to storage
-            await this.projectManager.saveToStorage();
-
-            this.updateProgressMessage('Generation completed successfully!');
-
-            // Close modal after short delay
-            setTimeout(() => {
-                this.close();
-            }, 1500);
-
-        } catch (error) {
-            console.error('Generation failed:', error);
-            this.updateProgressMessage(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            // Set the main UI dropdown values
+            this.setMainUILevels();
             
-            // Show error for a few seconds then hide progress
-            setTimeout(() => {
-                this.hideProgress();
-            }, 3000);
+            // Close this modal
+            await this.close();
+            
+            // Trigger the main generate button
+            this.triggerMainGeneration();
+            
+        } catch (error) {
+            console.error('Failed to apply settings and generate:', error);
+            alert('Failed to apply settings. Please try again.');
         }
     }
 
     /**
-     * Cancel the generation process
+     * Set the main UI level dropdown values
      */
-    public cancelGeneration(): void {
-        // Request abort through generation controller
-        this.projectManager.getGenerationController().requestAbort();
-        this.hideProgress();
-    }
-
-    /**
-     * Update progress message
-     */
-    private updateProgressMessage(message: string): void {
-        const progressMessage = document.getElementById('progress-message');
-        if (progressMessage) {
-            progressMessage.textContent = message;
-        }
-    }
-
-    /**
-     * Hide progress overlay and reset state
-     */
-    private hideProgress(): void {
-        this.isGenerating = false;
+    private setMainUILevels(): void {
+        const draftSelector = document.getElementById('draft-level-selector') as HTMLSelectElement;
+        const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
+        const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
+        const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
+        const autofixSelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
         
-        const progressOverlay = document.getElementById('progress-overlay');
-        if (progressOverlay) {
-            progressOverlay.classList.remove('show');
-        }
+        if (draftSelector) draftSelector.value = this.draftLevel.toString();
+        if (contentSelector) contentSelector.value = this.contentLevel.toString();
+        if (contextPruneSelector) contextPruneSelector.value = this.contextPruneLevel.toString();
+        if (coherenceSelector) coherenceSelector.value = this.coherenceLevel.toString();
+        if (autofixSelector) autofixSelector.value = this.autofixSeverity.toString();
+        
+        // Trigger change events to update any dependent UI
+        [draftSelector, contentSelector, contextPruneSelector, coherenceSelector, autofixSelector].forEach(selector => {
+            if (selector) {
+                selector.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    }
 
-        const startButton = document.getElementById('start-generation-btn') as HTMLButtonElement;
-        if (startButton) {
-            startButton.disabled = false;
-            startButton.textContent = '🚀 Start Generation';
+    /**
+     * Trigger the main generate button
+     */
+    private triggerMainGeneration(): void {
+        const generateButton = document.getElementById('node-generate-btn') as HTMLButtonElement;
+        if (generateButton) {
+            // Small delay to ensure UI is updated
+            setTimeout(() => {
+                generateButton.click();
+            }, 100);
+        } else {
+            console.error('Main generate button not found');
+            alert('Could not find the main generate button. Please use the Generate button in the main interface.');
         }
     }
 

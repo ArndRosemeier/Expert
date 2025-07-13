@@ -8,6 +8,7 @@ import { ProjectTemplate } from '../../../ProjectTemplate';
 import { ProjectGenerationService, ProjectGenerationRequest } from '../services/ProjectGenerationService';
 // import * as state from '../../../state'; // Not used currently
 import { SettingsManager } from '../../../SettingsManager';
+import { AI_ASSISTANT_EMOJI } from '../../../constants';
 import { StorageService } from '../../../StorageService';
 
 export interface AIProjectCreatorConfig {
@@ -208,7 +209,7 @@ export class AIProjectCreator {
                 <div class="description-section">
                     <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
                         <label for="ai-project-description" style="margin: 0;">
-                            🤖 Describe Your Project
+                            ${AI_ASSISTANT_EMOJI} Describe Your Project
                         </label>
                         <div class="prompt-dropdown-container" style="position: relative;">
                             <button id="saved-prompts-btn" type="button" style="padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">

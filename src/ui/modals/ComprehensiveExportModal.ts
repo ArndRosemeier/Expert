@@ -8,6 +8,7 @@ import { ComprehensiveImportService } from './services/ComprehensiveImportServic
 
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
+import { AI_ASSISTANT_EMOJI } from '../../constants';
 
 export interface ComprehensiveExportModalConfig extends ModalConfig {
     // No specific config needed for comprehensive export
@@ -95,7 +96,7 @@ export class ComprehensiveExportModal extends BaseModal {
                 <li>🗂️ All projects and their content</li>
                 <li>⚙️ All settings profiles and configurations</li>
                 <li>📝 All custom prompts and templates</li>
-                <li>🤖 Reader AI button configurations</li>
+                <li>${AI_ASSISTANT_EMOJI} Reader AI button configurations</li>
                 <li>✨ Polish text button configurations</li>
                 <li>🔧 Application preferences and settings</li>
             </ul>

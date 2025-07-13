@@ -12,6 +12,9 @@ export const MAX_MAX_ITERATIONS = 10;
 export const DEFAULT_PROFILE_NAME = 'default';
 export const MAX_PROFILE_NAME_LENGTH = 50;
 
+// === UI Icons ===
+export const AI_ASSISTANT_EMOJI = '💡';
+
 // === Storage Keys ===
 export const STORAGE_KEYS = {
     SETTINGS_PROFILES: 'expert_app_settings_profiles',

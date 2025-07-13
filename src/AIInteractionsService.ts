@@ -1,4 +1,5 @@
 import { StorageService, IStorageService } from './StorageService';
+import { AI_ASSISTANT_EMOJI } from './constants';
 
 export class AIInteractionsService {
     private static instance: AIInteractionsService | null = null;
@@ -90,7 +91,7 @@ export class AIInteractionsService {
         // Update header with purpose
         const header = this.overlay.querySelector('.ai-overlay-header h3');
         if (header) {
-            header.textContent = `🤖 AI Interaction - ${purpose}`;
+            header.textContent = `${AI_ASSISTANT_EMOJI} AI Interaction - ${purpose}`;
         }
 
         // Set prompt content

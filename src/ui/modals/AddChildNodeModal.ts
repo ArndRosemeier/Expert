@@ -5,6 +5,7 @@ import { ProjectManager } from '../../ProjectManager';
 import { NodeCreationService, NodeSuggestion, INodeCreationService, NodeCreationConfig } from './services/NodeCreationService';
 import { createElement } from './core/modal-utils';
 import { OpenRouterClient } from '../../OpenRouterClient';
+import { AI_ASSISTANT_EMOJI } from '../../constants';
 
 export interface AddChildNodeModalConfig extends ModalConfig {
     parentNodeId: string;
@@ -190,7 +191,7 @@ export class AddChildNodeModal extends BaseModal {
         const isDisabled = this.childModalState.isCreating || this.childModalState.isGenerating;
 
         const aiButton = createElement('button', {
-            content: '🤖 AI Suggestions',
+                            content: `${AI_ASSISTANT_EMOJI} AI Suggestions`,
             classes: this.childModalState.mode === 'ai' ? ['mode-btn', 'active'] : ['mode-btn'],
             attributes: {
                 style: this.getModeButtonStyle(this.childModalState.mode === 'ai', isDisabled),
@@ -342,7 +343,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         const icon = createElement('div', {
-            content: '🤖',
+            content: AI_ASSISTANT_EMOJI,
             attributes: { style: 'font-size: 48px; margin-bottom: 16px; opacity: 0.6;' }
         });
 
@@ -390,7 +391,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         const icon = createElement('div', {
-            content: '🤖',
+            content: AI_ASSISTANT_EMOJI,
             attributes: { style: 'font-size: 24px; margin-bottom: 16px;' }
         });
 

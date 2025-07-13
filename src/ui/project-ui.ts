@@ -16,6 +16,7 @@ import { AIInteractionsService } from '../AIInteractionsService';
 import { AIProgressService } from '../AIProgressService';
 import { getContextItemCount } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
+import { AI_ASSISTANT_EMOJI } from '../constants';
 
 
 // --- State Variables ---
@@ -1528,7 +1529,7 @@ export function renderNodeDetails() {
                             <!-- Autofix Severity -->
                             <div class="level-selector">
                                 <label for="autofix-severity-selector" title="Auto-fix contradictions of this severity and higher during generation">
-                                    <span class="level-icon">🤖</span>
+                                    <span class="level-icon">${AI_ASSISTANT_EMOJI}</span>
                                     Autofix Severity:
                                 </label>
                                 <select id="autofix-severity-selector" class="level-dropdown">
@@ -1568,7 +1569,7 @@ export function renderNodeDetails() {
                             <!-- Action Buttons -->
                             <div class="actions-container">
                                 <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
-                                    🤖
+                                    ${AI_ASSISTANT_EMOJI}
                                 </button>
                                 <button id="node-generate-btn" class="button button-primary" style="padding: 0.6rem 1.2rem; font-size: 0.9rem;">
                                     ⚡ Generate
@@ -3032,7 +3033,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: #495057;">
                     <input type="checkbox" id="ai-interactions-checkbox" style="margin: 0;">
-                    🤖 See AI interactions
+                    ${AI_ASSISTANT_EMOJI} See AI interactions
                 </label>
                     <div id="ai-progress-report" style="display: none; font-size: 0.75rem; color: #6c757d; padding-left: 1.75rem; margin-top: -0.125rem;">
                         <!-- AI progress will appear here -->
@@ -3050,7 +3051,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         <div id="ai-interactions-overlay" style="display: none;">
             <div class="ai-modal-content">
                 <div class="ai-overlay-header">
-                    <h3>🤖 AI Interaction</h3>
+                    <h3>${AI_ASSISTANT_EMOJI} AI Interaction</h3>
                     <button id="close-ai-overlay" class="close-btn">&times;</button>
                 </div>
                 <div class="ai-overlay-content">

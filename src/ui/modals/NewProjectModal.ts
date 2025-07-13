@@ -8,6 +8,7 @@ import { BaseModal } from './core/BaseModal';
 import { ModalConfig } from './types/ModalTypes';
 import { ManualProjectCreator, ManualProjectCreatorConfig } from './components/ManualProjectCreator';
 import { AIProjectCreator, AIProjectCreatorConfig } from './components/AIProjectCreator';
+import { AI_ASSISTANT_EMOJI } from '../../constants';
 import { ProjectTemplate } from '../../ProjectTemplate';
 import { createElement } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
@@ -21,7 +22,7 @@ type TabType = 'manual' | 'ai';
 
 export class NewProjectModal extends BaseModal {
     private onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
-    private activeTab: TabType = 'manual';
+    private activeTab: TabType = 'ai';
     private manualCreator: ManualProjectCreator;
     private aiCreator: AIProjectCreator;
     private currentTabContent: HTMLElement | null = null;
@@ -240,7 +241,7 @@ export class NewProjectModal extends BaseModal {
                         </button>
                         <button class="tab-btn ${this.activeTab === 'ai' ? 'active' : ''}" 
                                 data-tab="ai">
-                            🤖 AI Creation
+                            ${AI_ASSISTANT_EMOJI} AI Creation
                         </button>
                     </div>
                     <div class="tab-content" id="tab-content-container">

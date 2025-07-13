@@ -203,7 +203,7 @@ export class ContextItemsEditorModal extends BaseModal {
                         <button type="button" class="btn-success btn-small" data-action="add-item" ${this.isTransforming ? 'disabled' : ''}>
                             ➕ Add Item
                         </button>
-                        <button type="button" class="btn-transform" data-action="transform" ${this.isTransforming ? 'disabled' : ''}>
+                        <button type="button" class="btn-transform" data-action="transform" ${this.isTransforming ? 'disabled' : ''} title="Transforms unstructured context into the supported paragraph format">
                             ${this.isTransforming ? '<div class="transform-spinner"></div> Transforming...' : '🔄 Transform Context'}
                         </button>
                     </div>
