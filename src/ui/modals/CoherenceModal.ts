@@ -400,13 +400,13 @@ export class CoherenceModal extends BaseModal {
                             }
                         }
                     </style>
-                    ${headerContent}
-                    <div class="modal-body">
-                        ${statusContent}
-                        ${infoContent}
-                        ${contradictionsContent}
-                    </div>
-                    ${actionsContent}
+            ${headerContent}
+            <div class="modal-body">
+                ${statusContent}
+                ${infoContent}
+                ${contradictionsContent}
+            </div>
+            ${actionsContent}
         `;
     }
 
@@ -950,7 +950,7 @@ export class CoherenceModal extends BaseModal {
             // Fallback to old logic if no project root available
             actualParentNode = this.parentNode || undefined;
             if (this.parentNode && this.parentNode.children) {
-                childNode = this.parentNode.children.find(child => child.id === childId);
+            childNode = this.parentNode.children.find(child => child.id === childId);
             }
         }
         
@@ -1064,13 +1064,13 @@ export class CoherenceModal extends BaseModal {
             // Tag children from all analyzed parent nodes
             for (const parentNode of this.analysisResult.analyzedNodes) {
                 if (parentNode.children) {
-                    for (const childNode of parentNode.children) {
-                        const masterVersion = childNode.getMasterVersion();
+                for (const childNode of parentNode.children) {
+                    const masterVersion = childNode.getMasterVersion();
                         if (masterVersion && masterVersion.tags) {
-                            masterVersion.tags.add('consistent_to_parent');
-                            masterVersion.timestamp = new Date();
-                            taggedCount++;
-                            console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
+                        masterVersion.tags.add('consistent_to_parent');
+                        masterVersion.timestamp = new Date();
+                        taggedCount++;
+                        console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
                         }
                     }
                 }
@@ -1084,16 +1084,16 @@ export class CoherenceModal extends BaseModal {
             
             // Tag all children's master versions
             if (this.parentNode.children) {
-                for (const childNode of this.parentNode.children) {
-                    const masterVersion = childNode.getMasterVersion();
+            for (const childNode of this.parentNode.children) {
+                const masterVersion = childNode.getMasterVersion();
                     if (masterVersion && masterVersion.tags) {
-                        // Add the consistent_to_parent tag
-                        masterVersion.tags.add('consistent_to_parent');
-                        masterVersion.timestamp = new Date(); // Update timestamp
-                        taggedCount++;
+                    // Add the consistent_to_parent tag
+                    masterVersion.tags.add('consistent_to_parent');
+                    masterVersion.timestamp = new Date(); // Update timestamp
+                    taggedCount++;
     
-                    } else {
-                        console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
+                } else {
+                    console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
                     }
                 }
             }

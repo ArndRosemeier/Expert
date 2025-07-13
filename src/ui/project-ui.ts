@@ -18,6 +18,51 @@ import { getContextItemCount } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 
+/**
+ * Gets the appropriate status icon for a node based on its state
+ */
+function getNodeStatusIcon(node: DocumentNode): string {
+    // Root nodes have no status icon - they're distinguished by typography
+    if (node.level === 0 || node.parentId === null) {
+        return '';
+    }
+    
+    const masterVersion = node.getMasterVersion();
+    if (!masterVersion) {
+        return '🟣'; // Fallback to pure draft if no master version
+    }
+    
+    const hasContent = node.content && node.content.trim().length > 0;
+    const isDraft = masterVersion.tags.has('draft') || node.content?.startsWith('Draft:');
+    const isContextAdjusted = node.ContextIsAdjusted();
+    const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
+    
+    // Finished: all conditions met
+    if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
+        return '⭐';
+    }
+    
+    // Content done, context adjusted (but no coherence check)
+    if (hasContent && !isDraft && isContextAdjusted) {
+        return '🟢';
+    }
+    
+    // Content done, nothing much else
+    if (hasContent && !isDraft) {
+        return '🟡';
+    }
+    
+    // Draft with adjusted context
+    if (hasContent && isDraft && isContextAdjusted) {
+        return '🟠';
+    }
+    
+    // Pure draft
+    return '🟣';
+}
+
+
+
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
@@ -2067,10 +2112,9 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     const hasChildren = node.children.length > 0;
     const isCollapsed = node.collapsed; // Use node's collapsed property instead of global set
     const indent = node.level * 20;
+    const isLeaf = !hasChildren;
     
-
-    
-    let html = `<div class="tree-item" style="padding-left: ${indent}px;">`;
+    let html = `<div class="tree-item" style="padding-left: ${indent}px;" data-depth="${node.level}">`;
     
     // Add expand/collapse button for nodes with children
     if (hasChildren) {
@@ -2079,13 +2123,17 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
 
     } else {
         // Add spacing for nodes without children to align with those that have expand buttons
-        html += `<span style="margin-right: 12px;"></span>`;
+        // Match the exact width: fine-tuned to 16px for perfect alignment
+        html += `<span style="display: inline-block; width: 16px;"></span>`;
     }
     
-    // Add the node title with special styling for project roots
-    const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${isProjectRoot ? 'project-root' : ''}`;
+    // Add the node title with status icon and enhanced styling
+    const nodeTypeClass = isProjectRoot ? 'project-root' : (hasChildren ? 'has-children' : 'leaf-node');
+    const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${nodeTypeClass}`;
+    const statusIcon = getNodeStatusIcon(node);
+    const statusIconHtml = statusIcon ? `<span class="node-status-icon">${statusIcon}</span>` : '';
     html += `<span class="${nodeClasses}" data-id="${node.id}">
-                ${node.title} ${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
+                ${statusIconHtml}<span class="node-title">${node.title}</span>${node.isGenerating ? '<span class="spinner" style="width:12px; height:12px; border-width: 2px;"></span>' : ''}
              </span>`;
     
     html += `</div>`;
@@ -2198,7 +2246,7 @@ This action cannot be undone.`;
                             loopOrchestrator: (projectManager as any).loopOrchestrator,
                             settingsManager: projectManager.getSettingsManager(),
                             openRouterClient: (projectManager as any).openRouterClient,
-                            eventEmitter: projectManager,
+                            eventEmitter: projectManager as any,
                             saveToStorage: () => projectManager!.saveToStorage(),
                             rootNode: projectManager.rootNode
                         });
@@ -2264,7 +2312,7 @@ This action cannot be undone.`;
                             loopOrchestrator: (projectManager as any).loopOrchestrator,
                             settingsManager: projectManager.getSettingsManager(),
                             openRouterClient: (projectManager as any).openRouterClient,
-                            eventEmitter: projectManager,
+                            eventEmitter: projectManager as any,
                             saveToStorage: () => projectManager!.saveToStorage(),
                             rootNode: projectManager.rootNode
                         });
@@ -2992,20 +3040,106 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 font-size: 11px;
             }
             .tree-expand-btn:hover { color: var(--primary-color); }
+            /* === Enhanced Tree Styling === */
+            .tree-item {
+                position: relative;
+                transition: background-color 0.15s ease;
+                border-left: 1px solid transparent; /* Reserve space for border */
+            }
+            
+            .tree-item:hover {
+                background: linear-gradient(90deg, transparent 0%, #f8f9fa 20%, #f8f9fa 100%);
+                border-radius: 0 4px 4px 0;
+            }
+            
+            .tree-item::before {
+                content: '';
+                position: absolute;
+                left: 0px;
+                top: 50%;
+                width: 12px;
+                height: 1px;
+                background: #e9ecef;
+                display: none; /* Hidden by default */
+            }
+            
+            /* Show lines for child levels only */
+            .tree-item[data-depth]:not([data-depth="0"]) {
+                border-left: 1px solid #e9ecef;
+            }
+            .tree-item[data-depth]:not([data-depth="0"])::before {
+                display: block;
+            }
+            
             .tree-node { 
                 padding: 1px 0.5rem; 
                 border-radius: 4px; 
                 cursor: pointer; 
                 flex-grow: 1;
                 margin-left: 1px;
+                display: flex;
+                align-items: center;
+                transition: all 0.15s ease;
             }
-            .tree-node.selected { background-color: var(--primary-color); color: white; }
-            .tree-node:hover:not(.selected) { background-color: #e9ecef; }
-            .project-root {
-                font-weight: bold;
-                color: #495057;
+            
+            /* Typography Hierarchy */
+            .tree-node.project-root {
+                font-weight: 600;
+                font-size: 1rem;
+                color: #2c3e50;
                 border-left: 3px solid var(--primary-color);
                 background-color: #f8f9fa;
+            }
+            
+            .tree-node.has-children {
+                font-weight: 500;
+                color: #34495e;
+            }
+            
+            .tree-node.leaf-node {
+                font-weight: 400;
+                color: #495057;
+            }
+            
+            /* Enhanced Selection States */
+            .tree-node.selected { 
+                background: linear-gradient(90deg, #007bff 3px, #e3f2fd 3px, #e3f2fd 100%);
+                color: #0056b3;
+                font-weight: 500;
+                border-radius: 0 4px 4px 0;
+                box-shadow: 0 2px 4px rgba(0, 123, 255, 0.15);
+            }
+            
+            .tree-node:hover:not(.selected) { 
+                background-color: #f8f9fa;
+                transform: translateX(2px);
+            }
+            
+            /* Status Icon Styling */
+            .node-status-icon {
+                margin-right: 6px;
+                font-size: 0.9rem;
+                width: 16px;
+                text-align: center;
+                display: inline-block;
+                transition: transform 0.15s ease;
+            }
+            
+            .tree-node:hover .node-status-icon {
+                transform: scale(1.1);
+            }
+            
+            /* Content Stats Styling */
+            .content-stats {
+                margin-left: auto;
+                font-size: 0.75rem;
+                color: #6c757d;
+                font-style: italic;
+                opacity: 0.8;
+            }
+            
+            .tree-node:hover .content-stats {
+                opacity: 1;
             }
             .details-view { background-color: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
             .details-view h2, .details-view h3 { margin-top: 0; }
@@ -3605,7 +3739,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             loopOrchestrator: (projectManager as any).loopOrchestrator,
             settingsManager: projectManager.getSettingsManager(),
             openRouterClient: (projectManager as any).openRouterClient,
-            eventEmitter: projectManager,
+            eventEmitter: projectManager as any,
             saveToStorage: () => projectManager!.saveToStorage(),
             rootNode: projectManager.rootNode
         });
