@@ -438,7 +438,7 @@ export class PromptExpansionService {
             value: this.settingsManager.getLanguage(),
             description: 'Current project language setting'
         }));
-
+        
         // Context-dependent placeholders
         this.registerContextPlaceholder('project_title', (context) => ({
             value: context.project!.title!,

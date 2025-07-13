@@ -25,52 +25,209 @@
         
         button { cursor: pointer; }
 
-        /* Header Styles */
-        .main-header {
-            background-color: white;
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
-        }
-        .main-header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin: 0;
-        }
-        .main-header div { display: flex; gap: 1rem; }
-        
         /* Global Button Styles */
         .button {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
             padding: 0.75rem 1.25rem;
             border-radius: 8px;
             font-weight: 500;
+            font-size: 0.875rem;
             text-align: center;
             border: 1px solid transparent;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+            line-height: 1.2;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
-        .button-primary { background-color: var(--primary-color); color: white; }
-        .button-primary:hover { background-color: var(--primary-hover); }
+        
+        .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .button-primary { 
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white; 
+            border-color: #2563eb;
+        }
+        .button-primary:hover { 
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border-color: #1d4ed8;
+        }
         
         .button-secondary {
-            background-color: #e5e7eb;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
             color: #374151;
             border-color: #d1d5db;
         }
         .button-secondary:hover {
-            background-color: #d1d5db;
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+            border-color: #9ca3af;
+            color: #1f2937;
         }
         
         .button-success {
-            background-color: #28a745;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
-            border-color: #28a745;
+            border-color: #059669;
         }
         .button-success:hover {
-            background-color: #218838;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border-color: #047857;
+        }
+        
+        .button-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border-color: #dc2626;
+        }
+        .button-danger:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            border-color: #b91c1c;
+        }
+
+        /* Header Styles */
+        .main-header {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .main-header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-buttons {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        
+        /* Button group visual separation */
+        .header-buttons .button:nth-child(4) {
+            margin-right: 0.5rem;
+            border-right: 1px solid #e5e7eb;
+            padding-right: 1rem;
+        }
+        
+        /* Focus states for accessibility */
+        .button:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Disabled states */
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+        }
+        
+        .button:disabled:hover {
+            transform: none !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+        }
+        
+        /* Loading state for buttons */
+        .button.loading {
+            position: relative;
+            color: transparent;
+        }
+        
+        .button.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 1024px) {
+            .main-header {
+                padding: 1rem 1.5rem;
+            }
+            
+            .header-buttons {
+                gap: 0.5rem;
+            }
+            
+            .button {
+                padding: 0.625rem 1rem;
+                font-size: 0.8rem;
+            }
+            
+            .main-header h1 {
+                font-size: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-header {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+            
+            .header-buttons {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 0.5rem;
+            }
+            
+            .button {
+                padding: 0.5rem 0.875rem;
+                font-size: 0.75rem;
+            }
+            
+            /* Remove border separator on mobile */
+            .header-buttons .button:nth-child(4) {
+                border-right: none;
+                padding-right: 0.875rem;
+                margin-right: 0;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header-buttons .button {
+                flex: 1;
+                min-width: 0;
+                justify-content: center;
+            }
+            
+            .header-buttons {
+                width: 100%;
+            }
         }
 
         /* Placeholder Button Styles */
@@ -219,13 +376,13 @@
 
     <header class="main-header">
         <h1>Expert</h1>
-        <div>
+        <div class="header-buttons">
             <button id="globalAbortBtn" class="button button-danger">🛑 Abort Generation</button>
-            <button id="newProjectBtn" class="button button-primary">New Project</button>
-            <button id="importProjectBtn" class="button button-primary">Import Project</button>
+            <button id="newProjectBtn" class="button button-primary">📝 New Project</button>
+            <button id="importProjectBtn" class="button button-primary">📁 Import Project</button>
                             <button id="comprehensiveExportBtn" class="button button-primary">📦 Save/Load All</button>
-            <button id="settingsBtn" class="button button-secondary">Settings</button>
-            <button id="manageTemplatesBtn" class="button button-secondary">Manage Templates</button>
+            <button id="settingsBtn" class="button button-secondary">⚙️ Settings</button>
+            <button id="manageTemplatesBtn" class="button button-secondary">🎯 Manage Templates</button>
         </div>
     </header>
     

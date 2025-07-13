@@ -103,8 +103,8 @@ export class ContextAdjusterService {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
                 lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
-                
-                // Parse JSON response
+            
+            // Parse JSON response
                 issues = this.parseAnalysisResponse(lastResponse);
                 
                 if (issues !== null) {
@@ -144,15 +144,15 @@ export class ContextAdjusterService {
         if (issues === null) {
             throw new Error(`Context analysis failed after ${maxRetries} retries. The AI response may be malformed.\n\nLast AI Response:\n"${lastResponse}"`);
         }
-        
-        return {
-            issues,
-            hasIssues: issues.length > 0,
-            analysisTimestamp: new Date(),
-            nodeId: node.id,
-            originalContext: node.context || '',
-            contextMismatch: contextCheck.hasMismatch
-        };
+            
+            return {
+                issues,
+                hasIssues: issues.length > 0,
+                analysisTimestamp: new Date(),
+                nodeId: node.id,
+                originalContext: node.context || '',
+                contextMismatch: contextCheck.hasMismatch
+            };
     }
 
     /**

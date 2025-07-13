@@ -3088,16 +3088,47 @@ export async function initializeProjectUI(manager?: ProjectManager) {
 
     mainContent.innerHTML = `
         <style>
+            /* === LAYOUT COORDINATION === */
+            .main-layout-container {
+                padding: 0 2rem;
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            
             #global-profile-bar {
                 background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
                 border-bottom: 1px solid #e5e7eb;
                 box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                padding: 0;
+                padding: 0 2rem;
                 display: flex;
                 align-items: center;
-                margin-bottom: 0;
+                margin-bottom: 1rem;
                 min-height: 60px;
+                box-sizing: border-box;
             }
+            
+            /* Override enhanced-layout.css container styles */
+            #project-container { 
+                display: flex !important; 
+                gap: 1rem !important; 
+                align-items: flex-start !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+                background-color: transparent !important;
+                min-height: auto !important;
+            }
+            
+            #project-tree { 
+                flex: 1 !important; 
+                max-width: 280px !important; 
+                font-size: 0.8rem !important;
+                /* Keep enhanced-layout visual styling but override positioning */
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+                padding: 1.5rem;
+            }
+            #node-details { flex: 2 !important; }
             
             /* Professional Top Bar Groups */
             .top-bar-group {
@@ -3110,9 +3141,14 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 box-sizing: border-box;
             }
             
+            .top-bar-group:first-child {
+                padding-left: 0;
+            }
+            
             .top-bar-group:last-child {
                 border-right: none;
                 margin-left: auto;
+                padding-right: 0;
             }
             
             .top-bar-group.settings-group {
@@ -3236,13 +3272,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 background: white;
                 min-width: 180px;
             }
-            #project-container { display: flex; gap: 1rem; align-items: flex-start; }
-            #project-tree { 
-                flex: 1; 
-                max-width: 280px; 
-                font-size: 0.8rem;
-            }
-            #node-details { flex: 2; }
             
             /* === Simple Flexbox Tree Layout === */
             .tree-item {
@@ -3362,6 +3391,82 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 animation: spin 1s ease-in-out infinite;
             }
             @keyframes spin { to { transform: rotate(360deg); } }
+            
+            /* === RESPONSIVE LAYOUT COORDINATION === */
+            @media (max-width: 1024px) {
+                #global-profile-bar {
+                    padding: 0 1.5rem;
+                }
+                
+                #project-container {
+                    padding: 0 !important;
+                }
+                
+                .main-layout-container {
+                    padding: 0 1.5rem;
+                }
+            }
+            
+            @media (max-width: 768px) {
+                #global-profile-bar {
+                    padding: 0 1rem;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    align-items: stretch;
+                    min-height: auto;
+                    padding-top: 1rem;
+                    padding-bottom: 1rem;
+                }
+                
+                #project-container {
+                    padding: 0 !important;
+                    flex-direction: column !important;
+                    gap: 1.5rem !important;
+                }
+                
+                .main-layout-container {
+                    padding: 0 1rem;
+                }
+                
+                .top-bar-group {
+                    border-right: none;
+                    border-bottom: 1px solid #e5e7eb;
+                    padding: 0.75rem 0;
+                }
+                
+                .top-bar-group:first-child {
+                    padding-left: 0;
+                }
+                
+                .top-bar-group:last-child {
+                    border-bottom: none;
+                    margin-left: 0;
+                    padding-right: 0;
+                }
+                
+                #project-tree {
+                    max-width: none !important;
+                    flex: none !important;
+                }
+                
+                #node-details {
+                    flex: none !important;
+                }
+            }
+            
+            @media (max-width: 480px) {
+                #global-profile-bar {
+                    padding: 0 0.75rem;
+                }
+                
+                #project-container {
+                    padding: 0 !important;
+                }
+                
+                .main-layout-container {
+                    padding: 0 0.75rem;
+                }
+            }
         </style>
         <div id="global-profile-bar">
             <!-- Settings Group -->
