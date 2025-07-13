@@ -710,8 +710,15 @@ export async function initialize() {
     }
     
     try {
-    getElementById('manualBtn').addEventListener('click', () => {
-        window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    getElementById('manualBtn').addEventListener('click', async () => {
+        try {
+            const { ManualModal } = await import('./ui/modals/index');
+            await ManualModal.open();
+        } catch (error) {
+            console.error('Failed to open manual modal:', error);
+            // Fallback to opening in new window
+            window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        }
     });
     } catch (error) {
         console.error('❌ Failed to attach manual button listener:', error);
