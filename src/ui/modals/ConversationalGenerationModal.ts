@@ -1,4 +1,5 @@
 import { BaseModal } from './core/BaseModal';
+import { createElement } from './core/modal-utils';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { UnifiedGenerationService } from '../../project/UnifiedGenerationService';
@@ -86,12 +87,13 @@ export class ConversationalGenerationModal extends BaseModal {
         return levels;
     }
 
-    protected render(): string {
+    public override render(): HTMLElement {
         const availableLevels = this.getAvailableLevels();
         const coherenceLevels = this.getCoherenceLevels();
         const currentLevelName = this.getLevelDisplayName(this.node.level);
 
-        return `
+        const container = createElement('div');
+        container.innerHTML = `
             <div class="conversational-generation-container">
                 <style>
                     .conversational-generation-container {
@@ -497,12 +499,14 @@ export class ConversationalGenerationModal extends BaseModal {
                 </div>
             </div>
         `;
+        
+        return container;
     }
 
     /**
      * Setup event handlers after modal is opened
      */
-    public async open(): Promise<void> {
+    public override async open(): Promise<void> {
         await super.open();
         
         // Expose modal instance to window for event handlers
