@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert System - User Manual</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #3b82f6;
+            --background-color: #ffffff;
+            --surface-color: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-12: 3rem;
+            --radius-sm: 0.25rem;
+            --radius: 0.375rem;
+            --radius-lg: 0.5rem;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background-color: var(--background-color);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            padding: var(--space-6) var(--space-8);
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--space-6);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .search-container {
+            position: relative;
+            flex-grow: 1;
+            max-width: 400px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .controls {
+            display: flex;
+            gap: var(--space-3);
+            align-items: center;
+        }
+
+        .btn {
+            padding: var(--space-2) var(--space-4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: var(--space-8);
+            padding: var(--space-8);
+            min-height: calc(100vh - 140px);
+        }
+
+        .sidebar {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 140px;
+            height: fit-content;
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: var(--space-4);
+            color: var(--text-primary);
+        }
+
+        .toc {
+            list-style: none;
+        }
+
+        .toc li {
+            margin-bottom: var(--space-1);
+        }
+
+        .toc a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: block;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .toc a:hover {
+            background: var(--background-color);
+            color: var(--primary-color);
+            border-left-color: var(--primary-color);
+        }
+
+        .toc a.active {
+            background: var(--primary-color);
+            color: white;
+            border-left-color: var(--primary-color);
+        }
+
+        .toc .toc-h2 {
+            padding-left: var(--space-3);
+        }
+
+        .toc .toc-h3 {
+            padding-left: var(--space-6);
+            font-size: 0.8rem;
+        }
+
+        .content {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--space-8);
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+
+        .content h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: var(--space-6);
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: var(--space-4);
+        }
+
+        .content h2 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: var(--space-8) 0 var(--space-4) 0;
+            color: var(--text-primary);
+            border-left: 4px solid var(--primary-color);
+            padding-left: var(--space-4);
+        }
+
+        .content h3 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            margin: var(--space-6) 0 var(--space-3) 0;
+            color: var(--text-primary);
+        }
+
+        .content h4 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: var(--space-5) 0 var(--space-2) 0;
+            color: var(--text-primary);
+        }
+
+        .content p {
+            margin-bottom: var(--space-4);
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        .content ul, .content ol {
+            margin-bottom: var(--space-4);
+            padding-left: var(--space-6);
+        }
+
+        .content li {
+            margin-bottom: var(--space-2);
+            line-height: 1.6;
+        }
+
+        .content code {
+            background: var(--surface-color);
+            padding: var(--space-1) var(--space-2);
+            border-radius: var(--radius-sm);
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.875rem;
+            color: var(--primary-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre {
+            background: var(--surface-color);
+            padding: var(--space-4);
+            border-radius: var(--radius);
+            margin: var(--space-4) 0;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            color: var(--text-primary);
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--accent-color);
+            padding: var(--space-4) var(--space-6);
+            margin: var(--space-4) 0;
+            background: var(--surface-color);
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: var(--space-4) 0;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .content th, .content td {
+            padding: var(--space-3) var(--space-4);
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .content th {
+            background: var(--surface-color);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .content tr:hover {
+            background: rgba(37, 99, 235, 0.05);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: var(--space-4);
+            border-radius: var(--radius);
+            margin: var(--space-4) 0;
+        }
+
+        .search-highlight {
+            background: yellow;
+            padding: 1px 2px;
+            border-radius: 2px;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: var(--space-6);
+            right: var(--space-6);
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .back-to-top:hover {
+            background: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: var(--space-4);
+            }
+
+            .search-container {
+                max-width: none;
+                width: 100%;
+            }
+
+            .main-container {
+                grid-template-columns: 1fr;
+                gap: var(--space-4);
+                padding: var(--space-4);
+            }
+
+            .sidebar {
+                position: static;
+                max-height: none;
+            }
+
+            .content {
+                padding: var(--space-4);
+            }
+
+            .content h1 {
+                font-size: 1.875rem;
+            }
+
+            .content h2 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>📚 Expert System - User Manual</h1>
+            <div class="search-container">
+                <input type="text" class="search-input" placeholder="Search manual..." id="searchInput">
+            </div>
+            <div class="controls">
+                <button class="btn" onclick="toggleSidebar()">📑 TOC</button>
+                <button class="btn" onclick="printManual()">🖨️ Print</button>
+                <button class="btn" onclick="window.close()">✕ Close</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar" id="sidebar">
+            <h2>Table of Contents</h2>
+            <ul class="toc" id="tableOfContents">
+                <li><div class="loading">Loading...</div></li>
+            </ul>
+        </aside>
+
+        <main class="content" id="content">
+            <div class="loading">Loading manual...</div>
+        </main>
+    </div>
+
+    <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+
+    <script>
+        let manualContent = '';
+        let searchQuery = '';
+
+        // Load and render the manual
+        async function loadManual() {
+            try {
+                const response = await fetch('./Expert-User-Manual.md');
+                if (!response.ok) {
+                    throw new Error(`Failed to load manual: ${response.status}`);
+                }
+                
+                const markdown = await response.text();
+                manualContent = markdown;
+                
+                // Configure marked options
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true,
+                    headerIds: true,
+                    headerPrefix: 'section-'
+                });
+                
+                // Render markdown to HTML
+                const html = marked.parse(markdown);
+                
+                // Display content
+                document.getElementById('content').innerHTML = html;
+                
+                // Generate table of contents
+                generateTableOfContents();
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                console.log('Manual loaded successfully');
+            } catch (error) {
+                console.error('Error loading manual:', error);
+                document.getElementById('content').innerHTML = 
+                    `<div class="error">Failed to load manual: ${error.message}</div>`;
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const headings = document.querySelectorAll('#content h1, #content h2, #content h3');
+            const toc = document.getElementById('tableOfContents');
+            toc.innerHTML = '';
+
+            headings.forEach((heading, index) => {
+                const level = heading.tagName.toLowerCase();
+                const text = heading.textContent;
+                const id = heading.id || `heading-${index}`;
+                
+                if (!heading.id) {
+                    heading.id = id;
+                }
+
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = `#${id}`;
+                a.textContent = text;
+                a.className = `toc-${level}`;
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    document.getElementById(id).scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                    updateActiveSection(id);
+                };
+                
+                li.appendChild(a);
+                toc.appendChild(li);
+            });
+        }
+
+        // Update active section in TOC
+        function updateActiveSection(activeId) {
+            document.querySelectorAll('.toc a').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelector(`.toc a[href="#${activeId}"]`)?.classList.add('active');
+        }
+
+        // Search functionality
+        function performSearch(query) {
+            searchQuery = query.toLowerCase();
+            const content = document.getElementById('content');
+            
+            if (!query) {
+                // Clear highlights
+                content.innerHTML = marked.parse(manualContent);
+                generateTableOfContents();
+                return;
+            }
+
+            // Highlight search terms
+            let html = marked.parse(manualContent);
+            
+            // Simple text highlighting (improved to avoid HTML tag issues)
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            html = html.replace(regex, '<span class="search-highlight">$1</span>');
+            
+            content.innerHTML = html;
+            generateTableOfContents();
+
+            // Scroll to first match
+            const firstMatch = content.querySelector('.search-highlight');
+            if (firstMatch) {
+                firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Search input
+            const searchInput = document.getElementById('searchInput');
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    performSearch(e.target.value);
+                }, 300);
+            });
+
+            // Back to top button
+            const backToTop = document.getElementById('backToTop');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    backToTop.classList.add('visible');
+                } else {
+                    backToTop.classList.remove('visible');
+                }
+            });
+
+            // Auto-update active section on scroll
+            let scrollTimeout;
+            window.addEventListener('scroll', () => {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    const headings = document.querySelectorAll('#content h1, #content h2, #content h3');
+                    let current = '';
+                    
+                    headings.forEach(heading => {
+                        const rect = heading.getBoundingClientRect();
+                        if (rect.top <= 100) {
+                            current = heading.id;
+                        }
+                    });
+                    
+                    if (current) {
+                        updateActiveSection(current);
+                    }
+                }, 100);
+            });
+        }
+
+        // Utility functions
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function printManual() {
+            window.print();
+        }
+
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case 'f':
+                        e.preventDefault();
+                        document.getElementById('searchInput').focus();
+                        break;
+                    case 'p':
+                        e.preventDefault();
+                        printManual();
+                        break;
+                }
+            }
+            
+            if (e.key === 'Escape') {
+                document.getElementById('searchInput').value = '';
+                performSearch('');
+            }
+        });
+
+        // Load manual when page loads
+        document.addEventListener('DOMContentLoaded', loadManual);
+    </script>
+</body>
+</html> 

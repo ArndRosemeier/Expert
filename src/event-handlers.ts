@@ -709,6 +709,14 @@ export async function initialize() {
         console.error('❌ Failed to attach manage templates button listener:', error);
     }
     
+    try {
+    getElementById('manualBtn').addEventListener('click', () => {
+        window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    });
+    } catch (error) {
+        console.error('❌ Failed to attach manual button listener:', error);
+    }
+    
     // Global abort button handler - SIMPLIFIED VERSION
     try {
     getElementById('globalAbortBtn').addEventListener('click', async () => {
