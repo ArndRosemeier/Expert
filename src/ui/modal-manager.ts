@@ -67,7 +67,7 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
         <h2>Import Project from File</h2>
         <div class="form-group" style="margin-bottom: 1.5rem;">
             <label for="import-file-input">Select Import File</label>
-            <input type="file" id="import-file-input" accept=".json,.txt,.pdf" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;">
+            <input type="file" id="import-file-input" accept=".json,.txt,.pdf" style="width: 100%; padding: 0.75rem; border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */ border-radius: 8px;">
                             <small style="color: var(--secondary-500); margin-top: 0.25rem; display: block;">
                 Choose a JSON file exported from Expert, a text file, or a PDF file to analyze and import
             </small>
@@ -318,7 +318,7 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         .extract-section input, .extract-section select, .extract-section textarea { 
                             width: 100%; 
                             padding: 0.75rem; 
-                            border: 1px solid var(--border-color); 
+                            border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */ 
                             border-radius: 8px;
                             box-sizing: border-box;
                         }
@@ -1045,7 +1045,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                 .chat-section select, .chat-section textarea { 
                     width: 100%; 
                     padding: 0.75rem; 
-                    border: 1px solid var(--border-color); 
+                    border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */ 
                     border-radius: 8px;
                     box-sizing: border-box;
                 }

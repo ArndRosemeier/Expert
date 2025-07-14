@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js';
 
 function getVersionInfo() {
   try {
@@ -50,6 +51,9 @@ export default defineConfig(({ mode }) => {
   
   return {
     base,
+    plugins: [
+      cssInjectedByJsPlugin()
+    ],
     define: {
       // Inject version info as compile-time constants
       __APP_VERSION__: JSON.stringify(versionInfo.version),
@@ -63,9 +67,13 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: false,
-      minify: 'esbuild',
+      minify: 'esbuild',  // Enable JS minification
+      cssMinify: false,  // Disable CSS minification to prevent style changes
       target: 'es2015',
       rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'index.html')
+        },
         output: {
           // Add hash to filenames for cache busting
           entryFileNames: 'assets/[name]-[hash].js',

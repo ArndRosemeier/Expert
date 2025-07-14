@@ -115,7 +115,7 @@ export class LanguageSelector {
             .language-selector-dropdown {
                 width: 100%;
                 padding: 0.5rem;
-                border: 1px solid var(--border-color, #ddd);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 4px;
                 background: var(--background-color, white);
                 color: var(--text-color, #333);
@@ -127,7 +127,7 @@ export class LanguageSelector {
             
             .language-selector-dropdown:focus {
                 outline: none;
-                border-color: var(--primary-color, #007bff);
+                border-color: var(--primary-500); /* Updated from legacy --primary-color */
                 box-shadow: 0 0 0 2px var(--primary-color-alpha, rgba(0, 123, 255, 0.25));
             }
             
@@ -135,14 +135,14 @@ export class LanguageSelector {
                 margin-top: 0.75rem;
                 padding: 0.75rem;
                 background: var(--background-secondary, #f8f9fa);
-                border: 1px solid var(--border-color, #ddd);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 4px;
             }
             
             .language-selector-custom-input {
                 width: 100%;
                 padding: 0.5rem;
-                border: 1px solid var(--border-color, #ddd);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 4px;
                 background: var(--background-color, white);
                 color: var(--text-color, #333);
@@ -152,7 +152,7 @@ export class LanguageSelector {
             
             .language-selector-custom-input:focus {
                 outline: none;
-                border-color: var(--primary-color, #007bff);
+                border-color: var(--primary-500); /* Updated from legacy --primary-color */
                 box-shadow: 0 0 0 2px var(--primary-color-alpha, rgba(0, 123, 255, 0.25));
             }
             

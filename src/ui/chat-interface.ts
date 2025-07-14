@@ -1401,7 +1401,7 @@ For each suggestion, provide clear justification for why the change would improv
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                z-index: 10000;
+                z-index: 25000;
             `;
 
             // Create modal dialog

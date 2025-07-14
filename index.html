@@ -7,15 +7,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/src/ui/enhanced-layout.css">
     <style>
         :root {
-            --primary-color: #475569;
-            --primary-hover: #334155;
-            --secondary-color: #6b7280;
-            --border-color: #d1d5db;
-            --input-bg: #fff;
-            --bg-subtle: #f9fafb;
+            /* === LEGACY CSS VARIABLES REMOVED === */
+            /* These legacy variables have been consolidated into the modern CSS variable system
+             * defined in src/ui/enhanced-layout.css. All usage has been updated to use the new system:
+             * 
+             * OLD LEGACY VARIABLES (removed):
+             * --primary-color: #475569;      → now var(--primary-500)
+             * --primary-hover: #334155;      → now var(--primary-600)
+             * --secondary-color: #6b7280;    → now var(--secondary-500)
+             * --border-color: #d1d5db;       → now var(--secondary-300)
+             * --input-bg: #fff;              → now #ffffff
+             * --bg-subtle: #f9fafb;          → now var(--secondary-50)
+             * 
+             * This eliminates CSS variable race conditions and ensures consistent styling
+             * between development and production environments.
+             */
         }
         body { font-family: 'Inter', sans-serif; margin: 0; background-color: #f7f8fa; color: #1a202c; }
         
@@ -25,81 +33,92 @@
         
         button { cursor: pointer; }
 
-        /* Global Button Styles */
-        .button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.25rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            text-align: center;
-            border: 1px solid transparent;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            text-decoration: none;
-            white-space: nowrap;
-            line-height: 1.2;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        /* Override Enhanced Layout Button Styles */
+        .main-header .button,
+        .header-buttons .button {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.5rem !important;
+            padding: 0.75rem 1.25rem !important;
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
+            text-align: center !important;
+            border: 1px solid transparent !important;
+            transition: all 0.2s ease !important;
+            cursor: pointer !important;
+            text-decoration: none !important;
+            white-space: nowrap !important;
+            line-height: 1.2 !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
         }
         
-        .button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        .main-header .button:hover,
+        .header-buttons .button:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
         }
         
-        .button:active {
-            transform: translateY(0);
+        .main-header .button:active,
+        .header-buttons .button:active {
+            transform: translateY(0) !important;
         }
         
-        .button-primary { 
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white; 
-            border-color: #2563eb;
+        .main-header .button-primary,
+        .header-buttons .button-primary { 
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+            color: white !important; 
+            border-color: #2563eb !important;
         }
-        .button-primary:hover { 
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            border-color: #1d4ed8;
-        }
-        
-        .button-secondary {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            color: #374151;
-            border-color: #d1d5db;
-        }
-        .button-secondary:hover {
-            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-            border-color: #9ca3af;
-            color: #1f2937;
+        .main-header .button-primary:hover,
+        .header-buttons .button-primary:hover { 
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+            border-color: #1d4ed8 !important;
         }
         
-        .button-success {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            border-color: #059669;
+        .main-header .button-secondary,
+        .header-buttons .button-secondary {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+            color: #374151 !important;
+            border-color: #d1d5db !important;
         }
-        .button-success:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            border-color: #047857;
+        .main-header .button-secondary:hover,
+        .header-buttons .button-secondary:hover {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+            border-color: #9ca3af !important;
+            color: #1f2937 !important;
         }
         
-        .button-danger {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-            border-color: #dc2626;
+        .main-header .button-success,
+        .header-buttons .button-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: white !important;
+            border-color: #059669 !important;
         }
-        .button-danger:hover {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-            border-color: #b91c1c;
+        .main-header .button-success:hover,
+        .header-buttons .button-success:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+            border-color: #047857 !important;
+        }
+        
+        .main-header .button-danger,
+        .header-buttons .button-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+            color: white !important;
+            border-color: #dc2626 !important;
+        }
+        .main-header .button-danger:hover,
+        .header-buttons .button-danger:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+            border-color: #b91c1c !important;
         }
 
         /* Header Styles */
         .main-header {
             background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
             padding: 1.25rem 2rem;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
             display: flex;
             justify-content: space-between;
             align-items: center;

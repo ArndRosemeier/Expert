@@ -25,7 +25,7 @@ Expert is a sophisticated AI-powered hierarchical document generation system des
 
 **Key Capabilities:**
 - **Hierarchical Generation**: Creates structured documents using customizable templates (Book → Chapter → Scene)
-- **Multi-Agent AI System**: Uses Creator, Rater, and Editor AI models for iterative quality improvement
+- **Multi-Agent AI System**: Uses Creator, Prose, Rater, and Editor AI models for iterative quality improvement
 - **Smart Context Management**: Maintains consistency across document sections using inherited context
 - **Template Flexibility**: User-definable document structures for any content type
 - **Quality Assurance**: Configurable quality criteria with automatic evaluation and refinement
@@ -55,7 +55,7 @@ Expert is a sophisticated AI-powered hierarchical document generation system des
    - Click "⚙️ Settings" in the header
    - Enter your OpenRouter API key
    - Test the connection
-   - Select AI models for Creator, Rater, and Editor roles
+   - Select AI models for Creator, Rater, Editor and Prose roles
 
 4. **Create Your First Project**
    - Click "📝 New Project"
@@ -294,25 +294,38 @@ Every generated node goes through:
 
 ### Multi-Agent System
 
-Expert uses a sophisticated three-agent AI system:
+Expert uses a sophisticated four-agent AI system with specialized models for different content types:
 
 **1. Creator Agent**
-- **Purpose**: Generate initial content
+- **Purpose**: Generate outlines and structural content for branch nodes
 - **Input**: Generation prompt + context + quality criteria
-- **Output**: Raw content draft
+- **Output**: Detailed outlines, summaries, and structural content
 - **Models**: Typically high-creativity models (GPT-4, Claude, etc.)
+- **Usage**: Used for non-leaf nodes that will be expanded into child nodes
 
-**2. Rater Agent**
-- **Purpose**: Evaluate content quality
+**2. Prose Agent**
+- **Purpose**: Generate refined final text for leaf nodes
+- **Input**: Generation prompt + context + quality criteria
+- **Output**: Polished, publication-ready text content
+- **Models**: Models optimized for writing style and narrative flow
+- **Usage**: Used for leaf nodes representing the finished document text
+
+**3. Rater Agent**
+- **Purpose**: Evaluate content quality for both outline and prose content
 - **Input**: Generated content + quality criteria + scoring goals
 - **Output**: Numerical scores (1-10) for each criterion
 - **Models**: Typically analytical models focused on evaluation
 
-**3. Editor Agent**
-- **Purpose**: Provide improvement suggestions
+**4. Editor Agent**
+- **Purpose**: Provide improvement suggestions for any content type
 - **Input**: Content + ratings + feedback goals
 - **Output**: Specific, actionable improvement advice
 - **Models**: Typically balanced models good at critique and suggestion
+
+**Content Type Selection:**
+The system automatically chooses between Creator and Prose models based on node type:
+- **Branch Nodes**: Use Creator model for outlines and structural content
+- **Leaf Nodes**: Use Prose model for final, polished text content
 
 ### Generation Workflow
 
@@ -592,7 +605,7 @@ Different profiles can have different quality criteria:
 Profiles store complete AI configurations, allowing instant switching between different use cases and writing styles.
 
 **Profile Components:**
-- **AI Model Selection**: Creator, Rater, and Editor model choices
+- **AI Model Selection**: Creator, Prose, Rater, and Editor model choices
 - **Quality Criteria**: Custom scoring goals and enabled criteria
 - **Generation Settings**: Iteration limits and timeout values
 - **Prompt Configurations**: Custom prompt templates
@@ -626,11 +639,17 @@ Profiles store complete AI configurations, allowing instant switching between di
 **Model Selection:**
 For each AI role, choose from available OpenRouter models:
 
-**Creator Models** (Content Generation):
+**Creator Models** (Outline & Structure Generation):
 - **High Creativity**: GPT-4, Claude-3 Opus, Gemini Pro
 - **Balanced**: GPT-3.5 Turbo, Claude-3 Sonnet
 - **Fast**: Smaller models for quick generation
 - **Specialized**: Domain-specific models
+
+**Prose Models** (Final Text Generation):
+- **Literary**: Models optimized for narrative writing and style
+- **Professional**: Models focused on clear, polished prose
+- **Creative**: Models that excel at engaging, expressive writing
+- **Specific**: Genre-specific or domain-specialized prose models
 
 **Rater Models** (Quality Evaluation):
 - **Analytical**: Models good at evaluation and scoring

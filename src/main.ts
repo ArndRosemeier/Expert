@@ -1,5 +1,6 @@
 import { AppKeyService } from './keys/AppKeyService.js';
 import { VersionService } from './VersionService.js';
+import './ui/enhanced-layout.css';
 
 // Log version info on startup
 VersionService.logVersionInfo();

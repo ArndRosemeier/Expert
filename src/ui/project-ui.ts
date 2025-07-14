@@ -1496,7 +1496,7 @@ export function renderNodeDetails() {
             }
             .node-section {
                 background-color: #ffffff;
-                border: 1px solid var(--border-color);
+                border: 1px solid var(--secondary-300);
                 border-radius: 12px;
                 padding: 1.5rem;
                 display: flex;
@@ -1511,12 +1511,12 @@ export function renderNodeDetails() {
             }
             .large-textarea {
                 width: 100%;
-                border: 1px solid var(--border-color);
+                border: 1px solid var(--secondary-300);
                 border-radius: 8px;
                 padding: 0.75rem;
                 font-size: 0.85rem;
                 line-height: 1.5;
-                background-color: var(--input-bg);
+                background-color: #ffffff;
                 resize: vertical;
             }
             .node-actions {
@@ -1537,7 +1537,7 @@ export function renderNodeDetails() {
             .settings-bar select, .settings-bar input {
                 flex-grow: 1;
                 padding: 0.5rem;
-                border: 1px solid var(--border-color);
+                border: 1px solid var(--secondary-300);
                 border-radius: 8px;
             }
             .settings-bar input[type="number"] {
@@ -3118,16 +3118,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 min-height: auto !important;
             }
             
-            #project-tree { 
-                flex: 1 !important; 
-                max-width: 280px !important; 
-                font-size: 0.8rem !important;
-                /* Keep enhanced-layout visual styling but override positioning */
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-                padding: 1.5rem;
-            }
+            /* #project-tree styling now completely handled by enhanced-layout.css */
             #node-details { flex: 2 !important; }
             
             /* Professional Top Bar Groups */
@@ -3273,112 +3264,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 min-width: 180px;
             }
             
-            /* === Simple Flexbox Tree Layout === */
-            .tree-item {
-                display: flex;
-                align-items: center;
-                min-height: 24px;
-                transition: background-color 0.15s ease;
-            }
-            
-            .tree-item:hover {
-                background: linear-gradient(90deg, transparent 0%, #f8f9fa 20%, #f8f9fa 100%);
-                border-radius: 0 4px 4px 0;
-            }
-            
-            .tree-expand-btn { 
-                color: #6c757d; 
-                font-weight: bold;
-                width: 14px;
-                text-align: center;
-                font-size: 11px;
-                cursor: pointer;
-                user-select: none;
-                display: inline-block;
-                margin-right: 2px;
-                flex-shrink: 0;
-            }
-            .tree-expand-btn:hover { color: var(--primary-color); }
-            
-            .tree-expand-spacer {
-                width: 16px;
-                display: inline-block;
-                flex-shrink: 0;
-            }
-            
-            .tree-node { 
-                padding: 1px 0.5rem; 
-                border-radius: 4px; 
-                cursor: pointer; 
-                display: inline-flex;
-                align-items: center;
-                transition: all 0.15s ease;
-                min-width: 0; 
-                flex-grow: 1;
-            }
-            
-            /* Typography Hierarchy */
-            .tree-node.project-root {
-                font-weight: 600;
-                font-size: 1rem;
-                color: #2c3e50;
-                border-left: 3px solid var(--primary-color);
-                background-color: #f8f9fa;
-            }
-            
-            .tree-node.has-children {
-                font-weight: 500;
-                color: #34495e;
-            }
-            
-            .tree-node.leaf-node {
-                font-weight: 400;
-                color: #495057;
-            }
-            
-            /* Enhanced Selection States */
-            .tree-node.selected { 
-                background: linear-gradient(90deg, #007bff 3px, #e3f2fd 3px, #e3f2fd 100%);
-                color: #0056b3;
-                font-weight: 500;
-                border-radius: 4px;
-                box-shadow: 0 2px 4px rgba(0, 123, 255, 0.15);
-            }
-            
-            .tree-item:hover .tree-node:not(.selected) { 
-                background-color: #f8f9fa;
-            }
-            
-            /* Status Icon Styling */
-            .node-status-icon {
-                font-size: 0.9rem;
-                width: 16px;
-                text-align: center;
-                display: inline-block;
-                transition: transform 0.15s ease;
-                margin-right: 6px;
-                flex-shrink: 0;
-            }
-            
-            .tree-item:hover .node-status-icon {
-                transform: scale(1.1);
-            }
-            
-            /* Content Stats Styling */
-            .content-stats {
-                margin-left: auto;
-                font-size: 0.75rem;
-                color: #6c757d;
-                font-style: italic;
-                opacity: 0.8;
-            }
-            
-            .tree-node:hover .content-stats {
-                opacity: 1;
-            }
+            /* === Tree Layout Handled by enhanced-layout.css === */
+            /* All tree styles moved to static CSS for consistent dev/production behavior */
             .details-view { background-color: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
             .details-view h2, .details-view h3 { margin-top: 0; }
-            .details-view textarea, .details-view select, .details-view input { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); }
+            .details-view textarea, .details-view select, .details-view input { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--secondary-300); }
             .details-view .form-group { margin-bottom: 1rem; }
             .action-buttons { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
             .spinner {
@@ -3387,7 +3277,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 height: 20px;
                 border: 3px solid rgba(0,0,0,0.1);
                 border-radius: 50%;
-                border-top-color: var(--primary-color);
+                border-top-color: var(--primary-500);
                 animation: spin 1s ease-in-out infinite;
             }
             @keyframes spin { to { transform: rotate(360deg); } }

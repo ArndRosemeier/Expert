@@ -1,19 +1,31 @@
 /* Enhanced Professional Layout for Expert App */
 
 :root {
-    /* Professional Color Palette */
-    --primary-500: #475569;
-    --primary-600: #334155;
-    --primary-700: #1e293b;
+    /* === MODERN CSS VARIABLE SYSTEM === */
+    /* This is the single source of truth for all styling variables.
+     * Legacy variables (--primary-color, --border-color, etc.) have been 
+     * consolidated into this comprehensive design token system.
+     * 
+     * NAMING CONVENTION:
+     * - Colors use semantic names with numeric intensity: --primary-500, --secondary-300
+     * - Spacing uses rem units: --space-4 = 1rem
+     * - Radius uses descriptive names: --radius-lg, --radius-xl
+     * - Shadows use standard names: --shadow-sm, --shadow-md, --shadow-lg
+     */
     
-    --secondary-50: #f8fafc;
-    --secondary-100: #f1f5f9;
-    --secondary-200: #e2e8f0;
-    --secondary-300: #cbd5e1;
-    --secondary-500: #64748b;
-    --secondary-600: #475569;
-    --secondary-700: #334155;
-    --secondary-900: #0f172a;
+    /* Professional Color Palette */
+    --primary-500: #475569;    /* Main primary color (replaces --primary-color) */
+    --primary-600: #334155;    /* Darker primary for hover states (replaces --primary-hover) */
+    --primary-700: #1e293b;    /* Darkest primary for active states */
+    
+    --secondary-50: #f8fafc;     /* Lightest secondary for subtle backgrounds (replaces --bg-subtle) */
+    --secondary-100: #f1f5f9;    /* Light secondary for backgrounds */
+    --secondary-200: #e2e8f0;    /* Light secondary for dividers */
+    --secondary-300: #cbd5e1;    /* Medium secondary for borders (replaces --border-color) */
+    --secondary-500: #64748b;    /* Main secondary color (replaces --secondary-color) */
+    --secondary-600: #475569;    /* Darker secondary for text */
+    --secondary-700: #334155;    /* Dark secondary for headings */
+    --secondary-900: #0f172a;    /* Darkest secondary for high contrast text */
     
     --success-500: #059669;
     --success-600: #047857;
@@ -22,25 +34,25 @@
     --danger-500: #dc2626;
     --danger-600: #b91c1c;
     
-    /* Spacing Scale */
-    --space-1: 0.25rem;
-    --space-2: 0.5rem;
-    --space-3: 0.75rem;
-    --space-4: 1rem;
-    --space-6: 1.5rem;
-    --space-8: 2rem;
-    --space-12: 3rem;
+    /* Spacing Scale - Consistent spacing throughout the application */
+    --space-1: 0.25rem;   /* 4px - For tight spacing */
+    --space-2: 0.5rem;    /* 8px - For small gaps */
+    --space-3: 0.75rem;   /* 12px - For medium gaps */
+    --space-4: 1rem;      /* 16px - For standard spacing */
+    --space-6: 1.5rem;    /* 24px - For large spacing */
+    --space-8: 2rem;      /* 32px - For section spacing */
+    --space-12: 3rem;     /* 48px - For major layout spacing */
     
-    /* Border Radius */
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
+    /* Border Radius - Consistent rounding throughout components */
+    --radius-sm: 0.375rem;    /* 6px - For small elements */
+    --radius-md: 0.5rem;      /* 8px - For buttons, inputs */
+    --radius-lg: 0.75rem;     /* 12px - For cards, modals */
+    --radius-xl: 1rem;        /* 16px - For large containers */
     
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    /* Shadows - Professional depth system */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);     /* Subtle shadow for inputs */
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);  /* Standard shadow for cards */
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); /* Prominent shadow for modals */
 }
 
 /* Main Layout Improvements */
@@ -60,6 +72,9 @@
     box-shadow: var(--shadow-md);
     padding: var(--space-8);
     font-size: 0.8rem;
+    
+    /* Production layout overrides (moved from project-ui.ts) */
+    max-width: 280px !important;
 }
 
 #node-details {
@@ -689,13 +704,86 @@ label[for] {
 }
 
 /* Tree Styling Improvements */
+
+/* Tree container and layout (moved from project-ui.ts for production) */
+.tree-item {
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    transition: background-color 0.15s ease;
+}
+
+.tree-item:hover {
+    background: linear-gradient(90deg, transparent 0%, #f8f9fa 20%, #f8f9fa 100%);
+    border-radius: 0 4px 4px 0;
+}
+
+.tree-expand-btn { 
+    color: #6c757d; 
+    font-weight: bold;
+    width: 14px;
+    text-align: center;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    display: inline-block;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+.tree-expand-btn:hover { 
+    color: var(--primary-500); 
+}
+
+.tree-expand-spacer {
+    width: 16px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
 .tree-node {
     padding: 1px 0.5rem;
-    border-radius: var(--radius-md);
-    margin: 1px 0;
-    transition: all 0.2s ease;
+    border-radius: 4px;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.15s ease;
+    min-width: 0;
+    flex-grow: 1;
+    margin: 1px 0;
     border: 1px solid transparent;
+}
+
+/* Typography Hierarchy */
+.tree-node.project-root {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #2c3e50;
+    border-left: 3px solid var(--primary-500);
+    background-color: #f8f9fa;
+}
+
+.tree-node.has-children {
+    font-weight: 500;
+    color: #34495e;
+}
+
+.tree-node.leaf-node {
+    font-weight: 400;
+    color: #495057;
+}
+
+/* Enhanced Selection States */
+.tree-node.selected { 
+    background: linear-gradient(90deg, #007bff 3px, #e3f2fd 3px, #e3f2fd 100%);
+    color: #0056b3;
+    font-weight: 500;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.15);
+}
+
+.tree-item:hover .tree-node:not(.selected) { 
+    background-color: #f8f9fa;
 }
 
 .tree-node:hover:not(.selected) {
@@ -703,10 +791,32 @@ label[for] {
     border-color: var(--secondary-200);
 }
 
-.tree-node.selected {
-    background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
-    color: white;
-    box-shadow: var(--shadow-sm);
+/* Status Icon Styling */
+.node-status-icon {
+    font-size: 0.9rem;
+    width: 16px;
+    text-align: center;
+    display: inline-block;
+    transition: transform 0.15s ease;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.tree-item:hover .node-status-icon {
+    transform: scale(1.1);
+}
+
+/* Content Stats Styling */
+.content-stats {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.tree-node:hover .content-stats {
+    opacity: 1;
 }
 
 /* Header Improvements */

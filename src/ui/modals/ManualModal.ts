@@ -59,7 +59,7 @@ export class ManualModal extends BaseModal {
                 justify-content: space-between;
                 align-items: center;
                 padding: 1rem 0;
-                border-bottom: 1px solid var(--border-color, #e2e8f0);
+                border-bottom: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 margin-bottom: 1rem;
             }
             
@@ -72,15 +72,15 @@ export class ManualModal extends BaseModal {
             .manual-search-input {
                 width: 100%;
                 padding: 0.5rem 0.75rem;
-                border: 1px solid var(--border-color, #d1d5db);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 6px;
                 font-size: 0.875rem;
-                background: var(--input-bg, #fff);
+                background: #ffffff; /* Updated from legacy --input-bg */
             }
             
             .manual-search-input:focus {
                 outline: none;
-                border-color: var(--primary-color, #3b82f6);
+                border-color: var(--primary-500); /* Updated from legacy --primary-color */
                 box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
             }
             
@@ -92,26 +92,26 @@ export class ManualModal extends BaseModal {
             
             .manual-btn {
                 padding: 0.5rem 0.75rem;
-                border: 1px solid var(--border-color, #d1d5db);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 6px;
-                background: var(--input-bg, #fff);
+                background: #ffffff; /* Updated from legacy --input-bg */
                 cursor: pointer;
                 font-size: 0.875rem;
                 transition: all 0.2s ease;
             }
             
             .manual-btn:hover {
-                background: var(--bg-subtle, #f9fafb);
-                border-color: var(--secondary-color, #6b7280);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
+                border-color: var(--secondary-500); /* Updated from legacy --secondary-color */
             }
             
             .manual-sidebar {
-                background: var(--bg-subtle, #f8fafc);
-                border: 1px solid var(--border-color, #e2e8f0);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 8px;
                 padding: 1rem;
                 overflow-y: auto;
-                height: calc(100% - 80px);
+                height: 100%;
             }
             
             .manual-sidebar h3 {
@@ -143,15 +143,15 @@ export class ManualModal extends BaseModal {
             }
             
             .manual-toc a:hover {
-                background: var(--input-bg, #fff);
-                color: var(--primary-color, #3b82f6);
-                border-left-color: var(--primary-color, #3b82f6);
+                background: #ffffff; /* Updated from legacy --input-bg */
+                color: var(--primary-500); /* Updated from legacy --primary-color */
+                border-left-color: var(--primary-500); /* Updated from legacy --primary-color */
             }
             
             .manual-toc a.active {
-                background: var(--primary-color, #3b82f6);
+                background: var(--primary-500); /* Updated from legacy --primary-color */
                 color: white;
-                border-left-color: var(--primary-color, #3b82f6);
+                border-left-color: var(--primary-500); /* Updated from legacy --primary-color */
             }
             
             .manual-toc .toc-h2 {
@@ -164,12 +164,12 @@ export class ManualModal extends BaseModal {
             }
             
             .manual-content {
-                background: var(--input-bg, #fff);
-                border: 1px solid var(--border-color, #e2e8f0);
+                background: #ffffff; /* Updated from legacy --input-bg */
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 8px;
                 padding: 2rem;
                 overflow-y: auto;
-                height: calc(100% - 80px);
+                height: 100%;
             }
             
             .manual-content h1 {
@@ -177,7 +177,7 @@ export class ManualModal extends BaseModal {
                 font-weight: 700;
                 margin-bottom: 1.5rem;
                 color: var(--text-primary, #1e293b);
-                border-bottom: 2px solid var(--border-color, #e2e8f0);
+                border-bottom: 2px solid var(--secondary-300); /* Updated from legacy --border-color */
                 padding-bottom: 1rem;
             }
             
@@ -186,7 +186,7 @@ export class ManualModal extends BaseModal {
                 font-weight: 600;
                 margin: 2rem 0 1rem 0;
                 color: var(--text-primary, #1e293b);
-                border-left: 4px solid var(--primary-color, #3b82f6);
+                border-left: 4px solid var(--primary-500); /* Updated from legacy --primary-color */
                 padding-left: 1rem;
             }
             
@@ -221,22 +221,22 @@ export class ManualModal extends BaseModal {
             }
             
             .manual-content code {
-                background: var(--bg-subtle, #f8fafc);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
                 padding: 0.125rem 0.375rem;
                 border-radius: 4px;
                 font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
                 font-size: 0.875rem;
-                color: var(--primary-color, #3b82f6);
-                border: 1px solid var(--border-color, #e2e8f0);
+                color: var(--primary-500); /* Updated from legacy --primary-color */
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
             }
             
             .manual-content pre {
-                background: var(--bg-subtle, #f8fafc);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
                 padding: 1rem;
                 border-radius: 6px;
                 margin: 1rem 0;
                 overflow-x: auto;
-                border: 1px solid var(--border-color, #e2e8f0);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
             }
             
             .manual-content pre code {
@@ -247,10 +247,10 @@ export class ManualModal extends BaseModal {
             }
             
             .manual-content blockquote {
-                border-left: 4px solid var(--primary-color, #3b82f6);
+                border-left: 4px solid var(--primary-500); /* Updated from legacy --primary-color */
                 padding: 1rem 1.5rem;
                 margin: 1rem 0;
-                background: var(--bg-subtle, #f8fafc);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
                 font-style: italic;
                 color: var(--text-secondary, #64748b);
             }
@@ -259,7 +259,7 @@ export class ManualModal extends BaseModal {
                 width: 100%;
                 border-collapse: collapse;
                 margin: 1rem 0;
-                border: 1px solid var(--border-color, #e2e8f0);
+                border: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
                 border-radius: 6px;
                 overflow: hidden;
             }
@@ -267,11 +267,11 @@ export class ManualModal extends BaseModal {
             .manual-content th, .manual-content td {
                 padding: 0.75rem 1rem;
                 text-align: left;
-                border-bottom: 1px solid var(--border-color, #e2e8f0);
+                border-bottom: 1px solid var(--secondary-300); /* Updated from legacy --border-color */
             }
             
             .manual-content th {
-                background: var(--bg-subtle, #f8fafc);
+                background: var(--secondary-50); /* Updated from legacy --bg-subtle */
                 font-weight: 600;
                 color: var(--text-primary, #1e293b);
             }
@@ -308,12 +308,12 @@ export class ManualModal extends BaseModal {
                 display: inline-flex;
                 align-items: center;
                 gap: 0.25rem;
-                color: var(--primary-color, #3b82f6);
+                color: var(--primary-500); /* Updated from legacy --primary-color */
                 text-decoration: none;
                 font-weight: 500;
                 padding: 0.25rem 0.5rem;
                 border-radius: 4px;
-                border: 1px solid var(--primary-color, #3b82f6);
+                border: 1px solid var(--primary-500); /* Updated from legacy --primary-color */
                 background: rgba(59, 130, 246, 0.05);
                 transition: all 0.2s ease;
             }
@@ -402,7 +402,7 @@ export class ManualModal extends BaseModal {
 
     private async loadManual(): Promise<void> {
         try {
-            const response = await fetch('./public/Expert-User-Manual.md');
+            const response = await fetch('./Expert-User-Manual.md');
             if (!response.ok) {
                 throw new Error(`Failed to load manual: ${response.status}`);
             }
@@ -688,7 +688,7 @@ export class ManualModal extends BaseModal {
     }
 
     public openInNewWindow(): void {
-        window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        window.open('./manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
     }
 
     public async openManualChat(): Promise<void> {
@@ -748,7 +748,7 @@ Instructions:
                 width: 100%;
                 height: 100%;
                 background-color: rgba(0, 0, 0, 0.5);
-                z-index: 10000;
+                z-index: 20000;
                 display: flex;
                 align-items: center;
                 justify-content: center;
