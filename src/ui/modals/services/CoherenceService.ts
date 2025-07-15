@@ -151,6 +151,9 @@ export class CoherenceService {
             
             console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
             
+            // Get model name for error reporting
+            const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
+            
             const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
             console.log(`✅ Coherence analysis API call completed for "${node.title}"`);
@@ -178,18 +181,42 @@ export class CoherenceService {
                 requestChildCount: request.childNodes.length
             });
             
-            // Provide more specific error message based on error type
+            // Get model information for error messages
+            const isLeafNode = node.isLeaf;
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
+            const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
+            
+            // Check for content filtering errors
             if (error instanceof Error) {
-                if (error.message.includes('API key') || error.message.includes('authentication')) {
-                    throw new Error('Coherence analysis failed due to API authentication issues. Please check your API key settings.');
-                } else if (error.message.includes('parse') || error.message.includes('JSON')) {
-                    throw new Error('Coherence analysis failed due to malformed AI response. Please try again.');
-                } else if (error.message.includes('network') || error.message.includes('fetch')) {
-                    throw new Error('Coherence analysis failed due to network issues. Please check your connection and try again.');
+                if (error.name === 'ContentFilterError' || error.name === 'EmptyResponseError') {
+                    // Content was filtered by AI safety system
+                    throw new Error(`Content analysis blocked by AI safety system. The model "${modelName}" detected content that violates its usage policies. 
+
+To fix this:
+1. Go to Settings → Task Models → Coherence Analysis
+2. Change the model to a less restrictive one like:
+   • Mistral Large (best unrestricted quality)
+   • Other Mistral models
+   • Meta Llama models
+3. Avoid Google Gemini and Claude models for adult/explicit content
+
+Original error: ${error.message}`);
+                }
+                
+                if (error.message.includes('Response body is null') || error.message.includes('response length: 0')) {
+                    // Likely content filtering but not explicitly flagged
+                    throw new Error(`Empty response from AI model "${modelName}" - likely content filtering. The model appears to be refusing to analyze your content due to safety restrictions.
+
+To fix this:
+1. Go to Settings → Task Models → Coherence Analysis  
+2. Switch to a more permissive model like Mistral Large (best unrestricted quality) or other Mistral models
+3. Google and Claude models are particularly restrictive with adult content
+
+If the problem persists, try rephrasing explicit content in your project to be less detailed.`);
                 }
             }
             
-            throw new Error('Failed to analyze coherence. Please try again.');
+            throw new Error(`Coherence analysis failed due to malformed AI response. Please try again.`);
         }
     }
 

@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { DocumentNode } from '../../../DocumentNode';
-import { ExportConfig, ExportScope } from '../types/ExportTypes';
+import { ExportConfig } from '../types/ExportTypes';
 import { ProjectManager } from '../../../ProjectManager';
 
 export class WorkingEpubGenerator {
@@ -67,7 +67,7 @@ export class WorkingEpubGenerator {
         content = content.replace(/<\/?(?:div|span|br)[^>]*>/gi, '');
         console.log('[WorkingEpubGenerator] After HTML cleanup:', content);
         
-        // Use simple paragraph formatting like HelloWorldEpubGenerator
+        // TEMPORARY: Use simple paragraph formatting like HelloWorldEpubGenerator
         const paragraphs = content.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
         const simpleFormatted = paragraphs.map(p => `<p>${this.escapeHtml(p)}</p>`).join('\n    ');
         console.log('[WorkingEpubGenerator] Simple formatted content:', simpleFormatted);
@@ -85,46 +85,15 @@ export class WorkingEpubGenerator {
         return nodes;
     }
 
-    private collectLeafNodes(node: DocumentNode): DocumentNode[] {
-        const leafNodes: DocumentNode[] = [];
-        
-        // If this node is a leaf, add it
-        if (node.isLeaf) {
-            leafNodes.push(node);
-        } else {
-            // Otherwise, check children
-            if (node.children) {
-                for (const child of node.children) {
-                    leafNodes.push(...this.collectLeafNodes(child));
-                }
-            }
-        }
-        
-        return leafNodes;
-    }
-
-    private collectNodesBasedOnScope(node: DocumentNode, scope: ExportScope): DocumentNode[] {
-        switch (scope) {
-            case ExportScope.Single:
-                return [node];
-            case ExportScope.Leaves:
-                return this.collectLeafNodes(node);
-            case ExportScope.Hierarchy:
-            default:
-                return this.collectAllNodes(node);
-        }
-    }
-
     async generate(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<Blob> {
         console.log('[WorkingEpubGenerator] Starting EPUB generation for:', node.title);
-        console.log('[WorkingEpubGenerator] Export scope:', config.scope);
         
-        // Collect nodes based on scope
-        const selectedNodes = this.collectNodesBasedOnScope(node, config.scope);
-        console.log('[WorkingEpubGenerator] Found', selectedNodes.length, 'nodes to export based on scope');
+        // Collect all nodes to export
+        const allNodes = this.collectAllNodes(node);
+        console.log('[WorkingEpubGenerator] Found', allNodes.length, 'nodes to export');
         
         // Filter nodes with actual content
-        const contentNodes = selectedNodes.filter(n => n.content && n.content.trim() !== '');
+        const contentNodes = allNodes.filter(n => n.content && n.content.trim() !== '');
         console.log('[WorkingEpubGenerator] Found', contentNodes.length, 'nodes with content');
         
         // Debug: Log details about each content node
@@ -132,16 +101,22 @@ export class WorkingEpubGenerator {
             console.log(`[WorkingEpubGenerator] Content node ${index + 1}:`, node.title, 'content length:', node.content?.length || 0);
         });
         
-        // If no content nodes found, create a placeholder
+        // If no content nodes found, create a test node to debug
         if (contentNodes.length === 0) {
-            console.log('[WorkingEpubGenerator] No content nodes found, creating placeholder');
-            const placeholderNode = {
-                title: 'No Content Found',
-                content: 'No content was found in the selected scope. Please check your selection and try again.',
-                isLeaf: true
+            console.log('[WorkingEpubGenerator] No content nodes found, creating test node');
+            const testNode = {
+                title: 'Test Chapter',
+                content: 'This is a test chapter with some content to verify the EPUB generation is working properly.'
             } as DocumentNode;
-            contentNodes.push(placeholderNode);
+            contentNodes.push(testNode);
         }
+        
+        // TEMPORARY: Always add a known working chapter for debugging
+        const debugNode = {
+            title: 'Debug Chapter',
+            content: 'This is a debug chapter with simple content that should work in iBooks. This content is hardcoded to match the working HelloWorldEpubGenerator pattern.'
+        } as DocumentNode;
+        contentNodes.push(debugNode);
         
         // Add required files to ZIP
         this.addMimeType();
@@ -234,7 +209,7 @@ ${navItems}
         const styles = `
 body {
     font-family: Georgia, serif;
-    font-size: 1em;
+    font-size: 1.2em;
     line-height: 1.6;
     margin: 0;
     padding: 2em;
@@ -244,13 +219,14 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
+    color: #2c3e50;
     margin-top: 2em;
     margin-bottom: 1em;
 }
 
 h1 {
-    font-size: 1.33em;
-    border-bottom: 2px solid currentColor;
+    font-size: 2em;
+    border-bottom: 2px solid #3498db;
     padding-bottom: 0.5em;
 }
 
@@ -269,6 +245,7 @@ nav li {
 }
 
 nav a {
+    color: #3498db;
     text-decoration: none;
 }
 

@@ -134,7 +134,15 @@ function handleTemplateSelect(event: Event) {
 
 function handleSave() {
     const templateManager = state.getTemplateManager();
-    if (!templateManager || !currentTemplateName || !singleTemplateEditor) return;
+    if (!templateManager) {
+        throw new Error('TemplateManager not available - services not properly initialized');
+    }
+    if (!currentTemplateName) {
+        throw new Error('No template selected - UI state corrupted');
+    }
+    if (!singleTemplateEditor) {
+        throw new Error('SingleTemplateEditor not available - UI component not properly initialized');
+    }
 
     const template = singleTemplateEditor.getTemplateFromUI();
     const newName = template.name.trim();

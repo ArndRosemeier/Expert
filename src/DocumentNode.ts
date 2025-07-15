@@ -318,22 +318,31 @@ export class DocumentNode {
     
     get content(): string {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.content || '';
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: No master version available - node data corrupted`);
+        }
+        return masterVersion.content;
     }
 
     get title(): string {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.title || 'Untitled';
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: No master version available - node data corrupted`);
+        }
+        return masterVersion.title;
     }
 
     get context(): string {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.context || '';
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: No master version available - node data corrupted`);
+        }
+        return masterVersion.context;
     }
 
     get creatorModel(): string | null {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.metadata?.['creatorModel'] || null;
+        return masterVersion?.metadata?.['creatorModel'] ?? null;
     }
 
     // --- Version Management Methods ---
@@ -342,7 +351,7 @@ export class DocumentNode {
      * Gets the master version of this node.
      */
     getMasterVersion(): ContentVersion | null {
-        return this.versions.find(v => v.tags.has('master')) || null;
+        return this.versions.find(v => v.tags.has('master')) ?? null;
     }
 
     /**
@@ -386,9 +395,12 @@ export class DocumentNode {
         
         // Get defaults from master version if available
         const masterVersion = this.getMasterVersion();
-        const defaultTitle = masterVersion?.title || 'Untitled';
-        const defaultContent = masterVersion?.content || '';
-        const defaultContext = masterVersion?.context || '';
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: Cannot add version - no master version exists (node not properly initialized)`);
+        }
+        const defaultTitle = masterVersion.title;
+        const defaultContent = masterVersion.content;
+        const defaultContext = masterVersion.context;
         
         // Check if we should replace an empty master version
         const masterIsEmpty = masterVersion && masterVersion.content.trim() === '';
@@ -600,8 +612,11 @@ export class DocumentNode {
     setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number): void {
         // Get current master version for title/context preservation
         const currentMaster = this.getMasterVersion();
-        const preservedTitle = currentMaster?.title || 'Untitled';
-        const preservedContext = currentMaster?.context || '';
+        if (!currentMaster) {
+            throw new Error(`DocumentNode ${this.id}: Cannot set generation content - no master version exists (node not properly initialized)`);
+        }
+        const preservedTitle = currentMaster.title;
+        const preservedContext = currentMaster.context;
         
         const tags = ['generated']; // Do NOT include master tag automatically
         if (iterationIndex !== undefined) {

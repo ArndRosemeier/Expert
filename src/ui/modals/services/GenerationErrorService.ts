@@ -2,9 +2,16 @@ import { GenerationErrorModal, ErrorDetails } from '../GenerationErrorModal';
 
 export class GenerationErrorService {
     private static instance: GenerationErrorService | null = null;
+    private currentErrorModal: GenerationErrorModal | null = null;
+    private errorQueue: Array<{ errorDetails: ErrorDetails; resolve: () => void }> = [];
 
     private constructor() {
         // Private constructor for singleton
+        
+        // Expose emergency clear function globally for debug purposes
+        (window as any).clearErrorModals = () => {
+            this.clearAllErrorModals();
+        };
     }
 
     /**
@@ -104,6 +111,12 @@ export class GenerationErrorService {
             console.error(`Purpose: ${errorDetails.purpose}`);
         }
 
+        // Check if we already have an error modal showing for similar errors
+        if (this.currentErrorModal) {
+            console.log('⚠️ Error modal already showing, preventing duplicate dialog');
+            return;
+        }
+
         // Show the full error modal
         const fullErrorDetails: ErrorDetails = {
             ...errorDetails,
@@ -112,8 +125,50 @@ export class GenerationErrorService {
             ...(error.stack && { stack: error.stack })
         };
 
-        const modal = new GenerationErrorModal(fullErrorDetails);
-        await modal.open();
+        await this.showErrorModalSafely(fullErrorDetails);
+    }
+
+    /**
+     * Safely show error modal with protection against multiple instances
+     */
+    private async showErrorModalSafely(errorDetails: ErrorDetails): Promise<void> {
+        // If there's already a modal showing, queue this error
+        if (this.currentErrorModal) {
+            return new Promise<void>((resolve) => {
+                this.errorQueue.push({ errorDetails, resolve });
+            });
+        }
+
+        try {
+            // Create and show the modal
+            this.currentErrorModal = new GenerationErrorModal(errorDetails);
+            
+            // Set up cleanup when modal closes
+            const originalClose = this.currentErrorModal.close.bind(this.currentErrorModal);
+            this.currentErrorModal.close = async () => {
+                await originalClose();
+                this.currentErrorModal = null;
+                
+                // Process next error in queue if any
+                const nextError = this.errorQueue.shift();
+                if (nextError) {
+                    setTimeout(() => {
+                        void this.showErrorModalSafely(nextError.errorDetails).finally(() => {
+                            nextError.resolve();
+                        });
+                    }, 100); // Small delay to prevent rapid-fire modals
+                }
+            };
+            
+            await this.currentErrorModal.open();
+            
+        } catch (modalError) {
+            console.error('Failed to show error modal:', modalError);
+            this.currentErrorModal = null;
+            
+            // Fallback to alert for critical failures
+            alert(`Error: ${errorDetails.message}\n\nAdditional error showing dialog: ${modalError instanceof Error ? modalError.message : 'Unknown error'}`);
+        }
     }
 
     public static getInstance(): GenerationErrorService {
@@ -121,6 +176,37 @@ export class GenerationErrorService {
             GenerationErrorService.instance = new GenerationErrorService();
         }
         return GenerationErrorService.instance;
+    }
+
+    /**
+     * Emergency method to clear all error modals - use only if stuck in endless loop
+     */
+    public clearAllErrorModals(): void {
+        console.log('🚨 Emergency clearing of all error modals');
+        
+        // Close current modal if exists
+        if (this.currentErrorModal) {
+            try {
+                void this.currentErrorModal.close();
+            } catch (error) {
+                console.error('Failed to close current error modal:', error);
+            }
+            this.currentErrorModal = null;
+        }
+        
+        // Clear error queue
+        this.errorQueue.length = 0;
+        
+        // Resolve any pending promises in the queue
+        this.errorQueue.forEach(entry => {
+            try {
+                entry.resolve();
+            } catch (error) {
+                console.error('Failed to resolve queued error:', error);
+            }
+        });
+        
+        console.log('✅ All error modals cleared');
     }
 
     /**
@@ -171,6 +257,50 @@ export class GenerationErrorService {
             purpose: 'Project Creation',
             operation: description ? `Generating project from: "${description}"` : 'Project Generation'
         }, 'Project generation');
+    }
+
+    /**
+     * Show specialized error modal for content filtering with enhanced guidance
+     */
+    public async showContentFilteringError(error: Error, context: {
+        title?: string;
+        purpose?: string;
+        operation?: string;
+        nodeTitle?: string;
+    } = {}): Promise<void> {
+        // Extract model name from error message if available
+        const modelMatch = error.message.match(/model "([^"]+)"/);
+        const modelName = modelMatch ? modelMatch[1] : 'Unknown model';
+        
+        // Enhanced error message with clear next steps
+        const enhancedMessage = `${this.formatErrorMessage(error)}
+
+📖 **What happened?**
+The AI model detected content that violates its usage policies and refused to process your request.
+
+🔧 **How to fix this:**
+• This is a settings issue, not a system error
+• Simply change to a more permissive model
+• Your work is saved and you can retry immediately
+
+⚙️ **Recommended action:**
+1. Go to Settings → Task Models
+2. Find the failing operation (e.g., "Coherence Analysis")
+3. Change the model to a less restrictive option like:
+   • Mistral Large (best unrestricted quality)
+   • Other Mistral models
+   • Meta Llama models
+4. Click "Generate" again to retry
+
+🎯 **This is completely normal** for projects with mature content when using restrictive models like Google Gemini.`;
+
+        await this.handleError(new Error(enhancedMessage), {
+            title: context.title || '🚨 Content Filtering - Settings Fix Needed',
+            message: enhancedMessage,
+            ...(context.purpose && { purpose: context.purpose }),
+            ...(modelName !== 'Unknown model' && { model: modelName }),
+            ...(context.operation && { operation: context.operation })
+        }, context.operation || 'AI operation');
     }
 
     /**

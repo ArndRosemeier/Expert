@@ -243,21 +243,39 @@ This document provides a comprehensive mapping of all functionality in the Exper
 - **File**: `src/OpenRouterClient.ts`
 - **Class**: `OpenRouterClient`
 - **Functions**:
-  - `sendMessage(messages, options)` - Send message to AI
-  - `streamMessage(messages, callbacks)` - Stream AI response
+  - `streamingChat(purpose, messages, callbacks, operationId?, externalAbortSignal?)` - **RECOMMENDED**: Stream AI response with callbacks
+  - `chat(purpose, message, operationId?, externalAbortSignal?)` - **DEPRECATED**: Legacy method, routes to streamingChat internally
   - `getModels()` - Get available models
-  - `setApiKey(key)` - Set API key
+  - `getModelConfigForPurpose(purpose)` - Get model configuration including provider
+  - `fetchModelEndpoints(model)` - Get provider endpoints for model
+  - `setApiKey(key)` - Set API key from UI (deprecated in singleton mode)
+  - `getApiKeyFromStorage()` - Get API key from IndexedDB
+  - `abortOperation(operationId)` - Abort specific operation
+- **Provider Selection**: 
+  - Supports OpenRouter provider routing via `provider` parameter
+  - Provider selections persist per-purpose in IndexedDB
+  - "Automatic" mode lets OpenRouter choose best provider
+- **Progress Events**: Dispatches `ai-progress` CustomEvents with `{type, message, characters?}` data
 
 ### Model Selection
 - **File**: `src/ModelSelector.ts`
 - **Class**: `ModelSelector`
 - **Functions**:
-  - `getSelectedModels()` - Get selected models
+  - `getSelectedModels()` - Get selected models for all purposes
   - `setSelectedModels(models)` - Set selected models
-  - `getAvailableModels()` - Get all available models
-  - `selectModel(modelId, role)` - Select model for role
-  - `loadFromStorage()` - Load model configuration
-  - `saveToStorage()` - Save model configuration
+  - `getAvailableModels()` - Get all available models from OpenRouter
+  - `loadFromStorage()` - Load model configuration from IndexedDB
+  - `saveToStorage()` - Save model configuration to IndexedDB
+  - `fetchModelEndpoints(model)` - Get provider endpoints for model
+  - `getProviderSlug(providerName)` - Map provider display name to API slug
+- **Provider Management**:
+  - Provider selections stored per-purpose (`prose`, `creator`, `editor`, `rater`)
+  - Automatically fetches provider options when models selected
+  - "Automatic" provider lets OpenRouter choose best option
+  - Provider changes persist immediately to IndexedDB
+- **Web Search Configuration**:
+  - Per-purpose web search enable/disable
+  - Integrates with OpenRouter's native web search capabilities
 
 ### AI Logging
 - **File**: `src/AILogService.ts`
@@ -427,6 +445,28 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `filterSensitiveData(data)` - Remove sensitive keys
   - `downloadBlob(blob, filename)` - Trigger file download
 
+### EPUB Generation Services
+- **File**: `src/ui/modals/services/SimpleEpubGenerator.ts`
+- **Class**: `SimpleEpubGenerator`
+- **Functions**:
+  - `generateEpub(rootNode, title, author)` - Generate EPUB from node hierarchy
+  - `generateChapterContent(node)` - Convert node content to EPUB format
+  - `sanitizeForEpub(content)` - Clean content for EPUB standards
+
+- **File**: `src/ui/modals/services/WorkingEpubGenerator.ts`
+- **Class**: `WorkingEpubGenerator`
+- **Functions**:
+  - `generateEpub(rootNode, options)` - Advanced EPUB generation with full options
+  - `createTableOfContents(nodes)` - Generate navigation structure
+  - `processNodeHierarchy(node, level)` - Process nested node structure
+  - `addMetadata(options)` - Add EPUB metadata and styling
+
+- **File**: `src/HelloWorldEpubGenerator.ts`
+- **Class**: `HelloWorldEpubGenerator`
+- **Functions**:
+  - `generateHelloWorldEpub()` - Generate test EPUB for validation
+  - `createSimpleEpubStructure()` - Create minimal valid EPUB structure
+
 ## 🧪 Testing
 
 ### Test Runner
@@ -454,6 +494,22 @@ This document provides a comprehensive mapping of all functionality in the Exper
   - `on(event, handler)` - Add event listener
   - `off(event, handler)` - Remove event listener
   - `emit(event, data)` - Emit event
+
+### AI Progress Events
+- **Event**: `ai-progress` CustomEvent
+- **Dispatched by**: `OpenRouterClient` during AI operations
+- **Listened by**: `src/ui/project-ui.ts` for UI updates
+- **Event Detail Structure**:
+  - `type: 'start'` - AI generation started, `message` contains status
+  - `type: 'update'` - Streaming progress update, `characters` contains current count
+  - `type: 'complete'` - AI generation finished, `characters` contains final count
+- **Usage Example**:
+  ```javascript
+  window.addEventListener('ai-progress', (event) => {
+    const { type, message, characters } = event.detail;
+    // Update UI based on progress type
+  });
+  ```
 
 ## 🏗️ Types & Interfaces
 
@@ -507,4 +563,48 @@ import { StorageService } from './src/StorageService';
 const storage = await StorageService.getInstance();
 await storage.set('key', data);
 const data = await storage.get('key');
+```
+
+### Using OpenRouter Client (Recommended Pattern)
+```typescript
+import { OpenRouterClient } from './src/OpenRouterClient';
+
+const client = OpenRouterClient.getInstance();
+
+// RECOMMENDED: Use streamingChat for new code
+let fullResponse = '';
+await client.streamingChat('creator', [{ role: 'user', content: prompt }], {
+  onStart: () => console.log('AI generation started'),
+  onChunk: (chunk) => {
+    fullResponse += chunk;
+    console.log(`Received ${fullResponse.length} characters so far`);
+  },
+  onComplete: (response) => console.log('Generation complete:', response),
+  onError: (error) => console.error('Generation failed:', error)
+});
+
+// LEGACY: chat() method (deprecated but still works)
+const response = await client.chat('creator', prompt);
+```
+
+### Listening to AI Progress Events
+```typescript
+// Set up progress tracking in UI
+window.addEventListener('ai-progress', (event) => {
+  const { type, message, characters } = event.detail;
+  const progressElement = document.getElementById('ai-progress-report');
+  
+  switch(type) {
+    case 'start':
+      progressElement.textContent = message;
+      progressElement.style.display = 'block';
+      break;
+    case 'update':
+      progressElement.textContent = `${characters} characters received so far...`;
+      break;
+    case 'complete':
+      progressElement.textContent = `Done. ${characters} characters received.`;
+      break;
+  }
+});
 ``` 

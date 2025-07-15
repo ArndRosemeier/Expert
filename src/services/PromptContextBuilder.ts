@@ -3,6 +3,18 @@ import { SettingsManager } from '../SettingsManager.js';
 import { PlaceholderContext } from './PromptExpansionService.js';
 
 export class PromptContextBuilder {
+    
+    private static getValidatedCriteria(settingsManager: SettingsManager): any[] {
+        const profile = settingsManager.getLastUsedProfile();
+        if (!profile) {
+            throw new Error('No active profile available - settings configuration corrupted');
+        }
+        if (!profile.criteria || profile.criteria.length === 0) {
+            throw new Error('Profile has no criteria configured - profile data corrupted or incomplete');
+        }
+        return profile.criteria;
+    }
+
     /**
      * Build context for a specific node
      */
@@ -23,7 +35,7 @@ export class PromptContextBuilder {
             project: {
                 title: 'Current Project', // TODO: Get actual project title
                 language,
-                criteria: settingsManager.getLastUsedProfile()?.criteria || []
+                criteria: this.getValidatedCriteria(settingsManager)
             }
         };
     }
@@ -75,7 +87,7 @@ export class PromptContextBuilder {
         return {
             project: {
                 language: settingsManager.getLanguage(),
-                criteria: settingsManager.getLastUsedProfile()?.criteria || []
+                criteria: this.getValidatedCriteria(settingsManager)
             },
             prompt: options
         };
@@ -105,7 +117,7 @@ export class PromptContextBuilder {
         return {
             project: {
                 language: settingsManager.getLanguage(),
-                criteria: settingsManager.getLastUsedProfile()?.criteria || []
+                criteria: this.getValidatedCriteria(settingsManager)
             },
             analysis: options
         };
@@ -125,7 +137,7 @@ export class PromptContextBuilder {
         return {
             project: {
                 language: settingsManager.getLanguage(),
-                criteria: settingsManager.getLastUsedProfile()?.criteria || []
+                criteria: this.getValidatedCriteria(settingsManager)
             },
             ui: options
         };
@@ -143,7 +155,7 @@ export class PromptContextBuilder {
         const language = settingsManager.getLanguage();
         const criteria = 'getCriteria' in settingsManager 
             ? settingsManager.getCriteria() 
-            : (settingsManager as SettingsManager).getLastUsedProfile()?.criteria || [];
+            : this.getValidatedCriteria(settingsManager as SettingsManager);
             
         return {
             project: {

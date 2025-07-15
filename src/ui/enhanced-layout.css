@@ -2065,3 +2065,22 @@ label[for] {
         font-size: 0.8rem;
     }
 }
+
+/* AI Progress Report */
+.progress-report {
+    display: none;
+    background: var(--secondary-100);
+    border: 1px solid var(--secondary-300);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    margin: 0.25rem 0;
+    font-size: 0.875rem;
+    color: var(--text-600);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    min-width: 200px;
+}
+
+.progress-report:not([style*="display: none"]) {
+    display: block;
+}

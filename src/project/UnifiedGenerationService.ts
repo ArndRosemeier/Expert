@@ -216,7 +216,7 @@ export class UnifiedGenerationService {
      * Main entry point for unified generation using stateless target-state approach
      */
     public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
-        // Clear any previous accumulated contradictions
+        // Clear any previous state
         this.accumulatedContradictions = {
             hasContradictions: false,
             contradictions: [],
@@ -311,11 +311,9 @@ export class UnifiedGenerationService {
             
             // Collect starting node and ALL its descendants in breadth-first order
             const allNodes = this.collectAllDescendants(startNodeId);
-            console.log(`🔍 Found ${allNodes.length} nodes to process:`, allNodes.map(n => `"${n.title}" (Level ${n.level})`));
             
             // Calculate target states for each level
             const targetStates = this.calculateTargetStates(levels, startNode.level, maxLevel);
-            console.log(`🎯 Target states calculated for levels ${startNode.level} to ${maxLevel}:`, targetStates);
             
             // Process each node
             for (const node of allNodes) {
@@ -327,56 +325,43 @@ export class UnifiedGenerationService {
                 // Determine what work is needed for this node
                 const currentState = this.getNodeCurrentState(node);
                 const workNeeded = this.getWorkNeeded(node, targetState);
-                console.log(`🔧 Node "${node.title}" (Level ${node.level}): Target state:`, targetState, `Current state:`, currentState, `Work needed:`, workNeeded);
+
                 
                 // Do context pruning if needed
                 if (workNeeded.contextPruning) {
-                    console.log(`🧹 Performing context pruning for "${node.title}"`);
                     await this.handleContextPruning(node.id);
                     workDone = true;
                 }
                 
                 // Do content generation if needed
                 if (workNeeded.contentGeneration) {
-                    console.log(`✍️ Generating content for "${node.title}"`);
                     await this.handleContentGeneration(node.id);
                     workDone = true;
                 }
                 
                 // Do coherence check if needed (only for last sibling)
                 if (workNeeded.coherenceCheck) {
-                    console.log(`🔍 Node "${node.title}" needs coherence check. Is last sibling: ${this.isLastSibling(node)}`);
                     if (this.isLastSibling(node)) {
                         if (node.parentId) {
-                            console.log(`🔍 Performing coherence check for parent of "${node.title}"`);
                             await this.handleCoherenceCheck(node.parentId, levels);
                             workDone = true;
                         }
-                    } else {
-                        console.log(`⏸️ Coherence check needed for "${node.title}" but it's not the last sibling - waiting`);
                     }
                 }
                 
                 // Check if node can expand
                 if (workNeeded.expansion) {
                     const canExpand = this.canNodeExpand(node, targetState, allNodes);
-                    console.log(`🌳 Node "${node.title}" expansion check: needed=${workNeeded.expansion}, canExpand=${canExpand}`);
                     if (canExpand) {
-                        console.log(`🌳 Expanding node "${node.title}"`);
                         const expansionResult = await this.handleDraftCreation(node.id);
                         if (expansionResult.childrenCreated) {
                             workDone = true;
                         }
-                    } else {
-                        console.log(`⏸️ Cannot expand "${node.title}" - waiting for siblings to complete work`);
                     }
                 }
             }
             
-            console.log(`🔄 Loop iteration completed. Work done: ${workDone}`);
         }
-        
-        console.log(`✅ Generation process completed. No more work needed.`);
     }
 
     /**
@@ -385,12 +370,9 @@ export class UnifiedGenerationService {
     private calculateTargetStates(levels: GenerationLevels, minLevel: number, maxLevel: number): TargetState[] {
         const targetStates: TargetState[] = [];
         
-        console.log(`🎯 Calculating target states for levels ${minLevel} to ${maxLevel} with generation levels:`, levels);
-        
         for (let level = minLevel; level <= maxLevel; level++) {
             // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed
             const needsCoherenceCheck = (levels.coherenceLevel + 1) >= level && level > 0;
-            console.log(`   Level ${level}: coherenceLevel(${levels.coherenceLevel}) + 1 >= level(${level}) && level > 0 = ${needsCoherenceCheck}`);
             
             targetStates[level] = {
                 level,
@@ -437,17 +419,14 @@ export class UnifiedGenerationService {
      */
     private canNodeExpand(node: DocumentNode, targetState: TargetState, allNodes: DocumentNode[]): boolean {
         if (!targetState.canExpand) {
-            console.log(`❌ Cannot expand "${node.title}": targetState.canExpand = false`);
             return false;
         }
         if (node.children.length > 0) {
-            console.log(`❌ Cannot expand "${node.title}": already has ${node.children.length} children`);
             return false;
         }
         
         // Get all siblings at the same level
         const siblings = allNodes.filter(n => n.level === node.level);
-        console.log(`🔍 Checking ${siblings.length} siblings at level ${node.level}: ${siblings.map(s => s.title).join(', ')}`);
         
         // Check if all siblings have reached their target state
         const allSiblingsReady = siblings.every(sibling => {
@@ -455,11 +434,8 @@ export class UnifiedGenerationService {
             const isReady = !siblingWorkNeeded.contextPruning && 
                            !siblingWorkNeeded.contentGeneration && 
                            !siblingWorkNeeded.coherenceCheck;
-            console.log(`   📋 Sibling "${sibling.title}": work needed:`, siblingWorkNeeded, `ready: ${isReady}`);
             return isReady;
         });
-        
-        console.log(`🎯 All siblings ready for expansion: ${allSiblingsReady}`);
         return allSiblingsReady;
     }
 
@@ -541,19 +517,6 @@ export class UnifiedGenerationService {
                 message: contextChanged ? `Auto-pruned context for "${node.title}"` : `No context issues found for "${node.title}"`
             };
             this.emitUnifiedProgress();
-        } catch (error) {
-            // Check if this is an abort error - if so, propagate it immediately
-            if (error instanceof Error && (
-                error.message.includes('aborted by user') || 
-                error.message.includes('Request was aborted') ||
-                error.name === 'AbortError'
-            )) {
-                throw error; // Propagate abort errors
-            }
-            
-            // For other errors, log but continue with generation
-            console.error('Auto-prune context failed:', error);
-            // Continue with generation even if auto-prune fails
         } finally {
             // Clear isGenerating flag and update tree to hide spinner
             node.isGenerating = false;
@@ -571,7 +534,6 @@ export class UnifiedGenerationService {
     private async handleContentGeneration(nodeId: string): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            console.log('🛑 UnifiedGenerationService: Abort detected in handleContentGeneration');
             throw new Error('Generation was aborted by user');
         }
 
@@ -640,7 +602,6 @@ export class UnifiedGenerationService {
     private async handleDraftCreation(nodeId: string): Promise<{ childIds: string[]; childrenCreated: boolean }> {
         // Check for abort at start of operation
         if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            console.log('🛑 UnifiedGenerationService: Abort detected in handleDraftCreation');
             throw new Error('Generation was aborted by user');
         }
 
@@ -754,7 +715,7 @@ export class UnifiedGenerationService {
             console.log(`✅ Created ${childIds.length} children for "${node.title}"`);
             
             // Update tree immediately after children are created
-            console.log(`📢 EMITTING tree-update-needed event for node ${nodeId}: children-created`);
+    
             this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'children-created' });
             
             return { childIds, childrenCreated: true };
@@ -884,18 +845,6 @@ export class UnifiedGenerationService {
                 }
             }
             
-        } catch (error) {
-            // Show error through the error service (includes console logging)
-            await GenerationErrorService.getInstance().showAIError(
-                error as Error,
-                {
-                    title: 'Coherence Check Failed',
-                    operation: `Coherence check for "${parentNode.title}"`,
-                    purpose: 'Coherence Analysis'
-                }
-            );
-            
-            // Continue with generation even if coherence check fails
         } finally {
             // Clear isGenerating flag and update tree to hide spinner
             parentNode.isGenerating = false;
@@ -914,33 +863,23 @@ export class UnifiedGenerationService {
      * Show coherence modal and wait for user to close it
      */
     private async showCoherenceModalAndWait(parentNode: DocumentNode, result: CoherenceResult): Promise<void> {
-        try {
-            // Import and create the coherence modal
-            const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
-            const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
-            
-            // Open modal in loading state first
-            await coherenceModal.openInLoadingState(parentNode);
-            
-            // Update with results
-            coherenceModal.updateWithResults(result);
-            
-            // Wait for the modal to be closed by the user
-            // The modal's close() method is called when user clicks close, backdrop, or escape
-            // We need to wait for it to actually close
-            await this.waitForModalClose(coherenceModal);
-            
-        } catch (error) {
-            // Show error through the error service (includes console logging)
-            await GenerationErrorService.getInstance().showAIError(
-                error as Error,
-                {
-                    title: 'Coherence Modal Error',
-                    operation: `Opening coherence modal for "${parentNode.title}"`,
-                    purpose: 'Coherence Analysis'
-                }
-            );
-        }
+        // Import and create the coherence modal
+        const { CoherenceModal } = await import('../ui/modals/CoherenceModal');
+        const coherenceModal = new CoherenceModal(this.deps.rootNode); // Pass the generation project
+        
+        // Open modal in loading state first
+        await coherenceModal.openInLoadingState(parentNode);
+        
+        // Update with results
+        coherenceModal.updateWithResults(result);
+        
+        // Wait for the modal to be closed by the user
+        // The modal's close() method is called when user clicks close, backdrop, or escape
+        // We need to wait for it to actually close
+        await this.waitForModalClose(coherenceModal);
+        
+        // Note: Error handling is done at the higher level in handleCoherenceCheck
+        // to prevent duplicate error dialogs from cascading errors
     }
 
     /**
@@ -950,23 +889,50 @@ export class UnifiedGenerationService {
         return new Promise<void>((resolve) => {
             // Check if modal is already closed
             if (!modal.isOpen()) {
+                console.log('🔍 Modal already closed, resolving immediately');
                 resolve();
                 return;
             }
 
+            console.log('🔍 Waiting for coherence modal to be closed by user...');
+            
+            let resolved = false;
+            const resolveOnce = () => {
+                if (!resolved) {
+                    resolved = true;
+                    console.log('✅ Coherence modal closed, continuing generation');
+                    resolve();
+                }
+            };
+
             // Set up an interval to check if the modal is closed
             const checkClosed = setInterval(() => {
-                if (!modal.isOpen()) {
+                try {
+                    if (!modal.isOpen()) {
+                        clearInterval(checkClosed);
+                        resolveOnce();
+                    }
+                } catch (error) {
+                    // If modal checking fails, assume it's closed
+                    console.warn('⚠️ Error checking modal state, assuming closed:', error);
                     clearInterval(checkClosed);
-                    resolve();
+                    resolveOnce();
                 }
             }, 100);
             
             // Also set up a maximum timeout to prevent infinite waiting
-            setTimeout(() => {
+            const timeout = setTimeout(() => {
+                console.warn('⚠️ Modal wait timeout reached, continuing generation');
                 clearInterval(checkClosed);
-                resolve();
+                resolveOnce();
             }, 5 * 60 * 1000); // 5 minutes max wait time
+            
+            // Clean up timeout if resolved early
+            const originalResolve = resolve;
+            resolve = () => {
+                clearTimeout(timeout);
+                originalResolve();
+            };
         });
     }
 
@@ -1064,7 +1030,7 @@ export class UnifiedGenerationService {
             }
         }
         
-        console.log(`✅ Tagged ${taggedCount} children as consistent to parent: "${parentNode.title}"`);
+
         
         // Save the project after tagging
         await this.saveProjectAfterBatchTagging();
@@ -1098,7 +1064,7 @@ export class UnifiedGenerationService {
                 }
             }
             
-            console.log(`✅ Tagged ${nodeTaggedCount} subnodes as consistent to parent: "${parentNode.title}"`);
+
         }
         
         console.log(`✅ Batch tagging completed: ${totalTaggedCount} total subnodes tagged as consistent`);
@@ -1163,7 +1129,15 @@ export class UnifiedGenerationService {
         
         // For other operations, use the creator model (default behavior)
         const profile = this.deps.settingsManager.getLastUsedProfile();
-        if (!profile || !profile.selectedModels || !profile.selectedModels['creator']) return undefined;
+        if (!profile) {
+            throw new Error('No profile available - settings not properly configured');
+        }
+        if (!profile.selectedModels) {
+            throw new Error('Profile has no selected models - model configuration corrupted');
+        }
+        if (!profile.selectedModels['creator']) {
+            throw new Error('No creator model selected - model configuration incomplete');
+        }
         
         return this.formatModelName(profile.selectedModels['creator']);
     }
@@ -1413,7 +1387,7 @@ export class UnifiedGenerationService {
                 }
                 
                 // Update tree after each node completion so user sees progress
-                console.log(`📢 EMITTING tree-update-needed event for node ${nodeId}: content-generated`);
+    
                 this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'content-generated' });
                 // Note: Individual content generation does not emit completion events
                 // Only the main unified generation process emits those events

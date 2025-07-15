@@ -13,7 +13,7 @@ import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
-import { AIProgressService } from '../AIProgressService';
+
 import { getContextItemCount } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
@@ -40,6 +40,11 @@ function getNodeStatusIcon(node: DocumentNode): string {
     // Finished: all conditions met
     if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
         return '⭐';
+    }
+    
+    // Content done, coherent with parent (but no context adjustment)
+    if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
+        return '✨';
     }
     
     // Content done, context adjusted (but no coherence check)
@@ -100,6 +105,7 @@ function getProjectRootTooltip(rootNode: DocumentNode): string {
     // Define the order and descriptions for each status type
     const statusOrder = [
         { icon: '⭐', description: 'Finished' },
+        { icon: '✨', description: 'Content done and coherent with parent' },
         { icon: '🟢', description: 'Content done with context adjusted' },
         { icon: '🟡', description: 'Content done - basic state' },
         { icon: '🟠', description: 'Draft with adjusted context' },
@@ -138,6 +144,11 @@ function getNodeStatusTooltip(node: DocumentNode): string {
     // Finished: all conditions met
     if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
         return 'Finished - content complete, context adjusted, and consistent with parent';
+    }
+    
+    // Content done, coherent with parent (but no context adjustment)
+    if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
+        return 'Content done and coherent with parent - ready for context adjustment';
     }
     
     // Content done, context adjusted (but no coherence check)
@@ -467,7 +478,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'check-coherence': 'check-coherence-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
-                            'tag-manager': 'tag-manager-btn'
+                            'tag-manager': 'tag-manager-btn',
+                            'test-hello-world-epub': 'test-hello-world-epub-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -757,6 +769,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ` : ''}
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
+                    </button>
+                    <button class="action-btn" data-action="test-hello-world-epub">
+                        📘 Test Hello World EPUB
                     </button>
                 </div>
             </div>
@@ -1181,12 +1196,13 @@ export function renderNodeDetails() {
     const contentArea = getElementById('node-details');
     contentArea.innerHTML = ''; // Clear previous content
 
-    if (!projectManager || !selectedNodeId) {
-        // Use safe content replacement for placeholder
+    if (!projectManager) {
+        throw new Error('projectManager is null in renderNodeDetails - application state corrupted');
+    }
+    if (!selectedNodeId) {
+        // This is a valid state - no node is selected yet
         void import('./event-manager').then(({ eventManager }) => {
             eventManager.replaceContent('node-details', '<div class="placeholder">No node selected.</div>');
-        }).catch(() => {
-            contentArea.innerHTML = '<div class="placeholder">No node selected.</div>';
         });
         return;
     }
@@ -1838,21 +1854,21 @@ export function renderNodeDetails() {
             '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
-        }).catch(console.error);
+        });
     } else if (isAnyOperationInProgress) {
         void import('./event-manager').then(({ eventManager }) => {
             eventManager.updateButtonContent('node-generate-btn', 
                 '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px; vertical-align: middle; margin-right: 8px;"></span>...',
                 { disabled: true, className: 'button button-primary' }
             );
-        }).catch(console.error);
+        });
     } else {
         void import('./event-manager').then(({ eventManager }) => {
             eventManager.updateButtonContent('node-generate-btn', 
                 BUTTON_LABELS.GENERATE,
                 { disabled: false, className: 'button button-primary' }
             );
-        }).catch(console.error);
+        });
     }
 
     // Set up event listeners for level-based generation controls
@@ -1909,7 +1925,7 @@ export function renderNodeDetails() {
             selector.addEventListener('change', () => {
                 validateLevels();
                 // Save level states to storage
-                void saveLevelStates().catch(console.error);
+                void saveLevelStates();
             });
         }
     });
@@ -1937,7 +1953,7 @@ export function renderNodeDetails() {
                     // Save to storage with debounced approach
                     clearTimeout((contentTextArea as any)._saveTimeout);
                     (contentTextArea as any)._saveTimeout = void void setTimeout(() => {
-                        void projectManager!.saveToStorage().catch(console.error);
+                        void projectManager!.saveToStorage();
                     }, 1000); // Save after 1 second of no typing
                 }
             }
@@ -2123,10 +2139,20 @@ function updateVersionContentDisplay() {
 
 function renderRatingsView() {
     const ratingsDisplay = document.getElementById('ratings-display') as HTMLDivElement;
-    if (!ratingsDisplay || !projectManager || !selectedNodeId) return;
+    if (!ratingsDisplay) {
+        throw new Error('Ratings display element not found - DOM structure corrupted');
+    }
+    if (!projectManager) {
+        throw new Error('ProjectManager is null in renderRatingsView - application state corrupted');
+    }
+    if (!selectedNodeId) {
+        throw new Error('No node selected in renderRatingsView - UI state corrupted');
+    }
     
     const node = projectManager.findNodeById(selectedNodeId);
-    if (!node) return;
+    if (!node) {
+        throw new Error(`Node ${selectedNodeId} not found in renderRatingsView - data corruption detected`);
+    }
     
     // Import RatingsRenderer dynamically
     void import('./components/RatingsRenderer').then(({ RatingsRenderer }) => {
@@ -2252,11 +2278,46 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
 
 
 /**
+ * Handle testing the Hello World EPUB generator
+ */
+async function handleTestHelloWorldEpub(): Promise<void> {
+    try {
+        // Import the HelloWorldEpubGenerator
+        const { HelloWorldEpubGenerator } = await import('../HelloWorldEpubGenerator');
+        
+        // Create a new generator instance
+        const generator = new HelloWorldEpubGenerator();
+        
+        // Generate the EPUB
+        const epubBlob = await generator.generate();
+        
+        // Use the FileDownloadService to download the EPUB
+        const { FileDownloadService } = await import('../utils/FileDownloadService');
+        await FileDownloadService.downloadBlob(epubBlob, {
+            filename: 'hello-world-test.epub',
+            mimeType: 'application/epub+zip',
+            description: 'Hello World EPUB Test File',
+            extensions: ['epub']
+        });
+        
+        console.log('✅ Hello World EPUB generated and downloaded successfully!');
+    } catch (error) {
+        console.error('❌ Error generating Hello World EPUB:', error);
+        alert('Error generating Hello World EPUB. Check console for details.');
+    }
+}
+
+/**
  * Handle dropdown action by button ID
  * This function contains all the logic for dropdown actions that were moved out of the main switch statement
  */
 function handleDropdownAction(buttonId: string): void {
-    if (!projectManager || !selectedNodeId) return;
+    if (!projectManager) {
+        throw new Error('ProjectManager is null in handleDropdownAction - application state corrupted');
+    }
+    if (!selectedNodeId) {
+        throw new Error('No node selected in handleDropdownAction - UI state corrupted');
+    }
 
     switch (buttonId) {
         case 'new-top-layer-btn':
@@ -2309,7 +2370,9 @@ function handleDropdownAction(buttonId: string): void {
         case 'node-generate-content-action':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
+                if (!node) {
+                    throw new Error(`Node ${selectedNodeId} not found in node-generate-content-action - data corruption detected`);
+                }
 
                 // Check if node state is Final and warn user
                 if (node.getState() === 'Final') {
@@ -2369,7 +2432,34 @@ This action cannot be undone.`;
                         
                     } catch (error) {
                         console.error('Content generation failed:', error);
-                        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        
+                        // Use rich error modal instead of basic alert
+                        if (error instanceof Error) {
+                            // Check if this is a content filtering error
+                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
+                                                      error.message.includes('Empty response from AI model') ||
+                                                      error.message.includes('likely content filtering') ||
+                                                      error.name === 'ContentFilterError' ||
+                                                      error.name === 'EmptyResponseError';
+                            
+                            if (isContentFiltering) {
+                                import('./modals').then(({ GenerationErrorService }) => {
+                                    const errorService = GenerationErrorService.getInstance();
+                                    void errorService.showContentFilteringError(error, {
+                                        purpose: 'Content Generation',
+                                        operation: `Content generation for "${node.title}"`,
+                                        nodeTitle: node.title
+                                    });
+                                }).catch(console.error);
+                            } else {
+                                import('./modals').then(({ GenerationErrorService }) => {
+                                    const errorService = GenerationErrorService.getInstance();
+                                    void errorService.showContentGenerationError(error, node.title);
+                                }).catch(console.error);
+                            }
+                        } else {
+                            alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        }
                     } finally {
                         clearProgressUI();
                         hideGenerationOverlay();
@@ -2435,7 +2525,38 @@ This action cannot be undone.`;
                         
                     } catch (error) {
                         console.error('Bulk generation failed:', error);
-                        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        
+                        // Use rich error modal instead of basic alert
+                        if (error instanceof Error) {
+                            // Check if this is a content filtering error
+                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
+                                                      error.message.includes('Empty response from AI model') ||
+                                                      error.message.includes('likely content filtering') ||
+                                                      error.name === 'ContentFilterError' ||
+                                                      error.name === 'EmptyResponseError';
+                            
+                            if (isContentFiltering) {
+                                import('./modals').then(({ GenerationErrorService }) => {
+                                    const errorService = GenerationErrorService.getInstance();
+                                    void errorService.showContentFilteringError(error, {
+                                        purpose: 'Bulk Generation',
+                                        operation: `Bulk generation for "${node.title}"`,
+                                        nodeTitle: node.title
+                                    });
+                                }).catch(console.error);
+                            } else {
+                                import('./modals').then(({ GenerationErrorService }) => {
+                                    const errorService = GenerationErrorService.getInstance();
+                                    void errorService.showAIError(error, {
+                                        title: 'Bulk Generation Failed',
+                                        purpose: 'Bulk Generation',
+                                        operation: `Bulk generation for "${node.title}"`
+                                    });
+                                }).catch(console.error);
+                            }
+                        } else {
+                            alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        }
                     } finally {
                         clearProgressUI();
                         hideGenerationOverlay();
@@ -2853,7 +2974,9 @@ This action cannot be undone.`;
 
                 // Import and open batch update modal
                 import('./components/BatchUpdateModal').then(({ BatchUpdateModal }) => {
-                    if (!projectManager) return; // Additional null check after async import
+                    if (!projectManager) {
+                        throw new Error('ProjectManager became null during async import - application state corrupted');
+                    }
                     
                     // Create modal container
                     const modalContainer = document.createElement('div');
@@ -2937,7 +3060,9 @@ This action cannot be undone.`;
 
                 // Import and open tag manager modal
                 import('./modals/TagManagerModal').then(({ TagManagerModal }) => {
-                    if (!projectManager) return; // Additional null check after async import
+                    if (!projectManager) {
+                        throw new Error('ProjectManager became null during async import - application state corrupted');
+                    }
                     
                     const tagModal = new TagManagerModal(node, {
                         onClose: () => {
@@ -2955,6 +3080,12 @@ This action cannot be undone.`;
                     console.error('Failed to open tag manager modal:', error);
                     alert('Failed to open tag manager. Please try again.');
                 });
+            }
+            break;
+
+        case 'test-hello-world-epub-btn':
+            {
+                void handleTestHelloWorldEpub();
             }
             break;
 
@@ -3450,9 +3581,24 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     const aiInteractionsService = AIInteractionsService.getInstance();
     await aiInteractionsService.initialize();
     
-    // Initialize AI progress service
-    const aiProgressService = AIProgressService.getInstance();
-    aiProgressService.initialize();
+    // Set up simple AI progress event listener
+    window.addEventListener('ai-progress', (event: any) => {
+        const progressElement = document.getElementById('ai-progress-report')!; // Crash if not found!
+        const { type, message, characters } = event.detail;
+        
+        switch(type) {
+            case 'start':
+                progressElement.textContent = message;
+                progressElement.style.display = 'block';
+                break;
+            case 'update':
+                progressElement.textContent = `${characters} characters received so far...`;
+                break;
+            case 'complete':
+                progressElement.textContent = `Done. ${characters} characters received.`;
+                break;
+        }
+    });
 }
 
 
@@ -3757,38 +3903,88 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         );
     }
 
-    // Create the imported node as a new child of the target node
-    const importedNode = importChildNodeWithRootTemplate(projectManager, targetNode.id, importData.title);
-
-    // Set imported node properties using version management system
-    // Apply the fields using version management
-    if (importData.content !== undefined) {
-        importedNode.setContent(importData.content, 'master');
-    }
-
-    if (importData.context !== undefined) {
-        importedNode.setContext(importData.context, 'master');
-    }
-
-    if (importData.generationPrompt !== undefined) {
-        importedNode.generationPrompt = importData.generationPrompt;
-    }
+    // Enhanced: Check if we have version data (new format) or need legacy import
+    let importedNode: DocumentNode;
     
-    // Restore generation metadata in version metadata
-    if (importData.creatorModel !== undefined) {
-        const masterVersion = importedNode.getMasterVersion();
-        if (masterVersion) {
-            masterVersion.metadata = masterVersion.metadata || {};
-            masterVersion.metadata['creatorModel'] = importData.creatorModel;
+    if (importData.versions && Array.isArray(importData.versions) && importData.versions.length > 0) {
+        console.log(`🔄 Importing with enhanced version data: ${importData.versions.length} versions`);
+        
+        // FIXED: Use proper project manager method to ensure template sharing
+        importedNode = projectManager.addNode(importData.title, targetNode.id);
+        
+        // Now restore the version data and other properties
+        importedNode.id = `imported_${Date.now()}_${importData.id || 'unknown'}`; // New ID to avoid conflicts
+        
+        // Clear the default master version and restore all versions from import
+        (importedNode as any).versions = []; // Clear default versions
+        
+        if (importData.versions && Array.isArray(importData.versions)) {
+            // Restore all versions with proper tag handling
+            importData.versions.forEach((versionData: any) => {
+                const restoredVersion = {
+                    id: versionData.id,
+                    content: versionData.content,
+                    title: versionData.title,
+                    context: versionData.context,
+                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
+                    timestamp: new Date(versionData.timestamp),
+                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
+                    creatorModel: versionData.creatorModel,
+                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
+                };
+                (importedNode as any).versions.push(restoredVersion);
+            });
         }
-    }
-    
-    if (importData.generationHistory !== undefined && Array.isArray(importData.generationHistory)) {
-        importedNode.generationHistory = importData.generationHistory;
-    }
-    
-    if (importData.generationSessions !== undefined && Array.isArray(importData.generationSessions)) {
-        importedNode.generationSessions = importData.generationSessions;
+        
+        // Restore other properties
+        if (importData.generationPrompt) {
+            importedNode.generationPrompt = importData.generationPrompt;
+        }
+        if (importData.generationHistory) {
+            importedNode.generationHistory = importData.generationHistory;
+        }
+        if (importData.generationSessions) {
+            importedNode.generationSessions = importData.generationSessions;
+        }
+        if (importData.collapsed !== undefined) {
+            importedNode.collapsed = importData.collapsed;
+        }
+        
+    } else {
+        console.log(`🔄 Importing with legacy format (no version data)`);
+        
+        // Legacy import: Create new node and set properties individually
+        importedNode = importChildNodeWithRootTemplate(projectManager, targetNode.id, importData.title);
+
+        // Set imported node properties using version management system
+        if (importData.content !== undefined) {
+            importedNode.setContent(importData.content, 'imported');
+        }
+
+        if (importData.context !== undefined) {
+            importedNode.setContext(importData.context, 'imported');
+        }
+
+        if (importData.generationPrompt !== undefined) {
+            importedNode.generationPrompt = importData.generationPrompt;
+        }
+        
+        // Restore generation metadata in version metadata
+        if (importData.creatorModel !== undefined) {
+            const masterVersion = importedNode.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['creatorModel'] = importData.creatorModel;
+            }
+        }
+        
+        if (importData.generationHistory !== undefined && Array.isArray(importData.generationHistory)) {
+            importedNode.generationHistory = importData.generationHistory;
+        }
+        
+        if (importData.generationSessions !== undefined && Array.isArray(importData.generationSessions)) {
+            importedNode.generationSessions = importData.generationSessions;
+        }
     }
 
     // Import children recursively
@@ -3800,6 +3996,9 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 
     // Propagate the correct template to all newly imported nodes
     propagateTemplateToSubtree(importedNode);
+
+    // CRITICAL: Ensure all nodes share the same template reference for dropdown population
+    AssertFlatTemplateCopy(projectManager);
 
     // Save the project
     void projectManager.saveToStorage().catch(console.error);
@@ -3814,37 +4013,94 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         return;
     }
 
-    // Create the child node with root template (shallow copy)
-    const newNode = importChildNodeWithRootTemplate(projectManager, parentId, childData.title);
-
-    // Set node properties using version management system
-    if (childData.content !== undefined) {
-        newNode.setContent(childData.content, 'master');
+    const parentNode = projectManager.findNodeById(parentId);
+    if (!parentNode) {
+        console.warn(`Parent node not found: ${parentId}`);
+        return;
     }
 
-    if (childData.context !== undefined) {
-        newNode.setContext(childData.context, 'master');
-    }
-
-    if (childData.generationPrompt !== undefined) {
-        newNode.generationPrompt = childData.generationPrompt;
-    }
+    // Enhanced: Check if we have version data (new format) or need legacy import
+    let newNode: DocumentNode;
     
-    // Restore generation metadata for child nodes in version metadata
-    if (childData.creatorModel !== undefined) {
-        const masterVersion = newNode.getMasterVersion();
-        if (masterVersion) {
-            masterVersion.metadata = masterVersion.metadata || {};
-            masterVersion.metadata['creatorModel'] = childData.creatorModel;
+    if (childData.versions && Array.isArray(childData.versions) && childData.versions.length > 0) {
+        console.log(`🔄 Importing child with enhanced version data: ${childData.versions.length} versions`);
+        
+        // FIXED: Use proper project manager method to ensure template sharing
+        newNode = projectManager.addNode(childData.title, parentId);
+        
+        // Now restore the version data and other properties
+        newNode.id = `imported_${Date.now()}_${childData.id || 'unknown'}`; // New ID to avoid conflicts
+        
+        // Clear the default master version and restore all versions from import
+        (newNode as any).versions = []; // Clear default versions
+        
+        if (childData.versions && Array.isArray(childData.versions)) {
+            // Restore all versions with proper tag handling
+            childData.versions.forEach((versionData: any) => {
+                const restoredVersion = {
+                    id: versionData.id,
+                    content: versionData.content,
+                    title: versionData.title,
+                    context: versionData.context,
+                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
+                    timestamp: new Date(versionData.timestamp),
+                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
+                    creatorModel: versionData.creatorModel,
+                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
+                };
+                (newNode as any).versions.push(restoredVersion);
+            });
         }
-    }
-    
-    if (childData.generationHistory !== undefined && Array.isArray(childData.generationHistory)) {
-        newNode.generationHistory = childData.generationHistory;
-    }
-    
-    if (childData.generationSessions !== undefined && Array.isArray(childData.generationSessions)) {
-        newNode.generationSessions = childData.generationSessions;
+        
+        // Restore other properties
+        if (childData.generationPrompt) {
+            newNode.generationPrompt = childData.generationPrompt;
+        }
+        if (childData.generationHistory) {
+            newNode.generationHistory = childData.generationHistory;
+        }
+        if (childData.generationSessions) {
+            newNode.generationSessions = childData.generationSessions;
+        }
+        if (childData.collapsed !== undefined) {
+            newNode.collapsed = childData.collapsed;
+        }
+        
+    } else {
+        console.log(`🔄 Importing child with legacy format (no version data)`);
+        
+        // Legacy import: Create new node and set properties individually
+        newNode = importChildNodeWithRootTemplate(projectManager, parentId, childData.title);
+
+        // Set node properties using version management system
+        if (childData.content !== undefined) {
+            newNode.setContent(childData.content, 'imported');
+        }
+
+        if (childData.context !== undefined) {
+            newNode.setContext(childData.context, 'imported');
+        }
+
+        if (childData.generationPrompt !== undefined) {
+            newNode.generationPrompt = childData.generationPrompt;
+        }
+        
+        // Restore generation metadata for child nodes in version metadata
+        if (childData.creatorModel !== undefined) {
+            const masterVersion = newNode.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['creatorModel'] = childData.creatorModel;
+            }
+        }
+        
+        if (childData.generationHistory !== undefined && Array.isArray(childData.generationHistory)) {
+            newNode.generationHistory = childData.generationHistory;
+        }
+        
+        if (childData.generationSessions !== undefined && Array.isArray(childData.generationSessions)) {
+            newNode.generationSessions = childData.generationSessions;
+        }
     }
 
     // Recursively import children
@@ -3899,7 +4155,9 @@ function propagateTemplateToSubtree(rootNode: DocumentNode): void {
  * Unified generation handler that checks radio button state and calls appropriate generation method
  */
 async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
-    if (!projectManager) return;
+    if (!projectManager) {
+        throw new Error('ProjectManager is null in handleUnifiedGeneration - application state corrupted');
+    }
 
     // Get level values from dropdowns
     const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
@@ -3978,7 +4236,41 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         
     } catch (error) {
         console.error('Unified generation failed:', error);
-        alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Use rich error modal instead of basic alert
+        if (error instanceof Error) {
+            // Check if this is a content filtering error and provide enhanced guidance
+            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
+                                      error.message.includes('Empty response from AI model') ||
+                                      error.message.includes('likely content filtering') ||
+                                      error.name === 'ContentFilterError' ||
+                                      error.name === 'EmptyResponseError';
+            
+            if (isContentFiltering) {
+                // Import and show specialized content filtering error modal
+                import('./modals').then(({ GenerationErrorService }) => {
+                    const errorService = GenerationErrorService.getInstance();
+                    void errorService.showContentFilteringError(error, {
+                        purpose: 'Unified Generation',
+                        operation: `Generation for "${node.title}"`,
+                        nodeTitle: node.title
+                    });
+                }).catch(console.error);
+            } else {
+                // Show regular generation error modal
+                import('./modals').then(({ GenerationErrorService }) => {
+                    const errorService = GenerationErrorService.getInstance();
+                    void errorService.showAIError(error, {
+                        title: 'Generation Failed',
+                        purpose: 'Unified Generation',
+                        operation: `Generation for "${node.title}"`
+                    });
+                }).catch(console.error);
+            }
+        } else {
+            // Fallback for non-Error objects
+            alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     } finally {
         // Clear progress UI and hide overlay
         clearProgressUI();
@@ -4150,8 +4442,14 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         const selectedVersion = availableVersions[currentVersionIndex];
         // Use version management system to update content
         node.setContent(selectedVersion.content, 'master');
-        node.generationHistory = selectedVersion.generationHistory || [];
-        node.generationSessions = selectedVersion.generationSessions || [];
+        if (!selectedVersion.generationHistory) {
+            throw new Error(`Selected version ${selectedVersion.id} is missing generationHistory - data corruption detected`);
+        }
+        if (!selectedVersion.generationSessions) {
+            throw new Error(`Selected version ${selectedVersion.id} is missing generationSessions - data corruption detected`);
+        }
+        node.generationHistory = selectedVersion.generationHistory;
+        node.generationSessions = selectedVersion.generationSessions;
         
         // Set creator model in version metadata if it exists
         if (selectedVersion.creatorModel) {

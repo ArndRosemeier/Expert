@@ -750,8 +750,8 @@ export class ModelSelector {
           });
         }
 
-        // Set current selection (default to automatic)
-        providerSelect.value = this.selectedProviders[purpose.key] || 'automatic';
+        // Set current selection (crash if missing - no defensive fallbacks!)
+        providerSelect.value = this.selectedProviders[purpose.key]!
 
         providerSelect.addEventListener('change', async (e) => {
           this.selectedProviders[purpose.key] = (e.target as HTMLSelectElement).value;
@@ -1181,6 +1181,27 @@ export class ModelSelector {
   public async setSelectedModels(models: Record<string, string>): Promise<void> {
     this.selectedModels = { ...models };
     await this.saveToStorage();
+    
+    // Pre-fetch endpoint information for newly selected models before rendering
+    const fetchPromises: Promise<void>[] = [];
+    for (const purpose of PURPOSES) {
+      const selectedModel = this.selectedModels[purpose.key];
+      if (selectedModel && !this.modelEndpoints[selectedModel]) {
+        fetchPromises.push(this.fetchModelEndpoints(selectedModel));
+      }
+    }
+    
+    // Wait for all endpoint fetches to complete, then re-render
+    if (fetchPromises.length > 0) {
+      try {
+        await Promise.all(fetchPromises);
+        console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} models after profile switch`);
+      } catch (error) {
+        console.error('❌ Some endpoint fetches failed during profile switch:', error);
+        // Continue with update even if some fetches failed - the error will be thrown by fetchModelEndpoints
+      }
+    }
+    
     this.update();
   }
 
@@ -1189,6 +1210,13 @@ export class ModelSelector {
   }
 
   public async setSelectedProviders(providers: Record<string, string>): Promise<void> {
+    // Validate providers - crash if invalid providers are set
+    for (const [purpose, provider] of Object.entries(providers)) {
+      if (provider !== 'automatic' && !provider) {
+        throw new Error(`Invalid provider for ${purpose}: ${provider}`);
+      }
+    }
+    
     this.selectedProviders = { ...providers };
     await this.saveToStorage();
     this.update();
@@ -1242,10 +1270,10 @@ export class ModelSelector {
       const endpoints = await client.fetchModelEndpoints(modelId);
       this.modelEndpoints[modelId] = endpoints;
       console.log(`📋 Fetched ${endpoints.length} providers for model ${modelId}`);
+
     } catch (error) {
-      console.warn(`⚠️ Failed to fetch endpoints for model ${modelId}:`, error);
-      // Set empty array so we don't keep trying to fetch
-      this.modelEndpoints[modelId] = [];
+      console.error(`❌ CRITICAL: Failed to fetch endpoints for model ${modelId}:`, error);
+      throw error; // Crash loudly - no silent error masking!
     }
   }
 
@@ -1253,15 +1281,15 @@ export class ModelSelector {
    * Check if a model has multiple providers available
    */
   private hasMultipleProviders(modelId: string): boolean {
-    const endpoints = this.modelEndpoints[modelId];
-    return !!(endpoints && endpoints.length > 1);
+    const endpoints = this.modelEndpoints[modelId]!; // Crash if not loaded!
+    return endpoints.length > 1;
   }
 
   /**
    * Get available providers for a model
    */
   private getProvidersForModel(modelId: string): OpenRouterModel['endpoints'] {
-    return this.modelEndpoints[modelId] || [];
+    return this.modelEndpoints[modelId]!; // Crash if endpoints not loaded!
   }
 
   /**

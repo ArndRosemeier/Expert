@@ -89,7 +89,13 @@ export class TaskModelService {
     public getModelForTask(taskType: keyof AllTaskModelConfigs, isLeafNode: boolean): string {
         const purpose = this.getModelPurposeForTask(taskType, isLeafNode);
         const profile = this.settingsManager.getLastUsedProfile();
-        const selectedModels = profile?.selectedModels || {};
+        if (!profile) {
+            throw new Error('No active profile available - settings configuration corrupted');
+        }
+        if (!profile.selectedModels) {
+            throw new Error('Profile has no selectedModels configuration - profile data corrupted');
+        }
+        const selectedModels = profile.selectedModels;
         const modelId = selectedModels[purpose];
         
         if (!modelId) {
@@ -104,7 +110,13 @@ export class TaskModelService {
      */
     public getTaskModelConfigs(): AllTaskModelConfigs {
         const profile = this.settingsManager.getLastUsedProfile();
-        return profile?.taskModelConfigs || DEFAULT_TASK_MODEL_CONFIGS;
+        if (!profile) {
+            throw new Error('No active profile available - settings configuration corrupted');
+        }
+        if (!profile.taskModelConfigs) {
+            throw new Error('Profile has no taskModelConfigs - profile data corrupted, using defaults instead');
+        }
+        return profile.taskModelConfigs;
     }
 
     /**

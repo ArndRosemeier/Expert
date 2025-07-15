@@ -278,7 +278,6 @@ export class SettingsManager {
                         // Check for version mismatch
                         if (!profile.version || profile.version !== currentVersion) {
                             hasVersionMismatch = true;
-                            console.log(`📋 Profile "${profileName}" has version mismatch. Profile version: ${profile.version || 'unknown'}, Current version: ${currentVersion}`);
                         } else {
         
                         }
@@ -310,13 +309,11 @@ export class SettingsManager {
                                     prose: 'prose' as const
                                 }
                             };
-                            console.log(`📋 Added default task model configs to profile "${profileName}"`);
                         }
                         
                         // Add default language to existing profiles that don't have it
                         if (!profile.language) {
                             profile.language = 'English';
-                            console.log(`📋 Added default language to profile "${profileName}"`);
                         }
                     }
                 });
@@ -502,11 +499,6 @@ export class SettingsManager {
             throw new Error(`Active profile "${this.getLastUsedProfileName()}" is missing language property`);
         }
         const language = profile.language;
-        console.log('🔍 getLanguage() called:', {
-            profileName: this.getLastUsedProfileName(),
-            profile: profile ? { ...profile, selectedModels: '[REDACTED]' } : null,
-            language
-        });
         return language;
     }
 
@@ -515,11 +507,6 @@ export class SettingsManager {
      */
     public async setLanguage(language: string): Promise<void> {
         const profileName = this.getLastUsedProfileName();
-        console.log('🔧 setLanguage() called:', {
-            language,
-            profileName,
-            beforeProfile: profileName ? (this.getProfile(profileName) ? { ...this.getProfile(profileName)!, selectedModels: '[REDACTED]' } : null) : null
-        });
         
         if (!profileName) {
             throw new Error('No active profile to update language setting');
@@ -532,12 +519,6 @@ export class SettingsManager {
 
         const updatedProfile = { ...profile, language };
         await this.saveProfile(profileName, updatedProfile);
-        
-        console.log('✅ setLanguage() completed:', {
-            language,
-            profileName,
-            afterProfile: profileName ? (this.getProfile(profileName) ? { ...this.getProfile(profileName)!, selectedModels: '[REDACTED]' } : null) : null
-        });
     }
 
     private async saveProfiles(): Promise<void> {
@@ -809,7 +790,6 @@ export class SettingsManager {
      * Reset all profiles to defaults with current version
      */
     public async resetToDefaults(preserveModels?: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> }): Promise<void> {
-        console.log('🔄 Resetting all profiles to defaults...');
         
         // Preserve model selections if provided, otherwise use empty objects
         const modelsToKeep = preserveModels?.selectedModels || {};
@@ -864,8 +844,5 @@ export class SettingsManager {
         
         // Clear version mismatch flag
         this.hasVersionMismatch = false;
-        
-        const modelInfo = Object.keys(modelsToKeep).length > 0 ? ' (model selections preserved)' : '';
-        console.log(`✅ All profiles and prompts reset to defaults${modelInfo}`);
     }
 } 

@@ -25,12 +25,13 @@ const activeProjectChangeListeners: ActiveProjectChangeListener[] = [];
 export const getOrchestrator = () => orchestrator;
 export const getProjects = () => projects;
 export const getActiveProject = (): ProjectManager | null => {
-    if (!activeProjectId) return null;
+    if (!activeProjectId) {
+        // This is a valid state - no project is active yet
+        return null;
+    }
     const project = projects.find(p => p.rootNode.id === activeProjectId);
     if (!project) {
-        console.warn(`⚠️ Active project ${activeProjectId} not found in projects list. Resetting active project.`);
-        activeProjectId = projects.length > 0 ? projects[0]!.rootNode.id : null;
-        return activeProjectId ? projects.find(p => p.rootNode.id === activeProjectId) || null : null;
+        throw new Error(`Active project ${activeProjectId} not found in projects list - this indicates state corruption that must be debugged`);
     }
     return project;
 };
@@ -116,7 +117,13 @@ export const removeProject = (projectId: string) => {
         // Update active project if the removed project was active
         if (activeProjectId === projectId) {
             activeProjectId = projects.length > 0 ? projects[0]!.rootNode.id : null;
-            const newActiveProject = activeProjectId ? projects.find(p => p.rootNode.id === activeProjectId) || null : null;
+            const newActiveProject = activeProjectId ? (() => {
+                const found = projects.find(p => p.rootNode.id === activeProjectId);
+                if (!found) {
+                    throw new Error(`State corruption: activeProjectId ${activeProjectId} set but project not found in projects list`);
+                }
+                return found;
+            })() : null;
             notifyActiveProjectChange(newActiveProject);
             console.log(`🔄 Active project changed after removal: ${newActiveProject?.projectTitle || 'None'}`);
         }
@@ -129,7 +136,7 @@ export const removeProject = (projectId: string) => {
  * Get a project by its ID
  */
 export const getProjectById = (projectId: string): ProjectManager | null => {
-    return projects.find(p => p.rootNode.id === projectId) || null;
+    return projects.find(p => p.rootNode.id === projectId) ?? null;
 };
 
 /**
@@ -139,7 +146,13 @@ export const ensureActiveProjectConsistency = () => {
     if (activeProjectId && !projects.find(p => p.rootNode.id === activeProjectId)) {
         console.warn(`⚠️ Active project ${activeProjectId} not found. Resetting to first available project.`);
         activeProjectId = projects.length > 0 ? projects[0]!.rootNode.id : null;
-        const newActiveProject = activeProjectId ? projects.find(p => p.rootNode.id === activeProjectId) || null : null;
+        const newActiveProject = activeProjectId ? (() => {
+            const found = projects.find(p => p.rootNode.id === activeProjectId);
+            if (!found) {
+                throw new Error(`State corruption: activeProjectId ${activeProjectId} set but project not found after consistency check`);
+            }
+            return found;
+        })() : null;
         notifyActiveProjectChange(newActiveProject);
     }
 };

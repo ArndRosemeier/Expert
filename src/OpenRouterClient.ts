@@ -31,6 +31,7 @@ export interface OpenRouterRequest {
 export interface OpenRouterResponse {
   choices: Array<{
     message: OpenRouterMessage;
+    finish_reason?: string; // Add finish_reason to the interface
   }>;
 }
 
@@ -95,7 +96,7 @@ import { AILogService } from './AILogService';
 import { SettingsManager } from './SettingsManager';
 import { StorageService } from './StorageService';
 import { AIInteractionsService } from './AIInteractionsService';
-import { AIProgressService } from './AIProgressService';
+
 import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
 
@@ -174,13 +175,12 @@ export class OpenRouterClient {
     const loadedProfile = state.getCurrentlyLoadedProfileName();
     
     // If they don't match, load the correct profile
-    if (uiSelectedProfile !== loadedProfile) {
-      console.log(`⚠️  Profile inconsistency detected! UI shows "${uiSelectedProfile}" but "${loadedProfile}" is loaded. Fixing...`);
+          if (uiSelectedProfile !== loadedProfile) {
       
       if (uiSelectedProfile) {
         const profile = settingsManager.getProfile(uiSelectedProfile);
         if (profile && profile.selectedModels) {
-          // Load the correct profile models and web search settings
+          // Load the correct profile models
           modelSelector.setSelectedModels(profile.selectedModels);
           
           // Load web search settings if they exist in the profile
@@ -188,8 +188,12 @@ export class OpenRouterClient {
             await modelSelector.setWebSearchEnabled(profile.webSearchEnabled);
           }
           
+          // Load provider selections if they exist in the profile
+          if (profile.selectedProviders) {
+            await modelSelector.setSelectedProviders(profile.selectedProviders);
+          }
+          
           state.setCurrentlyLoadedProfileName(uiSelectedProfile);
-          console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" with models and web search settings.`);
         } else {
           console.warn(`⚠️  Profile "${uiSelectedProfile}" not found or has no models. Using current loaded profile.`);
         }
@@ -237,6 +241,8 @@ export class OpenRouterClient {
       const webSearchPrefs = modelSelector.getWebSearchEnabled();
       const model = models[purpose];
       const provider = providers[purpose];
+      
+
       
       if (!model) {
         throw new Error(`No model configured for purpose: ${purpose}`);
@@ -293,7 +299,6 @@ export class OpenRouterClient {
    */
   public setForceStreamingMode(enabled: boolean): void {
     this.forceStreamingMode = enabled;
-    console.log(`🌊 Streaming mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
   }
 
   /**
@@ -316,16 +321,12 @@ export class OpenRouterClient {
   public abortOperation(operationId: string): void {
     const controller = this.activeOperations.get(operationId);
     if (controller) {
-      console.log(`🛑 OpenRouterClient: Aborting operation: ${operationId}`);
       try {
         controller.abort();
-        console.log(`🛑 OpenRouterClient: Operation ${operationId} aborted successfully`);
       } catch (error) {
         console.warn(`🛑 OpenRouterClient: Error aborting operation ${operationId}:`, error);
       }
       this.activeOperations.delete(operationId);
-    } else {
-      console.log(`🛑 OpenRouterClient: Operation ${operationId} not found (might already be completed)`);
     }
   }
 
@@ -334,10 +335,8 @@ export class OpenRouterClient {
    */
   public abortAllOperations(): void {
     const operationCount = this.activeOperations.size;
-    console.log(`🛑 OpenRouterClient: Aborting all operations (${operationCount} active)`);
     
     if (operationCount === 0) {
-      console.log(`🛑 OpenRouterClient: No active operations to abort`);
       return;
     }
     
@@ -347,7 +346,6 @@ export class OpenRouterClient {
         Promise.resolve().then(() => {
           try {
             controller.abort();
-            console.log(`🛑 OpenRouterClient: Operation ${operationId} aborted`);
           } catch (error) {
             console.warn(`🛑 OpenRouterClient: Error aborting operation ${operationId}:`, error);
           }
@@ -356,9 +354,7 @@ export class OpenRouterClient {
     }
     
     // Execute all aborts in parallel for faster response
-    Promise.all(abortPromises).then(() => {
-      console.log(`🛑 OpenRouterClient: All ${operationCount} operations aborted`);
-    }).catch(error => {
+    Promise.all(abortPromises).catch(error => {
       console.warn(`🛑 OpenRouterClient: Error during bulk abort:`, error);
     });
     
@@ -404,6 +400,30 @@ export class OpenRouterClient {
   /**
    * Send a chat message for a given purpose. Always uses role 'user'.
    * Returns just the model's answer string.
+   * 
+   * @deprecated This method is obsolete and only exists for backward compatibility.
+   * It internally routes all requests through streamingChat().
+   * 
+   * For new code, use streamingChat() directly with appropriate callbacks:
+   * - Better control over streaming progress
+   * - More explicit about asynchronous nature
+   * - Direct access to chunked responses
+   * - Cleaner error handling
+   * 
+   * Example migration:
+   * ```
+   * // OLD (obsolete):
+   * const response = await client.chat('creator', prompt);
+   * 
+   * // NEW (recommended):
+   * let fullResponse = '';
+   * await client.streamingChat('creator', [{ role: 'user', content: prompt }], {
+   *   onStart: () => console.log('Started'),
+   *   onChunk: (chunk) => fullResponse += chunk,
+   *   onComplete: (response) => console.log('Done:', response),
+   *   onError: (error) => console.error('Error:', error)
+   * });
+   * ```
    */
   async chat(purpose: string, message: string, _operationId?: string, externalAbortSignal?: AbortSignal): Promise<string> {
     const opId = _operationId || this.generateOperationId(purpose);
@@ -413,7 +433,6 @@ export class OpenRouterClient {
     // Listen to external abort signal if provided
     if (externalAbortSignal) {
       externalAbortSignal.addEventListener('abort', () => {
-        console.log(`🛑 OpenRouterClient: External abort signal received for operation: ${opId}`);
         this.abortOperation(opId);
       });
     }
@@ -421,154 +440,92 @@ export class OpenRouterClient {
     // CRITICAL FIX: Ensure UI selection matches loaded profile
     await this.ensureProfileConsistency();
 
-    try {
-      const apiKey = await this.getApiKeyFromStorage();
-      if (!apiKey) {
-        throw new Error('OpenRouter API key not configured. Please set it in the settings.');
-      }
-
-      const modelConfig = await this.getModelConfigForPurpose(purpose);
-      const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
-
-      const startTime = Date.now();
-      const request: OpenRouterRequest = {
-        model: webSearchEnabled && !hasNativeWebSearch ? `${model}:online` : model,
-        messages: [
-          { role: 'user', content: message }
-        ],
-      };
-      
-      // Add provider routing if specified
-      if (provider) {
-        request.provider = {
-          order: [provider],
-          allow_fallbacks: false // Only use the selected provider
-        };
-      }
-
-      // Add web search options for native web search models
-      if (webSearchEnabled && hasNativeWebSearch) {
-        request.web_search_options = {
-          search_context_size: 'medium' // Default to medium context
-        };
-      }
-      
-      console.log(`📤 Sending request to OpenRouter:`, { model, provider, messageLength: message.length, operationId: opId });
-      const response = await this.sendMessage(request, apiKey, abortController.signal);
-      console.log(`📨 Received response from OpenRouter:`, { 
-        hasChoices: !!response.choices, 
-        choicesLength: response.choices?.length || 0,
-        hasContent: !!response.choices?.[0]?.message?.content,
-        operationId: opId
-      });
-      
-      const answer = response.choices?.[0]?.message?.content ?? '';
-      const duration = Date.now() - startTime;
-      console.log(`✅ AI generation completed successfully in ${duration}ms, response length: ${answer.length}, operation: ${opId}`);
-
-      // Log the interaction if logging is enabled
-      const settingsManager = this.getSettingsManager();
-      if (settingsManager?.isAILoggingEnabled()) {
-        try {
-          await this.aiLogService.addLogEntry({
-            timestamp: new Date(),
-            purpose,
-            prompt: message,
-            response: answer,
-            model,
-            requestDuration: duration
-          });
-        } catch (logError) {
-          console.error('Failed to log AI interaction:', logError);
-        }
-      }
-
-      return answer;
-    } catch (error) {
-      console.error(`❌ AI generation failed for purpose: ${purpose}, operation: ${opId}`, {
-        error: error instanceof Error ? error.message : error,
-        errorType: error instanceof Error ? error.name : typeof error,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      // Try with streaming if standard request failed and it wasn't already a streaming attempt
-      if (!this.forceStreamingMode) {
-        try {
-          return await this.chatWithStreamingFallback(purpose, message, opId, abortController.signal);
-        } catch (fallbackError) {
-          console.error(`❌ Streaming fallback also failed for operation: ${opId}`, fallbackError);
-        }
-      }
-      
-      // Log failed requests too if logging is enabled
-      const settingsManager = this.getSettingsManager();
-      if (settingsManager?.isAILoggingEnabled()) {
-        try {
-          await this.aiLogService.addLogEntry({
-            timestamp: new Date(),
-            purpose,
-            prompt: message,
-            response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            model: await this.getModelForPurpose(purpose).catch(() => 'unknown'),
-            requestDuration: 0
-          });
-        } catch (logError) {
-          console.error('Failed to log AI interaction error:', logError);
-        }
-      }
-      
-      // Show detailed error modal
-      if (error instanceof Error) {
-        const errorService = GenerationErrorService.getInstance();
-        const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
-        void errorService.showOpenRouterError(error, purpose, modelForError);
-      }
-      
-      throw error;
-    } finally {
-      this.activeOperations.delete(opId);
-    }
-  }
-
-  /**
-   * Fallback method that uses streaming to get a complete response
-   * when standard JSON requests fail
-   */
-  private async chatWithStreamingFallback(purpose: string, message: string, operationId: string, abortSignal: AbortSignal): Promise<string> {
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       let fullResponse = '';
+      const startTime = Date.now();
       
       const callbacks: StreamingCallbacks = {
         onStart: () => {
-          // Stream started
         },
         onChunk: (chunk: string) => {
           fullResponse += chunk;
         },
-        onComplete: (finalResponse: string) => {
-          resolve(finalResponse);
+        onComplete: async (finalResponse: string) => {
+          try {
+            const duration = Date.now() - startTime;
+
+            // Log the interaction if logging is enabled
+            const settingsManager = this.getSettingsManager();
+            if (settingsManager?.isAILoggingEnabled()) {
+              try {
+                const model = await this.getModelForPurpose(purpose);
+                await this.aiLogService.addLogEntry({
+                  timestamp: new Date(),
+                  purpose,
+                  prompt: message,
+                  response: finalResponse,
+                  model,
+                  requestDuration: duration
+                });
+              } catch (logError) {
+                console.error('Failed to log AI interaction:', logError);
+              }
+            }
+
+            resolve(finalResponse);
+          } catch (logError) {
+            console.error('Error in completion handler:', logError);
+            resolve(finalResponse); // Still resolve with the response even if logging fails
+          }
         },
-        onError: (error: Error) => {
+        onError: async (error: Error) => {
+          console.error(`❌ Chat failed for purpose: ${purpose}, operation: ${opId}`, {
+            error: error.message,
+            errorType: error.name,
+            stack: error.stack
+          });
+          
+          // Log failed requests too if logging is enabled
+          const settingsManager = this.getSettingsManager();
+          if (settingsManager?.isAILoggingEnabled()) {
+            try {
+              const model = await this.getModelForPurpose(purpose).catch(() => 'unknown');
+              await this.aiLogService.addLogEntry({
+                timestamp: new Date(),
+                purpose,
+                prompt: message,
+                response: `ERROR: ${error.message}`,
+                model,
+                requestDuration: 0
+              });
+            } catch (logError) {
+              console.error('Failed to log AI interaction error:', logError);
+            }
+          }
+          
+          // Show detailed error modal
+          const errorService = GenerationErrorService.getInstance();
+          const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
+          void errorService.showOpenRouterError(error, purpose, modelForError);
+          
           reject(error);
         }
       };
 
-      // Use streaming chat with single user message
-      this.streamingChat(purpose, [{ role: 'user', content: message }], callbacks, operationId, abortSignal)
-        .catch(reject);
+      // Route everything through streamingChat for unified handling
+      this.streamingChat(purpose, [{ role: 'user', content: message }], callbacks, opId, abortController.signal)
+        .catch(reject)
+        .finally(() => {
+          this.activeOperations.delete(opId);
+        });
     });
   }
 
+
+
   async sendMessage(request: OpenRouterRequest, apiKey: string, abortSignal: AbortSignal): Promise<OpenRouterResponse> {
-    console.log(`🌐 Initiating HTTP request to OpenRouter API`, {
-      url: this.apiUrl,
-      model: request.model,
-      messageCount: request.messages.length,
-      hasStream: !!request.stream,
-      hasAbortSignal: !!abortSignal,
-      // WARNING: Logging API keys is dangerous in production!
-      apiKey: maskApiKey(apiKey)
-    });
+
+    const fetchStartTime = Date.now();
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -580,16 +537,8 @@ export class OpenRouterClient {
         body: JSON.stringify(request),
         signal: abortSignal
       });
-
-      console.log(`📡 HTTP response received`, {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: {
-          'content-type': response.headers.get('content-type'),
-          'content-length': response.headers.get('content-length')
-        }
-      });
+      
+      const fetchDuration = Date.now() - fetchStartTime;
 
       if (!response.ok) {
         // Try to parse error body as JSON
@@ -620,12 +569,19 @@ export class OpenRouterClient {
         throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
       }
 
-      console.log(`🔄 Parsing JSON response...`);
-      const result = await response.json();
-      console.log(`✅ JSON parsed successfully`, {
-        hasChoices: !!result.choices,
-        choicesCount: result.choices?.length || 0
-      });
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        console.error(`❌ JSON parsing failed:`, {
+          error: jsonError,
+          responseStatus: response.status,
+          contentType: response.headers.get('content-type'),
+          url: this.apiUrl
+        });
+        throw new Error(`Failed to parse OpenRouter response as JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
+      }
+      
       return result;
     } catch (error: any) {
       console.error(`💥 Request failed:`, {
@@ -791,6 +747,8 @@ export class OpenRouterClient {
 
       const modelConfig = await this.getModelConfigForPurpose(purpose);
       const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
+      
+
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
@@ -814,14 +772,17 @@ export class OpenRouterClient {
         };
       }
       
-      console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, provider: ${provider || 'default'}, operation: ${opId}`);
+
 
       // Show AI interactions overlay if enabled
       const aiInteractionsService = AIInteractionsService.getInstance();
-      const aiProgressService = AIProgressService.getInstance();
       const promptText = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
       aiInteractionsService.showInteraction(purpose, promptText);
-      aiProgressService.startInteraction();
+      
+      // Emit simple progress event
+      window.dispatchEvent(new CustomEvent('ai-progress', { 
+        detail: { type: 'start', message: 'Waiting for response...' } 
+      }));
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -833,8 +794,11 @@ export class OpenRouterClient {
         signal: abortController.signal
       });
 
+
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('❌ OpenRouter API error response:', errorText);
         const error = new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
         callbacks.onError?.(error);
         throw error;
@@ -849,6 +813,8 @@ export class OpenRouterClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let wasContentFiltered = false;
+      let contentFilterReason = '';
 
       callbacks.onStart?.();
 
@@ -871,13 +837,26 @@ export class OpenRouterClient {
               
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content;
+                const choice = parsed.choices?.[0];
+                const content = choice?.delta?.content;
+                const finishReason = choice?.finish_reason;
+                
+                // Check for content filtering
+                if (finishReason === 'content_filter') {
+                  wasContentFiltered = true;
+                  contentFilterReason = 'Content was filtered by the AI safety system';
+                  break; // Stop processing further chunks
+                }
                 
                 if (content) {
                   fullContent += content;
                   callbacks.onChunk?.(content);
                   aiInteractionsService.updateResponse(content);
-                  aiProgressService.updateCharacters(content);
+                  
+                  // Emit progress update with current character count
+                  window.dispatchEvent(new CustomEvent('ai-progress', { 
+                    detail: { type: 'update', characters: fullContent.length } 
+                  }));
                 }
               } catch (parseError) {
                 // Ignore JSON parse errors for partial chunks
@@ -887,8 +866,23 @@ export class OpenRouterClient {
           }
         }
         
+        // Check for content filtering after streaming completes
+        if (wasContentFiltered) {
+          const error = new Error(`Content filtering detected: ${contentFilterReason}. The AI model refused to generate content due to safety restrictions. Try using a different model or rephrasing your content.`);
+          error.name = 'ContentFilterError';
+          callbacks.onError?.(error);
+          throw error;
+        }
+        
+        // Check for empty response (another form of content filtering)
+        if (fullContent.length === 0) {
+          const error = new Error(`Empty response received from ${model}. This often indicates content filtering by the AI safety system. The model may have detected content that violates its usage policies. Try using a different model (like Mistral Large for best unrestricted quality) or rephrasing your content to be less explicit.`);
+          error.name = 'EmptyResponseError';
+          callbacks.onError?.(error);
+          throw error;
+        }
+        
         const duration = Date.now() - startTime;
-        console.log(`✅ Streaming chat completed successfully in ${duration}ms, response length: ${fullContent.length}, operation: ${opId}`);
         
         // Log the interaction if logging is enabled
         const settingsManager = this.getSettingsManager();
@@ -908,7 +902,12 @@ export class OpenRouterClient {
         }
         
         aiInteractionsService.completeInteraction();
-        aiProgressService.completeInteraction();
+        
+        // Emit completion event with final character count
+        window.dispatchEvent(new CustomEvent('ai-progress', { 
+          detail: { type: 'complete', characters: fullContent.length } 
+        }));
+        
         callbacks.onComplete?.(fullContent);
         
       } finally {

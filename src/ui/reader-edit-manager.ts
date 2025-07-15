@@ -309,7 +309,7 @@ export class ReaderEditManager {
             'context': context,
             'project_title': this.projectManager.projectTitle,
             'parent_content': node.parentId ? 
-                this.projectManager.findNodeById(node.parentId)?.content || '' : '',
+                this.projectManager.findNodeById(node.parentId)?.content ?? '' : '',
             'child_level_name': node.childLevelName || '',
             'criteria': formatCriteriaAsJson(criteria)
         };

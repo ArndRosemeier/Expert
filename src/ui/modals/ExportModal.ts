@@ -33,6 +33,7 @@ export class ExportModal extends BaseModal {
     private hierarchyTitleCheckboxes: { [level: number]: HTMLInputElement } = {};
     private htmlTocCheckbox?: HTMLInputElement;
     private hierarchyTitleContainer?: HTMLElement;
+    private reimportInfoContainer?: HTMLElement;
 
     constructor(config: ExportModalConfig) {
         super({
@@ -243,6 +244,10 @@ export class ExportModal extends BaseModal {
         const htmlTocOption = this.createHtmlTocOption();
         section.appendChild(htmlTocOption);
 
+        // Reimport info section
+        const reimportInfo = this.createReimportInfoSection();
+        section.appendChild(reimportInfo);
+
         this.updateFormatOptionsVisibility();
 
         return section;
@@ -278,6 +283,63 @@ export class ExportModal extends BaseModal {
     }
 
     /**
+     * Creates the reimport information section
+     */
+    private createReimportInfoSection(): HTMLElement {
+        this.reimportInfoContainer = createElement('div', {
+            classes: ['reimport-info-section']
+        });
+        this.reimportInfoContainer.style.display = 'none'; // Hidden by default
+
+        const infoIcon = createElement('div', {
+            classes: ['info-icon'],
+            content: 'ℹ️'
+        });
+
+        const infoContent = createElement('div', {
+            classes: ['info-content']
+        });
+
+        const title = createElement('h4', {
+            content: 'Enhanced Backup Format',
+            classes: ['info-title']
+        });
+
+        const description = createElement('p', {
+            content: 'This export now includes the complete tagging and version system:',
+            classes: ['info-description']
+        });
+
+        const featureList = createElement('ul', {
+            classes: ['feature-list']
+        });
+
+        const features = [
+            'All content versions with their tags (master, generated, iterations, etc.)',
+            'Complete metadata (ratings, creator models, timestamps)',
+            'Generation history and session data',
+            'UI state (collapsed/expanded nodes)',
+            'Full compatibility with import functionality'
+        ];
+
+        features.forEach(feature => {
+            const listItem = createElement('li', {
+                content: feature
+            });
+            featureList.appendChild(listItem);
+        });
+
+        infoContent.appendChild(title);
+        infoContent.appendChild(description);
+        infoContent.appendChild(featureList);
+
+        this.reimportInfoContainer.appendChild(infoIcon);
+        this.reimportInfoContainer.appendChild(infoContent);
+
+        return this.reimportInfoContainer;
+    }
+
+    /**
      * Creates the scope selection option
      */
     private createScopeOption(): HTMLElement {
@@ -298,7 +360,7 @@ export class ExportModal extends BaseModal {
         const scopeOptions = [
             { value: 'leafOnly', label: 'Lowest hierarchy layer (deepest content)' },
             { value: 'hierarchical', label: 'All layers (complete hierarchy)' },
-            { value: 'reimport', label: 'For reimport (JSON format)' }
+            { value: 'reimport', label: 'Complete backup (JSON with versions & tags)' }
         ];
 
         scopeOptions.forEach(scopeOption => {
@@ -312,6 +374,7 @@ export class ExportModal extends BaseModal {
         this.scopeSelect.addEventListener('change', () => {
             this.updateFormatState();
             this.updateHierarchyTitleVisibility();
+            this.updateFormatOptionsVisibility();
         });
 
         // Initialize format state after DOM setup
@@ -344,7 +407,8 @@ export class ExportModal extends BaseModal {
         const formatOptions = [
             { value: 'html', label: 'HTML' },
             { value: 'plain', label: 'Plain Text' },
-            { value: 'markdown', label: 'Markdown' }
+            { value: 'markdown', label: 'Markdown' },
+            { value: 'epub', label: 'EPUB' }
         ];
 
         formatOptions.forEach(formatOption => {
@@ -456,7 +520,7 @@ export class ExportModal extends BaseModal {
      * Updates the visibility of format-specific options based on format selection
      */
     private updateFormatOptionsVisibility(): void {
-        if (!this.formatSelect) return;
+        if (!this.formatSelect || !this.scopeSelect) return;
         
         // Find the format options section
         const formatOptionsSection = document.querySelector('.format-options-section') as HTMLElement;
@@ -467,6 +531,12 @@ export class ExportModal extends BaseModal {
         const htmlTocOption = formatOptionsSection.querySelector('.html-toc-option') as HTMLElement;
         if (htmlTocOption) {
             htmlTocOption.style.display = isHtml ? 'block' : 'none';
+        }
+
+        // Show reimport info section only for reimport scope
+        const isReimport = this.scopeSelect.value === 'reimport';
+        if (this.reimportInfoContainer) {
+            this.reimportInfoContainer.style.display = isReimport ? 'block' : 'none';
         }
     }
 
@@ -576,6 +646,11 @@ export class ExportModal extends BaseModal {
             });
 
             // Copy to clipboard
+            if (result.content instanceof Blob) {
+                // For binary content (like EPUB), we can't copy to clipboard
+                alert('Binary content cannot be copied to clipboard. Please use the export button instead.');
+                return;
+            }
             await navigator.clipboard.writeText(result.content);
             
             // Show success message and close
@@ -882,6 +957,56 @@ export class ExportModal extends BaseModal {
                     color: #6b7280;
                     margin-bottom: 1rem;
                     line-height: 1.4;
+                }
+
+                .export-modal-container .reimport-info-section {
+                    display: flex;
+                    gap: 1rem;
+                    padding: 1rem;
+                    background-color: #e0f2fe;
+                    border: 1px solid #0891b2;
+                    border-radius: 8px;
+                    margin-top: 1rem;
+                }
+
+                .export-modal-container .reimport-info-section .info-icon {
+                    font-size: 1.5rem;
+                    line-height: 1;
+                    flex-shrink: 0;
+                }
+
+                .export-modal-container .reimport-info-section .info-content {
+                    flex-grow: 1;
+                }
+
+                .export-modal-container .reimport-info-section .info-title {
+                    margin: 0 0 0.5rem 0;
+                    font-size: 1rem;
+                    font-weight: 600;
+                    color: #0c4a6e;
+                }
+
+                .export-modal-container .reimport-info-section .info-description {
+                    margin: 0 0 0.75rem 0;
+                    font-size: 0.875rem;
+                    color: #0c4a6e;
+                    line-height: 1.4;
+                }
+
+                .export-modal-container .reimport-info-section .feature-list {
+                    margin: 0;
+                    padding-left: 1.25rem;
+                    font-size: 0.875rem;
+                    color: #0c4a6e;
+                }
+
+                .export-modal-container .reimport-info-section .feature-list li {
+                    margin-bottom: 0.25rem;
+                    line-height: 1.3;
+                }
+
+                .export-modal-container .reimport-info-section .feature-list li:last-child {
+                    margin-bottom: 0;
                 }
             `
         });

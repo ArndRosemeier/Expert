@@ -351,7 +351,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                     const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
                         ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
                 );
-                    return { projects, activeProjectId: activeProjectId || null };
+                    return { projects, activeProjectId: activeProjectId ?? null };
                 }
             } else {
                 // This should never happen with IndexedDB-only storage
