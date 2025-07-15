@@ -451,9 +451,15 @@ export class KeysUI {
             
             // Parse and re-stringify to ensure it's valid JSON for the centralized service
             const parsedData = JSON.parse(exportData);
-            await FileDownloadService.downloadJson(parsedData, filename, 'Expert Keys Export');
+            const downloadResult = await FileDownloadService.downloadJson(parsedData, filename, 'Expert Keys Export');
             
-            this.showSuccess('Keys exported successfully');
+            if (downloadResult.success && !downloadResult.cancelled) {
+                this.showSuccess('Keys exported successfully');
+            } else if (downloadResult.cancelled) {
+                this.showError('Export cancelled by user');
+            } else {
+                this.showError('Failed to save export file');
+            }
         } catch (error) {
             this.showError('Failed to export keys: ' + (error as Error).message);
         }

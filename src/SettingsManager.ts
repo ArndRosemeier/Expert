@@ -695,15 +695,24 @@ export class SettingsManager {
      * Exports a profile to a downloadable JSON file
      * @param profileName The name of the profile to export
      */
-    public async downloadProfileExport(profileName: string): Promise<void> {
+    public async downloadProfileExport(profileName: string): Promise<{ success: boolean; message: string }> {
         const exportData = this.exportProfile(profileName);
         if (!exportData) {
-            alert(`Profile "${profileName}" not found.`);
-            return;
+            const message = `Profile "${profileName}" not found.`;
+            alert(message);
+            return { success: false, message };
         }
 
         const filename = `expert-app-profile-${profileName}-${new Date().toISOString().split('T')[0]}.json`;
-        await FileDownloadService.downloadJson(exportData, filename, 'Expert Profile Export');
+        const downloadResult = await FileDownloadService.downloadJson(exportData, filename, 'Expert Profile Export');
+        
+        if (downloadResult.success && !downloadResult.cancelled) {
+            return { success: true, message: `Profile "${profileName}" exported successfully.` };
+        } else if (downloadResult.cancelled) {
+            return { success: false, message: 'Export cancelled by user.' };
+        } else {
+            return { success: false, message: 'Failed to export profile. Please try again.' };
+        }
     }
 
     /**

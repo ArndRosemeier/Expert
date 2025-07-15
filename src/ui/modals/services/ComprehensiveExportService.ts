@@ -112,11 +112,22 @@ export class ComprehensiveExportService {
                     level: 9  // Maximum compression (1-9, where 9 is best compression)
                 }
             });
-            await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
+            
+            const downloadResult = await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
+            
+            // Check if user cancelled or download failed
+            if (!downloadResult.success || downloadResult.cancelled) {
+                return {
+                    success: false,
+                    filename: '',
+                    message: downloadResult.cancelled ? 'Export cancelled by user' : 'Export failed to save file',
+                    exportedItems: []
+                };
+            }
 
             return {
                 success: true,
-                filename,
+                filename: downloadResult.actualFilename || filename,
                 message: `Successfully exported complete IndexedDB backup with ${exportedItems.length} data categories`,
                 exportedItems
             };

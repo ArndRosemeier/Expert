@@ -177,9 +177,9 @@ export class FileDownloadService {
     /**
      * Convenience method for JSON exports
      */
-    public static async downloadJson(data: any, filename: string, description?: string): Promise<void> {
+    public static async downloadJson(data: any, filename: string, description?: string): Promise<FileDownloadResult> {
         const content = JSON.stringify(data, null, 2);
-        await this.downloadText(content, {
+        return await this.downloadText(content, {
             filename,
             mimeType: 'application/json',
             description: description || 'JSON Export'
@@ -189,8 +189,8 @@ export class FileDownloadService {
     /**
      * Convenience method for ZIP downloads
      */
-    public static async downloadZip(blob: Blob, filename: string, description?: string): Promise<void> {
-        await this.downloadBlob(blob, {
+    public static async downloadZip(blob: Blob, filename: string, description?: string): Promise<FileDownloadResult> {
+        return await this.downloadBlob(blob, {
             filename,
             mimeType: 'application/zip',
             description: description || 'ZIP Archive'

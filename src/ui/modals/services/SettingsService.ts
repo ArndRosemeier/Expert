@@ -72,7 +72,9 @@ export class SettingsService {
      * Gets a specific profile by name
      */
     public getProfile(name: string): SettingsProfile | null {
-        return this.settingsManager.getProfile(name) || null;
+        const profile = this.settingsManager.getProfile(name);
+        // Return null if profile doesn't exist - this is expected behavior for profile existence checking
+        return profile || null;
     }
 
     /**
@@ -87,7 +89,10 @@ export class SettingsService {
      */
     public getLastUsedProfile(): SettingsProfile | null {
         const profile = this.settingsManager.getLastUsedProfile();
-        return profile || null;
+        if (profile === undefined) {
+            throw new Error("No profile has been used yet - initialize profiles or select a default profile first");
+        }
+        return profile;
     }
 
     /**
@@ -233,8 +238,7 @@ export class SettingsService {
         }
 
         try {
-            await this.settingsManager.downloadProfileExport(profileName);
-            return { success: true, message: `Profile "${profileName}" exported successfully.` };
+            return await this.settingsManager.downloadProfileExport(profileName);
         } catch (error) {
             console.error('Export failed:', error);
             return { success: false, message: 'Failed to export profile. Please try again.' };
