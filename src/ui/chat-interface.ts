@@ -1204,6 +1204,9 @@ For each suggestion, provide clear justification for why the change would improv
         
         const roleplaySystemPrompt = expansionService.expandPrompt(roleplayPrompt, promptContext);
 
+        // CRITICAL FIX: Store the roleplay system prompt so it persists for all subsequent messages
+        this.customSystemPrompt = roleplaySystemPrompt;
+
         // Create roleplay message
         const roleplayMessage: ChatMessage = {
             id: this.generateId(),
