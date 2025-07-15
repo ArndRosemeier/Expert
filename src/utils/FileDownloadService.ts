@@ -15,13 +15,20 @@ export interface FileTypeConfig {
     accept: Record<string, string[]>;
 }
 
+export interface FileDownloadResult {
+    success: boolean;
+    cancelled: boolean;
+    actualFilename?: string;
+    method: 'save-as' | 'download' | 'failed';
+}
+
 export class FileDownloadService {
     /**
      * Downloads a blob as a file using the best available method
      * - Tries File System Access API first (Chrome/Edge 86+) for "Save As" dialog
      * - Falls back to traditional download to Downloads folder
      */
-    public static async downloadBlob(blob: Blob, options: FileDownloadOptions): Promise<void> {
+    public static async downloadBlob(blob: Blob, options: FileDownloadOptions): Promise<FileDownloadResult> {
         try {
             // Try modern File System Access API first
             if ('showSaveFilePicker' in window) {
@@ -37,24 +44,44 @@ export class FileDownloadService {
                 await writable.close();
                 
                 console.log('✅ File saved using Save As dialog');
-                return;
+                return {
+                    success: true,
+                    cancelled: false,
+                    actualFilename: fileHandle.name,
+                    method: 'save-as'
+                };
             }
-        } catch (error) {
-            // User cancelled or API not supported - fall back to download
-            console.log('💡 Save As not available or cancelled, using Downloads folder');
+        } catch (error: any) {
+            // Check if user cancelled
+            if (error.name === 'AbortError') {
+                console.log('❌ User cancelled file save');
+                return {
+                    success: false,
+                    cancelled: true,
+                    method: 'failed'
+                };
+            }
+            // API not supported or other error - fall back to download
+            console.log('💡 Save As not available, using Downloads folder');
         }
         
         // Fallback: Traditional download to Downloads folder
         this.downloadBlobTraditional(blob, options.filename);
         console.log('📁 File downloaded to Downloads folder');
+        return {
+            success: true,
+            cancelled: false,
+            actualFilename: options.filename,
+            method: 'download'
+        };
     }
 
     /**
      * Downloads a string as a file
      */
-    public static async downloadText(content: string, options: FileDownloadOptions): Promise<void> {
+    public static async downloadText(content: string, options: FileDownloadOptions): Promise<FileDownloadResult> {
         const blob = new Blob([content], { type: options.mimeType });
-        await this.downloadBlob(blob, options);
+        return await this.downloadBlob(blob, options);
     }
 
     /**
@@ -131,7 +158,7 @@ export class FileDownloadService {
     /**
      * Convenience method for downloading export results
      */
-    public static async downloadExportResult(content: string, filename: string, mimeType: string, description?: string): Promise<void> {
+    public static async downloadExportResult(content: string | Blob, filename: string, mimeType: string, description?: string): Promise<FileDownloadResult> {
         const options: FileDownloadOptions = {
             filename,
             mimeType
@@ -139,7 +166,12 @@ export class FileDownloadService {
         if (description) {
             options.description = description;
         }
-        await this.downloadText(content, options);
+        
+        if (content instanceof Blob) {
+            return await this.downloadBlob(content, options);
+        } else {
+            return await this.downloadText(content, options);
+        }
     }
 
     /**

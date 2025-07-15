@@ -6,7 +6,9 @@ import { DocumentNode } from '../../../DocumentNode';
 import { ProjectManager } from '../../../ProjectManager';
 import { IExportService, ExportConfig, ExportResult, NodeExportData, ExportScope, ExportFormat } from '../types/ExportTypes';
 import { sanitizeFilename, escapeHtml, formatContentAsHtml } from '../core/modal-utils';
-import { FileDownloadService } from '../../../utils/FileDownloadService';
+import { FileDownloadService, FileDownloadResult } from '../../../utils/FileDownloadService';
+import JSZip from 'jszip';
+import { WorkingEpubGenerator } from './WorkingEpubGenerator';
 
 /**
  * Interface for hierarchical TOC structure
@@ -30,13 +32,22 @@ interface ContentNode {
     isLeaf: boolean;
 }
 
+/**
+ * Interface for EPUB chapter data
+ */
+interface EpubChapter {
+    title: string;
+    content: string;
+    filename: string;
+}
+
 export class ExportService implements IExportService {
     
     /**
      * Main export function that handles all export types
      */
     public async export(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<ExportResult> {
-        let content: string;
+        let content: string | Blob;
         let filename: string;
         let mimeType: string;
 
@@ -45,6 +56,11 @@ export class ExportService implements IExportService {
             content = this.exportNodeForReimport(node);
             filename = config.filename || `${sanitizeFilename(node.title)}_export.json`;
             mimeType = 'application/json';
+        } else if (config.format === ExportFormat.EPUB) {
+            // Export as EPUB - binary format
+            content = await this.generateEpubContent(node, config, projectManager);
+            filename = config.filename || `${sanitizeFilename(node.title)}_${config.scope}.epub`;
+            mimeType = 'application/epub+zip';
         } else {
             // Export for reading - formatted content
             content = this.exportNodeContent(node, config.scope, config.format, config, projectManager);
@@ -58,6 +74,448 @@ export class ExportService implements IExportService {
             filename,
             mimeType
         };
+    }
+
+
+
+    /**
+     * Generates EPUB content using WorkingEpubGenerator
+     */
+    private async generateEpubContent(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<Blob> {
+        const generator = new WorkingEpubGenerator();
+        return await generator.generate(node, config, projectManager);
+    }
+
+
+    
+
+    
+    private generateSimpleStyles(): string {
+        console.log('[EPUB STYLES] Generating CSS styles...');
+        
+        const styles = `body {
+    font-family: serif;
+    line-height: 1.6;
+    margin: 1em;
+    max-width: 40em;
+}
+
+h1 {
+    font-size: 1.5em;
+    margin-bottom: 1em;
+}
+
+h2 {
+    font-size: 1.3em;
+    margin-bottom: 0.8em;
+}
+
+h3 {
+    font-size: 1.1em;
+    margin-bottom: 0.6em;
+}
+
+p {
+    margin-bottom: 1em;
+}
+
+nav ol {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+nav li {
+    margin-bottom: 0.5em;
+}
+
+nav a {
+    text-decoration: none;
+    color: #333;
+}
+
+nav a:hover {
+    text-decoration: underline;
+}`;
+        
+        console.log('[EPUB STYLES] CSS styles generated successfully, length:', styles.length);
+        return styles;
+    }
+
+
+
+    /**
+     * Gets a smart title for a node, considering if its parent is an empty container
+     */
+    private getSmartTitleForNode(node: DocumentNode, projectManager?: ProjectManager): string {
+        if (!projectManager || !node.parentId) {
+            return node.title;
+        }
+        
+        const parent = projectManager.findNodeById(node.parentId);
+        if (!parent) {
+            return node.title;
+        }
+        
+        // Check if parent is an empty container (no content, only children)
+        const isParentEmpty = !parent.content?.trim() && parent.children.length > 0;
+        
+        // Check if this node is the only child or the first child of an empty parent
+        const firstChild = parent.children[0];
+        const isFirstChild = firstChild && firstChild.id === node.id;
+        
+        if (isParentEmpty && isFirstChild) {
+            // Merge parent and child titles for cleaner output
+            return `${parent.title} - ${node.title}`;
+        }
+        
+        return node.title;
+    }
+
+    /**
+     * Collect chapters for EPUB based on scope - reuses HTML export logic
+     */
+    private collectEpubChapters(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): EpubChapter[] {
+        const chapters: EpubChapter[] = [];
+        
+        if (config.scope === ExportScope.Single) {
+            // Single node export
+            const htmlContent = this.generateHtmlHierarchy(node, 1, config, projectManager);
+            const bodyContent = this.extractBodyContent(htmlContent);
+            chapters.push({
+                title: node.title,
+                content: bodyContent,
+                filename: 'chapter1.html'
+            });
+        } else if (config.scope === ExportScope.Hierarchy) {
+            // Hierarchical export - use the same logic as HTML export
+            const htmlContent = this.generateHtmlHierarchy(node, 1, config, projectManager);
+            const bodyContent = this.extractBodyContent(htmlContent);
+            chapters.push({
+                title: node.title,
+                content: bodyContent,
+                filename: 'chapter1.html'
+            });
+        } else if (config.scope === ExportScope.Leaves) {
+            // Leaf nodes export - use the same logic as HTML export
+            const leafNodes = this.findLeafNodes(node);
+            const htmlContent = this.generateHtmlContent(leafNodes, node.title, config, projectManager);
+            const bodyContent = this.extractBodyContent(htmlContent);
+            chapters.push({
+                title: node.title,
+                content: bodyContent,
+                filename: 'chapter1.html'
+            });
+        }
+        
+        return chapters;
+    }
+
+    /**
+     * Extracts body content from full HTML document for EPUB
+     */
+    private extractBodyContent(htmlContent: string): string {
+        console.log('�� extractBodyContent called with HTML length:', htmlContent.length);
+        console.log('🔍 First 500 chars:', htmlContent.substring(0, 500));
+        
+        // Find the content-area div
+        const contentAreaMatch = htmlContent.match(/<div class="content-area">([\s\S]*?)<\/div>\s*<\/div>\s*<\/body>/);
+        if (contentAreaMatch && contentAreaMatch[1]) {
+            console.log('✅ Content-area match found, length:', contentAreaMatch[1].length);
+            let extracted = contentAreaMatch[1].trim();
+            
+            // Clean up the content for EPUB compatibility
+            extracted = this.cleanContentForEpub(extracted);
+            
+            console.log('🔍 Cleaned content first 500 chars:', extracted.substring(0, 500));
+            console.log('🔍 Cleaned content last 500 chars:', extracted.substring(extracted.length - 500));
+            return extracted;
+        }
+        
+        // Fallback: try to extract body content
+        const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+        if (bodyMatch && bodyMatch[1]) {
+            console.log('✅ Body match found, length:', bodyMatch[1].length);
+            let extracted = bodyMatch[1].trim();
+            
+            // Clean up the content for EPUB compatibility
+            extracted = this.cleanContentForEpub(extracted);
+            
+            console.log('🔍 Body cleaned first 500 chars:', extracted.substring(0, 500));
+            return extracted;
+        }
+        
+        // If no match found, return the content as-is
+        console.log('⚠️ No match found, returning original content');
+        return htmlContent;
+    }
+
+    /**
+     * Clean content for EPUB compatibility by removing wrapper divs and unnecessary elements
+     */
+    private cleanContentForEpub(content: string): string {
+        // Remove outer wrapper divs but keep the essential content structure
+        let cleaned = content;
+        
+        // Remove node-content wrapper divs
+        cleaned = cleaned.replace(/<div class="node-content">\s*<div class="content">/g, '');
+        cleaned = cleaned.replace(/<\/div>\s*<\/div>/g, '');
+        
+        // Remove metadata divs
+        cleaned = cleaned.replace(/<div class="metadata">[\s\S]*?<\/div>/g, '');
+        
+        // Remove empty divs
+        cleaned = cleaned.replace(/<div[^>]*>\s*<\/div>/g, '');
+        
+        // Remove standalone div tags without content
+        cleaned = cleaned.replace(/<div[^>]*>\s*<\/div>/g, '');
+        
+        // Convert multiple line breaks to paragraph breaks, but do this more carefully
+        // First, normalize line breaks
+        cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        // Replace double line breaks with paragraph markers
+        cleaned = cleaned.replace(/\n\s*\n/g, '\n\n[PARAGRAPH_BREAK]\n\n');
+        
+        // Replace single <br> tags with line breaks
+        cleaned = cleaned.replace(/<br\s*\/?>/g, '\n');
+        
+        // Replace double <br> patterns with paragraph breaks
+        cleaned = cleaned.replace(/\n\s*\n/g, '\n\n[PARAGRAPH_BREAK]\n\n');
+        
+        // Split content into paragraphs and wrap each in proper <p> tags
+        const paragraphs = cleaned.split('[PARAGRAPH_BREAK]')
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+        
+        // Wrap each paragraph in <p> tags, but preserve existing headings
+        const wrappedParagraphs = paragraphs.map(para => {
+            // If paragraph already starts with HTML tag, keep it as is
+            if (para.match(/^\s*<[h1-6]|^\s*<div|^\s*<p/)) {
+                return para;
+            }
+            // Otherwise wrap in <p> tags
+            return `<p>${para}</p>`;
+        });
+        
+        return wrappedParagraphs.join('\n\n');
+    }
+
+    /**
+     * Escape text for XML context
+     */
+    private escapeXml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    /**
+     * Generate content.opf file
+     */
+    private generateContentOpf(rootNode: DocumentNode, chapters: EpubChapter[], epubUuid: string): string {
+        const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier id="bookid" opf:scheme="uuid">${this.escapeXml(epubUuid)}</dc:identifier>
+        <dc:title>${this.escapeXml(rootNode.title)}</dc:title>
+        <dc:creator opf:role="aut">Expert Application</dc:creator>
+        <dc:publisher>Expert Application</dc:publisher>
+        <dc:description>Generated from Expert Application</dc:description>
+        <dc:date>${currentDate}</dc:date>
+        <dc:language>en</dc:language>
+        <dc:rights>All rights reserved</dc:rights>
+        <meta name="cover" content="cover-image"/>
+    </metadata>
+    <manifest>
+        <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+        <item id="styles" href="styles.css" media-type="text/css"/>
+        ${chapters.map((chapter, index) => {
+            const filename = chapter.filename || `chapter${index + 1}.html`;
+            return `<item id="chapter${index + 1}" href="${this.escapeXml(filename)}" media-type="application/xhtml+xml"/>`;
+        }).join('\n        ')}
+    </manifest>
+    <spine toc="ncx">
+        ${chapters.map((chapter, index) => 
+            `<itemref idref="chapter${index + 1}"/>`
+        ).join('\n        ')}
+    </spine>
+</package>`;
+    }
+
+    /**
+     * Generate toc.ncx file
+     */
+    private generateTocNcx(rootNode: DocumentNode, chapters: EpubChapter[], epubUuid: string): string {
+        
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<ncx version="2005-1" xmlns="http://www.daisy.org/z3986/2005/ncx/">
+    <head>
+        <meta name="dtb:uid" content="${epubUuid}"/>
+        <meta name="dtb:depth" content="1"/>
+        <meta name="dtb:totalPageCount" content="0"/>
+        <meta name="dtb:maxPageNumber" content="0"/>
+    </head>
+    <docTitle>
+        <text>${this.escapeXml(rootNode.title)}</text>
+    </docTitle>
+    <navMap>
+        ${chapters.map((chapter, index) => {
+            const filename = chapter.filename || `chapter${index + 1}.html`;
+            return `<navPoint id="chapter${index + 1}" playOrder="${index + 1}">
+            <navLabel>
+                <text>${this.escapeXml(chapter.title)}</text>
+            </navLabel>
+            <content src="${filename}"/>
+        </navPoint>`;
+        }).join('\n        ')}
+    </navMap>
+</ncx>`;
+    }
+
+    /**
+     * Generate CSS for EPUB
+     */
+    private generateEpubCss(): string {
+        return `body {
+    font-family: Georgia, serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1em;
+    max-width: 100%;
+}
+
+.chapter {
+    margin-bottom: 2rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #2c3e50;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+
+h1 {
+    font-size: 2em;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5rem;
+    color: #2c3e50;
+}
+
+h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid #666;
+    padding-bottom: 0.2em;
+    color: #34495e;
+    margin-top: 2rem;
+}
+
+h3, h4, h5, h6 {
+    color: #34495e;
+    margin-top: 2rem;
+}
+
+p {
+    margin-bottom: 1rem;
+    text-align: justify;
+}
+
+.content {
+    margin-bottom: 2rem;
+}
+
+.metadata {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+
+ul, ol {
+    margin-bottom: 1em;
+    padding-left: 2em;
+}
+
+li {
+    margin-bottom: 0.5em;
+}
+
+blockquote {
+    margin: 1em 0;
+    padding: 0.5em 1em;
+    border-left: 4px solid #3498db;
+    background-color: #f8f9fa;
+    font-style: italic;
+}
+
+code {
+    background-color: #f8f9fa;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+}
+
+pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin-bottom: 1em;
+}
+
+.context {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.context h3 {
+    margin-top: 0;
+    color: #495057;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 0.5em;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+}`;
+    }
+
+    /**
+     * Generate HTML for a single chapter
+     */
+    private generateChapterHtml(chapter: EpubChapter): string {
+        console.log('🔍 generateChapterHtml called for:', chapter.title);
+        console.log('🔍 Chapter content length:', chapter.content.length);
+        console.log('🔍 Chapter content first 500 chars:', chapter.content.substring(0, 500));
+        
+        const html = `<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>${this.escapeXml(chapter.title)}</title>
+    <link rel="stylesheet" type="text/css" href="styles.css"/>
+</head>
+<body>
+    ${chapter.content}
+</body>
+</html>`;
+        
+        console.log('🔍 Final chapter HTML length:', html.length);
+        return html;
     }
 
     /**
@@ -79,8 +537,8 @@ export class ExportService implements IExportService {
     /**
      * Downloads the export result as a file
      */
-    public async downloadFile(result: ExportResult): Promise<void> {
-        await FileDownloadService.downloadExportResult(
+    public async downloadFile(result: ExportResult): Promise<FileDownloadResult> {
+        return await FileDownloadService.downloadExportResult(
             result.content,
             result.filename,
             result.mimeType,
@@ -102,6 +560,8 @@ export class ExportService implements IExportService {
                 return 'Plain Text Export';
             case 'json':
                 return 'JSON Data Export';
+            case 'epub':
+                return 'EPUB eBook Export';
             default:
                 return 'Document Export';
         }
@@ -131,17 +591,19 @@ export class ExportService implements IExportService {
         }
 
         const result = await this.export(node, config, projectManager);
-        await this.downloadFile(result);
+        const downloadResult = await this.downloadFile(result);
         
-        // Show success message
-        alert(`Successfully exported "${node.title}" as ${result.filename}`);
+        // Show success message only if download was successful
+        if (downloadResult.success && !downloadResult.cancelled) {
+            alert(`Successfully exported "${node.title}"`);
+        }
     }
 
     /**
      * Exports node data for reimport purposes
      */
     private exportNodeForReimport(node: DocumentNode): string {
-        const exportObject = {
+        const exportObject: any = {
             title: node.title,
             content: node.content,
             context: node.context ?? undefined,
@@ -154,6 +616,37 @@ export class ExportService implements IExportService {
             generationHistory: (node.generationHistory && node.generationHistory.length > 0) ? node.generationHistory : undefined,
             generationSessions: (node.generationSessions && node.generationSessions.length > 0) ? node.generationSessions : undefined
         };
+
+        // Enhanced: Export complete version and tagging system for root node
+        const allVersions = node.getAllVersions();
+        if (allVersions && allVersions.length > 0) {
+            exportObject.versions = allVersions.map(version => {
+                const exportVersion: any = {
+                    id: version.id,
+                    content: version.content,
+                    title: version.title,
+                    context: version.context,
+                    tags: Array.from(version.tags), // Convert Set to Array for JSON
+                    timestamp: version.timestamp.toISOString() // Convert Date to ISO string
+                };
+                
+                // Only add optional properties if they exist
+                if (version.ratings && version.ratings.length > 0) {
+                    exportVersion.ratings = [...version.ratings];
+                }
+                if (version.creatorModel) {
+                    exportVersion.creatorModel = version.creatorModel;
+                }
+                if (version.metadata && Object.keys(version.metadata).length > 0) {
+                    exportVersion.metadata = { ...version.metadata };
+                }
+                
+                return exportVersion;
+            });
+        }
+
+        // Export UI state for root node
+        exportObject.collapsed = node.collapsed;
         
         return JSON.stringify(exportObject, null, 2);
     }
@@ -196,6 +689,37 @@ export class ExportService implements IExportService {
         if (node.generationSessions && node.generationSessions.length > 0) {
             data.generationSessions = node.generationSessions;
         }
+
+        // Enhanced: Export complete version and tagging system
+        const allVersions = node.getAllVersions();
+        if (allVersions && allVersions.length > 0) {
+            data.versions = allVersions.map(version => {
+                const exportVersion: any = {
+                    id: version.id,
+                    content: version.content,
+                    title: version.title,
+                    context: version.context,
+                    tags: Array.from(version.tags), // Convert Set to Array for JSON
+                    timestamp: version.timestamp.toISOString() // Convert Date to ISO string
+                };
+                
+                // Only add optional properties if they exist
+                if (version.ratings && version.ratings.length > 0) {
+                    exportVersion.ratings = [...version.ratings];
+                }
+                if (version.creatorModel) {
+                    exportVersion.creatorModel = version.creatorModel;
+                }
+                if (version.metadata && Object.keys(version.metadata).length > 0) {
+                    exportVersion.metadata = { ...version.metadata };
+                }
+                
+                return exportVersion;
+            });
+        }
+
+        // Export UI state
+        data.collapsed = node.collapsed;
 
         return data;
     }
@@ -725,52 +1249,123 @@ export class ExportService implements IExportService {
         let markdown = '';
         let plain = '';
         
-        // Render the node title if it exists
-        if (node.title) {
-            // HTML
-            const headingTag = `h${Math.min(node.level + 2, 6)}`;
-            html += `
-    <${headingTag} id="${node.titleId}">${escapeHtml(node.title)}</${headingTag}>`;
-            
-            // Markdown
-            const headingPrefix = '#'.repeat(Math.min(node.level + 2, 6));
-            markdown += `${headingPrefix} ${node.title}\n\n`;
-            
-            // Plain text
-            const indent = '  '.repeat(node.level);
-            plain += `${indent}${node.title}\n`;
-        }
+        // Smart title handling: detect if this is an empty parent container
+        const isEmptyParent = !node.content?.trim() && node.children.length > 0;
+        const shouldMergeTitle = isEmptyParent && node.children.length === 1;
         
-        // Render the node content if it exists
-        if (node.content && node.content.trim()) {
-            // HTML
-            html += `
+        if (shouldMergeTitle) {
+            // Merge parent and child titles for cleaner output
+            const child = node.children[0];
+            if (!child) {
+                throw new Error('Child node not found despite length check');
+            }
+            const mergedTitle = `${node.title} - ${child.title}`;
+            
+            // Render merged title at the child's level
+            if (child.title) {
+                // HTML
+                const headingTag = `h${Math.min(child.level + 2, 6)}`;
+                html += `
+    <${headingTag} id="${child.titleId}">${escapeHtml(mergedTitle)}</${headingTag}>`;
+                
+                // Markdown
+                const headingPrefix = '#'.repeat(Math.min(child.level + 2, 6));
+                markdown += `${headingPrefix} ${mergedTitle}\n\n`;
+                
+                // Plain text
+                const indent = '  '.repeat(child.level);
+                plain += `${indent}${mergedTitle}\n`;
+            }
+            
+            // Render child content
+            if (child.content && child.content.trim()) {
+                // HTML
+                html += `
+    <div class="node-content">
+        <div class="content">
+            ${formatContentAsHtml(child.content)}
+        </div>
+    </div>`;
+                
+                // Markdown
+                markdown += `${child.content}\n\n`;
+                
+                // Plain text
+                plain += '\n'; // Add spacing after title
+                const contentLines = child.content.split('\n');
+                for (const line of contentLines) {
+                    plain += line ? `  ${line}\n` : '\n';
+                }
+                plain += '\n';
+            }
+            
+            // Render child's children if any
+            for (const grandchild of child.children) {
+                const grandchildContent = this.renderContentNode(grandchild, config);
+                html += grandchildContent.html;
+                markdown += grandchildContent.markdown;
+                plain += grandchildContent.plain;
+            }
+            
+        } else if (isEmptyParent) {
+            // Empty parent with multiple children - skip parent title, render children normally
+            for (const child of node.children) {
+                const childContent = this.renderContentNode(child, config);
+                html += childContent.html;
+                markdown += childContent.markdown;
+                plain += childContent.plain;
+            }
+            
+        } else {
+            // Normal rendering for nodes with content or leaf nodes
+            
+            // Render the node title if it exists
+            if (node.title) {
+                // HTML
+                const headingTag = `h${Math.min(node.level + 2, 6)}`;
+                html += `
+    <${headingTag} id="${node.titleId}">${escapeHtml(node.title)}</${headingTag}>`;
+                
+                // Markdown
+                const headingPrefix = '#'.repeat(Math.min(node.level + 2, 6));
+                markdown += `${headingPrefix} ${node.title}\n\n`;
+                
+                // Plain text
+                const indent = '  '.repeat(node.level);
+                plain += `${indent}${node.title}\n`;
+            }
+            
+            // Render the node content if it exists
+            if (node.content && node.content.trim()) {
+                // HTML
+                html += `
     <div class="node-content">
         <div class="content">
             ${formatContentAsHtml(node.content)}
         </div>
     </div>`;
-            
-            // Markdown
-            markdown += `${node.content}\n\n`;
-            
-            // Plain text
-            if (node.title) {
-                plain += '\n'; // Add spacing after title
+                
+                // Markdown
+                markdown += `${node.content}\n\n`;
+                
+                // Plain text
+                if (node.title) {
+                    plain += '\n'; // Add spacing after title
+                }
+                const contentLines = node.content.split('\n');
+                for (const line of contentLines) {
+                    plain += line ? `  ${line}\n` : '\n';
+                }
+                plain += '\n';
             }
-            const contentLines = node.content.split('\n');
-            for (const line of contentLines) {
-                plain += line ? `  ${line}\n` : '\n';
+            
+            // Render children
+            for (const child of node.children) {
+                const childContent = this.renderContentNode(child, config);
+                html += childContent.html;
+                markdown += childContent.markdown;
+                plain += childContent.plain;
             }
-            plain += '\n';
-        }
-        
-        // Render children
-        for (const child of node.children) {
-            const childContent = this.renderContentNode(child, config);
-            html += childContent.html;
-            markdown += childContent.markdown;
-            plain += childContent.plain;
         }
         
         return { html, markdown, plain };
@@ -948,6 +1543,8 @@ export class ExportService implements IExportService {
                 return 'md';
             case ExportFormat.Plain:
                 return 'txt';
+            case ExportFormat.EPUB:
+                return 'epub';
             case ExportFormat.Reimport:
                 return 'json';
             default:
@@ -966,6 +1563,8 @@ export class ExportService implements IExportService {
                 return 'text/markdown';
             case ExportFormat.Plain:
                 return 'text/plain';
+            case ExportFormat.EPUB:
+                return 'application/epub+zip';
             case ExportFormat.Reimport:
                 return 'application/json';
             default:

@@ -2,7 +2,8 @@
  * Type definitions for export functionality
  */
 
-import { DocumentNode } from '../../../DocumentNode';
+import { DocumentNode, ContentVersion } from '../../../DocumentNode';
+import { FileDownloadResult } from '../../../utils/FileDownloadService';
 
 /**
  * Export scope options
@@ -20,6 +21,7 @@ export enum ExportFormat {
     HTML = 'html',
     Markdown = 'markdown',
     Plain = 'plain',
+    EPUB = 'epub',
     Reimport = 'reimport'
 }
 
@@ -49,7 +51,7 @@ export interface ExportConfig {
  * Export result
  */
 export interface ExportResult {
-    content: string;
+    content: string | Blob;
     filename: string;
     mimeType: string;
 }
@@ -60,7 +62,7 @@ export interface ExportResult {
 export interface IExportService {
     export(node: DocumentNode, config: ExportConfig): Promise<ExportResult>;
     generateContent(nodes: DocumentNode[], format: ExportFormat, title?: string): string;
-    downloadFile(result: ExportResult): Promise<void>;
+    downloadFile(result: ExportResult): Promise<FileDownloadResult>;
 }
 
 /**
@@ -81,6 +83,25 @@ export interface NodeExportData {
     creatorModel?: string;
     generationHistory?: any[];
     generationSessions?: any[];
+    // Enhanced: Complete version and tagging system
+    versions?: ContentVersionExportData[];
+    // UI state
+    collapsed?: boolean;
+}
+
+/**
+ * Content version data for export/import
+ */
+export interface ContentVersionExportData {
+    id: string;
+    content: string;
+    title: string;
+    context: string;
+    tags: string[]; // Array instead of Set for JSON serialization
+    timestamp: string; // ISO string for JSON serialization
+    ratings?: any[]; // Rating array from LoopOrchestrator
+    creatorModel?: string;
+    metadata?: { [key: string]: any };
 }
 
 /**
