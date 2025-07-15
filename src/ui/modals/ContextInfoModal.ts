@@ -450,12 +450,22 @@ export class ContextItemsEditorModal extends BaseModal {
                         const updatedItems = [...versionContextItems, itemText];
                         const newContext = formatContextItems(updatedItems);
                         
-                        // Update this version's context directly
-                        version.context = newContext;
-                        version.timestamp = new Date();
+                        // Create a new version with updated context instead of mutating existing version
+                        const newVersionId = child.addVersion(
+                            [...version.tags, 'context_propagated'].filter(tag => tag !== 'master'), // Remove master tag temporarily
+                            {
+                                content: version.content,
+                                title: version.title,
+                                context: newContext
+                            },
+                            { ...version.metadata },
+                            version.ratings ? [...version.ratings] : undefined
+                        );
                         
-                        // Add propagation tag to this version
-                        version.tags.add('context_propagated');
+                        // If this was the master version, promote the new version to master
+                        if (version.tags.has('master') && newVersionId) {
+                            child.promoteToMaster(newVersionId, ['context_propagated']);
+                        }
                         
                         childUpdated = true;
                     }
@@ -510,12 +520,22 @@ export class ContextItemsEditorModal extends BaseModal {
                     if (filteredItems.length < versionContextItems.length) {
                         const newContext = formatContextItems(filteredItems);
                         
-                        // Update this version's context directly
-                        version.context = newContext;
-                        version.timestamp = new Date();
+                        // Create a new version with updated context instead of mutating existing version
+                        const newVersionId = child.addVersion(
+                            [...version.tags, 'context_removed'].filter(tag => tag !== 'master'), // Remove master tag temporarily
+                            {
+                                content: version.content,
+                                title: version.title,
+                                context: newContext
+                            },
+                            { ...version.metadata },
+                            version.ratings ? [...version.ratings] : undefined
+                        );
                         
-                        // Add removal tag to this version
-                        version.tags.add('context_removed');
+                        // If this was the master version, promote the new version to master
+                        if (version.tags.has('master') && newVersionId) {
+                            child.promoteToMaster(newVersionId, ['context_removed']);
+                        }
                         
                         childUpdated = true;
                     }
