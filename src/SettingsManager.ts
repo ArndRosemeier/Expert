@@ -135,6 +135,7 @@ export interface SettingsProfile {
     maxIterations: number;
     selectedModels: Record<string, string>;
     webSearchEnabled?: Record<string, boolean>;
+    selectedProviders?: Record<string, string>;
     contextExtractionPrompt: string;
     language?: string; // Language setting for content generation (e.g., "English", "Spanish", "French")
     version?: string; // Version of the application when this profile was saved
@@ -171,6 +172,8 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
             profile.selectedModels !== null &&
             // webSearchEnabled is optional for backward compatibility
             (profile.webSearchEnabled === undefined || (typeof profile.webSearchEnabled === 'object' && profile.webSearchEnabled !== null)) &&
+            // selectedProviders is optional for backward compatibility
+            (profile.selectedProviders === undefined || (typeof profile.selectedProviders === 'object' && profile.selectedProviders !== null)) &&
             // contextExtractionPrompt is optional for backward compatibility
             (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
             // language is optional for backward compatibility
@@ -684,6 +687,8 @@ export class SettingsManager {
             'selectedModels' in profile &&
             typeof profile.selectedModels === 'object' &&
             profile.selectedModels !== null &&
+            // selectedProviders is optional for backward compatibility
+            (profile.selectedProviders === undefined || (typeof profile.selectedProviders === 'object' && profile.selectedProviders !== null)) &&
             // contextExtractionPrompt is optional for backward compatibility
             (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
             // taskModelConfigs is optional for backward compatibility

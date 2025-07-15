@@ -15,12 +15,45 @@ export interface OpenRouterRequest {
   web_search_options?: {
     search_context_size?: 'low' | 'medium' | 'high';
   };
+  provider?: {
+    order?: string[];
+    allow_fallbacks?: boolean;
+    require_parameters?: boolean;
+    data_collection?: 'allow' | 'deny';
+    only?: string[];
+    ignore?: string[];
+    quantizations?: string[];
+    sort?: string;
+    max_price?: Record<string, number>;
+  };
 }
 
 export interface OpenRouterResponse {
   choices: Array<{
     message: OpenRouterMessage;
   }>;
+}
+
+export interface OpenRouterModelEndpoint {
+  name: string;
+  context_length: number;
+  pricing: {
+    request?: string;
+    image?: string;
+    prompt?: string;
+    completion?: string;
+    web_search?: string;
+    internal_reasoning?: string;
+    input_cache_read?: string;
+    input_cache_write?: string;
+  };
+  provider_name: string;
+  supported_parameters?: string[];
+  quantization?: string;
+  max_completion_tokens?: number;
+  max_prompt_tokens?: number;
+  status?: string;
+  uptime_last_30m?: number;
 }
 
 export interface OpenRouterModel {
@@ -35,10 +68,27 @@ export interface OpenRouterModel {
   pricing?: Record<string, string>;
   context_length?: number;
   supported_parameters?: string[];
+  endpoints?: OpenRouterModelEndpoint[]; // Provider-specific endpoints
 }
 
 export interface OpenRouterModelsResponse {
   data: OpenRouterModel[];
+}
+
+export interface OpenRouterModelEndpointsResponse {
+  data: {
+    id: string;
+    name: string;
+    created: number;
+    description: string;
+    architecture: {
+      input_modalities: string[];
+      output_modalities: string[];
+      tokenizer: string;
+      instruct_type?: string;
+    };
+    endpoints: OpenRouterModelEndpoint[];
+  };
 }
 
 import { AILogService } from './AILogService';
@@ -130,10 +180,16 @@ export class OpenRouterClient {
       if (uiSelectedProfile) {
         const profile = settingsManager.getProfile(uiSelectedProfile);
         if (profile && profile.selectedModels) {
-          // Load the correct profile models
+          // Load the correct profile models and web search settings
           modelSelector.setSelectedModels(profile.selectedModels);
+          
+          // Load web search settings if they exist in the profile
+          if (profile.webSearchEnabled) {
+            await modelSelector.setWebSearchEnabled(profile.webSearchEnabled);
+          }
+          
           state.setCurrentlyLoadedProfileName(uiSelectedProfile);
-          console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" models.`);
+          console.log(`✅ Profile consistency restored. Loaded "${uiSelectedProfile}" with models and web search settings.`);
         } else {
           console.warn(`⚠️  Profile "${uiSelectedProfile}" not found or has no models. Using current loaded profile.`);
         }
@@ -167,9 +223,9 @@ export class OpenRouterClient {
   }
 
   /**
-   * Get model configuration including web search preferences for a purpose
+   * Get model configuration including web search preferences and provider for a purpose
    */
-  private async getModelConfigForPurpose(purpose: string): Promise<{model: string, webSearchEnabled: boolean, hasNativeWebSearch: boolean}> {
+  private async getModelConfigForPurpose(purpose: string): Promise<{model: string, webSearchEnabled: boolean, hasNativeWebSearch: boolean, provider?: string}> {
     try {
       const modelSelector = state.getModelSelector();
       if (!modelSelector) {
@@ -177,8 +233,10 @@ export class OpenRouterClient {
       }
       
       const models = modelSelector.getSelectedModels();
+      const providers = modelSelector.getSelectedProviders();
       const webSearchPrefs = modelSelector.getWebSearchEnabled();
       const model = models[purpose];
+      const provider = providers[purpose];
       
       if (!model) {
         throw new Error(`No model configured for purpose: ${purpose}`);
@@ -191,11 +249,18 @@ export class OpenRouterClient {
       
       const webSearchEnabled = hasNativeWebSearch || (webSearchPrefs[purpose] || false);
       
-      return {
+      const result: {model: string, webSearchEnabled: boolean, hasNativeWebSearch: boolean, provider?: string} = {
         model,
         webSearchEnabled,
         hasNativeWebSearch
       };
+      
+      // Only include provider if it's specified and not "automatic"
+      if (provider && provider !== 'automatic') {
+        result.provider = provider;
+      }
+      
+      return result;
     } catch (error) {
       console.error(`Failed to get model config for purpose ${purpose}:`, error);
       throw error;
@@ -363,14 +428,7 @@ export class OpenRouterClient {
       }
 
       const modelConfig = await this.getModelConfigForPurpose(purpose);
-      const { model, webSearchEnabled, hasNativeWebSearch } = modelConfig;
-      
-      
-      
-      // Use streaming by default (more reliable across different systems)
-      if (this.forceStreamingMode) {
-        return await this.chatWithStreamingFallback(purpose, message, opId, abortController.signal);
-      }
+      const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
@@ -379,6 +437,14 @@ export class OpenRouterClient {
           { role: 'user', content: message }
         ],
       };
+      
+      // Add provider routing if specified
+      if (provider) {
+        request.provider = {
+          order: [provider],
+          allow_fallbacks: false // Only use the selected provider
+        };
+      }
 
       // Add web search options for native web search models
       if (webSearchEnabled && hasNativeWebSearch) {
@@ -387,7 +453,7 @@ export class OpenRouterClient {
         };
       }
       
-      console.log(`📤 Sending request to OpenRouter:`, { model, messageLength: message.length, operationId: opId });
+      console.log(`📤 Sending request to OpenRouter:`, { model, provider, messageLength: message.length, operationId: opId });
       const response = await this.sendMessage(request, apiKey, abortController.signal);
       console.log(`📨 Received response from OpenRouter:`, { 
         hasChoices: !!response.choices, 
@@ -633,6 +699,70 @@ export class OpenRouterClient {
   }
 
   /**
+   * Fetch detailed provider information for a specific model
+   */
+  async fetchModelEndpoints(modelId: string): Promise<OpenRouterModelEndpoint[]> {
+    const apiKey = await this.getApiKeyFromStorage();
+    if (!apiKey) {
+      throw new Error('OpenRouter API key not configured. Please set it in the settings.');
+    }
+
+    // Parse model ID to get author and slug
+    const parts = modelId.split('/');
+    if (parts.length !== 2) {
+      throw new Error(`Invalid model ID format: ${modelId}. Expected format: author/slug`);
+    }
+    const [author, slug] = parts;
+
+    try {
+      const url = `https://openrouter.ai/api/v1/models/${author}/${slug}/endpoints`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      });
+      
+      if (!response.ok) {
+        // Try to parse error body as JSON
+        let errorBody: any = null;
+        let errorText = '';
+        try {
+          const text = await response.text();
+          errorText = text;
+          try {
+            errorBody = JSON.parse(text);
+          } catch (jsonErr) {
+            // Not JSON, keep as text
+          }
+        } catch (bodyErr) {
+          errorText = '[Failed to read error body]';
+        }
+        console.error(`🚨 HTTP error response (fetchModelEndpoints):`, {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          modelId,
+          apiKey: maskApiKey(apiKey),
+          errorBody,
+          errorText
+        });
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
+      }
+      
+      const data: OpenRouterModelEndpointsResponse = await response.json();
+      return data.data.endpoints || [];
+    } catch (error: any) {
+      console.error(`💥 fetchModelEndpoints failed for ${modelId}:`, {
+        errorName: error.name,
+        errorMessage: error.message,
+        modelId,
+        apiKey: maskApiKey(apiKey)
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Send a streaming chat message for a given purpose.
    * Calls onContent for each chunk and onComplete when finished.
    */
@@ -660,7 +790,7 @@ export class OpenRouterClient {
       }
 
       const modelConfig = await this.getModelConfigForPurpose(purpose);
-      const { model, webSearchEnabled, hasNativeWebSearch } = modelConfig;
+      const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
@@ -668,6 +798,14 @@ export class OpenRouterClient {
         messages,
         stream: true
       };
+      
+      // Add provider routing if specified
+      if (provider) {
+        request.provider = {
+          order: [provider],
+          allow_fallbacks: false // Only use the selected provider
+        };
+      }
 
       // Add web search options for native web search models
       if (webSearchEnabled && hasNativeWebSearch) {
@@ -676,7 +814,7 @@ export class OpenRouterClient {
         };
       }
       
-      console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, operation: ${opId}`);
+      console.log(`🌊 Starting streaming chat for purpose: ${purpose}, model: ${model}, provider: ${provider || 'default'}, operation: ${opId}`);
 
       // Show AI interactions overlay if enabled
       const aiInteractionsService = AIInteractionsService.getInstance();

@@ -3,9 +3,10 @@ import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
-import { DocumentNode } from './DocumentNode';
+import { DocumentNode, GenerationSession, ContentVersion } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
 import { initializeProjectUI } from './ui/project-ui';
+import { LoopHistoryItem } from './LoopOrchestrator';
 
 import { SettingsManager } from './SettingsManager';
 import { ModelSelector } from './ModelSelector';
@@ -17,6 +18,7 @@ import { TemplateManager } from './TemplateManager';
 import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
+import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
 
 
 import * as pdfjsLib from 'pdfjs-dist';
@@ -116,10 +118,15 @@ async function extractTextFromPDF(file: File): Promise<string> {
 }
 
 
-function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>) {
+function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) {
     const modelSelector = state.getModelSelector();
     const settingsManager = state.getSettingsManager();
-    if (!modelSelector || !settingsManager) return;
+    if (!modelSelector) {
+        throw new Error('ModelSelector not available - services not properly initialized');
+    }
+    if (!settingsManager) {
+        throw new Error('SettingsManager not available - services not properly initialized');
+    }
     
     // The model selector now handles its own storage internally.
     // We just need to reconfigure services and save the updated models to the active settings profile.
@@ -138,6 +145,9 @@ function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Rec
     if (webSearchEnabled) {
         activeProfile.webSearchEnabled = webSearchEnabled;
     }
+    if (selectedProviders) {
+        activeProfile.selectedProviders = selectedProviders;
+    }
     void settingsManager.saveProfile(activeProfileName, activeProfile);
 
     // Settings modal now closes automatically after saving
@@ -148,22 +158,26 @@ function recreateAndReconfigureServices() {
     const modelSelector = state.getModelSelector();
     const settingsManager = state.getSettingsManager();
     if (!modelSelector) {
-        console.error("ModelSelector not available. Cannot configure services.");
-        return;
+        throw new Error("ModelSelector not available - services not properly initialized");
+    }
+    if (!settingsManager) {
+        throw new Error("SettingsManager not available - services not properly initialized");
     }
     const client = OpenRouterClient.getInstance();
     
     // Connect the OpenRouterClient to the SettingsManager for AI logging
-    if (settingsManager) {
-        client.setSettingsManager(settingsManager);
-    }
+    client.setSettingsManager(settingsManager);
     
     const activeProject = state.getActiveProject();
     if (!activeProject) {
         throw new Error('No active project');
     }
     const projectSettings = activeProject.getSettingsManager();
-    const orchestrator = new LoopOrchestrator(projectSettings, client, state.getOrchestratorPrompts() || undefined);
+    const orchestratorPrompts = state.getOrchestratorPrompts();
+    if (!orchestratorPrompts) {
+        throw new Error("OrchestratorPrompts not available - application state corrupted");
+    }
+    const orchestrator = new LoopOrchestrator(projectSettings, client, orchestratorPrompts);
     state.setOpenRouterClient(client);
     state.setOrchestrator(orchestrator);
     
@@ -214,7 +228,7 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
         
         // Store AI metadata in content for reference
         if (typedAiData.description) {
-            console.log('📝 AI project created from description:', typedAiData.description);
+            console.log('�� AI project created from description:', typedAiData.description);
             console.log('🎯 Project type:', typedAiData.projectType);
             console.log('⚙️ Generation options:', typedAiData.options);
         }
@@ -240,6 +254,17 @@ interface ImportNodeData {
     context?: string;
     generationPrompt?: string;
     children?: ImportNodeData[];
+    // Enhanced export fields
+    id?: string;
+    level?: number;
+    hierarchyTemplate?: string[]; // Node hierarchy template (different from project template)
+    generationHistory?: LoopHistoryItem[];
+    generationSessions?: GenerationSession[];
+    versions?: ContentVersion[];
+    collapsed?: boolean;
+    creatorModel?: string;
+    // Legacy fields for backward compatibility
+    template?: any; // Project template for text imports (different usage)
 }
 
 function handleImportProject(title: string, template: ProjectTemplate, importData: ImportNodeData) {
@@ -259,26 +284,54 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
         // Ensure all nodes share the same template reference
         AssertFlatTemplateCopy(project);
         
-        // Import the data into the project's root node
+        // Enhanced: Import root node data with version support
         const rootNode = project.rootNode;
         
-        // Import node data using version management system
-        
-        if (importData.title !== undefined) {
-            rootNode.setTitle(importData.title, 'master');
-            project.projectTitle = importData.title; // Keep project title in sync
-        }
+                if (importData.versions && Array.isArray(importData.versions) && importData.versions.length > 0) {
+            console.log(`🔄 Importing root node with enhanced version data: ${importData.versions.length} versions`);
+            
+            // Replace the root node with a fully restored version
+            const nodeDataForCreation = {
+                id: rootNode.id, // Keep the same ID for root
+                title: importData.title || 'Imported Project',
+                level: 0, // Root level
+                parentId: null,
+                template: template.hierarchyLevels, // Use the project template's hierarchy levels
+                generationPrompt: importData.generationPrompt,
+                generationHistory: importData.generationHistory ?? (() => { throw new Error('Import data missing generationHistory'); })(),
+                generationSessions: importData.generationSessions ?? (() => { throw new Error('Import data missing generationSessions'); })(),
+                versions: importData.versions, // This will be properly handled by DocumentNode.fromJSON
+                collapsed: importData.collapsed ?? false,
+                children: [] // Will be handled recursively
+            };
+            
+            // Create new root node with full version data
+            const restoredRootNode = DocumentNode.fromJSON(nodeDataForCreation);
+            
+            // Replace the project's root node
+            project.rootNode = restoredRootNode;
+            project.projectTitle = importData.title || 'Imported Project';
+            
+        } else {
+            console.log(`🔄 Importing root node with legacy format (no version data)`);
+            
+            // Legacy import: Set properties individually
+            if (importData.title !== undefined) {
+                rootNode.setTitle(importData.title, 'imported');
+                project.projectTitle = importData.title; // Keep project title in sync
+            }
 
-        if (importData.content !== undefined) {
-            rootNode.setContent(importData.content, 'master');
-        }
+            if (importData.content !== undefined) {
+                rootNode.setContent(importData.content, 'imported');
+            }
 
-        if (importData.context !== undefined) {
-            rootNode.setContext(importData.context, 'master');
-        }
+            if (importData.context !== undefined) {
+                rootNode.setContext(importData.context, 'imported');
+            }
 
-        if (importData.generationPrompt !== undefined) {
-            rootNode.generationPrompt = importData.generationPrompt;
+            if (importData.generationPrompt !== undefined) {
+                rootNode.generationPrompt = importData.generationPrompt;
+            }
         }
 
         // Import children recursively if they exist
@@ -287,6 +340,19 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
                 importChildNodeForProject(project, rootNode.id, childData, index);
             });
         }
+        
+        // Propagate the correct template to all nodes in the project
+        const propagateRecursively = (node: DocumentNode) => {
+            // Update the node's template to be a shallow copy of the project template
+            node.template = [...template.hierarchyLevels];
+            
+            // Recursively propagate to all children
+            node.children.forEach(child => propagateRecursively(child));
+        };
+        propagateRecursively(project.rootNode);
+        
+        // Ensure all nodes share the same template reference for dropdown population
+        AssertFlatTemplateCopy(project);
         
         // Add to state and save
         state.addProject(project);
@@ -316,29 +382,85 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         return;
     }
 
-    // Create the child node with root template (shallow copy)
-    const newNode = importChildNodeWithRootTemplateForProject(project, parentId, childData.title);
+    const parentNode = project.findNodeById(parentId);
+    if (!parentNode) {
+        console.warn(`Parent node not found: ${parentId}`);
+        return;
+    }
 
-    // Set node properties using version management system
+    // Enhanced: Check if we have version data (new format) or need legacy import
+    let newNode: DocumentNode;
     
-    if (childData.content !== undefined) {
-        newNode.setContent(childData.content, 'master');
-    }
+    if (childData.versions && Array.isArray(childData.versions) && childData.versions.length > 0) {
+        console.log(`🔄 Importing project child with enhanced version data: ${childData.versions.length} versions`);
+        
+        // FIXED: Use proper project manager method to ensure template sharing
+        newNode = project.addNode(childData.title, parentId);
+        
+        // Now restore the version data and other properties
+        newNode.id = `imported_${Date.now()}_${childData.id || 'unknown'}`; // New ID to avoid conflicts
+        
+        // Clear the default master version and restore all versions from import
+        (newNode as any).versions = []; // Clear default versions
+        
+        if (childData.versions && Array.isArray(childData.versions)) {
+            // Restore all versions with proper tag handling
+            childData.versions.forEach((versionData: any) => {
+                const restoredVersion = {
+                    id: versionData.id,
+                    content: versionData.content,
+                    title: versionData.title,
+                    context: versionData.context,
+                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
+                    timestamp: new Date(versionData.timestamp),
+                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
+                    creatorModel: versionData.creatorModel,
+                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
+                };
+                (newNode as any).versions.push(restoredVersion);
+            });
+        }
+        
+        // Restore other properties
+        if (childData.generationPrompt) {
+            newNode.generationPrompt = childData.generationPrompt;
+        }
+        if (childData.generationHistory) {
+            newNode.generationHistory = childData.generationHistory;
+        }
+        if (childData.generationSessions) {
+            newNode.generationSessions = childData.generationSessions;
+        }
+        if (childData.collapsed !== undefined) {
+            newNode.collapsed = childData.collapsed;
+        }
+        
+    } else {
+        console.log(`🔄 Importing project child with legacy format (no version data)`);
+        
+        // Legacy import: Create new node and set properties individually
+        newNode = importChildNodeWithRootTemplateForProject(project, parentId, childData.title);
 
-    if (childData.context !== undefined) {
-        newNode.setContext(childData.context, 'master');
-    }
+        // Set node properties using version management system
+        if (childData.content !== undefined) {
+            newNode.setContent(childData.content, 'imported');
+        }
 
-    if (childData.generationPrompt !== undefined) {
-        newNode.generationPrompt = childData.generationPrompt;
+        if (childData.context !== undefined) {
+            newNode.setContext(childData.context, 'imported');
+        }
+
+        if (childData.generationPrompt !== undefined) {
+            newNode.generationPrompt = childData.generationPrompt;
+        }
     }
 
     // Recursively import children
-            if (childData.children && Array.isArray(childData.children)) {
-            childData.children.forEach((grandChildData: ImportNodeData, grandChildIndex: number) => {
-                importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
-            });
-        }
+    if (childData.children && Array.isArray(childData.children)) {
+        childData.children.forEach((grandChildData: ImportNodeData, grandChildIndex: number) => {
+            importChildNodeForProject(project, newNode.id, grandChildData, grandChildIndex);
+        });
+    }
 }
 
 /**
@@ -415,6 +537,10 @@ export async function initialize() {
     
     const settingsManager = await SettingsManager.getInstance();
     state.setSettingsManager(settingsManager);
+    
+    // CRITICAL: Transfer orchestrator prompts from SettingsManager to global state
+    // This was missing and causing the OrchestratorPrompts not available error
+    state.setOrchestratorPrompts(settingsManager.getPrompts());
 
     const templateManager = new TemplateManager();
     state.setTemplateManager(templateManager);
@@ -476,6 +602,38 @@ export async function initialize() {
     });
     } catch (error) {
         console.error('❌ Failed to attach settings button listener:', error);
+    }
+    
+    // Add global emergency escape for error modal loops
+    try {
+    document.addEventListener('keydown', (event) => {
+        // Triple ESC press to emergency clear error modals
+        if (event.key === 'Escape') {
+            const now = Date.now();
+            if (!event.ctrlKey) return; // Must hold Ctrl
+            
+            // Store last escape press time
+            const lastEscape = (window as any)._lastEscapePress || 0;
+            if (now - lastEscape < 1000) { // Within 1 second
+                const escapeCount = ((window as any)._escapeCount || 0) + 1;
+                (window as any)._escapeCount = escapeCount;
+                
+                if (escapeCount >= 3) {
+                    console.log('🚨 Emergency escape activated - clearing all error modals');
+                    const errorService = GenerationErrorService.getInstance();
+                    errorService.clearAllErrorModals();
+                    (window as any)._escapeCount = 0;
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            } else {
+                (window as any)._escapeCount = 1;
+            }
+            (window as any)._lastEscapePress = now;
+        }
+    });
+    } catch (error) {
+        console.error('❌ Failed to attach emergency escape listener:', error);
     }
     
 

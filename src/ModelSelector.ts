@@ -7,6 +7,7 @@ import { showBalanceModal } from './ui/modals/BalanceModal';
 const STORAGE_KEY_API_KEY = 'openrouter_api_key';
 const STORAGE_KEY_MODELS = 'openrouter_model_purposes';
 const STORAGE_KEY_WEB_SEARCH = 'openrouter_web_search_preferences';
+const STORAGE_KEY_PROVIDERS = 'openrouter_provider_selections';
 const PURPOSES = [
   { key: 'creator', label: 'Creator' },
   { key: 'rater', label: 'Rater' },
@@ -41,7 +42,7 @@ function isApiKeyFormatValid(key: string): boolean {
 }
 
 export class ModelSelector {
-  private onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>) => void;
+  private onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) => void;
   private closeModal: () => void;
   private apiKey: string = '';
   private models: OpenRouterModel[] = [];
@@ -50,6 +51,8 @@ export class ModelSelector {
   private error: string | null = null;
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
+  private selectedProviders: Record<string, string> = {}; // Track provider selections per purpose
+  private modelEndpoints: Record<string, OpenRouterModel['endpoints']> = {}; // Cache endpoint data
   private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
   private storageService: Promise<IStorageService>;
@@ -66,7 +69,7 @@ export class ModelSelector {
   private readonly SAVE_DEBOUNCE_MS = 300;
 
   constructor(
-    onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>) => void,
+    onSelect: (selectedModels: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) => void,
     closeModal: () => void,
   ) {
     this.onSelect = onSelect;
@@ -605,8 +608,10 @@ export class ModelSelector {
           margin: 0;
         `;
 
-        webSearchCheckbox.addEventListener('change', () => {
+        webSearchCheckbox.addEventListener('change', async () => {
           this.webSearchEnabled[purpose.key] = webSearchCheckbox.checked;
+          // Save to storage immediately when web search preference changes
+          await this.saveToStorage();
           // Re-render to update pricing display
           this.update();
         });
@@ -615,7 +620,22 @@ export class ModelSelector {
         webSearchCheckboxContainer.appendChild(webSearchLabel);
         section.appendChild(webSearchCheckboxContainer);
         
-        if (validModel.pricing) {
+        // Get pricing - use provider-specific pricing if available
+        let pricingToShow = validModel.pricing;
+        const selectedProviderSlug = this.selectedProviders[purpose.key];
+        if (selectedProviderSlug && this.hasMultipleProviders(validModel.id)) {
+          const providers = this.getProvidersForModel(validModel.id);
+          const providerEndpoint = providers?.find(p => {
+            const providerDisplayName = p.name || p.provider_name;
+            const providerSlug = this.getProviderSlug(providerDisplayName);
+            return providerSlug === selectedProviderSlug;
+          });
+          if (providerEndpoint?.pricing) {
+            pricingToShow = providerEndpoint.pricing;
+          }
+        }
+
+        if (pricingToShow) {
           pricingUl = document.createElement('ul');
           pricingUl.style.cssText = `
             list-style: disc inside;
@@ -624,7 +644,7 @@ export class ModelSelector {
           `;
           
           // Regular pricing
-          formatPromptCompletionPricing(validModel.pricing).forEach(line => {
+          formatPromptCompletionPricing(pricingToShow).forEach(line => {
             const li = document.createElement('li');
             li.textContent = line;
             li.style.cssText = `
@@ -653,8 +673,21 @@ export class ModelSelector {
         section.appendChild(desc);
       }
 
-      select.addEventListener('change', (e) => {
-        this.selectedModels[purpose.key] = (e.target as HTMLSelectElement).value;
+      select.addEventListener('change', async (e) => {
+        const modelId = (e.target as HTMLSelectElement).value;
+        this.selectedModels[purpose.key] = modelId;
+        
+              // Reset provider selection to automatic when model changes
+      this.selectedProviders[purpose.key] = 'automatic';
+        
+        // Save to storage immediately when model or provider changes
+        await this.saveToStorage();
+        
+        if (modelId) {
+          // Fetch endpoint information for the selected model
+          await this.fetchModelEndpoints(modelId);
+        }
+        
         const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
         desc.textContent = model ? (model.description || '') : '';
         
@@ -663,6 +696,74 @@ export class ModelSelector {
       });
       
       section.appendChild(select);
+
+      // Provider selection (if model has multiple providers)
+      if (validModel && this.hasMultipleProviders(validModel.id)) {
+        const providerLabel = document.createElement('div');
+        providerLabel.textContent = 'Provider';
+        providerLabel.style.cssText = `
+          font-weight: bold;
+          margin-top: 0.75rem;
+          margin-bottom: 0.25rem;
+          font-size: 0.9rem;
+        `;
+        section.appendChild(providerLabel);
+
+        const providerSelect = document.createElement('select');
+        providerSelect.style.cssText = `
+          padding: 0.5rem 1rem;
+          border: 1.5px solid #d1d5db;
+          border-radius: 0.75rem;
+          font-size: 1rem;
+          background: #fff;
+          transition: border-color 0.2s;
+        `;
+        providerSelect.addEventListener('focus', () => { providerSelect.style.borderColor = '#3b82f6'; });
+        providerSelect.addEventListener('blur', () => { providerSelect.style.borderColor = '#d1d5db'; });
+
+        // Automatic option (default)
+        const automaticProviderOpt = document.createElement('option');
+        automaticProviderOpt.value = 'automatic';
+        automaticProviderOpt.textContent = 'Automatic (OpenRouter chooses best)';
+        providerSelect.appendChild(automaticProviderOpt);
+
+        // Provider options
+        const providers = this.getProvidersForModel(validModel.id);
+        if (providers) {
+          providers.forEach(endpoint => {
+            const opt = document.createElement('option');
+            // Use the provider display name from the endpoint data
+            const providerDisplayName = endpoint.provider_name || endpoint.name;
+            
+            // Convert to API slug for the value
+            const providerSlug = this.getProviderSlug(providerDisplayName);
+            opt.value = providerSlug;
+            
+            // Show provider display name with pricing if available
+            let displayText = providerDisplayName;
+            if (endpoint.pricing?.prompt) {
+              const promptPrice = parseFloat(endpoint.pricing.prompt) * 1_000_000;
+              displayText += ` ($${promptPrice.toFixed(2)}/M tokens)`;
+            }
+            opt.textContent = displayText;
+            providerSelect.appendChild(opt);
+          });
+        }
+
+        // Set current selection (default to automatic)
+        providerSelect.value = this.selectedProviders[purpose.key] || 'automatic';
+
+        providerSelect.addEventListener('change', async (e) => {
+          this.selectedProviders[purpose.key] = (e.target as HTMLSelectElement).value;
+          // Save to storage immediately when provider changes
+          await this.saveToStorage();
+          // Re-render to update pricing display for selected provider
+          this.update();
+        });
+
+        section.appendChild(providerSelect);
+      }
+
       if (validModel && pricingUl) {
         section.appendChild(pricingUl);
       }
@@ -700,7 +801,7 @@ export class ModelSelector {
     saveBtn.addEventListener('click', async () => {
       if (this.areAllModelsSelected()) {
         await this.saveToStorage();
-        this.onSelect(this.selectedModels, this.webSearchEnabled);
+        this.onSelect(this.selectedModels, this.webSearchEnabled, this.selectedProviders);
       }
     });
     buttonContainer.appendChild(saveBtn);
@@ -739,9 +840,15 @@ export class ModelSelector {
         
         alert(message);
       } else {
-        // Key is invalid
-        const errorData = await response.json().catch(() => ({ error: { message: 'Invalid API key' } }));
-        const errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        // Key is invalid - parse response to get actual error message
+        let errorMessage: string;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (jsonError) {
+          // If JSON parsing fails, the API returned invalid JSON which is a different error
+          throw new Error(`API returned invalid JSON response: ${response.status} ${response.statusText}. Original error: ${jsonError}`);
+        }
         this.error = `API Key Test Failed: ${errorMessage}`;
         alert(`❌ API Key Test Failed: ${errorMessage}`);
       }
@@ -929,7 +1036,29 @@ export class ModelSelector {
       
       this.fetched = true;
       this.loading = false; // Set loading to false BEFORE update() so model selectors render
-      this.update(); // Full re-render to show model selectors
+
+      // Pre-fetch endpoint information for currently selected models
+      const fetchPromises: Promise<void>[] = [];
+      for (const purpose of PURPOSES) {
+        const selectedModel = this.selectedModels[purpose.key];
+        if (selectedModel && !this.modelEndpoints[selectedModel]) {
+          fetchPromises.push(this.fetchModelEndpoints(selectedModel));
+        }
+      }
+      
+      // Wait for all endpoint fetches to complete, then re-render
+      if (fetchPromises.length > 0) {
+        try {
+          await Promise.all(fetchPromises);
+          console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} selected models`);
+          this.update(); // Re-render to show provider options if available
+        } catch (error) {
+          console.warn('⚠️ Some endpoint fetches failed during initialization:', error);
+          this.update(); // Still render even if some fetches failed
+        }
+      } else {
+        this.update(); // Full re-render to show model selectors
+      }
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       this.error = errorMessage;
@@ -963,6 +1092,44 @@ export class ModelSelector {
         console.log('ℹ️ No OpenRouter model selections found in IndexedDB');
       }
 
+      const providers = await storage.get<Record<string, string>>(STORAGE_KEY_PROVIDERS);
+      if (providers) {
+        // Clear any old Google provider selections that might be invalid
+        const updatedProviders: Record<string, string> = {};
+        let clearedCount = 0;
+        for (const [key, value] of Object.entries(providers)) {
+          if (value !== 'google' && value !== 'googleaistudio') {
+            updatedProviders[key] = value;
+          } else {
+            clearedCount++;
+            console.log(`🔄 Clearing invalid Google provider selection: ${key} = ${value}`);
+          }
+        }
+        this.selectedProviders = updatedProviders;
+        
+        if (clearedCount > 0) {
+          console.log(`🔄 Cleared ${clearedCount} invalid Google provider selection(s), forcing re-selection`);
+          // Save the cleaned up providers
+          await storage.set(STORAGE_KEY_PROVIDERS, updatedProviders);
+        } else {
+          console.log('✅ OpenRouter provider selections loaded from IndexedDB:', providers);
+        }
+      } else {
+        console.log('ℹ️ No OpenRouter provider selections found in IndexedDB, will default to automatic');
+        // Initialize with automatic for all purposes
+        this.selectedProviders = {};
+        PURPOSES.forEach(purpose => {
+          this.selectedProviders[purpose.key] = 'automatic';
+        });
+      }
+
+      // Ensure all purposes have a provider selection (default to automatic)
+      PURPOSES.forEach(purpose => {
+        if (!this.selectedProviders[purpose.key]) {
+          this.selectedProviders[purpose.key] = 'automatic';
+        }
+      });
+
       const webSearchPrefs = await storage.get<Record<string, boolean>>(STORAGE_KEY_WEB_SEARCH);
       if (webSearchPrefs) {
         this.webSearchEnabled = webSearchPrefs;
@@ -973,6 +1140,10 @@ export class ModelSelector {
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
       this.selectedModels = {};
+      this.selectedProviders = {};
+      PURPOSES.forEach(purpose => {
+        this.selectedProviders[purpose.key] = 'automatic';
+      });
       this.webSearchEnabled = {};
       this.apiKey = '';
     }
@@ -983,6 +1154,7 @@ export class ModelSelector {
       const storage = await this.storageService;
       await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
       await storage.set(STORAGE_KEY_MODELS, this.selectedModels);
+      await storage.set(STORAGE_KEY_PROVIDERS, this.selectedProviders);
       await storage.set(STORAGE_KEY_WEB_SEARCH, this.webSearchEnabled);
       console.log('✅ OpenRouter configuration saved to IndexedDB');
     } catch (error) {
@@ -992,7 +1164,18 @@ export class ModelSelector {
   }
 
   public areAllModelsSelected(): boolean {
-    return PURPOSES.every(p => this.selectedModels[p.key] && this.selectedModels[p.key] !== '');
+    return PURPOSES.every(p => {
+      const modelId = this.selectedModels[p.key];
+      if (!modelId || modelId === '') return false;
+      
+      // If model has multiple providers, check that a provider is selected (automatic is valid)
+      if (this.hasMultipleProviders(modelId)) {
+        const providerId = this.selectedProviders[p.key];
+        return providerId && providerId !== '';
+      }
+      
+      return true;
+    });
   }
 
   public async setSelectedModels(models: Record<string, string>): Promise<void> {
@@ -1003,6 +1186,16 @@ export class ModelSelector {
 
   public getSelectedModels(): Record<string, string> {
     return this.selectedModels;
+  }
+
+  public async setSelectedProviders(providers: Record<string, string>): Promise<void> {
+    this.selectedProviders = { ...providers };
+    await this.saveToStorage();
+    this.update();
+  }
+
+  public getSelectedProviders(): Record<string, string> {
+    return this.selectedProviders;
   }
 
   public getApiKey(): string {
@@ -1038,6 +1231,93 @@ export class ModelSelector {
   public async setWebSearchEnabled(webSearchEnabled: Record<string, boolean>): Promise<void> {
     this.webSearchEnabled = webSearchEnabled;
     await this.saveToStorage();
+  }
+
+  /**
+   * Fetch endpoint information for a model
+   */
+  private async fetchModelEndpoints(modelId: string): Promise<void> {
+    try {
+      const client = OpenRouterClient.getInstance();
+      const endpoints = await client.fetchModelEndpoints(modelId);
+      this.modelEndpoints[modelId] = endpoints;
+      console.log(`📋 Fetched ${endpoints.length} providers for model ${modelId}`);
+    } catch (error) {
+      console.warn(`⚠️ Failed to fetch endpoints for model ${modelId}:`, error);
+      // Set empty array so we don't keep trying to fetch
+      this.modelEndpoints[modelId] = [];
+    }
+  }
+
+  /**
+   * Check if a model has multiple providers available
+   */
+  private hasMultipleProviders(modelId: string): boolean {
+    const endpoints = this.modelEndpoints[modelId];
+    return !!(endpoints && endpoints.length > 1);
+  }
+
+  /**
+   * Get available providers for a model
+   */
+  private getProvidersForModel(modelId: string): OpenRouterModel['endpoints'] {
+    return this.modelEndpoints[modelId] || [];
+  }
+
+  /**
+   * Convert provider display name to API slug
+   * OpenRouter uses lowercase slugs for provider routing
+   */
+  private getProviderSlug(providerName: string): string {
+    // Common provider name to slug mappings
+    const providerMap: Record<string, string> = {
+      'Groq': 'groq',
+      'Together': 'together',
+      'DeepInfra': 'deepinfra',
+      'Fireworks': 'fireworks',
+      'Anthropic': 'anthropic',
+      'OpenAI': 'openai',
+      'Google': 'google-ai-studio',
+      'Google AI Studio': 'google-ai-studio',
+      'Mistral': 'mistral',
+      'Cohere': 'cohere',
+      'Meta': 'meta',
+      'Moonshot AI': 'moonshot',
+      'Azure': 'azure',
+      'Amazon Bedrock': 'bedrock',
+      'Replicate': 'replicate',
+      'Hugging Face': 'huggingface',
+      'Cerebras': 'cerebras',
+      'Perplexity': 'perplexity',
+      'xAI': 'xai',
+      'BaseTen': 'baseten',
+      'SambaNova': 'sambanova',
+      'Lepton': 'lepton',
+      'Hyperbolic': 'hyperbolic',
+      'DeepSeek': 'deepseek',
+      'Liquid': 'liquid',
+      'AI21': 'ai21',
+      'Inflection': 'inflection',
+      '01.AI': '01ai'
+    };
+
+    // Check if we have a direct mapping
+    if (providerMap[providerName]) {
+      return providerMap[providerName];
+    }
+
+    // For unknown providers, use a safe fallback that only keeps the first word
+    // This prevents malformed strings like "groqmoonshotaikimik2"
+    const words = providerName.split(/[\s\/\-_]+/);
+    const firstWord = words[0] || 'unknown';
+    const normalized = firstWord.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Only use the normalized version if it's a reasonable length
+    if (normalized.length > 2 && normalized.length < 20) {
+      return normalized;
+    } else {
+      return 'unknown';
+    }
   }
 
   private async isSavedConfigValid(): Promise<boolean> {
