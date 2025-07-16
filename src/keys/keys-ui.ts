@@ -454,11 +454,13 @@ export class KeysUI {
             const downloadResult = await FileDownloadService.downloadJson(parsedData, filename, 'Expert Keys Export');
             
             if (downloadResult.success && !downloadResult.cancelled) {
-                this.showSuccess('Keys exported successfully');
+                const method = downloadResult.method === 'save-as' ? 'with file selector' : 'to Downloads folder';
+                this.showSuccess(`Keys exported successfully ${method}`);
             } else if (downloadResult.cancelled) {
                 this.showError('Export cancelled by user');
             } else {
-                this.showError('Failed to save export file');
+                const errorMessage = downloadResult.error || 'Unknown export error';
+                this.showError(`Failed to save export file: ${errorMessage}`);
             }
         } catch (error) {
             this.showError('Failed to export keys: ' + (error as Error).message);

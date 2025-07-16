@@ -538,12 +538,25 @@ th {
      * Downloads the export result as a file
      */
     public async downloadFile(result: ExportResult): Promise<FileDownloadResult> {
-        return await FileDownloadService.downloadExportResult(
+        const downloadResult = await FileDownloadService.downloadExportResult(
             result.content,
             result.filename,
             result.mimeType,
             this.getFileDescription(result.filename)
         );
+        
+        // Handle file selector failures with detailed error messages
+        if (!downloadResult.success && downloadResult.error) {
+            console.error('Export download failed:', downloadResult.error);
+            // Error will be handled by calling code
+        }
+        
+        // Warn if fallback was used
+        if (downloadResult.success && downloadResult.method === 'download') {
+            console.warn('⚠️ File selector not available, file saved to Downloads folder');
+        }
+        
+        return downloadResult;
     }
 
     /**
@@ -593,9 +606,19 @@ th {
         const result = await this.export(node, config, projectManager);
         const downloadResult = await this.downloadFile(result);
         
-        // Show success message only if download was successful
+        // Handle different download results
         if (downloadResult.success && !downloadResult.cancelled) {
-            alert(`Successfully exported "${node.title}"`);
+            // Success - show appropriate message based on method used
+            const method = downloadResult.method === 'save-as' ? 'with file selector' : 'to Downloads folder';
+            alert(`Successfully exported "${node.title}" ${method}`);
+        } else if (downloadResult.cancelled) {
+            // User cancelled - no error message needed
+            console.log('Export cancelled by user');
+        } else {
+            // Export failed - show detailed error
+            const errorMessage = downloadResult.error || 'Unknown error occurred';
+            alert(`Export failed: ${errorMessage}\n\nPlease try again or check browser compatibility.`);
+            throw new Error(`Export failed: ${errorMessage}`);
         }
     }
 

@@ -120,9 +120,18 @@ export class ComprehensiveExportService {
                 return {
                     success: false,
                     filename: '',
-                    message: downloadResult.cancelled ? 'Export cancelled by user' : 'Export failed to save file',
+                    message: downloadResult.cancelled 
+                        ? 'Export cancelled by user' 
+                        : downloadResult.error 
+                            ? `Export failed: ${downloadResult.error}` 
+                            : 'Export failed to save file',
                     exportedItems: []
                 };
+            }
+
+            // Warn if fallback was used (direct download instead of file selector)
+            if (downloadResult.method === 'download') {
+                console.warn('⚠️ File selector not available, file saved to Downloads folder');
             }
 
             return {
