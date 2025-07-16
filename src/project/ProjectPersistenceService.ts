@@ -8,6 +8,13 @@ import * as state from '../state';
 import { STORAGE_KEYS } from '../constants';
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 
+// NEW: Import our persistence utilities to eliminate duplication
+import { 
+    StorageOperations,
+    PersistenceFallbacks,
+    getStorageServices 
+} from '../ui/utils/PersistenceUtils';
+
 /**
  * ProjectPersistenceService handles all project serialization, storage, and loading operations.
  * Manages the conversion between in-memory project data and persistent storage formats.
@@ -68,100 +75,71 @@ export class ProjectPersistenceService {
     }
 
     /**
-     * Clears all projects from storage.
+     * Clears all projects from storage - REFACTORED using PersistenceUtils
      */
     public static async clearAllProjectsFromStorage(): Promise<void> {
-        try {
-            const storage = await ProjectPersistenceService.getStorageService();
-            const indexedDB = await ProjectPersistenceService.getIndexedDBService();
-            
-            if (indexedDB) {
-                // Clear all projects from IndexedDB
-                await indexedDB.clear('projects');
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
-            }
+        await StorageOperations.clearProjects(async (services) => {
+            // Clear all projects from IndexedDB
+            await services.indexedDB!.clear('projects');
             
             // Clear active project references
-            await storage.delete(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY);
-        } catch (error) {
-            console.error('Failed to clear projects from storage:', error);
-            throw error;
-        }
+            await services.storage.delete(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY);
+        });
     }
 
     /**
-     * Saves all projects and active project ID to storage.
+     * Saves all projects and active project ID to storage - REFACTORED using PersistenceUtils
      */
     private static async saveAllProjectsToStorage(): Promise<void> {
         const projects = state.getProjects();
         const activeProject = state.getActiveProject();
         
-        try {
-            const storage = await ProjectPersistenceService.getStorageService();
-            const indexedDB = await ProjectPersistenceService.getIndexedDBService();
-            
-            if (indexedDB) {
-                // Use IndexedDB for efficient project storage
-                for (const project of projects) {
-                    const projectRecord: ProjectRecord = {
-                        id: project.rootNode.id,
-                        title: project.projectTitle,
-                        templateName: project.template.name,
-                        createdAt: new Date(), // Could store actual creation date
-                        lastModified: new Date(),
-                        data: ProjectPersistenceService.save(project)
-                    };
-                    await indexedDB.set('projects', project.rootNode.id, projectRecord);
-                }
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
+        await StorageOperations.saveProjects(async (services) => {
+            // Use IndexedDB for efficient project storage
+            for (const project of projects) {
+                const projectRecord: ProjectRecord = {
+                    id: project.rootNode.id,
+                    title: project.projectTitle,
+                    templateName: project.template.name,
+                    createdAt: new Date(), // Could store actual creation date
+                    lastModified: new Date(),
+                    data: ProjectPersistenceService.save(project)
+                };
+                await services.indexedDB!.set('projects', project.rootNode.id, projectRecord);
             }
             
             // Save active project ID
             if (activeProject) {
-                await storage.set(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
+                await services.storage.set(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
             }
-        } catch (error) {
-            console.error('Failed to save projects to storage:', error);
-            throw error;
-        }
+        });
     }
 
-    /**
-     * Loads all projects from IndexedDB storage.
+        /**
+     * Loads all projects from IndexedDB storage - REFACTORED using PersistenceUtils
      * @param dependencies The dependencies needed to reconstruct projects.
      * @returns Promise containing projects and active project ID.
      */
     public static async loadAllProjectsFromStorage(_dependencies: ProjectDependencies): Promise<LoadResult> {
-        
         try {
-            const storage = await ProjectPersistenceService.getStorageService();
-            const indexedDB = await ProjectPersistenceService.getIndexedDBService();
+            const services = await getStorageServices(true);
             
-            if (indexedDB) {
-                // Load from IndexedDB
-                const projectRecords = await indexedDB.getAll<ProjectRecord>('projects');
-                const activeProjectId = await storage.get<string>(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY);
-            
-                if (projectRecords && Object.keys(projectRecords).length > 0) {
-                    // Return the raw data - the caller will need to create ProjectManager instances
-                    return { 
-                        projects: Object.values(projectRecords),
-                        activeProjectId: activeProjectId || null 
-                    };
-                }
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
+            // Load from IndexedDB
+            const projectRecords = await services.indexedDB!.getAll<ProjectRecord>('projects');
+            const activeProjectId = await services.storage.get<string>(ProjectPersistenceService.ACTIVE_PROJECT_STORAGE_KEY);
+        
+            if (projectRecords && Object.keys(projectRecords).length > 0) {
+                // Return the raw data - the caller will need to create ProjectManager instances
+                return { 
+                    projects: Object.values(projectRecords),
+                    activeProjectId: activeProjectId || null 
+                };
             }
             
-            return { projects: [], activeProjectId: null };
+            return PersistenceFallbacks.emptyProjectList;
         } catch (error) {
             console.error("Failed to load projects from storage:", error);
-            return { projects: [], activeProjectId: null };
+            return PersistenceFallbacks.emptyProjectList;
         }
     }
 
@@ -288,7 +266,7 @@ export class ProjectPersistenceService {
     }
 
     /**
-     * Gets storage statistics.
+     * Gets storage statistics - REFACTORED using PersistenceUtils
      * @returns Promise containing storage usage information.
      */
     public static async getStorageStats(): Promise<{
@@ -297,28 +275,24 @@ export class ProjectPersistenceService {
         lastModified: Date | null;
     }> {
         try {
-            const indexedDB = await ProjectPersistenceService.getIndexedDBService();
+            const services = await getStorageServices(true);
             
-            if (indexedDB) {
-                const projectRecords = await indexedDB.getAll<ProjectRecord>('projects');
-                const projects = Object.values(projectRecords || {});
-                
-                const totalSize = projects.reduce((size, project) => size + project.data.length, 0);
-                const lastModified = projects.length > 0 
-                    ? new Date(Math.max(...projects.map(p => p.lastModified.getTime())))
-                    : null;
-                
-                return {
-                    projectCount: projects.length,
-                    totalSize,
-                    lastModified
-                };
-            }
+            const projectRecords = await services.indexedDB!.getAll<ProjectRecord>('projects');
+            const projects = Object.values(projectRecords || {});
             
-            return { projectCount: 0, totalSize: 0, lastModified: null };
+            const totalSize = projects.reduce((size, project) => size + project.data.length, 0);
+            const lastModified = projects.length > 0 
+                ? new Date(Math.max(...projects.map(p => p.lastModified.getTime())))
+                : null;
+            
+            return {
+                projectCount: projects.length,
+                totalSize,
+                lastModified
+            };
         } catch (error) {
             console.error('Failed to get storage stats:', error);
-            return { projectCount: 0, totalSize: 0, lastModified: null };
+            return PersistenceFallbacks.emptyStats;
         }
     }
 
