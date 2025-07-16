@@ -1,6 +1,7 @@
 import { DocumentNode } from '../../DocumentNode';
 import { SelectableNodeTree } from '../components/SelectableNodeTree';
 import { BaseModal } from './core/BaseModal';
+import { createLeftPanel } from '../utils/ModalUtils';
 import { analyzeTagsInHierarchy, VersionInfo } from '../../ProjectUtils';
 
 interface TagManagerModalOptions {
@@ -80,19 +81,7 @@ export class TagManagerModal extends BaseModal {
         container.style.overflow = 'hidden';
 
         // --- Left Panel: Tree ---
-        this.leftPanel = document.createElement('div');
-        this.leftPanel.style.width = '25%';
-        this.leftPanel.style.minWidth = '18em';
-        this.leftPanel.style.maxWidth = '22em';
-        this.leftPanel.style.background = '#fff';
-        this.leftPanel.style.borderRight = '1.5px solid #e5e7eb';
-        this.leftPanel.style.display = 'flex';
-        this.leftPanel.style.flexDirection = 'column';
-        this.leftPanel.style.position = 'relative';
-        this.leftPanel.style.transition = 'width 0.3s';
-        this.leftPanel.style.overflow = 'hidden';
-        this.leftPanel.style.height = '100%';
-        this.leftPanel.style.minHeight = '0';
+        this.leftPanel = createLeftPanel();
 
         // Tree header
         const treeHeader = document.createElement('div');

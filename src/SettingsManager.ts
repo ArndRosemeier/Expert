@@ -586,7 +586,7 @@ export class SettingsManager {
             const profileData = exportData.profile;
 
             // Validate profile structure
-            if (!this.isValidProfileStructure(profileData)) {
+            if (!SettingsManager.validateProfileStructure(profileData)) {
                 return { success: false, message: 'Invalid profile structure in export data' };
             }
 
@@ -641,9 +641,9 @@ export class SettingsManager {
     }
 
     /**
-     * Validates the structure of a profile object
+     * Validates the structure of a single profile object
      */
-    private isValidProfileStructure(profile: any): boolean {
+    private static validateProfileStructure(profile: any): boolean {
         return (
             typeof profile === 'object' &&
             profile !== null &&
@@ -668,13 +668,15 @@ export class SettingsManager {
             'selectedModels' in profile &&
             typeof profile.selectedModels === 'object' &&
             profile.selectedModels !== null &&
-            // selectedProviders is optional for backward compatibility
-            (profile.selectedProviders === undefined || (typeof profile.selectedProviders === 'object' && profile.selectedProviders !== null)) &&
-            // contextExtractionPrompt is optional for backward compatibility
-            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
-            // taskModelConfigs is optional for backward compatibility
-            (profile.taskModelConfigs === undefined || (typeof profile.taskModelConfigs === 'object' && profile.taskModelConfigs !== null))
+            // Optional properties for backward compatibility
+            (profile.selectedProviders === undefined || typeof profile.selectedProviders === 'object') &&
+            (profile.webSearchEnabled === undefined || typeof profile.webSearchEnabled === 'boolean')
         );
+    }
+
+    private static isValidProfilesData(data: any): boolean {
+        if (typeof data !== 'object' || data === null) return false;
+        return Object.values(data).every((profile: any) => this.validateProfileStructure(profile));
     }
 
     /**
