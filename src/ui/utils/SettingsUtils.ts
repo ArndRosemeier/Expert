@@ -4,12 +4,12 @@
 
 import { createServiceResponse, executeWithErrorHandling, ServiceResponse } from './ServiceUtils';
 
-export interface ProfileValidationResult {
+interface ProfileValidationResult {
     isValid: boolean;
     errors: string[];
 }
 
-export interface ProfileOperationContext {
+interface ProfileOperationContext {
     settingsManager: any;
     operation: string;
     profileName?: string;
@@ -17,7 +17,7 @@ export interface ProfileOperationContext {
     sourceProfile?: any;
 }
 
-export interface SettingsChangeEvent {
+interface SettingsChangeEvent {
     type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging';
     data: unknown;
 }
@@ -25,7 +25,7 @@ export interface SettingsChangeEvent {
 /**
  * Validate profile name with comprehensive checks
  */
-export function validateProfileName(name: string, context: 'create' | 'rename' | 'duplicate' = 'create'): ProfileValidationResult {
+function validateProfileName(name: string, context: 'create' | 'rename' | 'duplicate' = 'create'): ProfileValidationResult {
     const errors: string[] = [];
     
     if (!name?.trim()) {
@@ -43,7 +43,7 @@ export function validateProfileName(name: string, context: 'create' | 'rename' |
 /**
  * Check if profile exists with appropriate error message
  */
-export function validateProfileExists(settingsManager: any, profileName: string, shouldExist: boolean = true): ProfileValidationResult {
+function validateProfileExists(settingsManager: any, profileName: string, shouldExist: boolean = true): ProfileValidationResult {
     const exists = !!settingsManager.getProfile(profileName);
     const errors: string[] = [];
     
@@ -59,7 +59,7 @@ export function validateProfileExists(settingsManager: any, profileName: string,
 /**
  * Comprehensive profile validation for operations
  */
-export function validateProfileOperation(
+function validateProfileOperation(
     context: ProfileOperationContext
 ): ProfileValidationResult {
     const errors: string[] = [];
@@ -92,7 +92,7 @@ export function validateProfileOperation(
 /**
  * Execute a profile operation with standardized validation and error handling
  */
-export async function executeProfileOperation<T = void>(
+async function executeProfileOperation<T = void>(
     context: ProfileOperationContext,
     operation: () => Promise<T>,
     successMessage?: string

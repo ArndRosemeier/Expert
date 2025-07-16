@@ -5,7 +5,7 @@ import { QualityCriterion } from './types';
 /**
  * Interface for tag analysis results
  */
-export interface TagAnalysis {
+interface TagAnalysis {
     tagToNodesMap: { [tagName: string]: DocumentNode[] };
     tagToVersionsMap: { [tagName: string]: VersionInfo[] };
     allTags: string[];
@@ -154,14 +154,4 @@ export function analyzeTagsInHierarchy(rootNode: DocumentNode): TagAnalysis {
         tagToVersionsMap,
         allTags
     };
-}
-
-/**
- * Get all unique tags from a node hierarchy
- * 
- * @param rootNode The root node to analyze
- * @returns Sorted array of unique tag names (master first, then alphabetical)
- */
-export function getAllTagsFromHierarchy(rootNode: DocumentNode): string[] {
-    return analyzeTagsInHierarchy(rootNode).allTags;
 }

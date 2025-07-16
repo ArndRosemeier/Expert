@@ -22,17 +22,12 @@ import {
     executeWithErrorHandling 
 } from '../utils/ServiceUtils';
 
-export interface VersionMismatchModalConfig extends ModalConfig {
+interface VersionMismatchModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
     modelSelector?: ModelSelector;
     onResetComplete?: () => void;
 }
 
-export interface VersionMismatchModalEvents {
-    resetAccepted: void;
-    resetDeclined: void;
-    closed: void;
-}
 
 export class VersionMismatchModal extends BaseModal {
     private settingsManager: SettingsManager;

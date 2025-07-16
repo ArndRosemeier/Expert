@@ -20,7 +20,7 @@ export interface ContentVersion {
  * Represents a single iteration attempt during content generation.
  * Each iteration contains the generated content and its quality ratings.
  */
-export interface GenerationIteration {
+interface GenerationIteration {
     iteration: number;
     content: string;
     ratings: Rating[];

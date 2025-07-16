@@ -19,7 +19,7 @@ import JSZip from 'jszip';
 import { StorageService } from '../../../StorageService';
 import { IndexedDBService } from '../../../IndexedDBService';
 
-export interface ComprehensiveImportResult {
+interface ComprehensiveImportResult {
     success: boolean;
     message: string;
     importedItems: string[];
@@ -28,7 +28,7 @@ export interface ComprehensiveImportResult {
     migrationProfileName?: string | undefined;
 }
 
-export interface ImportValidation {
+interface ImportValidation {
     isValid: boolean;
     errors: string[];
     manifest?: any;

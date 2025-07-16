@@ -60,14 +60,14 @@ export interface OrchestratorPrompts {
     context_transformation: string;
 }
 
-export interface PromptDefinition {
+interface PromptDefinition {
     text: string;
     placeholders: string[];
     description: string;
 }
 
 // SINGLE SOURCE OF TRUTH for all prompt definitions
-export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefinition> = {
+const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefinition> = {
     content_generation_initial: {
         text: `
             Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.

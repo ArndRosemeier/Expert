@@ -13,7 +13,7 @@ import { StorageService } from '../../../StorageService';
 import { IndexedDBService } from '../../../IndexedDBService';
 import { FileDownloadService } from '../../../utils/FileDownloadService';
 
-export interface ComprehensiveExportResult {
+interface ComprehensiveExportResult {
     success: boolean;
     filename: string;
     message: string;

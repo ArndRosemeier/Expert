@@ -24,13 +24,6 @@ export interface SettingsModalConfig extends ModalConfig {
     refreshGlobalProfileSelector?: () => void;
 }
 
-export interface SettingsModalEvents {
-    settingsChanged: { type: string; data: unknown };
-    profileChanged: { profileName: string };
-    saved: void;
-    cancelled: void;
-}
-
 export class SettingsModal extends BaseModal {
     private settingsManager: SettingsManager;
     private modelSelector: ModelSelector;

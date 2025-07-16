@@ -1,7 +1,7 @@
 import { SettingsManager } from '../../SettingsManager';
 import { TaskModelService, AllTaskModelConfigs, TaskModelConfig, MODEL_PURPOSES } from '../../services/TaskModelService';
 
-export interface TaskModelEditorOptions {
+interface TaskModelEditorOptions {
     onChange?: () => void;
     showDescriptions?: boolean;
 }

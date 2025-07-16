@@ -8,16 +8,11 @@ export function getElementById<T extends HTMLElement>(id: string): T {
 }
 
 // --- DOM Elements (Lazy Access) ---
-export const mainAppContainer = () => getElementById<HTMLElement>('main-app');
-export const settingsBtn = () => getElementById<HTMLButtonElement>('settingsBtn');
 export const modalContainer = () => getElementById<HTMLElement>('modal-container');
 export const modalContent = () => getElementById<HTMLElement>('modal-content');
 export const testModalContainer = () => getElementById<HTMLElement>('test-modal-container');
 export const testModalContent = () => getElementById<HTMLElement>('test-modal-content');
 
-export const newProjectBtn = () => getElementById<HTMLButtonElement>('newProjectBtn');
-export const importProjectBtn = () => getElementById<HTMLButtonElement>('importProjectBtn');
-export const comprehensiveExportBtn = () => getElementById<HTMLButtonElement>('comprehensiveExportBtn');
 export const newProjectModalContainer = () => getElementById<HTMLElement>('new-project-modal-container');
 export const newProjectModalContent = () => getElementById<HTMLElement>('new-project-modal-content');
 

@@ -4,14 +4,14 @@
 
 import { IStorageService } from '../../StorageService';
 import { IndexedDBService } from '../../IndexedDBService';
-import { executeWithErrorHandling, ServiceResponseWithData, createServiceResponse } from './ServiceUtils';
+import { executeWithErrorHandling, ServiceResponseWithData } from './ServiceUtils';
 
-export interface StorageServices {
+interface StorageServices {
     storage: IStorageService;
     indexedDB: IndexedDBService | null;
 }
 
-export interface PersistenceOperationOptions {
+interface PersistenceOperationOptions {
     operation: string;
     fallbackValue?: any;
     requireIndexedDB?: boolean;
@@ -44,7 +44,7 @@ export async function getStorageServices(requireIndexedDB: boolean = true): Prom
 /**
  * Execute a persistence operation with standardized error handling
  */
-export async function executePersistenceOperation<T>(
+async function executePersistenceOperation<T>(
     operation: () => Promise<T>,
     options: PersistenceOperationOptions
 ): Promise<ServiceResponseWithData<T>> {
@@ -57,7 +57,7 @@ export async function executePersistenceOperation<T>(
 /**
  * Execute a persistence operation that may need fallback values
  */
-export async function executePersistenceOperationWithFallback<T>(
+async function executePersistenceOperationWithFallback<T>(
     operation: () => Promise<T>,
     options: PersistenceOperationOptions
 ): Promise<T> {
@@ -74,17 +74,11 @@ export async function executePersistenceOperationWithFallback<T>(
     return result.data!;
 }
 
-/**
- * Standard error logging for persistence operations
- */
-export function logPersistenceError(operation: string, error: any): void {
-    console.error(`Failed to ${operation}:`, error);
-}
 
 /**
  * Validate storage services are available
  */
-export function validateStorageServices(services: StorageServices, requireIndexedDB: boolean = true): void {
+function validateStorageServices(services: StorageServices, requireIndexedDB: boolean = true): void {
     if (!services.storage) {
         throw new Error('Storage service is not available');
     }
@@ -97,7 +91,7 @@ export function validateStorageServices(services: StorageServices, requireIndexe
 /**
  * Create a storage operation wrapper that handles common patterns
  */
-export function createStorageOperation<T>(
+function createStorageOperation<T>(
     operationName: string,
     requireIndexedDB: boolean = true
 ) {
@@ -162,12 +156,4 @@ export const StorageOperations = {
     clearProjects: createStorageOperation('clear all projects')
 };
 
-/**
- * Standard fallback values for common operations
- */
-export const PersistenceFallbacks = {
-    emptyProjectList: { projects: [], activeProjectId: null },
-    emptyStats: { projectCount: 0, totalSize: 0, lastModified: null },
-    emptyString: '',
-    defaultValue: null
-}; 
+ 

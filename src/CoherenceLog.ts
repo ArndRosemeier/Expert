@@ -1,7 +1,7 @@
 import { DocumentNode } from './DocumentNode';
 import { CoherenceContradiction } from './types/CoherenceTypes';
 
-export interface CoherenceLogEntry {
+interface CoherenceLogEntry {
     timestamp: Date;
     nodeId: string;
     nodeTitle: string;
@@ -12,7 +12,7 @@ export interface CoherenceLogEntry {
     autofixSeverityThreshold?: number;
 }
 
-export interface CoherenceLogData {
+interface CoherenceLogData {
     entries: CoherenceLogEntry[];
     version: string;
 }

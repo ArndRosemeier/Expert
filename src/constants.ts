@@ -9,8 +9,6 @@ export const MIN_MAX_ITERATIONS = 1;
 export const MAX_MAX_ITERATIONS = 10;
 
 // === UI Configuration ===
-export const DEFAULT_PROFILE_NAME = 'default';
-export const MAX_PROFILE_NAME_LENGTH = 50;
 
 // === UI Icons ===
 export const AI_ASSISTANT_EMOJI = '💡';
@@ -47,38 +45,12 @@ Please extract and list all instances of: {{extraction_request}}
 Format your response as a clear, organized summary that would be useful for reference.`;
 
 // === API Configuration ===
-export const API_CONFIG = {
-    DEFAULT_TIMEOUT: 30000, // 30 seconds
-    MAX_RETRIES: 3,
-    RATE_LIMIT_DELAY: 1000 // 1 second
-} as const;
 
 // === UI Limits ===
-export const UI_LIMITS = {
-    MAX_GENERATION_COUNT: 20,
-    MIN_GENERATION_COUNT: 1,
-    MAX_READER_WIDTH: 3200,
-    MIN_READER_WIDTH: 600,
-    READER_WIDTH_STEP: 50
-} as const;
 
 // === Modal Configuration ===
-export const MODAL_CONFIG = {
-    AUTO_CLOSE_DELAY: 300, // milliseconds
-    ANIMATION_DURATION: 200,
-    MAX_WIDTH_VW: 80,
-    MAX_HEIGHT_VH: 90
-} as const;
 
 // === File Types ===
-export const SUPPORTED_FILE_TYPES = {
-    JSON: '.json',
-    TXT: '.txt',
-    MD: '.md'
-} as const;
 
 // === Version ===
-export const VERSION_CONFIG = {
-    EXPORT_VERSION: '1.0',
-    SCHEMA_VERSION: '1.0'
-} as const; 
+ 

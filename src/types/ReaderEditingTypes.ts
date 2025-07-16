@@ -37,18 +37,5 @@ export interface EditState {
     editableNodes: Map<string, HTMLElement>;
 }
 
-export interface EditOperation {
-    type: 'replace' | 'insert';
-    nodeId: string;
-    originalText: string;
-    newText: string;
-    startOffset: number;
-    endOffset: number;
-    timestamp: Date;
-}
 
-export interface EditHistory {
-    operations: EditOperation[];
-    currentIndex: number;
-    maxSize: number;
-} 
+ 

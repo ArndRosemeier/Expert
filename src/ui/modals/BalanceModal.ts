@@ -6,12 +6,12 @@ import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 
-export interface BalanceData {
+interface BalanceData {
     message: string;
     isError?: boolean;
 }
 
-export class BalanceModal extends BaseModal {
+class BalanceModal extends BaseModal {
     private balanceData: BalanceData;
 
     constructor(config: ModalConfig & { balanceData: BalanceData }, hooks: ModalHooks = {}) {

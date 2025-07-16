@@ -68,16 +68,16 @@ export interface PlaceholderContext {
     custom?: Record<string, string>;
 }
 
-export interface PlaceholderValue {
+interface PlaceholderValue {
     value: string;
     description?: string;
 }
 
-export type GlobalPlaceholderProvider = () => PlaceholderValue;
-export type ContextPlaceholderProvider = (context: PlaceholderContext) => PlaceholderValue;
-export type AsyncPlaceholderProvider = (context: PlaceholderContext, match: string) => Promise<PlaceholderValue>;
+type GlobalPlaceholderProvider = () => PlaceholderValue;
+type ContextPlaceholderProvider = (context: PlaceholderContext) => PlaceholderValue;
+type AsyncPlaceholderProvider = (context: PlaceholderContext, match: string) => Promise<PlaceholderValue>;
 
-export class PromptExpansionService {
+class PromptExpansionService {
     private globalProviders: Map<string, GlobalPlaceholderProvider> = new Map();
     private contextProviders: Map<string, ContextPlaceholderProvider> = new Map();
     private asyncProviders: Map<string, AsyncPlaceholderProvider> = new Map();
@@ -1061,7 +1061,7 @@ export class PromptExpansionService {
 }
 
 // Global singleton instance
-export let promptExpansionService: PromptExpansionService;
+let promptExpansionService: PromptExpansionService;
 
 export function createPromptExpansionService(settingsManager: SettingsManager): PromptExpansionService {
     if (!promptExpansionService) {

@@ -29,7 +29,7 @@ export interface RaterProgressPayload {
     rating: Rating;
 }
 
-export type LoopProgressPayload = CreatorPayload | RaterProgressPayload | EditorPayload;
+type LoopProgressPayload = CreatorPayload | RaterProgressPayload | EditorPayload;
 
 export interface LoopProgress {
     type: 'creator' | 'rater' | 'editor';
@@ -54,7 +54,7 @@ export interface LoopHistoryItem {
     payload: any; // Simplified for history
 }
 
-export interface LoopResult {
+interface LoopResult {
     finalResponse: string;
     history: LoopHistoryItem[];
     iterations: number;

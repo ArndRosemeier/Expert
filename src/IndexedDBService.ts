@@ -3,7 +3,7 @@
  * with proper error handling, transaction management, and database versioning.
  */
 
-export interface IDBStoreConfig {
+interface IDBStoreConfig {
   name: string;
   keyPath?: string;
   autoIncrement?: boolean;

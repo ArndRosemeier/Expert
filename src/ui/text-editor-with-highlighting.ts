@@ -5,9 +5,9 @@ import './text-editor-highlighting.css';
  * A text editor component that supports both editing and highlighting of text ranges.
  * Uses contenteditable internally but provides a clean interface that only deals with plain text.
  */
-export type SelectionMode = 'words' | 'sentences' | 'paragraphs';
+type SelectionMode = 'words' | 'sentences' | 'paragraphs';
 
-export interface UndoState {
+interface UndoState {
     startPos: number;
     endPos: number;
     originalText: string;

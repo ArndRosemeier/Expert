@@ -4,7 +4,7 @@
 
 import { BaseModal } from './core/BaseModal';
 import { ExportService } from './services/ExportService';
-import { ExportScope, ExportFormat, HierarchyTitleConfig } from './types/ExportTypes';
+import { HierarchyTitleConfig } from './types/ExportTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { ModalConfig } from './types/ModalTypes';
@@ -13,11 +13,6 @@ import { createElement } from './core/modal-utils';
 export interface ExportModalConfig extends ModalConfig {
     projectManager: ProjectManager;
     node: DocumentNode;
-}
-
-export interface ExportModalEvents {
-    exported: { filename: string; scope: ExportScope; format: ExportFormat };
-    cancelled: void;
 }
 
 export class ExportModal extends BaseModal {

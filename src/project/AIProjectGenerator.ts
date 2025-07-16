@@ -11,7 +11,7 @@ import { SettingsManager } from '../SettingsManager';
 import { QualityCriterion } from '../types';
 import { formatCriteriaAsJson } from '../ProjectUtils';
 
-export interface ProjectGenerationOptions {
+interface ProjectGenerationOptions {
     // Options for project generation - concepts are always detailed
 }
 

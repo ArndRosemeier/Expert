@@ -2,21 +2,21 @@
  * DOM Utilities for reducing createElement duplication across modals
  */
 
-export interface CreateElementOptions {
+interface CreateElementOptions {
     classes?: string[] | undefined;
     content?: string | undefined;
     id?: string | undefined;
     attributes?: Record<string, string> | undefined;
 }
 
-export interface ButtonOptions extends CreateElementOptions {
+interface ButtonOptions extends CreateElementOptions {
     type?: 'primary' | 'secondary' | 'danger' | 'success';
     disabled?: boolean;
     loading?: boolean;
     onClick?: () => void;
 }
 
-export interface ListOptions {
+interface ListOptions {
     items: string[];
     classes?: string[];
     itemClasses?: string[];
@@ -25,7 +25,7 @@ export interface ListOptions {
 /**
  * Enhanced createElement with consistent options
  */
-export function createElement(tag: string, options: CreateElementOptions = {}): HTMLElement {
+function createElement(tag: string, options: CreateElementOptions = {}): HTMLElement {
     const element = document.createElement(tag);
     
     if (options.classes) {
@@ -98,29 +98,6 @@ export function createList(options: ListOptions): HTMLUListElement {
     return list;
 }
 
-/**
- * Create an info section with title and content
- */
-export function createInfoSection(title: string, content: string, options: CreateElementOptions = {}): HTMLElement {
-    const section = createElement('div', {
-        classes: ['info-section', ...(options.classes || [])]
-    });
-    
-    const titleElement = createElement('h4', {
-        content: title,
-        classes: ['info-title']
-    });
-    
-    const contentElement = createElement('p', {
-        content: content,
-        classes: ['info-content']
-    });
-    
-    section.appendChild(titleElement);
-    section.appendChild(contentElement);
-    
-    return section;
-}
 
 /**
  * Create a button container with multiple buttons

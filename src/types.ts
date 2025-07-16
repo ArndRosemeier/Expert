@@ -1,11 +1,7 @@
-import { Rating } from "./LoopOrchestrator";
 
 export interface CreatorPayload {
     prompt: string;
     response: string;
-}
-export interface RatingPayload {
-    ratings: Rating[];
 }
 export interface EditorPayload {
     prompt:string;

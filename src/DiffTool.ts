@@ -3,7 +3,7 @@
  * Returns HTML with background colors for added/removed sentences
  */
 
-export interface DiffResult {
+interface DiffResult {
     originalHtml: string;
     modifiedHtml: string;
     stats: {
@@ -309,22 +309,5 @@ export class DiffTool {
     }
 }
 
-/**
- * Convenience function for quick diff comparison
- * @param original - The original text
- * @param modified - The modified text
- * @returns DiffResult with HTML versions and statistics
- */
-export function diffTexts(original: string, modified: string): DiffResult {
-    return DiffTool.compare(original, modified);
-}
 
-/**
- * Convenience function for advanced diff comparison
- * @param original - The original text
- * @param modified - The modified text
- * @returns DiffResult with HTML versions and statistics
- */
-export function diffTextsAdvanced(original: string, modified: string): DiffResult {
-    return DiffTool.compareAdvanced(original, modified);
-} 
+ 

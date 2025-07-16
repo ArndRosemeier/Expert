@@ -1,7 +1,7 @@
 import { getElementById } from "../dom-elements";
 import { ProjectTemplate } from "../../ProjectTemplate";
 
-export interface SingleTemplateEditorOptions {
+interface SingleTemplateEditorOptions {
     containerId: string;
     template: ProjectTemplate;
     onTemplateChange?: (template: ProjectTemplate) => void;

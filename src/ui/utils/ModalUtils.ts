@@ -2,7 +2,7 @@
  * Utility functions for creating common modal UI elements
  */
 
-export interface PanelConfig {
+interface PanelConfig {
     width?: string;
     minWidth?: string;
     maxWidth?: string;
@@ -37,22 +37,6 @@ export function createLeftPanel(config: Partial<PanelConfig> = {}): HTMLDivEleme
     return createPanelWithConfig(defaultConfig, config);
 }
 
-/**
- * Creates a standardized right panel for modals with detail/action content
- */
-export function createRightPanel(config: Partial<PanelConfig> = {}): HTMLDivElement {
-    const defaultConfig: PanelConfig = {
-        width: '75%',
-        background: '#fff',
-        flexDirection: 'column',
-        position: 'relative',
-        overflow: 'hidden',
-        height: '100%',
-        minHeight: '0'
-    };
-
-    return createPanelWithConfig(defaultConfig, config);
-}
 
 /**
  * Internal utility to create a panel with merged configuration
@@ -77,19 +61,4 @@ function createPanelWithConfig(defaultConfig: PanelConfig, userConfig: Partial<P
     return panel;
 }
 
-/**
- * Creates a standardized button with common styling
- */
-export function createStyledButton(
-    text: string,
-    onClick: () => void,
-    className?: string
-): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.textContent = text;
-    button.addEventListener('click', onClick);
-    if (className) {
-        button.className = className;
-    }
-    return button;
-} 
+ 

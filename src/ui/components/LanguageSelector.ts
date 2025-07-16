@@ -1,14 +1,14 @@
 /**
  * Language selector component with flag emojis and custom text option
  */
-export interface LanguageSelectorOptions {
+interface LanguageSelectorOptions {
     currentLanguage: string;
     onLanguageChange: (language: string) => void;
     label?: string;
     description?: string;
 }
 
-export interface LanguageOption {
+interface LanguageOption {
     code: string;
     name: string;
     flag: string;

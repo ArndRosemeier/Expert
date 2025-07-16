@@ -10,7 +10,7 @@ export const MODEL_PURPOSES = [
     { key: 'prose', label: 'Prose' },
 ] as const;
 
-export type ModelPurpose = typeof MODEL_PURPOSES[number]['key'];
+type ModelPurpose = typeof MODEL_PURPOSES[number]['key'];
 
 /**
  * Task types that can have configurable model selection
@@ -37,7 +37,7 @@ export interface AllTaskModelConfigs {
 /**
  * Default model configurations for all tasks
  */
-export const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
+const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
     coherence_analysis: {
         outline: 'creator',
         prose: 'prose'

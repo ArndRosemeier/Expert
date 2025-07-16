@@ -16,7 +16,7 @@ export interface AIProjectCreatorConfig {
     settingsManager?: SettingsManager;
 }
 
-export interface ProjectGenerationOptions {
+interface ProjectGenerationOptions {
     includeCharacters: boolean;  // Always true - automatically included for narrative projects
     includeStyleGuide: boolean;  // Always true - automatically included for all projects
 }

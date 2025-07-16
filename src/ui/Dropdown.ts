@@ -1,4 +1,4 @@
-export interface DropdownOptions {
+interface DropdownOptions {
     /** Minimum width of the dropdown */
     minWidth?: string;
     /** Maximum width of the dropdown */
@@ -13,7 +13,7 @@ export interface DropdownOptions {
     zIndex?: number;
 }
 
-export interface DropdownPosition {
+interface DropdownPosition {
     /** Position relative to trigger: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right' */
     position?: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
 }
@@ -285,13 +285,4 @@ export class Dropdown {
     }
 }
 
-/**
- * Utility function to create a dropdown quickly
- */
-export function createDropdown(
-    triggerElement: HTMLElement,
-    content: string | HTMLElement,
-    options?: DropdownOptions & DropdownPosition
-): Dropdown {
-    return new Dropdown(triggerElement, content, options);
-} 
+ 
