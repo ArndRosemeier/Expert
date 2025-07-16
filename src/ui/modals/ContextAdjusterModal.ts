@@ -2,7 +2,7 @@ import { BaseModal } from './core/BaseModal';
 import { DocumentNode } from '../../DocumentNode';
 import { ContextAdjusterService } from './services/ContextAdjusterService';
 import { ContextAnalysisResult, ContextIssue } from '../../types/ContextAdjusterTypes';
-import { getContextItems, formatContextItems } from '../../ContextFormat';
+import { getContextItems, formatContextItems, getContextInfoText } from '../../ContextFormat';
 
 export class ContextAdjusterModal extends BaseModal {
     private analysisResult: ContextAnalysisResult | null = null;
@@ -564,9 +564,7 @@ export class ContextAdjusterModal extends BaseModal {
             if (contextLabel) {
                 const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
                 if (contextInfoSpan) {
-                    const { getContextItemCount } = await import('../../ContextFormat');
-                    const itemCount = getContextItemCount(newContext);
-                    contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
+                    contextInfoSpan.textContent = getContextInfoText(newContext);
                 }
             }
             

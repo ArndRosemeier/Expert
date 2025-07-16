@@ -38,4 +38,14 @@ export function getContextItemCount(context: string): number {
  */
 export function formatContextItems(items: string[]): string {
     return items.join('\n\n');
+}
+
+/**
+ * Generates the context info text with count and explanation
+ * @param context - The context string to analyze
+ * @returns Formatted info text explaining context items
+ */
+export function getContextInfoText(context: string): string {
+    const count = getContextItemCount(context);
+    return `${count} context items in context. Any paragraph is considered a context item. Items starting with "*" are protected from AI analysis.`;
 } 

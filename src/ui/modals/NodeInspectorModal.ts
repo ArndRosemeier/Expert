@@ -486,7 +486,7 @@ export class NodeInspectorModal extends BaseModal {
             item.innerHTML = `
                 <div class="version-label">${this.getVersionLabel(version)}</div>
                 ${tags ? `<div class="version-tags">${tags}</div>` : ''}
-                <div class="version-timestamp">${new Date(version.timestamp).toLocaleString()}</div>
+                <div class="version-timestamp">Modified: ${new Date(version.timestamp).toLocaleString()}</div>
                 <div class="version-preview">
                     ${version.title ? `<div class="preview-title"><strong>Title:</strong> ${this.escapeHtml(version.title.substring(0, 40))}${version.title.length > 40 ? '…' : ''}</div>` : ''}
                     <div class="preview-content"><strong>Content:</strong> ${this.escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
@@ -558,7 +558,10 @@ export class NodeInspectorModal extends BaseModal {
         
         wrapper.innerHTML = `
             <div class="content-header">
-                <div class="content-label"><strong>${this.getVersionLabel(version)}</strong> <span class="content-timestamp">${new Date(version.timestamp).toLocaleString()}</span></div>
+                <div class="content-label">
+                    <strong>${this.getVersionLabel(version)}</strong>
+                    <span class="content-timestamp">Modified: ${new Date(version.timestamp).toLocaleString()}</span>
+                </div>
                 ${contentTags ? `<div class="content-version-tags">${contentTags}</div>` : ''}
                     </div>
                     
@@ -783,22 +786,28 @@ export class NodeInspectorModal extends BaseModal {
 
         // Title editor - save only on blur (when focus is lost)
         if (titleEditor) {
-            titleEditor.addEventListener('blur', () => {
+            titleEditor.addEventListener('blur', async () => {
                 this.saveTitle(titleEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
             });
         }
 
         // Content editor - save only on blur (when focus is lost)
         if (contentEditor) {
-            contentEditor.addEventListener('blur', () => {
+            contentEditor.addEventListener('blur', async () => {
                 this.saveContent(contentEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
             });
         }
 
         // Context editor - save only on blur (when focus is lost)
         if (contextEditor) {
-            contextEditor.addEventListener('blur', () => {
+            contextEditor.addEventListener('blur', async () => {
                 this.saveContext(contextEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
             });
         }
     }
@@ -814,8 +823,9 @@ export class NodeInspectorModal extends BaseModal {
         // Initial resize
         resize();
 
-        // Resize on input
-        textarea.addEventListener('input', resize);
+        // Only resize on focus/blur to avoid disruption during typing
+        textarea.addEventListener('focus', resize);
+        textarea.addEventListener('blur', resize);
 
         // Resize on window resize
         window.addEventListener('resize', resize);
@@ -837,12 +847,6 @@ export class NodeInspectorModal extends BaseModal {
             selectedVersion.timestamp = new Date();
             selectedVersion.tags.add('edited');
             selectedVersion.tags.add('title_edited');
-            
-            // Debounced save
-            clearTimeout((this as any)._titleSaveTimeout);
-            (this as any)._titleSaveTimeout = void void setTimeout(async () => {
-                await this.persistNodeChanges();
-            }, 1000);
         } catch (error) {
             console.error('Failed to save title:', error);
         }
@@ -864,12 +868,6 @@ export class NodeInspectorModal extends BaseModal {
             selectedVersion.timestamp = new Date();
             selectedVersion.tags.add('edited');
             selectedVersion.tags.add('content_edited');
-            
-            // Debounced save
-            clearTimeout((this as any)._contentSaveTimeout);
-            (this as any)._contentSaveTimeout = void void setTimeout(async () => {
-                await this.persistNodeChanges();
-            }, 1000);
         } catch (error) {
             console.error('Failed to save content:', error);
         }
@@ -902,12 +900,6 @@ export class NodeInspectorModal extends BaseModal {
                 };
                 propagateRecursively(this.node);
             }
-            
-            // Debounced save
-            clearTimeout((this as any)._contextSaveTimeout);
-            (this as any)._contextSaveTimeout = void void setTimeout(async () => {
-                await this.persistNodeChanges();
-            }, 1000);
         } catch (error) {
             console.error('Failed to save context:', error);
         }
@@ -1260,7 +1252,7 @@ export class NodeInspectorModal extends BaseModal {
                 font-size: 0.7rem;
             }
             .content-timestamp {
-                font-size: 0.9em;
+                font-size: 0.85em;
                 color: #6b7280;
                 margin-left: 1em;
             }

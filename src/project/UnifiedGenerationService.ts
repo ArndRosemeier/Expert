@@ -351,7 +351,7 @@ export class UnifiedGenerationService {
                 
                 // Check if node can expand
                 if (workNeeded.expansion) {
-                    const canExpand = this.canNodeExpand(node, targetState, allNodes);
+                    const canExpand = this.canNodeExpand(node, targetState, startNodeId);
                     if (canExpand) {
                         const expansionResult = await this.handleDraftCreation(node.id);
                         if (expansionResult.childrenCreated) {
@@ -416,8 +416,9 @@ export class UnifiedGenerationService {
 
     /**
      * Check if a node can expand (all siblings at target state)
+     * Recalculates current descendants to avoid race conditions from stale data
      */
-    private canNodeExpand(node: DocumentNode, targetState: TargetState, allNodes: DocumentNode[]): boolean {
+    private canNodeExpand(node: DocumentNode, targetState: TargetState, startNodeId: string): boolean {
         if (!targetState.canExpand) {
             return false;
         }
@@ -425,8 +426,12 @@ export class UnifiedGenerationService {
             return false;
         }
         
-        // Get all siblings at the same level
-        const siblings = allNodes.filter(n => n.level === node.level);
+        // CRITICAL: Recalculate current descendants to get fresh node collection
+        // This prevents race conditions when nodes create children during the same iteration
+        const currentAllNodes = this.collectAllDescendants(startNodeId);
+        
+        // Get all siblings at the same level from the CURRENT tree state
+        const siblings = currentAllNodes.filter(n => n.level === node.level);
         
         // Check if all siblings have reached their target state
         const allSiblingsReady = siblings.every(sibling => {
@@ -1450,13 +1455,20 @@ export class UnifiedGenerationService {
             // Add current node unconditionally
                 result.push(currentNode);
             
-            // Add all children to queue
-                currentNode.children.forEach(child => {
-                    if (!visited.has(child.id)) {
-                        queue.push(child);
-                        visited.add(child.id);
-                    }
-                });
+            // Add all children to queue, sorted by timestamp for deterministic ordering
+            const sortedChildren = [...currentNode.children].sort((a, b) => {
+                const aMasterVersion = a.getMasterVersion()!;
+                const bMasterVersion = b.getMasterVersion()!;
+                
+                return aMasterVersion.timestamp.getTime() - bMasterVersion.timestamp.getTime();
+            });
+            
+            sortedChildren.forEach(child => {
+                if (!visited.has(child.id)) {
+                    queue.push(child);
+                    visited.add(child.id);
+                }
+            });
         }
         
         return result;

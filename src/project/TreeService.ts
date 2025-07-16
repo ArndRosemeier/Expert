@@ -28,6 +28,20 @@ export class TreeService {
     }
 
     /**
+     * Gets children of a node sorted by timestamp for deterministic ordering.
+     * @param node The parent node.
+     * @returns Array of children sorted by timestamp (oldest first).
+     */
+    public getSortedChildren(node: DocumentNode): DocumentNode[] {
+        return [...node.children].sort((a, b) => {
+            const aMasterVersion = a.getMasterVersion()!;
+            const bMasterVersion = b.getMasterVersion()!;
+            
+            return aMasterVersion.timestamp.getTime() - bMasterVersion.timestamp.getTime();
+        });
+    }
+
+    /**
      * Adds a new node to the document tree under a specified parent.
      * @param title The title of the new node.
      * @param parentId The ID of the parent node (null for root operations).

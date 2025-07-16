@@ -702,9 +702,8 @@ export class ContextItemsEditorModal extends BaseModal {
         if (contextLabel) {
             const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
             if (contextInfoSpan) {
-                void import('../../ContextFormat').then(({ getContextItemCount }) => {
-                    const itemCount = getContextItemCount(newContext);
-                    contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
+                void import('../../ContextFormat').then(({ getContextInfoText }) => {
+                    contextInfoSpan.textContent = getContextInfoText(newContext);
                 });
             }
         }

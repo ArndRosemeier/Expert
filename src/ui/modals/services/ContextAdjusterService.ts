@@ -75,11 +75,39 @@ export class ContextAdjusterService {
         const request = this.prepareAnalysisRequest(node, projectManager);
         const contextCheck = this.checkContextMismatch(node, projectManager);
         
-        // Format context items as numbered list
-        const contextItems = getContextItems(node.context || '');
-        const numberedContextItems = contextItems.length > 0 
-            ? contextItems.map((item, index) => `${index + 1}: ${item}`).join('\n\n')
-            : 'No context items available';
+        // Format context items as numbered list, filtering out items that start with "*"
+        const allContextItems = getContextItems(node.context || '');
+        
+        // Create filtered list (exclude items starting with "*") and mapping
+        const filteredContextItems: string[] = [];
+        const filteredToOriginalMapping: number[] = []; // Maps filtered index to original index
+        
+        allContextItems.forEach((item, originalIndex) => {
+            if (!item.trim().startsWith('*')) {
+                filteredContextItems.push(item);
+                filteredToOriginalMapping.push(originalIndex);
+            }
+        });
+        
+        const filteredCount = allContextItems.length - filteredContextItems.length;
+        if (filteredCount > 0) {
+            console.log(`🔒 Context analysis: Filtered out ${filteredCount} protected context item(s) starting with "*"`);
+        }
+        
+        // If all items are filtered out, skip analysis
+        if (filteredContextItems.length === 0) {
+            console.log(`📋 Context analysis: All context items are protected (start with "*") - skipping analysis`);
+            return {
+                issues: [],
+                hasIssues: false,
+                analysisTimestamp: new Date(),
+                nodeId: node.id,
+                originalContext: node.context || '',
+                contextMismatch: contextCheck.hasMismatch
+            };
+        }
+        
+        const numberedContextItems = filteredContextItems.map((item, index) => `${index + 1}: ${item}`).join('\n\n');
         
         // Create analysis prompt
         const prompts = this.settingsManager.getPrompts();
@@ -104,8 +132,8 @@ export class ContextAdjusterService {
             try {
                 lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
-            // Parse JSON response
-                issues = this.parseAnalysisResponse(lastResponse);
+            // Parse JSON response with mapping from filtered to original indices
+                issues = this.parseAnalysisResponse(lastResponse, filteredToOriginalMapping);
                 
                 if (issues !== null) {
                     break; // Success
@@ -158,8 +186,10 @@ export class ContextAdjusterService {
     /**
      * Parse AI response and extract context issues
      * Returns null if parsing fails (for retry logic)
+     * @param response AI response containing JSON array of issues
+     * @param filteredToOriginalMapping Array mapping filtered indices to original indices
      */
-    private parseAnalysisResponse(response: string): ContextIssue[] | null {
+    private parseAnalysisResponse(response: string, filteredToOriginalMapping: number[]): ContextIssue[] | null {
         try {
             // Try to extract JSON from response
             const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -203,8 +233,16 @@ export class ContextAdjusterService {
                                     item.details || 
                                     '';
 
+                // Convert AI's filtered item number to original item number
+                const filteredItemNumber = Number(item.item_number) || Number(item.number) || 0;
+                let originalItemNumber = 0;
+                if (filteredItemNumber > 0 && filteredItemNumber <= filteredToOriginalMapping.length) {
+                    const originalIndex = filteredToOriginalMapping[filteredItemNumber - 1];
+                    originalItemNumber = originalIndex !== undefined ? originalIndex + 1 : 0; // Convert to 1-based
+                }
+                
                 const issue: ContextIssue = {
-                    item_number: Number(item.item_number) || Number(item.number) || 0,
+                    item_number: originalItemNumber,
                     problematic_context_item: String(problematicItem).trim(),
                     reason_for_problem: String(reasonForProblem).trim(),
                     justification: String(justification).trim(),

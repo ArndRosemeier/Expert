@@ -272,18 +272,38 @@ export const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptD
             
             You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 
-Please provide a clear, organized list or summary of the requested information. Be thorough but concise, and focus only on the specific type of information requested.
-
 Content to analyze from "{{node_title}}":
 ---
 {{content}}
 ---
 
-Please extract and list all instances of: {{extraction_request}}
+EXTRACTION TASK:
+Extract and organize all relevant information about: {{extraction_request}}
 
-Format your response as a clear, organized summary that would be useful for reference.`,
+FORMATTING REQUIREMENTS:
+Format your response as context items, where each distinct piece of information is its own paragraph (context item). Follow these rules:
+
+1. Each context item should be a separate paragraph
+2. Use double newlines (two line breaks) to separate each context item
+3. Each paragraph should contain one main concept or piece of information
+4. Group related information logically into coherent paragraphs
+5. Be thorough but concise - focus only on the specific type of information requested
+6. Do not add section headers or labels - just provide the pure context items
+7. For characters: include names, ages, personalities, relationships, and key traits
+8. For places: include names, descriptions, significance, and relationships to other locations
+9. For themes: include clear explanations of how each theme manifests in the content
+10. For plot elements: include key events, conflicts, and story developments
+
+EXAMPLE OUTPUT FORMAT:
+Marcus Chen is a 28-year-old software engineer who works at TechCorp in downtown Seattle. He struggles with social anxiety but dreams of opening his own restaurant, having grown up helping in his family's Chinese restaurant.
+
+The story takes place primarily in modern-day Seattle, focusing on the tech district downtown and the International District where Marcus grew up.
+
+The central theme explores the tension between practical career choices and following one's true passion, examining how family expectations can both support and constrain personal growth.
+
+IMPORTANT: Your response should contain ONLY the extracted context items formatted as separate paragraphs with double newlines between them. Do not include any introductory text, explanations, or meta-commentary.`,
         placeholders: ['extraction_request', 'node_title', 'content', 'language'],
-        description: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) for reference and organization."
+        description: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) formatted as context items with one paragraph per distinct piece of information."
     },
 
     expand_text_user: {
@@ -681,13 +701,6 @@ JSON Response:`.trim(),
             
             You are analyzing inherited context for potential issues when creating subnodes.
 
-**Current Node:**
-Title: {{node_title}}
-Content: {{node_content}}
-
-**Numbered Context Items:**
-{{numbered_context_items}}
-
 **Your Task:**
 Analyze the numbered context items and identify those that might be problematic for creating subnodes of the current node. Look for:
 
@@ -696,6 +709,17 @@ Analyze the numbered context items and identify those that might be problematic 
 3. **Contradictory information** that conflicts with the current node's content
 4. **Outdated assumptions** that no longer apply to this part of the document
 5. **Overly specific details** that would be confusing for subnode creation
+6. **If in doubt, leave it out**. Context items that are not relevant to the current node should be reported as "not relevant"
+
+**Numbered Context Items:**
+{{numbered_context_items}}
+
+**Current Node:**
+Title: {{node_title}}
+*****
+Content: {{node_content}}
+*****
+
 
 **RESPONSE FORMAT - CRITICAL:**
 Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.

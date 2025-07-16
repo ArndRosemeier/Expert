@@ -14,7 +14,7 @@ import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
 
-import { getContextItemCount } from '../ContextFormat';
+import { getContextItemCount, getContextInfoText } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 
@@ -1790,7 +1790,7 @@ export function renderNodeDetails() {
                     <button id="context-adjuster-btn" class="info-button" title="Context Adjuster - Remove problematic context items" style="font-size: 0.8rem; padding: 2px 4px; margin-right: 2px;">🔧</button>
                     <label for="node-context">Context</label>
                     <button id="context-info-btn" class="info-button" title="Edit Context Items" style="margin-left: 4px;">📝</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">${getContextItemCount(node.context || '')} context items in context. Any paragraph is considered a context item.</span>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">${getContextInfoText(node.context || '')}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
@@ -1966,25 +1966,13 @@ export function renderNodeDetails() {
                     const newContext = contextTextArea.value;
                     // Use version management system to update context with "edited" and "context_edited" tags
                     node.setContextWithTags(newContext, ['edited', 'context_edited']);
-                
-                // Always propagate context to all descendants
-                const propagateRecursively = (parentNode: DocumentNode) => {
-                    for (const child of parentNode.children) {
-                        // Use version management system to update child context
-                        child.setContext(parentNode.context, 'master'); // Use parent's context, not sourceNode
-                        propagateRecursively(child);
-                    }
-                };
-                
-                propagateRecursively(node);
                     
                     // Update the context items count display
                     const contextLabel = document.querySelector('label[for="node-context"]');
                     if (contextLabel) {
                         const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
                         if (contextInfoSpan) {
-                            const itemCount = getContextItemCount(newContext);
-                            contextInfoSpan.textContent = `${itemCount} context items in context. Any paragraph is considered a context item.`;
+                            contextInfoSpan.textContent = getContextInfoText(newContext);
                         }
                     }
                     

@@ -270,15 +270,15 @@ export class DocumentNode {
                             // If this was the chosen iteration, it might have been the master
                             // But we already created a master from the main content, so don't duplicate
                             if (!iteration.wasChosen || iteration.content !== mainContent) {
-                                node.versions.push({
-                                    id: uuidv4(),
-                                    content: iteration.content,
-                                    title: mainTitle,
-                                    context: mainContext,
-                                    tags: tags,
-                                    timestamp: new Date(iteration.timestamp || session.startTime),
-                                    metadata: iterationMetadata
-                                });
+                                                            node.versions.push({
+                                id: uuidv4(),
+                                content: iteration.content,
+                                title: mainTitle,
+                                context: mainContext,
+                                tags: tags,
+                                timestamp: new Date(iteration.timestamp || session.startTime),
+                                metadata: iterationMetadata
+                            });
                             } else if (iteration.wasChosen && iteration.content === mainContent) {
                                 // Update the master version with generation metadata
                                 const masterVersion = node.versions.find(v => v.tags.has('master'));
