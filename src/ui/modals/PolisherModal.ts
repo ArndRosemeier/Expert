@@ -6,6 +6,7 @@ import { OpenRouterClient } from '../../OpenRouterClient';
 import { TaskModelService } from '../../services/TaskModelService';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { PromptContextBuilder } from '../../services/PromptContextBuilder';
+import { formatContentForPreWrap } from '../../utils/TextFormattingUtils';
 import * as state from '../../state';
 
 export interface PolishingButton {
@@ -26,6 +27,8 @@ export class PolisherModal extends BaseModal {
     private taskModelService: TaskModelService;
     private currentPolishedContent: string | null = null;
     private isGenerating: boolean = false;
+    private originalContent: string = ''; // Store original content for undo functionality
+    private polishingInstructions: string = ''; // Store custom polishing instructions
     
     // Default polishing buttons
     private defaultButtons: PolishingButton[] = [
@@ -96,6 +99,10 @@ export class PolisherModal extends BaseModal {
         this.node = node;
         this.currentPolishedContent = null;
         this.isGenerating = false;
+        
+        // Store original content for undo functionality
+        this.originalContent = node.content || '';
+        this.polishingInstructions = '';
         
         // Prevent body scrolling while modal is open
         document.body.style.overflow = 'hidden';
@@ -192,35 +199,28 @@ export class PolisherModal extends BaseModal {
                 }
                 
                 .polisher-content {
-                    display: grid;
-                    grid-template-rows: auto 1fr;
+                    display: flex;
+                    flex-direction: column;
                     gap: 1rem;
-                    height: 100%;
-                    min-height: 0;
+                    flex: 1;
                 }
                 
                 .content-section {
-                    display: grid;
-                    grid-template-rows: auto 1fr;
+                    display: flex;
+                    flex-direction: column;
                     gap: 0.5rem;
-                    height: 100%;
-                    min-height: 0;
                 }
                 
                 .content-comparison {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
                     gap: 1rem;
-                    height: 100%;
-                    min-height: 0;
                 }
                 
                 .content-comparison .content-section {
-                    display: grid;
-                    grid-template-rows: auto 1fr;
+                    display: flex;
+                    flex-direction: column;
                     gap: 0.5rem;
-                    height: 100%;
-                    min-height: 0;
                 }
                 
                 .content-box {
@@ -235,8 +235,25 @@ export class PolisherModal extends BaseModal {
                     white-space: pre-wrap;
                     word-wrap: break-word;
                     box-sizing: border-box;
-                    height: 100%;
-                    min-height: 0;
+                    flex: 1;
+                    min-height: 200px;
+                }
+                
+                .diff-content {
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }
+                
+                .diff-content ins {
+                    background-color: #d4edda;
+                    color: #155724;
+                    text-decoration: none;
+                }
+                
+                .diff-content del {
+                    background-color: #f8d7da;
+                    color: #721c24;
+                    text-decoration: line-through;
                 }
                 
                 .diff-summary-section {
@@ -265,6 +282,49 @@ export class PolisherModal extends BaseModal {
                     justify-content: center;
                     align-items: center;
                     z-index: 10;
+                }
+                
+                .polishing-instructions-section {
+                    margin-top: 1rem;
+                }
+                
+                .polishing-instructions-textarea {
+                    width: 100%;
+                    min-height: 120px;
+                    padding: 1rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    background-color: #fafafa;
+                    font-family: 'Source Code Pro', monospace;
+                    font-size: 0.875rem;
+                    line-height: 1.5;
+                    resize: vertical;
+                    box-sizing: border-box;
+                    transition: border-color 0.2s ease;
+                }
+                
+                .polishing-instructions-textarea:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                }
+                
+                .polishing-instructions-textarea:disabled {
+                    background-color: #f3f4f6;
+                    color: #6b7280;
+                    cursor: not-allowed;
+                }
+                
+                .polishing-action-buttons {
+                    display: flex;
+                    gap: 1rem;
+                    margin-top: 1rem;
+                    align-items: center;
+                }
+                
+                .polishing-action-buttons .button:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
                 }
             </style>
             <div class="polisher-modal-container">
@@ -336,63 +396,89 @@ export class PolisherModal extends BaseModal {
     }
 
     /**
-     * Render action buttons based on current state
+     * Render action buttons - simplified for iterative polishing workflow
      */
     private renderActionButtons(): string {
-        if (this.isGenerating) {
-            return `<button class="button button-secondary" id="close-polisher-btn">Close</button>`;
-        } else if (!this.currentPolishedContent) {
-            return `<button class="button button-secondary" id="close-polisher-btn">Close</button>`;
-        } else {
-            // Show all action buttons when content is polished
-            return `
-                <button class="button button-success" id="accept-polished-content">
-                    ✅ Accept & Apply
-                </button>
-                <button class="button button-secondary" id="retry-polishing">
-                    🔄 Retry
-                </button>
-                <button class="button button-danger" id="cancel-polishing">
-                    ❌ Cancel
-                </button>
-                <button class="button button-secondary" id="close-polisher-btn">Close</button>
-            `;
-        }
+        return `<button class="button button-secondary" id="close-polisher-btn">Close</button>`;
     }
 
     /**
-     * Render content area
+     * Render content area - shows single view initially, then splits to diff view after polishing
      */
-    private renderContent(originalContent: string): string {
-        const baseContent = !this.currentPolishedContent ? `
+    private renderContent(currentContent: string): string {
+        // Determine if we should show diff view (content has been polished)
+        const showDiffView = currentContent !== this.originalContent;
+        
+        const baseContent = showDiffView ? `
             <div class="polisher-content">
-                <div class="content-section">
-                    <h3>Original Content</h3>
-                    <div class="content-box original-content">
-                        ${this.escapeHtml(originalContent)}
+                <div class="content-comparison">
+                    <div class="content-section">
+                        <h4>Original Content</h4>
+                        <div class="content-box original-content diff-content">${DiffTool.compare(this.originalContent, currentContent).originalHtml}</div>
+                    </div>
+                    
+                    <div class="content-section">
+                        <h4>Polished Content</h4>
+                        <div class="content-box polished-content diff-content">${DiffTool.compare(this.originalContent, currentContent).modifiedHtml}</div>
+                    </div>
+                </div>
+                
+                <div class="content-section polishing-instructions-section">
+                    <h3>Polishing Instructions</h3>
+                    <textarea 
+                        id="polishing-instructions" 
+                        class="polishing-instructions-textarea"
+                        placeholder="Enter specific instructions for how you want the content to be polished..."
+                        ${this.isGenerating ? 'disabled' : ''}>${formatContentForPreWrap(this.polishingInstructions)}</textarea>
+                    
+                    <div class="polishing-action-buttons">
+                        <button 
+                            class="button button-primary" 
+                            id="execute-polishing-btn"
+                            ${this.isGenerating || !this.polishingInstructions.trim() ? 'disabled' : ''}
+                        >
+                            🎨 Execute Now
+                        </button>
+                        <button 
+                            class="button button-secondary" 
+                            id="undo-changes-btn"
+                            ${this.isGenerating || currentContent === this.originalContent ? 'disabled' : ''}
+                        >
+                            ↶ Undo
+                        </button>
                     </div>
                 </div>
             </div>
         ` : `
             <div class="polisher-content">
-                <div class="diff-summary-section">
-                    <h3>Polishing Results</h3>
-                    <p class="diff-stats">Changes: ${DiffTool.getSummary(DiffTool.compare(originalContent, this.currentPolishedContent))}</p>
+                <div class="content-section">
+                    <h3>Content</h3>
+                    <div class="content-box original-content">${formatContentForPreWrap(currentContent)}</div>
                 </div>
                 
-                <div class="content-comparison">
-                    <div class="content-section">
-                        <h4>Original Content</h4>
-                        <div class="content-box original-content diff-content">
-                            ${DiffTool.compare(originalContent, this.currentPolishedContent).originalHtml}
-                        </div>
-                    </div>
+                <div class="content-section polishing-instructions-section">
+                    <h3>Polishing Instructions</h3>
+                    <textarea 
+                        id="polishing-instructions" 
+                        class="polishing-instructions-textarea"
+                        placeholder="Enter specific instructions for how you want the content to be polished..."
+                        ${this.isGenerating ? 'disabled' : ''}>${formatContentForPreWrap(this.polishingInstructions)}</textarea>
                     
-                    <div class="content-section">
-                        <h4>Polished Content</h4>
-                        <div class="content-box polished-content diff-content">
-                            ${DiffTool.compare(originalContent, this.currentPolishedContent).modifiedHtml}
-                        </div>
+                    <div class="polishing-action-buttons">
+                        <button 
+                            class="button button-primary" 
+                            id="execute-polishing-btn"
+                            ${this.isGenerating || !this.polishingInstructions.trim() ? 'disabled' : ''}
+                        >
+                            🎨 Execute Now
+                        </button>
+                        <button 
+                            class="button button-secondary" 
+                            id="undo-changes-btn"
+                            ${this.isGenerating || currentContent === this.originalContent ? 'disabled' : ''}
+                        >
+                            ↶ Undo
+                        </button>
                     </div>
                 </div>
             </div>
@@ -486,8 +572,8 @@ export class PolisherModal extends BaseModal {
             editButtonsBtn.addEventListener('click', () => this.openEditButtonsModal());
         }
 
-        // Polishing action buttons
-        this.setupPolishingActionListeners();
+        // Custom polishing instructions
+        this.setupCustomPolishingListeners();
 
         // ESC key handler
         document.addEventListener('keydown', this.handleEscKey.bind(this));
@@ -520,27 +606,72 @@ export class PolisherModal extends BaseModal {
         }
     }
 
+
+
     /**
-     * Setup polishing action listeners
+     * Setup custom polishing instructions listeners
      */
-    private setupPolishingActionListeners(): void {
-        // Accept button
-        const acceptBtn = document.getElementById('accept-polished-content');
-        if (acceptBtn) {
-            acceptBtn.addEventListener('click', () => this.acceptPolishedContent());
+    private setupCustomPolishingListeners(): void {
+        // Polishing instructions textarea
+        const instructionsTextarea = document.getElementById('polishing-instructions') as HTMLTextAreaElement;
+        if (instructionsTextarea) {
+            instructionsTextarea.addEventListener('input', () => {
+                this.polishingInstructions = instructionsTextarea.value;
+                this.updateExecuteButtonState();
+            });
         }
 
-        // Retry button
-        const retryBtn = document.getElementById('retry-polishing');
-        if (retryBtn) {
-            retryBtn.addEventListener('click', () => this.retryPolishing());
+        // Execute polishing button
+        const executeBtn = document.getElementById('execute-polishing-btn');
+        if (executeBtn) {
+            executeBtn.addEventListener('click', () => {
+                if (this.polishingInstructions.trim()) {
+                    void this.generatePolishedContentWithDetail(this.polishingInstructions.trim());
+                }
+            });
         }
 
-        // Cancel button
-        const cancelBtn = document.getElementById('cancel-polishing');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => this.cancelPolishing());
+        // Undo changes button
+        const undoBtn = document.getElementById('undo-changes-btn');
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => this.undoChanges());
         }
+    }
+
+    /**
+     * Update the execute button state based on instructions content
+     */
+    private updateExecuteButtonState(): void {
+        const executeBtn = document.getElementById('execute-polishing-btn') as HTMLButtonElement;
+        if (executeBtn) {
+            const hasInstructions = this.polishingInstructions.trim().length > 0;
+            executeBtn.disabled = this.isGenerating || !hasInstructions;
+        }
+    }
+
+    /**
+     * Undo changes and restore original content
+     */
+    private undoChanges(): void {
+        if (!this.node) return;
+
+        // Restore original content to the node
+        this.node.setContentWithTags(this.originalContent, ['edited', 'content_edited', 'undo']);
+        
+        // Save to storage
+        void import('../../state').then(({ getActiveProject }) => {
+            const project = getActiveProject();
+            if (project) {
+                void project.saveToStorage();
+            }
+        });
+
+        // Reset polished content and refresh UI
+        this.currentPolishedContent = null;
+        void this.refresh();
+        
+        // Show confirmation
+        console.log('Content restored to original state');
     }
 
     /**
@@ -560,7 +691,25 @@ export class PolisherModal extends BaseModal {
             
             const polishedContent = await this.performPolishing(options);
             
-            this.currentPolishedContent = polishedContent;
+            // Apply the polished content directly to the node for iterative polishing
+            if (this.node) {
+                this.node.setContent(polishedContent, 'polished');
+                
+                // Save to storage
+                void import('../../state').then(({ getActiveProject }) => {
+                    const project = getActiveProject();
+                    if (project) {
+                        void project.saveToStorage();
+                    }
+                });
+                
+                // Trigger UI update
+                const event = new CustomEvent('nodeContentChanged', {
+                    detail: { nodeId: this.node.id }
+                });
+                document.dispatchEvent(event);
+            }
+            
             this.isGenerating = false;
             void this.refresh();
             
@@ -635,48 +784,7 @@ ${content}`;
         return promptTemplate;
     }
 
-    /**
-     * Accept polished content
-     */
-    private acceptPolishedContent(): void {
-        if (!this.node || !this.currentPolishedContent) {
-            console.error('No content to accept');
-            return;
-        }
 
-        // Update the node content using version management system
-        this.node.setContent(this.currentPolishedContent, 'master');
-        
-        // Clear the polished content
-        this.currentPolishedContent = null;
-        
-        // Close the modal
-        void this.close();
-        
-        // Trigger UI update
-        const event = new CustomEvent('nodeContentChanged', {
-            detail: { nodeId: this.node.id }
-        });
-        document.dispatchEvent(event);
-    }
-
-    /**
-     * Retry polishing
-     */
-    private retryPolishing(): void {
-        // Clear current polished content and refresh
-        this.currentPolishedContent = null;
-        void this.refresh();
-    }
-
-    /**
-     * Cancel polishing
-     */
-    private cancelPolishing(): void {
-        // Clear current polished content and refresh
-        this.currentPolishedContent = null;
-        void this.refresh();
-    }
 
     /**
      * Refresh modal content
@@ -888,6 +996,17 @@ ${content}`;
         
         // Restore body scrolling
         document.body.style.overflow = '';
+        
+        // Refresh the main UI to show the updated content
+        try {
+            const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
+            renderMultiProjectTree(); // Updates tree titles and structure
+            renderNodeDetails();      // Updates details panel content
+            console.log('✅ Main UI refreshed after polishing');
+        } catch (refreshError) {
+            console.warn('⚠️ Failed to refresh main UI after polishing:', refreshError);
+            // Don't fail the modal close if UI refresh fails
+        }
         
         await super.close();
     }

@@ -1942,27 +1942,24 @@ export function renderNodeDetails() {
     const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
     const nodeTitleDisplay = getElementById('node-title-display') as HTMLElement;
 
-    // Content textarea - save content changes to node
+    // Content textarea - save content changes to node only on blur (when focus is lost)
     if (contentTextArea) {
-        contentTextArea.addEventListener('input', () => {
+        contentTextArea.addEventListener('blur', () => {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     // Use version management system to update content with "edited" and "content_edited" tags
                     node.setContentWithTags(contentTextArea.value, ['edited', 'content_edited']);
-                    // Save to storage with debounced approach
-                    clearTimeout((contentTextArea as any)._saveTimeout);
-                    (contentTextArea as any)._saveTimeout = void void setTimeout(() => {
-                        void projectManager!.saveToStorage();
-                    }, 1000); // Save after 1 second of no typing
+                    // Save to storage immediately since this only happens on blur
+                    void projectManager.saveToStorage();
                 }
             }
         });
     }
 
-    // Context textarea - save context changes to node
+    // Context textarea - save context changes to node only on blur (when focus is lost)
     if (contextTextArea) {
-        contextTextArea.addEventListener('input', () => {
+        contextTextArea.addEventListener('blur', () => {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
@@ -1991,11 +1988,8 @@ export function renderNodeDetails() {
                         }
                     }
                     
-                    // Save to storage with debounced approach
-                    clearTimeout((contextTextArea as any)._saveTimeout);
-                    (contextTextArea as any)._saveTimeout = void void setTimeout(() => {
-                        void projectManager!.saveToStorage().catch(console.error);
-                    }, 1000); // Save after 1 second of no typing
+                    // Save to storage immediately since this only happens on blur
+                    void projectManager.saveToStorage();
                 }
             }
         });

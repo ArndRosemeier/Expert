@@ -284,9 +284,18 @@ export class ContextItemsEditorModal extends BaseModal {
             
             addEventListenerWithCleanup(
                 textarea,
-                'input',
+                'blur',
                 (e) => {
                     this.handleItemChange(e);
+                },
+                this.cleanupHandlers
+            );
+            
+            // Keep input listener only for auto-resize to maintain good UX
+            addEventListenerWithCleanup(
+                textarea,
+                'input',
+                (e) => {
                     this.autoResizeTextarea(e.target as HTMLTextAreaElement);
                 },
                 this.cleanupHandlers

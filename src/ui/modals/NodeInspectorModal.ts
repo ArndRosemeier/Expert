@@ -781,23 +781,23 @@ export class NodeInspectorModal extends BaseModal {
         this.setupAutoResize(contentEditor);
         this.setupAutoResize(contextEditor);
 
-        // Title editor
+        // Title editor - save only on blur (when focus is lost)
         if (titleEditor) {
-            titleEditor.addEventListener('input', () => {
+            titleEditor.addEventListener('blur', () => {
                 this.saveTitle(titleEditor.value);
             });
         }
 
-        // Content editor
+        // Content editor - save only on blur (when focus is lost)
         if (contentEditor) {
-            contentEditor.addEventListener('input', () => {
+            contentEditor.addEventListener('blur', () => {
                 this.saveContent(contentEditor.value);
             });
         }
 
-        // Context editor
+        // Context editor - save only on blur (when focus is lost)
         if (contextEditor) {
-            contextEditor.addEventListener('input', () => {
+            contextEditor.addEventListener('blur', () => {
                 this.saveContext(contextEditor.value);
             });
         }

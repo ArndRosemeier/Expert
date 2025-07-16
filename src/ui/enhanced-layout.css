@@ -1504,14 +1504,14 @@ label[for] {
     font-weight: 600;
 }
 
-/* Fix whitespace preservation issue in polisher modal */
+/* Polisher modal content styling with proper paragraph preservation */
 .polisher-modal-container .content-box {
     padding: 0.75rem;
     border-radius: 4px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 0.875rem;
     line-height: 1.5;
-    white-space: normal; /* Override pre-wrap to prevent leading whitespace preservation */
+    white-space: pre-wrap; /* Preserve paragraphs and line breaks */
     flex: 1;
     overflow-y: auto;
     border: 1px solid #d1d5db;
