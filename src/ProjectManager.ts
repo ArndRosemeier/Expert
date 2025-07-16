@@ -19,6 +19,12 @@ import {
 import { GenerationCoordinator } from './project/GenerationCoordinator';
 import { STORAGE_KEYS } from './constants';
 
+// NEW: Import our persistence utilities to eliminate duplication
+import { 
+    StorageOperations,
+    getStorageServices 
+} from './ui/utils/PersistenceUtils';
+
 
 type ProjectManagerEvents = {
     'project-loaded': [];
@@ -154,21 +160,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         return ProjectManager.storageService;
     }
 
-    /**
-     * Gets the IndexedDB service if using IndexedDB, null otherwise
-     */
-    private static async getIndexedDBService(): Promise<IndexedDBService | null> {
-        const storage = await ProjectManager.getStorageService();
-        if (storage.isIndexedDB()) {
-            // Access the IndexedDB service from the storage instance
-            const service = await StorageService.getInstance();
-            if (service.isIndexedDB()) {
-                // Return the IndexedDB service for direct project operations
-                return (service as any).indexedDBService;
-            }
-        }
-        return null;
-    }
+
 
     /**
      * Finds a node in the document tree by its ID, starting from a given node.
@@ -270,25 +262,17 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     /**
      * Clears all projects from storage.
      */
+    /**
+     * Clears all projects from storage - REFACTORED using PersistenceUtils
+     */
     public async clearAllProjectsFromStorage(): Promise<void> {
-        try {
-            const storage = await ProjectManager.getStorageService();
-            const indexedDB = await ProjectManager.getIndexedDBService();
-            
-            if (indexedDB) {
-                // Clear all projects from IndexedDB
-                await indexedDB.clear('projects');
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
-            }
+        await StorageOperations.clearProjects(async (services) => {
+            // Clear all projects from IndexedDB
+            await services.indexedDB!.clear('projects');
             
             // Clear active project references
-            await storage.delete(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
-        } catch (error) {
-            console.error('Failed to clear projects from storage:', error);
-            throw error;
-        }
+            await services.storage.delete(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+        });
     }
 
     /**
@@ -298,40 +282,29 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         const projects = state.getProjects();
         const activeProject = state.getActiveProject();
         
-        try {
-            const storage = await ProjectManager.getStorageService();
-            const indexedDB = await ProjectManager.getIndexedDBService();
-            
-            if (indexedDB) {
-                // Use IndexedDB for efficient project storage
-                for (const project of projects) {
-                    const projectRecord: ProjectRecord = {
-                        id: project.rootNode.id,
-                        title: project.projectTitle,
-                        templateName: project.template.name,
-                        createdAt: new Date(), // Could store actual creation date
-                        lastModified: new Date(),
-                        data: project.save()
-                    };
-                    await indexedDB.set('projects', project.rootNode.id, projectRecord);
-        }
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
+        await StorageOperations.saveProjects(async (services) => {
+            // Use IndexedDB for efficient project storage
+            for (const project of projects) {
+                const projectRecord: ProjectRecord = {
+                    id: project.rootNode.id,
+                    title: project.projectTitle,
+                    templateName: project.template.name,
+                    createdAt: new Date(), // Could store actual creation date
+                    lastModified: new Date(),
+                    data: project.save()
+                };
+                await services.indexedDB!.set('projects', project.rootNode.id, projectRecord);
             }
             
             // Save active project ID
-        if (activeProject) {
-                await storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
+            if (activeProject) {
+                await services.storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, activeProject.rootNode.id);
             }
-        } catch (error) {
-            console.error('Failed to save projects to storage:', error);
-            throw error;
-        }
+        });
     }
 
     /**
-     * Loads all projects from IndexedDB storage.
+     * Loads all projects from IndexedDB storage - REFACTORED using PersistenceUtils
      */
     public static async loadAllProjectsFromStorage(
         loopOrchestrator: LoopOrchestrator,
@@ -339,23 +312,17 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         openRouterClient: OpenRouterClient
     ): Promise<{ projects: ProjectManager[], activeProjectId: string | null }> {
         try {
-            const storage = await ProjectManager.getStorageService();
-            const indexedDB = await ProjectManager.getIndexedDBService();
+            const services = await getStorageServices(true);
             
-            if (indexedDB) {
-                // Load from IndexedDB
-                const projectRecords = await indexedDB.getAll<ProjectRecord>('projects');
-                const activeProjectId = await storage.get<string>(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
-            
-                if (projectRecords && Object.keys(projectRecords).length > 0) {
-                    const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
-                        ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
+            // Load from IndexedDB
+            const projectRecords = await services.indexedDB!.getAll<ProjectRecord>('projects');
+            const activeProjectId = await services.storage.get<string>(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
+        
+            if (projectRecords && Object.keys(projectRecords).length > 0) {
+                const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
+                    ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
                 );
-                    return { projects, activeProjectId: activeProjectId ?? null };
-                }
-            } else {
-                // This should never happen with IndexedDB-only storage
-                throw new Error('IndexedDB service is not available but was expected');
+                return { projects, activeProjectId: activeProjectId ?? null };
             }
             
             return { projects: [], activeProjectId: null };
