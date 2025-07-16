@@ -9,6 +9,19 @@ import { VersionService } from '../../VersionService';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 
+// NEW: Import our duplication-eliminating utilities
+import { 
+    createButton, 
+    createButtonContainer, 
+    createList, 
+    createWarning,
+    ButtonStateManager 
+} from '../utils/DOMUtils';
+
+import { 
+    executeWithErrorHandling 
+} from '../utils/ServiceUtils';
+
 export interface VersionMismatchModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
     modelSelector?: ModelSelector;
@@ -26,6 +39,7 @@ export class VersionMismatchModal extends BaseModal {
     private modelSelector: ModelSelector | undefined;
     private onResetComplete: (() => void) | undefined;
     private mismatches: Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> = [];
+    private buttonStateManager = new ButtonStateManager();
 
     constructor(config: VersionMismatchModalConfig) {
         super({
@@ -72,7 +86,7 @@ export class VersionMismatchModal extends BaseModal {
     }
 
     /**
-     * Creates the modal header
+     * Creates the modal header - REFACTORED using DOMUtils
      */
     private createHeader(): HTMLElement {
         const header = createElement('div', {
@@ -83,13 +97,9 @@ export class VersionMismatchModal extends BaseModal {
             content: '⚠️ Settings Update Required'
         });
 
-        const closeButton = createElement('button', {
+        const closeButton = createButton('×', {
             classes: ['close-button'],
-            innerHTML: '&times;'
-        });
-
-        closeButton.addEventListener('click', () => {
-            this.handleClose();
+            onClick: () => this.handleClose()
         });
 
         header.appendChild(title);
@@ -130,21 +140,19 @@ export class VersionMismatchModal extends BaseModal {
 
         explanation.appendChild(mainMessage);
 
-        // Mismatch details
+        // Mismatch details - REFACTORED using DOMUtils
         if (this.mismatches.length > 0) {
             const detailsTitle = createElement('h4', {
                 content: 'Profile Version Details:'
             });
 
-            const detailsList = createElement('ul', {
+            const mismatchItems = this.mismatches.map(mismatch => 
+                `Profile "${mismatch.profileName}": ${mismatch.profileVersion || 'No version info'} → ${mismatch.currentVersion}`
+            );
+            
+            const detailsList = createList({
+                items: mismatchItems,
                 classes: ['mismatch-details']
-            });
-
-            this.mismatches.forEach(mismatch => {
-                const listItem = createElement('li', {
-                    content: `Profile "${mismatch.profileName}": ${mismatch.profileVersion || 'No version info'} → ${mismatch.currentVersion}`
-                });
-                detailsList.appendChild(listItem);
             });
 
             explanation.appendChild(detailsTitle);
@@ -164,10 +172,6 @@ export class VersionMismatchModal extends BaseModal {
             content: 'We recommend resetting your settings to defaults to ensure you have the latest prompts, quality criteria, and feature configurations. This will:'
         });
 
-        const benefitsList = createElement('ul', {
-            classes: ['benefits-list']
-        });
-
         const benefits = [
             'Update all prompts to the latest versions',
             'Reset quality criteria to current best practices',
@@ -175,17 +179,15 @@ export class VersionMismatchModal extends BaseModal {
             'Remove potential conflicts from old settings'
         ];
 
-        benefits.forEach(benefit => {
-            const benefitItem = createElement('li', {
-                content: benefit
-            });
-            benefitsList.appendChild(benefitItem);
+        const benefitsList = createList({
+            items: benefits,
+            classes: ['benefits-list']
         });
 
-        const warningText = createElement('p', {
-            content: '⚠️ Note: This will reset all your custom settings, including any modified prompts and criteria. Your API keys and model selections will be preserved.',
-            classes: ['warning-text']
-        });
+        const warningText = createWarning(
+            'Note: This will reset all your custom settings, including any modified prompts and criteria. Your API keys and model selections will be preserved.',
+            'warning'
+        );
 
         recommendations.appendChild(recommendTitle);
         recommendations.appendChild(recommendText);
@@ -200,77 +202,75 @@ export class VersionMismatchModal extends BaseModal {
     }
 
     /**
-     * Creates the modal footer with action buttons
+     * Creates the modal footer with action buttons - REFACTORED using DOMUtils
      */
     private createFooter(): HTMLElement {
         const footer = createElement('div', {
             classes: ['modal-footer']
         });
 
-        const buttonContainer = createElement('div', {
-            classes: ['button-container']
+        const resetButton = createButton('Reset to Defaults (Recommended)', {
+            classes: ['reset-button', 'primary'],
+            type: 'primary',
+            onClick: () => this.handleReset()
         });
 
-        const resetButton = createElement('button', {
-            content: 'Reset to Defaults (Recommended)',
-            classes: ['reset-button', 'primary']
+        const continueButton = createButton('Continue with Current Settings', {
+            classes: ['continue-button', 'secondary'],
+            type: 'secondary',
+            onClick: () => this.handleContinue()
         });
 
-        const continueButton = createElement('button', {
-            content: 'Continue with Current Settings',
-            classes: ['continue-button', 'secondary']
-        });
-
-        resetButton.addEventListener('click', () => {
-            this.handleReset();
-        });
-
-        continueButton.addEventListener('click', () => {
-            this.handleContinue();
-        });
-
-        buttonContainer.appendChild(resetButton);
-        buttonContainer.appendChild(continueButton);
+        const buttonContainer = createButtonContainer([resetButton, continueButton]);
         footer.appendChild(buttonContainer);
 
         return footer;
     }
 
     /**
-     * Handle reset to defaults action
+     * Handle reset to defaults action - REFACTORED using ServiceUtils
      */
     private async handleReset(): Promise<void> {
-        try {
-            // Show loading state
-            const resetButton = document.querySelector('#version-mismatch-modal .reset-button') as HTMLButtonElement;
-            if (resetButton) {
-                resetButton.disabled = true;
-                resetButton.textContent = 'Resetting...';
-            }
+        const resetButton = document.querySelector('#version-mismatch-modal .reset-button') as HTMLButtonElement;
+        if (!resetButton) return;
 
-            // Prepare model selections to preserve
-            let preserveModels: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> } | undefined;
-            
-            if (this.modelSelector) {
-                const selectedModels = this.modelSelector.getSelectedModels();
-                const webSearchEnabled = this.modelSelector.getWebSearchEnabled();
+        // Show loading state
+        this.buttonStateManager.setLoading(resetButton, 'Resetting...');
+
+        const result = await executeWithErrorHandling(
+            async () => {
+                // Prepare model selections to preserve
+                let preserveModels: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> } | undefined;
                 
-                // Only preserve if we have actual model selections
-                if (Object.keys(selectedModels).length > 0) {
-                    preserveModels = {
-                        selectedModels,
-                        webSearchEnabled
-                    };
-                    console.log('🔧 Preserving model selections during reset:', selectedModels);
+                if (this.modelSelector) {
+                    const selectedModels = this.modelSelector.getSelectedModels();
+                    const webSearchEnabled = this.modelSelector.getWebSearchEnabled();
+                    
+                    // Only preserve if we have actual model selections
+                    if (Object.keys(selectedModels).length > 0) {
+                        preserveModels = {
+                            selectedModels,
+                            webSearchEnabled
+                        };
+                        console.log('🔧 Preserving model selections during reset:', selectedModels);
+                    }
                 }
-            }
 
-            // Reset settings with preserved models
-            await this.settingsManager.resetToDefaults(preserveModels);
+                // Reset settings with preserved models
+                await this.settingsManager.resetToDefaults(preserveModels);
 
-            // Clear version mismatch flag
-            this.settingsManager.clearVersionMismatchFlag();
+                // Clear version mismatch flag
+                this.settingsManager.clearVersionMismatchFlag();
 
+                return { success: true, message: 'Settings reset successfully' };
+            },
+            'Failed to reset settings. Please try again or contact support.'
+        );
+
+        // Clear loading state
+        this.buttonStateManager.clearLoading(resetButton);
+
+        if (result.success) {
             // Emit event
             this.emit('resetAccepted', undefined);
 
@@ -281,17 +281,6 @@ export class VersionMismatchModal extends BaseModal {
 
             // Close modal
             void this.close();
-
-        } catch (error) {
-            console.error('Failed to reset settings:', error);
-            alert('Failed to reset settings. Please try again or contact support.');
-            
-            // Re-enable button
-            const resetButton = document.querySelector('#version-mismatch-modal .reset-button') as HTMLButtonElement;
-            if (resetButton) {
-                resetButton.disabled = false;
-                resetButton.textContent = 'Reset to Defaults (Recommended)';
-            }
         }
     }
 

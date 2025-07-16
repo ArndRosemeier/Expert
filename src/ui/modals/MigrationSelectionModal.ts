@@ -9,6 +9,17 @@ import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 import { SettingsService } from './services/SettingsService';
 
+// NEW: Import our duplication-eliminating utilities
+import { 
+    createButton, 
+    createButtonContainer, 
+    ButtonStateManager 
+} from '../utils/DOMUtils';
+
+import { 
+    executeWithErrorHandling 
+} from '../utils/ServiceUtils';
+
 // Simplified types for migration to avoid complex TypeScript issues for now
 export interface SimpleMigrationAnalysis {
     profileName: string;
@@ -28,6 +39,7 @@ export class MigrationSelectionModal extends BaseModal {
     private settingsManager: SettingsManager;
     private modelSelector: ModelSelector | undefined;
     private analysis: SimpleMigrationAnalysis;
+    private buttonStateManager = new ButtonStateManager();
     private onMigrationComplete: (() => void) | undefined;
 
     constructor(config: MigrationSelectionModalConfig) {
@@ -179,11 +191,10 @@ export class MigrationSelectionModal extends BaseModal {
      */
     private async handleReset(): Promise<void> {
         try {
-            // Show loading state
+            // Show loading state using utility
             const resetButton = document.querySelector('#migration-selection-modal .reset-button') as HTMLButtonElement;
             if (resetButton) {
-                resetButton.disabled = true;
-                resetButton.textContent = 'Resetting...';
+                this.buttonStateManager.setLoading(resetButton, 'Resetting...');
             }
 
             // Prepare model selections to preserve
@@ -220,11 +231,10 @@ export class MigrationSelectionModal extends BaseModal {
             console.error('Failed to reset settings:', error);
             alert('Failed to reset settings. Please try again or contact support.');
             
-            // Re-enable button
+            // Re-enable button using utility
             const resetButton = document.querySelector('#migration-selection-modal .reset-button') as HTMLButtonElement;
             if (resetButton) {
-                resetButton.disabled = false;
-                resetButton.textContent = 'Reset to Defaults';
+                this.buttonStateManager.clearLoading(resetButton);
             }
         }
     }
@@ -234,11 +244,10 @@ export class MigrationSelectionModal extends BaseModal {
      */
     private async handleSmartMigration(): Promise<void> {
         try {
-            // Show loading state
+            // Show loading state using utility
             const migrateButton = document.querySelector('#migration-selection-modal .migrate-button') as HTMLButtonElement;
             if (migrateButton) {
-                migrateButton.disabled = true;
-                migrateButton.textContent = 'Migrating...';
+                this.buttonStateManager.setLoading(migrateButton, 'Migrating...');
             }
 
             // Create SettingsService instance - use a default ModelSelector if none provided
