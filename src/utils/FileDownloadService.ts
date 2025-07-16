@@ -99,7 +99,11 @@ export class FileDownloadService {
         
         // Fallback to traditional download (only if not forcing file selector)
         if (!options.forceFileSelector) {
-            console.log('📁 Using direct download to Downloads folder (fallback)');
+            // Provide clear browser-specific guidance
+            const browserInfo = this.getBrowserInfo();
+            console.warn(`⚠️ File selector not available in ${browserInfo.name}. Using direct download to Downloads folder.`);
+            console.info(`💡 For better file management, consider using Chrome 86+ or Edge 86+ which support file selectors.`);
+            
             this.downloadBlobTraditional(blob, options.filename);
             return {
                 success: true,
@@ -210,7 +214,7 @@ export class FileDownloadService {
         const options: FileDownloadOptions = {
             filename,
             mimeType,
-            forceFileSelector: true // ALWAYS use file selector for exports
+            forceFileSelector: false // Allow fallback to direct download for browser compatibility
         };
         if (description) {
             options.description = description;
@@ -224,7 +228,7 @@ export class FileDownloadService {
     }
 
     /**
-     * Convenience method for JSON exports with file selector
+     * Convenience method for JSON exports with file selector preference
      */
     public static async downloadJson(data: any, filename: string, description?: string): Promise<FileDownloadResult> {
         const content = JSON.stringify(data, null, 2);
@@ -232,19 +236,19 @@ export class FileDownloadService {
             filename,
             mimeType: 'application/json',
             description: description || 'JSON Export',
-            forceFileSelector: true // ALWAYS use file selector for JSON exports
+            forceFileSelector: false // Allow fallback for browser compatibility
         });
     }
 
     /**
-     * Convenience method for ZIP downloads with file selector
+     * Convenience method for ZIP downloads with file selector preference
      */
     public static async downloadZip(blob: Blob, filename: string, description?: string): Promise<FileDownloadResult> {
         return await this.downloadBlob(blob, {
             filename,
             mimeType: 'application/zip',
             description: description || 'ZIP Archive',
-            forceFileSelector: true // ALWAYS use file selector for ZIP files
+            forceFileSelector: false // Allow fallback for browser compatibility
         });
     }
 
@@ -314,5 +318,35 @@ export class FileDownloadService {
         } catch (error) {
             return { success: false, message: `❌ Test failed: ${error}` };
         }
+    }
+
+    /**
+     * Show a user-friendly notification about browser file selector support
+     * Useful for first-time users or when fallbacks are frequently used
+     */
+    public static showBrowserCompatibilityInfo(): void {
+        const support = this.testFileSelectorSupport();
+        const browserInfo = this.getBrowserInfo();
+        
+        if (support.supported) {
+            console.info(`✅ ${browserInfo.name} ${browserInfo.version} supports file selectors - you can choose where to save files!`);
+        } else {
+            console.info(`📋 ${browserInfo.name} ${browserInfo.version} downloads files directly to Downloads folder.`);
+            console.info(`💡 For better file management, consider using Chrome 86+ or Edge 86+ which let you choose save locations.`);
+        }
+    }
+
+    /**
+     * Helper to get browser information for fallback messages
+     */
+    private static getBrowserInfo(): { name: string; version: string } {
+        const userAgent = navigator.userAgent;
+        const browserName = userAgent.includes('Chrome') ? 'Chrome' :
+                            userAgent.includes('Edg') ? 'Edge' :
+                            userAgent.includes('Firefox') ? 'Firefox' :
+                            userAgent.includes('Safari') ? 'Safari' : 'Unknown';
+        const versionMatch = userAgent.match(/Chrome\/(\d+)/) || userAgent.match(/Edg\/(\d+)/) || userAgent.match(/Firefox\/(\d+)/) || userAgent.match(/Safari\/(\d+)/);
+        const version = versionMatch ? (versionMatch[1] || 'Unknown') : 'Unknown';
+        return { name: browserName, version };
     }
 } 

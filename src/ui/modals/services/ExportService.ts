@@ -609,8 +609,12 @@ th {
         // Handle different download results
         if (downloadResult.success && !downloadResult.cancelled) {
             // Success - show appropriate message based on method used
-            const method = downloadResult.method === 'save-as' ? 'with file selector' : 'to Downloads folder';
-            alert(`Successfully exported "${node.title}" ${method}`);
+            if (downloadResult.method === 'save-as') {
+                alert(`Successfully exported "${node.title}" using file selector`);
+            } else {
+                // Direct download fallback - inform user but don't make it seem like an error
+                alert(`Successfully exported "${node.title}" to Downloads folder\n\n💡 For better file location control, consider using Chrome or Edge which support file selectors.`);
+            }
         } else if (downloadResult.cancelled) {
             // User cancelled - no error message needed
             console.log('Export cancelled by user');

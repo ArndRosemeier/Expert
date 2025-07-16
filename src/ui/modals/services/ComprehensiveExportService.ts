@@ -129,9 +129,9 @@ export class ComprehensiveExportService {
                 };
             }
 
-            // Warn if fallback was used (direct download instead of file selector)
+            // Provide user feedback about download method
             if (downloadResult.method === 'download') {
-                console.warn('⚠️ File selector not available, file saved to Downloads folder');
+                console.info('💡 Backup saved to Downloads folder. For file location control, consider using Chrome or Edge.');
             }
 
             return {

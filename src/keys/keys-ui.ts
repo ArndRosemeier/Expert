@@ -454,8 +454,12 @@ export class KeysUI {
             const downloadResult = await FileDownloadService.downloadJson(parsedData, filename, 'Expert Keys Export');
             
             if (downloadResult.success && !downloadResult.cancelled) {
-                const method = downloadResult.method === 'save-as' ? 'with file selector' : 'to Downloads folder';
-                this.showSuccess(`Keys exported successfully ${method}`);
+                if (downloadResult.method === 'save-as') {
+                    this.showSuccess('Keys exported successfully using file selector');
+                } else {
+                    this.showSuccess('Keys exported successfully to Downloads folder');
+                    console.info('💡 For file location control, consider using Chrome or Edge which support file selectors.');
+                }
             } else if (downloadResult.cancelled) {
                 this.showError('Export cancelled by user');
             } else {
