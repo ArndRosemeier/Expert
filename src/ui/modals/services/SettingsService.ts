@@ -10,6 +10,13 @@ import { VersionService } from '../../../VersionService';
 import { DEFAULT_MAX_ITERATIONS } from '../../../constants';
 import * as state from '../../../state';
 
+// NEW: Import our settings utilities to eliminate duplication
+import { 
+    ProfileOperations,
+    ProfileValidation,
+    ProfileMessages
+} from '../../utils/SettingsUtils';
+
 export interface ProfileImportResult {
     success: boolean;
     message: string;
@@ -96,53 +103,41 @@ export class SettingsService {
     }
 
     /**
-     * Creates a new profile by copying the currently active profile
+     * Creates a new profile by copying the currently active profile - REFACTORED using SettingsUtils
      */
     public async createProfile(name: string): Promise<{ success: boolean; message: string }> {
-        if (!name.trim()) {
-            return { success: false, message: 'Please enter a name for the new profile.' };
+        // Get the current active profile to copy from
+        const currentProfile = this.getLastUsedProfile();
+        
+        let newProfileSettings: SettingsProfile;
+        
+        if (currentProfile && currentProfile.criteria) {
+            // Copy all settings from the current profile
+            newProfileSettings = { ...currentProfile };
+        } else {
+            // Fallback: create with current component settings if no active profile
+            newProfileSettings = {
+                selectedModels: this.modelSelector.getSelectedModels(),
+                criteria: [], // Will be filled by the UI component
+                maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
+                prompt: '', // Legacy field
+                contextExtractionPrompt: '' // Legacy field
+            };
         }
 
-        // Check if profile already exists
-        if (this.settingsManager.getProfile(name)) {
-            return { success: false, message: `A profile named "${name}" already exists.` };
-        }
-
-        try {
-            // Get the current active profile to copy from
-            const currentProfile = this.getLastUsedProfile();
-            
-            let newProfileSettings: SettingsProfile;
-            
-            if (currentProfile && currentProfile.criteria) {
-                // Copy all settings from the current profile
-                newProfileSettings = { ...currentProfile };
-            } else {
-                // Fallback: create with current component settings if no active profile
-                newProfileSettings = {
-                    selectedModels: this.modelSelector.getSelectedModels(),
-                    criteria: [], // Will be filled by the UI component
-                    maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
-                    prompt: '', // Legacy field
-                    contextExtractionPrompt: '' // Legacy field
-                };
-            }
-
-            // Save the new profile
-            await this.settingsManager.saveProfile(name, newProfileSettings);
-            await this.settingsManager.setLastUsedProfile(name);
-
-            this.emitChange({
-                type: 'profile',
-                data: { action: 'created', profileName: name }
-            });
-
-            const sourceMessage = currentProfile ? ` (copied from "${this.getLastUsedProfileName()}")` : '';
-            return { success: true, message: `Profile "${name}" created and activated${sourceMessage}.` };
-        } catch (error) {
-            console.error('Failed to create profile:', error);
-            return { success: false, message: 'Failed to create profile. Please try again.' };
-        }
+        const sourceProfileName = currentProfile ? (this.getLastUsedProfileName() || undefined) : undefined;
+        
+        const result = await ProfileOperations.create(
+            this.settingsManager,
+            name,
+            newProfileSettings,
+            (event) => this.emitChange(event)
+        );
+        
+        return {
+            success: result.success,
+            message: result.success ? ProfileMessages.created(name, sourceProfileName) : result.message
+        };
     }
 
     /**
@@ -329,102 +324,44 @@ export class SettingsService {
     }
 
     /**
-     * Validates profile data
+     * Validates profile data - REFACTORED using SettingsUtils
      */
     public validateProfile(profile: unknown): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (!profile || typeof profile !== 'object') {
-            errors.push('Profile data is missing or invalid');
-            return { valid: false, errors };
-        }
-
-        const p = profile as any;
-
-        if (!p.selectedModels || typeof p.selectedModels !== 'object') {
-            errors.push('Selected models must be an object');
-        }
-
-        if (!Array.isArray(p.criteria)) {
-            errors.push('Criteria must be an array');
-        }
-
-        if (typeof p.maxIterations !== 'number' || p.maxIterations < 1) {
-            errors.push('Max iterations must be a positive number');
-        }
-
-        return { valid: errors.length === 0, errors };
+        const validation = ProfileValidation.validateStructure(profile);
+        return {
+            valid: validation.isValid,
+            errors: validation.errors
+        };
     }
 
     /**
-     * Duplicates an existing profile with a new name
+     * Duplicates an existing profile with a new name - REFACTORED using SettingsUtils
      */
     public async duplicateProfile(
         sourceProfileName: string, 
         newProfileName: string
     ): Promise<{ success: boolean; message: string }> {
-        const sourceProfile = this.getProfile(sourceProfileName);
-        if (!sourceProfile) {
-            return { success: false, message: `Source profile "${sourceProfileName}" not found.` };
-        }
-
-        if (this.getProfile(newProfileName)) {
-            return { success: false, message: `A profile named "${newProfileName}" already exists.` };
-        }
-
-        try {
-            await this.settingsManager.saveProfile(newProfileName, { ...sourceProfile });
-            
-            this.emitChange({
-                type: 'profile',
-                data: { action: 'duplicated', sourceProfileName, newProfileName }
-            });
-
-            return { success: true, message: `Profile "${newProfileName}" created from "${sourceProfileName}".` };
-        } catch (error) {
-            console.error('Failed to duplicate profile:', error);
-            return { success: false, message: 'Failed to duplicate profile. Please try again.' };
-        }
+        return ProfileOperations.duplicate(
+            this.settingsManager,
+            sourceProfileName,
+            newProfileName,
+            (event) => this.emitChange(event)
+        );
     }
 
     /**
-     * Renames an existing profile
+     * Renames an existing profile - REFACTORED using SettingsUtils
      */
     public async renameProfile(
         oldName: string, 
         newName: string
     ): Promise<{ success: boolean; message: string }> {
-        const profile = this.getProfile(oldName);
-        if (!profile) {
-            return { success: false, message: `Profile "${oldName}" not found.` };
-        }
-
-        if (this.getProfile(newName)) {
-            return { success: false, message: `A profile named "${newName}" already exists.` };
-        }
-
-        try {
-            // Save with new name
-            await this.settingsManager.saveProfile(newName, profile);
-            
-            // Delete old profile
-            this.settingsManager.deleteProfile(oldName);
-            
-            // Update last used if it was the renamed profile
-            if (this.getLastUsedProfileName() === oldName) {
-                this.settingsManager.setLastUsedProfile(newName);
-            }
-
-            this.emitChange({
-                type: 'profile',
-                data: { action: 'renamed', oldName, newName }
-            });
-
-            return { success: true, message: `Profile renamed from "${oldName}" to "${newName}".` };
-        } catch (error) {
-            console.error('Failed to rename profile:', error);
-            return { success: false, message: 'Failed to rename profile. Please try again.' };
-        }
+        return ProfileOperations.rename(
+            this.settingsManager,
+            oldName,
+            newName,
+            (event) => this.emitChange(event)
+        );
     }
 
     /**
