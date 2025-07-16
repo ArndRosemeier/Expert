@@ -76,7 +76,10 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "duplication:check": "jscpd src --min-lines 3 --min-tokens 30 --reporters console",
     "duplication:report": "jscpd src --min-lines 3 --min-tokens 30 --reporters html --output jscpd-report",
-    "duplication:detailed": "jscpd src --min-lines 2 --min-tokens 20 --reporters html,console --output jscpd-report"
+    "duplication:detailed": "jscpd src --min-lines 2 --min-tokens 20 --reporters html,console --output jscpd-report",
+    "deadcode:check": "tsr 'src/(main|keys/index)\\.ts$'",
+    "deadcode:remove": "tsr --write 'src/(main|keys/index)\\.ts$'",
+    "deadcode:check-ci": "tsr 'src/(main|keys/index)\\.ts$' --check"
   },
   "keywords": [],
   "author": "",
