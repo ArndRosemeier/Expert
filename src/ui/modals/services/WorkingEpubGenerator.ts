@@ -232,7 +232,7 @@ ${navItems}
         const styles = `
 body {
     font-family: Georgia, serif;
-    font-size: 1.2em;
+    font-size: 0.84em;
     line-height: 1.6;
     margin: 0;
     padding: 2em;
@@ -248,7 +248,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 {
-    font-size: 2em;
+    font-size: 1.4em;
     border-bottom: 2px solid #3498db;
     padding-bottom: 0.5em;
 }
