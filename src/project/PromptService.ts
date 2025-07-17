@@ -46,7 +46,8 @@ export class PromptService {
     ): string {
         let draftOrFresh: string;
         if (node.content && node.content.trim() !== '') {
-            if (node.content.startsWith('Draft:')) {
+            const masterVersion = node.getMasterVersion();
+            if (masterVersion && masterVersion.tags.has('draft')) {
                 draftOrFresh = `You have an initial draft to work with:
 ---
 ${node.content}

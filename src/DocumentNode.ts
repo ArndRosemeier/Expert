@@ -131,8 +131,8 @@ export class DocumentNode {
     }
 
     /**
-     * Gets the current state of the node based on its content.
-     * @returns 'Empty' if no content, 'Draft' if content starts with 'Draft:', 'Final' if has other content
+     * Gets the current state of the node based on its master version tags.
+     * @returns 'Empty' if no content, 'Draft' if master version has 'draft' tag, 'Final' otherwise
      */
     getState(): 'Empty' | 'Draft' | 'Final' {
         const content = this.content;
@@ -140,13 +140,9 @@ export class DocumentNode {
             return 'Empty';
         }
         
-        // Check if the master version has draft tags
+        // Check if the master version has draft tag
         const masterVersion = this.getMasterVersion();
         if (masterVersion && masterVersion.tags.has('draft')) {
-            return 'Draft';
-        }
-        
-        if (content.startsWith('Draft:')) {
             return 'Draft';
         }
         

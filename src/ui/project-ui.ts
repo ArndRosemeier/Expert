@@ -33,7 +33,7 @@ function getNodeStatusIcon(node: DocumentNode): string {
     }
     
     const hasContent = node.content && node.content.trim().length > 0;
-    const isDraft = masterVersion.tags.has('draft') || node.content?.startsWith('Draft:');
+    const isDraft = masterVersion.tags.has('draft');
     const isContextAdjusted = node.ContextIsAdjusted();
     const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
     
@@ -137,7 +137,7 @@ function getNodeStatusTooltip(node: DocumentNode): string {
     }
     
     const hasContent = node.content && node.content.trim().length > 0;
-    const isDraft = masterVersion.tags.has('draft') || node.content?.startsWith('Draft:');
+    const isDraft = masterVersion.tags.has('draft');
     const isContextAdjusted = node.ContextIsAdjusted();
     const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
     
