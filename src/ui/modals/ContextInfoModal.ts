@@ -4,21 +4,67 @@ import { getContextItems, formatContextItems } from '../../ContextFormat';
 import { DocumentNode } from '../../DocumentNode';
 import { PromptManager } from '../../PromptManager';
 
+interface ContextItemInfo {
+    text: string;
+    index: number; // 1-based index in original context
+    originalIndex: number; // 0-based index in this.contextItems array, or -1 for parent items
+    category: 'missing-from-child' | 'only-in-child' | 'common' | 'normal';
+    isParentItem?: boolean; // true if this item is from parent only
+}
+
 export class ContextItemsEditorModal extends BaseModal {
     private node: DocumentNode;
     private contextItems: string[] = [];
     private isDirty = false;
     private isTransforming = false;
+    private compareWithParent: boolean = false;
+    private parentNode: DocumentNode | null = null;
 
     constructor(node: DocumentNode) {
         super({
             id: 'context-items-editor-modal',
             title: 'Edit Context Items',
-            maxWidth: '800px',
-            maxHeight: '80vh'
+            // Make the modal significantly bigger
+            maxWidth: '95vw',
+            maxHeight: '95vh',
+            width: '1200px',
+            height: '800px'
         });
         this.node = node;
         this.contextItems = getContextItems(node.context || '');
+        
+        // Find parent node for comparison (async initialization)
+        void this.findParentNode();
+    }
+
+    /**
+     * Find the parent node for comparison
+     */
+    private async findParentNode(): Promise<void> {
+        if (!this.node.parentId) {
+            this.parentNode = null;
+            return;
+        }
+
+        try {
+            const { getActiveProject } = await import('../../state');
+            const projectManager = getActiveProject()!;
+            const { TreeService } = await import('../../project/TreeService');
+            const treeService = new TreeService();
+            this.parentNode = treeService.findParentNode(this.node.id, projectManager.rootNode);
+            
+            // Re-render if modal is already open and parent was found
+            if (this.parentNode && this.element) {
+                const modalBody = this.element.querySelector('.modal-body');
+                if (modalBody) {
+                    modalBody.innerHTML = this.render().innerHTML;
+                    this.setupEventHandlers();
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to find parent node:', error);
+            this.parentNode = null;
+        }
     }
 
     public render(): HTMLElement {
@@ -44,9 +90,12 @@ export class ContextItemsEditorModal extends BaseModal {
                     display: flex;
                     flex-direction: column;
                     gap: 0.75rem;
-                    max-height: 400px;
+                    max-height: 500px;
                     overflow-y: auto;
                     padding: 0.5rem;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    background: white;
                 }
                 .context-item {
                     display: flex;
@@ -190,9 +239,11 @@ export class ContextItemsEditorModal extends BaseModal {
                         <p style="margin: 0; color: #6c757d; font-size: 0.875rem;">Each paragraph is a separate context item. Edit items individually below.</p>
                     </div>
                     <div>
-                        <span style="font-weight: bold; color: #007cba;">${this.contextItems.length} items</span>
+                        <span style="font-weight: bold; color: #007cba;">${this.getItemCountText()}</span>
                     </div>
                 </div>
+                
+                ${this.renderParentComparisonSection()}
                 
                 <div class="context-items-list" id="context-items-list">
                     ${this.renderContextItems()}
@@ -222,31 +273,222 @@ export class ContextItemsEditorModal extends BaseModal {
         return content;
     }
 
+    private renderParentComparisonSection(): string {
+        if (!this.parentNode) {
+            return '';
+        }
+
+        return `
+            <div class="parent-comparison-section" style="
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            ">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input 
+                        type="checkbox" 
+                        id="compare-with-parent-checkbox" 
+                        ${this.compareWithParent ? 'checked' : ''}
+                        style="
+                            margin: 0;
+                            transform: scale(1.2);
+                        "
+                    />
+                    <label for="compare-with-parent-checkbox" style="
+                        font-weight: 500;
+                        color: #495057;
+                        margin: 0;
+                        cursor: pointer;
+                    ">
+                        📊 Compare with Parent Context
+                    </label>
+                </div>
+                <p style="
+                    margin: 0.5rem 0 0 1.8rem;
+                    color: #6c757d;
+                    font-size: 0.9rem;
+                    line-height: 1.4;
+                ">
+                    Show items missing from child, items only in child, and highlight differences. Parent items are read-only.
+                </p>
+            </div>
+        `;
+    }
+
+    private getItemCountText(): string {
+        if (this.compareWithParent && this.parentNode) {
+            const organizedItems = this.getOrganizedContextItems();
+            const missingCount = organizedItems.filter(item => item.category === 'missing-from-child').length;
+            const onlyInChildCount = organizedItems.filter(item => item.category === 'only-in-child').length;
+            const commonCount = organizedItems.filter(item => item.category === 'common').length;
+            
+            return `${missingCount} missing, ${onlyInChildCount} only in child, ${commonCount} common`;
+        } else {
+            return `${this.contextItems.length} items`;
+        }
+    }
+
+    private getOrganizedContextItems(): ContextItemInfo[] {
+        const items: ContextItemInfo[] = [];
+
+        if (this.compareWithParent && this.parentNode) {
+            const parentItems = getContextItems(this.parentNode.context || '');
+            
+            // Items missing from child (only in parent) - these come first and are read-only
+            parentItems.forEach((parentItem, parentIndex) => {
+                const isInChild = this.contextItems.some(childItem => 
+                    childItem.trim() === parentItem.trim()
+                );
+                
+                if (!isInChild) {
+                    items.push({
+                        text: parentItem,
+                        index: parentIndex + 1, // 1-based
+                        originalIndex: -1, // Parent items don't have an index in this.contextItems
+                        category: 'missing-from-child',
+                        isParentItem: true
+                    });
+                }
+            });
+
+            // Items only in child (not in parent)
+            this.contextItems.forEach((childItem, childIndex) => {
+                const isInParent = parentItems.some(parentItem => 
+                    parentItem.trim() === childItem.trim()
+                );
+                
+                if (!isInParent) {
+                    items.push({
+                        text: childItem,
+                        index: childIndex + 1,
+                        originalIndex: childIndex, // 0-based index in this.contextItems
+                        category: 'only-in-child',
+                        isParentItem: false
+                    });
+                }
+            });
+
+            // Common items
+            this.contextItems.forEach((childItem, childIndex) => {
+                const isInParent = parentItems.some(parentItem => 
+                    parentItem.trim() === childItem.trim()
+                );
+                
+                if (isInParent) {
+                    items.push({
+                        text: childItem,
+                        index: childIndex + 1,
+                        originalIndex: childIndex, // 0-based index in this.contextItems
+                        category: 'common',
+                        isParentItem: false
+                    });
+                }
+            });
+        } else {
+            // Normal mode - just list all items
+            this.contextItems.forEach((item, index) => {
+                items.push({
+                    text: item,
+                    index: index + 1,
+                    originalIndex: index, // 0-based index in this.contextItems
+                    category: 'normal',
+                    isParentItem: false
+                });
+            });
+        }
+
+        return items;
+    }
+
     private renderContextItems(): string {
-        if (this.contextItems.length === 0) {
+        const organizedItems = this.getOrganizedContextItems();
+        
+        if (organizedItems.length === 0) {
             return '<div class="empty-state">No context items yet. Add your first item to get started.</div>';
         }
 
-        return this.contextItems.map((item, index) => `
-            <div class="context-item" data-index="${index}">
-                <div class="context-item-header">
-                    <span class="context-item-number">Item ${index + 1}</span>
-                    <div class="context-item-actions">
-                        <button type="button" class="btn-danger btn-small" data-action="remove-item" data-index="${index}" title="Remove this item from this node only">
-                            🗑️ Remove
-                        </button>
-                        <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${index}" title="Add this item to all versions of all descendant nodes that don't already have it">
-                            ↗️ Propagate
-                        </button>
-                        <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${index}" title="Remove this item from all versions of all descendant nodes that contain it">
-                            🗑️ Remove Recursively
-                        </button>
+        return organizedItems.map((item, displayIndex) => {
+            // Get visual styling based on category
+            let categoryStyle = '';
+            let categoryLabel = '';
+            let isReadOnly = false;
+
+            switch (item.category) {
+                case 'missing-from-child':
+                    categoryStyle = 'background: #fff3cd; border-left: 4px solid #ffc107;';
+                    categoryLabel = '⬇️ Missing from Child (only in parent)';
+                    isReadOnly = true;
+                    break;
+                case 'only-in-child':
+                    categoryStyle = 'background: #d1ecf1; border-left: 4px solid #17a2b8;';
+                    categoryLabel = '⬆️ Only in Child (not in parent)';
+                    break;
+                case 'common':
+                    categoryStyle = 'background: #d4edda; border-left: 4px solid #28a745;';
+                    categoryLabel = '↔️ Common (in both)';
+                    break;
+                default:
+                    categoryStyle = '';
+                    categoryLabel = '';
+            }
+
+            return `
+                <div class="context-item" data-index="${item.originalIndex}" data-display-index="${displayIndex}" style="${categoryStyle}">
+                    <div class="context-item-header">
+                        <div>
+                            <span class="context-item-number">Item #${item.index}</span>
+                            ${categoryLabel ? `
+                                <span style="
+                                    font-size: 0.8rem;
+                                    font-weight: 500;
+                                    color: #495057;
+                                    margin-left: 0.5rem;
+                                ">${categoryLabel}</span>
+                            ` : ''}
+                        </div>
+                        ${!isReadOnly ? `
+                            <div class="context-item-actions">
+                                <button type="button" class="btn-danger btn-small" data-action="remove-item" data-index="${item.originalIndex}" title="Remove this item from this node only">
+                                    🗑️ Remove
+                                </button>
+                                <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${item.originalIndex}" title="Add this item to all versions of all descendant nodes that don't already have it">
+                                    ↗️ Propagate
+                                </button>
+                                <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${item.originalIndex}" title="Remove this item from all versions of all descendant nodes that contain it">
+                                    🗑️ Remove Recursively
+                                </button>
+                            </div>
+                        ` : `
+                            <div class="context-item-actions">
+                                <span style="
+                                    font-size: 0.8rem;
+                                    color: #6c757d;
+                                    font-style: italic;
+                                ">Read-only (from parent)</span>
+                            </div>
+                        `}
                     </div>
+                    ${isReadOnly ? `
+                        <div class="context-item-display" style="
+                            padding: 0.75rem;
+                            background: rgba(255,255,255,0.7);
+                            border: 1px solid #e9ecef;
+                            border-radius: 4px;
+                            font-family: inherit;
+                            font-size: 14px;
+                            line-height: 1.5;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        ">${item.text}</div>
+                    ` : `
+                        <textarea class="context-item-textarea" data-index="${item.originalIndex}" placeholder="Enter context item content...">${item.text}</textarea>
+                        <div class="error-message" id="error-${item.originalIndex}" style="display: none;"></div>
+                    `}
                 </div>
-                <textarea class="context-item-textarea" data-index="${index}" placeholder="Enter context item content...">${item}</textarea>
-                <div class="error-message" id="error-${index}" style="display: none;"></div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     private refreshItemsList(): void {
@@ -267,7 +509,7 @@ export class ContextItemsEditorModal extends BaseModal {
         // Update item count
         const countSpan = this.element?.querySelector('.context-items-header span');
         if (countSpan) {
-            countSpan.textContent = `${this.contextItems.length} items`;
+            countSpan.textContent = this.getItemCountText();
         }
     }
 
@@ -350,6 +592,12 @@ export class ContextItemsEditorModal extends BaseModal {
         const index = parseInt(textarea.dataset['index'] || '0');
         const value = textarea.value;
         
+        // Safety check: don't allow changes to parent items or invalid indices
+        if (index < 0 || index >= this.contextItems.length) {
+            console.warn('Invalid index for item change:', index);
+            return;
+        }
+        
         // Check if the value contains paragraph breaks (double newlines)
         const hasMultipleParagraphs = value.includes('\n\n');
         const errorElement = this.element?.querySelector(`#error-${index}`) as HTMLElement;
@@ -371,15 +619,30 @@ export class ContextItemsEditorModal extends BaseModal {
         // Update the item if valid
         this.contextItems[index] = value;
         this.isDirty = true;
+        
+        // Immediately update the node context
+        this.updateNodeContext();
     }
 
     private handleRemoveItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
         const index = parseInt(button.dataset['index'] || '0');
         
+        // Safety check: don't allow removal of parent items or invalid indices
+        if (index < 0 || index >= this.contextItems.length) {
+            console.warn('Invalid index for item removal:', index);
+            return;
+        }
+        
         if (confirm('Are you sure you want to remove this context item?')) {
+            // Remove the item from the local array
             this.contextItems.splice(index, 1);
             this.isDirty = true;
+            
+            // Immediately update the node context
+            this.updateNodeContext();
+            
+            // Refresh the visual display
             this.refreshItemsList();
         }
     }
@@ -387,6 +650,13 @@ export class ContextItemsEditorModal extends BaseModal {
     private handlePropagateItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
         const index = parseInt(button.dataset['index'] || '0');
+        
+        // Safety check: don't allow propagation of parent items or invalid indices
+        if (index < 0 || index >= this.contextItems.length) {
+            console.warn('Invalid index for item propagation:', index);
+            return;
+        }
+        
         const itemToPropagateText = this.contextItems[index];
         
         if (!itemToPropagateText || !itemToPropagateText.trim()) {
@@ -412,6 +682,13 @@ export class ContextItemsEditorModal extends BaseModal {
     private handleRemoveRecursivelyItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
         const index = parseInt(button.dataset['index'] || '0');
+        
+        // Safety check: don't allow removal of parent items or invalid indices
+        if (index < 0 || index >= this.contextItems.length) {
+            console.warn('Invalid index for recursive item removal:', index);
+            return;
+        }
+        
         const itemToRemoveText = this.contextItems[index];
         
         if (!itemToRemoveText || !itemToRemoveText.trim()) {
@@ -420,17 +697,27 @@ export class ContextItemsEditorModal extends BaseModal {
         }
 
         // Confirm action
-        if (!confirm(`Are you sure you want to remove this context item from all versions of all descendant nodes?\n\nThis will remove the item from every version of every subnode that contains it.\n\nItem: "${itemToRemoveText.substring(0, 100)}${itemToRemoveText.length > 100 ? '...' : ''}"`)) {
+        if (!confirm(`Are you sure you want to remove this context item from this node and all versions of all descendant nodes?\n\nThis will remove the item from this node and from every version of every subnode that contains it.\n\nItem: "${itemToRemoveText.substring(0, 100)}${itemToRemoveText.length > 100 ? '...' : ''}"`)) {
             return;
         }
 
         // Remove from all descendants
         const removedCount = this.removeItemFromDescendants(itemToRemoveText.trim());
         
+        // Also remove from the current node
+        this.contextItems.splice(index, 1);
+        this.isDirty = true;
+        
+        // Immediately update the current node's context
+        this.updateNodeContext();
+        
+        // Refresh the visual display
+        this.refreshItemsList();
+        
         if (removedCount > 0) {
-            alert(`Context item removed from all versions of ${removedCount} descendant node(s).`);
+            alert(`Context item removed from this node and all versions of ${removedCount} descendant node(s).`);
         } else {
-            alert('No descendant nodes found with this context item.');
+            alert('Context item removed from this node. No descendant nodes found with this context item.');
         }
     }
 
@@ -672,16 +959,10 @@ export class ContextItemsEditorModal extends BaseModal {
         }
     }
 
-    private validateAndSave(): boolean {
-        // Check for multiple paragraphs in any item
-        for (let i = 0; i < this.contextItems.length; i++) {
-            const item = this.contextItems[i];
-            if (item && item.includes('\n\n')) {
-                alert(`Context item ${i + 1} contains multiple paragraphs. Please use single paragraphs only.`);
-                return false;
-            }
-        }
-
+    /**
+     * Updates the node's context with the current contextItems array
+     */
+    private updateNodeContext(): void {
         // Filter out empty items
         const validItems = this.contextItems.filter(item => item.trim().length > 0);
         
@@ -715,6 +996,20 @@ export class ContextItemsEditorModal extends BaseModal {
                 void project.saveToStorage();
             }
         });
+    }
+
+    private validateAndSave(): boolean {
+        // Check for multiple paragraphs in any item
+        for (let i = 0; i < this.contextItems.length; i++) {
+            const item = this.contextItems[i];
+            if (item && item.includes('\n\n')) {
+                alert(`Context item ${i + 1} contains multiple paragraphs. Please use single paragraphs only.`);
+                return false;
+            }
+        }
+
+        // Update the node context (this also handles filtering empty items)
+        this.updateNodeContext();
         
         return true;
     }
@@ -727,6 +1022,19 @@ export class ContextItemsEditorModal extends BaseModal {
         super.setupEventHandlers();
 
         if (this.element) {
+            // Parent comparison checkbox
+            const compareCheckbox = this.element.querySelector('#compare-with-parent-checkbox') as HTMLInputElement;
+            if (compareCheckbox) {
+                addEventListenerWithCleanup(
+                    compareCheckbox,
+                    'change',
+                    () => {
+                        this.compareWithParent = compareCheckbox.checked;
+                        this.refreshItemsList();
+                    },
+                    this.cleanupHandlers
+                );
+            }
             // Add item button
             const addButton = this.element.querySelector('[data-action="add-item"]');
             if (addButton) {

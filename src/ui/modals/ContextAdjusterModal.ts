@@ -4,17 +4,32 @@ import { ContextAdjusterService } from './services/ContextAdjusterService';
 import { ContextAnalysisResult, ContextIssue } from '../../types/ContextAdjusterTypes';
 import { getContextItems, formatContextItems, getContextInfoText } from '../../ContextFormat';
 
+interface ContextItem {
+    text: string;
+    index: number; // 1-based index in original context
+    category: 'missing-from-child' | 'only-in-child' | 'common' | 'normal';
+    hasIssue?: boolean;
+    issue?: ContextIssue | undefined;
+}
+
 export class ContextAdjusterModal extends BaseModal {
     private analysisResult: ContextAnalysisResult | null = null;
     private targetNode: DocumentNode | null = null;
     private isLoading: boolean = false;
     private removedItems: Set<number> = new Set();
+    private compareWithParent: boolean = false;
+    private parentNode: DocumentNode | null = null;
 
     constructor() {
         super({ 
             id: 'context-adjuster-modal',
             closable: true,
-            backdrop: true
+            backdrop: true,
+            // Make the modal significantly bigger
+            maxWidth: '95vw',
+            maxHeight: '95vh',
+            width: '1200px',
+            height: '800px'
         });
     }
 
@@ -35,6 +50,10 @@ export class ContextAdjusterModal extends BaseModal {
         this.isLoading = true;
         this.analysisResult = null;
         this.removedItems.clear();
+        this.compareWithParent = false;
+        
+        // Find parent node for comparison
+        await this.findParentNode();
         
         this.open();
         
@@ -51,6 +70,27 @@ export class ContextAdjusterModal extends BaseModal {
         } catch (error) {
             console.error('Context analysis failed:', error);
             this.updateWithError(error instanceof Error ? error.message : 'Analysis failed');
+        }
+    }
+
+    /**
+     * Find the parent node for comparison
+     */
+    private async findParentNode(): Promise<void> {
+        if (!this.targetNode || !this.targetNode.parentId) {
+            this.parentNode = null;
+            return;
+        }
+
+        try {
+            const { getActiveProject } = await import('../../state');
+            const projectManager = getActiveProject()!;
+            const { TreeService } = await import('../../project/TreeService');
+            const treeService = new TreeService();
+            this.parentNode = treeService.findParentNode(this.targetNode.id, projectManager.rootNode);
+        } catch (error) {
+            console.warn('Failed to find parent node:', error);
+            this.parentNode = null;
         }
     }
 
@@ -147,6 +187,10 @@ export class ContextAdjusterModal extends BaseModal {
         this.targetNode = targetNode;
         this.isLoading = false;
         this.removedItems.clear();
+        this.compareWithParent = false;
+        
+        // Find parent node for comparison
+        await this.findParentNode();
         
         await this.open();
         this.setupEventListeners();
@@ -200,10 +244,14 @@ export class ContextAdjusterModal extends BaseModal {
 
         // Add context mismatch warning at the top if present
         const contextMismatchWarning = this.renderContextMismatchWarning();
+        
+        // Render parent comparison checkbox if parent exists
+        const parentComparisonSection = this.renderParentComparisonSection();
 
-        if (!this.analysisResult.hasIssues) {
+        if (!this.analysisResult.hasIssues && !this.compareWithParent) {
             return `
                 ${contextMismatchWarning}
+                ${parentComparisonSection}
                 <div class="no-issues-message" style="
                     text-align: center;
                     padding: 2rem;
@@ -229,7 +277,7 @@ export class ContextAdjusterModal extends BaseModal {
                         border-radius: 6px;
                         padding: 1rem;
                         margin: 0 auto;
-                        max-width: 600px;
+                        max-width: 100%;
                     ">
                         <h4 style="
                             color: #495057;
@@ -247,7 +295,7 @@ export class ContextAdjusterModal extends BaseModal {
                             white-space: pre-wrap;
                             word-wrap: break-word;
                             text-align: left;
-                            max-height: 300px;
+                            max-height: 400px;
                             overflow-y: auto;
                         ">${this.formatContextItems(this.analysisResult.originalContext || 'No context available')}</div>
                     </div>
@@ -255,11 +303,12 @@ export class ContextAdjusterModal extends BaseModal {
             `;
         }
 
-        // Sort issues by severity (highest first)
-        const sortedIssues = [...this.analysisResult.issues].sort((a, b) => b.severity - a.severity);
+        // Get organized context items based on comparison mode
+        const contextItems = this.getOrganizedContextItems();
 
         return `
             ${contextMismatchWarning}
+            ${parentComparisonSection}
             <div class="analysis-results" style="
                 margin: 1rem 0;
             ">
@@ -281,25 +330,33 @@ export class ContextAdjusterModal extends BaseModal {
                             font-size: 1.2rem;
                             margin: 0;
                         ">🎯 Context Analysis Results</h3>
-                        <button class="button button-danger remove-all-btn" style="
-                            padding: 0.5rem 1rem;
-                            font-size: 0.9rem;
-                            border-radius: 6px;
-                            font-weight: 500;
-                        ">
-                            🗑️ Remove All
-                        </button>
+                        ${this.analysisResult.hasIssues ? `
+                            <button class="button button-danger remove-all-btn" style="
+                                padding: 0.5rem 1rem;
+                                font-size: 0.9rem;
+                                border-radius: 6px;
+                                font-weight: 500;
+                            ">
+                                🗑️ Remove All Issues
+                            </button>
+                        ` : ''}
                     </div>
                     <p style="
                         color: #6c757d;
                         margin: 0;
                         line-height: 1.5;
                         text-align: center;
-                    ">Found ${sortedIssues.length} potential issue(s) in the inherited context. Issues are sorted by severity (highest first).</p>
+                    ">${this.getResultsSummary()}</p>
                 </div>
                 
-                <div class="issues-container">
-                    ${sortedIssues.map((issue, index) => this.renderIssueItem(issue, index)).join('')}
+                <div class="items-container" style="
+                    max-height: 500px;
+                    overflow-y: auto;
+                    border: 1px solid #e9ecef;
+                    border-radius: 8px;
+                    background: white;
+                ">
+                    ${contextItems.map((item, index) => this.renderContextItem(item, index)).join('')}
                 </div>
                 
                 ${this.removedItems.size > 0 ? this.renderApplyChangesSection() : ''}
@@ -328,6 +385,285 @@ export class ContextAdjusterModal extends BaseModal {
                     <strong>This node's context appears to be edited already.</strong> 
                     The context differs from the parent context, indicating it has been manually or automatically modified.
                 </p>
+            </div>
+        `;
+    }
+
+    private renderParentComparisonSection(): string {
+        if (!this.parentNode) {
+            return '';
+        }
+
+        return `
+            <div class="parent-comparison-section" style="
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            ">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input 
+                        type="checkbox" 
+                        id="compare-with-parent-checkbox" 
+                        ${this.compareWithParent ? 'checked' : ''}
+                        style="
+                            margin: 0;
+                            transform: scale(1.2);
+                        "
+                    />
+                    <label for="compare-with-parent-checkbox" style="
+                        font-weight: 500;
+                        color: #495057;
+                        margin: 0;
+                        cursor: pointer;
+                    ">
+                        📊 Compare with Parent Context
+                    </label>
+                </div>
+                <p style="
+                    margin: 0.5rem 0 0 1.8rem;
+                    color: #6c757d;
+                    font-size: 0.9rem;
+                    line-height: 1.4;
+                ">
+                    Show items missing from child, items only in child, and highlight differences.
+                </p>
+            </div>
+        `;
+    }
+
+    private getOrganizedContextItems(): ContextItem[] {
+        if (!this.targetNode || !this.analysisResult) {
+            return [];
+        }
+
+        const childItems = getContextItems(this.targetNode.context || '');
+        const items: ContextItem[] = [];
+
+        if (this.compareWithParent && this.parentNode) {
+            const parentItems = getContextItems(this.parentNode.context || '');
+            
+            // Items missing from child (only in parent)
+            parentItems.forEach((parentItem, parentIndex) => {
+                const isInChild = childItems.some(childItem => 
+                    childItem.trim() === parentItem.trim()
+                );
+                
+                if (!isInChild) {
+                    items.push({
+                        text: parentItem,
+                        index: parentIndex + 1, // 1-based
+                        category: 'missing-from-child'
+                    });
+                }
+            });
+
+            // Items only in child (not in parent)
+            childItems.forEach((childItem, childIndex) => {
+                const isInParent = parentItems.some(parentItem => 
+                    parentItem.trim() === childItem.trim()
+                );
+                
+                if (!isInParent) {
+                    const issue = this.findIssueForItem(childIndex + 1);
+                    items.push({
+                        text: childItem,
+                        index: childIndex + 1,
+                        category: 'only-in-child',
+                        hasIssue: !!issue,
+                        issue: issue
+                    });
+                }
+            });
+
+            // Common items
+            childItems.forEach((childItem, childIndex) => {
+                const isInParent = parentItems.some(parentItem => 
+                    parentItem.trim() === childItem.trim()
+                );
+                
+                if (isInParent) {
+                    const issue = this.findIssueForItem(childIndex + 1);
+                    items.push({
+                        text: childItem,
+                        index: childIndex + 1,
+                        category: 'common',
+                        hasIssue: !!issue,
+                        issue: issue
+                    });
+                }
+            });
+        } else {
+            // Normal mode - just list all items with their issues
+            childItems.forEach((item, index) => {
+                const issue = this.findIssueForItem(index + 1);
+                items.push({
+                    text: item,
+                    index: index + 1,
+                    category: 'normal',
+                    hasIssue: !!issue,
+                    issue: issue
+                });
+            });
+        }
+
+        return items;
+    }
+
+    private findIssueForItem(itemNumber: number): ContextIssue | undefined {
+        return this.analysisResult?.issues.find(issue => issue.item_number === itemNumber);
+    }
+
+    private getResultsSummary(): string {
+        if (!this.analysisResult) {
+            return '';
+        }
+
+        if (this.compareWithParent && this.parentNode) {
+            const items = this.getOrganizedContextItems();
+            const missingCount = items.filter(item => item.category === 'missing-from-child').length;
+            const onlyInChildCount = items.filter(item => item.category === 'only-in-child').length;
+            const commonCount = items.filter(item => item.category === 'common').length;
+            const issuesCount = items.filter(item => item.hasIssue).length;
+
+            return `Comparison with parent: ${missingCount} missing from child, ${onlyInChildCount} only in child, ${commonCount} common. ${issuesCount} items have issues.`;
+        } else {
+            const issuesCount = this.analysisResult.issues.length;
+            return issuesCount > 0 
+                ? `Found ${issuesCount} potential issue(s) in the inherited context. Issues are sorted by severity (highest first).`
+                : 'No problematic context items found.';
+        }
+    }
+
+    private renderContextItem(item: ContextItem, index: number): string {
+        const isRemoved = this.removedItems.has(item.index);
+        let categoryStyle = '';
+        let categoryLabel = '';
+
+        switch (item.category) {
+            case 'missing-from-child':
+                categoryStyle = 'background: #fff3cd; border-left: 4px solid #ffc107;';
+                categoryLabel = '⬇️ Missing from Child (only in parent)';
+                break;
+            case 'only-in-child':
+                categoryStyle = 'background: #d1ecf1; border-left: 4px solid #17a2b8;';
+                categoryLabel = '⬆️ Only in Child (not in parent)';
+                break;
+            case 'common':
+                categoryStyle = 'background: #d4edda; border-left: 4px solid #28a745;';
+                categoryLabel = '↔️ Common (in both)';
+                break;
+            default:
+                categoryStyle = '';
+                categoryLabel = '';
+        }
+
+        const severityColor = item.issue ? this.getSeverityColor(item.issue.severity) : '';
+        
+        return `
+            <div class="context-item${isRemoved ? ' removed' : ''}${item.hasIssue ? ' has-issue' : ''}" 
+                 data-item-index="${index}" 
+                 data-item-number="${item.index}" 
+                 style="
+                    ${categoryStyle}
+                    border-bottom: 1px solid #e9ecef;
+                    padding: 1rem;
+                    opacity: ${isRemoved ? '0.6' : '1'};
+                    transition: all 0.3s ease;
+                ">
+                <div class="item-header" style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: ${item.issue ? '0.75rem' : '0'};
+                ">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                            <span class="item-number" style="
+                                font-weight: 600;
+                                color: #495057;
+                                font-size: 0.9rem;
+                                min-width: 60px;
+                            ">Item #${item.index}</span>
+                            
+                            ${categoryLabel ? `
+                                <span class="category-badge" style="
+                                    font-size: 0.8rem;
+                                    font-weight: 500;
+                                    color: #495057;
+                                ">${categoryLabel}</span>
+                            ` : ''}
+                            
+                            ${item.issue ? `
+                                <span class="severity-badge" style="
+                                    background-color: ${severityColor};
+                                    color: white;
+                                    padding: 0.25rem 0.5rem;
+                                    border-radius: 4px;
+                                    font-size: 0.8rem;
+                                    font-weight: 500;
+                                ">
+                                    Severity ${item.issue.severity}/10
+                                </span>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="item-text" style="
+                            background: ${item.category === 'missing-from-child' ? '#fff' : 'rgba(255,255,255,0.7)'};
+                            border: 1px solid #e9ecef;
+                            border-radius: 4px;
+                            padding: 0.75rem;
+                            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                            font-size: 0.85rem;
+                            line-height: 1.4;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            max-height: 150px;
+                            overflow-y: auto;
+                        ">${this.escapeHtml(item.text)}</div>
+                    </div>
+                    
+                    ${item.category !== 'missing-from-child' ? `
+                        <div class="item-actions" style="margin-left: 1rem;">
+                            ${isRemoved ? `
+                                <button class="button button-secondary undo-remove-btn" data-item-number="${item.index}" style="
+                                    padding: 0.4rem 0.8rem;
+                                    font-size: 0.85rem;
+                                    border-radius: 4px;
+                                ">
+                                    ↶ Undo
+                                </button>
+                            ` : `
+                                <button class="button button-danger remove-item-btn" data-item-number="${item.index}" style="
+                                    padding: 0.4rem 0.8rem;
+                                    font-size: 0.85rem;
+                                    border-radius: 4px;
+                                ">
+                                    🗑️ Remove
+                                </button>
+                            `}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${item.issue ? `
+                    <div class="issue-details" style="
+                        margin-top: 0.75rem;
+                        padding-top: 0.75rem;
+                        border-top: 1px solid rgba(0,0,0,0.1);
+                    ">
+                        <div class="issue-reason" style="margin-bottom: 0.75rem;">
+                            <strong style="color: #495057; font-size: 0.9rem;">Problem:</strong> 
+                            <span style="color: #6c757d; line-height: 1.5;">${this.escapeHtml(item.issue.reason_for_problem)}</span>
+                        </div>
+                        
+                        <div class="issue-justification">
+                            <strong style="color: #495057; font-size: 0.9rem;">Justification:</strong> 
+                            <span style="color: #6c757d; line-height: 1.5;">${this.escapeHtml(item.issue.justification)}</span>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
@@ -640,6 +976,15 @@ export class ContextAdjusterModal extends BaseModal {
     }
 
     private setupEventListeners(): void {
+        // Parent comparison checkbox
+        const compareCheckbox = document.querySelector('#compare-with-parent-checkbox') as HTMLInputElement;
+        if (compareCheckbox) {
+            compareCheckbox.addEventListener('change', () => {
+                this.compareWithParent = compareCheckbox.checked;
+                this.refreshContent();
+            });
+        }
+
         // Remove item buttons
         const removeButtons = document.querySelectorAll('.remove-item-btn');
         removeButtons.forEach(button => {
