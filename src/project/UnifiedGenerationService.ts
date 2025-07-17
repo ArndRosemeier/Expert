@@ -1334,17 +1334,7 @@ export class UnifiedGenerationService {
      * Determine if content should be generated for a node
      */
     private shouldGenerateContent(node: DocumentNode): boolean {
-        const nodeState = node.getState();
-        const shouldGenerate = nodeState !== 'Final';
-        
-        // Add debug logging to catch infinite loops
-        if (shouldGenerate) {
-            console.log(`🔍 Node "${node.title}" needs content generation - State: ${nodeState}, Content length: ${node.content.length}`);
-        } else {
-            console.log(`✅ Node "${node.title}" has Final content - skipping generation`);
-        }
-        
-        return shouldGenerate;
+        return node.getState() !== 'Final';
     }
 
     /**
@@ -1491,38 +1481,32 @@ export class UnifiedGenerationService {
                 
                 // Promote the final result to master and mark as winner
                 const completedSession = node.getLatestGenerationSession();
-                if (completedSession) {
-                    const finalIterationNumber = completedSession.finalIterationNumber;
-                    const generationVersion = node.getAllVersions().find(v => 
-                        v.tags.has('generated') && v.tags.has(`iteration${finalIterationNumber}`)
-                    );
-                    
-                    if (generationVersion) {
-                        node.promoteToMaster(generationVersion.id, ['generatedWinner']);
-                        console.log(`✅ Successfully promoted iteration ${finalIterationNumber} to master for "${node.title}"`);
-                    } else {
-                        // CRITICAL BUG FIX: Don't just warn - this creates infinite loops
-                        console.error(`❌ CRITICAL: No version found for final iteration ${finalIterationNumber} for node ${node.title}`);
-                        console.error(`Available versions:`, node.getAllVersions().map(v => ({
-                            id: v.id,
-                            tags: Array.from(v.tags),
-                            contentPreview: v.content.substring(0, 50) + '...'
-                        })));
-                        
-                        // Fallback: Set the final response directly as master to prevent infinite loop
-                        console.log(`🔧 FALLBACK: Setting final response directly as master content`);
-                        node.setContent(result.finalResponse, 'generatedWinner');
-                        
-                        // Verify the node is now in Final state
-                        if (node.getState() !== 'Final') {
-                            throw new Error(`CRITICAL: Node "${node.title}" still not in Final state after fallback promotion. State: ${node.getState()}, Content length: ${node.content.length}`);
-                        }
-                    }
-                } else {
-                    // No session - direct fallback
-                    console.warn(`No completed session found for "${node.title}", using direct content assignment`);
-                    node.setContent(result.finalResponse, 'generatedWinner');
+                if (!completedSession) {
+                    throw new Error(`CRITICAL: No completed generation session found for node "${node.title}" after successful content generation. This indicates a serious bug in session management.`);
                 }
+                
+                const finalIterationNumber = completedSession.finalIterationNumber;
+                const generationVersion = node.getAllVersions().find(v => 
+                    v.tags.has('generated') && v.tags.has(`iteration${finalIterationNumber}`)
+                );
+                
+                if (!generationVersion) {
+                    console.error(`❌ CRITICAL: No version found for final iteration ${finalIterationNumber} for node ${node.title}`);
+                    console.error(`Available versions:`, node.getAllVersions().map(v => ({
+                        id: v.id,
+                        tags: Array.from(v.tags),
+                        contentPreview: v.content.substring(0, 50) + '...'
+                    })));
+                    console.error(`Session details:`, {
+                        sessionId: completedSession.sessionId,
+                        finalIterationNumber: completedSession.finalIterationNumber,
+                        totalIterations: completedSession.iterations.length,
+                        iterationNumbers: completedSession.iterations.map(i => i.iteration)
+                    });
+                    throw new Error(`CRITICAL: Version promotion failed for node "${node.title}". Final iteration ${finalIterationNumber} version not found. This indicates a serious bug in version management.`);
+                }
+                
+                node.promoteToMaster(generationVersion.id, ['generatedWinner']);
                 
                 await this.deps.saveToStorage();
                 
