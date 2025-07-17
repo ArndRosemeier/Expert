@@ -489,8 +489,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'check-coherence': 'check-coherence-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
-                            'tag-manager': 'tag-manager-btn',
-                            'test-hello-world-epub': 'test-hello-world-epub-btn'
+                            'tag-manager': 'tag-manager-btn'
                         };
                         
                         const handlerAction = actionMap[action];
@@ -780,9 +779,6 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ` : ''}
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
-                    </button>
-                    <button class="action-btn" data-action="test-hello-world-epub">
-                        📘 Test Hello World EPUB
                     </button>
                 </div>
             </div>
@@ -2275,35 +2271,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
 
 
 
-/**
- * Handle testing the Hello World EPUB generator
- */
-async function handleTestHelloWorldEpub(): Promise<void> {
-    try {
-        // Import the HelloWorldEpubGenerator
-        const { HelloWorldEpubGenerator } = await import('../HelloWorldEpubGenerator');
-        
-        // Create a new generator instance
-        const generator = new HelloWorldEpubGenerator();
-        
-        // Generate the EPUB
-        const epubBlob = await generator.generate();
-        
-        // Use the FileDownloadService to download the EPUB
-        const { FileDownloadService } = await import('../utils/FileDownloadService');
-        await FileDownloadService.downloadBlob(epubBlob, {
-            filename: 'hello-world-test.epub',
-            mimeType: 'application/epub+zip',
-            description: 'Hello World EPUB Test File',
-            extensions: ['epub']
-        });
-        
-        console.log('✅ Hello World EPUB generated and downloaded successfully!');
-    } catch (error) {
-        console.error('❌ Error generating Hello World EPUB:', error);
-        alert('Error generating Hello World EPUB. Check console for details.');
-    }
-}
+
 
 /**
  * Handle dropdown action by button ID
@@ -3070,11 +3038,7 @@ This action cannot be undone.`;
             }
             break;
 
-        case 'test-hello-world-epub-btn':
-            {
-                void handleTestHelloWorldEpub();
-            }
-            break;
+
 
         default:
             console.warn('Unknown dropdown action:', buttonId);
