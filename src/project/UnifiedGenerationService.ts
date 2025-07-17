@@ -1479,34 +1479,9 @@ export class UnifiedGenerationService {
                     });
                 }
                 
-                // Promote the final result to master and mark as winner
-                const completedSession = node.getLatestGenerationSession();
-                if (!completedSession) {
-                    throw new Error(`CRITICAL: No completed generation session found for node "${node.title}" after successful content generation. This indicates a serious bug in session management.`);
-                }
-                
-                const finalIterationNumber = completedSession.finalIterationNumber;
-                const generationVersion = node.getAllVersions().find(v => 
-                    v.tags.has('generated') && v.tags.has(`iteration${finalIterationNumber}`)
-                );
-                
-                if (!generationVersion) {
-                    console.error(`❌ CRITICAL: No version found for final iteration ${finalIterationNumber} for node ${node.title}`);
-                    console.error(`Available versions:`, node.getAllVersions().map(v => ({
-                        id: v.id,
-                        tags: Array.from(v.tags),
-                        contentPreview: v.content.substring(0, 50) + '...'
-                    })));
-                    console.error(`Session details:`, {
-                        sessionId: completedSession.sessionId,
-                        finalIterationNumber: completedSession.finalIterationNumber,
-                        totalIterations: completedSession.iterations.length,
-                        iterationNumbers: completedSession.iterations.map(i => i.iteration)
-                    });
-                    throw new Error(`CRITICAL: Version promotion failed for node "${node.title}". Final iteration ${finalIterationNumber} version not found. This indicates a serious bug in version management.`);
-                }
-                
-                node.promoteToMaster(generationVersion.id, ['generatedWinner']);
+                // CRITICAL: Set content FIRST, then tags to prevent "Draft:" + "generatedWinner" state
+                // This order ensures content is updated before any tag manipulation
+                node.setContent(result.finalResponse, 'generatedWinner');
                 
                 await this.deps.saveToStorage();
                 

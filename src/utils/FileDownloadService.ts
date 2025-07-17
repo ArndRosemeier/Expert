@@ -68,16 +68,16 @@ export class FileDownloadService {
                     actualFilename: fileHandle.name,
                     method: 'save-as'
                 };
-            } catch (error: any) {
-                // Check if user cancelled
-                if (error.name === 'AbortError') {
-                    console.log('❌ User cancelled file save');
-                    return {
-                        success: false,
-                        cancelled: true,
-                        method: 'failed'
-                    };
-                }
+        } catch (error: any) {
+            // Check if user cancelled
+            if (error.name === 'AbortError') {
+                console.log('❌ User cancelled file save');
+                return {
+                    success: false,
+                    cancelled: true,
+                    method: 'failed'
+                };
+            }
                 
                 // Log detailed error for debugging
                 console.error('💥 File System Access API failed:', error);
@@ -104,12 +104,12 @@ export class FileDownloadService {
             console.warn(`⚠️ File selector not available in ${browserInfo.name}. Using direct download to Downloads folder.`);
             console.info(`💡 For better file management, consider using Chrome 86+ or Edge 86+ which support file selectors.`);
             
-            this.downloadBlobTraditional(blob, options.filename);
-            return {
-                success: true,
-                cancelled: false,
-                actualFilename: options.filename,
-                method: 'download'
+        this.downloadBlobTraditional(blob, options.filename);
+        return {
+            success: true,
+            cancelled: false,
+            actualFilename: options.filename,
+            method: 'download'
             };
         }
         
