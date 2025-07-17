@@ -1334,8 +1334,17 @@ export class UnifiedGenerationService {
      * Determine if content should be generated for a node
      */
     private shouldGenerateContent(node: DocumentNode): boolean {
-        // Skip if node already has final content
-        return node.getState() !== 'Final';
+        const nodeState = node.getState();
+        const shouldGenerate = nodeState !== 'Final';
+        
+        // Add debug logging to catch infinite loops
+        if (shouldGenerate) {
+            console.log(`🔍 Node "${node.title}" needs content generation - State: ${nodeState}, Content length: ${node.content.length}`);
+        } else {
+            console.log(`✅ Node "${node.title}" has Final content - skipping generation`);
+        }
+        
+        return shouldGenerate;
     }
 
     /**
@@ -1490,9 +1499,29 @@ export class UnifiedGenerationService {
                     
                     if (generationVersion) {
                         node.promoteToMaster(generationVersion.id, ['generatedWinner']);
+                        console.log(`✅ Successfully promoted iteration ${finalIterationNumber} to master for "${node.title}"`);
                     } else {
-                        console.warn(`No version found for final iteration ${finalIterationNumber} for node ${node.title}`);
+                        // CRITICAL BUG FIX: Don't just warn - this creates infinite loops
+                        console.error(`❌ CRITICAL: No version found for final iteration ${finalIterationNumber} for node ${node.title}`);
+                        console.error(`Available versions:`, node.getAllVersions().map(v => ({
+                            id: v.id,
+                            tags: Array.from(v.tags),
+                            contentPreview: v.content.substring(0, 50) + '...'
+                        })));
+                        
+                        // Fallback: Set the final response directly as master to prevent infinite loop
+                        console.log(`🔧 FALLBACK: Setting final response directly as master content`);
+                        node.setContent(result.finalResponse, 'generatedWinner');
+                        
+                        // Verify the node is now in Final state
+                        if (node.getState() !== 'Final') {
+                            throw new Error(`CRITICAL: Node "${node.title}" still not in Final state after fallback promotion. State: ${node.getState()}, Content length: ${node.content.length}`);
+                        }
                     }
+                } else {
+                    // No session - direct fallback
+                    console.warn(`No completed session found for "${node.title}", using direct content assignment`);
+                    node.setContent(result.finalResponse, 'generatedWinner');
                 }
                 
                 await this.deps.saveToStorage();
