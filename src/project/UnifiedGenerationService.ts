@@ -317,7 +317,8 @@ export class UnifiedGenerationService {
             // Calculate target states for each level
             const targetStates = this.calculateTargetStates(levels, startNode.level, maxLevel);
             
-            // Process each node
+            // Find the first node that needs work and do exactly one operation
+            // This ensures completely stateless behavior - no temporal coupling
             for (const node of allNodes) {
                 const targetState = targetStates[node.level];
                 if (!targetState) {
@@ -328,36 +329,41 @@ export class UnifiedGenerationService {
                 const currentState = this.getNodeCurrentState(node);
                 const workNeeded = this.getWorkNeeded(node, targetState);
 
+                // Do ONLY the first type of work needed, then exit and reassess
                 
-                // Do context pruning if needed
+                // Priority 1: Context pruning
                 if (workNeeded.contextPruning) {
                     await this.handleContextPruning(node.id, levels.contextRatingThreshold);
                     workDone = true;
+                    break; // Exit immediately - fresh assessment next iteration
                 }
                 
-                // Do content generation if needed
+                // Priority 2: Content generation
                 if (workNeeded.contentGeneration) {
                     await this.handleContentGeneration(node.id);
                     workDone = true;
+                    break; // Exit immediately - fresh assessment next iteration
                 }
                 
-                // Do coherence check if needed (only for last sibling)
+                // Priority 3: Coherence check (only for last sibling)
                 if (workNeeded.coherenceCheck) {
                     if (this.isLastSibling(node)) {
                         if (node.parentId) {
                             await this.handleCoherenceCheck(node.parentId, levels);
                             workDone = true;
+                            break; // Exit immediately - fresh assessment next iteration
                         }
                     }
                 }
                 
-                // Check if node can expand
+                // Priority 4: Expansion
                 if (workNeeded.expansion) {
                     const canExpand = this.canNodeExpand(node, targetState, startNodeId);
                     if (canExpand) {
                         const expansionResult = await this.handleDraftCreation(node.id);
                         if (expansionResult.childrenCreated) {
                             workDone = true;
+                            break; // Exit immediately - fresh assessment next iteration
                         }
                     }
                 }
