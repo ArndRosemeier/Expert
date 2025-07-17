@@ -666,7 +666,15 @@ export class SettingsModal extends BaseModal {
         }
 
         this.saveTimeout = window.setTimeout(async () => {
+            console.log('🔄 Auto-saving settings and prompts...');
+            
+            // Save profile settings (criteria, models, etc.)
             await this.saveCurrentSettingsToProfile();
+            
+            // CRITICAL FIX: Also save prompt changes during auto-save
+            await this.promptService.saveToStorage();
+            
+            console.log('✅ Auto-save completed');
             this.updateUnsavedIndicator(false);
         }, 2000);
     }
@@ -701,7 +709,16 @@ export class SettingsModal extends BaseModal {
             window.clearTimeout(this.saveTimeout);
         }
         
+        console.log('💾 Saving settings and prompts...');
+        
+        // Save profile settings (criteria, models, etc.)
         await this.saveCurrentSettingsToProfile();
+        
+        // CRITICAL FIX: Save prompt changes to storage
+        await this.promptService.saveToStorage();
+        
+        console.log('✅ Settings and prompts saved successfully');
+        
         this.updateUnsavedIndicator(false);
         this.emit('saved');
         void this.close();
