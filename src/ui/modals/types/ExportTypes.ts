@@ -45,6 +45,8 @@ export interface ExportConfig {
     hierarchyTitles?: HierarchyTitleConfig;
     // HTML-specific options
     includeHtmlToc?: boolean;
+    // EPUB-specific options
+    author?: string;
 }
 
 /**

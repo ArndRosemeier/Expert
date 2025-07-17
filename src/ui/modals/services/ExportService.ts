@@ -589,7 +589,8 @@ th {
         scope: string, 
         format: string, 
         hierarchyTitles?: { [level: number]: boolean }, 
-        includeHtmlToc?: boolean
+        includeHtmlToc?: boolean,
+        author?: string
     ): Promise<void> {
         const config: ExportConfig = {
             scope: scope as ExportScope,
@@ -601,6 +602,9 @@ th {
         }
         if (includeHtmlToc !== undefined) {
             config.includeHtmlToc = includeHtmlToc;
+        }
+        if (author !== undefined) {
+            config.author = author;
         }
 
         const result = await this.export(node, config, projectManager);

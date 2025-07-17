@@ -144,7 +144,7 @@ export class WorkingEpubGenerator {
         // Add required files to ZIP
         this.addMimeType();
         this.addContainerXml();
-        this.addPackageOpf(node.title, contentNodes);
+        this.addPackageOpf(node.title, contentNodes, config.author || 'Expert Application');
         this.addNavXhtml(node.title, contentNodes);
         this.addStyles();
         
@@ -173,7 +173,7 @@ export class WorkingEpubGenerator {
         this.zip.file('META-INF/container.xml', containerXml);
     }
 
-    private addPackageOpf(bookTitle: string, contentNodes: DocumentNode[]): void {
+    private addPackageOpf(bookTitle: string, contentNodes: DocumentNode[], author: string = 'Expert Application'): void {
         const manifestItems = contentNodes.map((node, index) => 
             `        <item id="chapter${index + 1}" href="chapter${index + 1}.xhtml" media-type="application/xhtml+xml"/>`
         ).join('\n');
@@ -187,7 +187,7 @@ export class WorkingEpubGenerator {
     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
         <dc:identifier id="BookId">${this.uuid}</dc:identifier>
         <dc:title>${this.escapeXml(bookTitle)}</dc:title>
-        <dc:creator>Expert Application</dc:creator>
+        <dc:creator>${this.escapeXml(author)}</dc:creator>
         <dc:language>en</dc:language>
         <dc:date>${this.timestamp}</dc:date>
         <meta property="dcterms:modified">${this.timestamp}</meta>

@@ -27,6 +27,7 @@ export class ExportModal extends BaseModal {
     private nodeInfoDisplay?: HTMLElement;
     private hierarchyTitleCheckboxes: { [level: number]: HTMLInputElement } = {};
     private htmlTocCheckbox?: HTMLInputElement;
+    private epubAuthorInput?: HTMLInputElement;
     private hierarchyTitleContainer?: HTMLElement;
     private reimportInfoContainer?: HTMLElement;
 
@@ -239,6 +240,10 @@ export class ExportModal extends BaseModal {
         const htmlTocOption = this.createHtmlTocOption();
         section.appendChild(htmlTocOption);
 
+        // EPUB Author option
+        const epubAuthorOption = this.createEpubAuthorOption();
+        section.appendChild(epubAuthorOption);
+
         // Reimport info section
         const reimportInfo = this.createReimportInfoSection();
         section.appendChild(reimportInfo);
@@ -273,6 +278,36 @@ export class ExportModal extends BaseModal {
 
         option.appendChild(this.htmlTocCheckbox);
         option.appendChild(label);
+
+        return option;
+    }
+
+    /**
+     * Creates the EPUB author option
+     */
+    private createEpubAuthorOption(): HTMLElement {
+        const option = createElement('div', {
+            classes: ['epub-author-option']
+        });
+
+        const label = createElement('label', {
+            content: 'Author:',
+            attributes: { for: 'epub-author-input' }
+        });
+
+        this.epubAuthorInput = createElement('input', {
+            attributes: { 
+                type: 'text',
+                id: 'epub-author-input',
+                placeholder: 'Enter author name'
+            }
+        }) as HTMLInputElement;
+        
+        // Default value
+        this.epubAuthorInput.value = 'Expert Application';
+
+        option.appendChild(label);
+        option.appendChild(this.epubAuthorInput);
 
         return option;
     }
@@ -528,6 +563,13 @@ export class ExportModal extends BaseModal {
             htmlTocOption.style.display = isHtml ? 'block' : 'none';
         }
 
+        // Show EPUB author option only for EPUB format
+        const isEpub = this.formatSelect.value === 'epub';
+        const epubAuthorOption = formatOptionsSection.querySelector('.epub-author-option') as HTMLElement;
+        if (epubAuthorOption) {
+            epubAuthorOption.style.display = isEpub ? 'block' : 'none';
+        }
+
         // Show reimport info section only for reimport scope
         const isReimport = this.scopeSelect.value === 'reimport';
         if (this.reimportInfoContainer) {
@@ -637,7 +679,8 @@ export class ExportModal extends BaseModal {
                 scope: scope as any,
                 format: format as any,
                 hierarchyTitles,
-                includeHtmlToc: this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false
+                includeHtmlToc: this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false,
+                author: this.epubAuthorInput ? this.epubAuthorInput.value : 'Expert Application'
             });
 
             // Copy to clipboard
@@ -710,7 +753,8 @@ export class ExportModal extends BaseModal {
                 scope,
                 format,
                 hierarchyTitles,
-                this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false
+                this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false,
+                this.epubAuthorInput ? this.epubAuthorInput.value : 'Expert Application'
             );
 
             void this.close();
@@ -945,6 +989,28 @@ export class ExportModal extends BaseModal {
                     font-weight: 500;
                     color: #15803d;
                     margin: 0;
+                }
+                
+                .epub-author-option {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    margin-top: 1rem;
+                }
+                
+                .epub-author-option label {
+                    font-weight: 500;
+                    color: #7c2d12;
+                    margin: 0;
+                    min-width: 60px;
+                }
+                
+                .epub-author-option input[type="text"] {
+                    flex: 1;
+                    padding: 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 0.875rem;
                 }
                 
                 .section-description {
