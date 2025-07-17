@@ -2929,22 +2929,9 @@ This action cannot be undone.`;
                 }
 
                 // Create and show modal in loading state
+                // The modal handles its own analysis internally, no need to call analyzeContext separately
                 const analysisModal = new ContextAdjusterModal();
                 void analysisModal.openInLoadingState(node);
-                
-                // Perform analysis
-                contextService.analyzeContext(node, projectManager)
-                    .then((result) => {
-                        console.log('Context analysis completed, updating modal with results:', result);
-                        // Update modal with results
-                        analysisModal.updateWithResults(result);
-                    })
-                    .catch((error) => {
-                        console.error('Context analysis failed:', error);
-                        // Close loading modal and show error
-                        void analysisModal.close();
-                        alert('Context analysis failed: ' + error.message);
-                    });
             }
             break;
 
