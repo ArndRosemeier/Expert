@@ -702,14 +702,7 @@ JSON Response:`.trim(),
             You are analyzing inherited context for potential issues when creating subnodes.
 
 **Your Task:**
-Analyze the numbered context items and identify those that might be problematic for creating subnodes of the current node. Look for:
-
-1. **Temporal references** that refer to earlier or later states of the document
-2. **Scope mismatches** where context items are too broad or too narrow for subnodes
-3. **Contradictory information** that conflicts with the current node's content
-4. **Outdated assumptions** that no longer apply to this part of the document
-5. **Overly specific details** that would be confusing for subnode creation
-6. **If in doubt, leave it out**. Context items that are not relevant to the current node should be reported as "not relevant"
+Make a list of context items that are clearly beyond the scope of the content of this node and its possible subnodes.
 
 **Numbered Context Items:**
 {{numbered_context_items}}
