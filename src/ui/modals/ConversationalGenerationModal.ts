@@ -20,6 +20,7 @@ export class ConversationalGenerationModal extends BaseModal {
     private contextPruneLevel: number = -1;
     private coherenceLevel: number = -1;
     private autofixSeverity: number = -1;
+    private contextRatingThreshold: number = -1;
 
     constructor(config: ConversationalGenerationModalConfig) {
         super({
@@ -688,15 +689,17 @@ export class ConversationalGenerationModal extends BaseModal {
         const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
         const autofixSelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
+        const contextRatingThresholdSelector = document.getElementById('context-rating-threshold-selector') as HTMLSelectElement;
         
         if (draftSelector) draftSelector.value = this.draftLevel.toString();
         if (contentSelector) contentSelector.value = this.contentLevel.toString();
         if (contextPruneSelector) contextPruneSelector.value = this.contextPruneLevel.toString();
         if (coherenceSelector) coherenceSelector.value = this.coherenceLevel.toString();
         if (autofixSelector) autofixSelector.value = this.autofixSeverity.toString();
+        if (contextRatingThresholdSelector) contextRatingThresholdSelector.value = this.contextRatingThreshold.toString();
         
         // Trigger change events to update any dependent UI
-        [draftSelector, contentSelector, contextPruneSelector, coherenceSelector, autofixSelector].forEach(selector => {
+        [draftSelector, contentSelector, contextPruneSelector, coherenceSelector, autofixSelector, contextRatingThresholdSelector].forEach(selector => {
             if (selector) {
                 selector.dispatchEvent(new Event('change', { bubbles: true }));
             }

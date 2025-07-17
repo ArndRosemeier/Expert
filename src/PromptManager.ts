@@ -47,6 +47,9 @@ export interface OrchestratorPrompts {
     // For context analysis
     context_analysis: string;
     
+    // For context rating
+    context_rating: string;
+    
     // For fixing contradictions
     fix_contradiction: string;
     
@@ -757,6 +760,82 @@ Example 2 (no issues found):
 Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
         description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
+    },
+
+    context_rating: {
+        text: `
+            Write your response in {{language}} for any explanatory fields. All JSON field names must always remain in English.
+            
+            You are analyzing inherited context items to rate their relevancy for creating subnodes of the current node.
+
+**Your Task:**
+Rate each context item based on how relevant it is for creating subnodes under this specific node.
+
+**Numbered Context Items:**
+{{numbered_context_items}}
+
+**Current Node:**
+Title: {{node_title}}
+*****
+Content: {{node_content}}
+*****
+
+**RESPONSE FORMAT - CRITICAL:**
+Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+
+Each rating object MUST have these EXACT field names (no variations, abbreviations, or typos):
+- item_number: The number of the context item (from the numbered list above)
+- relevancy_rating: A number from 1-10 (where 10 is most relevant) indicating how relevant this context item is for creating subnodes under the current node
+
+**RATING GUIDELINES:**
+- 10: Extremely relevant - essential context for any subnode
+- 8-9: Highly relevant - very useful for most subnodes
+- 6-7: Moderately relevant - useful for some subnodes
+- 4-5: Somewhat relevant - may be useful in specific cases
+- 2-3: Low relevance - rarely useful for subnodes
+- 1: Not relevant - would not help with subnode creation
+
+**EXAMPLES:**
+
+Example 1 (mixed relevance):
+[
+  {
+    "item_number": 1,
+    "relevancy_rating": 9
+  },
+  {
+    "item_number": 2,
+    "relevancy_rating": 4
+  },
+  {
+    "item_number": 3,
+    "relevancy_rating": 7
+  }
+]
+
+Example 2 (all items relevant):
+[
+  {
+    "item_number": 1,
+    "relevancy_rating": 8
+  },
+  {
+    "item_number": 2,
+    "relevancy_rating": 10
+  }
+]
+
+**CRITICAL INSTRUCTIONS:**
+- Rate ALL context items from the numbered list
+- Use ONLY the exact field names shown above
+- Your response must be valid JSON that can be parsed by JSON.parse()
+- Do not add any text before or after the JSON array
+- Ratings must be integers between 1 and 10 inclusive
+- Test your JSON mentally before responding to ensure it's valid
+
+Your JSON response:`.trim(),
+        placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
+        description: "System prompt for rating inherited context items by relevancy for subnode creation. Provides compact numerical ratings for all context items."
     },
 
     fix_contradiction: {

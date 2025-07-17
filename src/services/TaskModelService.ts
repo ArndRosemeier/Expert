@@ -30,6 +30,7 @@ export interface AllTaskModelConfigs {
     fix_contradiction: TaskModelConfig;
     text_polishing: TaskModelConfig;
     context_adjustment: TaskModelConfig;
+    context_rating: TaskModelConfig;
     // Future tasks can be added here:
     // context_analysis: TaskModelConfig;
 }
@@ -53,6 +54,10 @@ const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
     context_adjustment: {
         outline: 'creator',  // Default to creator for context analysis in outline nodes
         prose: 'prose'       // Default to prose for context analysis in prose nodes
+    },
+    context_rating: {
+        outline: 'creator',  // Default to creator for context rating in outline nodes
+        prose: 'prose'       // Default to prose for context rating in prose nodes
     }
 };
 
@@ -193,7 +198,8 @@ export class TaskModelService {
             coherence_analysis: 'Coherence Analysis',
             fix_contradiction: 'Fix Contradiction',
             text_polishing: 'Text Polishing',
-            context_adjustment: 'Context Analysis'
+            context_adjustment: 'Context Analysis',
+            context_rating: 'Context Rating'
         };
 
         return {
