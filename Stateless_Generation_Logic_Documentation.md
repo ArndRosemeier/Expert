@@ -4,6 +4,8 @@
 
 The Expert system uses a sophisticated **stateless target-state-based generation strategy** for content creation and tree expansion. This approach ensures deterministic, level-based processing where nodes advance through clearly defined states based on generation parameters.
 
+**Critical Design Principle**: The system processes exactly **one operation per iteration** and reassesses the complete tree state after each operation. This eliminates temporal coupling and ensures identical behavior whether generation runs continuously or is interrupted and resumed.
+
 ## Core Concepts
 
 ### Target State vs Current State
@@ -124,26 +126,106 @@ const allSiblingsReady = siblings.every(sibling => {
 
 ## Loop Structure
 
-### Main Processing Loop
+### Single-Operation Processing Loop
 ```
 while (workDone) {
     workDone = false;
-    allNodes = collectAllDescendants(startNodeId);
+    allNodes = collectAllDescendants(startNodeId);  // Fresh assessment every iteration
     targetStates = calculateTargetStates(levels, startLevel, maxLevel);
     
     for each node in allNodes {
         workNeeded = getWorkNeeded(node, targetStates[node.level]);
         
-        if (workNeeded.contextPruning) → handleContextPruning();
-        if (workNeeded.contentGeneration) → handleContentGeneration();  
-        if (workNeeded.coherenceCheck && isLastSibling) → handleCoherenceCheck();
-        if (workNeeded.expansion && canNodeExpand()) → handleDraftCreation();
+        // Do ONLY the first operation needed, then break for fresh assessment
+        if (workNeeded.contextPruning) → handleContextPruning() → BREAK;
+        if (workNeeded.contentGeneration) → handleContentGeneration() → BREAK;  
+        if (workNeeded.coherenceCheck && isLastSibling) → handleCoherenceCheck() → BREAK;
+        if (workNeeded.expansion && canNodeExpand()) → handleDraftCreation() → BREAK;
     }
 }
 ```
 
+### Key Characteristics
+- **One Operation Per Iteration**: After any work is performed, immediately break and start fresh
+- **Fresh Tree Assessment**: Every iteration calls `collectAllDescendants()` for current tree state
+- **No Temporal Coupling**: Tree modifications don't affect other operations within the same iteration
+- **Predictable Behavior**: Identical processing order whether continuous or interrupted
+
+### Work Priority Order
+1. **Context Pruning** (highest priority)
+2. **Content Generation** 
+3. **Coherence Check** (only on last sibling)
+4. **Expansion** (lowest priority)
+
 ### Termination Condition
 Loop continues until a complete pass produces no work (`workDone = false`).
+
+## Node Processing Order
+
+### Creation Order vs. Modification Order
+The system processes nodes in **creation order** (array position) rather than modification timestamps. This ensures stable, predictable ordering that doesn't change based on operations.
+
+**Previous Issue (Fixed)**: Originally used timestamp-based ordering:
+```typescript
+// OLD - BROKEN: Timestamps change with operations
+const sortedChildren = [...currentNode.children].sort((a, b) => {
+    const aMasterVersion = a.getMasterVersion()!;
+    const bMasterVersion = b.getMasterVersion()!;
+    return aMasterVersion.timestamp.getTime() - bMasterVersion.timestamp.getTime();
+});
+```
+
+**Current Solution**: Uses natural array order (creation order):
+```typescript
+// NEW - STABLE: Creation order never changes
+const sortedChildren = [...currentNode.children];
+```
+
+### Why This Matters
+**Problem Scenario:**
+1. Parent expands → Child A, B, C (creation order)
+2. Child A gets context-adjusted (timestamp updated to "now")  
+3. Generation interrupted and resumed
+4. System would process B, C, A (wrong timestamp order)
+5. Child A triggers coherence check but has no content → **BUG**
+
+**Solution:**
+- **Stable Ordering**: A, B, C always processed in creation order
+- **Correct "Last Sibling"**: Child C always triggers coherence, not A
+- **Resumable**: Interruptions don't change processing logic
+
+## Temporal Coupling Elimination
+
+### The Hidden State Problem (Solved)
+The original design had a subtle temporal coupling issue where the order of operations **within a single iteration** could affect tree state and subsequent decisions.
+
+**Previous Issue**: 
+```typescript
+// OLD - Multiple operations per iteration created race conditions
+for (const node of allNodes) {
+    if (workNeeded.expansion) expandNode(); // Tree changes
+    if (workNeeded.content) generateContent(); // Decision based on modified tree
+}
+```
+
+**Root Cause**: When P1 expanded (creating children), P2's expansion decision saw a different tree state than the initial `allNodes` captured at loop start.
+
+**Current Solution**: Single-operation iterations with immediate reassessment:
+```typescript
+// NEW - One operation, then fresh assessment
+for (const node of allNodes) {
+    if (workNeeded.expansion) {
+        expandNode();
+        break; // Exit immediately - fresh tree assessment next iteration
+    }
+}
+```
+
+### Benefits of Single-Operation Iterations
+1. **Eliminates Race Conditions**: No mid-iteration tree changes affecting later decisions
+2. **Consistent Behavior**: Continuous vs. interrupted generation identical
+3. **Easier Debugging**: Each iteration has single responsibility
+4. **Perfect Resumability**: Every restart sees identical tree state
 
 ## Fault Tolerance & Seamless Recovery
 
@@ -288,24 +370,55 @@ console.log('Parent has children ready for coherence:',
 
 ## Benefits of This Approach
 
-1. **Deterministic**: Same parameters always produce same processing order
-2. **Stateless**: No complex state flags to manage
+1. **Truly Deterministic**: Same parameters **always** produce identical processing order
+   - Creation order preserved regardless of operations
+   - No timestamp-based side effects
+   - Continuous vs. interrupted generation behaves identically
+
+2. **Genuinely Stateless**: No hidden temporal dependencies
+   - Single-operation iterations eliminate race conditions
+   - Fresh tree assessment every iteration
+   - No complex state flags to manage
+
 3. **Level-Coordinated**: Prevents inconsistent tree states
+   - Same-level nodes always have identical target states
+   - Coordinated progression prevents premature expansion
+
 4. **Flexible**: Supports both content-first and structure-first workflows
+   - Draft nodes can expand without content if design allows
+   - Multiple expansion strategies supported
+
 5. **Fault-Tolerant & Resumable**: **This is the killer feature** - interrupted work can be seamlessly continued
    - Network problems? No problem - fix connection and restart
-   - API rate limits? Wait and continue - no duplicate work
+   - API rate limits? Wait and continue - no duplicate work  
    - Browser crash? Reload and pick up exactly where you left off
    - No complex state tracking needed - the system calculates what's needed on each run
    - Zero duplicate work - already completed tasks are automatically detected and skipped
 
+6. **Debuggable & Predictable**: 
+   - Single responsibility per iteration makes debugging easier
+   - No temporal coupling between operations
+   - Identical behavior regardless of interruption timing
+
 ## Potential Issues
 
-1. **Large Trees**: Checking all same-level nodes can be expensive
+1. **Performance with Large Trees**: More frequent `collectAllDescendants()` calls
+   - **Mitigation**: Tree traversal is microseconds vs. LLM calls in seconds - negligible impact
+   - Single-operation approach actually simplifies reasoning and debugging
+
 2. **Complex Dependencies**: Coherence checks can create unexpected waiting
-3. **User Confusion**: Draft expansion behavior may surprise users
-4. **Debug Complexity**: Hard to trace why expansion is blocked
+   - Last sibling must trigger coherence for entire level
+   - All children must be complete before coherence analysis
+
+3. **User Confusion**: Draft expansion behavior may surprise users  
+   - Nodes can expand even without final content if design allows
+   - "Ready" means target state achieved, not necessarily final content
+
+4. **Debugging Requires Understanding**: While much simpler than before, requires understanding:
+   - Creation order vs. modification order
+   - Single-operation iteration philosophy
+   - Target state vs. current state comparison
 
 ---
 
-*This documentation should be updated as the logic evolves or edge cases are discovered.* 
+*This documentation was last updated to reflect the single-operation iteration approach and creation-order processing fixes that eliminated temporal coupling issues.* 
