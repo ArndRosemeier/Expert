@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { DocumentNode } from '../../../DocumentNode';
-import { ExportConfig } from '../types/ExportTypes';
+import { ExportConfig, ExportScope } from '../types/ExportTypes';
 import { ProjectManager } from '../../../ProjectManager';
 
 export class WorkingEpubGenerator {
@@ -85,38 +85,61 @@ export class WorkingEpubGenerator {
         return nodes;
     }
 
+    /**
+     * Find all leaf nodes (nodes with no children) in the tree
+     */
+    private findLeafNodes(node: DocumentNode): DocumentNode[] {
+        if (node.children.length === 0) {
+            return [node];
+        }
+        
+        const leafNodes: DocumentNode[] = [];
+        for (const child of node.children) {
+            leafNodes.push(...this.findLeafNodes(child));
+        }
+        return leafNodes;
+    }
+
     async generate(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<Blob> {
         console.log('[WorkingEpubGenerator] Starting EPUB generation for:', node.title);
+        console.log('[WorkingEpubGenerator] Scope:', config.scope);
         
-        // Collect all nodes to export
-        const allNodes = this.collectAllNodes(node);
-        console.log('[WorkingEpubGenerator] Found', allNodes.length, 'nodes to export');
+        // Collect nodes to export based on scope
+        let nodesToExport: DocumentNode[];
+        switch (config.scope) {
+            case ExportScope.Single:
+                nodesToExport = [node];
+                console.log('[WorkingEpubGenerator] Single node export');
+                break;
+            case ExportScope.Leaves:
+                nodesToExport = this.findLeafNodes(node);
+                console.log('[WorkingEpubGenerator] Leaf nodes export:', nodesToExport.length, 'leaf nodes found');
+                break;
+            case ExportScope.Hierarchy:
+            default:
+                nodesToExport = this.collectAllNodes(node);
+                console.log('[WorkingEpubGenerator] Hierarchical export:', nodesToExport.length, 'total nodes found');
+                break;
+        }
         
         // Filter nodes with actual content
-        const contentNodes = allNodes.filter(n => n.content && n.content.trim() !== '');
-        console.log('[WorkingEpubGenerator] Found', contentNodes.length, 'nodes with content');
+        const contentNodes = nodesToExport.filter(n => n.content && n.content.trim() !== '');
+        console.log('[WorkingEpubGenerator] Found', contentNodes.length, 'nodes with content from', nodesToExport.length, 'total nodes');
         
         // Debug: Log details about each content node
         contentNodes.forEach((node, index) => {
             console.log(`[WorkingEpubGenerator] Content node ${index + 1}:`, node.title, 'content length:', node.content?.length || 0);
         });
         
-        // If no content nodes found, create a test node to debug
+        // If no content nodes found, create a minimal placeholder
         if (contentNodes.length === 0) {
-            console.log('[WorkingEpubGenerator] No content nodes found, creating test node');
-            const testNode = {
-                title: 'Test Chapter',
-                content: 'This is a test chapter with some content to verify the EPUB generation is working properly.'
+            console.log('[WorkingEpubGenerator] No content nodes found, creating placeholder');
+            const placeholderNode = {
+                title: 'No Content Available',
+                content: 'No content was found for the selected scope. Please check that your nodes contain content.'
             } as DocumentNode;
-            contentNodes.push(testNode);
+            contentNodes.push(placeholderNode);
         }
-        
-        // TEMPORARY: Always add a known working chapter for debugging
-        const debugNode = {
-            title: 'Debug Chapter',
-            content: 'This is a debug chapter with simple content that should work in iBooks. This content is hardcoded to match the working HelloWorldEpubGenerator pattern.'
-        } as DocumentNode;
-        contentNodes.push(debugNode);
         
         // Add required files to ZIP
         this.addMimeType();
