@@ -11,7 +11,11 @@ export class ContextAdjusterModal extends BaseModal {
     private removedItems: Set<number> = new Set();
 
     constructor() {
-        super({ id: 'context-adjuster-modal' });
+        super({ 
+            id: 'context-adjuster-modal',
+            closable: true,
+            backdrop: true
+        });
     }
 
     /**
@@ -628,7 +632,7 @@ export class ContextAdjusterModal extends BaseModal {
     private renderFooter(): string {
         return `
             <div class="button-group">
-                <button class="button button-secondary" onclick="this.getRootNode().host.close()">
+                <button id="context-adjuster-close-btn" class="button button-secondary">
                     Close
                 </button>
             </div>
@@ -675,6 +679,14 @@ export class ContextAdjusterModal extends BaseModal {
         if (resetButton) {
             resetButton.addEventListener('click', () => {
                 this.resetChanges();
+            });
+        }
+
+        // FIXED: Close button event listener
+        const closeButton = document.querySelector('#context-adjuster-close-btn');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                void this.close();
             });
         }
     }
