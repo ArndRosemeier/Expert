@@ -156,6 +156,10 @@ async function startApplication(): Promise<void> {
         await checkVersionMismatches();
         
         console.log('✅ Expert application started successfully');
+        
+        // Setup debug utilities for prompt verification
+        const { SettingsModal } = await import('./ui/modals/SettingsModal');
+        SettingsModal.setupDebugUtilities();
     } catch (error) {
         console.error('❌ Failed to start application:', error);
         alert('Failed to start the application. Please refresh the page and try again.');

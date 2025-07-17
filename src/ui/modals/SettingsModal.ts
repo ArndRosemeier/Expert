@@ -719,9 +719,47 @@ export class SettingsModal extends BaseModal {
         
         console.log('✅ Settings and prompts saved successfully');
         
+        // DEBUG: Log current prompts to verify they're saved
+        const savedPrompts = this.settingsManager.getPrompts();
+        console.log('🔍 Verification - Current prompts in SettingsManager:', Object.keys(savedPrompts));
+        
         this.updateUnsavedIndicator(false);
         this.emit('saved');
         void this.close();
+    }
+
+    /**
+     * DEBUG UTILITY: Global function to verify prompt changes are working
+     * Users can call this from browser console: window.debugPrompts()
+     */
+    public static setupDebugUtilities(): void {
+        (window as any).debugPrompts = () => {
+            const state = require('../../state');
+            const activeProject = state.getActiveProject();
+            if (!activeProject) {
+                console.log('❌ No active project found');
+                return;
+            }
+            
+            const settingsManager = activeProject.getSettingsManager();
+            const prompts = settingsManager.getPrompts();
+            
+            console.log('🔍 PROMPT DEBUG INFORMATION');
+            console.log('==========================================');
+            console.log('📋 Available prompts:', Object.keys(prompts));
+            console.log('');
+            console.log('🎯 Key prompts for content generation:');
+            console.log('- content_generation_user:', prompts.content_generation_user?.substring(0, 100) + '...');
+            console.log('- branch_content_generation_user:', prompts.branch_content_generation_user?.substring(0, 100) + '...');
+            console.log('- expand_text_user:', prompts.expand_text_user?.substring(0, 100) + '...');
+            console.log('');
+            console.log('💡 If you just changed prompts, these should reflect your changes');
+            console.log('💡 If they show old values, the prompt saving bug may still exist');
+            
+            return prompts;
+        };
+        
+        console.log('🛠️ Debug utility loaded! Run window.debugPrompts() to verify prompt changes');
     }
 
     /**
