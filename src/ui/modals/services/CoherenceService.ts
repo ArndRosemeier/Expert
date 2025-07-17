@@ -18,16 +18,18 @@ export class CoherenceService {
 
     /**
      * Check if a node is eligible for coherence analysis
+     * CRITICAL: This must align with stateless generation logic that uses node.getState() === 'Final'
      */
     isNodeEligible(node: DocumentNode): boolean {
         if (!node.children || node.children.length === 0) {
             return false;
         }
 
-        // Check if any child has non-empty, non-draft content AND is not already tagged as consistent
+        // Check if any child has Final content AND is not already tagged as consistent
+        // Use the same logic as UnifiedGenerationService: node.getState() === 'Final'
         const hasValidChildren = node.children.some(child => {
-            const content = child.content?.trim();
-            const hasValidContent = content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            // Use proper node state check instead of manual content inspection
+            const hasValidContent = child.getState() === 'Final';
             
             // Exclude children that are already tagged as consistent to parent
             const masterVersion = child.getMasterVersion();
@@ -41,19 +43,20 @@ export class CoherenceService {
 
     /**
      * Get the reason why a node is not eligible (for user feedback)
+     * CRITICAL: This must align with stateless generation logic that uses node.getState() === 'Final'
      */
     getIneligibilityReason(node: DocumentNode): string {
         if (!node.children || node.children.length === 0) {
             return 'This node has no children to analyze.';
         }
 
+        // Use same logic as isNodeEligible and UnifiedGenerationService
         const validChildren = node.children.filter(child => {
-            const content = child.content?.trim();
-            return content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            return child.getState() === 'Final';
         });
 
         if (validChildren.length === 0) {
-            return 'All child nodes are empty or contain draft content.';
+            return 'All child nodes are empty or in draft state (not Final).';
         }
 
         // Check if all valid children are already tagged as consistent
@@ -63,7 +66,7 @@ export class CoherenceService {
         });
 
         if (alreadyConsistentChildren.length === validChildren.length) {
-            return 'All child nodes are already marked as consistent to parent.';
+            return 'All child nodes with Final content are already marked as consistent to parent.';
         }
 
         // Check if there are any children left to analyze after filtering
@@ -82,11 +85,12 @@ export class CoherenceService {
 
     /**
      * Prepare analysis request from node and its children
+     * CRITICAL: This must align with stateless generation logic that uses node.getState() === 'Final'
      */
     private prepareAnalysisRequest(node: DocumentNode): CoherenceAnalysisRequest {
         const validChildren = node.children.filter(child => {
-            const content = child.content?.trim();
-            const hasValidContent = content && content.length > 0 && !content.toLowerCase().includes('[draft]');
+            // Use same logic as isNodeEligible and UnifiedGenerationService
+            const hasValidContent = child.getState() === 'Final';
             
             // Exclude children that are already tagged as consistent to parent
             const masterVersion = child.getMasterVersion();
