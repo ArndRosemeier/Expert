@@ -1562,13 +1562,9 @@ export class UnifiedGenerationService {
             // Add current node unconditionally
                 result.push(currentNode);
             
-            // Add all children to queue, sorted by timestamp for deterministic ordering
-            const sortedChildren = [...currentNode.children].sort((a, b) => {
-                const aMasterVersion = a.getMasterVersion()!;
-                const bMasterVersion = b.getMasterVersion()!;
-                
-                return aMasterVersion.timestamp.getTime() - bMasterVersion.timestamp.getTime();
-            });
+            // Add all children to queue in their natural array order (creation order)
+            // This ensures stable ordering that doesn't change based on operations
+            const sortedChildren = [...currentNode.children];
             
             sortedChildren.forEach(child => {
                 if (!visited.has(child.id)) {
