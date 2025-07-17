@@ -124,39 +124,43 @@ export class CoherenceService {
     /**
      * Perform coherence analysis using AI
      */
-    async analyzeCoherence(node: DocumentNode): Promise<CoherenceAnalysisResult> {
+    async analyzeCoherence(
+        node: DocumentNode,
+        frozenSettings: {
+            coherenceAnalysisPrompt: string;
+            fixContradictionPrompt: string;
+            language: string;
+            taskModelConfigs: {
+                coherence_analysis: { outline: string; prose: string };
+                fix_contradiction: { outline: string; prose: string };
+            };
+        }
+    ): Promise<CoherenceAnalysisResult> {
         if (!this.isNodeEligible(node)) {
             throw new Error(this.getIneligibilityReason(node));
         }
 
         const request = this.prepareAnalysisRequest(node);
         
-        // Create analysis prompt with better error handling
-        const prompts = this.settingsManager.getPrompts();
-        
-        // Check if prompts are properly loaded
-        if (!prompts || !prompts.coherence_analysis) {
-            console.error('Coherence analysis prompts not available. Current prompts:', prompts);
-            throw new Error('Coherence analysis prompts not available. This may be due to settings being modified during analysis.');
-        }
-        
-        const analysisPrompt = prompts.coherence_analysis
+        // Use frozen settings - no fallbacks, errors fly if missing
+        const analysisPrompt = frozenSettings.coherenceAnalysisPrompt
             .replace(/\{\{parent_content\}\}/g, request.parentContent)
             .replace(/\{\{parent_context\}\}/g, request.parentContext)
             .replace(/\{\{children_content\}\}/g, request.childrenContent)
-            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
+            .replace(/\{\{language\}\}/g, frozenSettings.language);
 
         try {
             console.log(`🔍 Starting coherence analysis for "${node.title}" with ${request.childNodes.length} child nodes`);
             
-            // Use configurable model for analysis based on template-defined leaf status
+            // Use frozen task model configuration - no fallbacks
             const isLeafNode = node.isLeaf;
-            const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
+            const taskConfig = frozenSettings.taskModelConfigs.coherence_analysis;
+            const modelPurpose = isLeafNode ? taskConfig.prose : taskConfig.outline;
             
             console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
             
             // Get model name for error reporting
-            const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
+            const modelName = this.taskModelService.getCurrentModelName(modelPurpose as any);
             
             const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             
@@ -179,9 +183,9 @@ export class CoherenceService {
             console.error('Coherence analysis failed for node:', node.title);
             console.error('Error details:', error);
             console.error('Current settings state:', {
-                hasPrompts: !!prompts,
-                hasCoherencePrompt: !!(prompts && prompts.coherence_analysis),
-                language: this.settingsManager.getLanguage(),
+                hasFrozenSettings: !!frozenSettings,
+                hasCoherencePrompt: !!frozenSettings.coherenceAnalysisPrompt,
+                language: frozenSettings.language,
                 requestChildCount: request.childNodes.length
             });
             
@@ -322,6 +326,15 @@ If the problem persists, try rephrasing explicit content in your project to be l
         parentNode: DocumentNode,
         childNode: DocumentNode,
         contradiction: CoherenceContradiction,
+        frozenSettings: {
+            coherenceAnalysisPrompt: string;
+            fixContradictionPrompt: string;
+            language: string;
+            taskModelConfigs: {
+                coherence_analysis: { outline: string; prose: string };
+                fix_contradiction: { outline: string; prose: string };
+            };
+        },
         onProgress?: (message: string) => void
     ): Promise<string> {
         // Log the problem that's about to be fixed
@@ -336,10 +349,8 @@ If the problem persists, try rephrasing explicit content in your project to be l
             onProgress(`Analyzing contradiction in "${childNode.title}"...`);
         }
         
-        const prompts = this.settingsManager.getPrompts();
-        
-        // Create fix prompt
-        const fixPrompt = prompts.fix_contradiction
+        // Use frozen settings - no fallbacks, errors fly if missing
+        const fixPrompt = frozenSettings.fixContradictionPrompt
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
             .replace(/\{\{parent_context\}\}/g, parentNode.context || '')
             .replace(/\{\{child_title\}\}/g, childNode.title || 'Untitled')
@@ -347,12 +358,13 @@ If the problem persists, try rephrasing explicit content in your project to be l
             .replace(/\{\{fact_in_outline\}\}/g, contradiction.fact_in_outline)
             .replace(/\{\{fact_in_expansion\}\}/g, contradiction.fact_in_expansion)
             .replace(/\{\{justification\}\}/g, contradiction.justification)
-            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
+            .replace(/\{\{language\}\}/g, frozenSettings.language);
 
         try {
-            // Use configurable model based on template-defined leaf status
+            // Use frozen task model configuration - no fallbacks
             const isLeaf = childNode.isLeaf;
-            const modelPurpose = this.taskModelService.getModelPurposeForTask('fix_contradiction', isLeaf);
+            const taskConfig = frozenSettings.taskModelConfigs.fix_contradiction;
+            const modelPurpose = isLeaf ? taskConfig.prose : taskConfig.outline;
             
             console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'template-leaf' : 'template-branch'} node "${childNode.title}"`);
             
@@ -360,7 +372,7 @@ If the problem persists, try rephrasing explicit content in your project to be l
                 onProgress(`Generating fix using ${modelPurpose} model...`);
             }
             
-            const response = await this.openRouterClient.chat(modelPurpose, fixPrompt);
+            const response = await this.openRouterClient.chat(modelPurpose as any, fixPrompt);
             
             console.log(`✅ Generated fix for "${childNode.title}" (${response.length} characters)`);
             
@@ -384,11 +396,20 @@ If the problem persists, try rephrasing explicit content in your project to be l
     async analyzeCoherenceWithAutofix(
         node: DocumentNode,
         autofixSeverity: number, // -1 = disabled, 1-10 = threshold
+        frozenSettings: {
+            coherenceAnalysisPrompt: string;
+            fixContradictionPrompt: string;
+            language: string;
+            taskModelConfigs: {
+                coherence_analysis: { outline: string; prose: string };
+                fix_contradiction: { outline: string; prose: string };
+            };
+        },
         isAutomaticMode: boolean = false,
         projectId?: string
     ): Promise<CoherenceAnalysisResult> {
         // First, perform the regular coherence analysis
-        const analysisResult = await this.analyzeCoherence(node);
+        const analysisResult = await this.analyzeCoherence(node, frozenSettings);
         
         // If no contradictions found, return the result
         if (!analysisResult.hasContradictions) {
@@ -447,7 +468,7 @@ If the problem persists, try rephrasing explicit content in your project to be l
                 console.log(`🔧 [${i + 1}/${toAutofix.length}] Auto-fixing contradiction in "${childNode.title}"`);
                 
                 // Generate the fix with progress callback
-                const fixedContent = await this.fixContradiction(node, childNode, contradiction, (message) => {
+                const fixedContent = await this.fixContradiction(node, childNode, contradiction, frozenSettings, (message) => {
                     console.log(`   ⚡ ${message}`);
                 });
                 

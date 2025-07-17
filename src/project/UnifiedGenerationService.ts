@@ -1,4 +1,4 @@
-import { DocumentNode } from '../DocumentNode';
+import { DocumentNode, ContentVersion } from '../DocumentNode';
 import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
@@ -60,6 +60,25 @@ import { TaskModelService } from '../services/TaskModelService';
  */
 
 /**
+ * Frozen settings captured at generation start to ensure consistent behavior
+ */
+export interface FrozenSettings {
+    /** Coherence analysis prompt template */
+    coherenceAnalysisPrompt: string;
+    /** Fix contradiction prompt template */
+    fixContradictionPrompt: string;
+    /** Language setting for prompt filling */
+    language: string;
+    /** Task model configurations */
+    taskModelConfigs: {
+        coherence_analysis: { outline: string; prose: string };
+        fix_contradiction: { outline: string; prose: string };
+        context_adjustment: { outline: string; prose: string };
+        text_polishing: { outline: string; prose: string };
+    };
+}
+
+/**
  * Configuration for generation levels
  */
 export interface GenerationLevels {
@@ -75,6 +94,8 @@ export interface GenerationLevels {
     autofixSeverity: number;
     /** Context rating threshold (-1 = use old analysis method, 1-10 = rating threshold) */
     contextRatingThreshold: number;
+    /** Frozen settings captured at generation start */
+    frozenSettings: FrozenSettings;
 }
 
 /**
@@ -217,7 +238,29 @@ export class UnifiedGenerationService {
     /**
      * Main entry point for unified generation using stateless target-state approach
      */
-    public async generateWithLevels(startNodeId: string, levels: GenerationLevels): Promise<void> {
+    public async generateWithLevels(startNodeId: string, inputLevels: Omit<GenerationLevels, 'frozenSettings'>): Promise<void> {
+        // Capture frozen settings at generation start for consistent behavior
+        const prompts = this.deps.settingsManager.getPrompts();
+        const profile = this.deps.settingsManager.getLastUsedProfile();
+        
+        const frozenSettings: FrozenSettings = {
+            coherenceAnalysisPrompt: prompts.coherence_analysis || '',
+            fixContradictionPrompt: prompts.fix_contradiction || '',
+            language: this.deps.settingsManager.getLanguage(),
+            taskModelConfigs: profile?.taskModelConfigs || {
+                coherence_analysis: { outline: 'creator', prose: 'prose' },
+                fix_contradiction: { outline: 'creator', prose: 'prose' },
+                context_adjustment: { outline: 'creator', prose: 'prose' },
+                text_polishing: { outline: 'creator', prose: 'prose' }
+            }
+        };
+        
+        // Create complete levels object with frozen settings
+        const levels: GenerationLevels = {
+            ...inputLevels,
+            frozenSettings
+        };
+        
         // Clear any previous state
         this.accumulatedContradictions = {
             hasContradictions: false,
@@ -898,6 +941,7 @@ export class UnifiedGenerationService {
             const result = await this.coherenceService.analyzeCoherenceWithAutofix(
                 parentNode,
                 levels.autofixSeverity,
+                levels.frozenSettings, // Use frozen settings for consistent behavior
                 true, // isAutomaticMode = true (triggered by generation)
                 this.deps.rootNode.id // projectId
             );
@@ -1479,9 +1523,26 @@ export class UnifiedGenerationService {
                     });
                 }
                 
-                // CRITICAL: Set content FIRST, then tags to prevent "Draft:" + "generatedWinner" state
-                // This order ensures content is updated before any tag manipulation
-                node.setContent(result.finalResponse, 'generatedWinner');
+                // CRITICAL: Find the generated version with final content and promote it to master
+                // This preserves the original draft version as sacred
+                const finalVersion = node.getAllVersions().find((v: ContentVersion) => 
+                    v.content === result.finalResponse && v.tags.has('generated')
+                );
+                
+                if (finalVersion) {
+                    // Promote the generated version to master with generatedWinner tag
+                    node.promoteToMaster(finalVersion.id, ['generatedWinner']);
+                } else {
+                    // Fallback: create a new version for the final content and promote it
+                    const newVersionId = node.addVersion(['generated', 'finalResult'], {
+                        content: result.finalResponse
+                    });
+                    if (newVersionId) {
+                        node.promoteToMaster(newVersionId, ['generatedWinner']);
+                    } else {
+                        throw new Error('Failed to create new version for final content');
+                    }
+                }
                 
                 await this.deps.saveToStorage();
                 

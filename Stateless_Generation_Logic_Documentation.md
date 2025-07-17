@@ -76,6 +76,85 @@ currentState = {
 - **Draft**: Content exists but starts with "Draft:" or has 'draft' tag
 - **Final**: Has real content that's not marked as draft
 
+## Version Management & Draft Preservation
+
+### The Sacred Nature of Draft Versions
+**Critical Principle**: Draft versions must NEVER be modified during content generation. They serve as sacred baseline states that users can return to when regenerating content.
+
+**Previous Issue (Fixed)**: The system was directly overwriting draft content:
+```typescript
+// OLD - WRONG: Corrupted draft versions
+node.setContent(result.finalResponse, 'generatedWinner');
+```
+This approach violated draft preservation by writing new content into existing draft versions, making the original draft state unrecoverable.
+
+**Current Solution**: Version promotion workflow:
+```typescript
+// NEW - CORRECT: Preserves draft versions
+const finalVersion = node.getAllVersions().find((v: ContentVersion) => 
+    v.content === result.finalResponse && v.tags.has('generated')
+);
+
+if (finalVersion) {
+    // Promote the generated version to master with generatedWinner tag
+    node.promoteToMaster(finalVersion.id, ['generatedWinner']);
+} else {
+    // Fallback: create new version and promote it
+    const newVersionId = node.addVersion(['generated', 'finalResult'], {
+        content: result.finalResponse
+    });
+    node.promoteToMaster(newVersionId, ['generatedWinner']);
+}
+```
+
+### Content Generation Version Workflow
+1. **Preserve Original**: Draft versions remain untouched
+2. **Create New Versions**: Each generation iteration creates new versions with 'generated' tags
+3. **Promote Winner**: The best iteration is promoted to master status  
+4. **Maintain History**: All iterations remain available for comparison and rollback
+
+### Benefits of Version Preservation
+- **Regeneration Safety**: Users can always return to original draft state
+- **Version History**: Complete audit trail of all generation attempts
+- **Rollback Capability**: Easy to revert to any previous state
+- **No Data Loss**: Original user input is never destroyed
+
+## Frozen Settings System
+
+### The Settings Consistency Problem (Fixed)
+**Previous Issue**: Coherence checks used live settings during generation, creating inconsistent behavior when users changed settings mid-process.
+
+**Problem Scenarios**:
+- User changes coherence prompt during generation → different analysis behavior
+- User switches model configuration → different AI model mid-generation  
+- User changes language → prompts in different language mid-process
+
+### Frozen Settings Solution
+All generation-related settings are now **captured once at generation start** and remain frozen throughout the entire process:
+
+```typescript
+const frozenSettings: FrozenSettings = {
+    coherenceAnalysisPrompt: prompts.coherence_analysis || '',
+    fixContradictionPrompt: prompts.fix_contradiction || '',
+    language: this.deps.settingsManager.getLanguage(),
+    taskModelConfigs: profile?.taskModelConfigs || { /* defaults */ }
+};
+```
+
+### What Gets Frozen
+- **Prompt Templates**: coherence_analysis, fix_contradiction 
+- **Language Setting**: For prompt placeholder replacement
+- **Model Configurations**: Which models to use for each task type
+
+### Benefits of Frozen Settings
+- **Predictable Behavior**: Generation won't change mid-process if user touches UI
+- **No Race Conditions**: Settings changes can't corrupt ongoing generation  
+- **Deterministic Results**: Same frozen parameters always produce identical behavior
+- **Consistent Analysis**: Coherence checks use same settings throughout entire generation
+
+### No Defensive Programming
+The coherence service fully commits to frozen settings - if frozen settings are missing or incomplete, errors will be thrown immediately. This ensures consistent behavior and makes problems visible rather than hiding them with fallbacks.
+
 ## Work Determination Logic
 
 ```typescript
@@ -379,6 +458,7 @@ console.log('Parent has children ready for coherence:',
    - Single-operation iterations eliminate race conditions
    - Fresh tree assessment every iteration
    - No complex state flags to manage
+   - **Frozen Settings**: All analysis uses parameters captured at generation start
 
 3. **Level-Coordinated**: Prevents inconsistent tree states
    - Same-level nodes always have identical target states
