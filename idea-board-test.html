@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idea Board Test - Phase 1</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .toolbar {
+            background: #333;
+            color: white;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .toolbar button {
+            background: #555;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .toolbar button:hover {
+            background: #666;
+        }
+        
+        .toolbar button.active {
+            background: #0078d4;
+        }
+        
+        .board-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: white;
+        }
+        
+        .instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        
+        .instructions h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+        
+        .instructions ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="toolbar">
+            <h3 style="margin: 0; color: #fff;">Idea Board - Phase 1 Test</h3>
+            <button id="btn-new-board">New Board</button>
+            <button id="btn-save">Save</button>
+            <button id="btn-load">Load</button>
+            <button id="btn-clear">Clear All</button>
+            <span id="status" style="margin-left: auto; font-size: 12px; color: #ccc;">Ready</span>
+        </div>
+        
+        <div class="board-container" id="board-container">
+            <div class="instructions">
+                <h4>Phase 1 Controls:</h4>
+                <ul>
+                    <li><strong>Double-click</strong> empty space: Create post-it</li>
+                    <li><strong>Click & drag</strong> post-it: Move it</li>
+                    <li><strong>Double-click</strong> post-it: Edit text</li>
+                    <li><strong>Mouse wheel</strong>: Zoom in/out</li>
+                    <li><strong>Middle-click & drag</strong>: Pan view</li>
+                    <li><strong>Delete key</strong>: Remove selected post-it</li>
+                    <li><strong>Escape</strong>: Stop editing/deselect</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { IdeaBoard } from './src/idea-board/index.js';
+        
+        let currentBoard = null;
+        
+        // Initialize the board
+        function initBoard() {
+            const container = document.getElementById('board-container');
+            currentBoard = new IdeaBoard(container, 'Test Board');
+            updateStatus('Board initialized');
+        }
+        
+        // Update status message
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+            setTimeout(() => {
+                document.getElementById('status').textContent = 'Ready';
+            }, 3000);
+        }
+        
+        // Toolbar event handlers
+        document.getElementById('btn-new-board').addEventListener('click', () => {
+            if (currentBoard) {
+                currentBoard.destroy();
+            }
+            initBoard();
+            updateStatus('New board created');
+        });
+        
+        document.getElementById('btn-save').addEventListener('click', () => {
+            if (currentBoard) {
+                updateStatus('Board auto-saved to localStorage');
+            }
+        });
+        
+        document.getElementById('btn-load').addEventListener('click', () => {
+            if (currentBoard) {
+                // For demo, we'll just show available boards
+                const boardIds = currentBoard.constructor.listBoardIds?.() || [];
+                if (boardIds.length > 0) {
+                    updateStatus(`Found ${boardIds.length} saved board(s)`);
+                } else {
+                    updateStatus('No saved boards found');
+                }
+            }
+        });
+        
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            if (currentBoard && confirm('Clear all post-its?')) {
+                currentBoard.destroy();
+                initBoard();
+                updateStatus('Board cleared');
+            }
+        });
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initBoard();
+        });
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentBoard) {
+                currentBoard.destroy();
+            }
+        });
+    </script>
+</body>
+</html> 

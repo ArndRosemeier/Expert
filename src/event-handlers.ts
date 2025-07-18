@@ -24,6 +24,123 @@ import { GenerationErrorService } from './ui/modals/services/GenerationErrorServ
 import * as pdfjsLib from 'pdfjs-dist';
 
 /**
+ * Open the Idea Board in a modal or overlay
+ */
+async function openIdeaBoard(): Promise<void> {
+    try {
+        // Create modal container
+        const modalContainer = document.createElement('div');
+        modalContainer.id = 'idea-board-modal';
+        modalContainer.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        // Create board container
+        const boardContainer = document.createElement('div');
+        boardContainer.style.cssText = `
+            width: 95vw;
+            height: 90vh;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        `;
+
+        // Create header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            border-radius: 12px 12px 0 0;
+        `;
+        header.innerHTML = `
+            <span style="font-size: 1.1rem; font-weight: 600;">🗒️ Idea Board</span>
+            <button id="close-idea-board" style="
+                background: none;
+                border: none;
+                color: white;
+                font-size: 1.2rem;
+                cursor: pointer;
+                margin-left: auto;
+                padding: 4px 8px;
+                border-radius: 4px;
+                transition: background 0.2s;
+            " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
+               onmouseout="this.style.background='none'">✕</button>
+        `;
+
+        // Create board content area
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = `
+            flex: 1;
+            position: relative;
+            background: #f5f5f5;
+        `;
+
+        // Assemble modal
+        boardContainer.appendChild(header);
+        boardContainer.appendChild(contentArea);
+        modalContainer.appendChild(boardContainer);
+        document.body.appendChild(modalContainer);
+
+        // Import and initialize idea board
+        const { IdeaBoard } = await import('./idea-board/index');
+        const boardName = 'Global Ideas';
+        
+        const ideaBoard = new IdeaBoard(contentArea, boardName);
+        
+        console.log('🗒️ Idea Board opened');
+
+        // Close button handler
+        const closeBtn = header.querySelector('#close-idea-board');
+        closeBtn?.addEventListener('click', () => {
+            ideaBoard.destroy();
+            modalContainer.remove();
+            console.log('🗒️ Idea Board closed');
+        });
+
+        // Close on backdrop click
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) {
+                ideaBoard.destroy();
+                modalContainer.remove();
+                console.log('🗒️ Idea Board closed');
+            }
+        });
+
+        // ESC key to close
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                ideaBoard.destroy();
+                modalContainer.remove();
+                document.removeEventListener('keydown', handleEscape);
+                console.log('🗒️ Idea Board closed');
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+
+    } catch (error) {
+        console.error('❌ Failed to open Idea Board:', error);
+        alert('Failed to open Idea Board. Please try again.');
+    }
+}
+
+/**
  * Show a simple progress modal during text analysis
  */
 function showProgressModal(message: string): HTMLElement {
@@ -657,6 +774,11 @@ export async function initialize() {
                 console.error('Failed to open comprehensive export modal:', error);
                 alert('Failed to open comprehensive export dialog. Please try again.');
             });
+        });
+
+        // Idea Board button
+        getElementById('idea-board-btn').addEventListener('click', () => {
+            void openIdeaBoard();
         });
 
 

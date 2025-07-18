@@ -253,9 +253,17 @@ export class TextEditorWithHighlighting {
 
         // Check if the current selection already represents a complete sentence
         const currentSelectionText = text.substring(startPos, endPos).trim();
-        const startsWithCapitalOrPunctuation = /^[A-Z"']/.test(currentSelectionText);
-        const endsWithSentencePunctuation = /[.!?]\s*$/.test(currentSelectionText);
-        const isCompleteSentence = startsWithCapitalOrPunctuation && endsWithSentencePunctuation;
+        
+        // More robust sentence detection
+        const startsWithCapitalOrPunctuation = /^[A-Z"'"''`]/.test(currentSelectionText);
+        
+        // Enhanced sentence ending detection: handles multiple punctuation, quotes, etc.
+        const endsWithSentencePunctuation = /[.!?]+["'"''`]?\s*$/.test(currentSelectionText);
+        
+        // Additional check: make sure it's not just punctuation (minimum reasonable sentence length)
+        const hasMinimumLength = currentSelectionText.length >= 3;
+        
+        const isCompleteSentence = startsWithCapitalOrPunctuation && endsWithSentencePunctuation && hasMinimumLength;
 
         // If we already have a complete sentence selected, don't expand at all
         if (isCompleteSentence) {
@@ -305,17 +313,23 @@ export class TextEditorWithHighlighting {
             }
         }
 
-        // Expand end position to sentence end
-        while (newEndPos < text.length) {
-            const char = text[newEndPos];
-            if (!char) break; // Safety check
-            
-            // Stop after sentence-ending punctuation
-            if (/[.!?]/.test(char)) {
-                newEndPos++; // Include the punctuation
-                break;
+        // Check if we're already at the end of a sentence before expanding
+        const charBeforeEnd = endPos > 0 ? text[endPos - 1] || '' : '';
+        const isAlreadyAtSentenceEnd = /[.!?]/.test(charBeforeEnd);
+        
+        // Only expand end position if we're not already at a sentence end
+        if (!isAlreadyAtSentenceEnd) {
+            while (newEndPos < text.length) {
+                const char = text[newEndPos];
+                if (!char) break; // Safety check
+                
+                // Stop after sentence-ending punctuation
+                if (/[.!?]/.test(char)) {
+                    newEndPos++; // Include the punctuation
+                    break;
+                }
+                newEndPos++;
             }
-            newEndPos++;
         }
 
         // Trim leading whitespace but keep trailing punctuation
