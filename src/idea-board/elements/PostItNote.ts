@@ -72,7 +72,7 @@ export class PostItNote implements BoardElement {
       context.shadowOffsetY = 2 * viewport.zoom;
     }
 
-    // Draw text content
+    // Draw text content with basic line break support and height constraints
     if (this.content.trim()) {
       context.fillStyle = this.style.textColor;
       context.font = `${this.style.fontSize * viewport.zoom}px Arial`;
@@ -81,9 +81,77 @@ export class PostItNote implements BoardElement {
 
       const padding = 10 * viewport.zoom;
       const maxWidth = screenWidth - padding * 2;
-      const maxHeight = screenHeight - padding * 2;
+      const maxHeight = screenHeight - padding * 2; // Available height for text
+      const lineHeight = this.style.fontSize * viewport.zoom * 1.2;
 
-      this.wrapText(context, this.content, screenPos.x + padding, screenPos.y + padding, maxWidth, maxHeight);
+      // Split text by line breaks first, then handle word wrapping for each line
+      const lines = this.content.split('\n');
+      let currentY = screenPos.y + padding;
+      let isTextTruncated = false;
+
+      for (const line of lines) {
+        // Check if we have space for another line
+        if (currentY + lineHeight > screenPos.y + screenHeight - padding) {
+          isTextTruncated = true;
+          break;
+        }
+
+        if (line.trim() === '') {
+          // Empty line - just advance Y
+          currentY += lineHeight;
+          continue;
+        }
+
+        // Handle word wrapping for this line
+        const words = line.split(' ');
+        let currentLine = '';
+        
+        for (const word of words) {
+          const testLine = currentLine + (currentLine ? ' ' : '') + word;
+          const metrics = context.measureText(testLine);
+          
+          if (metrics.width > maxWidth && currentLine !== '') {
+            // Check if we have space for this line
+            if (currentY + lineHeight > screenPos.y + screenHeight - padding) {
+              isTextTruncated = true;
+              break;
+            }
+            
+            // Draw current line and start new one
+            context.fillText(currentLine, screenPos.x + padding, currentY);
+            currentY += lineHeight;
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        
+        if (isTextTruncated) {
+          break;
+        }
+        
+        // Draw remaining text if we have space
+        if (currentLine) {
+          if (currentY + lineHeight <= screenPos.y + screenHeight - padding) {
+            context.fillText(currentLine, screenPos.x + padding, currentY);
+            currentY += lineHeight;
+          } else {
+            isTextTruncated = true;
+          }
+        }
+      }
+
+      // Show truncation indicator if text was cut off
+      if (isTextTruncated) {
+        context.save();
+        context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        context.font = `${Math.max(10, this.style.fontSize * viewport.zoom * 0.8)}px Arial`;
+        const truncationText = '...';
+        const truncationY = screenPos.y + screenHeight - padding - (this.style.fontSize * viewport.zoom * 0.8);
+        const truncationX = screenPos.x + screenWidth - padding - context.measureText(truncationText).width;
+        context.fillText(truncationText, truncationX, truncationY);
+        context.restore();
+      }
     }
 
     // Draw connection dots on all sides
@@ -384,29 +452,5 @@ export class PostItNote implements BoardElement {
    */
   getEditing(): boolean {
     return this.isEditing;
-  }
-
-  /**
-   * Helper method to wrap text within post-it bounds
-   */
-  private wrapText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): void {
-    const words = text.split(' ');
-    let line = '';
-    let currentY = y;
-
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      const metrics = context.measureText(testLine);
-      const testWidth = metrics.width;
-
-      if (testWidth > maxWidth && n > 0) {
-        context.fillText(line, x, currentY);
-        line = words[n] + ' ';
-        currentY += lineHeight;
-      } else {
-        line = testLine;
-      }
-    }
-    context.fillText(line, x, currentY);
   }
 } 
