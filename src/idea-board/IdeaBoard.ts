@@ -34,9 +34,6 @@ export class IdeaBoard {
   // Rendering
   private animationFrameId: number | null = null;
   private needsRedraw: boolean = true;
-  private lastClickTime: number = 0;
-  private lastClickedDot: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
-  private lastClickHandledByDot: boolean = false;
 
   constructor(container: HTMLElement, boardName: string = 'New Board') {
     // Create canvas
@@ -150,6 +147,7 @@ export class IdeaBoard {
    * Setup input event handlers
    */
   private setupInputHandlers(): void {
+    // Handle single clicks for selection, dragging, and connections
     this.inputManager.on('onMouseDown', (point, event) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
       
@@ -161,41 +159,31 @@ export class IdeaBoard {
         return;
       }
 
-      // Check for connection dot clicks first
+      // Check for connection dot clicks
       for (const element of this.elements.values()) {
         if (element instanceof PostItNote) {
           const connectionHit = element.hitTestConnectionDot(point, this.viewport);
           if (connectionHit) {
-            // Check for double-click on connection dot
-            const now = Date.now();
-            const isSameDot = this.lastClickedDot && 
-                             this.lastClickedDot.postIt === element && 
-                             this.lastClickedDot.side === connectionHit.side;
-                             
-            if (isSameDot && this.lastClickTime && now - this.lastClickTime < 400) {
-              // Double-click detected - cut all connections to this dot
-              this.removeConnectionsFromDot(element.id, connectionHit.side);
-              this.lastClickedDot = null;
-              this.lastClickTime = 0;
-              this.lastClickHandledByDot = true;
-              
-              // Reset the flag after a delay to prevent post-it creation
-              setTimeout(() => {
-                this.lastClickHandledByDot = false;
-              }, 100);
-              return;
-            }
-
-            // Single click - start connection drag
+            // Start connection drag
             this.isConnecting = true;
             this.connectionStart = { postIt: element, side: connectionHit.side };
             this.dragConnectionEnd = point;
             this.canvas.style.cursor = 'crosshair';
-            this.lastClickedDot = { postIt: element, side: connectionHit.side };
-            this.lastClickTime = now;
-            this.lastClickHandledByDot = true;
             this.requestRedraw();
             return;
+          }
+        }
+      }
+
+      // Check for resize handles on selected elements FIRST (handles extend outside post-it bounds)
+      for (const element of this.elements.values()) {
+        if (element instanceof PostItNote && element.getSelected()) {
+          const resizeHit = element.hitTestResize(point, this.viewport);
+          if (resizeHit) {
+            this.resizingElement = element;
+            this.resizeHandle = resizeHit;
+            this.canvas.style.cursor = this.getResizeCursor(resizeHit);
+            return; // Important: return early to avoid setting up dragging
           }
         }
       }
@@ -207,25 +195,14 @@ export class IdeaBoard {
       const elementsArray = Array.from(this.elements.values());
       for (let i = elementsArray.length - 1; i >= 0; i--) {
         const element = elementsArray[i];
-        if (element.hitTest(worldPoint)) {
+        if (element && element.hitTest(worldPoint)) {
           hitElement = element;
           break;
         }
       }
 
       if (hitElement) {
-        if (hitElement instanceof PostItNote) {
-          // Check for resize handle
-          const resizeHit = hitElement.hitTestResize(point, this.viewport);
-          if (resizeHit && hitElement.getSelected()) {
-            this.resizingElement = hitElement;
-            this.resizeHandle = resizeHit;
-            this.canvas.style.cursor = this.getResizeCursor(resizeHit);
-            return;
-          }
-        }
-
-        // Select and prepare for dragging
+        // Only set up dragging if we're not resizing
         this.selectElement(hitElement);
         this.draggedElement = hitElement;
         this.dragOffset = {
@@ -233,22 +210,33 @@ export class IdeaBoard {
           y: worldPoint.y - hitElement.position.y
         };
         this.canvas.style.cursor = 'grabbing';
+        
+        // Bring the dragged element to front
+        this.bringElementToFront(hitElement);
       } else {
-        // Click on empty space
+        // Click on empty space - just clear selection
         this.selectElement(null);
-        
-        // Check if double-click to create new post-it (but not if last click was handled by a dot)
-        const now = Date.now();
-        if (this.lastClickTime && now - this.lastClickTime < 300 && !this.lastClickHandledByDot) {
-          this.createNewPostIt(worldPoint);
-        }
-        this.lastClickTime = now;
-        
-        // Only reset the flag if it wasn't recently set by a dot click
-        if (!this.lastClickHandledByDot) {
-          this.lastClickHandledByDot = false;
+      }
+    });
+
+    // Handle double-clicks for connection cutting and new post-it creation
+    this.inputManager.on('onDoubleClick', (point, event) => {
+      const worldPoint = this.viewport.screenToWorld(point.x, point.y);
+      
+      // First check if double-click was on a connection dot
+      for (const element of this.elements.values()) {
+        if (element instanceof PostItNote) {
+          const connectionHit = element.hitTestConnectionDot(point, this.viewport);
+          if (connectionHit) {
+            // Cut all connections from this dot
+            this.removeConnectionsFromDot(element.id, connectionHit.side);
+            return;
+          }
         }
       }
+      
+      // If not on a connection dot, create new post-it
+      this.createNewPostIt(worldPoint);
     });
 
     this.inputManager.on('onMouseMove', (point, event) => {
@@ -346,11 +334,6 @@ export class IdeaBoard {
       }
     });
 
-    this.inputManager.on('onDoubleClick', (point, event) => {
-      const worldPoint = this.viewport.screenToWorld(point.x, point.y);
-      this.handleDoubleClick(worldPoint);
-    });
-
     this.inputManager.on('onWheel', (delta, point, event) => {
       const zoomFactor = delta > 0 ? 1.1 : 0.9;
       this.viewport.zoomAt(zoomFactor, point.x, point.y);
@@ -370,7 +353,7 @@ export class IdeaBoard {
     
     if (hitElement instanceof PostItNote) {
       // Check if clicking on a resize handle
-      const resizeHandle = hitElement.hitTestResizeHandle(worldPoint, this.viewport);
+      const resizeHandle = hitElement.hitTestResize(worldPoint, this.viewport);
       
       if (resizeHandle) {
         this.startElementResize(hitElement, resizeHandle);
@@ -387,19 +370,6 @@ export class IdeaBoard {
       }
     } else {
       this.clearSelection();
-    }
-  }
-
-  /**
-   * Handle double click to create new post-it or edit existing
-   */
-  private handleDoubleClick(worldPoint: Point): void {
-    const hitElement = this.findElementAt(worldPoint);
-    
-    if (hitElement && hitElement instanceof PostItNote) {
-      this.startEditing(hitElement);
-    } else {
-      this.createNewPostIt(worldPoint);
     }
   }
 
@@ -570,7 +540,7 @@ export class IdeaBoard {
     const elementsArray = Array.from(this.elements.values());
     for (let i = elementsArray.length - 1; i >= 0; i--) {
       const element = elementsArray[i];
-      if (element.hitTest(worldPoint)) {
+      if (element && element.hitTest(worldPoint)) {
         return element;
       }
     }
@@ -802,25 +772,14 @@ export class IdeaBoard {
       return;
     }
 
-    // Check if connection already exists (in either direction between the same two post-its)
+    // Check if any connection already exists between these two post-its (regardless of dots or direction)
     for (const connection of this.connections.values()) {
-      const isExactDuplicate = 
-        connection.fromPostItId === fromPostItId && 
-        connection.fromSide === fromSide &&
-        connection.toPostItId === toPostItId && 
-        connection.toSide === toSide;
-      
-      const isReverseDuplicate = 
-        connection.fromPostItId === toPostItId && 
-        connection.toPostItId === fromPostItId;
+      const isAnyConnectionBetweenPostIts = 
+        (connection.fromPostItId === fromPostItId && connection.toPostItId === toPostItId) ||
+        (connection.fromPostItId === toPostItId && connection.toPostItId === fromPostItId);
         
-      if (isExactDuplicate) {
-        console.log('🚫 Connection already exists');
-        return;
-      }
-      
-      if (isReverseDuplicate) {
-        console.log('🚫 Connection already exists in reverse direction');
+      if (isAnyConnectionBetweenPostIts) {
+        console.log('🚫 Connection already exists between these post-its');
         return;
       }
     }
@@ -1133,7 +1092,9 @@ export class IdeaBoard {
     const elementIndex = this.boardState.elements.findIndex(e => e.id === element.id);
     if (elementIndex >= 0) {
       const elementData = this.boardState.elements.splice(elementIndex, 1)[0];
-      this.boardState.elements.push(elementData);
+      if (elementData) {
+        this.boardState.elements.push(elementData);
+      }
     }
     
     this.requestRedraw();

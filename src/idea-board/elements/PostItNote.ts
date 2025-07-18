@@ -167,7 +167,7 @@ export class PostItNote implements BoardElement {
    * Draw resize handles at corners and edges
    */
   private drawResizeHandles(context: CanvasRenderingContext2D, screenPos: Point, screenWidth: number, screenHeight: number): void {
-    const handleSize = 8;
+    const handleSize = 12; // Increased from 8 to 12 for better visibility
     const handleColor = '#2196f3';
     
     context.fillStyle = handleColor;
@@ -215,7 +215,7 @@ export class PostItNote implements BoardElement {
     const screenPos = viewport.worldToScreen(this.position.x, this.position.y);
     const screenWidth = this.size.width * viewport.zoom;
     const screenHeight = this.size.height * viewport.zoom;
-    const handleSize = 8;
+    const handleSize = 24; // Increased from 8 to 24 for much easier clicking
 
     // Define resize handle positions
     const handles = {
