@@ -27,7 +27,7 @@ export class PostItNote implements BoardElement {
     this.size = { width: 150, height: 150 };
     this.content = content;
     this.style = {
-      backgroundColor: '#ffeb3b', // Yellow post-it default
+      backgroundColor: '#fff9c4', // Light yellow post-it default
       textColor: '#333333',
       fontSize: 14
     };
@@ -49,46 +49,116 @@ export class PostItNote implements BoardElement {
     const screenWidth = this.size.width * viewport.zoom;
     const screenHeight = this.size.height * viewport.zoom;
 
+    // Save context state
     context.save();
 
-    // Draw post-it shadow
-    context.fillStyle = 'rgba(0, 0, 0, 0.1)';
-    context.fillRect(screenPos.x + 2, screenPos.y + 2, screenWidth, screenHeight);
-
-    // Draw post-it background
+    // Draw the main post-it body
     context.fillStyle = this.style.backgroundColor;
-    context.fillRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
-
-    // Draw border
-    context.strokeStyle = this.isSelected ? '#2196f3' : 'rgba(0, 0, 0, 0.1)';
+    context.strokeStyle = this.isSelected ? '#2196F3' : 'rgba(0, 0, 0, 0.1)';
     context.lineWidth = this.isSelected ? 2 : 1;
-    context.strokeRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+    
+    // Round corners
+    const radius = 8 * viewport.zoom;
+    context.beginPath();
+    context.roundRect(screenPos.x, screenPos.y, screenWidth, screenHeight, radius);
+    context.fill();
+    context.stroke();
 
-    // Draw resize handles if selected
-    if (this.isSelected && viewport.zoom > 0.5) {
-      this.drawResizeHandles(context, screenPos, screenWidth, screenHeight);
+    // Draw shadow (only if not selected to avoid visual clutter)
+    if (!this.isSelected) {
+      context.shadowColor = 'rgba(0, 0, 0, 0.1)';
+      context.shadowBlur = 4 * viewport.zoom;
+      context.shadowOffsetX = 2 * viewport.zoom;
+      context.shadowOffsetY = 2 * viewport.zoom;
     }
 
     // Draw text content
-    if (this.content && viewport.zoom > 0.3) { // Only show text when zoomed in enough
+    if (this.content.trim()) {
       context.fillStyle = this.style.textColor;
       context.font = `${this.style.fontSize * viewport.zoom}px Arial`;
-      
-      const padding = 8 * viewport.zoom;
-      const maxWidth = screenWidth - (padding * 2);
-      const lineHeight = this.style.fontSize * viewport.zoom * 1.2;
-      
-      this.wrapText(context, this.content, screenPos.x + padding, screenPos.y + padding + lineHeight, maxWidth, lineHeight);
+      context.textAlign = 'left';
+      context.textBaseline = 'top';
+
+      const padding = 10 * viewport.zoom;
+      const maxWidth = screenWidth - padding * 2;
+      const maxHeight = screenHeight - padding * 2;
+
+      this.wrapText(context, this.content, screenPos.x + padding, screenPos.y + padding, maxWidth, maxHeight);
     }
 
-    // Draw editing indicator
-    if (this.isEditing) {
-      context.strokeStyle = '#4caf50';
-      context.lineWidth = 3;
-      context.strokeRect(screenPos.x - 2, screenPos.y - 2, screenWidth + 4, screenHeight + 4);
+    // Draw connection dots on all sides
+    this.renderConnectionDots(context, screenPos, screenWidth, screenHeight, viewport.zoom);
+
+    // Draw resize handles if selected
+    if (this.isSelected) {
+      this.drawResizeHandles(context, screenPos, screenWidth, screenHeight);
     }
 
+    // Restore context state
     context.restore();
+  }
+
+  /**
+   * Render connection dots on all four sides
+   */
+  private renderConnectionDots(context: CanvasRenderingContext2D, screenPos: Point, screenWidth: number, screenHeight: number, zoom: number): void {
+    const dotRadius = 4 * zoom;
+    const dotColor = '#4CAF50'; // Green dots
+    const dotBorderColor = '#2E7D32'; // Darker green border
+
+    // Calculate dot positions
+    const dots = this.getConnectionDotPositions(screenPos, screenWidth, screenHeight);
+
+    dots.forEach(dot => {
+      // Draw dot with border
+      context.fillStyle = dotColor;
+      context.strokeStyle = dotBorderColor;
+      context.lineWidth = 1 * zoom;
+      
+      context.beginPath();
+      context.arc(dot.x, dot.y, dotRadius, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+    });
+  }
+
+  /**
+   * Get the screen positions of all connection dots
+   */
+  getConnectionDotPositions(screenPos: Point, screenWidth: number, screenHeight: number): Array<Point & { side: 'top' | 'right' | 'bottom' | 'left' }> {
+    const halfWidth = screenWidth / 2;
+    const halfHeight = screenHeight / 2;
+
+    return [
+      { x: screenPos.x + halfWidth, y: screenPos.y, side: 'top' as const },
+      { x: screenPos.x + screenWidth, y: screenPos.y + halfHeight, side: 'right' as const },
+      { x: screenPos.x + halfWidth, y: screenPos.y + screenHeight, side: 'bottom' as const },
+      { x: screenPos.x, y: screenPos.y + halfHeight, side: 'left' as const }
+    ];
+  }
+
+  /**
+   * Check if a point hits any connection dot
+   */
+  hitTestConnectionDot(point: Point, viewport: Viewport): { side: 'top' | 'right' | 'bottom' | 'left' } | null {
+    const screenPos = viewport.worldToScreen(this.position.x, this.position.y);
+    const screenWidth = this.size.width * viewport.zoom;
+    const screenHeight = this.size.height * viewport.zoom;
+    const dotRadius = 4 * viewport.zoom;
+
+    const dots = this.getConnectionDotPositions(screenPos, screenWidth, screenHeight);
+
+    for (const dot of dots) {
+      const dx = point.x - dot.x;
+      const dy = point.y - dot.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= dotRadius + 2) { // Add 2px tolerance
+        return { side: dot.side };
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -280,10 +350,25 @@ export class PostItNote implements BoardElement {
   }
 
   /**
-   * Set selection state
+   * Set selected state
    */
   setSelected(selected: boolean): void {
     this.isSelected = selected;
+  }
+
+  /**
+   * Set the background color of the post-it note
+   */
+  setColor(color: string): void {
+    this.style.backgroundColor = color;
+    this.metadata.lastEdited = new Date();
+  }
+
+  /**
+   * Get selected state
+   */
+  getSelected(): boolean {
+    return this.isSelected;
   }
 
   /**
@@ -291,13 +376,6 @@ export class PostItNote implements BoardElement {
    */
   setEditing(editing: boolean): void {
     this.isEditing = editing;
-  }
-
-  /**
-   * Get current selection state
-   */
-  getSelected(): boolean {
-    return this.isSelected;
   }
 
   /**

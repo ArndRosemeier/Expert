@@ -1,7 +1,9 @@
 import { Viewport } from './rendering/Viewport';
 import { PostItNote } from './elements/PostItNote';
+import { Connection, type ConnectionData } from './elements/Connection';
 import { InputManager } from './interaction/InputManager';
 import { BoardSerializer } from './persistence/BoardSerializer';
+import { ToolPanel, type ToolPanelConfig } from './ui/ToolPanel';
 import type { IdeaBoardState, ElementData, Point, BoardElement } from './types/BoardTypes';
 
 export class IdeaBoard {
@@ -9,8 +11,10 @@ export class IdeaBoard {
   private context: CanvasRenderingContext2D;
   private viewport: Viewport;
   private elements: Map<string, BoardElement> = new Map();
+  private connections: Map<string, Connection> = new Map();
   private inputManager: InputManager;
   private boardState: IdeaBoardState;
+  private toolPanel: ToolPanel;
   
   // Interaction state
   private selectedElement: BoardElement | null = null;
@@ -22,9 +26,15 @@ export class IdeaBoard {
   private isPanning: boolean = false;
   private panStart: Point = { x: 0, y: 0 };
   
+  // Connection state
+  private isConnecting: boolean = false;
+  private connectionStart: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
+  private dragConnectionEnd: Point | null = null;
+  
   // Rendering
   private animationFrameId: number | null = null;
   private needsRedraw: boolean = true;
+  private lastClickTime: number = 0;
 
   constructor(container: HTMLElement, boardName: string = 'New Board') {
     // Create canvas
@@ -53,6 +63,28 @@ export class IdeaBoard {
 
     // Setup resize observer
     this.setupResizeObserver(container);
+
+    // Create tool panel
+    this.toolPanel = new ToolPanel(this, {
+      onColorChange: (color: string) => {
+        this.setSelectedPostItColor(color);
+      },
+      onSearchToggle: () => {
+        // Search is handled within the ToolPanel
+      },
+      onAddPostIt: () => {
+        this.createPostItAtCenter();
+      },
+      onExport: () => {
+        console.log('Export functionality not yet implemented');
+      },
+      onSettings: () => {
+        console.log('Settings functionality not yet implemented');
+      }
+    });
+
+    // Attach tool panel to container
+    this.toolPanel.attachTo(container);
 
     // Start render loop
     this.startRenderLoop();
@@ -105,35 +137,167 @@ export class IdeaBoard {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
       
       if (event.button === 1 || (event.button === 0 && event.ctrlKey)) {
-        // Middle mouse or Ctrl+click = pan mode
-        this.startPanning(point);
-      } else if (event.button === 0) {
-        // Left click = select/edit/resize
-        this.handleLeftClick(worldPoint, event);
+        // Middle click or Ctrl+click to pan
+        this.isPanning = true;
+        this.panStart = point;
+        this.canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      // Check for connection dot clicks first
+      for (const element of this.elements.values()) {
+        if (element instanceof PostItNote) {
+          const connectionHit = element.hitTestConnectionDot(point, this.viewport);
+          if (connectionHit) {
+            // Start connection drag
+            this.isConnecting = true;
+            this.connectionStart = { postIt: element, side: connectionHit.side };
+            this.dragConnectionEnd = point;
+            this.canvas.style.cursor = 'crosshair';
+            this.requestRedraw();
+            return;
+          }
+        }
+      }
+
+      // Regular element hit testing
+      let hitElement: BoardElement | null = null;
+      
+      // Test elements in reverse order (top to bottom)
+      const elementsArray = Array.from(this.elements.values());
+      for (let i = elementsArray.length - 1; i >= 0; i--) {
+        const element = elementsArray[i];
+        if (element.hitTest(worldPoint)) {
+          hitElement = element;
+          break;
+        }
+      }
+
+      if (hitElement) {
+        if (hitElement instanceof PostItNote) {
+          // Check for resize handle
+          const resizeHit = hitElement.hitTestResize(point, this.viewport);
+          if (resizeHit && hitElement.getSelected()) {
+            this.resizingElement = hitElement;
+            this.resizeHandle = resizeHit;
+            this.canvas.style.cursor = this.getResizeCursor(resizeHit);
+            return;
+          }
+        }
+
+        // Select and prepare for dragging
+        this.selectElement(hitElement);
+        this.draggedElement = hitElement;
+        this.dragOffset = {
+          x: worldPoint.x - hitElement.position.x,
+          y: worldPoint.y - hitElement.position.y
+        };
+        this.canvas.style.cursor = 'grabbing';
+      } else {
+        // Click on empty space
+        this.selectElement(null);
+        
+        // Check if double-click to create new post-it
+        const now = Date.now();
+        if (this.lastClickTime && now - this.lastClickTime < 300) {
+          this.createNewPostIt(worldPoint);
+        }
+        this.lastClickTime = now;
       }
     });
 
     this.inputManager.on('onMouseMove', (point, event) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
-      
-      if (this.isPanning) {
-        this.handlePanning(point);
-      } else if (this.resizingElement && this.resizeHandle) {
-        this.handleElementResize(worldPoint);
-      } else if (this.draggedElement) {
-        this.handleElementDrag(point);
-      } else {
-        // Update cursor based on what's under mouse
-        this.updateCursor(worldPoint);
+
+      // Handle connection dragging
+      if (this.isConnecting) {
+        this.dragConnectionEnd = point;
+        this.requestRedraw();
+        return;
       }
+
+      // Handle panning
+      if (this.isPanning) {
+        const dx = point.x - this.panStart.x;
+        const dy = point.y - this.panStart.y;
+        this.viewport.pan(-dx / this.viewport.zoom, -dy / this.viewport.zoom);
+        this.panStart = point;
+        this.requestRedraw();
+        return;
+      }
+
+      // Handle dragging
+      if (this.draggedElement) {
+        this.draggedElement.position.x = worldPoint.x - this.dragOffset.x;
+        this.draggedElement.position.y = worldPoint.y - this.dragOffset.y;
+        this.updateElementData(this.draggedElement);
+        this.requestRedraw();
+        return;
+      }
+
+      // Handle resizing
+      if (this.resizingElement && this.resizeHandle) {
+        this.handleResize(worldPoint);
+        return;
+      }
+
+      // Update cursor based on hover
+      this.updateCursor(point, worldPoint);
     });
 
     this.inputManager.on('onMouseUp', (point, event) => {
-      this.isPanning = false;
+      const worldPoint = this.viewport.screenToWorld(point.x, point.y);
+
+      // Handle connection completion
+      if (this.isConnecting && this.connectionStart) {
+        // Check if we're dropping on a connection dot
+        for (const element of this.elements.values()) {
+          if (element instanceof PostItNote && element !== this.connectionStart.postIt) {
+            const connectionHit = element.hitTestConnectionDot(point, this.viewport);
+            if (connectionHit) {
+              // Create connection
+              this.createConnection(
+                this.connectionStart.postIt.id,
+                this.connectionStart.side,
+                element.id,
+                connectionHit.side
+              );
+              break;
+            }
+          }
+        }
+        
+        // End connection mode
+        this.isConnecting = false;
+        this.connectionStart = null;
+        this.dragConnectionEnd = null;
+        this.canvas.style.cursor = 'default';
+        this.requestRedraw();
+        return;
+      }
+
+      // Handle panning end
+      if (this.isPanning) {
+        this.isPanning = false;
+        this.canvas.style.cursor = 'default';
+        return;
+      }
+
+      // Handle drag end
+      if (this.draggedElement) {
+        this.draggedElement = null;
+        this.canvas.style.cursor = 'default';
+        this.autoSave();
+        return;
+      }
+
+      // Handle resize end
       if (this.resizingElement) {
-        this.finishElementResize();
-      } else if (this.draggedElement) {
-        this.finishElementDrag();
+        this.resizingElement = null;
+        this.resizeHandle = null;
+        this.canvas.style.cursor = 'default';
+        this.autoSave();
+        return;
       }
     });
 
@@ -570,22 +734,97 @@ export class IdeaBoard {
   }
 
   /**
-   * Render the entire board
+   * Create a connection between two post-it notes
+   */
+  private createConnection(
+    fromPostItId: string,
+    fromSide: 'top' | 'right' | 'bottom' | 'left',
+    toPostItId: string,
+    toSide: 'top' | 'right' | 'bottom' | 'left'
+  ): void {
+    // Check if connection already exists
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === fromPostItId && 
+          connection.fromSide === fromSide &&
+          connection.toPostItId === toPostItId && 
+          connection.toSide === toSide) {
+        return; // Connection already exists
+      }
+    }
+
+    const connection = new Connection(fromPostItId, fromSide, toPostItId, toSide);
+    this.connections.set(connection.id, connection);
+    
+    console.log(`🔗 Created connection from ${fromPostItId}:${fromSide} to ${toPostItId}:${toSide}`);
+    this.autoSave();
+  }
+
+  /**
+   * Render the board
    */
   private render(): void {
+    if (!this.needsRedraw) {
+      return;
+    }
+
     // Clear canvas
-    this.context.clearRect(0, 0, this.viewport.width, this.viewport.height);
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Draw grid (optional)
-    this.drawGrid();
+    // Draw background
+    this.context.fillStyle = '#f5f5f5';
+    this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Draw all elements in order (Map preserves insertion order)
+    // Draw connections first (behind post-its)
+    for (const connection of this.connections.values()) {
+      const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
+      const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
+      
+      if (fromPostIt && toPostIt) {
+        connection.render(this.context, this.viewport, fromPostIt, toPostIt);
+      }
+    }
+
+    // Draw connection preview while dragging
+    if (this.isConnecting && this.connectionStart && this.dragConnectionEnd) {
+      this.renderConnectionPreview();
+    }
+
+    // Draw all elements
     for (const element of this.elements.values()) {
       element.render(this.context, this.viewport);
     }
 
-    // Draw UI overlay
-    this.drawUI();
+    this.needsRedraw = false;
+  }
+
+  /**
+   * Render connection preview while dragging
+   */
+  private renderConnectionPreview(): void {
+    if (!this.connectionStart || !this.dragConnectionEnd) return;
+
+    const fromPostIt = this.connectionStart.postIt;
+    const fromScreenPos = this.viewport.worldToScreen(fromPostIt.position.x, fromPostIt.position.y);
+    const fromScreenWidth = fromPostIt.size.width * this.viewport.zoom;
+    const fromScreenHeight = fromPostIt.size.height * this.viewport.zoom;
+
+    const fromDots = fromPostIt.getConnectionDotPositions(fromScreenPos, fromScreenWidth, fromScreenHeight);
+    const fromDot = fromDots.find(dot => dot.side === this.connectionStart!.side);
+
+    if (!fromDot) return;
+
+    this.context.save();
+    this.context.strokeStyle = '#666666';
+    this.context.lineWidth = 2;
+    this.context.setLineDash([5, 5]); // Dashed line for preview
+    this.context.lineCap = 'round';
+
+    this.context.beginPath();
+    this.context.moveTo(fromDot.x, fromDot.y);
+    this.context.lineTo(this.dragConnectionEnd.x, this.dragConnectionEnd.y);
+    this.context.stroke();
+
+    this.context.restore();
   }
 
   /**
@@ -743,5 +982,61 @@ export class IdeaBoard {
     this.inputManager.destroy();
     this.removeEditingInput();
     this.canvas.remove();
+  }
+
+  /**
+   * Get all post-it notes
+   */
+  getAllPostIts(): PostItNote[] {
+    return Array.from(this.elements.values()).filter(
+      (element): element is PostItNote => element instanceof PostItNote
+    );
+  }
+
+  /**
+   * Focus the viewport on a specific post-it note
+   */
+  focusOnPostIt(postItId: string): void {
+    const postIt = this.elements.get(postItId);
+    if (postIt instanceof PostItNote) {
+      // Center the viewport on the post-it
+      const centerX = postIt.position.x + postIt.size.width / 2;
+      const centerY = postIt.position.y + postIt.size.height / 2;
+      
+      // Pan the viewport to center the post-it
+      this.viewport.x = centerX - this.viewport.width / 2;
+      this.viewport.y = centerY - this.viewport.height / 2;
+      
+      // Select the post-it
+      this.selectElement(postIt);
+      this.requestRedraw();
+    }
+  }
+
+  /**
+   * Set the color of the selected post-it note
+   */
+  private setSelectedPostItColor(color: string): void {
+    if (this.selectedElement instanceof PostItNote) {
+      this.selectedElement.setColor(color);
+      this.updateElementData(this.selectedElement);
+      this.requestRedraw();
+      this.autoSave();
+    }
+  }
+
+  /**
+   * Create a new post-it note at the center of the viewport
+   */
+  private createPostItAtCenter(): void {
+    const centerX = this.viewport.x + this.viewport.width / (2 * this.viewport.zoom);
+    const centerY = this.viewport.y + this.viewport.height / (2 * this.viewport.zoom);
+    const postIt = this.createNewPostIt({ x: centerX, y: centerY });
+    
+    // Apply the currently selected color from the tool panel
+    const currentColor = this.toolPanel.getCurrentColor();
+    postIt.setColor(currentColor);
+    this.updateElementData(postIt);
+    this.autoSave();
   }
 } 
