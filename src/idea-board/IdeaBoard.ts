@@ -122,8 +122,23 @@ export class IdeaBoard {
         }
       }
 
+      // Recreate connections from saved data
+      this.connections.clear();
+      if (this.boardState.connections) {
+        for (const connectionData of this.boardState.connections) {
+          const connection = new Connection(
+            connectionData.fromPostItId,
+            connectionData.fromSide,
+            connectionData.toPostItId,
+            connectionData.toSide
+          );
+          connection.deserialize(connectionData);
+          this.connections.set(connection.id, connection);
+        }
+      }
+
       this.requestRedraw();
-      console.log(`📂 Board initialized with ${this.elements.size} existing elements`);
+      console.log(`📂 Board initialized with ${this.elements.size} elements and ${this.connections.size} connections`);
     } catch (error) {
       console.error('Failed to initialize board from storage:', error);
       // Fallback to new board if loading fails
@@ -671,6 +686,15 @@ export class IdeaBoard {
     this.boardState.viewport.x = this.viewport.x;
     this.boardState.viewport.y = this.viewport.y;
     this.boardState.viewport.zoom = this.viewport.zoom;
+    
+    // Update elements
+    this.boardState.elements = Array.from(this.elements.values()).map(element => element.serialize());
+    
+    // Update connections
+    this.boardState.connections = Array.from(this.connections.values()).map(connection => connection.serialize());
+    
+    this.boardState.metadata.totalElements = this.elements.size;
+    
     void BoardSerializer.autoSave(this.boardState);
   }
 
@@ -763,13 +787,32 @@ export class IdeaBoard {
     toPostItId: string,
     toSide: 'top' | 'right' | 'bottom' | 'left'
   ): void {
-    // Check if connection already exists
+    // Prevent self-connections
+    if (fromPostItId === toPostItId) {
+      console.log('🚫 Cannot connect a post-it to itself');
+      return;
+    }
+
+    // Check if connection already exists (in either direction between the same two post-its)
     for (const connection of this.connections.values()) {
-      if (connection.fromPostItId === fromPostItId && 
-          connection.fromSide === fromSide &&
-          connection.toPostItId === toPostItId && 
-          connection.toSide === toSide) {
-        return; // Connection already exists
+      const isExactDuplicate = 
+        connection.fromPostItId === fromPostItId && 
+        connection.fromSide === fromSide &&
+        connection.toPostItId === toPostItId && 
+        connection.toSide === toSide;
+      
+      const isReverseDuplicate = 
+        connection.fromPostItId === toPostItId && 
+        connection.toPostItId === fromPostItId;
+        
+      if (isExactDuplicate) {
+        console.log('🚫 Connection already exists');
+        return;
+      }
+      
+      if (isReverseDuplicate) {
+        console.log('🚫 Connection already exists in reverse direction');
+        return;
       }
     }
 

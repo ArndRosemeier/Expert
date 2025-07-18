@@ -179,6 +179,7 @@ export class BoardSerializer {
         zoom: 1.0
       },
       elements: [],
+      connections: [],
       metadata: {
         version: this.VERSION,
         totalElements: 0

@@ -29,6 +29,7 @@ export interface IdeaBoardState {
     zoom: number;
   };
   elements: ElementData[];
+  connections: import('../elements/Connection').ConnectionData[];
   metadata: {
     version: string;
     totalElements: number;
