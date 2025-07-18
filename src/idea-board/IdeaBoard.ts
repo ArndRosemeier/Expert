@@ -767,8 +767,11 @@ export class IdeaBoard {
       return;
     }
 
-    // Clear canvas
+    // Clear the entire canvas completely
+    this.context.save();
+    this.context.setTransform(1, 0, 0, 1, 0, 0); // Reset any transforms
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.context.restore();
 
     // Draw background
     this.context.fillStyle = '#f5f5f5';
@@ -836,9 +839,10 @@ export class IdeaBoard {
   private drawGrid(): void {
     const gridSize = 50;
     
-    // Calculate visible world space bounds
-    const topLeft = this.viewport.screenToWorld(0, 0);
-    const bottomRight = this.viewport.screenToWorld(this.canvas.width, this.canvas.height);
+    // Calculate visible world space bounds with padding to ensure full coverage
+    const padding = gridSize * 2; // Extra padding to avoid edge artifacts
+    const topLeft = this.viewport.screenToWorld(-padding, -padding);
+    const bottomRight = this.viewport.screenToWorld(this.canvas.width + padding, this.canvas.height + padding);
     
     // Snap to grid boundaries
     const startX = Math.floor(topLeft.x / gridSize) * gridSize;
@@ -849,27 +853,34 @@ export class IdeaBoard {
     this.context.save();
     this.context.strokeStyle = 'rgba(0, 0, 0, 0.1)';
     this.context.lineWidth = 1;
+    
+    // Ensure lines are drawn on pixel boundaries to avoid blurriness
+    this.context.translate(0.5, 0.5);
 
     // Draw vertical lines
     for (let x = startX; x <= endX; x += gridSize) {
-      const topScreen = this.viewport.worldToScreen(x, topLeft.y);
-      const bottomScreen = this.viewport.worldToScreen(x, bottomRight.y);
+      const screenX = Math.floor(this.viewport.worldToScreen(x, 0).x);
       
-      this.context.beginPath();
-      this.context.moveTo(topScreen.x, topScreen.y);
-      this.context.lineTo(bottomScreen.x, bottomScreen.y);
-      this.context.stroke();
+      // Only draw if line is within visible bounds (with small margin)
+      if (screenX >= -1 && screenX <= this.canvas.width + 1) {
+        this.context.beginPath();
+        this.context.moveTo(screenX, 0);
+        this.context.lineTo(screenX, this.canvas.height);
+        this.context.stroke();
+      }
     }
 
     // Draw horizontal lines
     for (let y = startY; y <= endY; y += gridSize) {
-      const leftScreen = this.viewport.worldToScreen(topLeft.x, y);
-      const rightScreen = this.viewport.worldToScreen(bottomRight.x, y);
+      const screenY = Math.floor(this.viewport.worldToScreen(0, y).y);
       
-      this.context.beginPath();
-      this.context.moveTo(leftScreen.x, leftScreen.y);
-      this.context.lineTo(rightScreen.x, rightScreen.y);
-      this.context.stroke();
+      // Only draw if line is within visible bounds (with small margin)
+      if (screenY >= -1 && screenY <= this.canvas.height + 1) {
+        this.context.beginPath();
+        this.context.moveTo(0, screenY);
+        this.context.lineTo(this.canvas.width, screenY);
+        this.context.stroke();
+      }
     }
 
     this.context.restore();
