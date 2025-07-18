@@ -1,11 +1,29 @@
 import type { IdeaBoard } from '../IdeaBoard';
+import * as state from '../../state';
+import { StorageService, type IStorageService } from '../../StorageService';
+
+// Storage key for persisting model purpose selection
+const STORAGE_KEY_MODEL_PURPOSE = 'idea_board_model_purpose';
+
+// Available AI model purposes for idea board operations
+const AI_MODEL_PURPOSES = [
+  { key: 'creator', label: 'Creator' },
+  { key: 'rater', label: 'Rater' },
+  { key: 'editor', label: 'Editor' },
+  { key: 'prose', label: 'Prose' },
+] as const;
 
 export interface ToolPanelConfig {
   onColorChange: (color: string) => void;
   onSearchToggle: () => void;
   onAddPostIt: () => void;
-  onExport: () => void;
-  onSettings: () => void;
+  onAddNodeContent: () => void;
+  onSummarize: () => void;
+  onExpand: () => void;
+  onGenerateIdeas: () => void;
+  onExportMarkdown: () => void;
+  onClearAll: () => void;
+  onModelChange: (modelPurpose: string) => void;
 }
 
 export class ToolPanel {
@@ -14,9 +32,10 @@ export class ToolPanel {
   private config: ToolPanelConfig;
   private colorPicker: HTMLElement | null = null;
   private searchBox: HTMLElement | null = null;
-  private exportMenu: HTMLElement | null = null;
-  private settingsMenu: HTMLElement | null = null;
   private currentColor: string = '#fff9c4'; // Default light yellow
+  private selectedModelPurpose: string = 'editor'; // Default to editor model
+  private modelDropdownElement: HTMLSelectElement | null = null;
+  private storageService: Promise<IStorageService>;
   
   // Available post-it colors
   private readonly colors = [
@@ -33,8 +52,12 @@ export class ToolPanel {
   constructor(ideaBoard: IdeaBoard, config: ToolPanelConfig) {
     this.ideaBoard = ideaBoard;
     this.config = config;
+    this.storageService = StorageService.getInstance();
     this.container = this.createContainer();
     this.createToolButtons();
+    
+    // Load saved model purpose and refresh dropdown
+    this.loadModelPurposeFromStorage();
   }
 
   private createContainer(): HTMLElement {
@@ -63,6 +86,11 @@ export class ToolPanel {
       this.config.onAddPostIt();
     });
 
+    // Add Node Content button
+    const nodeBtn = this.createToolButton('📄', 'Add Node Content', () => {
+      this.config.onAddNodeContent();
+    });
+
     // Color picker button
     const colorBtn = this.createToolButton('🎨', 'Colors', () => {
       this.toggleColorPicker();
@@ -73,21 +101,44 @@ export class ToolPanel {
       this.toggleSearch();
     });
 
-    // Export button (placeholder for now)
-    const exportBtn = this.createToolButton('📁', 'Export', () => {
-      this.toggleExportMenu();
+    // Summarize button
+    const summarizeBtn = this.createToolButton('🧠', 'Summarize', () => {
+      this.config.onSummarize();
     });
 
-    // Settings button (placeholder for now)
-    const settingsBtn = this.createToolButton('⚙️', 'Settings', () => {
-      this.toggleSettingsMenu();
+    // Expand button
+    const expandBtn = this.createToolButton('🔄', 'Expand', () => {
+      this.config.onExpand();
     });
+
+    // Generate Ideas button
+    const ideasBtn = this.createToolButton('💡', 'Generate Ideas', () => {
+      this.config.onGenerateIdeas();
+    });
+
+    // Export as Markdown button
+    const exportBtn = this.createToolButton('📁', 'Export as Markdown', () => {
+      this.config.onExportMarkdown();
+    });
+
+    // Clear All button
+    const clearBtn = this.createToolButton('🗑️', 'Clear All', () => {
+      this.config.onClearAll();
+    });
+
+    // Model Selection Dropdown
+    const modelDropdown = this.createModelDropdown();
 
     this.container.appendChild(addBtn);
+    this.container.appendChild(nodeBtn);
     this.container.appendChild(colorBtn);
     this.container.appendChild(searchBtn);
+    this.container.appendChild(summarizeBtn);
+    this.container.appendChild(expandBtn);
+    this.container.appendChild(ideasBtn);
     this.container.appendChild(exportBtn);
-    this.container.appendChild(settingsBtn);
+    this.container.appendChild(clearBtn);
+    this.container.appendChild(modelDropdown);
   }
 
   private createToolButton(icon: string, tooltip: string, onClick: () => void): HTMLElement {
@@ -214,7 +265,7 @@ export class ToolPanel {
     if (this.colorPicker) {
       const buttons = this.colorPicker.querySelectorAll('button');
       buttons.forEach((btn, index) => {
-        const isSelected = this.colors[index].value === color;
+        const isSelected = this.colors[index]?.value === color;
         btn.style.border = `2px solid ${isSelected ? '#333' : 'transparent'}`;
       });
     }
@@ -395,185 +446,165 @@ export class ToolPanel {
     });
   }
 
-  private toggleExportMenu(): void {
-    if (this.exportMenu) {
-      this.exportMenu.remove();
-      this.exportMenu = null;
-      return;
-    }
 
-    this.exportMenu = this.createExportMenu();
-    // Append to the same parent as the tool panel to ensure proper layering
-    this.container.parentElement?.appendChild(this.exportMenu);
-    this.positionExportMenu();
-  }
 
-  private createExportMenu(): HTMLElement {
-    const menu = document.createElement('div');
-    menu.style.cssText = `
-      position: absolute;
-      background: white;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-      z-index: 10001;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      min-width: 150px;
-    `;
 
-    const exportOptions = [
-      { name: 'Export as JSON', action: () => this.config.onExport() },
-      { name: 'Export as Markdown', action: () => this.config.onExport() },
-      { name: 'Export as HTML', action: () => this.config.onExport() },
-    ];
-
-    exportOptions.forEach(option => {
-      const optionButton = document.createElement('button');
-      optionButton.textContent = option.name;
-      optionButton.style.cssText = `
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        border-radius: 4px;
-        text-align: left;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-      `;
-
-      optionButton.addEventListener('mouseenter', () => {
-        optionButton.style.backgroundColor = '#f5f5f5';
-      });
-
-      optionButton.addEventListener('mouseleave', () => {
-        optionButton.style.backgroundColor = 'transparent';
-      });
-
-      optionButton.addEventListener('click', () => {
-        option.action();
-        this.exportMenu?.remove();
-        this.exportMenu = null;
-      });
-
-      menu.appendChild(optionButton);
-    });
-
-    // Close menu when clicking outside
-    const closeHandler = (e: MouseEvent) => {
-      if (!menu.contains(e.target as Node)) {
-        menu.remove();
-        this.exportMenu = null;
-        document.removeEventListener('click', closeHandler);
-      }
-    };
-
-    setTimeout(() => {
-      document.addEventListener('click', closeHandler);
-    }, 100);
-
-    return menu;
-  }
-
-  private positionExportMenu(): void {
-    if (!this.exportMenu) return;
-
-    const exportButton = this.container.children[3] as HTMLElement; // Export button is fourth
-    if (exportButton) {
-      const exportButtonRect = exportButton.getBoundingClientRect();
-      this.exportMenu.style.top = `${exportButtonRect.bottom + 8}px`;
-      this.exportMenu.style.left = `${exportButtonRect.left}px`;
-    }
-  }
-
-  private toggleSettingsMenu(): void {
-    if (this.settingsMenu) {
-      this.settingsMenu.remove();
-      this.settingsMenu = null;
-      return;
-    }
-
-    this.settingsMenu = this.createSettingsMenu();
-    // Append to the same parent as the tool panel to ensure proper layering
-    this.container.parentElement?.appendChild(this.settingsMenu);
-    this.positionSettingsMenu();
-  }
-
-  private createSettingsMenu(): HTMLElement {
-    const menu = document.createElement('div');
-    menu.style.cssText = `
-      position: absolute;
-      background: white;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-      z-index: 10001;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      min-width: 150px;
-    `;
-
-    const settingsOptions = [
-      { name: 'Settings', action: () => this.config.onSettings() },
-      { name: 'About', action: () => this.config.onSettings() }, // Placeholder for about action
-    ];
-
-    settingsOptions.forEach(option => {
-      const optionButton = document.createElement('button');
-      optionButton.textContent = option.name;
-      optionButton.style.cssText = `
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        border-radius: 4px;
-        text-align: left;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-      `;
-
-      optionButton.addEventListener('mouseenter', () => {
-        optionButton.style.backgroundColor = '#f5f5f5';
-      });
-
-      optionButton.addEventListener('mouseleave', () => {
-        optionButton.style.backgroundColor = 'transparent';
-      });
-
-      optionButton.addEventListener('click', () => {
-        option.action();
-        this.settingsMenu?.remove();
-        this.settingsMenu = null;
-      });
-
-      menu.appendChild(optionButton);
-    });
-
-    // Close menu when clicking outside
-    const closeHandler = (e: MouseEvent) => {
-      if (!menu.contains(e.target as Node)) {
-        menu.remove();
-        this.settingsMenu = null;
-        document.removeEventListener('click', closeHandler);
-      }
-    };
-
-    setTimeout(() => {
-      document.addEventListener('click', closeHandler);
-    }, 100);
-
-    return menu;
-  }
-
-  private positionSettingsMenu(): void {
-    if (!this.settingsMenu) return;
-
-    const settingsButton = this.container.children[4] as HTMLElement; // Settings button is fifth
-    if (settingsButton) {
-      const settingsButtonRect = settingsButton.getBoundingClientRect();
-      this.settingsMenu.style.top = `${settingsButtonRect.bottom + 8}px`;
-      this.settingsMenu.style.left = `${settingsButtonRect.left}px`;
-    }
-  }
 
   getCurrentColor(): string {
     return this.currentColor;
+  }
+
+  getSelectedModelPurpose(): string {
+    return this.selectedModelPurpose;
+  }
+
+  /**
+   * Refresh the model dropdown with current model names
+   */
+  refreshModelDropdown(): void {
+    this.updateModelDropdownOptions();
+  }
+
+  /**
+   * Load the saved model purpose from storage
+   */
+  private async loadModelPurposeFromStorage(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      const savedPurpose = await storage.get<string>(STORAGE_KEY_MODEL_PURPOSE);
+      
+      if (savedPurpose && AI_MODEL_PURPOSES.some(p => p.key === savedPurpose)) {
+        this.selectedModelPurpose = savedPurpose;
+        console.log(`🤖 Loaded saved model purpose: ${savedPurpose}`);
+      } else {
+        console.log(`🤖 Using default model purpose: ${this.selectedModelPurpose}`);
+      }
+    } catch (error) {
+      console.warn('Failed to load model purpose from storage:', error);
+    }
+    
+    // Refresh dropdown after loading
+    setTimeout(() => this.refreshModelDropdown(), 100);
+  }
+
+  /**
+   * Save the current model purpose to storage
+   */
+  private async saveModelPurposeToStorage(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      await storage.set(STORAGE_KEY_MODEL_PURPOSE, this.selectedModelPurpose);
+      console.log(`🤖 Saved model purpose: ${this.selectedModelPurpose}`);
+    } catch (error) {
+      console.warn('Failed to save model purpose to storage:', error);
+    }
+  }
+
+  /**
+   * Create a model selection dropdown for AI operations
+   */
+  private createModelDropdown(): HTMLElement {
+    const container = document.createElement('div');
+    container.style.cssText = `
+      position: relative;
+      display: inline-block;
+      height: 34px;
+      display: flex;
+      align-items: center;
+    `;
+
+    const dropdown = document.createElement('select');
+    dropdown.title = 'Select AI Model for Operations';
+    dropdown.style.cssText = `
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      min-width: 120px;
+      max-width: 200px;
+      height: 34px;
+      box-sizing: border-box;
+    `;
+
+    this.modelDropdownElement = dropdown;
+    this.updateModelDropdownOptions();
+
+    // Handle selection changes
+    dropdown.addEventListener('change', (e) => {
+      const target = e.target as HTMLSelectElement;
+      this.selectedModelPurpose = target.value;
+      this.config.onModelChange(target.value);
+      this.saveModelPurposeToStorage(); // Save the selection
+      console.log(`🤖 AI model changed to: ${target.value}`);
+    });
+
+    container.appendChild(dropdown);
+    return container;
+  }
+
+  /**
+   * Update the dropdown options with actual model names
+   */
+  private updateModelDropdownOptions(): void {
+    if (!this.modelDropdownElement) return;
+
+    // Clear existing options
+    this.modelDropdownElement.innerHTML = '';
+
+    try {
+      // Try to get the settings manager to get actual model names
+      const settingsManager = state.getSettingsManager();
+      
+      if (settingsManager) {
+        const profile = settingsManager.getLastUsedProfile();
+        const selectedModels = profile?.selectedModels || {};
+
+        // Add options with actual model names
+        AI_MODEL_PURPOSES.forEach(purpose => {
+          const option = document.createElement('option');
+          option.value = purpose.key;
+          
+          const modelName = selectedModels[purpose.key];
+          if (modelName) {
+            // Extract a shorter model name (remove provider prefix if present)
+            const shortName = modelName.includes('/') ? modelName.split('/')[1] : modelName;
+            option.textContent = `${purpose.label}: ${shortName}`;
+          } else {
+            option.textContent = `${purpose.label}: Not configured`;
+          }
+          
+          if (purpose.key === this.selectedModelPurpose) {
+            option.selected = true;
+          }
+          this.modelDropdownElement!.appendChild(option);
+        });
+      } else {
+        // Fallback: just show purpose labels
+        AI_MODEL_PURPOSES.forEach(purpose => {
+          const option = document.createElement('option');
+          option.value = purpose.key;
+          option.textContent = purpose.label;
+          if (purpose.key === this.selectedModelPurpose) {
+            option.selected = true;
+          }
+          this.modelDropdownElement!.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.warn('Could not load model names for dropdown:', error);
+      // Fallback: just show purpose labels
+      AI_MODEL_PURPOSES.forEach(purpose => {
+        const option = document.createElement('option');
+        option.value = purpose.key;
+        option.textContent = purpose.label;
+        if (purpose.key === this.selectedModelPurpose) {
+          option.selected = true;
+        }
+        this.modelDropdownElement!.appendChild(option);
+      });
+    }
   }
 
   attachTo(parent: HTMLElement): void {
@@ -586,12 +617,6 @@ export class ToolPanel {
     }
     if (this.searchBox) {
       this.searchBox.remove();
-    }
-    if (this.exportMenu) {
-      this.exportMenu.remove();
-    }
-    if (this.settingsMenu) {
-      this.settingsMenu.remove();
     }
     this.container.remove();
   }

@@ -4,7 +4,12 @@ import { Connection, type ConnectionData } from './elements/Connection';
 import { InputManager } from './interaction/InputManager';
 import { BoardSerializer } from './persistence/BoardSerializer';
 import { ToolPanel, type ToolPanelConfig } from './ui/ToolPanel';
+import { NodeSearchModal } from './ui/NodeSearchModal';
+import { OpenRouterClient } from '../OpenRouterClient';
+import { createPromptExpansionService } from '../services/PromptExpansionService';
+import * as state from '../state';
 import type { IdeaBoardState, ElementData, Point, BoardElement } from './types/BoardTypes';
+import type { DocumentNode } from '../DocumentNode';
 
 export class IdeaBoard {
   private canvas: HTMLCanvasElement;
@@ -34,6 +39,21 @@ export class IdeaBoard {
   // Rendering
   private animationFrameId: number | null = null;
   private needsRedraw: boolean = true;
+  private disableZoomingWhileEditing: boolean = false;
+  
+  // Animation state for idea generation
+  private ideaGenerationAnimation: {
+    isActive: boolean;
+    postItId: string | null;
+    startTime: number;
+  } = {
+    isActive: false,
+    postItId: null,
+    startTime: 0
+  };
+  
+  // Selected AI model purpose for operations
+  private selectedModelPurpose: string = 'editor';
 
   constructor(container: HTMLElement, boardName: string = 'New Board') {
     // Create canvas
@@ -74,11 +94,26 @@ export class IdeaBoard {
       onAddPostIt: () => {
         this.createPostItAtCenter();
       },
-      onExport: () => {
-        console.log('Export functionality not yet implemented');
+      onAddNodeContent: () => {
+        this.showNodeSearchModal();
       },
-      onSettings: () => {
-        console.log('Settings functionality not yet implemented');
+      onExportMarkdown: () => {
+        this.exportAsMarkdown();
+      },
+      onClearAll: () => {
+        this.clearAll();
+      },
+      onSummarize: () => {
+        this.summarizeSelectedPostIt();
+      },
+      onExpand: () => {
+        this.expandSelectedPostIt();
+      },
+      onGenerateIdeas: () => {
+        this.generateIdeasForSelectedPostIt();
+      },
+      onModelChange: (modelPurpose: string) => {
+        this.setSelectedModelPurpose(modelPurpose);
       }
     });
 
@@ -219,7 +254,7 @@ export class IdeaBoard {
       }
     });
 
-    // Handle double-clicks for connection cutting and new post-it creation
+    // Handle double-clicks for connection cutting, editing, and new post-it creation
     this.inputManager.on('onDoubleClick', (point, event) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
       
@@ -235,7 +270,19 @@ export class IdeaBoard {
         }
       }
       
-      // If not on a connection dot, create new post-it
+      // Second check if double-click was inside a post-it (but not on connection dot)
+      for (const element of this.elements.values()) {
+        if (element instanceof PostItNote) {
+          const hitResult = element.hitTest(worldPoint);
+          if (hitResult) {
+            // Start editing this post-it
+            this.startEditing(element);
+            return;
+          }
+        }
+      }
+      
+      // If not on connection dot or inside post-it, create new post-it
       this.createNewPostIt(worldPoint);
     });
 
@@ -335,6 +382,12 @@ export class IdeaBoard {
     });
 
     this.inputManager.on('onWheel', (delta, point, event) => {
+      // Disable zooming while editing
+      if (this.disableZoomingWhileEditing) {
+        console.log('🔒 Zooming disabled during edit mode');
+        return;
+      }
+      
       const zoomFactor = delta > 0 ? 1.1 : 0.9;
       this.viewport.zoomAt(zoomFactor, point.x, point.y);
       this.requestRedraw();
@@ -466,6 +519,8 @@ export class IdeaBoard {
       this.removeEditingInput();
       this.requestRedraw();
       this.autoSave();
+      this.disableZoomingWhileEditing = false; // Re-enable zooming
+      console.log('🔓 Zooming re-enabled after edit mode');
     }
   }
 
@@ -473,35 +528,95 @@ export class IdeaBoard {
    * Create temporary input for editing post-it content
    */
   private createEditingInput(postIt: PostItNote): void {
+    // Remove any existing editing input first
+    this.removeEditingInput();
+    
+    // Get the canvas container to position relative to it
+    const canvasRect = this.canvas.getBoundingClientRect();
     const screenPos = this.viewport.worldToScreen(postIt.position.x, postIt.position.y);
     const screenWidth = postIt.size.width * this.viewport.zoom;
     const screenHeight = postIt.size.height * this.viewport.zoom;
     
-    const input = document.createElement('textarea');
-    input.id = 'postit-editor';
-    input.value = postIt.content;
-    input.style.position = 'absolute';
-    input.style.left = `${this.canvas.offsetLeft + screenPos.x + 8}px`;
-    input.style.top = `${this.canvas.offsetTop + screenPos.y + 8}px`;
-    input.style.width = `${screenWidth - 16}px`;
-    input.style.height = `${screenHeight - 16}px`;
-    input.style.background = postIt.style.backgroundColor;
-    input.style.color = postIt.style.textColor;
-    input.style.border = '2px solid #4caf50';
-    input.style.borderRadius = '4px';
-    input.style.padding = '4px';
-    input.style.fontSize = `${postIt.style.fontSize * this.viewport.zoom}px`;
-    input.style.fontFamily = 'Arial, sans-serif';
-    input.style.resize = 'none';
-    input.style.zIndex = '1000';
+    // Create textarea that covers the post-it exactly
+    const textarea = document.createElement('textarea');
+    textarea.id = 'postit-editor';
+    textarea.value = postIt.content;
     
-    document.body.appendChild(input);
-    input.focus();
-    input.select();
+    // Position and size to match post-it exactly
+    textarea.style.position = 'fixed'; // Use fixed positioning relative to viewport
+    textarea.style.left = `${canvasRect.left + screenPos.x}px`;
+    textarea.style.top = `${canvasRect.top + screenPos.y}px`;
+    textarea.style.width = `${screenWidth}px`;
+    textarea.style.height = `${screenHeight}px`;
     
-    // Handle input events
-    const handleChange = () => {
-      postIt.setContent(input.value);
+    // Styling to match post-it appearance
+    textarea.style.background = postIt.style.backgroundColor;
+    textarea.style.color = postIt.style.textColor;
+    textarea.style.border = '3px solid #4caf50'; // Prominent green border to show edit mode
+    textarea.style.borderRadius = '8px';
+    textarea.style.padding = '10px';
+    textarea.style.margin = '0';
+    textarea.style.boxSizing = 'border-box';
+    
+    // Font styling that matches zoom level
+    const baseFontSize = postIt.style.fontSize;
+    const zoomedFontSize = baseFontSize * this.viewport.zoom;
+    textarea.style.fontSize = `${Math.max(12, zoomedFontSize)}px`; // Minimum 12px for readability
+    textarea.style.fontFamily = 'Arial, sans-serif';
+    textarea.style.lineHeight = '1.2';
+    
+    // Behavior settings
+    textarea.style.resize = 'none'; // Prevent manual resizing
+    textarea.style.overflowX = 'hidden'; // Hide horizontal scrollbar
+    textarea.style.overflowY = 'auto'; // Show vertical scrollbar when needed
+    textarea.style.outline = 'none'; // Remove focus outline (we have our own border)
+    textarea.style.zIndex = '10001'; // Above everything else
+    
+    // Add smooth transition
+    textarea.style.transition = 'none'; // No transitions to avoid visual glitches
+    
+    // Custom scrollbar styling for better integration
+    textarea.style.scrollbarWidth = 'thin'; // Firefox
+    textarea.style.scrollbarColor = '#ccc #f0f0f0'; // Firefox: thumb track
+    
+    // Add webkit scrollbar styling for Chrome/Safari
+    const style = document.createElement('style');
+    style.setAttribute('data-postit-scrollbar', 'true');
+    style.textContent = `
+      #postit-editor::-webkit-scrollbar {
+        width: 8px;
+      }
+      #postit-editor::-webkit-scrollbar-track {
+        background: #f0f0f0;
+        border-radius: 4px;
+      }
+      #postit-editor::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 4px;
+      }
+      #postit-editor::-webkit-scrollbar-thumb:hover {
+        background: #999;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Add to DOM and focus
+    document.body.appendChild(textarea);
+    
+    // Focus and position cursor at end after a brief delay to ensure proper positioning
+    setTimeout(() => {
+      textarea.focus();
+      // Position cursor at the end of the text instead of selecting all
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }, 10);
+    
+    // Disable zooming while editing
+    this.disableZoomingWhileEditing = true;
+    console.log('🔒 Zooming disabled during edit mode');
+    
+    // Event handlers
+    const handleInput = () => {
+      postIt.setContent(textarea.value);
       this.updateElementData(postIt);
       this.requestRedraw();
     };
@@ -512,14 +627,30 @@ export class IdeaBoard {
     
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
         this.stopEditing();
+        return;
       }
-      e.stopPropagation(); // Prevent board keyboard shortcuts
+      
+      // Allow normal text editing keys
+      if (e.key === 'Tab') {
+        e.preventDefault(); // Prevent tab from moving focus
+        // Insert tab character
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, start) + '\t' + textarea.value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + 1;
+        handleInput(); // Trigger update
+      }
+      
+      // Stop propagation to prevent board shortcuts
+      e.stopPropagation();
     };
     
-    input.addEventListener('input', handleChange);
-    input.addEventListener('blur', handleBlur);
-    input.addEventListener('keydown', handleKeyDown);
+    // Attach event listeners
+    textarea.addEventListener('input', handleInput);
+    textarea.addEventListener('blur', handleBlur);
+    textarea.addEventListener('keydown', handleKeyDown);
   }
 
   /**
@@ -529,6 +660,12 @@ export class IdeaBoard {
     const input = document.getElementById('postit-editor');
     if (input) {
       input.remove();
+    }
+    
+    // Also remove the custom scrollbar styles
+    const existingStyle = document.querySelector('style[data-postit-scrollbar]');
+    if (existingStyle) {
+      existingStyle.remove();
     }
   }
 
@@ -750,7 +887,8 @@ export class IdeaBoard {
     const render = () => {
       if (this.needsRedraw) {
         this.render();
-        this.needsRedraw = false;
+        // Don't automatically set needsRedraw to false - let render() method handle it
+        // This allows animations to keep the loop running
       }
       this.animationFrameId = requestAnimationFrame(render);
     };
@@ -832,7 +970,15 @@ export class IdeaBoard {
       element.render(this.context, this.viewport);
     }
 
-    this.needsRedraw = false;
+    // Draw idea generation animation if active
+    this.renderIdeaGenerationAnimation();
+
+    // Keep redrawing if animation is active
+    if (this.ideaGenerationAnimation.isActive) {
+      this.needsRedraw = true;
+    } else {
+      this.needsRedraw = false;
+    }
   }
 
   /**
@@ -1101,6 +1247,408 @@ export class IdeaBoard {
   }
 
   /**
+   * Clear all post-it notes and connections from the board
+   */
+  private clearAll(): void {
+    if (this.elements.size === 0 && this.connections.size === 0) {
+      console.log('📝 Board is already empty.');
+      return;
+    }
+
+    const totalItems = this.elements.size + this.connections.size;
+    const userConfirmed = confirm(
+      `⚠️ Warning: This will clear all content from the board.\n\n` +
+      `This will remove:\n` +
+      `• ${this.elements.size} post-it note(s)\n` +
+      `• ${this.connections.size} connection(s)\n\n` +
+      `This action cannot be undone. Do you want to continue?`
+    );
+
+    if (!userConfirmed) {
+      console.log('📝 Clear all cancelled by user.');
+      return;
+    }
+
+    console.log(`🗑️ Clearing ${totalItems} items from the board...`);
+
+    // Stop any editing in progress
+    if (this.editingElement) {
+      this.stopEditing();
+    }
+
+    // Clear selections
+    this.selectedElement = null;
+    this.draggedElement = null;
+    this.resizingElement = null;
+
+    // Clear all elements and connections
+    this.elements.clear();
+    this.connections.clear();
+
+    // Update board state
+    this.boardState.elements = [];
+    this.boardState.connections = [];
+    this.boardState.metadata.totalElements = 0;
+    this.boardState.lastModified = new Date();
+
+    // Redraw the empty board
+    this.requestRedraw();
+
+    // Save the cleared state
+    this.autoSave();
+
+    console.log('✅ Board cleared successfully.');
+  }
+
+  /**
+   * Set the selected AI model purpose for operations
+   */
+  private setSelectedModelPurpose(modelPurpose: string): void {
+    this.selectedModelPurpose = modelPurpose;
+    console.log(`🤖 IdeaBoard AI model purpose set to: ${modelPurpose}`);
+  }
+
+  /**
+   * Generate creative ideas for the currently selected post-it note
+   */
+  private async generateIdeasForSelectedPostIt(): Promise<void> {
+    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
+      console.log('❌ No post-it note selected. Please select a post-it to generate ideas for.');
+      return;
+    }
+
+    const selectedPostIt = this.selectedElement;
+    const originalContent = selectedPostIt.content;
+    
+    if (!originalContent.trim()) {
+      console.log('❌ The selected post-it has no content to generate ideas from.');
+      return;
+    }
+
+    const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+    let ideaCount: number;
+    let targetPostIts: PostItNote[] = [];
+    let isConnectedMode = false;
+
+    if (connectedPostIts.length > 0) {
+      // Connected mode: exact number of ideas to replace existing post-its
+      isConnectedMode = true;
+      ideaCount = connectedPostIts.length;
+      
+      const userConfirmed = confirm(
+        `💡 Generate Ideas: Connected Mode\n\n` +
+        `The selected post-it has ${connectedPostIts.length} connected post-it(s).\n` +
+        `This will generate exactly ${connectedPostIts.length} ideas and replace the content in all connected post-its.\n\n` +
+        'Do you want to continue and replace the existing content?'
+      );
+      
+      if (!userConfirmed) {
+        console.log('💡 Idea generation cancelled by user.');
+        return;
+      }
+      
+      targetPostIts = connectedPostIts;
+      console.log(`💡 Generating exactly ${ideaCount} ideas for connected post-its...`);
+    } else {
+      // Free mode: LLM decides number, create new post-its
+      ideaCount = 0; // Will be determined by LLM response
+      console.log(`💡 Generating ideas and creating new post-its below the selected one...`);
+      
+      // Start animation around bottom dot in free mode
+      this.startIdeaGenerationAnimation(selectedPostIt.id);
+    }
+
+    // Store original content for error recovery
+    const originalContents = new Map<string, string>();
+    if (isConnectedMode) {
+      for (const postIt of targetPostIts) {
+        originalContents.set(postIt.id, postIt.content);
+      }
+    }
+
+    try {
+      // Get SettingsManager first - needed for prompts and OpenRouterClient
+      const settingsManager = state.getSettingsManager();
+      
+      if (!settingsManager) {
+        console.log('❌ Settings not available. Please configure your settings first.');
+        return;
+      }
+
+      // Show working indicators if in connected mode
+      if (isConnectedMode) {
+        for (const postIt of targetPostIts) {
+          postIt.content = `💡 Generating ideas...\n\nReceiving creative ideas from main post-it.`;
+          this.updateElementData(postIt);
+        }
+        this.requestRedraw();
+      }
+
+      // Get the configured idea generation prompt and use proper placeholder expansion
+      const prompts = settingsManager.getPrompts();
+      const expansionService = createPromptExpansionService(settingsManager);
+      
+      // Create context that matches the expected structure for idea_generation_system prompt
+      const promptContext = {
+        node: {
+          content: originalContent.trim(),
+          title: 'Post-it Content for Ideas',
+          isLeaf: true
+        },
+        project: {
+          language: settingsManager.getLanguage(),
+          criteria: [] // Not needed for idea generation
+        },
+        custom: {
+          idea_count: isConnectedMode ? ideaCount.toString() : 'some'
+        }
+      };
+      
+      const ideaPrompt = expansionService.expandPrompt(prompts.idea_generation_system, promptContext);
+
+      // Use OpenRouterClient to get ideas
+      const client = OpenRouterClient.getInstance();
+      client.setSettingsManager(settingsManager);
+      const ideaContent = await client.chat(this.selectedModelPurpose, ideaPrompt);
+
+      // Parse the ideas from the response
+      const ideas = this.parseGeneratedIdeas(ideaContent);
+
+      if (ideas.length === 0) {
+        throw new Error('No ideas were generated by the AI');
+      }
+
+      console.log(`💡 Generated ${ideas.length} ideas from AI response`);
+
+      if (isConnectedMode) {
+        // Connected mode: distribute ideas to existing post-its
+        if (ideas.length !== ideaCount) {
+          console.warn(`⚠️ Expected ${ideaCount} ideas but got ${ideas.length}. Adjusting distribution.`);
+        }
+
+        for (let i = 0; i < targetPostIts.length; i++) {
+          const postIt = targetPostIts[i];
+          if (!postIt) continue;
+          
+          const idea = ideas[i] || `Idea ${i + 1}: (Content generation incomplete)`;
+          postIt.content = idea.trim();
+          this.updateElementData(postIt);
+        }
+      } else {
+        // Free mode: create new post-its arranged below the selected one
+        this.createPostItsForIdeas(selectedPostIt, ideas);
+      }
+
+      // Stop animation if it was running
+      this.stopIdeaGenerationAnimation();
+      
+      this.requestRedraw();
+      this.autoSave();
+
+      console.log(`✅ Successfully generated ${ideas.length} ideas ${isConnectedMode ? 'for connected post-its' : 'as new post-its'}.`);
+      
+    } catch (error) {
+      console.error('❌ Failed to generate ideas:', error);
+      console.log('❌ Idea generation failed. Please check your API key and try again.');
+      
+      // Stop animation if it was running
+      this.stopIdeaGenerationAnimation();
+      
+      // Restore original content on error (connected mode only)
+      if (isConnectedMode) {
+        for (const postIt of targetPostIts) {
+          const originalContentForPostIt = originalContents.get(postIt.id);
+          if (originalContentForPostIt !== undefined) {
+            postIt.content = originalContentForPostIt;
+            this.updateElementData(postIt);
+          }
+        }
+        this.requestRedraw();
+        this.autoSave();
+      }
+    }
+  }
+
+  /**
+   * Parse generated ideas using precise idea markers
+   */
+  private parseGeneratedIdeas(content: string): string[] {
+    const ideas: string[] = [];
+    
+    // Use regex to find content between idea markers
+    const ideaRegex = /=== IDEA START ===([\s\S]*?)=== IDEA END ===/g;
+    let match;
+    
+    while ((match = ideaRegex.exec(content)) !== null) {
+      const ideaContent = match[1]?.trim();
+      if (ideaContent) {
+        ideas.push(ideaContent);
+      }
+    }
+    
+    console.log(`📝 Parsed ${ideas.length} ideas from AI response`);
+    
+    // If no ideas found with markers, try fallback parsing
+    if (ideas.length === 0) {
+      console.warn('⚠️ No ideas found with expected markers. Using fallback parsing.');
+      // Fallback: split by double newlines and take non-empty parts
+      const fallbackIdeas = content
+        .split(/\n\s*\n/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .slice(0, 5); // Limit to max 5 ideas in fallback mode
+      
+      return fallbackIdeas.length > 0 ? fallbackIdeas : ['Generated idea content unavailable'];
+    }
+    
+    return ideas;
+  }
+
+  /**
+   * Create new post-its for ideas arranged below the triggering post-it
+   */
+  private createPostItsForIdeas(triggerPostIt: PostItNote, ideas: string[]): void {
+    const gap = 20; // Gap between post-its
+    const verticalOffset = 200; // Distance below the trigger post-it
+    
+    // Calculate spacing based on post-it width + gap
+    const postItWidth = triggerPostIt.size.width;
+    const spacing = postItWidth + gap;
+    
+    // Calculate starting position centered below the trigger post-it
+    const totalWidth = Math.max(1, ideas.length - 1) * spacing;
+    const startX = triggerPostIt.position.x + (triggerPostIt.size.width / 2) - (totalWidth / 2);
+    const startY = triggerPostIt.position.y + triggerPostIt.size.height + verticalOffset;
+
+    const parentColor = triggerPostIt.style.backgroundColor;
+    const newPostIts: PostItNote[] = [];
+
+    // Create post-its for each idea
+    for (let i = 0; i < ideas.length; i++) {
+      const x = startX + (i * spacing);
+      const y = startY;
+      
+      const newPostIt = this.createNewPostIt({ x, y }, ideas[i]!.trim());
+      newPostIt.setColor(parentColor);
+      
+      // Set the same size as the trigger post-it
+      newPostIt.size = { ...triggerPostIt.size };
+      
+      this.updateElementData(newPostIt);
+      newPostIts.push(newPostIt);
+    }
+
+    // Connect all new post-its to the trigger post-it
+    // New post-its connect their top dot to trigger post-it's bottom dot
+    for (const newPostIt of newPostIts) {
+      this.createConnection(
+        triggerPostIt.id,
+        'bottom',
+        newPostIt.id,
+        'top'
+      );
+    }
+
+    console.log(`📝 Created ${newPostIts.length} new post-its arranged below the trigger post-it`);
+  }
+
+  /**
+   * Start the idea generation animation for a specific post-it
+   */
+  private startIdeaGenerationAnimation(postItId: string): void {
+    this.ideaGenerationAnimation = {
+      isActive: true,
+      postItId: postItId,
+      startTime: Date.now()
+    };
+    this.requestRedraw();
+  }
+
+  /**
+   * Stop the idea generation animation
+   */
+  private stopIdeaGenerationAnimation(): void {
+    this.ideaGenerationAnimation = {
+      isActive: false,
+      postItId: null,
+      startTime: 0
+    };
+    this.requestRedraw();
+  }
+
+  /**
+   * Render the idea generation animation around the bottom dot of the active post-it
+   */
+  private renderIdeaGenerationAnimation(): void {
+    if (!this.ideaGenerationAnimation.isActive || !this.ideaGenerationAnimation.postItId) {
+      return;
+    }
+
+    const postIt = this.elements.get(this.ideaGenerationAnimation.postItId) as PostItNote;
+    if (!postIt) {
+      this.stopIdeaGenerationAnimation();
+      return;
+    }
+
+    const screenPos = this.viewport.worldToScreen(postIt.position.x, postIt.position.y);
+    const screenWidth = postIt.size.width * this.viewport.zoom;
+    const screenHeight = postIt.size.height * this.viewport.zoom;
+
+    // Calculate bottom dot position
+    const bottomDotX = screenPos.x + screenWidth / 2;
+    const bottomDotY = screenPos.y + screenHeight;
+
+    // Animation timing
+    const elapsed = Date.now() - this.ideaGenerationAnimation.startTime;
+    const animationSpeed = 0.003; // Rotation speed
+    const pulseSpeed = 0.006; // Pulsing speed
+    
+    // Calculate animation values
+    const rotation = elapsed * animationSpeed;
+    const pulse = Math.sin(elapsed * pulseSpeed) * 0.3 + 0.7; // 0.4 to 1.0
+    
+    this.context.save();
+    
+    // Draw rotating ring around bottom dot
+    this.context.translate(bottomDotX, bottomDotY);
+    this.context.rotate(rotation);
+    
+    // Outer pulsing ring
+    this.context.strokeStyle = '#4CAF50';
+    this.context.lineWidth = 3 * pulse;
+    this.context.globalAlpha = 0.6 * pulse;
+    this.context.beginPath();
+    this.context.arc(0, 0, 25 * this.viewport.zoom * pulse, 0, Math.PI * 2);
+    this.context.stroke();
+    
+    // Inner spinning dots
+    this.context.globalAlpha = 0.8;
+    const dotCount = 6;
+    const dotRadius = 18 * this.viewport.zoom;
+    
+    for (let i = 0; i < dotCount; i++) {
+      const angle = (i / dotCount) * Math.PI * 2;
+      const dotX = Math.cos(angle) * dotRadius;
+      const dotY = Math.sin(angle) * dotRadius;
+      
+      this.context.fillStyle = '#4CAF50';
+      this.context.globalAlpha = 0.8 - (i / dotCount) * 0.3; // Fade effect
+      this.context.beginPath();
+      this.context.arc(dotX, dotY, 3 * this.viewport.zoom, 0, Math.PI * 2);
+      this.context.fill();
+    }
+    
+    // Central bright dot
+    this.context.fillStyle = '#4CAF50';
+    this.context.globalAlpha = pulse;
+    this.context.beginPath();
+    this.context.arc(0, 0, 4 * this.viewport.zoom, 0, Math.PI * 2);
+    this.context.fill();
+    
+    this.context.restore();
+  }
+
+  /**
    * Get board state for external access
    */
   getBoardState(): IdeaBoardState {
@@ -1195,5 +1743,582 @@ export class IdeaBoard {
     this.requestRedraw();
     this.autoSave();
     console.log(`🔗 Removed all connections from dot: ${dotId} on side: ${side}`);
+  }
+
+  /**
+   * Summarize the content of the currently selected post-it note and all connected post-its
+   */
+  private async summarizeSelectedPostIt(): Promise<void> {
+    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
+      console.log('❌ No post-it note selected. Please select a post-it to summarize.');
+      return;
+    }
+
+    const selectedPostIt = this.selectedElement;
+    let originalContent = selectedPostIt.content; // Store original content for error recovery
+    
+    try {
+      // Get SettingsManager first - needed for prompts and OpenRouterClient
+      const settingsManager = state.getSettingsManager();
+      
+      if (!settingsManager) {
+        console.log('❌ Settings not available. Please configure your settings first.');
+        return;
+      }
+
+      // Find all post-its connected to the selected one
+      const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+      
+      if (connectedPostIts.length === 0) {
+        console.log('❌ No connected post-its found. Please connect other post-its to this one first to use summarization.');
+        return;
+      }
+
+      // Check if the triggering post-it already has content that will be overwritten
+      if (selectedPostIt.content.trim()) {
+        const userConfirmed = confirm(
+          '⚠️ Warning: This post-it already contains content.\n\n' +
+          'Summarizing will replace the existing content with a summary of the connected post-its.\n\n' +
+          'Do you want to continue and replace the existing content?'
+        );
+        
+        if (!userConfirmed) {
+          console.log('📝 Summarization cancelled by user to preserve existing content.');
+          return;
+        }
+        
+        console.log('✅ User confirmed to proceed with summarization, replacing existing content.');
+      }
+
+      // Concatenate only the connected post-its (exclude the triggering one)
+      let combinedText = '';
+      
+      for (const postIt of connectedPostIts) {
+        if (postIt.content.trim()) {
+          combinedText += postIt.content.trim() + '\n\n';
+        }
+      }
+
+      if (!combinedText.trim()) {
+        console.log('❌ No content found in the connected post-its to summarize. The connected post-its appear to be empty.');
+        return;
+      }
+
+      console.log(`🧠 Summarizing content from ${connectedPostIts.length} connected post-its...`);
+
+      // Show working indicator in the selected post-it
+      selectedPostIt.content = `🧠 Summarizing ${connectedPostIts.length} connected post-its...\n\nPlease wait while AI processes the content.`;
+      this.updateElementData(selectedPostIt);
+      this.requestRedraw();
+
+      // Get the configured summarize prompt and use proper placeholder expansion
+      const prompts = settingsManager.getPrompts();
+      const expansionService = createPromptExpansionService(settingsManager);
+      
+      // Create context that matches the expected structure for summarize_system prompt
+      // The prompt expects {{content}} and {{language}} placeholders
+      const promptContext = {
+        node: {
+          content: combinedText.trim(),
+          title: 'Combined Post-it Content',
+          isLeaf: true
+        },
+        project: {
+          language: settingsManager.getLanguage(),
+          criteria: [] // Not needed for summarization
+        }
+      };
+      
+      const summarizePrompt = expansionService.expandPrompt(prompts.summarize_system, promptContext);
+
+      // Use OpenRouterClient to get summary
+      const client = OpenRouterClient.getInstance();
+      client.setSettingsManager(settingsManager);
+      const summary = await client.chat(this.selectedModelPurpose, summarizePrompt);
+
+      // Update the selected post-it with the summary
+      selectedPostIt.content = summary.trim();
+      this.updateElementData(selectedPostIt);
+      this.requestRedraw();
+      this.autoSave();
+
+      console.log(`✅ Successfully summarized content from ${connectedPostIts.length} connected post-its into the selected post-it.`);
+      
+    } catch (error) {
+      console.error('❌ Failed to summarize post-it content:', error);
+      console.log('❌ Summarization failed. Please check your API key and try again.');
+      
+      // Restore original content on error
+      selectedPostIt.content = originalContent;
+      this.updateElementData(selectedPostIt);
+      this.requestRedraw();
+      this.autoSave();
+    }
+  }
+
+  /**
+   * Find all post-it notes connected to the given post-it ID
+   */
+  private findConnectedPostIts(postItId: string): PostItNote[] {
+    const connectedPostItIds = new Set<string>();
+    
+    // Find all connections involving this post-it
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === postItId) {
+        connectedPostItIds.add(connection.toPostItId);
+      } else if (connection.toPostItId === postItId) {
+        connectedPostItIds.add(connection.fromPostItId);
+      }
+    }
+
+    // Get the actual PostItNote objects
+    const connectedPostIts: PostItNote[] = [];
+    for (const id of connectedPostItIds) {
+      const element = this.elements.get(id);
+      if (element instanceof PostItNote) {
+        connectedPostIts.push(element);
+      }
+    }
+
+    return connectedPostIts;
+  }
+
+  /**
+   * Expand the content of the currently selected post-it note and distribute to connected post-its
+   */
+  private async expandSelectedPostIt(): Promise<void> {
+    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
+      console.log('❌ No post-it note selected. Please select a post-it to expand.');
+      return;
+    }
+
+    const selectedPostIt = this.selectedElement;
+    const originalContent = selectedPostIt.content;
+    const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+    
+    if (connectedPostIts.length === 0) {
+      console.log('❌ No connected post-its found. Please connect other post-its to this one first to use expansion.');
+      return;
+    }
+
+    if (!originalContent.trim()) {
+      console.log('❌ The selected post-it has no content to expand.');
+      return;
+    }
+
+    // Check if any connected post-its have content that will be overwritten
+    const postItsWithContent = connectedPostIts.filter(postIt => postIt.content.trim());
+    if (postItsWithContent.length > 0) {
+      const userConfirmed = confirm(
+        `⚠️ Warning: ${postItsWithContent.length} connected post-it(s) contain content.\n\n` +
+        'Expanding will replace all content in the connected post-its with expanded sections.\n\n' +
+        'Do you want to continue and replace the existing content?'
+      );
+      
+      if (!userConfirmed) {
+        console.log('📝 Expansion cancelled by user to preserve existing content.');
+        return;
+      }
+      
+      console.log('✅ User confirmed to proceed with expansion, replacing existing content.');
+    }
+
+    // Store original content for error recovery (outside try block for scope)
+    const originalContents = new Map<string, string>();
+    for (const postIt of connectedPostIts) {
+      originalContents.set(postIt.id, postIt.content);
+    }
+
+    try {
+      // Get SettingsManager first - needed for prompts and OpenRouterClient
+      const settingsManager = state.getSettingsManager();
+      
+      if (!settingsManager) {
+        console.log('❌ Settings not available. Please configure your settings first.');
+        return;
+      }
+
+      console.log(`🔄 Expanding content to ${connectedPostIts.length} connected post-its...`);
+
+      // Show working indicators in all target post-its
+      for (const postIt of connectedPostIts) {
+        postIt.content = `🔄 Expanding content...\n\nReceiving expanded section from main post-it.`;
+        this.updateElementData(postIt);
+      }
+      this.requestRedraw();
+
+      // Get the configured expand prompt and use proper placeholder expansion
+      const prompts = settingsManager.getPrompts();
+      const expansionService = createPromptExpansionService(settingsManager);
+      
+      // Create context that matches the expected structure for expand_system prompt
+      const promptContext = {
+        node: {
+          content: originalContent.trim(),
+          title: 'Post-it Content to Expand',
+          isLeaf: true
+        },
+        project: {
+          language: settingsManager.getLanguage(),
+          criteria: [] // Not needed for expansion
+        },
+        custom: {
+          expand_count: connectedPostIts.length.toString()
+        }
+      };
+      
+      const expandPrompt = expansionService.expandPrompt(prompts.expand_system, promptContext);
+
+      // Use OpenRouterClient to get expanded content
+      const client = OpenRouterClient.getInstance();
+      client.setSettingsManager(settingsManager);
+      const expandedContent = await client.chat(this.selectedModelPurpose, expandPrompt);
+
+      // Parse the expanded content into sections
+      const sections = this.parseExpandedSections(expandedContent, connectedPostIts.length);
+
+      if (sections.length !== connectedPostIts.length) {
+        console.warn(`⚠️ Expected ${connectedPostIts.length} sections but got ${sections.length}. Adjusting distribution.`);
+      }
+
+      // Distribute sections to connected post-its
+      for (let i = 0; i < connectedPostIts.length; i++) {
+        const postIt = connectedPostIts[i];
+        if (!postIt) continue; // Skip if postIt is undefined
+        
+        const section = sections[i] || `Section ${i + 1}: (Content unavailable)`;
+        
+        postIt.content = section.trim();
+        this.updateElementData(postIt);
+      }
+
+      this.requestRedraw();
+      this.autoSave();
+
+      console.log(`✅ Successfully expanded content to ${connectedPostIts.length} connected post-its.`);
+      
+    } catch (error) {
+      console.error('❌ Failed to expand post-it content:', error);
+      console.log('❌ Expansion failed. Please check your API key and try again.');
+      
+      // Restore original content on error
+      for (const postIt of connectedPostIts) {
+        const originalContentForPostIt = originalContents.get(postIt.id);
+        if (originalContentForPostIt !== undefined) {
+          postIt.content = originalContentForPostIt;
+          this.updateElementData(postIt);
+        }
+      }
+      this.requestRedraw();
+      this.autoSave();
+    }
+  }
+
+  /**
+   * Parse expanded content into sections using precise section markers
+   */
+  private parseExpandedSections(content: string, expectedCount: number): string[] {
+    const sections: string[] = [];
+    
+    // Use regex to find content between section markers
+    const sectionRegex = /=== SECTION START ===([\s\S]*?)=== SECTION END ===/g;
+    let match;
+    
+    while ((match = sectionRegex.exec(content)) !== null) {
+      const sectionContent = match[1]?.trim();
+      if (sectionContent) {
+        sections.push(sectionContent);
+      }
+    }
+    
+    console.log(`📝 Parsed ${sections.length} sections from AI response (expected ${expectedCount})`);
+    
+    // If we don't have the expected number of sections, handle the mismatch
+    if (sections.length === 0) {
+      console.warn('⚠️ No sections found with expected markers. Using fallback parsing.');
+      // Fallback: split by double newlines and take first N non-empty parts
+      const fallbackSections = content
+        .split(/\n\s*\n/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .slice(0, expectedCount);
+      
+      // Pad if not enough sections
+      while (fallbackSections.length < expectedCount) {
+        fallbackSections.push(`Section ${fallbackSections.length + 1}: Content parsing failed`);
+      }
+      
+      return fallbackSections;
+    }
+    
+    // If we have fewer sections than expected, pad with error messages
+    if (sections.length < expectedCount) {
+      console.warn(`⚠️ Got ${sections.length} sections but expected ${expectedCount}. Padding with error messages.`);
+      while (sections.length < expectedCount) {
+        sections.push(`Section ${sections.length + 1}: Content generation incomplete`);
+      }
+    }
+    
+    // If we have more sections than expected, truncate
+    if (sections.length > expectedCount) {
+      console.warn(`⚠️ Got ${sections.length} sections but expected ${expectedCount}. Truncating excess sections.`);
+      sections.splice(expectedCount);
+    }
+    
+    return sections;
+  }
+
+  /**
+   * Show the node search modal to create a post-it from node content
+   */
+  private async showNodeSearchModal(): Promise<void> {
+    const modal = new NodeSearchModal({
+      id: 'idea-board-node-search',
+      searchScope: 'all-projects', // Global idea board searches across all projects
+      onNodeSelected: (node: DocumentNode) => {
+        this.createPostItFromNode(node);
+      }
+    });
+
+    await modal.open();
+  }
+
+  /**
+   * Create a post-it note from a DocumentNode
+   */
+  private createPostItFromNode(node: DocumentNode): void {
+    // Create the post-it at the center of the viewport
+    const centerX = this.viewport.x + this.viewport.width / (2 * this.viewport.zoom);
+    const centerY = this.viewport.y + this.viewport.height / (2 * this.viewport.zoom);
+    
+    // Create post-it with node content
+    const postIt = this.createNewPostIt({ x: centerX, y: centerY }, node.content);
+    
+    // Apply the currently selected color from the tool panel
+    const currentColor = this.toolPanel.getCurrentColor();
+    postIt.setColor(currentColor);
+    this.updateElementData(postIt);
+    this.autoSave();
+    
+    console.log(`📄 Created post-it from node: "${node.title}"`);
+  }
+
+  /**
+   * Export the idea board as markdown and download it
+   */
+  private async exportAsMarkdown(): Promise<void> {
+    try {
+      console.log('📁 Generating markdown export...');
+
+      // Generate markdown content
+      const markdownContent = this.generateMarkdownContent();
+
+      // Create blob and download
+      const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
+      
+      // Use the file save dialog
+      if ('showSaveFilePicker' in window) {
+        // Modern browsers with File System Access API
+        try {
+          const fileHandle = await (window as any).showSaveFilePicker({
+            suggestedName: `${this.boardState.name}.md`,
+            types: [{
+              description: 'Markdown files',
+              accept: {'text/markdown': ['.md']},
+            }],
+          });
+          
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          
+          console.log('✅ Markdown export saved successfully');
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('Error saving file:', error);
+            // Fallback to download
+            this.downloadMarkdownFile(blob);
+          }
+        }
+      } else {
+        // Fallback for older browsers
+        this.downloadMarkdownFile(blob);
+      }
+    } catch (error) {
+      console.error('❌ Failed to export markdown:', error);
+      console.log('❌ Export failed. Please try again.');
+    }
+  }
+
+  /**
+   * Fallback method to download markdown file
+   */
+  private downloadMarkdownFile(blob: Blob): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${this.boardState.name}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ Markdown export downloaded');
+  }
+
+  /**
+   * Generate markdown content from the board state
+   */
+  private generateMarkdownContent(): string {
+    const boardName = this.boardState.name || 'Idea Board';
+    const createdDate = new Date(this.boardState.created).toLocaleDateString();
+    const modifiedDate = new Date(this.boardState.lastModified).toLocaleDateString();
+    
+    let markdown = `# ${boardName}\n\n`;
+    markdown += `- **Created:** ${createdDate}\n`;
+    markdown += `- **Last Modified:** ${modifiedDate}\n`;
+    markdown += `- **Total Elements:** ${this.elements.size}\n`;
+    markdown += `- **Total Connections:** ${this.connections.size}\n\n`;
+
+    // Get all post-its with their connection information
+    const postIts = Array.from(this.elements.values()).filter(
+      (element): element is PostItNote => element instanceof PostItNote
+    );
+
+    if (postIts.length === 0) {
+      markdown += `*No post-it notes found.*\n\n`;
+      return markdown;
+    }
+
+    // Sort post-its by position (top to bottom, left to right)
+    postIts.sort((a, b) => {
+      const yDiff = a.position.y - b.position.y;
+      if (Math.abs(yDiff) < 50) { // Consider same row if within 50 pixels
+        return a.position.x - b.position.x;
+      }
+      return yDiff;
+    });
+
+    markdown += `## Post-it Notes\n\n`;
+
+    // Group connected post-its together
+    const processedPostIts = new Set<string>();
+    let groupIndex = 1;
+
+    for (const postIt of postIts) {
+      if (processedPostIts.has(postIt.id)) {
+        continue;
+      }
+
+      const connectedPostIts = this.findConnectedPostIts(postIt.id);
+      
+      if (connectedPostIts.length > 0) {
+        // This is a connected group
+        markdown += `### Group ${groupIndex}: Connected Ideas\n\n`;
+        
+        // Add the main post-it
+        markdown += `#### Main Post-it\n\n`;
+        markdown += this.formatPostItAsMarkdown(postIt);
+        processedPostIts.add(postIt.id);
+        
+        // Add connected post-its
+        markdown += `#### Connected Post-its\n\n`;
+        for (const connectedPostIt of connectedPostIts) {
+          markdown += this.formatPostItAsMarkdown(connectedPostIt);
+          processedPostIts.add(connectedPostIt.id);
+        }
+        
+        groupIndex++;
+      } else {
+        // Standalone post-it
+        markdown += `### Standalone Post-it\n\n`;
+        markdown += this.formatPostItAsMarkdown(postIt);
+        processedPostIts.add(postIt.id);
+      }
+      
+      markdown += `\n`;
+    }
+
+    // Add connection information
+    if (this.connections.size > 0) {
+      markdown += `## Connections\n\n`;
+      markdown += `This board contains ${this.connections.size} connection(s) between post-its:\n\n`;
+      
+      for (const connection of this.connections.values()) {
+        const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
+        const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
+        
+        if (fromPostIt && toPostIt) {
+          const fromTitle = this.getPostItTitle(fromPostIt);
+          const toTitle = this.getPostItTitle(toPostIt);
+          markdown += `- **${fromTitle}** → **${toTitle}**\n`;
+        }
+      }
+      markdown += `\n`;
+    }
+
+    markdown += `---\n\n`;
+    markdown += `*Exported from Expert Idea Board on ${new Date().toLocaleString()}*\n`;
+
+    return markdown;
+  }
+
+  /**
+   * Format a single post-it as markdown
+   */
+  private formatPostItAsMarkdown(postIt: PostItNote): string {
+    const title = this.getPostItTitle(postIt);
+    const content = postIt.content.trim();
+    const colorName = this.getColorName(postIt.style.backgroundColor);
+    
+    let markdown = `**${title}** _(${colorName})_\n\n`;
+    
+    if (content) {
+      // Indent content to make it clear it belongs to this post-it
+      const indentedContent = content
+        .split('\n')
+        .map(line => `> ${line}`)
+        .join('\n');
+      markdown += `${indentedContent}\n\n`;
+    } else {
+      markdown += `> *(Empty post-it)*\n\n`;
+    }
+    
+    return markdown;
+  }
+
+  /**
+   * Get a meaningful title for a post-it (first line or ID)
+   */
+  private getPostItTitle(postIt: PostItNote): string {
+    const content = postIt.content.trim();
+    if (!content) {
+      return `Post-it ${postIt.id.slice(-8)}`;
+    }
+    
+    const firstLine = content.split('\n')[0]!.trim();
+    if (firstLine.length > 50) {
+      return firstLine.substring(0, 47) + '...';
+    }
+    
+    return firstLine || `Post-it ${postIt.id.slice(-8)}`;
+  }
+
+  /**
+   * Get a readable color name from hex value
+   */
+  private getColorName(hexColor: string): string {
+    const colorMap: Record<string, string> = {
+      '#fff9c4': 'Yellow',
+      '#bbdefb': 'Blue',
+      '#c8e6c9': 'Green',
+      '#f8bbd9': 'Pink',
+      '#ffcc80': 'Orange',
+      '#ffffff': 'White',
+      '#e1bee7': 'Purple',
+      '#ffcdd2': 'Red'
+    };
+    
+    return colorMap[hexColor.toLowerCase()] || 'Custom';
   }
 } 

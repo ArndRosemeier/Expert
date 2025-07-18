@@ -12,6 +12,8 @@ export interface OrchestratorPrompts {
     
     // For single-shot actions
     summarize_system: string;
+    expand_system: string;
+    idea_generation_system: string;
     expand_list_user: string;
     content_generation_user: string;
     branch_content_generation_user: string;
@@ -155,6 +157,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             Generate summary in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
             You are an expert at summarizing text for use as future context. Create a concise, factual summary of the following text, capturing the key points, main ideas, and any critical details.
+            Only return the summary, no other text, no header.
 
             ---
             
@@ -162,6 +165,66 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
         `.trim(),
         placeholders: ['content', 'language'],
         description: "The system prompt for summarizing generated content. The content will be inserted where the {{content}} placeholder is."
+    },
+
+    expand_system: {
+        text: `
+            Generate expanded content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            
+            You are an expert at expanding and elaborating on content. Take the following content and expand it into exactly {{expand_count}} distinct, well-developed sections.
+
+            Original content to expand:
+            ---
+            {{content}}
+            ---
+
+            CRITICAL FORMAT REQUIREMENTS:
+            1. Create exactly {{expand_count}} sections
+            2. Each section must start with the exact marker: "=== SECTION START ==="
+            3. Each section must end with the exact marker: "=== SECTION END ==="
+            4. Put substantial, detailed content between the markers
+            5. Make each section unique and complementary to the others
+            6. Maintain the overall theme and intent of the original content
+            7. Do NOT include any text outside the section markers
+
+            EXACT FORMAT EXAMPLE:
+            === SECTION START ===
+            [Detailed content for first section goes here]
+            === SECTION END ===
+            === SECTION START ===
+            [Detailed content for second section goes here]
+            === SECTION END ===
+
+            Generate exactly {{expand_count}} sections following this format precisely.
+        `.trim(),
+        placeholders: ['content', 'language', 'expand_count'],
+        description: "The system prompt for expanding content into multiple sections with precise formatting markers for reliable parsing."
+    },
+
+    idea_generation_system: {
+        text: `
+            You are a creative genius.
+
+            Original theme to generate ideas for:
+            ---
+            {{content}}
+            ---
+
+            Please generate {{idea_count}} distinct ideas in {{language}}. 
+            Any structural elements (such as section headers) must always remain in English.
+
+            EXACT FORMAT EXAMPLE:
+            === IDEA START ===
+            [First creative idea related to the content]
+            === IDEA END ===
+            === IDEA START ===
+            [Second creative idea exploring different aspects]
+            === IDEA END ===
+
+            Generate {{idea_count}} ideas following this format precisely.
+        `.trim(),
+        placeholders: ['content', 'language', 'idea_count'],
+        description: "The system prompt for generating creative ideas related to given content with precise formatting markers for reliable parsing."
     },
 
     expand_list_user: {
