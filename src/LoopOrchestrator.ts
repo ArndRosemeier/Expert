@@ -361,6 +361,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     }
 
                     const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
+                    
+                    // Add progress update to show rater is working (like creation and editing phases)
+                    this.emit('progress', { 
+                        iteration: i, 
+                        maxIterations: maxIterations, 
+                        phase: 'rate', 
+                        payload: { criterion: 'AI is analyzing content...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
+                        progress: 0,
+                        failureScore: 0
+                    });
+                    
                     try {
                         lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
                         ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);

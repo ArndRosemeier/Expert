@@ -406,7 +406,8 @@ If the problem persists, try rephrasing explicit content in your project to be l
             };
         },
         isAutomaticMode: boolean = false,
-        projectId?: string
+        projectId?: string,
+        onProgress?: (message: string, current?: number, total?: number) => void
     ): Promise<CoherenceAnalysisResult> {
         // First, perform the regular coherence analysis
         const analysisResult = await this.analyzeCoherence(node, frozenSettings);
@@ -467,9 +468,18 @@ If the problem persists, try rephrasing explicit content in your project to be l
                 
                 console.log(`🔧 [${i + 1}/${toAutofix.length}] Auto-fixing contradiction in "${childNode.title}"`);
                 
-                // Generate the fix with progress callback
+                // Update progress for this fix
+                if (onProgress) {
+                    onProgress(`Fixing contradiction ${i + 1} of ${toAutofix.length} in "${childNode.title}"`, i + 1, toAutofix.length + 1);
+                }
+                
+                // Generate the fix with local progress callback
                 const fixedContent = await this.fixContradiction(node, childNode, contradiction, frozenSettings, (message) => {
                     console.log(`   ⚡ ${message}`);
+                    // Update progress with more detailed message
+                    if (onProgress) {
+                        onProgress(`[${i + 1}/${toAutofix.length}] ${message}`, i + 1, toAutofix.length + 1);
+                    }
                 });
                 
                 // Apply the fix automatically
@@ -488,6 +498,11 @@ If the problem persists, try rephrasing explicit content in your project to be l
                     coherenceLog.logCoherenceIssue(projectId, node, contradiction, 'autofix_failed', autofixSeverity);
                 }
             }
+        }
+        
+        // Final progress update
+        if (onProgress && toAutofix.length > 0) {
+            onProgress(`Completed autofix: ${fixedContradictions.length}/${toAutofix.length} fixes applied`, toAutofix.length + 1, toAutofix.length + 1);
         }
         
         if (fixedContradictions.length > 0) {

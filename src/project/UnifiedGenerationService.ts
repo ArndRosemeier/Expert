@@ -943,7 +943,17 @@ export class UnifiedGenerationService {
                 levels.autofixSeverity,
                 levels.frozenSettings, // Use frozen settings for consistent behavior
                 true, // isAutomaticMode = true (triggered by generation)
-                this.deps.rootNode.id // projectId
+                this.deps.rootNode.id, // projectId
+                // Add progress callback for contradiction fixing
+                (progressMessage: string, current?: number, total?: number) => {
+                    // Update stage progress to show autofix progress
+                    this.currentStageProgress = {
+                        current: current || 2,
+                        total: total || 2,
+                        message: progressMessage
+                    };
+                    this.emitUnifiedProgress();
+                }
             );
             
             // Update progress after analysis/fixing is complete
@@ -1411,18 +1421,18 @@ export class UnifiedGenerationService {
                 message: `Iteration ${progress.iteration} of ${progress.maxIterations}`
             };
             this.currentStageProgress = {
-                current: progress.step,
-                total: progress.totalStepsInIteration,
-                message: `${progress.type} phase`
+                current: 1, // Use a default since step doesn't exist anymore
+                total: 3,   // Use a default since totalStepsInIteration doesn't exist anymore
+                message: `${progress.phase} phase`
             };
             this.emitUnifiedProgress();
             
-            if (progress.type === 'creator') {
+            if (progress.phase === 'create') {
                 const payload = progress.payload as CreatorPayload;
                 if (!payload.response.includes('is working')) {
                     currentIterationContent = payload.response;
                 }
-            } else if (progress.type === 'rater') {
+            } else if (progress.phase === 'rate') {
                 const payload = progress.payload as RaterProgressPayload;
                 if (payload.rating && payload.rating.criterion) {
                     const existingRatingIndex = currentIterationRatings.findIndex(
@@ -1455,12 +1465,10 @@ export class UnifiedGenerationService {
             this.deps.eventEmitter.emit('loop-progress', { 
                 nodeId, 
                 progress: {
-                    type: 'creator',
+                    phase: 'create',
                     payload: { prompt: 'Initializing generation...', response: '' } as CreatorPayload,
                     iteration: 0,
-                    maxIterations: input.maxIterations,
-                    step: 0,
-                    totalStepsInIteration: 3
+                    maxIterations: input.maxIterations
                 } as LoopProgress
             });
         };
@@ -1469,27 +1477,22 @@ export class UnifiedGenerationService {
             this.deps.eventEmitter.emit('loop-progress', { 
                 nodeId, 
                 progress: {
-                    type: 'creator',
+                    phase: 'create',
                     payload: { prompt: `Starting iteration ${iteration}...`, response: '' } as CreatorPayload,
                     iteration,
-                    maxIterations,
-                    step: 0,
-                    totalStepsInIteration: 3
+                    maxIterations
                 } as LoopProgress
             });
         };
 
         const onPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
-            const stepMap = { create: 1, rate: 2, edit: 3 };
             this.deps.eventEmitter.emit('loop-progress', { 
                 nodeId, 
                 progress: {
-                    type: 'creator',
+                    phase: phase,
                     payload: { prompt: `${phase} phase...`, response: '' } as CreatorPayload,
                     iteration,
-                    maxIterations: loopInput.maxIterations,
-                    step: stepMap[phase],
-                    totalStepsInIteration: 3
+                    maxIterations: loopInput.maxIterations
                 } as LoopProgress
             });
         };
