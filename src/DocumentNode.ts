@@ -102,8 +102,8 @@ export class DocumentNode {
      * @returns The extracted count or null if not specified in template.
      */
     public getTemplateChildrenCount(): number | null {
-        if (!this.template || this.isLeaf) {
-            return null; // No count for leaf nodes or missing template
+        if (this.isLeaf) {
+            return null; // No count for leaf nodes
         }
         
         // Look at the CHILD level name (the level this node will generate)
@@ -413,8 +413,8 @@ export class DocumentNode {
         }
         
         // If replacing empty master, remove it first
-        if (shouldReplaceMaster && masterVersion) {
-            const masterIndex = this.versions.findIndex(v => v.id === masterVersion.id);
+        if (shouldReplaceMaster) {
+            const masterIndex = this.versions.findIndex(v => v.id === masterVersion!.id);
             if (masterIndex !== -1) {
                 this.versions.splice(masterIndex, 1);
             }
@@ -631,7 +631,7 @@ export class DocumentNode {
             const latestSession = this.getLatestGenerationSession();
             
             // Check current session first, then latest session
-            const sessionToCheck = currentSession || latestSession;
+            const sessionToCheck = currentSession ?? latestSession;
             if (sessionToCheck) {
                 const iteration = sessionToCheck.iterations.find(iter => iter.iteration === iterationIndex);
                 if (iteration && iteration.ratings) {
@@ -765,10 +765,10 @@ export class DocumentNode {
         }
 
         // Calculate sum of all rating scores
-        const totalScore = version.ratings.reduce((sum, rating) => sum + rating.score, 0);
+        const totalScore = version.ratings.reduce((sum, rating) => sum + rating.actual, 0);
         
         // Check if all goals are met
-        const allGoalsMet = version.ratings.every(rating => rating.score >= rating.goal);
+        const allGoalsMet = version.ratings.every(rating => rating.actual >= rating.goal);
         
         if (allGoalsMet) {
             // All goals met: return sum of scores

@@ -18,10 +18,11 @@ export interface LoopInput {
 }
 
 export interface Rating {
-    criterion: string;
-    score: number;
-    justification: string;
+    name: string;
     goal: number;
+    actual: number;
+    passed: boolean;
+    description?: string;
 }
 
 export interface RaterProgressPayload {
@@ -32,26 +33,19 @@ export interface RaterProgressPayload {
 type LoopProgressPayload = CreatorPayload | RaterProgressPayload | EditorPayload;
 
 export interface LoopProgress {
-    type: 'creator' | 'rater' | 'editor';
-    payload: LoopProgressPayload;
     iteration: number;
     maxIterations: number;
-    step: number;
-    totalStepsInIteration: number;
-    // Enhanced messaging fields
-    modelName?: string;
-    isFirstCreation?: boolean;
-    isRevision?: boolean;
-    isRejected?: boolean;
-    contentType?: 'prose' | 'outline';
-    isCompletion?: boolean;
-    allCriteriaSatisfied?: boolean;
+    phase: 'create' | 'rate' | 'edit';
+    payload?: CreatorPayload | EditorPayload | any; // Allow payload for progress updates
+    ratings?: Rating[];
+    failureScore?: number;
+    progress?: number; // 0-100 percentage
 }
 
 export interface LoopHistoryItem {
     iteration: number;
     type: 'creator' | 'rater' | 'editor';
-    payload: any; // Simplified for history
+    payload: CreatorPayload | EditorPayload; // Fix: Replace any with proper union type
 }
 
 interface LoopResult {
@@ -88,7 +82,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private currentIteration = 0;
     private isRunning = false;
     private language: string = 'English'; // Default language
-    private expansionService: any;
+    private expansionService: ReturnType<typeof createPromptExpansionService>;
 
     constructor(settingsManager: SettingsManager, client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
@@ -211,11 +205,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 }
                 console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
 
-            } catch(e: any) {
-                if (e.message === 'Request was aborted' || this.stopRequested) {
-                    throw new Error('Rating aborted by user');
-                }
-                console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
+            } catch(e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
+                console.error(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, errorMessage);
             }
         }
 
@@ -276,16 +268,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 history.push({ iteration: creatorIteration, type: 'creator', payload: initialCreatorPayload });
 
                 this.emit('progress', { 
-                    type: 'creator', 
-                    payload: initialCreatorPayload, 
                     iteration: creatorIteration, 
                     maxIterations: maxIterations, 
-                    step: 1, 
-                    totalStepsInIteration,
-                    modelName: creatorModelName,
-                    isFirstCreation: true,
-                    isRevision: false,
-                    contentType: contentType
+                    phase: 'create', 
+                    payload: initialCreatorPayload, 
+                    progress: 0,
+                    failureScore: 0
                 });
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
@@ -312,43 +300,32 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                 // Emit progress BEFORE starting the API call to show model working state
                 this.emit('progress', { 
-                    type: 'creator', 
-                    payload: { prompt: initialPrompt, response: `${creatorModelName} is working...` }, 
                     iteration: creatorIteration, 
                     maxIterations: maxIterations, 
-                    step: 1, 
-                    totalStepsInIteration,
-                    modelName: creatorModelName,
-                    isFirstCreation: true,
-                    isRevision: false,
-                    contentType: contentType
+                    phase: 'create', 
+                    payload: { prompt: initialPrompt, response: `${creatorModelName} is working...` }, 
+                    progress: 0,
+                    failureScore: 0
                 });
 
                 try {
                     currentResponse = await this.client.chat(generationModel, initialPrompt, undefined, this.abortController.signal);
-                } catch (e: any) {
-                    if (e.message === 'Request was aborted' || this.stopRequested) {
-                        console.log('🛑 LoopOrchestrator: Initial generation aborted');
-                        aborted = true;
-                        throw new Error('Generation aborted by user');
-                    }
-                    throw new Error(`The AI ${creatorModelName} failed to respond. Please check your API key and network connection.`);
+                } catch (e: unknown) {
+                    const errorMessage = e instanceof Error ? e.message : 'Unknown error during initial creation';
+                    console.error('Creation failed:', errorMessage);
+                    throw new Error(`Content generation failed: ${errorMessage}`);
                 }
                 const creatorPayload: CreatorPayload = { prompt: initialPrompt, response: currentResponse };
                 history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
 
                 // Emit progress AFTER getting the response to show final result
                 this.emit('progress', { 
-                    type: 'creator', 
-                    payload: creatorPayload, 
                     iteration: creatorIteration, 
                     maxIterations: maxIterations, 
-                    step: 1, 
-                    totalStepsInIteration,
-                    modelName: creatorModelName,
-                    isFirstCreation: true,
-                    isRevision: false,
-                    contentType: contentType
+                    phase: 'create', 
+                    payload: creatorPayload, 
+                    progress: 0,
+                    failureScore: 0
                 });
             }
 
@@ -365,14 +342,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 this.emit('phase-started', 'rate', i);
 
                 this.emit('progress', { 
-                    type: 'rater', 
-                    payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
                     iteration: i, 
-                    maxIterations, 
-                    step: 2, 
-                    totalStepsInIteration,
-                    modelName: raterModelName,
-                    contentType: contentType
+                    maxIterations: maxIterations, 
+                    phase: 'rate', 
+                    payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
+                    progress: 0,
+                    failureScore: 0
                 });
 
                 let ratingsFromAI: Rating[] | null = null;
@@ -395,13 +370,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         }
                         console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
 
-                    } catch(e: any) {
-                        if (e.message === 'Request was aborted' || this.stopRequested) {
-                            console.log(`🛑 LoopOrchestrator: Rating aborted during attempt ${attempt + 1}`);
-                            aborted = true;
-                            break;
-                        }
-                        console.warn(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, e);
+                    } catch(e: unknown) {
+                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
+                        console.error('Rating failed:', errorMessage);
+                        throw new Error(`Rating failed: ${errorMessage}`);
                     }
                 }
 
@@ -419,24 +391,22 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         break;
                     }
 
-                    const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
+                    const ratingPayload: RaterProgressPayload = { criterion: rating.name, rating: rating };
                     this.emit('progress', { 
-                        type: 'rater', 
-                        payload: ratingPayload, 
                         iteration: i, 
-                        maxIterations, 
-                        step: 2, 
-                        totalStepsInIteration,
-                        modelName: raterModelName,
-                        contentType: contentType
+                        maxIterations: maxIterations, 
+                        phase: 'rate', 
+                        payload: ratingPayload, 
+                        progress: 0,
+                        failureScore: 0
                     });
 
-                    const originalCriterion = criteria.find(c => c.name === rating.criterion);
-                    if (originalCriterion && rating.score < originalCriterion.goal) {
+                    const originalCriterion = criteria.find(c => c.name === rating.name);
+                    if (originalCriterion && rating.actual < originalCriterion.goal) {
                         allGoalsMet = false;
-                        goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (FAILED)`);
+                        goalResults.push(`${rating.name}: ${rating.actual}/${originalCriterion.goal} (FAILED)`);
                     } else if (originalCriterion) {
-                        goalResults.push(`${rating.criterion}: ${rating.score}/${originalCriterion.goal} (PASSED)`);
+                        goalResults.push(`${rating.name}: ${rating.actual}/${originalCriterion.goal} (PASSED)`);
                     }
                 }
 
@@ -458,32 +428,26 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     this.emit('phase-started', 'edit', i);
                     
                     // 2. If not success, call Editor
-                    const failedRatings = ratingsFromAI.filter(r => r.score < r.goal);
+                    const failedRatings = ratingsFromAI.filter(r => r.actual < r.goal);
                     const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
                     let editorAdvice: string;
                     
                     // Emit progress BEFORE starting the editor API call to show model working state
                     this.emit('progress', { 
-                        type: 'editor', 
-                        payload: { prompt: editorPrompt, advice: `${editorModelName} is generating recommendations...` }, 
                         iteration: i, 
-                        maxIterations, 
-                        step: 3, 
-                        totalStepsInIteration,
-                        modelName: editorModelName,
-                        isRejected: true,
-                        contentType: contentType
+                        maxIterations: maxIterations, 
+                        phase: 'edit', 
+                        payload: { prompt: editorPrompt, advice: `${editorModelName} is generating recommendations...` }, 
+                        progress: 0,
+                        failureScore: 0
                     });
                     
                     try {
                         editorAdvice = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
-                    } catch(e: any) {
-                        if (e.message === 'Request was aborted' || this.stopRequested) {
-                            console.log('🛑 LoopOrchestrator: Editor aborted');
-                            aborted = true;
-                            break;
-                        }
-                        throw new Error("The AI Editor failed to provide feedback.");
+                    } catch(e: unknown) {
+                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during editing';
+                        console.error('Editing failed:', errorMessage);
+                        throw new Error(`Content editing failed: ${errorMessage}`);
                     }
                     
                     const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
@@ -491,15 +455,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                     // Emit progress AFTER getting the response to show final result
                     this.emit('progress', { 
-                        type: 'editor', 
-                        payload: editorPayload, 
                         iteration: i, 
-                        maxIterations, 
-                        step: 3, 
-                        totalStepsInIteration,
-                        modelName: editorModelName,
-                        isRejected: true,
-                        contentType: contentType
+                        maxIterations: maxIterations, 
+                        phase: 'edit', 
+                        payload: editorPayload, 
+                        progress: 0,
+                        failureScore: 0
                     });
 
                     if (this.stopRequested) {
@@ -519,43 +480,32 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     
                     // Emit progress BEFORE starting the API call to show model working state
                     this.emit('progress', { 
-                        type: 'creator', 
-                        payload: { prompt: creatorPrompt, response: `${creatorModelName} is working on revision...` }, 
                         iteration: creatorIteration, 
-                        maxIterations, 
-                        step: 1, 
-                        totalStepsInIteration,
-                        modelName: creatorModelName,
-                        isFirstCreation: false,
-                        isRevision: true,
-                        contentType: contentType
+                        maxIterations: maxIterations, 
+                        phase: 'create', 
+                        payload: { prompt: creatorPrompt, response: `${creatorModelName} is working on revision...` }, 
+                        progress: 0,
+                        failureScore: 0
                     });
                     
                     try {
                         currentResponse = await this.client.chat(generationModel, creatorPrompt, undefined, this.abortController.signal);
-                    } catch (e: any) {
-                        if (e.message === 'Request was aborted' || this.stopRequested) {
-                            console.log('🛑 LoopOrchestrator: Creator revision aborted');
-                            aborted = true;
-                            break;
-                        }
-                        throw new Error(`The AI ${creatorModelName} failed to respond during revision. Please check your API key and network connection.`);
+                    } catch(e: unknown) {
+                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during revision';
+                        console.error('Revision failed:', errorMessage);
+                        throw new Error(`Content revision failed: ${errorMessage}`);
                     }
                     const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
                     history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
                     
                     // Emit progress AFTER getting the response to show final result
                     this.emit('progress', { 
-                        type: 'creator', 
-                        payload: creatorPayload, 
                         iteration: creatorIteration, 
-                        maxIterations, 
-                        step: 1, 
-                        totalStepsInIteration,
-                        modelName: creatorModelName,
-                        isFirstCreation: false,
-                        isRevision: true,
-                        contentType: contentType
+                        maxIterations: maxIterations, 
+                        phase: 'create', 
+                        payload: creatorPayload, 
+                        progress: 0,
+                        failureScore: 0
                     });
 
                 } else {
@@ -565,13 +515,19 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 }
             }
 
-        } catch (error: any) {
-            if (error.message === 'Generation aborted by user' || this.stopRequested) {
-                aborted = true;
-                this.emit('aborted', 'Generation was aborted by user');
-            } else {
-                throw error;
-            }
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown orchestration error';
+            console.error('Loop failed:', errorMessage);
+            
+            this.emit('error', `Loop failed: ${errorMessage}`);
+            
+            return {
+                finalResponse: input.response,
+                history: [],
+                iterations: 0,
+                success: false,
+                aborted: false
+            };
         } finally {
             this.isRunning = false;
             this.abortController = null;
@@ -595,18 +551,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 : `Done! Not all criteria satisfied, best version selected.`;
             
             this.emit('progress', {
-                type: 'creator',
-                payload: { prompt: '', response: completionMessage },
                 iteration: this.currentIteration,
                 maxIterations: input.maxIterations,
-                step: 3,
-                totalStepsInIteration: 3,
-                modelName: '',
-                isFirstCreation: false,
-                isRevision: false,
-                contentType: contentType,
-                isCompletion: true,
-                allCriteriaSatisfied: finalSuccess
+                phase: 'create',
+                payload: { prompt: '', response: completionMessage },
+                progress: 0,
+                failureScore: 0
             });
         }
 
@@ -695,13 +645,14 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const criteriaMap = new Map(criteria.map(c => [c.name, c]));
 
                     for (const item of parsed) {
-                        const originalCriterion = criteriaMap.get(item.criterion);
+                        const originalCriterion = criteriaMap.get(item.name);
                         if (originalCriterion && typeof item.score === 'number' && typeof item.justification === 'string') {
                             ratings.push({
-                                criterion: item.criterion,
-                                score: item.score,
-                                justification: item.justification,
+                                name: item.name,
                                 goal: originalCriterion.goal,
+                                actual: item.score,
+                                passed: item.score >= originalCriterion.goal,
+                                description: item.justification
                             });
                         } else {
                             console.warn('Parsed rating item is invalid or does not match an original criterion.', { item });
@@ -747,8 +698,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     private calculateFailureScore(ratings: Rating[]): number {
         let failureScore = 0;
         for (const rating of ratings) {
-            if (rating.score < rating.goal) {
-                failureScore += (rating.goal - rating.score);
+            if (rating.actual < rating.goal) {
+                failureScore += (rating.goal - rating.actual);
             }
         }
         return failureScore;

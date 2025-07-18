@@ -542,7 +542,7 @@ export class OpenRouterClient {
 
       if (!response.ok) {
         // Try to parse error body as JSON
-        let errorBody: any = null;
+        let errorBody: unknown = null;
         let errorText = '';
         try {
           const text = await response.text();
@@ -559,40 +559,31 @@ export class OpenRouterClient {
           status: response.status,
           statusText: response.statusText,
           url: this.apiUrl,
-          apiKey: maskApiKey(apiKey), // WARNING: Logging API keys is dangerous in production!
+          apiKey: maskApiKey(apiKey),
           errorBody,
           errorText
         });
-        if (response.status === 401) {
-          console.error('🚨 401 Unauthorized error from OpenRouter! This is NOT always an invalid key. See logs above for details.');
-        }
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
+        // Handle structured error response
+        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
+                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
+                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
+                              ? (errorBody as any).error.message : errorText;
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
 
-      let result;
-      try {
-        result = await response.json();
-      } catch (jsonError) {
-        console.error(`❌ JSON parsing failed:`, {
-          error: jsonError,
-          responseStatus: response.status,
-          contentType: response.headers.get('content-type'),
-          url: this.apiUrl
-        });
-        throw new Error(`Failed to parse OpenRouter response as JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
-      }
-      
-      return result;
-    } catch (error: any) {
+      return await response.json();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown request error';
+      const errorName = error instanceof Error ? error.name : 'Unknown';
       console.error(`💥 Request failed:`, {
-        errorName: error.name,
-        errorMessage: error.message,
-        isAbortError: error.name === 'AbortError',
+        errorName,
+        errorMessage,
+        isAbortError: errorName === 'AbortError',
         isNetworkError: error instanceof TypeError,
         url: this.apiUrl,
         apiKey: maskApiKey(apiKey) // WARNING: Logging API keys is dangerous in production!
       });
-      if (error.name === 'AbortError') {
+      if (errorName === 'AbortError') {
         throw new Error('Request was aborted');
       }
       throw error;
@@ -613,7 +604,7 @@ export class OpenRouterClient {
       });
       if (!response.ok) {
         // Try to parse error body as JSON
-        let errorBody: any = null;
+        let errorBody: unknown = null;
         let errorText = '';
         try {
           const text = await response.text();
@@ -637,15 +628,20 @@ export class OpenRouterClient {
         if (response.status === 401) {
           console.error('🚨 401 Unauthorized error from OpenRouter! This is NOT always an invalid key. See logs above for details.');
         }
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
+        // Handle structured error response
+        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
+                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
+                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
+                              ? (errorBody as any).error.message : errorText;
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
       const data: OpenRouterModelsResponse = await response.json();
       return data.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`💥 fetchModels failed:`, {
-        errorName: error.name,
-        errorMessage: error.message,
-        isAbortError: error.name === 'AbortError',
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        isAbortError: error instanceof Error && error.name === 'AbortError',
         isNetworkError: error instanceof TypeError,
         url: 'https://openrouter.ai/api/v1/models',
         apiKey: maskApiKey(apiKey) // WARNING: Logging API keys is dangerous in production!
@@ -680,7 +676,7 @@ export class OpenRouterClient {
       
       if (!response.ok) {
         // Try to parse error body as JSON
-        let errorBody: any = null;
+        let errorBody: unknown = null;
         let errorText = '';
         try {
           const text = await response.text();
@@ -702,15 +698,20 @@ export class OpenRouterClient {
           errorBody,
           errorText
         });
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || errorText}`);
+        // Handle structured error response
+        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
+                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
+                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
+                              ? (errorBody as any).error.message : errorText;
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
       
       const data: OpenRouterModelEndpointsResponse = await response.json();
       return data.data.endpoints || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`💥 fetchModelEndpoints failed for ${modelId}:`, {
-        errorName: error.name,
-        errorMessage: error.message,
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
         modelId,
         apiKey: maskApiKey(apiKey)
       });
@@ -914,13 +915,15 @@ export class OpenRouterClient {
         reader.releaseLock();
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`❌ Streaming chat failed for purpose: ${purpose}, operation: ${opId}`, error);
       
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         const abortError = new Error('Request was aborted');
         callbacks.onError?.(abortError);
-        throw abortError;
+      } else {
+        const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
+        callbacks.onError?.(actualError);
       }
       
       // Log failed requests too if logging is enabled
@@ -948,8 +951,9 @@ export class OpenRouterClient {
         void errorService.showStreamingError(error, purpose, modelForError);
       }
       
-      callbacks.onError?.(error);
-      throw error;
+      const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
+      callbacks.onError?.(actualError);
+      throw actualError;
     } finally {
       this.activeOperations.delete(opId);
     }

@@ -83,27 +83,32 @@
     // "preserveSymlinks": true,                         /* Disable resolving symlinks to their realpath. This correlates to the same flag in node. */
     "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
 
-    /* Type Checking */
+    /* Type Checking - ANTI-DEFENSIVE PROGRAMMING CONFIGURATION */
     "strict": true,                                      /* Enable all strict type-checking options. */
-    // "noImplicitAny": true,                            /* Enable error reporting for expressions and declarations with an implied 'any' type. */
-    // "strictNullChecks": true,                         /* When type checking, take into account 'null' and 'undefined'. */
-    // "strictFunctionTypes": true,                      /* When assigning functions, check to ensure parameters and the return values are subtype-compatible. */
-    // "strictBindCallApply": true,                      /* Check that the arguments for 'bind', 'call', and 'apply' methods match the original function. */
-    // "strictPropertyInitialization": true,             /* Check for class properties that are declared but not set in the constructor. */
-    // "strictBuiltinIteratorReturn": true,              /* Built-in iterators are instantiated with a 'TReturn' type of 'undefined' instead of 'any'. */
-    // "noImplicitThis": true,                           /* Enable error reporting when 'this' is given the type 'any'. */
-    // "useUnknownInCatchVariables": true,               /* Default catch clause variables as 'unknown' instead of 'any'. */
-    // "alwaysStrict": true,                             /* Ensure 'use strict' is always emitted. */
-    "noUnusedLocals": true,                           /* Enable error reporting when local variables aren't read. */
-    "noUnusedParameters": true,                       /* Raise an error when a function parameter isn't read. */
-    "noImplicitReturns": true,                        /* Enable error reporting for codepaths that do not explicitly return in a function. */
-    "noFallthroughCasesInSwitch": true,               /* Enable error reporting for fallthrough cases in switch statements. */
-    "noUncheckedIndexedAccess": true,                 /* Add 'undefined' to a type when accessed using an index. */
-    "noImplicitOverride": true,                       /* Ensure overriding members in derived classes are marked with an override modifier. */
-    "noPropertyAccessFromIndexSignature": true,       /* Enforces using indexed accessors for keys declared using an indexed type. */
-    "allowUnusedLabels": false,                       /* Enable error reporting for unused labels. */
-    "allowUnreachableCode": false,                    /* Enable error reporting for unreachable code. */
-    "exactOptionalPropertyTypes": true,               /* Differentiate between undefined and not present. */
+    // "noImplicitAny": true,                            /* Enable error reporting for expressions and declarations with an implied 'any' type. (Included in strict) */
+    // "strictNullChecks": true,                         /* When type checking, take into account 'null' and 'undefined'. (Included in strict) */
+    // "strictFunctionTypes": true,                      /* When assigning functions, check to ensure parameters and the return values are subtype-compatible. (Included in strict) */
+    // "strictBindCallApply": true,                      /* Check that the arguments for 'bind', 'call', and 'apply' methods match the original function. (Included in strict) */
+    // "strictPropertyInitialization": true,             /* Check for class properties that are declared but not set in the constructor. (Included in strict) */
+    // "strictBuiltinIteratorReturn": true,              /* Built-in iterators are instantiated with a 'TReturn' type of 'undefined' instead of 'any'. (Included in strict) */
+    // "noImplicitThis": true,                           /* Enable error reporting when 'this' is given the type 'any'. (Included in strict) */
+    "useUnknownInCatchVariables": true,               /* Default catch clause variables as 'unknown' instead of 'any' - PREVENTS DEFENSIVE ANY IN CATCH */
+    // "alwaysStrict": true,                             /* Ensure 'use strict' is always emitted. (Included in strict) */
+    "noUnusedLocals": true,                           /* Enable error reporting when local variables aren't read - CATCHES DEFENSIVE VARIABLES */
+    "noUnusedParameters": true,                       /* Raise an error when a function parameter isn't read - CATCHES DEFENSIVE PARAMETERS */
+    "noImplicitReturns": true,                        /* Enable error reporting for codepaths that do not explicitly return in a function - PREVENTS DEFENSIVE EARLY RETURNS */
+    "noFallthroughCasesInSwitch": true,               /* Enable error reporting for fallthrough cases in switch statements - PREVENTS DEFENSIVE FALLTHROUGH */
+    "noUncheckedIndexedAccess": true,                 /* Add 'undefined' to a type when accessed using an index - FORCES EXPLICIT HANDLING */
+    "noImplicitOverride": true,                       /* Ensure overriding members in derived classes are marked with an override modifier - EXPLICIT OVERRIDES */
+    "noPropertyAccessFromIndexSignature": true,       /* Enforces using indexed accessors for keys declared using an indexed type - EXPLICIT ACCESS */
+    "allowUnusedLabels": false,                       /* Enable error reporting for unused labels - CATCHES DEFENSIVE LABELS */
+    "allowUnreachableCode": false,                    /* Enable error reporting for unreachable code - CATCHES DEFENSIVE DEAD CODE */
+    "exactOptionalPropertyTypes": true,               /* Differentiate between undefined and not present - PREVENTS DEFENSIVE OPTIONAL HANDLING */
+
+    /* ADDITIONAL ANTI-DEFENSIVE OPTIONS */
+    // "noStrictGenericChecks": false,                   /* Default: strict generic checks prevent defensive generics */
+    // "suppressExcessPropertyErrors": false,            /* Default: show excess property errors instead of silently ignoring */
+    // "suppressImplicitAnyIndexErrors": false,          /* Default: show implicit any errors on index access */
 
     /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
