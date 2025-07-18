@@ -35,6 +35,7 @@ export class IdeaBoard {
   private animationFrameId: number | null = null;
   private needsRedraw: boolean = true;
   private lastClickTime: number = 0;
+  private lastClickedDot: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
 
   constructor(container: HTMLElement, boardName: string = 'New Board') {
     // Create canvas
@@ -149,11 +150,27 @@ export class IdeaBoard {
         if (element instanceof PostItNote) {
           const connectionHit = element.hitTestConnectionDot(point, this.viewport);
           if (connectionHit) {
-            // Start connection drag
+            // Check for double-click on connection dot
+            const now = Date.now();
+            const isSameDot = this.lastClickedDot && 
+                             this.lastClickedDot.postIt === element && 
+                             this.lastClickedDot.side === connectionHit.side;
+                             
+            if (isSameDot && this.lastClickTime && now - this.lastClickTime < 400) {
+              // Double-click detected - cut all connections to this dot
+              this.removeConnectionsFromDot(element.id, connectionHit.side);
+              this.lastClickedDot = null;
+              this.lastClickTime = 0;
+              return;
+            }
+
+            // Single click - start connection drag
             this.isConnecting = true;
             this.connectionStart = { postIt: element, side: connectionHit.side };
             this.dragConnectionEnd = point;
             this.canvas.style.cursor = 'crosshair';
+            this.lastClickedDot = { postIt: element, side: connectionHit.side };
+            this.lastClickTime = now;
             this.requestRedraw();
             return;
           }
@@ -1139,5 +1156,27 @@ export class IdeaBoard {
     postIt.setColor(currentColor);
     this.updateElementData(postIt);
     this.autoSave();
+  }
+
+  /**
+   * Remove all connections from a specific dot
+   */
+  private removeConnectionsFromDot(dotId: string, side: 'top' | 'right' | 'bottom' | 'left'): void {
+    const connectionsToRemove: string[] = [];
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === dotId && connection.fromSide === side) {
+        connectionsToRemove.push(connection.id);
+      }
+      if (connection.toPostItId === dotId && connection.toSide === side) {
+        connectionsToRemove.push(connection.id);
+      }
+    }
+
+    for (const connectionId of connectionsToRemove) {
+      this.connections.delete(connectionId);
+    }
+    this.requestRedraw();
+    this.autoSave();
+    console.log(`🔗 Removed all connections from dot: ${dotId} on side: ${side}`);
   }
 } 

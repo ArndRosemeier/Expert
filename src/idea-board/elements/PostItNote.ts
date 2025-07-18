@@ -153,7 +153,9 @@ export class PostItNote implements BoardElement {
       const dy = point.y - dot.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance <= dotRadius + 2) { // Add 2px tolerance
+      // Increased tolerance for easier clicking - much larger hit area
+      const hitRadius = Math.max(dotRadius + 12, 20); // At least 20px hit radius, or dot + 12px padding
+      if (distance <= hitRadius) {
         return { side: dot.side };
       }
     }
@@ -203,32 +205,31 @@ export class PostItNote implements BoardElement {
   }
 
   /**
-   * Check if a point hits a resize handle
+   * Check if a point hits any resize handle
    */
-  hitTestResizeHandle(point: Point, viewport: Viewport): 'se' | 'nw' | 'ne' | 'sw' | null {
-    if (!this.isSelected || viewport.zoom <= 0.5) {
+  hitTestResize(point: Point, viewport: Viewport): 'se' | 'nw' | 'ne' | 'sw' | null {
+    if (!this.isSelected) {
       return null;
     }
 
-    const handleSize = 8 / viewport.zoom; // Convert to world coordinates
-    const tolerance = handleSize / 2;
+    const screenPos = viewport.worldToScreen(this.position.x, this.position.y);
+    const screenWidth = this.size.width * viewport.zoom;
+    const screenHeight = this.size.height * viewport.zoom;
+    const handleSize = 8;
 
-    // Check each corner handle
-    const corners = {
-      'se': { x: this.position.x + this.size.width, y: this.position.y + this.size.height }, // Bottom-right
-      'nw': { x: this.position.x, y: this.position.y }, // Top-left
-      'ne': { x: this.position.x + this.size.width, y: this.position.y }, // Top-right
-      'sw': { x: this.position.x, y: this.position.y + this.size.height } // Bottom-left
+    // Define resize handle positions
+    const handles = {
+      'nw': { x: screenPos.x - handleSize/2, y: screenPos.y - handleSize/2 },
+      'ne': { x: screenPos.x + screenWidth - handleSize/2, y: screenPos.y - handleSize/2 },
+      'sw': { x: screenPos.x - handleSize/2, y: screenPos.y + screenHeight - handleSize/2 },
+      'se': { x: screenPos.x + screenWidth - handleSize/2, y: screenPos.y + screenHeight - handleSize/2 }
     };
 
-    for (const [corner, pos] of Object.entries(corners)) {
-      if (
-        point.x >= pos.x - tolerance &&
-        point.x <= pos.x + tolerance &&
-        point.y >= pos.y - tolerance &&
-        point.y <= pos.y + tolerance
-      ) {
-        return corner as 'se' | 'nw' | 'ne' | 'sw';
+    // Check each handle
+    for (const [handle, pos] of Object.entries(handles)) {
+      if (point.x >= pos.x && point.x <= pos.x + handleSize &&
+          point.y >= pos.y && point.y <= pos.y + handleSize) {
+        return handle as 'se' | 'nw' | 'ne' | 'sw';
       }
     }
 
