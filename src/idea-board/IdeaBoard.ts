@@ -178,6 +178,11 @@ export class IdeaBoard {
               this.lastClickedDot = null;
               this.lastClickTime = 0;
               this.lastClickHandledByDot = true;
+              
+              // Reset the flag after a delay to prevent post-it creation
+              setTimeout(() => {
+                this.lastClickHandledByDot = false;
+              }, 100);
               return;
             }
 
@@ -238,7 +243,11 @@ export class IdeaBoard {
           this.createNewPostIt(worldPoint);
         }
         this.lastClickTime = now;
-        this.lastClickHandledByDot = false; // Reset the flag for next click
+        
+        // Only reset the flag if it wasn't recently set by a dot click
+        if (!this.lastClickHandledByDot) {
+          this.lastClickHandledByDot = false;
+        }
       }
     });
 
