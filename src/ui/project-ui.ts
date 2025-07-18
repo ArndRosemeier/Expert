@@ -1932,6 +1932,16 @@ export function renderNodeDetails() {
     // Re-attach event listeners after DOM content replacement
 
     setupEventListeners();
+    
+    // Check if generation is in progress and show progress container if needed
+    const isGenerationActive = projectManager.isAnyNodeGenerating();
+    if (isGenerationActive) {
+        const progressContainer = document.getElementById('generation-progress-container');
+        if (progressContainer && progressContainer.style.display === 'none') {
+            // Make sure progress container is visible if generation is active
+            progressContainer.style.display = 'block';
+        }
+    }
 
     // === DEBUGGING: Log dropdown HTML generation ===
     // Actions dropdown rendered successfully
