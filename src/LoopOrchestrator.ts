@@ -18,7 +18,7 @@ export interface LoopInput {
 }
 
 export interface Rating {
-    name: string;
+    criterion: string;  // Fix: Change back to 'criterion' to match AI response
     goal: number;
     actual: number;
     passed: boolean;
@@ -391,7 +391,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         break;
                     }
 
-                    const ratingPayload: RaterProgressPayload = { criterion: rating.name, rating: rating };
+                    const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
                     this.emit('progress', { 
                         iteration: i, 
                         maxIterations: maxIterations, 
@@ -401,12 +401,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         failureScore: 0
                     });
 
-                    const originalCriterion = criteria.find(c => c.name === rating.name);
+                    const originalCriterion = criteria.find(c => c.name === rating.criterion);
                     if (originalCriterion && rating.actual < originalCriterion.goal) {
                         allGoalsMet = false;
-                        goalResults.push(`${rating.name}: ${rating.actual}/${originalCriterion.goal} (FAILED)`);
+                        goalResults.push(`${rating.criterion}: ${rating.actual}/${originalCriterion.goal} (FAILED)`);
                     } else if (originalCriterion) {
-                        goalResults.push(`${rating.name}: ${rating.actual}/${originalCriterion.goal} (PASSED)`);
+                        goalResults.push(`${rating.criterion}: ${rating.actual}/${originalCriterion.goal} (PASSED)`);
                     }
                 }
 
@@ -645,10 +645,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     const criteriaMap = new Map(criteria.map(c => [c.name, c]));
 
                     for (const item of parsed) {
-                        const originalCriterion = criteriaMap.get(item.name);
+                        const originalCriterion = criteriaMap.get(item.criterion);  // Fix: Use item.criterion
                         if (originalCriterion && typeof item.score === 'number' && typeof item.justification === 'string') {
                             ratings.push({
-                                name: item.name,
+                                criterion: item.criterion,  // Fix: Use item.criterion
                                 goal: originalCriterion.goal,
                                 actual: item.score,
                                 passed: item.score >= originalCriterion.goal,
