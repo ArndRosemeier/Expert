@@ -857,30 +857,26 @@ export class IdeaBoard {
     // Ensure lines are drawn on pixel boundaries to avoid blurriness
     this.context.translate(0.5, 0.5);
 
-    // Draw vertical lines
+    // Draw vertical lines - use calculated bounds, not canvas dimensions
     for (let x = startX; x <= endX; x += gridSize) {
-      const screenX = Math.floor(this.viewport.worldToScreen(x, 0).x);
+      const topScreen = this.viewport.worldToScreen(x, topLeft.y);
+      const bottomScreen = this.viewport.worldToScreen(x, bottomRight.y);
       
-      // Only draw if line is within visible bounds (with small margin)
-      if (screenX >= -1 && screenX <= this.canvas.width + 1) {
-        this.context.beginPath();
-        this.context.moveTo(screenX, 0);
-        this.context.lineTo(screenX, this.canvas.height);
-        this.context.stroke();
-      }
+      this.context.beginPath();
+      this.context.moveTo(Math.floor(topScreen.x), Math.floor(topScreen.y));
+      this.context.lineTo(Math.floor(bottomScreen.x), Math.floor(bottomScreen.y));
+      this.context.stroke();
     }
 
-    // Draw horizontal lines
+    // Draw horizontal lines - use calculated bounds, not canvas dimensions
     for (let y = startY; y <= endY; y += gridSize) {
-      const screenY = Math.floor(this.viewport.worldToScreen(0, y).y);
+      const leftScreen = this.viewport.worldToScreen(topLeft.x, y);
+      const rightScreen = this.viewport.worldToScreen(bottomRight.x, y);
       
-      // Only draw if line is within visible bounds (with small margin)
-      if (screenY >= -1 && screenY <= this.canvas.height + 1) {
-        this.context.beginPath();
-        this.context.moveTo(0, screenY);
-        this.context.lineTo(this.canvas.width, screenY);
-        this.context.stroke();
-      }
+      this.context.beginPath();
+      this.context.moveTo(Math.floor(leftScreen.x), Math.floor(leftScreen.y));
+      this.context.lineTo(Math.floor(rightScreen.x), Math.floor(rightScreen.y));
+      this.context.stroke();
     }
 
     this.context.restore();
