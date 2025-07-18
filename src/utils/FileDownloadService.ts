@@ -3,7 +3,7 @@
  * and eliminates unwanted direct downloads
  */
 
-export interface FileDownloadOptions {
+interface FileDownloadOptions {
     filename: string;
     mimeType: string;
     description?: string;
@@ -11,7 +11,7 @@ export interface FileDownloadOptions {
     forceFileSelector?: boolean; // New option to force file selector usage
 }
 
-export interface FileTypeConfig {
+interface FileTypeConfig {
     description: string;
     accept: Record<string, string[]>;
 }
