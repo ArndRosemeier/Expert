@@ -216,7 +216,6 @@ export class UnifiedGenerationService {
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
     private currentOperationType: 'content' | 'draft' | 'context' | 'coherence' | null = null;
-    private currentLoopPhase: 'create' | 'rate' | 'edit' | null = null;
     // Add contradiction collection system
     private accumulatedContradictions: {
         hasContradictions: boolean;
@@ -751,9 +750,8 @@ export class UnifiedGenerationService {
             node.isGenerating = false;
             this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'generation-completed' });
             
-            // Clear operation type and loop phase after content generation
+            // Clear operation type after content generation
             this.currentOperationType = null;
-            this.currentLoopPhase = null;
             this.emitUnifiedProgress();
         }
     }
@@ -1266,33 +1264,6 @@ export class UnifiedGenerationService {
      * Get current model information for progress display
      */
     private getCurrentModelInfo(): string | undefined {
-        // Handle LoopOrchestrator phases first (for content generation loops)
-        if (this.currentLoopPhase && this.currentNodeId) {
-            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
-            if (node) {
-                const profile = this.deps.settingsManager.getLastUsedProfile();
-                if (profile && profile.selectedModels) {
-                    let modelKey: string;
-                    
-                    if (this.currentLoopPhase === 'create') {
-                        // Use appropriate creator model based on node type
-                        modelKey = node.isLeaf ? 'prose' : 'creator';
-                    } else if (this.currentLoopPhase === 'rate') {
-                        modelKey = 'rater';
-                    } else if (this.currentLoopPhase === 'edit') {
-                        modelKey = 'editor';
-                    } else {
-                        modelKey = node.isLeaf ? 'prose' : 'creator';
-                    }
-                    
-                    const modelName = profile.selectedModels[modelKey];
-                    if (modelName) {
-                        return this.formatModelName(modelName);
-                    }
-                }
-            }
-        }
-        
         if (this.currentOperationType === 'coherence' && this.currentNodeId) {
             // For coherence analysis, use TaskModelService to get the correct model
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
@@ -1436,46 +1407,18 @@ export class UnifiedGenerationService {
         let currentIterationContent: string | null = null;
         let currentIterationRatings: Rating[] = [];
         
-        // Subscribe to progress updates from the orchestrator
+        // Subscribe to progress updates from the orchestrator - just for content tracking, not UI
         const onProgress = (progress: LoopProgress) => {
             if (this.abortRequested) {
                 return;
             }
             
-            // Always forward progress to UI first
-            this.deps.eventEmitter.emit('loop-progress', { 
-                nodeId, 
-                progress: progress
-            });
-            
-            // Update unified progress tracking
-            this.currentNodeId = nodeId;
-            this.currentIterationProgress = {
-                current: progress.iteration,
-                total: progress.maxIterations,
-                message: `Iteration ${progress.iteration} of ${progress.maxIterations}`
-            };
-            // Map phase to step number: create=1, rate=2, edit=3
-            const phaseToStep = { 'create': 1, 'rate': 2, 'edit': 3 };
-            this.currentStageProgress = {
-                current: phaseToStep[progress.phase] || 1,
-                total: 3,
-                message: `${progress.phase} phase`
-            };
-            
-            // Set current phase for model name tracking
-            this.currentLoopPhase = progress.phase;
-            
-            this.emitUnifiedProgress();
-            
+            // Only track content for generation session - UI gets progress directly from LoopOrchestrator
             if (progress.phase === 'create') {
                 const payload = progress.payload as CreatorPayload;
                 if (!payload.response.includes('is working')) {
                     currentIterationContent = payload.response;
                 }
-                        } else if (progress.phase === 'rate') {
-                // Rating phase progress - no individual criterion tracking needed
-                // AI evaluates all criteria at once, just show that rating is in progress
             }
         };
 
@@ -1484,55 +1427,31 @@ export class UnifiedGenerationService {
             // Generation aborted - no additional action needed
         };
 
-        const onStarted = (input: LoopInput) => {
-            this.deps.eventEmitter.emit('loop-progress', { 
-                nodeId, 
-                progress: {
-                    phase: 'create',
-                    payload: { prompt: 'Initializing generation...', response: '' } as CreatorPayload,
-                    iteration: 0,
-                    maxIterations: input.maxIterations
-                } as LoopProgress
-            });
+        // Set up direct forwarding of LoopOrchestrator events to UI (no processing)
+        const forwardProgress = (progress: LoopProgress) => {
+            this.deps.eventEmitter.emit('loop-progress', { nodeId, progress });
         };
-
-        const onIterationStarted = (iteration: number, maxIterations: number) => {
-            this.deps.eventEmitter.emit('loop-progress', { 
-                nodeId, 
-                progress: {
-                    phase: 'create',
-                    payload: { prompt: `Starting iteration ${iteration}...`, response: '' } as CreatorPayload,
-                    iteration,
-                    maxIterations
-                } as LoopProgress
-            });
+        const forwardStarted = (input: LoopInput) => {
+            this.deps.eventEmitter.emit('loop-started', { nodeId, input });
         };
-
-        const onPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
-            let payload: CreatorPayload | RaterProgressPayload;
-            if (phase === 'rate') {
-                payload = { criterion: `${phase} phase...`, rating: { criterion: `${phase} phase...`, goal: 0, actual: 0, passed: false} } as RaterProgressPayload;
-            } else {
-                payload = { prompt: `${phase} phase...`, response: '' } as CreatorPayload;
-            }
-            
-            this.deps.eventEmitter.emit('loop-progress', { 
-                nodeId, 
-                progress: {
-                    phase: phase,
-                    payload: payload,
-                    iteration,
-                    maxIterations: loopInput.maxIterations
-                } as LoopProgress
-            });
+        const forwardPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
+            this.deps.eventEmitter.emit('loop-phase-started', { nodeId, phase, iteration });
+        };
+        const forwardIterationStarted = (iteration: number, maxIterations: number) => {
+            this.deps.eventEmitter.emit('loop-iteration-started', { nodeId, iteration, maxIterations });
+        };
+        const forwardAborted = () => {
+            this.deps.eventEmitter.emit('loop-aborted', { nodeId });
         };
 
         // Set up LoopOrchestrator event handlers
-        this.deps.loopOrchestrator.on('progress', onProgress);
-        this.deps.loopOrchestrator.on('aborted', onAborted);
-        this.deps.loopOrchestrator.on('started', onStarted);
-        this.deps.loopOrchestrator.on('iteration-started', onIterationStarted);
-        this.deps.loopOrchestrator.on('phase-started', onPhaseStarted);
+        this.deps.loopOrchestrator.on('progress', onProgress); // For content tracking
+        this.deps.loopOrchestrator.on('progress', forwardProgress); // For UI
+        this.deps.loopOrchestrator.on('started', forwardStarted);
+        this.deps.loopOrchestrator.on('phase-started', forwardPhaseStarted);
+        this.deps.loopOrchestrator.on('iteration-started', forwardIterationStarted);
+        this.deps.loopOrchestrator.on('aborted', onAborted); // For content tracking
+        this.deps.loopOrchestrator.on('aborted', forwardAborted); // For UI
 
         try {
             // Run the loop orchestrator
@@ -1619,10 +1538,12 @@ export class UnifiedGenerationService {
         } finally {
             // Clean up LoopOrchestrator event handlers
             this.deps.loopOrchestrator.off('progress', onProgress);
+            this.deps.loopOrchestrator.off('progress', forwardProgress);
+            this.deps.loopOrchestrator.off('started', forwardStarted);
+            this.deps.loopOrchestrator.off('phase-started', forwardPhaseStarted);
+            this.deps.loopOrchestrator.off('iteration-started', forwardIterationStarted);
             this.deps.loopOrchestrator.off('aborted', onAborted);
-            this.deps.loopOrchestrator.off('started', onStarted);
-            this.deps.loopOrchestrator.off('iteration-started', onIterationStarted);
-            this.deps.loopOrchestrator.off('phase-started', onPhaseStarted);
+            this.deps.loopOrchestrator.off('aborted', forwardAborted);
             
             // Note: Individual content generation does not manage isGenerating flag
             // Only the main unified generation process manages this flag

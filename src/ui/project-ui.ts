@@ -17,6 +17,80 @@ import { AIInteractionsService } from '../AIInteractionsService';
 import { getContextItemCount, getContextInfoText } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
+import { LoopProgress } from '../LoopOrchestrator';
+
+/**
+ * Calculate model name based on phase and node for progress display
+ */
+function getModelNameForPhase(nodeId: string, phase: 'create' | 'rate' | 'edit'): string | undefined {
+    if (!projectManager) return undefined;
+    
+    const node = projectManager.findNodeById(nodeId);
+    if (!node) return undefined;
+    
+    const settingsManager = state.getSettingsManager();
+    if (!settingsManager) return undefined;
+    
+    const profile = settingsManager.getLastUsedProfile();
+    if (!profile || !profile.selectedModels) return undefined;
+    
+    let modelKey: string;
+    if (phase === 'create') {
+        // Use appropriate creator model based on node type
+        modelKey = node.isLeaf ? 'prose' : 'creator';
+    } else if (phase === 'rate') {
+        modelKey = 'rater';
+    } else if (phase === 'edit') {
+        modelKey = 'editor';
+    } else {
+        modelKey = node.isLeaf ? 'prose' : 'creator';
+    }
+    
+    const modelName = profile.selectedModels[modelKey];
+    if (!modelName) return undefined;
+    
+    // Format model name for user display (e.g., "x-ai/grok-4" -> "Grok 4")
+    return formatModelName(modelName);
+}
+
+/**
+ * Format model name for user display (e.g., "x-ai/grok-4" -> "Grok 4")
+ */
+function formatModelName(modelId: string): string {
+    // Map of model patterns to friendly names
+    const modelMap: { [key: string]: string } = {
+        'x-ai/grok-4': 'Grok 4',
+        'x-ai/grok-2': 'Grok 2',
+        'anthropic/claude-3.5-sonnet': 'Claude 3.5 Sonnet',
+        'anthropic/claude-3-opus': 'Claude 3 Opus',
+        'anthropic/claude-3-sonnet': 'Claude 3 Sonnet',
+        'anthropic/claude-3-haiku': 'Claude 3 Haiku',
+        'openai/gpt-4o': 'GPT-4o',
+        'openai/gpt-4': 'GPT-4',
+        'openai/gpt-4-turbo': 'GPT-4 Turbo',
+        'openai/gpt-3.5-turbo': 'GPT-3.5 Turbo',
+        'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
+        'google/gemini-pro': 'Gemini Pro',
+        'meta-llama/llama-3.1-405b-instruct': 'Llama 3.1 405B',
+        'meta-llama/llama-3.1-70b-instruct': 'Llama 3.1 70B',
+        'meta-llama/llama-3.1-8b-instruct': 'Llama 3.1 8B'
+    };
+
+    // Check for exact match first
+    if (modelMap[modelId]) {
+        return modelMap[modelId];
+    }
+
+    // Extract readable name from model ID if no exact match
+    let name = modelId.replace(/^[^/]+\//, ''); // Remove provider prefix
+    name = name.replace(/-instruct$/, ''); // Remove -instruct suffix
+    name = name.replace(/-/g, ' '); // Replace hyphens with spaces
+    
+    // Capitalize words
+    return name.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+}
 
 /**
  * Gets the appropriate status icon for a node based on its state
@@ -989,6 +1063,39 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderProjectUI(manager);
     };
     
+    // Handle direct LoopOrchestrator progress events
+    const handleLoopProgress = (e: { nodeId: string, progress: LoopProgress }) => {
+        try {
+            const { progress } = e;
+            const progressData: ProgressUIData = {};
+            
+            // Map LoopProgress to UI format
+            progressData.iterations = {
+                current: progress.iteration,
+                total: progress.maxIterations,
+                message: `Iteration ${progress.iteration} of ${progress.maxIterations}`
+            };
+            
+            // Map phase to step number: create=1, rate=2, edit=3
+            const phaseToStep: Record<string, number> = { 'create': 1, 'rate': 2, 'edit': 3 };
+            progressData.stages = {
+                current: phaseToStep[progress.phase] || 1,
+                total: 3,
+                message: `${progress.phase} phase`
+            };
+            
+            // Calculate model name based on phase and node
+            const modelName = getModelNameForPhase(e.nodeId, progress.phase);
+            if (modelName) {
+                progressData.model = modelName;
+            }
+            
+            updateProgressUI(progressData);
+        } catch (error) {
+            console.error('Error updating loop progress:', error);
+        }
+    };
+
     const handleUnifiedProgress = (e: { nodeId: string; operations?: ProgressInfo; iterations?: ProgressInfo; stages?: ProgressInfo; detail?: string; model?: string }) => {
         try {
             const progressData: ProgressUIData = {};
@@ -1128,6 +1235,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // @ts-ignore
         manager.off('error', manager._errorListener);
         // @ts-ignore
+        manager.off('loop-progress', manager._loopProgressListener);
+        // @ts-ignore
         manager.off('unified-progress', manager._unifiedProgressListener);
         // @ts-ignore
         manager.off('nodeSummaryGenerated', manager._summaryGeneratedListener);
@@ -1150,6 +1259,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     // @ts-ignore
     manager._errorListener = handleError;
     // @ts-ignore
+    manager._loopProgressListener = handleLoopProgress;
+    // @ts-ignore
     manager._unifiedProgressListener = handleUnifiedProgress;
     // @ts-ignore
     manager._summaryGeneratedListener = handleSummaryGenerated;
@@ -1167,6 +1278,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     manager.on('bulkGenerationComplete', handleBulkGenerationComplete);
     manager.on('nodeGenerationAborted', handleAborted);
     manager.on('error', handleError);
+    manager.on('loop-progress', handleLoopProgress);
     manager.on('unified-progress', handleUnifiedProgress);
     manager.on('nodeSummaryGenerated', handleSummaryGenerated);
     manager.on('project-loaded', handleProjectLoaded);

@@ -1,6 +1,6 @@
 import { DocumentNode } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
-import { LoopOrchestrator, LoopProgress } from './LoopOrchestrator';
+import { LoopOrchestrator, LoopProgress, LoopInput } from './LoopOrchestrator';
 import { EventEmitter } from './EventEmitter';
 import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
@@ -34,6 +34,10 @@ type ProjectManagerEvents = {
     'bulkGenerationComplete': [e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }];
     'nodeGenerationAborted': [e: { nodeId: string, node: DocumentNode }];
     'loop-progress': [e: { nodeId: string, progress: LoopProgress }];
+    'loop-started': [e: { nodeId: string, input: LoopInput }];
+    'loop-phase-started': [e: { nodeId: string, phase: 'create' | 'rate' | 'edit', iteration: number }];
+    'loop-iteration-started': [e: { nodeId: string, iteration: number, maxIterations: number }];
+    'loop-aborted': [e: { nodeId: string }];
     'high-level-progress': [e: { nodeId: string, message: string, current: number, total: number }];
     'unified-progress': [e: { nodeId: string; operations?: { message: string; current: number; total: number }; iterations?: { message: string; current: number; total: number }; stages?: { message: string; current: number; total: number }; detail?: string }];
     'tree-update-needed': [e: { nodeId: string; reason: string }];
