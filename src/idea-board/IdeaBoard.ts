@@ -36,6 +36,7 @@ export class IdeaBoard {
   private needsRedraw: boolean = true;
   private lastClickTime: number = 0;
   private lastClickedDot: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
+  private lastClickHandledByDot: boolean = false;
 
   constructor(container: HTMLElement, boardName: string = 'New Board') {
     // Create canvas
@@ -161,6 +162,7 @@ export class IdeaBoard {
               this.removeConnectionsFromDot(element.id, connectionHit.side);
               this.lastClickedDot = null;
               this.lastClickTime = 0;
+              this.lastClickHandledByDot = true;
               return;
             }
 
@@ -171,6 +173,7 @@ export class IdeaBoard {
             this.canvas.style.cursor = 'crosshair';
             this.lastClickedDot = { postIt: element, side: connectionHit.side };
             this.lastClickTime = now;
+            this.lastClickHandledByDot = true;
             this.requestRedraw();
             return;
           }
@@ -214,12 +217,13 @@ export class IdeaBoard {
         // Click on empty space
         this.selectElement(null);
         
-        // Check if double-click to create new post-it
+        // Check if double-click to create new post-it (but not if last click was handled by a dot)
         const now = Date.now();
-        if (this.lastClickTime && now - this.lastClickTime < 300) {
+        if (this.lastClickTime && now - this.lastClickTime < 300 && !this.lastClickHandledByDot) {
           this.createNewPostIt(worldPoint);
         }
         this.lastClickTime = now;
+        this.lastClickHandledByDot = false; // Reset the flag for next click
       }
     });
 
