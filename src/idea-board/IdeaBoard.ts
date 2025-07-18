@@ -838,44 +838,29 @@ export class IdeaBoard {
    */
   private drawGrid(): void {
     const gridSize = 50;
+    const bounds = this.viewport.getWorldBounds();
     
-    // Calculate visible world space bounds with padding to ensure full coverage
-    const padding = gridSize * 2; // Extra padding to avoid edge artifacts
-    const topLeft = this.viewport.screenToWorld(-padding, -padding);
-    const bottomRight = this.viewport.screenToWorld(this.canvas.width + padding, this.canvas.height + padding);
-    
-    // Snap to grid boundaries
-    const startX = Math.floor(topLeft.x / gridSize) * gridSize;
-    const startY = Math.floor(topLeft.y / gridSize) * gridSize;
-    const endX = Math.ceil(bottomRight.x / gridSize) * gridSize;
-    const endY = Math.ceil(bottomRight.y / gridSize) * gridSize;
-
     this.context.save();
     this.context.strokeStyle = 'rgba(0, 0, 0, 0.1)';
     this.context.lineWidth = 1;
-    
-    // Ensure lines are drawn on pixel boundaries to avoid blurriness
-    this.context.translate(0.5, 0.5);
 
-    // Draw vertical lines - use calculated bounds, not canvas dimensions
-    for (let x = startX; x <= endX; x += gridSize) {
-      const topScreen = this.viewport.worldToScreen(x, topLeft.y);
-      const bottomScreen = this.viewport.worldToScreen(x, bottomRight.y);
-      
+    // Vertical lines
+    const startX = Math.floor(bounds.left / gridSize) * gridSize;
+    for (let x = startX; x <= bounds.right; x += gridSize) {
+      const screenX = this.viewport.worldToScreen(x, 0).x;
       this.context.beginPath();
-      this.context.moveTo(Math.floor(topScreen.x), Math.floor(topScreen.y));
-      this.context.lineTo(Math.floor(bottomScreen.x), Math.floor(bottomScreen.y));
+      this.context.moveTo(screenX, 0);
+      this.context.lineTo(screenX, this.viewport.height);
       this.context.stroke();
     }
 
-    // Draw horizontal lines - use calculated bounds, not canvas dimensions
-    for (let y = startY; y <= endY; y += gridSize) {
-      const leftScreen = this.viewport.worldToScreen(topLeft.x, y);
-      const rightScreen = this.viewport.worldToScreen(bottomRight.x, y);
-      
+    // Horizontal lines
+    const startY = Math.floor(bounds.top / gridSize) * gridSize;
+    for (let y = startY; y <= bounds.bottom; y += gridSize) {
+      const screenY = this.viewport.worldToScreen(0, y).y;
       this.context.beginPath();
-      this.context.moveTo(Math.floor(leftScreen.x), Math.floor(leftScreen.y));
-      this.context.lineTo(Math.floor(rightScreen.x), Math.floor(rightScreen.y));
+      this.context.moveTo(0, screenY);
+      this.context.lineTo(this.viewport.width, screenY);
       this.context.stroke();
     }
 
