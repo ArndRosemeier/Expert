@@ -534,20 +534,20 @@ export class IdeaBoard {
   }
 
   /**
-   * Select an element
+   * Select an element or clear selection
    */
-  private selectElement(element: BoardElement): void {
-    if (this.selectedElement) {
-      if (this.selectedElement instanceof PostItNote) {
-        this.selectedElement.setSelected(false);
-      }
+  private selectElement(element: BoardElement | null): void {
+    // Deselect previously selected element
+    if (this.selectedElement && this.selectedElement instanceof PostItNote) {
+      this.selectedElement.setSelected(false);
     }
-    
+
+    // Select new element
     this.selectedElement = element;
-    if (element instanceof PostItNote) {
+    if (element && element instanceof PostItNote) {
       element.setSelected(true);
     }
-    
+
     this.requestRedraw();
   }
 
@@ -774,6 +774,9 @@ export class IdeaBoard {
     this.context.fillStyle = '#f5f5f5';
     this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // Draw grid
+    this.drawGrid();
+
     // Draw connections first (behind post-its)
     for (const connection of this.connections.values()) {
       const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
@@ -832,29 +835,40 @@ export class IdeaBoard {
    */
   private drawGrid(): void {
     const gridSize = 50;
-    const bounds = this.viewport.getWorldBounds();
     
+    // Calculate visible world space bounds
+    const topLeft = this.viewport.screenToWorld(0, 0);
+    const bottomRight = this.viewport.screenToWorld(this.canvas.width, this.canvas.height);
+    
+    // Snap to grid boundaries
+    const startX = Math.floor(topLeft.x / gridSize) * gridSize;
+    const startY = Math.floor(topLeft.y / gridSize) * gridSize;
+    const endX = Math.ceil(bottomRight.x / gridSize) * gridSize;
+    const endY = Math.ceil(bottomRight.y / gridSize) * gridSize;
+
     this.context.save();
     this.context.strokeStyle = 'rgba(0, 0, 0, 0.1)';
     this.context.lineWidth = 1;
 
-    // Vertical lines
-    const startX = Math.floor(bounds.left / gridSize) * gridSize;
-    for (let x = startX; x <= bounds.right; x += gridSize) {
-      const screenX = this.viewport.worldToScreen(x, 0).x;
+    // Draw vertical lines
+    for (let x = startX; x <= endX; x += gridSize) {
+      const topScreen = this.viewport.worldToScreen(x, topLeft.y);
+      const bottomScreen = this.viewport.worldToScreen(x, bottomRight.y);
+      
       this.context.beginPath();
-      this.context.moveTo(screenX, 0);
-      this.context.lineTo(screenX, this.viewport.height);
+      this.context.moveTo(topScreen.x, topScreen.y);
+      this.context.lineTo(bottomScreen.x, bottomScreen.y);
       this.context.stroke();
     }
 
-    // Horizontal lines
-    const startY = Math.floor(bounds.top / gridSize) * gridSize;
-    for (let y = startY; y <= bounds.bottom; y += gridSize) {
-      const screenY = this.viewport.worldToScreen(0, y).y;
+    // Draw horizontal lines
+    for (let y = startY; y <= endY; y += gridSize) {
+      const leftScreen = this.viewport.worldToScreen(topLeft.x, y);
+      const rightScreen = this.viewport.worldToScreen(bottomRight.x, y);
+      
       this.context.beginPath();
-      this.context.moveTo(0, screenY);
-      this.context.lineTo(this.viewport.width, screenY);
+      this.context.moveTo(leftScreen.x, leftScreen.y);
+      this.context.lineTo(rightScreen.x, rightScreen.y);
       this.context.stroke();
     }
 
@@ -878,32 +892,127 @@ export class IdeaBoard {
   }
 
   /**
-   * Update cursor based on what's under the mouse
+   * Get cursor style for resize handle
    */
-  private updateCursor(worldPoint: Point): void {
-    const hitElement = this.findElementAt(worldPoint);
-    
-    if (hitElement instanceof PostItNote && hitElement.getSelected()) {
-      const resizeHandle = hitElement.hitTestResizeHandle(worldPoint, this.viewport);
-      
-      if (resizeHandle) {
-        // Set cursor based on resize handle
-        const cursors = {
-          'se': 'se-resize',
-          'nw': 'nw-resize',
-          'ne': 'ne-resize',
-          'sw': 'sw-resize'
-        };
-        this.canvas.style.cursor = cursors[resizeHandle];
-        return;
+  private getResizeCursor(handle: 'se' | 'nw' | 'ne' | 'sw'): string {
+    switch (handle) {
+      case 'se':
+      case 'nw':
+        return 'nw-resize';
+      case 'ne':
+      case 'sw':
+        return 'ne-resize';
+      default:
+        return 'default';
+    }
+  }
+
+  /**
+   * Handle resize dragging
+   */
+  private handleResize(worldPoint: Point): void {
+    if (!this.resizingElement || !this.resizeHandle) {
+      return;
+    }
+
+    const element = this.resizingElement;
+    const handle = this.resizeHandle;
+
+    // Calculate new size based on handle
+    let newX = element.position.x;
+    let newY = element.position.y;
+    let newWidth = element.size.width;
+    let newHeight = element.size.height;
+
+    switch (handle) {
+      case 'se': // Bottom-right
+        newWidth = worldPoint.x - element.position.x;
+        newHeight = worldPoint.y - element.position.y;
+        break;
+      case 'nw': // Top-left
+        newWidth = element.position.x + element.size.width - worldPoint.x;
+        newHeight = element.position.y + element.size.height - worldPoint.y;
+        newX = worldPoint.x;
+        newY = worldPoint.y;
+        break;
+      case 'ne': // Top-right
+        newWidth = worldPoint.x - element.position.x;
+        newHeight = element.position.y + element.size.height - worldPoint.y;
+        newY = worldPoint.y;
+        break;
+      case 'sw': // Bottom-left
+        newWidth = element.position.x + element.size.width - worldPoint.x;
+        newHeight = worldPoint.y - element.position.y;
+        newX = worldPoint.x;
+        break;
+    }
+
+    // Apply minimum size constraints
+    const minSize = 50;
+    if (newWidth < minSize) {
+      if (handle === 'nw' || handle === 'sw') {
+        newX = element.position.x + element.size.width - minSize;
+      }
+      newWidth = minSize;
+    }
+    if (newHeight < minSize) {
+      if (handle === 'nw' || handle === 'ne') {
+        newY = element.position.y + element.size.height - minSize;
+      }
+      newHeight = minSize;
+    }
+
+    // Update element
+    element.position.x = newX;
+    element.position.y = newY;
+    element.size.width = newWidth;
+    element.size.height = newHeight;
+
+    this.updateElementData(element);
+    this.requestRedraw();
+  }
+
+  /**
+   * Update cursor based on hover state
+   */
+  private updateCursor(screenPoint: Point, worldPoint: Point): void {
+    let cursor = 'default';
+
+    // Check for connection dots first
+    for (const element of this.elements.values()) {
+      if (element instanceof PostItNote) {
+        const connectionHit = element.hitTestConnectionDot(screenPoint, this.viewport);
+        if (connectionHit) {
+          cursor = 'crosshair';
+          break;
+        }
       }
     }
-    
-    if (hitElement) {
-      this.canvas.style.cursor = 'move';
-    } else {
-      this.canvas.style.cursor = 'default';
+
+    // Check for resize handles if no connection dot
+    if (cursor === 'default') {
+      for (const element of this.elements.values()) {
+        if (element instanceof PostItNote && element.getSelected()) {
+          const resizeHit = element.hitTestResize(screenPoint, this.viewport);
+          if (resizeHit) {
+            cursor = this.getResizeCursor(resizeHit);
+            break;
+          }
+        }
+      }
     }
+
+    // Check for hover over elements
+    if (cursor === 'default') {
+      for (const element of this.elements.values()) {
+        if (element.hitTest(worldPoint)) {
+          cursor = 'pointer';
+          break;
+        }
+      }
+    }
+
+    this.canvas.style.cursor = cursor;
   }
 
   /**
