@@ -38,7 +38,7 @@ export function getContextItemCount(context: string): number {
  */
 export function formatContextItems(items: string[]): string {
     return items.join('\n\n');
-}
+} 
 
 /**
  * Generates the context info text with count and explanation

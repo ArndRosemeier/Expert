@@ -216,6 +216,7 @@ export class UnifiedGenerationService {
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
     private currentOperationType: 'content' | 'draft' | 'context' | 'coherence' | null = null;
+    private currentLoopPhase: 'create' | 'rate' | 'edit' | null = null;
     // Add contradiction collection system
     private accumulatedContradictions: {
         hasContradictions: boolean;
@@ -750,8 +751,9 @@ export class UnifiedGenerationService {
             node.isGenerating = false;
             this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'generation-completed' });
             
-            // Clear operation type after content generation
+            // Clear operation type and loop phase after content generation
             this.currentOperationType = null;
+            this.currentLoopPhase = null;
             this.emitUnifiedProgress();
         }
     }
@@ -1264,7 +1266,34 @@ export class UnifiedGenerationService {
      * Get current model information for progress display
      */
     private getCurrentModelInfo(): string | undefined {
-                if (this.currentOperationType === 'coherence' && this.currentNodeId) {
+        // Handle LoopOrchestrator phases first (for content generation loops)
+        if (this.currentLoopPhase && this.currentNodeId) {
+            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
+            if (node) {
+                const profile = this.deps.settingsManager.getLastUsedProfile();
+                if (profile && profile.selectedModels) {
+                    let modelKey: string;
+                    
+                    if (this.currentLoopPhase === 'create') {
+                        // Use appropriate creator model based on node type
+                        modelKey = node.isLeaf ? 'prose' : 'creator';
+                    } else if (this.currentLoopPhase === 'rate') {
+                        modelKey = 'rater';
+                    } else if (this.currentLoopPhase === 'edit') {
+                        modelKey = 'editor';
+                    } else {
+                        modelKey = node.isLeaf ? 'prose' : 'creator';
+                    }
+                    
+                    const modelName = profile.selectedModels[modelKey];
+                    if (modelName) {
+                        return this.formatModelName(modelName);
+                    }
+                }
+            }
+        }
+        
+        if (this.currentOperationType === 'coherence' && this.currentNodeId) {
             // For coherence analysis, use TaskModelService to get the correct model
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
             if (node) {
@@ -1286,7 +1315,7 @@ export class UnifiedGenerationService {
             }
         }
         
-        // For content generation operations, select appropriate model based on node type
+        // For content generation operations without loop phase info, select appropriate model based on node type
         if (this.currentOperationType === 'content' && this.currentNodeId) {
             const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
         if (node) {
@@ -1413,6 +1442,12 @@ export class UnifiedGenerationService {
                 return;
             }
             
+            // Always forward progress to UI first
+            this.deps.eventEmitter.emit('loop-progress', { 
+                nodeId, 
+                progress: progress
+            });
+            
             // Update unified progress tracking
             this.currentNodeId = nodeId;
             this.currentIterationProgress = {
@@ -1420,11 +1455,17 @@ export class UnifiedGenerationService {
                 total: progress.maxIterations,
                 message: `Iteration ${progress.iteration} of ${progress.maxIterations}`
             };
+            // Map phase to step number: create=1, rate=2, edit=3
+            const phaseToStep = { 'create': 1, 'rate': 2, 'edit': 3 };
             this.currentStageProgress = {
-                current: 1, // Use a default since step doesn't exist anymore
-                total: 3,   // Use a default since totalStepsInIteration doesn't exist anymore
+                current: phaseToStep[progress.phase] || 1,
+                total: 3,
                 message: `${progress.phase} phase`
             };
+            
+            // Set current phase for model name tracking
+            this.currentLoopPhase = progress.phase;
+            
             this.emitUnifiedProgress();
             
             if (progress.phase === 'create') {
@@ -1432,27 +1473,9 @@ export class UnifiedGenerationService {
                 if (!payload.response.includes('is working')) {
                     currentIterationContent = payload.response;
                 }
-            } else if (progress.phase === 'rate') {
-                const payload = progress.payload as RaterProgressPayload;
-                if (payload.rating && payload.rating.criterion) {
-                    const existingRatingIndex = currentIterationRatings.findIndex(
-                        r => r.criterion === payload.rating.criterion
-                    );
-                    if (existingRatingIndex >= 0) {
-                        currentIterationRatings[existingRatingIndex] = payload.rating;
-                    } else {
-                        currentIterationRatings.push(payload.rating);
-                    }
-                    
-                    if (currentIterationRatings.length === loopInput.criteria.length && currentIterationContent) {
-                        node.addGenerationIteration(
-                            progress.iteration, 
-                            currentIterationContent, 
-                            [...currentIterationRatings]
-                        );
-                        currentIterationRatings = [];
-                    }
-                }
+                        } else if (progress.phase === 'rate') {
+                // Rating phase progress - no individual criterion tracking needed
+                // AI evaluates all criteria at once, just show that rating is in progress
             }
         };
 
@@ -1486,11 +1509,18 @@ export class UnifiedGenerationService {
         };
 
         const onPhaseStarted = (phase: 'create' | 'rate' | 'edit', iteration: number) => {
+            let payload: CreatorPayload | RaterProgressPayload;
+            if (phase === 'rate') {
+                payload = { criterion: `${phase} phase...`, rating: { criterion: `${phase} phase...`, goal: 0, actual: 0, passed: false} } as RaterProgressPayload;
+            } else {
+                payload = { prompt: `${phase} phase...`, response: '' } as CreatorPayload;
+            }
+            
             this.deps.eventEmitter.emit('loop-progress', { 
                 nodeId, 
                 progress: {
                     phase: phase,
-                    payload: { prompt: `${phase} phase...`, response: '' } as CreatorPayload,
+                    payload: payload,
                     iteration,
                     maxIterations: loopInput.maxIterations
                 } as LoopProgress

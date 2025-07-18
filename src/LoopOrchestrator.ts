@@ -345,7 +345,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     iteration: i, 
                     maxIterations: maxIterations, 
                     phase: 'rate', 
-                    payload: { criterion: 'Starting evaluation...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
+                    payload: { criterion: 'Starting evaluation...', rating: { criterion: 'Starting evaluation...', goal: 0, actual: 0, passed: false}}, 
                     progress: 0,
                     failureScore: 0
                 });
@@ -367,7 +367,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         iteration: i, 
                         maxIterations: maxIterations, 
                         phase: 'rate', 
-                        payload: { criterion: 'AI is analyzing content...', rating: { criterion: '', score: 0, justification: '', goal: 0}}, 
+                        payload: { criterion: 'AI is analyzing content...', rating: { criterion: 'AI is analyzing content...', goal: 0, actual: 0, passed: false}}, 
                         progress: 0,
                         failureScore: 0
                     });
@@ -401,16 +401,6 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         aborted = true;
                         break;
                     }
-
-                    const ratingPayload: RaterProgressPayload = { criterion: rating.criterion, rating: rating };
-                    this.emit('progress', { 
-                        iteration: i, 
-                        maxIterations: maxIterations, 
-                        phase: 'rate', 
-                        payload: ratingPayload, 
-                        progress: 0,
-                        failureScore: 0
-                    });
 
                     const originalCriterion = criteria.find(c => c.name === rating.criterion);
                     if (originalCriterion && rating.actual < originalCriterion.goal) {

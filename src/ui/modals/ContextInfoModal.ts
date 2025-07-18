@@ -436,7 +436,7 @@ export class ContextItemsEditorModal extends BaseModal {
 
             return `
                 <div class="context-item" data-index="${item.originalIndex}" data-display-index="${displayIndex}" style="${categoryStyle}">
-                    <div class="context-item-header">
+                <div class="context-item-header">
                         <div>
                             <span class="context-item-number">Item #${item.index}</span>
                             ${categoryLabel ? `
@@ -449,17 +449,17 @@ export class ContextItemsEditorModal extends BaseModal {
                             ` : ''}
                         </div>
                         ${!isReadOnly ? `
-                            <div class="context-item-actions">
+                    <div class="context-item-actions">
                                 <button type="button" class="btn-danger btn-small" data-action="remove-item" data-index="${item.originalIndex}" title="Remove this item from this node only">
-                                    🗑️ Remove
-                                </button>
+                            🗑️ Remove
+                        </button>
                                 <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${item.originalIndex}" title="Add this item to all versions of all descendant nodes that don't already have it">
-                                    ↗️ Propagate
-                                </button>
+                            ↗️ Propagate
+                        </button>
                                 <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${item.originalIndex}" title="Remove this item from all versions of all descendant nodes that contain it">
-                                    🗑️ Remove Recursively
-                                </button>
-                            </div>
+                            🗑️ Remove Recursively
+                        </button>
+                    </div>
                         ` : `
                             <div class="context-item-actions">
                                 <span style="
@@ -467,9 +467,9 @@ export class ContextItemsEditorModal extends BaseModal {
                                     color: #6c757d;
                                     font-style: italic;
                                 ">Read-only (from parent)</span>
-                            </div>
+                </div>
                         `}
-                    </div>
+            </div>
                     ${isReadOnly ? `
                         <div class="context-item-display" style="
                             padding: 0.75rem;
