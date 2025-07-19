@@ -369,7 +369,10 @@ export class IdeaBoard {
       if (this.isPanning) {
         const dx = point.x - this.panStart.x;
         const dy = point.y - this.panStart.y;
-        this.viewport.pan(-dx / this.viewport.zoom, -dy / this.viewport.zoom);
+        // Direct viewport movement for natural "grab and drag" feeling
+        // Move viewport in opposite direction of cursor movement (so content follows cursor)
+        this.viewport.x -= dx / this.viewport.zoom;
+        this.viewport.y -= dy / this.viewport.zoom;
         this.panStart = point;
         this.requestRedraw();
         return;
