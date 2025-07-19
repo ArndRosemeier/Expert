@@ -44,6 +44,10 @@ export class IdeaBoard {
   private draggedDescendants: PostItNote[] = [];
   private descendantOffsets: Map<string, Point> = new Map();
   
+  // Background rectangle group movement state
+  private containedPostIts: PostItNote[] = [];
+  private containedPostItOffsets: Map<string, Point> = new Map();
+  
   // Connection state
   private isConnecting: boolean = false;
   private connectionStart: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
@@ -299,6 +303,11 @@ export class IdeaBoard {
           this.setupHierarchicalDrag(hitElement);
         }
         
+        // Set up group movement for background rectangles
+        if (hitElement instanceof BackgroundRectangle) {
+          this.setupBackgroundRectGroupMovement(hitElement);
+        }
+        
         // Bring the dragged element to front
         this.bringElementToFront(hitElement);
       } else {
@@ -373,6 +382,11 @@ export class IdeaBoard {
           this.moveDescendantsWithParent(this.draggedElement);
         }
         
+        // Move contained post-it notes if this is a background rectangle drag
+        if (this.draggedElement instanceof BackgroundRectangle && this.containedPostIts.length > 0) {
+          this.moveContainedPostItsWithBackground(this.draggedElement);
+        }
+        
         this.requestRedraw();
         return;
       }
@@ -428,6 +442,9 @@ export class IdeaBoard {
       if (this.draggedElement) {
         // Clean up hierarchical drag state
         this.cleanupHierarchicalDrag();
+        
+        // Clean up background rectangle group movement state
+        this.cleanupBackgroundRectGroupMovement();
         
         this.draggedElement = null;
         this.canvas.style.cursor = 'default';
@@ -934,6 +951,7 @@ export class IdeaBoard {
     if (this.draggedElement === element) {
       this.draggedElement = null;
       this.cleanupHierarchicalDrag();
+      this.cleanupBackgroundRectGroupMovement();
     }
   }
 
@@ -1657,6 +1675,10 @@ export class IdeaBoard {
     this.selectedElement = null;
     this.draggedElement = null;
     this.resizingElement = null;
+    
+    // Clear drag state
+    this.cleanupHierarchicalDrag();
+    this.cleanupBackgroundRectGroupMovement();
 
     // Clear all elements and connections
     this.elements.clear();
@@ -2758,6 +2780,83 @@ export class IdeaBoard {
   private cleanupHierarchicalDrag(): void {
     this.draggedDescendants = [];
     this.descendantOffsets.clear();
+  }
+
+  /**
+   * Set up group movement for background rectangle - find all post-it notes completely inside it
+   */
+  private setupBackgroundRectGroupMovement(backgroundRect: BackgroundRectangle): void {
+    // Find all post-it notes that are completely inside the background rectangle
+    this.containedPostIts = this.findPostItsInsideBackgroundRect(backgroundRect);
+    
+    // Clear previous offsets
+    this.containedPostItOffsets.clear();
+    
+    // Store relative positions of contained post-it notes
+    for (const postIt of this.containedPostIts) {
+      const offset = {
+        x: postIt.position.x - backgroundRect.position.x,
+        y: postIt.position.y - backgroundRect.position.y
+      };
+      this.containedPostItOffsets.set(postIt.id, offset);
+    }
+    
+    console.log(`🔲 Background group drag: Moving ${this.containedPostIts.length} post-its with background rectangle`);
+  }
+
+  /**
+   * Find all post-it notes that are completely inside the background rectangle
+   */
+  private findPostItsInsideBackgroundRect(backgroundRect: BackgroundRectangle): PostItNote[] {
+    const contained: PostItNote[] = [];
+    
+    for (const element of this.elements.values()) {
+      if (element instanceof PostItNote) {
+        // Check if the post-it note is completely inside the background rectangle
+        const postItLeft = element.position.x;
+        const postItTop = element.position.y;
+        const postItRight = element.position.x + element.size.width;
+        const postItBottom = element.position.y + element.size.height;
+        
+        const rectLeft = backgroundRect.position.x;
+        const rectTop = backgroundRect.position.y;
+        const rectRight = backgroundRect.position.x + backgroundRect.size.width;
+        const rectBottom = backgroundRect.position.y + backgroundRect.size.height;
+        
+        // Post-it is completely inside if all its corners are within the background rectangle
+        if (postItLeft >= rectLeft && 
+            postItTop >= rectTop && 
+            postItRight <= rectRight && 
+            postItBottom <= rectBottom) {
+          contained.push(element);
+        }
+      }
+    }
+    
+    return contained;
+  }
+
+  /**
+   * Move all contained post-it notes to maintain their relative positions to the background rectangle
+   */
+  private moveContainedPostItsWithBackground(backgroundRect: BackgroundRectangle): void {
+    for (const postIt of this.containedPostIts) {
+      const offset = this.containedPostItOffsets.get(postIt.id);
+      if (offset) {
+        // Update post-it position based on background rectangle's new position + stored offset
+        postIt.position.x = backgroundRect.position.x + offset.x;
+        postIt.position.y = backgroundRect.position.y + offset.y;
+        this.updateElementData(postIt);
+      }
+    }
+  }
+
+  /**
+   * Clean up background rectangle group movement state after drag operation completes
+   */
+  private cleanupBackgroundRectGroupMovement(): void {
+    this.containedPostIts = [];
+    this.containedPostItOffsets.clear();
   }
 
   /**
