@@ -25,6 +25,13 @@ export class IdeaBoard {
   // Interaction state
   private selectedElement: BoardElement | null = null;
   private editingElement: PostItNote | null = null;
+  
+  // Clipboard for copy/cut/paste operations
+  private clipboard: {
+    content: string;
+    backgroundColor: string;
+    size: { width: number; height: number };
+  } | null = null;
   private draggedElement: BoardElement | null = null;
   private dragOffset: Point = { x: 0, y: 0 };
   private resizingElement: PostItNote | null = null;
@@ -485,6 +492,25 @@ export class IdeaBoard {
    * Handle keyboard shortcuts
    */
   private handleKeyDown(event: KeyboardEvent): void {
+    // Handle copy/cut/paste shortcuts
+    if (event.ctrlKey || event.metaKey) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
+      switch (event.key.toLowerCase()) {
+        case 'c':
+          event.preventDefault();
+          this.copySelectedElement();
+          break;
+        case 'x':
+          event.preventDefault();
+          this.cutSelectedElement();
+          break;
+        case 'v':
+          event.preventDefault();
+          this.pasteElement();
+          break;
+      }
+      return;
+    }
+
     switch (event.key) {
       case 'Delete':
         if (this.selectedElement) {
@@ -507,6 +533,116 @@ export class IdeaBoard {
         }
         break;
     }
+  }
+
+  /**
+   * Copy the currently selected post-it to clipboard
+   */
+  private async copySelectedElement(): Promise<void> {
+    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
+      console.log('📋 No post-it selected to copy');
+      return;
+    }
+
+    const postIt = this.selectedElement as PostItNote;
+    
+    // Store in internal clipboard
+    this.clipboard = {
+      content: postIt.content,
+      backgroundColor: postIt.style.backgroundColor,
+      size: { ...postIt.size }
+    };
+
+    // Also store in system clipboard
+    try {
+      const clipboardData = {
+        type: 'expert-postit',
+        content: postIt.content,
+        backgroundColor: postIt.style.backgroundColor,
+        size: postIt.size
+      };
+      
+      await navigator.clipboard.writeText(JSON.stringify(clipboardData));
+      console.log('📋 Post-it copied to clipboard');
+    } catch (error) {
+      console.warn('Failed to write to system clipboard:', error);
+      console.log('📋 Post-it copied to internal clipboard only');
+    }
+  }
+
+  /**
+   * Cut the currently selected post-it to clipboard
+   */
+  private async cutSelectedElement(): Promise<void> {
+    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
+      console.log('✂️ No post-it selected to cut');
+      return;
+    }
+
+    // Copy first
+    await this.copySelectedElement();
+    
+    // Then delete
+    this.deleteElement(this.selectedElement);
+    console.log('✂️ Post-it cut to clipboard');
+  }
+
+  /**
+   * Paste a post-it from clipboard
+   */
+  private async pasteElement(): Promise<void> {
+    let clipboardData = this.clipboard;
+
+    // Try to read from system clipboard first
+    try {
+      const systemClipboard = await navigator.clipboard.readText();
+      const parsedData = JSON.parse(systemClipboard);
+      
+      if (parsedData.type === 'expert-postit') {
+        clipboardData = {
+          content: parsedData.content,
+          backgroundColor: parsedData.backgroundColor,
+          size: parsedData.size
+        };
+      }
+    } catch (error) {
+      // System clipboard doesn't contain valid post-it data, use internal clipboard
+    }
+
+    if (!clipboardData) {
+      console.log('📋 No post-it data in clipboard to paste');
+      return;
+    }
+
+    // Create new post-it at center of viewport or offset from last paste
+    const viewportCenter = this.viewport.screenToWorld(this.viewport.width / 2, this.viewport.height / 2);
+    const pasteOffset = 20; // Offset each paste by 20 pixels
+    
+    // Add some randomness to avoid exact overlap
+    const offsetX = (Math.random() - 0.5) * pasteOffset;
+    const offsetY = (Math.random() - 0.5) * pasteOffset;
+    
+    const pastePosition = {
+      x: viewportCenter.x + offsetX,
+      y: viewportCenter.y + offsetY
+    };
+
+    // Create new post-it with clipboard data
+    const newPostIt = new PostItNote(pastePosition, clipboardData.content);
+    newPostIt.style.backgroundColor = clipboardData.backgroundColor;
+    newPostIt.size = { ...clipboardData.size };
+
+    // Add to board
+    this.elements.set(newPostIt.id, newPostIt);
+    
+    // Select the new post-it
+    this.selectElement(newPostIt);
+    
+    // Save state
+    this.autoSave();
+    this.requestRedraw();
+    
+    console.log('📋 Post-it pasted from clipboard');
   }
 
   /**
