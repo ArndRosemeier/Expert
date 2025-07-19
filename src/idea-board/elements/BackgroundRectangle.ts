@@ -123,6 +123,14 @@ export class BackgroundRectangle extends PostItNote {
   }
 
   /**
+   * Override to prevent connections - background rectangles are visual elements only
+   */
+  public override hitTestConnectionDot(): null {
+    // Always return null - background rectangles cannot be connected
+    return null;
+  }
+
+  /**
    * Override to prevent content setting
    */
   public override setContent(content: string): void {
