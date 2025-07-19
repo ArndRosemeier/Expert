@@ -1396,7 +1396,7 @@ export function renderNodeDetails() {
                 display: inline-block;
                 margin-top: 0.25rem;
             }
-            .header-left {
+            .node-details-header .header-left {
                 min-width: 0;
                 display: flex;
                 flex-direction: column;

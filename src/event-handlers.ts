@@ -69,7 +69,7 @@ async function openIdeaBoard(): Promise<void> {
             border-radius: 12px 12px 0 0;
         `;
         header.innerHTML = `
-            <span style="font-size: 1.1rem; font-weight: 600;">🗒️ Idea Board</span>
+            <span style="font-size: 1.1rem; font-weight: 600;">🧠 Idea Board</span>
             <button id="close-idea-board" style="
                 background: none;
                 border: none;
