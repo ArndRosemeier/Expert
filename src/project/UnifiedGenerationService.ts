@@ -341,8 +341,8 @@ export class UnifiedGenerationService {
         const startNode = this.deps.treeService.findNodeById(startNodeId, this.deps.rootNode);
         if (!startNode) throw new Error(`Start node not found: ${startNodeId}`);
 
-        // Calculate maximum level we might work on
-        const maxLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
+        // Calculate maximum level we might work on based on generation parameters
+        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
         
         // Keep looping until no more work can be done
         let workDone = true;
@@ -357,8 +357,11 @@ export class UnifiedGenerationService {
             // Collect starting node and ALL its descendants in breadth-first order
             const allNodes = this.collectAllDescendants(startNodeId);
             
-            // Calculate target states for each level
-            const targetStates = this.calculateTargetStates(levels, startNode.level, maxLevel);
+            // Find the actual maximum level that exists in the tree
+            const actualMaxLevel = Math.max(maxGenerationLevel, ...allNodes.map(node => node.level));
+            
+            // Calculate target states for each level, including all existing levels
+            const targetStates = this.calculateTargetStates(levels, startNode.level, actualMaxLevel);
             
             // Find the first node that needs work and do exactly one operation
             // This ensures completely stateless behavior - no temporal coupling
@@ -417,21 +420,38 @@ export class UnifiedGenerationService {
 
     /**
      * Calculate target states for each level based on generation parameters
+     * For levels beyond generation parameters, create "do nothing" target states
      */
     private calculateTargetStates(levels: GenerationLevels, minLevel: number, maxLevel: number): TargetState[] {
         const targetStates: TargetState[] = [];
         
+        // Calculate the maximum level that should receive any work based on generation parameters
+        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
+        
         for (let level = minLevel; level <= maxLevel; level++) {
-            // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed
-            const needsCoherenceCheck = (levels.coherenceLevel + 1) >= level && level > 0;
-            
-            targetStates[level] = {
-                level,
-                needsContextPruning: levels.contextPruneLevel >= level && level > 0, // Skip root level
-                needsContent: levels.contentLevel >= level,
-                needsCoherenceCheck: needsCoherenceCheck, // Coherence checks parent-child relationship, so skip root level
-                canExpand: level < levels.draftLevel
-            };
+            if (level <= maxGenerationLevel) {
+                // Within generation parameters - apply normal rules
+                // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed
+                const needsCoherenceCheck = (levels.coherenceLevel + 1) >= level && level > 0;
+                
+                targetStates[level] = {
+                    level,
+                    needsContextPruning: levels.contextPruneLevel >= level && level > 0, // Skip root level
+                    needsContent: levels.contentLevel >= level,
+                    needsCoherenceCheck: needsCoherenceCheck, // Coherence checks parent-child relationship, so skip root level
+                    canExpand: level < levels.draftLevel
+                };
+            } else {
+                // Beyond generation parameters - create "do nothing" target state
+                // This allows existing nodes at deeper levels to be processed without errors
+                targetStates[level] = {
+                    level,
+                    needsContextPruning: false,
+                    needsContent: false,
+                    needsCoherenceCheck: false,
+                    canExpand: false // Don't expand beyond what user requested
+                };
+            }
         }
         
         return targetStates;
