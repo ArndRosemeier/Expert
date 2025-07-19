@@ -1698,10 +1698,7 @@ export function renderNodeDetails() {
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
             </div>
                 
-                <!-- Template info positioned directly below title -->
-                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
-                
-                <!-- Progress Container (prominent, initially hidden) -->
+                <!-- Progress Container (prominent, initially hidden) positioned directly below title -->
                 <div id="generation-progress-container" style="display: none; margin-top: 0.5rem;">
                     <div class="progress-tier" style="margin-bottom: 0.25rem;">
                         <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: left;"></div>
@@ -1729,6 +1726,9 @@ export function renderNodeDetails() {
                     
                     <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
                     </div>
+                
+                <!-- Template info positioned below progress indicators -->
+                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.5rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
                     </div>
                     
             <!-- Right Side: Generation Controls -->
