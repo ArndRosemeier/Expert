@@ -1728,14 +1728,6 @@ export function renderNodeDetails() {
                     </div>
                     
                 ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
-                
-                <!-- Actions dropdown positioned at bottom left of title panel -->
-                <div style="margin-top: 0.5rem;">
-                    <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
-                        ⚡ Actions
-                        <span style="font-size: 0.7em;">▼</span>
-                    </button>
-                        </div>
                     </div>
                     
             <!-- Right Side: Generation Controls -->
@@ -1879,6 +1871,14 @@ export function renderNodeDetails() {
                             </div>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Actions dropdown positioned below header, bottom left of container -->
+                <div style="margin: 1rem 0 0.5rem 0;">
+                    <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                        ⚡ Actions
+                        <span style="font-size: 0.7em;">▼</span>
+                    </button>
                 </div>
                 
                 <style>
