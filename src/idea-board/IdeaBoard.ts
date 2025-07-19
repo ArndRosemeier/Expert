@@ -2357,6 +2357,28 @@ export class IdeaBoard {
   }
 
   /**
+   * Get the ID of the currently selected element
+   */
+  getSelectedElementId(): string | null {
+    return this.selectedElement ? this.selectedElement.id : null;
+  }
+
+  /**
+   * Set the color of a specific post-it note by ID
+   */
+  setPostItColorById(postItId: string, color: string): void {
+    if (postItId) {
+      const element = this.elements.get(postItId);
+      if (element instanceof PostItNote) {
+        element.setColor(color);
+        this.updateElementData(element);
+        this.requestRedraw();
+        this.autoSave();
+      }
+    }
+  }
+
+  /**
    * Set the color of the selected post-it note
    */
   private setSelectedPostItColor(color: string): void {

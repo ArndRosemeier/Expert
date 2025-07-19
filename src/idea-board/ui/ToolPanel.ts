@@ -35,6 +35,7 @@ export class ToolPanel {
   private colorPicker: HTMLElement | null = null;
   private searchBox: HTMLElement | null = null;
   private currentColor: string = '#fff9c4'; // Default light yellow
+  private targetElementForColor: string | null = null; // Remember which element we're changing color for
   private selectedModelPurpose: string = 'editor'; // Default to editor model
   private modelDropdownElement: HTMLSelectElement | null = null;
   private storageService: Promise<IStorageService>;
@@ -190,9 +191,13 @@ export class ToolPanel {
     if (this.colorPicker) {
       this.colorPicker.remove();
       this.colorPicker = null;
+      this.targetElementForColor = null;
       return;
     }
 
+    // Capture the currently selected element for color changes
+    this.targetElementForColor = this.ideaBoard.getSelectedElementId();
+    
     this.colorPicker = this.createColorPicker();
     // Append to the same parent as the tool panel to ensure proper layering
     this.container.parentElement?.appendChild(this.colorPicker);
@@ -296,14 +301,17 @@ export class ToolPanel {
     // Close picker when clicking outside
     const closeHandler = (e: MouseEvent) => {
       if (!picker.contains(e.target as Node)) {
+        e.preventDefault();
+        e.stopPropagation();
         picker.remove();
         this.colorPicker = null;
+        this.targetElementForColor = null;
         document.removeEventListener('click', closeHandler);
       }
     };
 
     setTimeout(() => {
-      document.addEventListener('click', closeHandler);
+      document.addEventListener('click', closeHandler, true); // Use capture phase
     }, 100);
 
     return picker;
@@ -322,7 +330,14 @@ export class ToolPanel {
 
   private selectColor(color: string): void {
     this.currentColor = color;
-    this.config.onColorChange(color);
+    
+    // Apply color to the originally targeted element, not the currently selected one
+    if (this.targetElementForColor) {
+      this.ideaBoard.setPostItColorById(this.targetElementForColor, color);
+    } else {
+      // Fallback to current selection if no target was captured
+      this.config.onColorChange(color);
+    }
     
     // Update color picker visual state
     if (this.colorPicker) {
@@ -337,6 +352,7 @@ export class ToolPanel {
     if (this.colorPicker) {
       this.colorPicker.remove();
       this.colorPicker = null;
+      this.targetElementForColor = null;
     }
   }
 
