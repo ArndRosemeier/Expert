@@ -67,6 +67,21 @@ export class IdeaBoard {
     postItId: null,
     startTime: 0
   };
+
+  // Animation state for deletion
+  private deletionAnimation: {
+    isActive: boolean;
+    postItIds: string[];
+    startTime: number;
+    duration: number;
+    onComplete: () => void;
+  } = {
+    isActive: false,
+    postItIds: [],
+    startTime: 0,
+    duration: 500, // 500ms animation
+    onComplete: () => {}
+  };
   
   // Selected AI model purpose for operations
   private selectedModelPurpose: string = 'editor';
@@ -663,21 +678,15 @@ export class IdeaBoard {
    * Delete a single element without descendants
    */
   private deleteSingleElement(element: BoardElement): void {
-    // Remove all connections involving this element
-    this.removeAllConnectionsForElement(element.id);
-    
-    // Remove from elements collection
-    this.elements.delete(element.id);
-    this.boardState.elements = this.boardState.elements.filter(e => e.id !== element.id);
-    this.boardState.metadata.totalElements = this.elements.size;
-    
-    // Clear selection/editing state
-    this.clearElementFromState(element);
-    
-    this.requestRedraw();
-    this.autoSave();
-    
-    console.log(`🗑️ Deleted single element: ${element.id}`);
+    if (element instanceof PostItNote) {
+      // Start deletion animation
+      this.startDeletionAnimation([element.id], () => {
+        this.performActualDeletion([element]);
+      });
+    } else {
+      // Non-PostIt elements don't get animation
+      this.performActualDeletion([element]);
+    }
   }
 
   /**
@@ -685,16 +694,29 @@ export class IdeaBoard {
    */
   private deleteElementWithDescendants(element: PostItNote, descendants: PostItNote[]): void {
     const allElementsToDelete = [element, ...descendants];
+    const allElementIds = allElementsToDelete.map(el => el.id);
     
     console.log(`🗑️ Deleting ${allElementsToDelete.length} elements (parent + descendants)`);
     
+    // Start deletion animation for all elements
+    this.startDeletionAnimation(allElementIds, () => {
+      this.performActualDeletion(allElementsToDelete);
+    });
+  }
+
+  /**
+   * Perform the actual deletion of elements after animation completes
+   */
+  private performActualDeletion(elementsToDelete: BoardElement[]): void {
+    console.log(`🗑️ Performing actual deletion of ${elementsToDelete.length} elements`);
+    
     // Remove all connections involving any of these elements
-    for (const elementToDelete of allElementsToDelete) {
+    for (const elementToDelete of elementsToDelete) {
       this.removeAllConnectionsForElement(elementToDelete.id);
     }
     
     // Remove all elements from collections
-    for (const elementToDelete of allElementsToDelete) {
+    for (const elementToDelete of elementsToDelete) {
       this.elements.delete(elementToDelete.id);
       this.boardState.elements = this.boardState.elements.filter(e => e.id !== elementToDelete.id);
       
@@ -707,7 +729,7 @@ export class IdeaBoard {
     this.requestRedraw();
     this.autoSave();
     
-    console.log(`🗑️ Successfully deleted ${allElementsToDelete.length} elements`);
+    console.log(`🗑️ Successfully deleted ${elementsToDelete.length} elements`);
   }
 
   /**
@@ -1221,8 +1243,12 @@ export class IdeaBoard {
       this.renderConnectionPreview();
     }
 
-    // Draw all elements
+    // Draw all elements (skip those being deleted)
     for (const element of this.elements.values()) {
+      // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
+      if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
+        continue;
+      }
       element.render(this.context, this.viewport);
     }
 
@@ -1232,9 +1258,13 @@ export class IdeaBoard {
     // Draw self-summarization animation if active
     this.renderSelfSummarizeAnimation();
 
+    // Draw deletion animation if active (render on top of everything)
+    this.renderDeletionAnimation();
+
     // Keep redrawing if any animation is active
     const hasActiveAnimations = this.ideaGenerationAnimation.isActive || 
                                this.selfSummarizeAnimation.isActive ||
+                               this.deletionAnimation.isActive ||
                                Array.from(this.connections.values()).some(conn => conn.isAnimating());
     
     if (hasActiveAnimations) {
@@ -1946,6 +1976,34 @@ export class IdeaBoard {
   }
 
   /**
+   * Start deletion animation for one or more post-its
+   */
+  private startDeletionAnimation(postItIds: string[], onComplete: () => void): void {
+    this.deletionAnimation = {
+      isActive: true,
+      postItIds: [...postItIds],
+      startTime: Date.now(),
+      duration: 500,
+      onComplete: onComplete
+    };
+    this.requestRedraw();
+  }
+
+  /**
+   * Stop the deletion animation
+   */
+  private stopDeletionAnimation(): void {
+    this.deletionAnimation = {
+      isActive: false,
+      postItIds: [],
+      startTime: 0,
+      duration: 500,
+      onComplete: () => {}
+    };
+    this.requestRedraw();
+  }
+
+  /**
    * Render the idea generation animation around the bottom dot of the active post-it
    */
   private renderIdeaGenerationAnimation(): void {
@@ -2078,6 +2136,56 @@ export class IdeaBoard {
     this.context.arc(0, 0, 22 * this.viewport.zoom * pulse, 0, Math.PI * 2);
     this.context.stroke();
 
+    this.context.restore();
+  }
+
+  /**
+   * Render the deletion animation with shrinking effect
+   */
+  private renderDeletionAnimation(): void {
+    if (!this.deletionAnimation.isActive) {
+      return;
+    }
+
+    const elapsed = Date.now() - this.deletionAnimation.startTime;
+    const progress = Math.min(elapsed / this.deletionAnimation.duration, 1);
+    
+    // Check if animation is complete
+    if (progress >= 1) {
+      // Complete the deletion
+      this.deletionAnimation.onComplete();
+      this.stopDeletionAnimation();
+      return;
+    }
+
+    // Calculate scale factor (1 to 0)
+    const scale = 1 - progress;
+    
+    this.context.save();
+    
+    for (const postItId of this.deletionAnimation.postItIds) {
+      const postIt = this.elements.get(postItId) as PostItNote;
+      if (!postIt) continue;
+
+      const screenPos = this.viewport.worldToScreen(postIt.position.x, postIt.position.y);
+      const screenWidth = postIt.size.width * this.viewport.zoom;
+      const screenHeight = postIt.size.height * this.viewport.zoom;
+
+      // Calculate center position
+      const centerX = screenPos.x + screenWidth / 2;
+      const centerY = screenPos.y + screenHeight / 2;
+
+      this.context.save();
+      this.context.translate(centerX, centerY);
+      this.context.scale(scale, scale);
+      this.context.translate(-centerX, -centerY);
+
+      // Render the post-it with scaling
+      postIt.render(this.context, this.viewport);
+
+      this.context.restore();
+    }
+    
     this.context.restore();
   }
 
