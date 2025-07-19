@@ -1,4 +1,4 @@
-import type { IdeaBoardState, ElementData } from '../types/BoardTypes';
+import type { IdeaBoardState } from '../types/BoardTypes';
 import type { IStorageService } from '../../StorageService';
 
 export class BoardSerializer {
@@ -126,7 +126,7 @@ export class BoardSerializer {
   /**
    * Generate a deterministic board ID based on project ID and name
    */
-  static generateBoardId(name: string, projectId?: string): string {
+  static generateBoardId(name: string): string {
     const baseString = name; // Use only the name for global boards
     // Create a simple hash-like string from the base string
     let hash = 0;
@@ -141,7 +141,7 @@ export class BoardSerializer {
   /**
    * Find or create a board by name and project ID
    */
-  static async findOrCreateBoard(name: string, projectId?: string): Promise<IdeaBoardState> {
+  static async findOrCreateBoard(name: string): Promise<IdeaBoardState> {
     const boardId = this.generateBoardId(name);
     
     // Try to load existing board

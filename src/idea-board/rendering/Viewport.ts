@@ -63,7 +63,7 @@ export class Viewport implements IViewport {
   zoomAt(factor: number, screenX: number, screenY: number): void {
     const worldPos = this.screenToWorld(screenX, screenY);
     
-    const oldZoom = this.zoom;
+    // const oldZoom = this.zoom;
     this.zoom = Math.max(0.1, Math.min(5.0, this.zoom * factor));
     
     const newWorldPos = this.screenToWorld(screenX, screenY);

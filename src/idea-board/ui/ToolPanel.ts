@@ -118,7 +118,7 @@ export class ToolPanel {
     });
 
     // Transform button
-    const transformBtn = this.createToolButton('🔄✨', 'Transform', () => {
+    const transformBtn = this.createToolButton('✨', 'Transform', () => {
       this.config.onTransform();
     });
 

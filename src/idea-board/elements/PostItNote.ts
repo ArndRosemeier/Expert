@@ -81,7 +81,8 @@ export class PostItNote implements BoardElement {
 
       const padding = 10 * viewport.zoom;
       const maxWidth = screenWidth - padding * 2;
-      const maxHeight = screenHeight - padding * 2; // Available height for text
+      // Available height for text
+      // const maxHeight = screenHeight - padding * 2;
       const lineHeight = this.style.fontSize * viewport.zoom * 1.2;
 
       // Split text by line breaks first, then handle word wrapping for each line

@@ -1,15 +1,15 @@
 import { Viewport } from './rendering/Viewport';
 import { PostItNote } from './elements/PostItNote';
-import { Connection, type ConnectionData } from './elements/Connection';
+import { Connection } from './elements/Connection';
 import { InputManager } from './interaction/InputManager';
 import { BoardSerializer } from './persistence/BoardSerializer';
-import { ToolPanel, type ToolPanelConfig } from './ui/ToolPanel';
+import { ToolPanel } from './ui/ToolPanel';
 import { NodeSearchModal } from './ui/NodeSearchModal';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { createPromptExpansionService } from '../services/PromptExpansionService';
 import { showPrompt } from '../ui/modals/ModalFactory';
 import * as state from '../state';
-import type { IdeaBoardState, ElementData, Point, BoardElement } from './types/BoardTypes';
+import type { IdeaBoardState, Point, BoardElement } from './types/BoardTypes';
 import type { DocumentNode } from '../DocumentNode';
 
 export class IdeaBoard {
@@ -302,7 +302,7 @@ export class IdeaBoard {
     });
 
     // Handle double-clicks for connection cutting, editing, and new post-it creation
-    this.inputManager.on('onDoubleClick', (point, event) => {
+    this.inputManager.on('onDoubleClick', (point) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
       
       // First check if double-click was on a connection dot
@@ -333,7 +333,7 @@ export class IdeaBoard {
       this.createNewPostIt(worldPoint);
     });
 
-    this.inputManager.on('onMouseMove', (point, event) => {
+    this.inputManager.on('onMouseMove', (point) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
 
       // Handle connection dragging
@@ -378,8 +378,7 @@ export class IdeaBoard {
       this.updateCursor(point, worldPoint);
     });
 
-    this.inputManager.on('onMouseUp', (point, event) => {
-      const worldPoint = this.viewport.screenToWorld(point.x, point.y);
+    this.inputManager.on('onMouseUp', (point) => {
 
       // Handle connection completion
       if (this.isConnecting && this.connectionStart) {
@@ -437,7 +436,7 @@ export class IdeaBoard {
       }
     });
 
-    this.inputManager.on('onWheel', (delta, point, event) => {
+    this.inputManager.on('onWheel', (delta, point) => {
       // Disable zooming while editing
       if (this.disableZoomingWhileEditing) {
         console.log('🔒 Zooming disabled during edit mode');
@@ -460,33 +459,7 @@ export class IdeaBoard {
     });
   }
 
-  /**
-   * Handle left mouse click
-   */
-  private handleLeftClick(worldPoint: Point, event: MouseEvent): void {
-    const hitElement = this.findElementAt(worldPoint);
-    
-    if (hitElement instanceof PostItNote) {
-      // Check if clicking on a resize handle
-      const resizeHandle = hitElement.hitTestResize(worldPoint, this.viewport);
-      
-      if (resizeHandle) {
-        this.startElementResize(hitElement, resizeHandle);
-        return;
-      }
-    }
-    
-    if (hitElement) {
-      this.selectElement(hitElement);
-      
-      // Start dragging if not already editing
-      if (this.editingElement !== hitElement) {
-        this.startElementDrag(hitElement, worldPoint);
-      }
-    } else {
-      this.clearSelection();
-    }
-  }
+
 
   /**
    * Handle keyboard shortcuts
@@ -1147,59 +1120,9 @@ export class IdeaBoard {
     this.bringElementToFront(element);
   }
 
-  /**
-   * Handle element dragging
-   */
-  private handleElementDrag(screenPoint: Point): void {
-    if (!this.draggedElement) return;
-    
-    const worldPoint = this.viewport.screenToWorld(screenPoint.x, screenPoint.y);
-    const newPosition = {
-      x: worldPoint.x - this.dragOffset.x,
-      y: worldPoint.y - this.dragOffset.y
-    };
-    
-    if (this.draggedElement instanceof PostItNote) {
-      this.draggedElement.moveTo(newPosition);
-    }
-    
-    this.requestRedraw();
-  }
 
-  /**
-   * Finish dragging an element
-   */
-  private finishElementDrag(): void {
-    if (this.draggedElement) {
-      this.updateElementData(this.draggedElement);
-      this.draggedElement = null;
-      this.canvas.style.cursor = 'default';
-      this.autoSave();
-    }
-  }
 
-  /**
-   * Start panning the viewport
-   */
-  private startPanning(screenPoint: Point): void {
-    this.isPanning = true;
-    this.panStart = screenPoint;
-    this.canvas.style.cursor = 'grabbing';
-  }
 
-  /**
-   * Handle viewport panning
-   */
-  private handlePanning(screenPoint: Point): void {
-    if (!this.isPanning) return;
-    
-    const deltaX = this.panStart.x - screenPoint.x;
-    const deltaY = this.panStart.y - screenPoint.y;
-    
-    this.viewport.pan(deltaX, deltaY);
-    this.panStart = screenPoint;
-    this.requestRedraw();
-  }
 
   /**
    * Update element data in board state
@@ -1999,12 +1922,7 @@ export class IdeaBoard {
     return items;
   }
 
-  /**
-   * Legacy wrapper for idea parsing - calls generic method
-   */
-  private parseGeneratedIdeas(content: string): string[] {
-    return this.parseContentWithMarkers(content, '=== IDEA START ===', '=== IDEA END ===', 'ideas', 0);
-  }
+
 
   /**
    * Generic method to create new post-its arranged below the triggering post-it
@@ -2054,19 +1972,7 @@ export class IdeaBoard {
     console.log(`📝 Created ${newPostIts.length} new ${contentType} post-its arranged below the trigger post-it`);
   }
 
-  /**
-   * Legacy wrapper for idea creation - calls generic method
-   */
-  private createPostItsForIdeas(triggerPostIt: PostItNote, ideas: string[]): void {
-    this.createPostItsFromContent(triggerPostIt, ideas, 'idea');
-  }
 
-  /**
-   * Legacy wrapper for continuation creation - calls generic method
-   */
-  private createPostItsForContinuations(triggerPostIt: PostItNote, continuations: string[]): void {
-    this.createPostItsFromContent(triggerPostIt, continuations, 'continuation');
-  }
 
   /**
    * Start the idea generation animation for a specific post-it
@@ -2835,12 +2741,7 @@ export class IdeaBoard {
     await this.performContentGeneration('transformations', 'transform_system', '=== TRANSFORMATION START ===', '=== TRANSFORMATION END ===');
   }
 
-  /**
-   * Legacy wrapper for continuation parsing - calls generic method
-   */
-  private parseContinuations(content: string, expectedCount: number): string[] {
-    return this.parseContentWithMarkers(content, '=== CONTINUATION START ===', '=== CONTINUATION END ===', 'continuations', expectedCount);
-  }
+
 
   /**
    * Show the node search modal to create a post-it from node content
