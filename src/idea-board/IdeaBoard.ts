@@ -31,6 +31,11 @@ export class IdeaBoard {
   private isPanning: boolean = false;
   private panStart: Point = { x: 0, y: 0 };
   
+  // Hierarchical dragging state
+  private draggedDescendants: PostItNote[] = [];
+  private descendantOffsets: Map<string, Point> = new Map();
+  private dragStartPosition: Point = { x: 0, y: 0 };
+  
   // Connection state
   private isConnecting: boolean = false;
   private connectionStart: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
@@ -246,6 +251,11 @@ export class IdeaBoard {
         };
         this.canvas.style.cursor = 'grabbing';
         
+        // Set up hierarchical dragging for post-its
+        if (hitElement instanceof PostItNote) {
+          this.setupHierarchicalDrag(hitElement);
+        }
+        
         // Bring the dragged element to front
         this.bringElementToFront(hitElement);
       } else {
@@ -311,6 +321,12 @@ export class IdeaBoard {
         this.draggedElement.position.x = worldPoint.x - this.dragOffset.x;
         this.draggedElement.position.y = worldPoint.y - this.dragOffset.y;
         this.updateElementData(this.draggedElement);
+        
+        // Move descendants if this is a hierarchical drag
+        if (this.draggedElement instanceof PostItNote && this.draggedDescendants.length > 0) {
+          this.moveDescendantsWithParent(this.draggedElement);
+        }
+        
         this.requestRedraw();
         return;
       }
@@ -365,6 +381,9 @@ export class IdeaBoard {
 
       // Handle drag end
       if (this.draggedElement) {
+        // Clean up hierarchical drag state
+        this.cleanupHierarchicalDrag();
+        
         this.draggedElement = null;
         this.canvas.style.cursor = 'default';
         this.autoSave();
@@ -395,6 +414,12 @@ export class IdeaBoard {
 
     this.inputManager.on('onKeyDown', (event) => {
       this.handleKeyDown(event);
+    });
+
+    // Handle right-click context menu
+    this.canvas.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      this.handleContextMenu(event);
     });
   }
 
@@ -455,6 +480,118 @@ export class IdeaBoard {
   }
 
   /**
+   * Handle right-click context menu
+   */
+  private handleContextMenu(event: MouseEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const screenPoint = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+    const worldPoint = this.viewport.screenToWorld(screenPoint.x, screenPoint.y);
+    
+    // Find element at cursor position
+    let hitElement: BoardElement | null = null;
+    const elementsArray = Array.from(this.elements.values());
+    for (let i = elementsArray.length - 1; i >= 0; i--) {
+      const element = elementsArray[i];
+      if (element && element.hitTest(worldPoint)) {
+        hitElement = element;
+        break;
+      }
+    }
+
+    if (hitElement instanceof PostItNote) {
+      this.selectElement(hitElement);
+      this.showContextMenu(event, hitElement);
+    }
+  }
+
+  /**
+   * Show context menu for a post-it note
+   */
+  private showContextMenu(event: MouseEvent, postIt: PostItNote): void {
+    const contextMenu = document.createElement('div');
+    contextMenu.className = 'idea-board-context-menu';
+    contextMenu.style.cssText = `
+      position: fixed;
+      left: ${event.clientX}px;
+      top: ${event.clientY}px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 10000;
+      min-width: 120px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    `;
+
+    // Delete option
+    const deleteOption = document.createElement('div');
+    deleteOption.textContent = '🗑️ Delete';
+    deleteOption.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+    `;
+    deleteOption.addEventListener('mouseover', () => {
+      deleteOption.style.backgroundColor = '#f5f5f5';
+    });
+    deleteOption.addEventListener('mouseout', () => {
+      deleteOption.style.backgroundColor = 'transparent';
+    });
+    deleteOption.addEventListener('click', () => {
+      this.deleteElement(postIt);
+      this.removeContextMenu();
+    });
+
+    // Edit option
+    const editOption = document.createElement('div');
+    editOption.textContent = '✏️ Edit';
+    editOption.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+    `;
+    editOption.addEventListener('mouseover', () => {
+      editOption.style.backgroundColor = '#f5f5f5';
+    });
+    editOption.addEventListener('mouseout', () => {
+      editOption.style.backgroundColor = 'transparent';
+    });
+    editOption.addEventListener('click', () => {
+      this.startEditing(postIt);
+      this.removeContextMenu();
+    });
+
+    contextMenu.appendChild(deleteOption);
+    contextMenu.appendChild(editOption);
+    document.body.appendChild(contextMenu);
+
+    // Remove context menu when clicking elsewhere
+    const removeOnClick = (e: MouseEvent) => {
+      if (!contextMenu.contains(e.target as Node)) {
+        this.removeContextMenu();
+        document.removeEventListener('click', removeOnClick);
+      }
+    };
+    
+    setTimeout(() => {
+      document.addEventListener('click', removeOnClick);
+    }, 0);
+  }
+
+  /**
+   * Remove context menu from DOM
+   */
+  private removeContextMenu(): void {
+    const existingMenu = document.querySelector('.idea-board-context-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+  }
+
+  /**
    * Create a new post-it note at the specified position
    */
   createNewPostIt(position: Point, content: string = ''): PostItNote {
@@ -472,24 +609,132 @@ export class IdeaBoard {
   }
 
   /**
-   * Delete an element
+   * Delete an element with optional descendant deletion
    */
   deleteElement(element: BoardElement): void {
+    if (element instanceof PostItNote) {
+      const descendants = this.findAllDescendants(element.id);
+      
+      if (descendants.length > 0) {
+        // Show confirmation dialog for hierarchical deletion
+        this.showDeletionConfirmationDialog(element, descendants);
+        return;
+      }
+    }
+    
+    // Delete single element (no descendants)
+    this.deleteSingleElement(element);
+  }
+
+  /**
+   * Show deletion confirmation dialog with descendant options
+   */
+  private showDeletionConfirmationDialog(element: PostItNote, descendants: PostItNote[]): void {
+    const confirmMessage = 
+      `🗑️ Delete Post-it Note\n\n` +
+      `This post-it has ${descendants.length} descendant(s) connected to it.\n\n` +
+      `What would you like to do?\n\n` +
+      `• OK: Delete this post-it AND all descendants (${descendants.length + 1} total)\n` +
+      `• Cancel: Delete only this post-it (descendants will remain)`;
+
+    const deleteWithDescendants = confirm(confirmMessage);
+    
+    if (deleteWithDescendants) {
+      // Delete element and all descendants
+      this.deleteElementWithDescendants(element, descendants);
+    } else {
+      // Delete only the selected element
+      this.deleteSingleElement(element);
+    }
+  }
+
+  /**
+   * Delete a single element without descendants
+   */
+  private deleteSingleElement(element: BoardElement): void {
+    // Remove all connections involving this element
+    this.removeAllConnectionsForElement(element.id);
+    
+    // Remove from elements collection
     this.elements.delete(element.id);
     this.boardState.elements = this.boardState.elements.filter(e => e.id !== element.id);
     this.boardState.metadata.totalElements = this.elements.size;
     
+    // Clear selection/editing state
+    this.clearElementFromState(element);
+    
+    this.requestRedraw();
+    this.autoSave();
+    
+    console.log(`🗑️ Deleted single element: ${element.id}`);
+  }
+
+  /**
+   * Delete an element and all its descendants
+   */
+  private deleteElementWithDescendants(element: PostItNote, descendants: PostItNote[]): void {
+    const allElementsToDelete = [element, ...descendants];
+    
+    console.log(`🗑️ Deleting ${allElementsToDelete.length} elements (parent + descendants)`);
+    
+    // Remove all connections involving any of these elements
+    for (const elementToDelete of allElementsToDelete) {
+      this.removeAllConnectionsForElement(elementToDelete.id);
+    }
+    
+    // Remove all elements from collections
+    for (const elementToDelete of allElementsToDelete) {
+      this.elements.delete(elementToDelete.id);
+      this.boardState.elements = this.boardState.elements.filter(e => e.id !== elementToDelete.id);
+      
+      // Clear selection/editing state for each element
+      this.clearElementFromState(elementToDelete);
+    }
+    
+    this.boardState.metadata.totalElements = this.elements.size;
+    
+    this.requestRedraw();
+    this.autoSave();
+    
+    console.log(`🗑️ Successfully deleted ${allElementsToDelete.length} elements`);
+  }
+
+  /**
+   * Remove all connections involving a specific element
+   */
+  private removeAllConnectionsForElement(elementId: string): void {
+    const connectionsToRemove: string[] = [];
+    
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === elementId || connection.toPostItId === elementId) {
+        connectionsToRemove.push(connection.id);
+      }
+    }
+    
+    for (const connectionId of connectionsToRemove) {
+      this.connections.delete(connectionId);
+    }
+    
+    if (connectionsToRemove.length > 0) {
+      console.log(`🔗 Removed ${connectionsToRemove.length} connections for element: ${elementId}`);
+    }
+  }
+
+  /**
+   * Clear an element from selection and editing state
+   */
+  private clearElementFromState(element: BoardElement): void {
     if (this.selectedElement === element) {
       this.selectedElement = null;
     }
     if (this.editingElement === element) {
       this.editingElement = null;
+      this.removeEditingInput();
     }
-    
-    this.requestRedraw();
-    this.autoSave();
-    
-    console.log(`🗑️ Deleted element: ${element.id}`);
+    if (this.draggedElement === element) {
+      this.draggedElement = null;
+      this.cleanupHierarchicalDrag();
+    }
   }
 
   /**
@@ -973,8 +1218,11 @@ export class IdeaBoard {
     // Draw idea generation animation if active
     this.renderIdeaGenerationAnimation();
 
-    // Keep redrawing if animation is active
-    if (this.ideaGenerationAnimation.isActive) {
+    // Keep redrawing if any animation is active
+    const hasActiveAnimations = this.ideaGenerationAnimation.isActive || 
+                               Array.from(this.connections.values()).some(conn => conn.isAnimating());
+    
+    if (hasActiveAnimations) {
       this.needsRedraw = true;
     } else {
       this.needsRedraw = false;
@@ -1325,20 +1573,20 @@ export class IdeaBoard {
       return;
     }
 
-    const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+    const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
     let ideaCount: number;
     let targetPostIts: PostItNote[] = [];
     let isConnectedMode = false;
 
-    if (connectedPostIts.length > 0) {
+    if (childPostIts.length > 0) {
       // Connected mode: exact number of ideas to replace existing post-its
       isConnectedMode = true;
-      ideaCount = connectedPostIts.length;
+      ideaCount = childPostIts.length;
       
       const userConfirmed = confirm(
         `💡 Generate Ideas: Connected Mode\n\n` +
-        `The selected post-it has ${connectedPostIts.length} connected post-it(s).\n` +
-        `This will generate exactly ${connectedPostIts.length} ideas and replace the content in all connected post-its.\n\n` +
+        `The selected post-it has ${childPostIts.length} child post-it(s).\n` +
+        `This will generate exactly ${childPostIts.length} ideas and replace the content in all child post-its.\n\n` +
         'Do you want to continue and replace the existing content?'
       );
       
@@ -1347,8 +1595,8 @@ export class IdeaBoard {
         return;
       }
       
-      targetPostIts = connectedPostIts;
-      console.log(`💡 Generating exactly ${ideaCount} ideas for connected post-its...`);
+      targetPostIts = childPostIts;
+      console.log(`💡 Generating exactly ${ideaCount} ideas for child post-its...`);
     } else {
       // Free mode: LLM decides number, create new post-its
       ideaCount = 0; // Will be determined by LLM response
@@ -1377,6 +1625,9 @@ export class IdeaBoard {
 
       // Show working indicators if in connected mode
       if (isConnectedMode) {
+        // Start connection animations to show data flow
+        this.startOutgoingConnectionAnimations(selectedPostIt.id);
+        
         for (const postIt of targetPostIts) {
           postIt.content = `💡 Generating ideas...\n\nReceiving creative ideas from main post-it.`;
           this.updateElementData(postIt);
@@ -1442,10 +1693,15 @@ export class IdeaBoard {
       // Stop animation if it was running
       this.stopIdeaGenerationAnimation();
       
+      // Stop connection animations if in connected mode
+      if (isConnectedMode) {
+        this.stopConnectionAnimations(selectedPostIt.id);
+      }
+      
       this.requestRedraw();
       this.autoSave();
 
-      console.log(`✅ Successfully generated ${ideas.length} ideas ${isConnectedMode ? 'for connected post-its' : 'as new post-its'}.`);
+      console.log(`✅ Successfully generated ${ideas.length} ideas ${isConnectedMode ? 'for child post-its' : 'as new post-its'}.`);
       
     } catch (error) {
       console.error('❌ Failed to generate ideas:', error);
@@ -1453,6 +1709,11 @@ export class IdeaBoard {
       
       // Stop animation if it was running
       this.stopIdeaGenerationAnimation();
+      
+      // Stop connection animations on error if in connected mode
+      if (isConnectedMode) {
+        this.stopConnectionAnimations(selectedPostIt.id);
+      }
       
       // Restore original content on error (connected mode only)
       if (isConnectedMode) {
@@ -1746,7 +2007,7 @@ export class IdeaBoard {
   }
 
   /**
-   * Summarize the content of the currently selected post-it note and all connected post-its
+   * Summarize the content of the currently selected post-it note using all parent post-its (incoming connections)
    */
   private async summarizeSelectedPostIt(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
@@ -1766,11 +2027,11 @@ export class IdeaBoard {
         return;
       }
 
-      // Find all post-its connected to the selected one
-      const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+      // Find all post-its that have incoming connections to the selected one
+      const parentPostIts = this.findIncomingPostIts(selectedPostIt.id);
       
-      if (connectedPostIts.length === 0) {
-        console.log('❌ No connected post-its found. Please connect other post-its to this one first to use summarization.');
+      if (parentPostIts.length === 0) {
+        console.log('❌ No parent post-its found. Please connect other post-its as parents (incoming connections) to use summarization.');
         return;
       }
 
@@ -1790,24 +2051,27 @@ export class IdeaBoard {
         console.log('✅ User confirmed to proceed with summarization, replacing existing content.');
       }
 
-      // Concatenate only the connected post-its (exclude the triggering one)
+      // Concatenate only the parent post-its (exclude the triggering one)
       let combinedText = '';
       
-      for (const postIt of connectedPostIts) {
+      for (const postIt of parentPostIts) {
         if (postIt.content.trim()) {
           combinedText += postIt.content.trim() + '\n\n';
         }
       }
 
       if (!combinedText.trim()) {
-        console.log('❌ No content found in the connected post-its to summarize. The connected post-its appear to be empty.');
+        console.log('❌ No content found in the parent post-its to summarize. The parent post-its appear to be empty.');
         return;
       }
 
-      console.log(`🧠 Summarizing content from ${connectedPostIts.length} connected post-its...`);
+      console.log(`🧠 Summarizing content from ${parentPostIts.length} parent post-its...`);
+
+      // Start connection animations to show data flow
+      this.startIncomingConnectionAnimations(selectedPostIt.id);
 
       // Show working indicator in the selected post-it
-      selectedPostIt.content = `🧠 Summarizing ${connectedPostIts.length} connected post-its...\n\nPlease wait while AI processes the content.`;
+      selectedPostIt.content = `🧠 Summarizing ${parentPostIts.length} parent post-its...\n\nPlease wait while AI processes the content.`;
       this.updateElementData(selectedPostIt);
       this.requestRedraw();
 
@@ -1842,11 +2106,17 @@ export class IdeaBoard {
       this.requestRedraw();
       this.autoSave();
 
-      console.log(`✅ Successfully summarized content from ${connectedPostIts.length} connected post-its into the selected post-it.`);
+      // Stop connection animations
+      this.stopConnectionAnimations(selectedPostIt.id);
+
+      console.log(`✅ Successfully summarized content from ${parentPostIts.length} parent post-its into the selected post-it.`);
       
     } catch (error) {
       console.error('❌ Failed to summarize post-it content:', error);
       console.log('❌ Summarization failed. Please check your API key and try again.');
+      
+      // Stop connection animations on error
+      this.stopConnectionAnimations(selectedPostIt.id);
       
       // Restore original content on error
       selectedPostIt.content = originalContent;
@@ -1857,7 +2127,8 @@ export class IdeaBoard {
   }
 
   /**
-   * Find all post-it notes connected to the given post-it ID
+   * Find all post-it notes connected to the given post-it ID (bidirectional)
+   * Used for markdown export and visualization where all connections are relevant
    */
   private findConnectedPostIts(postItId: string): PostItNote[] {
     const connectedPostItIds = new Set<string>();
@@ -1884,7 +2155,177 @@ export class IdeaBoard {
   }
 
   /**
-   * Expand the content of the currently selected post-it note and distribute to connected post-its
+   * Find post-it notes that are children of the given post-it (outgoing connections)
+   * Used for expand and idea generation functionality
+   */
+  private findOutgoingPostIts(postItId: string): PostItNote[] {
+    const outgoingPostItIds = new Set<string>();
+    
+    // Find connections where this post-it is the source (fromPostItId)
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === postItId) {
+        outgoingPostItIds.add(connection.toPostItId);
+      }
+    }
+
+    // Get the actual PostItNote objects
+    const outgoingPostIts: PostItNote[] = [];
+    for (const id of outgoingPostItIds) {
+      const element = this.elements.get(id);
+      if (element instanceof PostItNote) {
+        outgoingPostIts.push(element);
+      }
+    }
+
+    return outgoingPostIts;
+  }
+
+  /**
+   * Find post-it notes that are parents of the given post-it (incoming connections)
+   * Used for summarize functionality
+   */
+  private findIncomingPostIts(postItId: string): PostItNote[] {
+    const incomingPostItIds = new Set<string>();
+    
+    // Find connections where this post-it is the target (toPostItId)
+    for (const connection of this.connections.values()) {
+      if (connection.toPostItId === postItId) {
+        incomingPostItIds.add(connection.fromPostItId);
+      }
+    }
+
+    // Get the actual PostItNote objects
+    const incomingPostIts: PostItNote[] = [];
+    for (const id of incomingPostItIds) {
+      const element = this.elements.get(id);
+      if (element instanceof PostItNote) {
+        incomingPostIts.push(element);
+      }
+    }
+
+    return incomingPostIts;
+  }
+
+  /**
+   * Start connection animations for outgoing connections from a post-it
+   */
+  private startOutgoingConnectionAnimations(postItId: string): void {
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === postItId) {
+        connection.startAnimation();
+      }
+    }
+    this.requestRedraw();
+  }
+
+  /**
+   * Start connection animations for incoming connections to a post-it
+   */
+  private startIncomingConnectionAnimations(postItId: string): void {
+    for (const connection of this.connections.values()) {
+      if (connection.toPostItId === postItId) {
+        connection.startAnimation();
+      }
+    }
+    this.requestRedraw();
+  }
+
+  /**
+   * Stop all connection animations for a specific post-it
+   */
+  private stopConnectionAnimations(postItId: string): void {
+    for (const connection of this.connections.values()) {
+      if (connection.fromPostItId === postItId || connection.toPostItId === postItId) {
+        connection.stopAnimation();
+      }
+    }
+    this.requestRedraw();
+  }
+
+  /**
+   * Stop all connection animations
+   */
+  private stopAllConnectionAnimations(): void {
+    for (const connection of this.connections.values()) {
+      connection.stopAnimation();
+    }
+    this.requestRedraw();
+  }
+
+  /**
+   * Find all descendant post-its recursively (following outgoing connections)
+   */
+  private findAllDescendants(postItId: string, visited: Set<string> = new Set()): PostItNote[] {
+    // Prevent infinite loops in case of circular connections
+    if (visited.has(postItId)) {
+      return [];
+    }
+    visited.add(postItId);
+
+    const descendants: PostItNote[] = [];
+    const directChildren = this.findOutgoingPostIts(postItId);
+    
+    for (const child of directChildren) {
+      descendants.push(child);
+      // Recursively find descendants of this child
+      const childDescendants = this.findAllDescendants(child.id, visited);
+      descendants.push(...childDescendants);
+    }
+
+    return descendants;
+  }
+
+  /**
+   * Set up hierarchical dragging for a post-it and its descendants
+   */
+  private setupHierarchicalDrag(postIt: PostItNote): void {
+    // Store the starting position of the parent
+    this.dragStartPosition = { x: postIt.position.x, y: postIt.position.y };
+    
+    // Find all descendants
+    this.draggedDescendants = this.findAllDescendants(postIt.id);
+    
+    // Clear previous offsets
+    this.descendantOffsets.clear();
+    
+    // Store relative positions of descendants
+    for (const descendant of this.draggedDescendants) {
+      const offset = {
+        x: descendant.position.x - postIt.position.x,
+        y: descendant.position.y - postIt.position.y
+      };
+      this.descendantOffsets.set(descendant.id, offset);
+    }
+    
+    console.log(`🔗 Hierarchical drag: Moving ${this.draggedDescendants.length} descendants with parent`);
+  }
+
+  /**
+   * Move all descendant post-its to maintain their relative positions to the parent
+   */
+  private moveDescendantsWithParent(parentPostIt: PostItNote): void {
+    for (const descendant of this.draggedDescendants) {
+      const offset = this.descendantOffsets.get(descendant.id);
+      if (offset) {
+        // Update descendant position based on parent's new position + stored offset
+        descendant.position.x = parentPostIt.position.x + offset.x;
+        descendant.position.y = parentPostIt.position.y + offset.y;
+        this.updateElementData(descendant);
+      }
+    }
+  }
+
+  /**
+   * Clean up hierarchical drag state after drag operation completes
+   */
+  private cleanupHierarchicalDrag(): void {
+    this.draggedDescendants = [];
+    this.descendantOffsets.clear();
+    this.dragStartPosition = { x: 0, y: 0 };
+  }
+
+  /**
+   * Expand the content of the currently selected post-it note and distribute to child post-its (outgoing connections)
    */
   private async expandSelectedPostIt(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
@@ -1894,10 +2335,10 @@ export class IdeaBoard {
 
     const selectedPostIt = this.selectedElement;
     const originalContent = selectedPostIt.content;
-    const connectedPostIts = this.findConnectedPostIts(selectedPostIt.id);
+    const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
     
-    if (connectedPostIts.length === 0) {
-      console.log('❌ No connected post-its found. Please connect other post-its to this one first to use expansion.');
+    if (childPostIts.length === 0) {
+      console.log('❌ No child post-its found. Please connect other post-its as children (outgoing connections) to use expansion.');
       return;
     }
 
@@ -1906,12 +2347,12 @@ export class IdeaBoard {
       return;
     }
 
-    // Check if any connected post-its have content that will be overwritten
-    const postItsWithContent = connectedPostIts.filter(postIt => postIt.content.trim());
+    // Check if any child post-its have content that will be overwritten
+    const postItsWithContent = childPostIts.filter(postIt => postIt.content.trim());
     if (postItsWithContent.length > 0) {
       const userConfirmed = confirm(
-        `⚠️ Warning: ${postItsWithContent.length} connected post-it(s) contain content.\n\n` +
-        'Expanding will replace all content in the connected post-its with expanded sections.\n\n' +
+        `⚠️ Warning: ${postItsWithContent.length} child post-it(s) contain content.\n\n` +
+        'Expanding will replace all content in the child post-its with expanded sections.\n\n' +
         'Do you want to continue and replace the existing content?'
       );
       
@@ -1925,7 +2366,7 @@ export class IdeaBoard {
 
     // Store original content for error recovery (outside try block for scope)
     const originalContents = new Map<string, string>();
-    for (const postIt of connectedPostIts) {
+    for (const postIt of childPostIts) {
       originalContents.set(postIt.id, postIt.content);
     }
 
@@ -1938,10 +2379,13 @@ export class IdeaBoard {
         return;
       }
 
-      console.log(`🔄 Expanding content to ${connectedPostIts.length} connected post-its...`);
+      console.log(`🔄 Expanding content to ${childPostIts.length} child post-its...`);
+
+      // Start connection animations to show data flow
+      this.startOutgoingConnectionAnimations(selectedPostIt.id);
 
       // Show working indicators in all target post-its
-      for (const postIt of connectedPostIts) {
+      for (const postIt of childPostIts) {
         postIt.content = `🔄 Expanding content...\n\nReceiving expanded section from main post-it.`;
         this.updateElementData(postIt);
       }
@@ -1963,7 +2407,7 @@ export class IdeaBoard {
           criteria: [] // Not needed for expansion
         },
         custom: {
-          expand_count: connectedPostIts.length.toString()
+          expand_count: childPostIts.length.toString()
         }
       };
       
@@ -1975,15 +2419,15 @@ export class IdeaBoard {
       const expandedContent = await client.chat(this.selectedModelPurpose, expandPrompt);
 
       // Parse the expanded content into sections
-      const sections = this.parseExpandedSections(expandedContent, connectedPostIts.length);
+      const sections = this.parseExpandedSections(expandedContent, childPostIts.length);
 
-      if (sections.length !== connectedPostIts.length) {
-        console.warn(`⚠️ Expected ${connectedPostIts.length} sections but got ${sections.length}. Adjusting distribution.`);
+      if (sections.length !== childPostIts.length) {
+        console.warn(`⚠️ Expected ${childPostIts.length} sections but got ${sections.length}. Adjusting distribution.`);
       }
 
-      // Distribute sections to connected post-its
-      for (let i = 0; i < connectedPostIts.length; i++) {
-        const postIt = connectedPostIts[i];
+      // Distribute sections to child post-its
+      for (let i = 0; i < childPostIts.length; i++) {
+        const postIt = childPostIts[i];
         if (!postIt) continue; // Skip if postIt is undefined
         
         const section = sections[i] || `Section ${i + 1}: (Content unavailable)`;
@@ -1995,14 +2439,20 @@ export class IdeaBoard {
       this.requestRedraw();
       this.autoSave();
 
-      console.log(`✅ Successfully expanded content to ${connectedPostIts.length} connected post-its.`);
+      // Stop connection animations
+      this.stopConnectionAnimations(selectedPostIt.id);
+
+      console.log(`✅ Successfully expanded content to ${childPostIts.length} child post-its.`);
       
     } catch (error) {
       console.error('❌ Failed to expand post-it content:', error);
       console.log('❌ Expansion failed. Please check your API key and try again.');
       
+      // Stop connection animations on error
+      this.stopConnectionAnimations(selectedPostIt.id);
+      
       // Restore original content on error
-      for (const postIt of connectedPostIts) {
+      for (const postIt of childPostIts) {
         const originalContentForPostIt = originalContents.get(postIt.id);
         if (originalContentForPostIt !== undefined) {
           postIt.content = originalContentForPostIt;
