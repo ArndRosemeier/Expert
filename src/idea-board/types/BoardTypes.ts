@@ -38,7 +38,7 @@ export interface IdeaBoardState {
 
 export interface ElementData {
   id: string;
-  type: 'post-it';
+  type: 'post-it' | 'background-rect';
   position: Point;
   size: Size;
   content: string;
@@ -55,7 +55,7 @@ export interface ElementData {
 
 export interface BoardElement {
   id: string;
-  type: 'post-it';
+  type: 'post-it' | 'background-rect';
   position: Point;
   size: Size;
   render(context: CanvasRenderingContext2D, viewport: Viewport): void;

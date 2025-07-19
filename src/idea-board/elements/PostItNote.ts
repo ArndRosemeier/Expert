@@ -2,7 +2,7 @@ import type { Point, Size, BoardElement, ElementData, Viewport } from '../types/
 
 export class PostItNote implements BoardElement {
   public id: string;
-  public type: 'post-it' = 'post-it';
+  public type: 'post-it' | 'background-rect' = 'post-it';
   public position: Point;
   public size: Size;
   public content: string;

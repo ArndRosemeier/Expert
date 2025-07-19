@@ -1,5 +1,6 @@
 import { Viewport } from './rendering/Viewport';
 import { PostItNote } from './elements/PostItNote';
+import { BackgroundRectangle } from './elements/BackgroundRectangle';
 import { Connection } from './elements/Connection';
 import { InputManager } from './interaction/InputManager';
 import { BoardSerializer } from './persistence/BoardSerializer';
@@ -134,6 +135,9 @@ export class IdeaBoard {
       },
       onAddPostIt: () => {
         this.createPostItAtCenter();
+      },
+      onAddBackgroundRect: () => {
+        this.createBackgroundRectAtCenter();
       },
       onAddNodeContent: () => {
         this.showNodeSearchModal();
@@ -774,6 +778,32 @@ export class IdeaBoard {
   }
 
   /**
+   * Create a new background rectangle at the specified position
+   */
+  createBackgroundRectangle(position: Point): BackgroundRectangle {
+    // Get existing background rectangles to choose next color
+    const existingRectangles = Array.from(this.elements.values())
+      .filter(element => element instanceof BackgroundRectangle) as BackgroundRectangle[];
+    
+    const rectangle = new BackgroundRectangle(position);
+    
+    // Set next available color
+    const nextColor = BackgroundRectangle.getNextBackgroundColor(existingRectangles);
+    rectangle.setBackgroundColor(nextColor);
+    
+    this.elements.set(rectangle.id, rectangle);
+    this.boardState.elements.push(rectangle.serialize());
+    this.boardState.metadata.totalElements = this.elements.size;
+    
+    this.selectElement(rectangle);
+    this.requestRedraw();
+    this.autoSave();
+    
+    console.log(`🔲 Created background rectangle at (${position.x.toFixed(0)}, ${position.y.toFixed(0)})`);
+    return rectangle;
+  }
+
+  /**
    * Delete an element with optional descendant deletion
    */
   deleteElement(element: BoardElement): void {
@@ -1091,14 +1121,18 @@ export class IdeaBoard {
    */
   private selectElement(element: BoardElement | null): void {
     // Deselect previously selected element
-    if (this.selectedElement && this.selectedElement instanceof PostItNote) {
-      this.selectedElement.setSelected(false);
+    if (this.selectedElement) {
+      if (this.selectedElement instanceof PostItNote || this.selectedElement instanceof BackgroundRectangle) {
+        this.selectedElement.setSelected(false);
+      }
     }
 
     // Select new element
     this.selectedElement = element;
-    if (element && element instanceof PostItNote) {
-      element.setSelected(true);
+    if (element) {
+      if (element instanceof PostItNote || element instanceof BackgroundRectangle) {
+        element.setSelected(true);
+      }
     }
 
     this.requestRedraw();
@@ -1303,8 +1337,22 @@ export class IdeaBoard {
       this.renderConnectionPreview();
     }
 
-    // Draw all elements (skip those being deleted)
-    for (const element of this.elements.values()) {
+    // Draw all elements with proper layering (background rectangles first, then post-its)
+    const elements = Array.from(this.elements.values());
+    const backgroundRectangles = elements.filter(element => element instanceof BackgroundRectangle);
+    const postItNotes = elements.filter(element => element instanceof PostItNote);
+    
+    // Draw background rectangles first (behind everything else)
+    for (const element of backgroundRectangles) {
+      // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
+      if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
+        continue;
+      }
+      element.render(this.context, this.viewport);
+    }
+    
+    // Draw post-it notes on top
+    for (const element of postItNotes) {
       // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
       if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
         continue;
@@ -1528,11 +1576,40 @@ export class IdeaBoard {
 
   /**
    * Bring an element to the front by moving it to the end of the elements collection
+   * Background rectangles only move to front relative to other background rectangles
    */
   private bringElementToFront(element: BoardElement): void {
-    // Remove from current position and add to end (rendered last = appears on top)
-    this.elements.delete(element.id);
-    this.elements.set(element.id, element);
+    if (element instanceof BackgroundRectangle) {
+      // For background rectangles, only bring to front among background rectangles
+      const allElements = Array.from(this.elements.entries());
+      const backgroundRects = allElements.filter(([_, el]) => el instanceof BackgroundRectangle);
+      const postIts = allElements.filter(([_, el]) => el instanceof PostItNote);
+      
+      // Remove the element and re-add at end of background rectangles
+      const elementEntry = allElements.find(([id, _]) => id === element.id);
+      if (elementEntry) {
+        // Reconstruct elements map with background rectangles first, target element last among them
+        this.elements.clear();
+        
+        // Add other background rectangles first
+        for (const [id, el] of backgroundRects) {
+          if (id !== element.id) {
+            this.elements.set(id, el);
+          }
+        }
+        // Add target background rectangle last among background rectangles  
+        this.elements.set(element.id, element);
+        
+        // Add all post-it notes after background rectangles
+        for (const [id, el] of postIts) {
+          this.elements.set(id, el);
+        }
+      }
+    } else {
+      // For post-it notes, use normal front-bringing (but they stay after background rectangles)
+      this.elements.delete(element.id);
+      this.elements.set(element.id, element);
+    }
     
     // Also update the order in boardState.elements
     const elementIndex = this.boardState.elements.findIndex(e => e.id === element.id);
@@ -1617,8 +1694,18 @@ export class IdeaBoard {
     startMarker: string,
     endMarker: string
   ): Promise<void> {
-    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log(`❌ No post-it note selected. Please select a post-it to generate ${type} for.`);
+    if (!this.selectedElement) {
+      console.log(`❌ No element selected. Please select a post-it to generate ${type} for.`);
+      return;
+    }
+    
+    if (this.selectedElement instanceof BackgroundRectangle) {
+      console.log(`❌ Background rectangles are visual elements only and cannot be used for AI operations.`);
+      return;
+    }
+    
+    if (!(this.selectedElement instanceof PostItNote)) {
+      console.log(`❌ Selected element is not a post-it note. Please select a post-it to generate ${type} for.`);
       return;
     }
 
@@ -2260,6 +2347,18 @@ export class IdeaBoard {
     const currentColor = this.toolPanel.getCurrentColor();
     postIt.setColor(currentColor);
     this.updateElementData(postIt);
+    this.autoSave();
+  }
+
+  /**
+   * Create a background rectangle at the center of the viewport
+   */
+  private createBackgroundRectAtCenter(): void {
+    const centerX = this.viewport.x + this.viewport.width / (2 * this.viewport.zoom);
+    const centerY = this.viewport.y + this.viewport.height / (2 * this.viewport.zoom);
+    const rectangle = this.createBackgroundRectangle({ x: centerX, y: centerY });
+    
+    this.updateElementData(rectangle);
     this.autoSave();
   }
 

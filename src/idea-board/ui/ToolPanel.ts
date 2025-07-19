@@ -17,6 +17,7 @@ export interface ToolPanelConfig {
   onColorChange: (color: string) => void;
   onSearchToggle: () => void;
   onAddPostIt: () => void;
+  onAddBackgroundRect: () => void;
   onAddNodeContent: () => void;
   onSummarize: () => void;
   onExpand: () => void;
@@ -87,6 +88,11 @@ export class ToolPanel {
       this.config.onAddPostIt();
     });
 
+    // Add Background Rectangle button
+    const addBgRectBtn = this.createToolButton('⬛', 'Add Background Area', () => {
+      this.config.onAddBackgroundRect();
+    });
+
     // Add Node Content button
     const nodeBtn = this.createToolButton('📄', 'Add Node Content', () => {
       this.config.onAddNodeContent();
@@ -136,6 +142,7 @@ export class ToolPanel {
     const modelDropdown = this.createModelDropdown();
 
     this.container.appendChild(addBtn);
+    this.container.appendChild(addBgRectBtn);
     this.container.appendChild(nodeBtn);
     this.container.appendChild(colorBtn);
     this.container.appendChild(searchBtn);
