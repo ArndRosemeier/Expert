@@ -207,11 +207,19 @@ export class ToolPanel {
       border-radius: 12px;
       padding: 12px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      z-index: 10001;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    `;
+
+    // Create container for predefined colors
+    const colorGrid = document.createElement('div');
+    colorGrid.style.cssText = `
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
-      z-index: 10001;
-      border: 1px solid rgba(0, 0, 0, 0.1);
     `;
 
     this.colors.forEach(color => {
@@ -241,8 +249,49 @@ export class ToolPanel {
         this.selectColor(color.value);
       });
 
-      picker.appendChild(colorButton);
+      colorGrid.appendChild(colorButton);
     });
+
+    // Create custom color picker section
+    const customSection = document.createElement('div');
+    customSection.style.cssText = `
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+      padding-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+
+    const customLabel = document.createElement('span');
+    customLabel.textContent = 'Custom:';
+    customLabel.style.cssText = `
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    `;
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = this.currentColor;
+    colorInput.style.cssText = `
+      width: 40px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+      padding: 0;
+    `;
+
+    colorInput.addEventListener('change', () => {
+      this.selectColor(colorInput.value);
+    });
+
+    customSection.appendChild(customLabel);
+    customSection.appendChild(colorInput);
+    
+    picker.appendChild(colorGrid);
+    picker.appendChild(customSection);
 
     // Close picker when clicking outside
     const closeHandler = (e: MouseEvent) => {
