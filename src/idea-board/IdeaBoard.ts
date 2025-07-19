@@ -1351,7 +1351,7 @@ export class IdeaBoard {
     // Draw all elements with proper layering (background rectangles first, then connections, then post-its)
     const elements = Array.from(this.elements.values());
     const backgroundRectangles = elements.filter(element => element instanceof BackgroundRectangle);
-    const postItNotes = elements.filter(element => element instanceof PostItNote);
+    const postItNotes = elements.filter(element => element instanceof PostItNote && !(element instanceof BackgroundRectangle));
     
     // Draw background rectangles first (bottom layer)
     for (const element of backgroundRectangles) {
