@@ -1400,7 +1400,9 @@ export function renderNodeDetails() {
                 min-width: 0;
                 display: flex;
                 flex-direction: column;
+                align-items: stretch;
                 gap: 0;
+                width: 100%;
             }
             .header-right {
                 display: flex;
