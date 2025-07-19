@@ -159,9 +159,9 @@ export class BackgroundRectangle extends PostItNote {
   }
 
   /**
-   * Convert to data format for serialization
+   * Override serialize method for proper persistence
    */
-  public toData(): ElementData {
+  public override serialize(): ElementData {
     return {
       id: this.id,
       type: this.type,
@@ -171,5 +171,12 @@ export class BackgroundRectangle extends PostItNote {
       style: { ...this.style },
       metadata: { ...this.metadata }
     };
+  }
+
+  /**
+   * Convert to data format for serialization (alias for serialize)
+   */
+  public toData(): ElementData {
+    return this.serialize();
   }
 } 

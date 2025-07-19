@@ -203,6 +203,10 @@ export class IdeaBoard {
           const postIt = new PostItNote({ x: 0, y: 0 });
           postIt.deserialize(elementData);
           this.elements.set(postIt.id, postIt);
+        } else if (elementData.type === 'background-rect') {
+          const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
+          backgroundRect.deserialize(elementData);
+          this.elements.set(backgroundRect.id, backgroundRect);
         }
       }
 
@@ -1225,6 +1229,10 @@ export class IdeaBoard {
         const postIt = new PostItNote({ x: 0, y: 0 });
         postIt.deserialize(elementData);
         this.elements.set(postIt.id, postIt);
+      } else if (elementData.type === 'background-rect') {
+        const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
+        backgroundRect.deserialize(elementData);
+        this.elements.set(backgroundRect.id, backgroundRect);
       }
     }
 
