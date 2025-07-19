@@ -336,9 +336,9 @@ export class IdeaBoard {
         }
       }
       
-      // Second check if double-click was inside a post-it (but not on connection dot)
+      // Second check if double-click was inside a post-it (but not on connection dot or background rectangle)
       for (const element of this.elements.values()) {
-        if (element instanceof PostItNote) {
+        if (element instanceof PostItNote && !(element instanceof BackgroundRectangle)) {
           const hitResult = element.hitTest(worldPoint);
           if (hitResult) {
             // Start editing this post-it
