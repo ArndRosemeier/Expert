@@ -24,7 +24,7 @@ export class PostItNote implements BoardElement {
   constructor(position: Point, content: string = '') {
     this.id = `postit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     this.position = { ...position };
-    this.size = { width: 150, height: 150 };
+    this.size = { width: 225, height: 150 };
     this.content = content;
     this.style = {
       backgroundColor: '#fff9c4', // Light yellow post-it default
