@@ -1795,15 +1795,14 @@ export class IdeaBoard {
   }
 
   /**
-   * Generic method to parse content using specified markers
+   * Generic method to parse content using specified markers - NO FALLBACKS, FAIL FAST
    */
   private parseContentWithMarkers(
     content: string, 
     startMarker: string, 
     endMarker: string, 
     contentType: string,
-    expectedCount: number = 0,
-    fallbackLimit: number = 5
+    expectedCount: number = 0
   ): string[] {
     const items: string[] = [];
     
@@ -1823,51 +1822,19 @@ export class IdeaBoard {
     const expectedText = expectedCount === 0 ? 'any number' : expectedCount.toString();
     console.log(`📝 Parsed ${items.length} ${contentType} from AI response (expected ${expectedText})`);
     
-    // Handle free mode (expectedCount = 0) - return all found items
+    // NO FALLBACKS - Fail fast and loud
+    if (items.length === 0) {
+      throw new Error(`❌ AI failed to generate ${contentType} with proper markers. Expected markers: ${startMarker} ... ${endMarker}. Got response: ${content.substring(0, 200)}...`);
+    }
+    
+    // Free mode (expectedCount = 0) - return all found items
     if (expectedCount === 0) {
-      if (items.length === 0) {
-        console.warn(`⚠️ No ${contentType} found with expected markers. Using fallback parsing.`);
-        // Fallback: split by double newlines and take non-empty parts
-        const fallbackItems = content
-          .split(/\n\s*\n/)
-          .map(s => s.trim())
-          .filter(s => s.length > 0);
-        
-        return fallbackItems.length > 0 ? fallbackItems : [`Generated ${contentType} content unavailable`];
-      }
       return items;
     }
     
-    // Handle connected mode - return what we found (truncate/pad later if needed)
-    if (items.length === 0) {
-      console.warn(`⚠️ No ${contentType} found with expected markers. Using fallback parsing.`);
-      // Fallback: split by double newlines and take first N non-empty parts
-      const fallbackItems = content
-        .split(/\n\s*\n/)
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-        .slice(0, expectedCount);
-      
-      // Pad if not enough items
-      while (fallbackItems.length < expectedCount) {
-        fallbackItems.push(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${fallbackItems.length + 1}: Content parsing failed`);
-      }
-      
-      return fallbackItems;
-    }
-    
-    // If we have fewer items than expected, pad with error messages
-    if (items.length < expectedCount) {
-      console.warn(`⚠️ Got ${items.length} ${contentType} but expected ${expectedCount}. Padding with error messages.`);
-      while (items.length < expectedCount) {
-        items.push(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${items.length + 1}: Content generation incomplete`);
-      }
-    }
-    
-    // If we have more items than expected, truncate
-    if (items.length > expectedCount) {
-      console.warn(`⚠️ Got ${items.length} ${contentType} but expected ${expectedCount}. Truncating excess ${contentType}.`);
-      items.splice(expectedCount);
+    // Connected mode - strict count validation
+    if (items.length !== expectedCount) {
+      throw new Error(`❌ AI generated ${items.length} ${contentType} but expected exactly ${expectedCount}. This is a strict requirement in connected mode.`);
     }
     
     return items;
@@ -1877,7 +1844,7 @@ export class IdeaBoard {
    * Legacy wrapper for idea parsing - calls generic method
    */
   private parseGeneratedIdeas(content: string): string[] {
-    return this.parseContentWithMarkers(content, '=== IDEA START ===', '=== IDEA END ===', 'ideas', 0, 5);
+    return this.parseContentWithMarkers(content, '=== IDEA START ===', '=== IDEA END ===', 'ideas', 0);
   }
 
   /**
