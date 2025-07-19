@@ -196,6 +196,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             === CONTINUATION END ===
 
             Generate exactly {{expand_count}} continuations following this format precisely.
+            The continuations should not repeat the original content, just the continuation.
         `.trim(),
         placeholders: ['content', 'language', 'expand_count'],
         description: "The system prompt for continuing content in multiple different ways with precise formatting markers for reliable parsing."
