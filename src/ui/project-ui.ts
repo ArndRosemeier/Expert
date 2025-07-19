@@ -1369,7 +1369,6 @@ export function renderNodeDetails() {
                 grid-template-columns: 1fr auto;
                 gap: 1.5rem;
                 align-items: start;
-                position: relative;
             }
             .node-details-header h2 {
                 font-size: 1.4rem;
@@ -1699,6 +1698,9 @@ export function renderNodeDetails() {
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
             </div>
                 
+                <!-- Template info positioned directly below title -->
+                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
+                
                 <!-- Progress Container (prominent, initially hidden) -->
                 <div id="generation-progress-container" style="display: none; margin-top: 0.5rem;">
                     <div class="progress-tier" style="margin-bottom: 0.25rem;">
@@ -1727,8 +1729,6 @@ export function renderNodeDetails() {
                     
                     <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
                     </div>
-                    
-                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.25rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
                     </div>
                     
             <!-- Right Side: Generation Controls -->
@@ -1874,14 +1874,13 @@ export function renderNodeDetails() {
                     </div>
                 </div>
                 
-                <!-- Actions dropdown positioned at bottom left of header container -->
-                <div style="position: absolute; bottom: 1rem; left: 1rem;">
+                <!-- Actions dropdown positioned below header, bottom left of container -->
+                <div style="margin: 1rem 0 0.5rem 0;">
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
                     </button>
                 </div>
-            </div>
                 
                 <style>
         /* Actions modal now uses proper BaseModal system */
