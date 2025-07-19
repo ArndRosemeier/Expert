@@ -79,7 +79,7 @@ export class Connection {
     const dx = toDot.x - fromDot.x;
     const dy = toDot.y - fromDot.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const numSegments = Math.max(2, Math.floor(distance / 30));
+    const numSegments = Math.max(2, Math.floor(distance / 60));
 
     // Draw the connection line with segmented arrows
     context.save();
