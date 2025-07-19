@@ -312,8 +312,8 @@ export class IdeaBoard {
           this.setupBackgroundRectGroupMovement(hitElement);
         }
         
-        // Bring the dragged element to front
-        this.bringElementToFront(hitElement);
+        // Bring all moving elements to front (descendants/contained first, then triggering element)
+        this.bringGroupToFront(hitElement);
       } else {
         // Click on empty space - just clear selection
         this.selectElement(null);
@@ -1650,6 +1650,24 @@ export class IdeaBoard {
     }
     
     this.requestRedraw();
+  }
+
+  /**
+   * Bring all moving elements to front, with the triggering element on top
+   */
+  private bringGroupToFront(triggeringElement: BoardElement): void {
+    // Bring descendants to front first (for hierarchical dragging)
+    for (const descendant of this.draggedDescendants) {
+      this.bringElementToFront(descendant);
+    }
+    
+    // Bring contained post-its to front first (for background rectangle group movement)
+    for (const containedPostIt of this.containedPostIts) {
+      this.bringElementToFront(containedPostIt);
+    }
+    
+    // Finally bring the triggering element to front (so it's on top of all others)
+    this.bringElementToFront(triggeringElement);
   }
 
   /**
