@@ -301,8 +301,6 @@ export class ToolPanel {
     // Close picker when clicking outside
     const closeHandler = (e: MouseEvent) => {
       if (!picker.contains(e.target as Node)) {
-        e.preventDefault();
-        e.stopPropagation();
         picker.remove();
         this.colorPicker = null;
         this.targetElementForColor = null;
@@ -311,7 +309,7 @@ export class ToolPanel {
     };
 
     setTimeout(() => {
-      document.addEventListener('click', closeHandler, true); // Use capture phase
+      document.addEventListener('click', closeHandler);
     }, 100);
 
     return picker;
