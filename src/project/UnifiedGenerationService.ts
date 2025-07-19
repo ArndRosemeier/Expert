@@ -393,18 +393,12 @@ export class UnifiedGenerationService {
                 
                 // Priority 3: Coherence check (only for last sibling)
                 if (workNeeded.coherenceCheck) {
-                    console.log(`🔍 Node "${node.title}" (level ${node.level}) needs coherence check`);
                     if (this.isLastSibling(node)) {
-                        console.log(`✅ Node "${node.title}" is last sibling, triggering coherence check for parent`);
                         if (node.parentId) {
-                            const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-                            console.log(`🎯 Triggering coherence check for parent "${parentNode?.title}" (level ${parentNode?.level})`);
                             await this.handleCoherenceCheck(node.parentId, levels);
                             workDone = true;
                             break; // Exit immediately - fresh assessment next iteration
                         }
-                    } else {
-                        console.log(`⏸️ Node "${node.title}" needs coherence check but is not last sibling - waiting`);
                     }
                 }
                 
@@ -448,10 +442,7 @@ export class UnifiedGenerationService {
                     canExpand: level < levels.draftLevel
                 };
                 
-                // Debug coherence level calculation
-                if (needsCoherenceCheck) {
-                    console.log(`🎯 Level ${level} needs coherence check (coherenceLevel=${levels.coherenceLevel}, calculation: (${levels.coherenceLevel} + 1) >= ${level} = ${(levels.coherenceLevel + 1) >= level})`);
-                }
+
             } else {
                 // Beyond generation parameters - create "do nothing" target state
                 // This allows existing nodes at deeper levels to be processed without errors
@@ -945,19 +936,6 @@ export class UnifiedGenerationService {
         try {
             // Check if node is eligible for coherence analysis
             if (!this.coherenceService.isNodeEligible(parentNode)) {
-                const reason = this.coherenceService.getIneligibilityReason(parentNode);
-                console.log(`⏭️ Skipping coherence check for "${parentNode.title}": ${reason}`);
-                
-                // Debug information to help understand the issue
-                console.log(`🔍 Debug info for "${parentNode.title}":`, {
-                    hasChildren: parentNode.children?.length > 0,
-                    childrenCount: parentNode.children?.length || 0,
-                    childrenStates: parentNode.children?.map(child => ({
-                        title: child.title,
-                        state: child.getState(),
-                        hasConsistentTag: child.getMasterVersion()?.tags.has('consistent_to_parent')
-                    })) || []
-                });
                 return;
             }
 
