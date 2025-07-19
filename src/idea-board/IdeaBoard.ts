@@ -1788,17 +1788,24 @@ export class IdeaBoard {
       isConnectedMode = true;
       count = childPostIts.length;
       
-      const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(0, -1);
-      const userConfirmed = confirm(
-        `🔄 Generate ${typeCapitalized}: Connected Mode\n\n` +
-        `The selected post-it has ${childPostIts.length} child post-it(s).\n` +
-        `This will generate exactly ${childPostIts.length} ${type} and replace the content in all child post-its.\n\n` +
-        'Do you want to continue and replace the existing content?'
-      );
+      // Check if any child post-its have content that would be overwritten
+      const nonEmptyChildPostIts = childPostIts.filter(postIt => postIt.content.trim());
       
-      if (!userConfirmed) {
-        console.log(`🔄 ${typeCapitalized} generation cancelled by user.`);
-        return;
+      if (nonEmptyChildPostIts.length > 0) {
+        // Only show warning if there's content that would be overwritten
+        const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(0, -1);
+        const userConfirmed = confirm(
+          `🔄 Generate ${typeCapitalized}: Connected Mode\n\n` +
+          `The selected post-it has ${childPostIts.length} child post-it(s).\n` +
+          `${nonEmptyChildPostIts.length} of them contain content that will be replaced.\n` +
+          `This will generate exactly ${childPostIts.length} ${type} and replace the content in all child post-its.\n\n` +
+          'Do you want to continue and replace the existing content?'
+        );
+        
+        if (!userConfirmed) {
+          console.log(`🔄 ${typeCapitalized} generation cancelled by user.`);
+          return;
+        }
       }
       
       targetPostIts = childPostIts;
