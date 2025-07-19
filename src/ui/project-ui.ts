@@ -1369,6 +1369,7 @@ export function renderNodeDetails() {
                 grid-template-columns: 1fr auto;
                 gap: 1.5rem;
                 align-items: start;
+                position: relative;
             }
             .node-details-header h2 {
                 font-size: 1.4rem;
@@ -1873,13 +1874,14 @@ export function renderNodeDetails() {
                     </div>
                 </div>
                 
-                <!-- Actions dropdown positioned below header, bottom left of container -->
-                <div style="margin: 1rem 0 0.5rem 0;">
+                <!-- Actions dropdown positioned at bottom left of header container -->
+                <div style="position: absolute; bottom: 1rem; left: 1rem;">
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
                     </button>
                 </div>
+            </div>
                 
                 <style>
         /* Actions modal now uses proper BaseModal system */
