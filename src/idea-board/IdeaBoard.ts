@@ -42,7 +42,6 @@ export class IdeaBoard {
   // Hierarchical dragging state
   private draggedDescendants: PostItNote[] = [];
   private descendantOffsets: Map<string, Point> = new Map();
-  private dragStartPosition: Point = { x: 0, y: 0 };
   
   // Connection state
   private isConnecting: boolean = false;
@@ -1058,21 +1057,7 @@ export class IdeaBoard {
     }
   }
 
-  /**
-   * Find element at world coordinates
-   */
-  private findElementAt(worldPoint: Point): BoardElement | null {
-    // Check elements in reverse order (last rendered = on top)
-    const elementsArray = Array.from(this.elements.values());
-    for (let i = elementsArray.length - 1; i >= 0; i--) {
-      const element = elementsArray[i];
-      if (element && element.hitTest(worldPoint)) {
-        return element;
-      }
-    }
-    
-    return null;
-  }
+
 
   /**
    * Select an element or clear selection
@@ -1105,20 +1090,7 @@ export class IdeaBoard {
     }
   }
 
-  /**
-   * Start dragging an element
-   */
-  private startElementDrag(element: BoardElement, worldPoint: Point): void {
-    this.draggedElement = element;
-    this.dragOffset = {
-      x: worldPoint.x - element.position.x,
-      y: worldPoint.y - element.position.y
-    };
-    this.canvas.style.cursor = 'grabbing';
-    
-    // Bring the dragged element to front
-    this.bringElementToFront(element);
-  }
+
 
 
 
@@ -2682,9 +2654,6 @@ export class IdeaBoard {
    * Set up hierarchical dragging for a post-it and its descendants
    */
   private setupHierarchicalDrag(postIt: PostItNote): void {
-    // Store the starting position of the parent
-    this.dragStartPosition = { x: postIt.position.x, y: postIt.position.y };
-    
     // Find all descendants
     this.draggedDescendants = this.findAllDescendants(postIt.id);
     
@@ -2724,7 +2693,6 @@ export class IdeaBoard {
   private cleanupHierarchicalDrag(): void {
     this.draggedDescendants = [];
     this.descendantOffsets.clear();
-    this.dragStartPosition = { x: 0, y: 0 };
   }
 
   /**
