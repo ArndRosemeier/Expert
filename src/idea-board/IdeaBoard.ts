@@ -56,6 +56,17 @@ export class IdeaBoard {
     postItId: null,
     startTime: 0
   };
+
+  // Animation state for self-summarization
+  private selfSummarizeAnimation: {
+    isActive: boolean;
+    postItId: string | null;
+    startTime: number;
+  } = {
+    isActive: false,
+    postItId: null,
+    startTime: 0
+  };
   
   // Selected AI model purpose for operations
   private selectedModelPurpose: string = 'editor';
@@ -1217,9 +1228,13 @@ export class IdeaBoard {
 
     // Draw idea generation animation if active
     this.renderIdeaGenerationAnimation();
+    
+    // Draw self-summarization animation if active
+    this.renderSelfSummarizeAnimation();
 
     // Keep redrawing if any animation is active
     const hasActiveAnimations = this.ideaGenerationAnimation.isActive || 
+                               this.selfSummarizeAnimation.isActive ||
                                Array.from(this.connections.values()).some(conn => conn.isAnimating());
     
     if (hasActiveAnimations) {
@@ -1838,6 +1853,30 @@ export class IdeaBoard {
   }
 
   /**
+   * Start the self-summarization animation
+   */
+  private startSelfSummarizeAnimation(postItId: string): void {
+    this.selfSummarizeAnimation = {
+      isActive: true,
+      postItId: postItId,
+      startTime: Date.now()
+    };
+    this.requestRedraw();
+  }
+
+  /**
+   * Stop the self-summarization animation
+   */
+  private stopSelfSummarizeAnimation(): void {
+    this.selfSummarizeAnimation = {
+      isActive: false,
+      postItId: null,
+      startTime: 0
+    };
+    this.requestRedraw();
+  }
+
+  /**
    * Render the idea generation animation around the bottom dot of the active post-it
    */
   private renderIdeaGenerationAnimation(): void {
@@ -1906,6 +1945,70 @@ export class IdeaBoard {
     this.context.arc(0, 0, 4 * this.viewport.zoom, 0, Math.PI * 2);
     this.context.fill();
     
+    this.context.restore();
+  }
+
+  /**
+   * Render the self-summarization animation in the center of the active post-it
+   */
+  private renderSelfSummarizeAnimation(): void {
+    if (!this.selfSummarizeAnimation.isActive || !this.selfSummarizeAnimation.postItId) {
+      return;
+    }
+
+    const postIt = this.elements.get(this.selfSummarizeAnimation.postItId) as PostItNote;
+    if (!postIt) {
+      this.stopSelfSummarizeAnimation();
+      return;
+    }
+
+    const screenPos = this.viewport.worldToScreen(postIt.position.x, postIt.position.y);
+    const screenWidth = postIt.size.width * this.viewport.zoom;
+    const screenHeight = postIt.size.height * this.viewport.zoom;
+
+    // Calculate center position
+    const centerX = screenPos.x + screenWidth / 2;
+    const centerY = screenPos.y + screenHeight / 2;
+
+    const elapsed = Date.now() - this.selfSummarizeAnimation.startTime;
+    const rotationSpeed = 0.003; // radians per millisecond
+    const rotation = elapsed * rotationSpeed;
+    const pulseSpeed = 0.005; // Pulsing speed
+    const pulse = Math.sin(elapsed * pulseSpeed) * 0.3 + 0.7; // 0.4 to 1.0
+
+    this.context.save();
+    this.context.translate(centerX, centerY);
+    this.context.rotate(rotation);
+
+    // Draw spinning brain/processing animation
+    this.context.fillStyle = 'rgba(128, 90, 213, 0.8)'; // Purple color for brain processing
+    this.context.strokeStyle = 'rgba(128, 90, 213, 1)';
+    this.context.lineWidth = 2;
+
+    // Draw central pulsing circle
+    this.context.globalAlpha = pulse;
+    this.context.beginPath();
+    this.context.arc(0, 0, 12 * this.viewport.zoom * pulse, 0, Math.PI * 2);
+    this.context.fill();
+
+    // Draw rotating spokes (brain activity)
+    this.context.globalAlpha = 0.8;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      this.context.beginPath();
+      this.context.moveTo(Math.cos(angle) * 8 * this.viewport.zoom, Math.sin(angle) * 8 * this.viewport.zoom);
+      this.context.lineTo(Math.cos(angle) * 18 * this.viewport.zoom, Math.sin(angle) * 18 * this.viewport.zoom);
+      this.context.stroke();
+    }
+
+    // Draw outer pulsing ring
+    this.context.globalAlpha = 0.5 * pulse;
+    this.context.strokeStyle = 'rgba(128, 90, 213, 0.8)';
+    this.context.lineWidth = 2 * pulse;
+    this.context.beginPath();
+    this.context.arc(0, 0, 22 * this.viewport.zoom * pulse, 0, Math.PI * 2);
+    this.context.stroke();
+
     this.context.restore();
   }
 
@@ -2027,13 +2130,21 @@ export class IdeaBoard {
         return;
       }
 
-      // Find all post-its that have incoming connections to the selected one
-      const parentPostIts = this.findIncomingPostIts(selectedPostIt.id);
-      
-      if (parentPostIts.length === 0) {
-        console.log('❌ No parent post-its found. Please connect other post-its as parents (incoming connections) to use summarization.');
+          // Find all post-its that have incoming connections to the selected one
+    const parentPostIts = this.findIncomingPostIts(selectedPostIt.id);
+    
+    // Check if we should do self-summarization
+    if (parentPostIts.length === 0) {
+      if (!originalContent.trim()) {
+        console.log('❌ No parent post-its found and no content to self-summarize. Please add content or connect parent post-its.');
         return;
       }
+      
+      // Self-summarization mode
+      console.log('🧠 Self-summarizing post-it content...');
+      await this.performSelfSummarization(selectedPostIt, originalContent, settingsManager);
+      return;
+    }
 
       // Check if the triggering post-it already has content that will be overwritten
       if (selectedPostIt.content.trim()) {
@@ -2152,6 +2263,68 @@ export class IdeaBoard {
     }
 
     return connectedPostIts;
+  }
+
+  /**
+   * Perform self-summarization on a post-it's own content
+   */
+  private async performSelfSummarization(postIt: PostItNote, originalContent: string, settingsManager: any): Promise<void> {
+    try {
+      // Start center animation to show processing
+      this.startSelfSummarizeAnimation(postIt.id);
+
+      // Show working indicator
+      postIt.content = `🧠 Self-summarizing...\n\nProcessing and condensing the content.`;
+      this.updateElementData(postIt);
+      this.requestRedraw();
+
+      // Get the configured summarize prompt and use proper placeholder expansion
+      const prompts = settingsManager.getPrompts();
+      const expansionService = createPromptExpansionService(settingsManager);
+      
+      // Create context that matches the expected structure for summarize_system prompt
+      const promptContext = {
+        node: {
+          content: originalContent.trim(),
+          title: 'Self-summarization Content',
+          isLeaf: true
+        },
+        project: {
+          language: settingsManager.getLanguage(),
+          criteria: [] // Not needed for summarization
+        }
+      };
+      
+      const summarizePrompt = expansionService.expandPrompt(prompts.summarize_system, promptContext);
+
+      // Use OpenRouterClient to get summary
+      const client = OpenRouterClient.getInstance();
+      client.setSettingsManager(settingsManager);
+      const summary = await client.chat(this.selectedModelPurpose, summarizePrompt);
+
+      // Update the post-it with the summary
+      postIt.content = summary.trim();
+      this.updateElementData(postIt);
+      this.requestRedraw();
+      this.autoSave();
+
+      // Stop center animation
+      this.stopSelfSummarizeAnimation();
+
+      console.log('✅ Successfully self-summarized post-it content.');
+    } catch (error) {
+      console.error('❌ Failed to self-summarize post-it content:', error);
+      console.log('❌ Self-summarization failed. Please check your API key and try again.');
+      
+      // Stop center animation on error
+      this.stopSelfSummarizeAnimation();
+      
+      // Restore original content on error
+      postIt.content = originalContent;
+      this.updateElementData(postIt);
+      this.requestRedraw();
+      this.autoSave();
+    }
   }
 
   /**
