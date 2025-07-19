@@ -1946,12 +1946,12 @@ export class IdeaBoard {
             postIt.content = originalContentForPostIt;
             this.updateElementData(postIt);
           }
-          }
         }
         this.requestRedraw();
         this.autoSave();
       }
     }
+  }
 
   /**
    * Generate creative ideas for the currently selected post-it note
