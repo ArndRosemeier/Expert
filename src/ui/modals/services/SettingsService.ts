@@ -120,7 +120,6 @@ export class SettingsService {
                     selectedModels: this.modelSelector.getSelectedModels(),
                     criteria: [], // Will be filled by the UI component
                     maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
-                    prompt: '', // Legacy field
                     contextExtractionPrompt: '' // Legacy field
                 };
             }
@@ -155,7 +154,6 @@ export class SettingsService {
             selectedModels: this.modelSelector.getSelectedModels(),
             criteria,
             maxIterations,
-            prompt: existingProfile?.prompt || '', // Preserve existing prompt
             contextExtractionPrompt: existingProfile?.contextExtractionPrompt || '' // Preserve existing context extraction prompt
         };
 
@@ -318,7 +316,6 @@ export class SettingsService {
             selectedModels: this.modelSelector.getSelectedModels(),
             criteria,
             maxIterations,
-            prompt: '', // Legacy field
             contextExtractionPrompt: '' // Legacy field
         };
     }
@@ -559,7 +556,6 @@ export class SettingsService {
 
             // Create updated profile
             const updatedProfile: SettingsProfile = {
-                prompt: currentProfile.prompt, // Keep user's main prompt
                 criteria: finalCriteria,
                 maxIterations: currentProfile.maxIterations || DEFAULT_MAX_ITERATIONS,
                 selectedModels: preserveModels?.selectedModels || currentProfile.selectedModels || {},
@@ -570,7 +566,8 @@ export class SettingsService {
                     coherence_analysis: { outline: 'creator' as const, prose: 'prose' as const },
                     fix_contradiction: { outline: 'creator' as const, prose: 'prose' as const },
                     text_polishing: { outline: 'creator' as const, prose: 'prose' as const },
-                    context_adjustment: { outline: 'creator' as const, prose: 'prose' as const }
+                    context_adjustment: { outline: 'creator' as const, prose: 'prose' as const },
+                    context_rating: { outline: 'creator' as const, prose: 'prose' as const }
                 }, // Preserve task model configurations with fallback
                 version: analysis.currentVersion
             };

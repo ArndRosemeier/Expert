@@ -362,17 +362,31 @@ export class OpenRouterClient {
   }
 
   /**
-   * Get list of active operation IDs
+   * Check if any operations are currently active/pending
+   */
+  public hasActiveOperations(): boolean {
+    return this.activeOperations.size > 0;
+  }
+
+  /**
+   * Get the number of currently active operations
+   */
+  public getActiveOperationCount(): number {
+    return this.activeOperations.size;
+  }
+
+  /**
+   * Get the IDs of all currently active operations
    */
   public getActiveOperationIds(): string[] {
     return Array.from(this.activeOperations.keys());
   }
 
   /**
-   * Check if there are any active operations
+   * Check if a specific operation is currently active
    */
-  public hasActiveOperations(): boolean {
-    return this.activeOperations.size > 0;
+  public isOperationActive(operationId: string): boolean {
+    return this.activeOperations.has(operationId);
   }
 
   /**

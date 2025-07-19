@@ -130,8 +130,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
 ];
 
 export interface SettingsProfile {
-    prompt: string;
-    criteria: QualityCriterion[];
+    criteria?: QualityCriterion[]; // Optional - if missing, use defaults
     maxIterations: number;
     selectedModels: Record<string, string>;
     webSearchEnabled?: Record<string, boolean>;
@@ -149,22 +148,22 @@ function areValidSettingsProfiles(data: any): data is Record<string, SettingsPro
         return (
             typeof profile === 'object' &&
             profile !== null &&
-            'prompt' in profile &&
-            typeof profile.prompt === 'string' &&
-            'criteria' in profile &&
-            Array.isArray(profile.criteria) && 
-            profile.criteria.every((criterion: any) => 
-                typeof criterion === 'object' &&
-                criterion !== null &&
-                'name' in criterion &&
-                'goal' in criterion &&
-                typeof criterion.name === 'string' &&
-                typeof criterion.goal === 'number' &&
-                // Optional properties - if present, must be boolean
-                (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
-                (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
-                (criterion.description === undefined || typeof criterion.description === 'string')
-            ) &&
+            // criteria is now optional - if present, must be valid array
+            (profile.criteria === undefined || (
+                Array.isArray(profile.criteria) && 
+                profile.criteria.every((criterion: any) => 
+                    typeof criterion === 'object' &&
+                    criterion !== null &&
+                    'name' in criterion &&
+                    'goal' in criterion &&
+                    typeof criterion.name === 'string' &&
+                    typeof criterion.goal === 'number' &&
+                    // Optional properties - if present, must be boolean
+                    (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
+                    (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
+                    (criterion.description === undefined || typeof criterion.description === 'string')
+                )
+            )) &&
             'maxIterations' in profile &&
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
@@ -272,6 +271,8 @@ export class SettingsManager {
                 
                 // Check for version mismatches and update legacy profiles
         
+                let hasDefaultCriteria = false;
+                
                 Object.keys(this.profiles).forEach(profileName => {
                     const profile = this.profiles[profileName];
                     if (profile) {
@@ -280,6 +281,15 @@ export class SettingsManager {
                             hasVersionMismatch = true;
                         } else {
         
+                        }
+                        
+                        // Handle criteria - add defaults if missing, detect if existing are default
+                        if (!profile.criteria) {
+                            // Missing criteria is expected after cleanup - just populate with defaults
+                            profile.criteria = DEFAULT_CRITERIA;
+                        } else if (this.areDefaultCriteria(profile.criteria)) {
+                            // Found explicitly stored default criteria - needs cleanup
+                            hasDefaultCriteria = true;
                         }
                         
                         // Add default context extraction prompt and web search preferences to existing profiles that don't have them
@@ -307,6 +317,10 @@ export class SettingsManager {
                                 context_adjustment: {
                                     outline: 'creator' as const,
                                     prose: 'prose' as const
+                                },
+                                context_rating: {
+                                    outline: 'creator' as const,
+                                    prose: 'prose' as const
                                 }
                             };
                         }
@@ -323,8 +337,16 @@ export class SettingsManager {
                     this.hasVersionMismatch = true;
                 }
                 
-                // Save the updated profiles with the new field
-                await this.saveProfiles();
+                // Clean up default criteria immediately to prevent old defaults from overriding new system criteria
+                if (hasDefaultCriteria) {
+                    console.log('🧹 Cleaning up default criteria from profiles...');
+                    
+                    // Re-save to storage with smart criteria logic (but keep full profiles in memory)
+                    await this.saveProfiles(true);
+                } else {
+                    // Save the updated profiles with the new field
+                    await this.saveProfiles();
+                }
                 } else {
                 console.warn('Invalid settings profiles found in storage. Ignoring.');
                 this.profiles = {};
@@ -336,8 +358,7 @@ export class SettingsManager {
 
         // If, after all that, we still have no profiles, create a default one.
         if (Object.keys(this.profiles).length === 0) {
-            const defaultProfile = {
-                prompt: "",
+            const defaultProfile: SettingsProfile = {
                 criteria: DEFAULT_CRITERIA,
                 maxIterations: DEFAULT_MAX_ITERATIONS,
                 selectedModels: {},
@@ -360,6 +381,10 @@ export class SettingsManager {
                     context_adjustment: {
                         outline: 'creator' as const,
                         prose: 'prose' as const
+                    },
+                    context_rating: {
+                        outline: 'creator' as const,
+                        prose: 'prose' as const
                     }
                 }
             };
@@ -372,19 +397,31 @@ export class SettingsManager {
     private async loadPrompts(): Promise<void> {
         try {
             const storage = await this.storageService;
-            const saved = await storage.get<OrchestratorPrompts>(PROMPT_STORAGE_KEY);
+            const saved = await storage.get<Partial<OrchestratorPrompts>>(PROMPT_STORAGE_KEY);
             
-        if (saved) {
-                // TODO: Add a type guard for prompts
+            if (saved) {
+                // Only apply non-default prompts from storage
                 this.prompts = { ...defaultPrompts, ...saved };
+                
+                // Clean up: immediately re-save to remove any default prompts that were stored
+                // This prevents old default prompts from overriding new system prompts in future versions
+                const hasDefaultPrompts = Object.entries(saved).some(([key, value]) => {
+                    const defaultValue = defaultPrompts[key as keyof OrchestratorPrompts];
+                    return value === defaultValue;
+                });
+                
+                if (hasDefaultPrompts) {
+                    console.log('🧹 Cleaning up default prompts from storage...');
+                    await this.savePrompts(this.prompts);
+                }
             } else {
                 this.prompts = { ...defaultPrompts };
             }
-            } catch (error) {
+        } catch (error) {
             console.error('Failed to load prompts from storage', error);
             this.prompts = { ...defaultPrompts };
-            }
         }
+    }
 
     private async loadLastUsedProfile(): Promise<void> {
         try {
@@ -411,11 +448,103 @@ export class SettingsManager {
         return this.prompts;
     }
 
+    /**
+     * Get list of prompts that have been modified from their default values
+     */
+    public getModifiedPrompts(): Array<{ key: keyof OrchestratorPrompts; isModified: boolean }> {
+        const modifiedPrompts: Array<{ key: keyof OrchestratorPrompts; isModified: boolean }> = [];
+        
+        for (const [key, value] of Object.entries(this.prompts)) {
+            const defaultValue = defaultPrompts[key as keyof OrchestratorPrompts];
+            modifiedPrompts.push({
+                key: key as keyof OrchestratorPrompts,
+                isModified: value !== defaultValue
+            });
+        }
+        
+        return modifiedPrompts;
+    }
+
+    /**
+     * Reset a specific prompt to its default value
+     */
+    public async resetPromptToDefault(promptKey: keyof OrchestratorPrompts): Promise<void> {
+        this.prompts[promptKey] = defaultPrompts[promptKey];
+        await this.savePrompts(this.prompts);
+    }
+
+    /**
+     * Check if criteria array is identical to defaults
+     */
+    private areDefaultCriteria(criteria: QualityCriterion[]): boolean {
+        if (criteria.length !== DEFAULT_CRITERIA.length) {
+            return false;
+        }
+
+        return criteria.every((criterion, index) => {
+            const defaultCriterion = DEFAULT_CRITERIA[index];
+            if (!defaultCriterion) return false;
+            
+            return (
+                criterion.name === defaultCriterion.name &&
+                criterion.description === defaultCriterion.description &&
+                criterion.goal === defaultCriterion.goal &&
+                criterion.outline === defaultCriterion.outline &&
+                criterion.leaf === defaultCriterion.leaf
+            );
+        });
+    }
+
+    /**
+     * Get profiles that have been modified from their default criteria
+     */
+    public getModifiedCriteriaProfiles(): Array<{ profileName: string; isDefault: boolean }> {
+        const modifiedProfiles: Array<{ profileName: string; isDefault: boolean }> = [];
+        
+        Object.entries(this.profiles).forEach(([profileName, profile]) => {
+            modifiedProfiles.push({
+                profileName,
+                isDefault: this.areDefaultCriteria(profile.criteria || DEFAULT_CRITERIA)
+            });
+        });
+        
+        return modifiedProfiles;
+    }
+
+    /**
+     * Reset a specific profile's criteria to defaults
+     */
+    public async resetCriteriaToDefault(profileName: string): Promise<void> {
+        const profile = this.getProfile(profileName);
+        if (profile) {
+            const updatedProfile: SettingsProfile = {
+                ...profile,
+                criteria: DEFAULT_CRITERIA
+            };
+            await this.saveProfile(profileName, updatedProfile);
+        }
+    }
+
     public async savePrompts(prompts: OrchestratorPrompts): Promise<void> {
         this.prompts = prompts;
         try {
             const storage = await this.storageService;
-            await storage.set(PROMPT_STORAGE_KEY, this.prompts);
+            
+            // Only save prompts that differ from defaults to prevent old defaults 
+            // from overriding new system prompts in future versions
+            const modifiedPrompts: Partial<OrchestratorPrompts> = {};
+            
+            for (const [key, value] of Object.entries(prompts)) {
+                const defaultValue = defaultPrompts[key as keyof OrchestratorPrompts];
+                if (value !== defaultValue) {
+                    (modifiedPrompts as any)[key] = value;
+                }
+            }
+            
+            // Save only the modified prompts
+            await storage.set(PROMPT_STORAGE_KEY, modifiedPrompts);
+            
+            console.log(`💾 Saved ${Object.keys(modifiedPrompts).length} modified prompts (out of ${Object.keys(prompts).length} total)`);
         } catch (error) {
             console.error('Failed to save prompts to storage', error);
         }
@@ -426,19 +555,30 @@ export class SettingsManager {
     }
 
     public getProfile(name: string): SettingsProfile | undefined {
-        return this.profiles[name];
+        const profile = this.profiles[name];
+        if (profile) {
+            // Ensure criteria are populated with defaults if missing
+            return {
+                ...profile,
+                criteria: profile.criteria || DEFAULT_CRITERIA
+            };
+        }
+        return undefined;
     }
 
     public async saveProfile(name: string, profile: SettingsProfile): Promise<void> {
         if (!name) throw new Error("Profile name cannot be empty.");
         
-        // Add current version to the profile
-        const profileWithVersion: SettingsProfile = {
+        // Store profile in memory with criteria always populated for immediate use
+        const profileToSave: SettingsProfile = {
             ...profile,
+            criteria: profile.criteria || DEFAULT_CRITERIA,
             version: VersionService.getBuildNumber()
         };
+
+        this.profiles[name] = profileToSave;
         
-        this.profiles[name] = profileWithVersion;
+        // saveProfiles() will handle excluding default criteria from storage
         await this.saveProfiles();
     }
 
@@ -462,11 +602,27 @@ export class SettingsManager {
 
     public getLastUsedProfile(): SettingsProfile | undefined {
         if (this.lastUsedProfileName) {
-            return this.getProfile(this.lastUsedProfileName);
+            const profile = this.getProfile(this.lastUsedProfileName);
+            if (profile) {
+                // Ensure criteria are populated with defaults if missing
+                return {
+                    ...profile,
+                    criteria: profile.criteria || DEFAULT_CRITERIA
+                };
+            }
         }
         // Return the first profile if no last-used is set
         const names = this.getProfileNames();
-        return names.length > 0 ? this.getProfile(names[0]!) : undefined;
+        if (names.length > 0) {
+            const profile = this.getProfile(names[0]!);
+            if (profile) {
+                return {
+                    ...profile,
+                    criteria: profile.criteria || DEFAULT_CRITERIA
+                };
+            }
+        }
+        return undefined;
     }
 
     public getLastUsedProfileName(): string | null {
@@ -521,10 +677,38 @@ export class SettingsManager {
         await this.saveProfile(profileName, updatedProfile);
     }
 
-    private async saveProfiles(): Promise<void> {
+    private async saveProfiles(isCleanupOperation: boolean = false): Promise<void> {
         try {
             const storage = await this.storageService;
-            await storage.set(SETTINGS_PROFILES_KEY, this.profiles);
+            
+            // Create a storage version with default criteria removed to prevent old defaults
+            // from overriding new system criteria in future versions
+            const profilesForStorage: Record<string, SettingsProfile> = {};
+            
+            Object.entries(this.profiles).forEach(([profileName, profile]) => {
+                if (profile) {
+                    const isDefaultCriteria = this.areDefaultCriteria(profile.criteria || DEFAULT_CRITERIA);
+                    
+                    if (isDefaultCriteria) {
+                        // Remove criteria from storage version - they'll be populated from defaults on load
+                        const { criteria, ...profileWithoutCriteria } = profile;
+                        profilesForStorage[profileName] = profileWithoutCriteria as SettingsProfile;
+                    } else {
+                        // Keep custom criteria in storage
+                        profilesForStorage[profileName] = profile;
+                    }
+                }
+            });
+            
+            await storage.set(SETTINGS_PROFILES_KEY, profilesForStorage);
+            
+            // Only log detailed info during cleanup operations
+            if (isCleanupOperation) {
+                const defaultCount = Object.values(this.profiles).filter(p => p && this.areDefaultCriteria(p.criteria || DEFAULT_CRITERIA)).length;
+                const customCount = Object.keys(this.profiles).length - defaultCount;
+                
+                console.log(`💾 Cleanup complete: ${Object.keys(this.profiles).length} profiles (${customCount} with custom criteria, ${defaultCount} using defaults)`);
+            }
         } catch (error) {
             console.error("Failed to save settings profiles to storage", error);
         }
@@ -551,7 +735,6 @@ export class SettingsManager {
             exportDate: new Date().toISOString(),
             profileName: profileName,
             profile: {
-                prompt: profile.prompt,
                 criteria: profile.criteria,
                 maxIterations: profile.maxIterations,
                 selectedModels: profile.selectedModels,
@@ -608,7 +791,6 @@ export class SettingsManager {
 
             // Create the imported profile
             const importedProfile: SettingsProfile = {
-                prompt: profileData.prompt,
                 criteria: profileData.criteria,
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
@@ -647,22 +829,22 @@ export class SettingsManager {
         return (
             typeof profile === 'object' &&
             profile !== null &&
-            'prompt' in profile &&
-            typeof profile.prompt === 'string' &&
-            'criteria' in profile &&
-            Array.isArray(profile.criteria) &&
-            profile.criteria.every((criterion: any) => 
-                typeof criterion === 'object' &&
-                criterion !== null &&
-                'name' in criterion &&
-                'goal' in criterion &&
-                typeof criterion.name === 'string' &&
-                typeof criterion.goal === 'number' &&
-                // Optional properties - if present, must be boolean
-                (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
-                (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
-                (criterion.description === undefined || typeof criterion.description === 'string')
-            ) &&
+            // criteria is now optional - if present, must be valid array
+            (profile.criteria === undefined || (
+                Array.isArray(profile.criteria) &&
+                profile.criteria.every((criterion: any) => 
+                    typeof criterion === 'object' &&
+                    criterion !== null &&
+                    'name' in criterion &&
+                    'goal' in criterion &&
+                    typeof criterion.name === 'string' &&
+                    typeof criterion.goal === 'number' &&
+                    // Optional properties - if present, must be boolean
+                    (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
+                    (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
+                    (criterion.description === undefined || typeof criterion.description === 'string')
+                )
+            )) &&
             'maxIterations' in profile &&
             typeof profile.maxIterations === 'number' &&
             'selectedModels' in profile &&
@@ -803,7 +985,6 @@ export class SettingsManager {
         
         // Create a new default profile with current version
         const defaultProfile: SettingsProfile = {
-            prompt: "",
             criteria: DEFAULT_CRITERIA,
             maxIterations: DEFAULT_MAX_ITERATIONS,
             selectedModels: modelsToKeep,
@@ -825,6 +1006,10 @@ export class SettingsManager {
                     prose: 'prose' as const
                 },
                 context_adjustment: {
+                    outline: 'creator' as const,
+                    prose: 'prose' as const
+                },
+                context_rating: {
                     outline: 'creator' as const,
                     prose: 'prose' as const
                 }

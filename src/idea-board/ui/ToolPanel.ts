@@ -110,7 +110,7 @@ export class ToolPanel {
     });
 
     // Summarize button
-    const summarizeBtn = this.createToolButton('🧠', 'Summarize', () => {
+    const summarizeBtn = this.createToolButton('🗜️', 'Summarize', () => {
       this.config.onSummarize();
     });
 

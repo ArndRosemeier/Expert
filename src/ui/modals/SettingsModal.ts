@@ -16,6 +16,7 @@ import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
 import { TaskModelEditor } from '../components/TaskModelEditor';
+import { OpenRouterClient } from '../../OpenRouterClient';
 
 
 export interface SettingsModalConfig extends ModalConfig {
@@ -545,11 +546,42 @@ export class SettingsModal extends BaseModal {
         // Initialize model selector
         const modelsContainer = this.element?.querySelector('#settings-models-container') as HTMLElement;
         if (modelsContainer) {
-            // Wait for ModelSelector initialization before rendering
-            await this.modelSelector.waitForInitialization();
-            this.modelSelector.render(modelsContainer);
-            modelsContainer.addEventListener('change', () => this.autoSave());
-            modelsContainer.addEventListener('input', () => this.autoSave());
+            // Check if OpenRouterClient has active operations
+            const openRouterClient = OpenRouterClient.getInstance();
+            const activeOperationCount = openRouterClient.getActiveOperationCount();
+            
+            if (activeOperationCount > 0) {
+                // Disable model configurator when AI operations are active
+                modelsContainer.innerHTML = `
+                    <div style="
+                        padding: 1rem;
+                        background-color: #fef3c7;
+                        border: 1px solid #f59e0b;
+                        border-radius: 8px;
+                        color: #92400e;
+                        text-align: center;
+                    ">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem;">
+                            ⚡ Model Configuration Disabled
+                        </div>
+                        <div style="font-size: 0.875rem;">
+                            ${activeOperationCount} AI operation${activeOperationCount !== 1 ? 's' : ''} currently running.<br/>
+                            Model settings cannot be changed while AI operations are in progress<br/>
+                            to prevent configuration conflicts.
+                        </div>
+                        <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.8;">
+                            Please wait for operations to complete and reopen settings.
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Normal model selector initialization
+                // Wait for ModelSelector initialization before rendering
+                await this.modelSelector.waitForInitialization();
+                this.modelSelector.render(modelsContainer);
+                modelsContainer.addEventListener('change', () => this.autoSave());
+                modelsContainer.addEventListener('input', () => this.autoSave());
+            }
         }
 
         // Initialize task model editor

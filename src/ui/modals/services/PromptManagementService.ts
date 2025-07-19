@@ -251,6 +251,16 @@ export class PromptManagementService {
             classes: ['prompt-actions']
         });
 
+        // Show Modified Prompts button
+        const showModifiedButton = createElement('button', {
+            classes: ['btn-outline'],
+            content: 'Show Modified Prompts'
+        });
+
+        showModifiedButton.addEventListener('click', () => {
+            this.showModifiedPromptsDialog();
+        });
+
         const resetButton = createElement('button', {
             classes: ['btn-outline'],
             content: 'Reset All Prompts to Defaults'
@@ -260,6 +270,7 @@ export class PromptManagementService {
             this.revertToDefaults();
         });
 
+        container.appendChild(showModifiedButton);
         container.appendChild(resetButton);
         return container;
     }
@@ -372,6 +383,24 @@ export class PromptManagementService {
         });
 
         container.appendChild(style);
+    }
+
+    /**
+     * Shows a dialog with modified prompts
+     */
+    private showModifiedPromptsDialog(): void {
+        const modifiedPrompts = this.settingsManager.getModifiedPrompts();
+        const modifiedOnly = modifiedPrompts.filter(p => p.isModified);
+
+        let message: string;
+        if (modifiedOnly.length === 0) {
+            message = 'No prompts have been modified from their default values.\n\nAll prompts are currently using the system defaults.';
+        } else {
+            const promptList = modifiedOnly.map(p => `• ${this.formatPromptName(p.key)}`).join('\n');
+            message = `${modifiedOnly.length} prompt${modifiedOnly.length === 1 ? '' : 's'} modified from default:\n\n${promptList}\n\nOnly modified prompts are saved to prevent old defaults from overriding new system prompts in future updates.`;
+        }
+
+        alert(message);
     }
 
     /**
