@@ -14,6 +14,7 @@ export interface OrchestratorPrompts {
     summarize_system: string;
     expand_system: string;
     idea_generation_system: string;
+    transform_system: string;
     expand_list_user: string;
     content_generation_user: string;
     branch_content_generation_user: string;
@@ -202,16 +203,64 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
         description: "The system prompt for continuing content in multiple different ways with precise formatting markers for reliable parsing."
     },
 
-    idea_generation_system: {
+    transform_system: {
         text: `
-            You are a creative genius.
+            Generate transformed content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            
+            You are an expert at transforming and modifying written content based on specific instructions. Transform the following content according to the user's request in exactly {{transform_count}} different ways.
 
-            Original theme to generate ideas for:
+            User's transformation request:
+            ---
+            {{user_instruction}}
+            ---
+
+            Original content to transform:
             ---
             {{content}}
             ---
 
-            Please generate {{idea_count}} distinct ideas in {{language}}. 
+            CRITICAL FORMAT REQUIREMENTS:
+            1. Create exactly {{transform_count}} transformations
+            2. Each transformation must start with the exact marker: "=== TRANSFORMATION START ==="
+            3. Each transformation must end with the exact marker: "=== TRANSFORMATION END ==="
+            4. Put substantial, detailed content between the markers that applies the user's instruction to the original content
+            5. Make each transformation explore different approaches to applying the instruction while maintaining quality
+            6. Each transformation should be a complete, standalone result based on the original content
+            7. Do NOT include any text outside the transformation markers
+
+            EXACT FORMAT EXAMPLE:
+            === TRANSFORMATION START ===
+            [Content transformed according to the user's instruction - first approach]
+            === TRANSFORMATION END ===
+            === TRANSFORMATION START ===
+            [Content transformed according to the user's instruction - alternative approach]
+            === TRANSFORMATION END ===
+
+            Generate exactly {{transform_count}} transformations following this format precisely.
+            Apply the user's instruction creatively but faithfully to produce high-quality results.
+        `.trim(),
+        placeholders: ['content', 'language', 'transform_count', 'user_instruction'],
+        description: "The system prompt for transforming content based on user instructions in multiple different ways with precise formatting markers for reliable parsing."
+    },
+
+    idea_generation_system: {
+        text: `
+            You are a creative genius.
+
+            Original content to generate ideas for:
+            ---
+            {{content}}
+            ---
+
+            Please generate {{idea_count}} distinct ideas in {{language}}.
+            If the original content looks like finished text, give ideas how to immprove it.
+            If the original content looks like a draft, give ideas how to develop it.
+            If the original content looks like a list, give ideas how to expand it.
+            If the original content looks like a question, give ideas how to answer it.
+            If the original content looks like a list of tasks, give ideas how to complete them.
+            If the original content looks like character(s), give ideas how to develop them.
+            If the original content looks like a concept, give ideas for implementations.
+            The guiding principle is to anticipate where the user could use ideas for his input.
             Any structural elements (such as section headers) must always remain in English.
 
             EXACT FORMAT EXAMPLE:

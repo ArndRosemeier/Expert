@@ -7,6 +7,7 @@ import { ToolPanel, type ToolPanelConfig } from './ui/ToolPanel';
 import { NodeSearchModal } from './ui/NodeSearchModal';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { createPromptExpansionService } from '../services/PromptExpansionService';
+import { showPrompt } from '../ui/modals/ModalFactory';
 import * as state from '../state';
 import type { IdeaBoardState, ElementData, Point, BoardElement } from './types/BoardTypes';
 import type { DocumentNode } from '../DocumentNode';
@@ -142,6 +143,9 @@ export class IdeaBoard {
       },
       onGenerateIdeas: async () => {
         await this.generateIdeasForSelectedPostIt();
+      },
+      onTransform: async () => {
+        await this.transformSelectedPostIt();
       },
       onModelChange: (modelPurpose: string) => {
         this.setSelectedModelPurpose(modelPurpose);
@@ -1600,11 +1604,11 @@ export class IdeaBoard {
   }
 
   /**
-   * Generalized content generation for ideas, continuations, and future content types
+   * Generalized content generation for ideas, continuations, transformations, and future content types
    */
   private async performContentGeneration(
-    type: 'ideas' | 'continuations',
-    promptKey: 'idea_generation_system' | 'expand_system',
+    type: 'ideas' | 'continuations' | 'transformations',
+    promptKey: 'idea_generation_system' | 'expand_system' | 'transform_system',
     startMarker: string,
     endMarker: string
   ): Promise<void> {
@@ -1692,6 +1696,24 @@ export class IdeaBoard {
       const prompts = settingsManager.getPrompts();
       const expansionService = createPromptExpansionService(settingsManager);
       
+      // Get user input for transformations
+      let userInstruction = '';
+      if (type === 'transformations') {
+        const instruction = await showPrompt(
+          'What would you like to do with the content?',
+          '',
+          'Transform Content'
+        );
+        
+        if (!instruction || !instruction.trim()) {
+          console.log('❌ Transformation cancelled - no instruction provided.');
+          return;
+        }
+        
+        userInstruction = instruction.trim();
+        console.log(`🔄 Transforming content with instruction: "${userInstruction}"`);
+      }
+
       // Create context that matches the expected structure
       const promptContext = {
         node: {
@@ -1704,7 +1726,8 @@ export class IdeaBoard {
           criteria: [] // Not needed for generation
         },
         custom: {
-          [type === 'ideas' ? 'idea_count' : 'expand_count']: isConnectedMode ? count.toString() : 'some'
+          [type === 'ideas' ? 'idea_count' : type === 'continuations' ? 'expand_count' : 'transform_count']: isConnectedMode ? count.toString() : 'some',
+          ...(type === 'transformations' && { user_instruction: userInstruction })
         }
       };
       
@@ -2667,6 +2690,13 @@ export class IdeaBoard {
    */
   private async continueSelectedPostIt(): Promise<void> {
     await this.performContentGeneration('continuations', 'expand_system', '=== CONTINUATION START ===', '=== CONTINUATION END ===');
+  }
+
+  /**
+   * Transform the content of the currently selected post-it note based on user input
+   */
+  private async transformSelectedPostIt(): Promise<void> {
+    await this.performContentGeneration('transformations', 'transform_system', '=== TRANSFORMATION START ===', '=== TRANSFORMATION END ===');
   }
 
   /**

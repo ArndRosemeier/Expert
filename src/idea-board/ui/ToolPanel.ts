@@ -21,6 +21,7 @@ export interface ToolPanelConfig {
   onSummarize: () => void;
   onExpand: () => void;
   onGenerateIdeas: () => void;
+  onTransform: () => void;
   onExportMarkdown: () => void;
   onClearAll: () => void;
   onModelChange: (modelPurpose: string) => void;
@@ -116,6 +117,11 @@ export class ToolPanel {
       this.config.onGenerateIdeas();
     });
 
+    // Transform button
+    const transformBtn = this.createToolButton('🔄✨', 'Transform', () => {
+      this.config.onTransform();
+    });
+
     // Export as Markdown button
     const exportBtn = this.createToolButton('📁', 'Export as Markdown', () => {
       this.config.onExportMarkdown();
@@ -136,6 +142,7 @@ export class ToolPanel {
     this.container.appendChild(summarizeBtn);
     this.container.appendChild(continueBtn);
     this.container.appendChild(ideasBtn);
+    this.container.appendChild(transformBtn);
     this.container.appendChild(exportBtn);
     this.container.appendChild(clearBtn);
     this.container.appendChild(modelDropdown);
