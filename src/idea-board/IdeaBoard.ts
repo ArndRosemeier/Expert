@@ -134,14 +134,14 @@ export class IdeaBoard {
       onClearAll: () => {
         this.clearAll();
       },
-      onSummarize: () => {
-        this.summarizeSelectedPostIt();
+      onSummarize: async () => {
+        await this.summarizeSelectedPostIt();
       },
-      onExpand: () => {
-        this.continueSelectedPostIt();
+      onExpand: async () => {
+        await this.continueSelectedPostIt();
       },
-      onGenerateIdeas: () => {
-        this.generateIdeasForSelectedPostIt();
+      onGenerateIdeas: async () => {
+        await this.generateIdeasForSelectedPostIt();
       },
       onModelChange: (modelPurpose: string) => {
         this.setSelectedModelPurpose(modelPurpose);
@@ -1252,7 +1252,7 @@ export class IdeaBoard {
 
     // Draw idea generation animation if active
     this.renderIdeaGenerationAnimation();
-    
+
     // Draw self-summarization animation if active
     this.renderSelfSummarizeAnimation();
 
@@ -1780,12 +1780,12 @@ export class IdeaBoard {
             postIt.content = originalContentForPostIt;
             this.updateElementData(postIt);
           }
+          }
         }
+        this.requestRedraw();
+        this.autoSave();
       }
-      this.requestRedraw();
-      this.autoSave();
     }
-  }
 
   /**
    * Generate creative ideas for the currently selected post-it note
@@ -2324,8 +2324,8 @@ export class IdeaBoard {
       // Self-summarization mode
       console.log('🧠 Self-summarizing post-it content...');
       await this.performSelfSummarization(selectedPostIt, originalContent, settingsManager);
-      return;
-    }
+        return;
+      }
 
       // Check if the triggering post-it already has content that will be overwritten
       if (selectedPostIt.content.trim()) {
@@ -2568,8 +2568,8 @@ export class IdeaBoard {
       if (connection.fromPostItId === postItId) {
         connection.startAnimation();
       }
-    }
-    this.requestRedraw();
+      }
+      this.requestRedraw();
   }
 
   /**
