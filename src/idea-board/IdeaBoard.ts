@@ -1572,11 +1572,16 @@ export class IdeaBoard {
   }
 
   /**
-   * Generate creative ideas for the currently selected post-it note
+   * Generalized content generation for ideas and continuations
    */
-  private async generateIdeasForSelectedPostIt(): Promise<void> {
+  private async performContentGeneration(
+    type: 'ideas' | 'continuations',
+    promptKey: 'idea_generation_system' | 'expand_system',
+    parseMethod: 'parseGeneratedIdeas' | 'parseContinuations',
+    createMethod: 'createPostItsForIdeas' | 'createPostItsForContinuations'
+  ): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('❌ No post-it note selected. Please select a post-it to generate ideas for.');
+      console.log(`❌ No post-it note selected. Please select a post-it to generate ${type} for.`);
       return;
     }
 
@@ -1584,38 +1589,39 @@ export class IdeaBoard {
     const originalContent = selectedPostIt.content;
     
     if (!originalContent.trim()) {
-      console.log('❌ The selected post-it has no content to generate ideas from.');
+      console.log(`❌ The selected post-it has no content to generate ${type} from.`);
       return;
     }
 
     const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
-    let ideaCount: number;
+    let count: number;
     let targetPostIts: PostItNote[] = [];
     let isConnectedMode = false;
 
     if (childPostIts.length > 0) {
-      // Connected mode: exact number of ideas to replace existing post-its
+      // Connected mode: exact number to replace existing post-its
       isConnectedMode = true;
-      ideaCount = childPostIts.length;
+      count = childPostIts.length;
       
+      const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(0, -1);
       const userConfirmed = confirm(
-        `💡 Generate Ideas: Connected Mode\n\n` +
+        `🔄 Generate ${typeCapitalized}: Connected Mode\n\n` +
         `The selected post-it has ${childPostIts.length} child post-it(s).\n` +
-        `This will generate exactly ${childPostIts.length} ideas and replace the content in all child post-its.\n\n` +
+        `This will generate exactly ${childPostIts.length} ${type} and replace the content in all child post-its.\n\n` +
         'Do you want to continue and replace the existing content?'
       );
       
       if (!userConfirmed) {
-        console.log('💡 Idea generation cancelled by user.');
+        console.log(`🔄 ${typeCapitalized} generation cancelled by user.`);
         return;
       }
       
       targetPostIts = childPostIts;
-      console.log(`💡 Generating exactly ${ideaCount} ideas for child post-its...`);
+      console.log(`🔄 Generating exactly ${count} ${type} for child post-its...`);
     } else {
       // Free mode: LLM decides number, create new post-its
-      ideaCount = 0; // Will be determined by LLM response
-      console.log(`💡 Generating ideas and creating new post-its below the selected one...`);
+      count = 0; // Will be determined by LLM response
+      console.log(`🔄 Generating ${type} and creating new post-its below the selected one...`);
       
       // Start animation around bottom dot in free mode
       this.startIdeaGenerationAnimation(selectedPostIt.id);
@@ -1643,66 +1649,76 @@ export class IdeaBoard {
         // Start connection animations to show data flow
         this.startOutgoingConnectionAnimations(selectedPostIt.id);
         
+        const workingMessage = type === 'ideas' ? 
+          `💡 Generating ideas...\n\nReceiving creative ideas from main post-it.` :
+          `🔄 Continuing content...\n\nReceiving continuation from main post-it.`;
+        
         for (const postIt of targetPostIts) {
-          postIt.content = `💡 Generating ideas...\n\nReceiving creative ideas from main post-it.`;
+          postIt.content = workingMessage;
           this.updateElementData(postIt);
         }
         this.requestRedraw();
       }
 
-      // Get the configured idea generation prompt and use proper placeholder expansion
+      // Get the configured prompt and use proper placeholder expansion
       const prompts = settingsManager.getPrompts();
       const expansionService = createPromptExpansionService(settingsManager);
       
-      // Create context that matches the expected structure for idea_generation_system prompt
+      // Create context that matches the expected structure
       const promptContext = {
         node: {
           content: originalContent.trim(),
-          title: 'Post-it Content for Ideas',
+          title: `Post-it Content for ${type.charAt(0).toUpperCase() + type.slice(0, -1)}`,
           isLeaf: true
         },
         project: {
           language: settingsManager.getLanguage(),
-          criteria: [] // Not needed for idea generation
+          criteria: [] // Not needed for generation
         },
         custom: {
-          idea_count: isConnectedMode ? ideaCount.toString() : 'some'
+          [type === 'ideas' ? 'idea_count' : 'expand_count']: isConnectedMode ? count.toString() : 'some'
         }
       };
       
-      const ideaPrompt = expansionService.expandPrompt(prompts.idea_generation_system, promptContext);
+      const prompt = expansionService.expandPrompt(prompts[promptKey], promptContext);
 
-      // Use OpenRouterClient to get ideas
+      // Use OpenRouterClient to get content
       const client = OpenRouterClient.getInstance();
       client.setSettingsManager(settingsManager);
-      const ideaContent = await client.chat(this.selectedModelPurpose, ideaPrompt);
+      const generatedContent = await client.chat(this.selectedModelPurpose, prompt);
 
-      // Parse the ideas from the response
-      const ideas = this.parseGeneratedIdeas(ideaContent);
+      // Parse the content from the response
+      const results = parseMethod === 'parseGeneratedIdeas' ? 
+        this.parseGeneratedIdeas(generatedContent) : 
+        this.parseContinuations(generatedContent, 0); // 0 means parse all found
 
-      if (ideas.length === 0) {
-        throw new Error('No ideas were generated by the AI');
+      if (results.length === 0) {
+        throw new Error(`No ${type} were generated by the AI`);
       }
 
-      console.log(`💡 Generated ${ideas.length} ideas from AI response`);
+      console.log(`🔄 Generated ${results.length} ${type} from AI response`);
 
       if (isConnectedMode) {
-        // Connected mode: distribute ideas to existing post-its
-        if (ideas.length !== ideaCount) {
-          console.warn(`⚠️ Expected ${ideaCount} ideas but got ${ideas.length}. Adjusting distribution.`);
+        // Connected mode: distribute content to existing post-its
+        if (results.length !== count) {
+          console.warn(`⚠️ Expected ${count} ${type} but got ${results.length}. Adjusting distribution.`);
         }
 
         for (let i = 0; i < targetPostIts.length; i++) {
           const postIt = targetPostIts[i];
           if (!postIt) continue;
           
-          const idea = ideas[i] || `Idea ${i + 1}: (Content generation incomplete)`;
-          postIt.content = idea.trim();
+          const result = results[i] || `${type.charAt(0).toUpperCase() + type.slice(0, -1)} ${i + 1}: (Content generation incomplete)`;
+          postIt.content = result.trim();
           this.updateElementData(postIt);
         }
       } else {
         // Free mode: create new post-its arranged below the selected one
-        this.createPostItsForIdeas(selectedPostIt, ideas);
+        if (createMethod === 'createPostItsForIdeas') {
+          this.createPostItsForIdeas(selectedPostIt, results);
+        } else {
+          this.createPostItsForContinuations(selectedPostIt, results);
+        }
       }
 
       // Stop animation if it was running
@@ -1716,21 +1732,19 @@ export class IdeaBoard {
       this.requestRedraw();
       this.autoSave();
 
-      console.log(`✅ Successfully generated ${ideas.length} ideas ${isConnectedMode ? 'for child post-its' : 'as new post-its'}.`);
+      console.log(`✅ Successfully generated ${results.length} ${type} ${isConnectedMode ? 'for child post-its' : 'as new post-its'}.`);
       
     } catch (error) {
-      console.error('❌ Failed to generate ideas:', error);
-      console.log('❌ Idea generation failed. Please check your API key and try again.');
+      console.error(`❌ Failed to generate ${type}:`, error);
+      console.log(`❌ ${type.charAt(0).toUpperCase() + type.slice(0, -1)} generation failed. Please check your API key and try again.`);
       
-      // Stop animation if it was running
+      // Stop animations on error
       this.stopIdeaGenerationAnimation();
-      
-      // Stop connection animations on error if in connected mode
       if (isConnectedMode) {
         this.stopConnectionAnimations(selectedPostIt.id);
       }
       
-      // Restore original content on error (connected mode only)
+      // Restore original content on error (only in connected mode)
       if (isConnectedMode) {
         for (const postIt of targetPostIts) {
           const originalContentForPostIt = originalContents.get(postIt.id);
@@ -1739,10 +1753,17 @@ export class IdeaBoard {
             this.updateElementData(postIt);
           }
         }
-        this.requestRedraw();
-        this.autoSave();
       }
+      this.requestRedraw();
+      this.autoSave();
     }
+  }
+
+  /**
+   * Generate creative ideas for the currently selected post-it note
+   */
+  private async generateIdeasForSelectedPostIt(): Promise<void> {
+    await this.performContentGeneration('ideas', 'idea_generation_system', 'parseGeneratedIdeas', 'createPostItsForIdeas');
   }
 
   /**
@@ -1826,6 +1847,54 @@ export class IdeaBoard {
     }
 
     console.log(`📝 Created ${newPostIts.length} new post-its arranged below the trigger post-it`);
+  }
+
+  /**
+   * Create new post-its for continuations arranged below the triggering post-it
+   */
+  private createPostItsForContinuations(triggerPostIt: PostItNote, continuations: string[]): void {
+    const gap = 20; // Gap between post-its
+    const verticalOffset = 200; // Distance below the trigger post-it
+    
+    // Calculate spacing based on post-it width + gap
+    const postItWidth = triggerPostIt.size.width;
+    const spacing = postItWidth + gap;
+    
+    // Calculate starting position centered below the trigger post-it
+    const totalWidth = Math.max(1, continuations.length - 1) * spacing;
+    const startX = triggerPostIt.position.x + (triggerPostIt.size.width / 2) - (totalWidth / 2);
+    const startY = triggerPostIt.position.y + triggerPostIt.size.height + verticalOffset;
+
+    const parentColor = triggerPostIt.style.backgroundColor;
+    const newPostIts: PostItNote[] = [];
+
+    // Create post-its for each continuation
+    for (let i = 0; i < continuations.length; i++) {
+      const x = startX + (i * spacing);
+      const y = startY;
+      
+      const newPostIt = this.createNewPostIt({ x, y }, continuations[i]!.trim());
+      newPostIt.setColor(parentColor);
+      
+      // Set the same size as the trigger post-it
+      newPostIt.size = { ...triggerPostIt.size };
+      
+      this.updateElementData(newPostIt);
+      newPostIts.push(newPostIt);
+    }
+
+    // Connect all new post-its to the trigger post-it
+    // New post-its connect their top dot to trigger post-it's bottom dot
+    for (const newPostIt of newPostIts) {
+      this.createConnection(
+        triggerPostIt.id,
+        'bottom',
+        newPostIt.id,
+        'top'
+      );
+    }
+
+    console.log(`📝 Created ${newPostIts.length} new continuation post-its arranged below the trigger post-it`);
   }
 
   /**
@@ -2498,143 +2567,10 @@ export class IdeaBoard {
   }
 
   /**
-   * Continue the content of the currently selected post-it note and distribute to child post-its (outgoing connections)
+   * Continue the content of the currently selected post-it note
    */
   private async continueSelectedPostIt(): Promise<void> {
-    if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('❌ No post-it note selected. Please select a post-it to continue.');
-      return;
-    }
-
-    const selectedPostIt = this.selectedElement;
-    const originalContent = selectedPostIt.content;
-    const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
-    
-    if (childPostIts.length === 0) {
-      console.log('❌ No child post-its found. Please connect other post-its as children (outgoing connections) to use continuation.');
-      return;
-    }
-
-    if (!originalContent.trim()) {
-      console.log('❌ The selected post-it has no content to continue.');
-      return;
-    }
-
-    // Check if any child post-its have content that will be overwritten
-    const postItsWithContent = childPostIts.filter(postIt => postIt.content.trim());
-    if (postItsWithContent.length > 0) {
-      const userConfirmed = confirm(
-        `⚠️ Warning: ${postItsWithContent.length} child post-it(s) contain content.\n\n` +
-        'Continuing will replace all content in the child post-its with different continuations.\n\n' +
-        'Do you want to continue and replace the existing content?'
-      );
-      
-      if (!userConfirmed) {
-        console.log('📝 Continuation cancelled by user to preserve existing content.');
-        return;
-      }
-      
-      console.log('✅ User confirmed to proceed with continuation, replacing existing content.');
-    }
-
-    // Store original content for error recovery (outside try block for scope)
-    const originalContents = new Map<string, string>();
-    for (const postIt of childPostIts) {
-      originalContents.set(postIt.id, postIt.content);
-    }
-
-    try {
-      // Get SettingsManager first - needed for prompts and OpenRouterClient
-      const settingsManager = state.getSettingsManager();
-      
-      if (!settingsManager) {
-        console.log('❌ Settings not available. Please configure your settings first.');
-        return;
-      }
-
-      console.log(`🔄 Continuing content to ${childPostIts.length} child post-its...`);
-
-      // Start connection animations to show data flow
-      this.startOutgoingConnectionAnimations(selectedPostIt.id);
-
-      // Show working indicators in all target post-its
-      for (const postIt of childPostIts) {
-        postIt.content = `🔄 Continuing content...\n\nReceiving continuation from main post-it.`;
-        this.updateElementData(postIt);
-      }
-      this.requestRedraw();
-
-      // Get the configured expand prompt and use proper placeholder expansion
-      const prompts = settingsManager.getPrompts();
-      const expansionService = createPromptExpansionService(settingsManager);
-      
-      // Create context that matches the expected structure for expand_system prompt
-      const promptContext = {
-        node: {
-          content: originalContent.trim(),
-          title: 'Post-it Content to Continue',
-          isLeaf: true
-        },
-        project: {
-          language: settingsManager.getLanguage(),
-          criteria: [] // Not needed for continuation
-        },
-        custom: {
-          expand_count: childPostIts.length.toString()
-        }
-      };
-      
-      const continuePrompt = expansionService.expandPrompt(prompts.expand_system, promptContext);
-
-      // Use OpenRouterClient to get continued content
-      const client = OpenRouterClient.getInstance();
-      client.setSettingsManager(settingsManager);
-      const continuedContent = await client.chat(this.selectedModelPurpose, continuePrompt);
-
-      // Parse the continued content into continuations
-      const continuations = this.parseContinuations(continuedContent, childPostIts.length);
-
-      if (continuations.length !== childPostIts.length) {
-        console.warn(`⚠️ Expected ${childPostIts.length} continuations but got ${continuations.length}. Adjusting distribution.`);
-      }
-
-      // Distribute continuations to child post-its
-      for (let i = 0; i < childPostIts.length; i++) {
-        const postIt = childPostIts[i];
-        if (!postIt) continue; // Skip if postIt is undefined
-        
-        const continuation = continuations[i] || `Continuation ${i + 1}: (Content unavailable)`;
-        
-        postIt.content = continuation.trim();
-        this.updateElementData(postIt);
-      }
-
-      this.requestRedraw();
-      this.autoSave();
-
-      // Stop connection animations
-      this.stopConnectionAnimations(selectedPostIt.id);
-
-      console.log(`✅ Successfully continued content to ${childPostIts.length} child post-its.`);
-      
-    } catch (error) {
-      console.error('❌ Failed to continue post-it content:', error);
-      console.log('❌ Continuation failed. Please check your API key and try again.');
-      
-      // Stop connection animations on error
-      this.stopConnectionAnimations(selectedPostIt.id);
-      
-      // Restore original content on error
-      for (const postIt of childPostIts) {
-        const originalContentForPostIt = originalContents.get(postIt.id);
-        if (originalContentForPostIt !== undefined) {
-          postIt.content = originalContentForPostIt;
-          this.updateElementData(postIt);
-        }
-      }
-      this.requestRedraw();
-      this.autoSave();
-    }
+    await this.performContentGeneration('continuations', 'expand_system', 'parseContinuations', 'createPostItsForContinuations');
   }
 
   /**
