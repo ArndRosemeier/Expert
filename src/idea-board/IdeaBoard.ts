@@ -1371,21 +1371,7 @@ export class IdeaBoard {
     this.context.restore();
   }
 
-  /**
-   * Draw UI overlay
-   */
-  private drawUI(): void {
-    // Status bar
-    this.context.save();
-    this.context.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    this.context.fillRect(0, this.viewport.height - 30, this.viewport.width, 30);
-    
-    this.context.fillStyle = 'white';
-    this.context.font = '12px Arial';
-    const statusText = `Zoom: ${(this.viewport.zoom * 100).toFixed(0)}% | Position: (${this.viewport.x.toFixed(0)}, ${this.viewport.y.toFixed(0)}) | Elements: ${this.elements.size}`;
-    this.context.fillText(statusText, 10, this.viewport.height - 10);
-    this.context.restore();
-  }
+
 
   /**
    * Get cursor style for resize handle
@@ -1511,46 +1497,7 @@ export class IdeaBoard {
     this.canvas.style.cursor = cursor;
   }
 
-  /**
-   * Start resizing an element
-   */
-  private startElementResize(element: PostItNote, handle: 'se' | 'nw' | 'ne' | 'sw'): void {
-    this.resizingElement = element;
-    this.resizeHandle = handle;
-    element.setResizing(true);
-    
-    const cursors = {
-      'se': 'se-resize',
-      'nw': 'nw-resize', 
-      'ne': 'ne-resize',
-      'sw': 'sw-resize'
-    };
-    this.canvas.style.cursor = cursors[handle];
-  }
 
-  /**
-   * Handle element resizing
-   */
-  private handleElementResize(worldPoint: Point): void {
-    if (!this.resizingElement || !this.resizeHandle) return;
-    
-    this.resizingElement.resize(this.resizeHandle, worldPoint);
-    this.requestRedraw();
-  }
-
-  /**
-   * Finish resizing an element
-   */
-  private finishElementResize(): void {
-    if (this.resizingElement) {
-      this.resizingElement.setResizing(false);
-      this.updateElementData(this.resizingElement);
-      this.resizingElement = null;
-      this.resizeHandle = null;
-      this.canvas.style.cursor = 'default';
-      this.autoSave();
-    }
-  }
 
   /**
    * Bring an element to the front by moving it to the end of the elements collection
@@ -2617,15 +2564,7 @@ export class IdeaBoard {
     this.requestRedraw();
   }
 
-  /**
-   * Stop all connection animations
-   */
-  private stopAllConnectionAnimations(): void {
-    for (const connection of this.connections.values()) {
-      connection.stopAnimation();
-    }
-    this.requestRedraw();
-  }
+
 
   /**
    * Find all descendant post-its recursively (following outgoing connections)
