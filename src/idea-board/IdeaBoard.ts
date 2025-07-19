@@ -2590,7 +2590,22 @@ export class IdeaBoard {
       }
     }
     
-    console.log(`📝 Parsed ${continuations.length} continuations from AI response (expected ${expectedCount})`);
+    console.log(`📝 Parsed ${continuations.length} continuations from AI response (expected ${expectedCount === 0 ? 'any number' : expectedCount})`);
+    
+    // If expectedCount is 0, it means "free mode" - return all found continuations
+    if (expectedCount === 0) {
+      if (continuations.length === 0) {
+        console.warn('⚠️ No continuations found with expected markers. Using fallback parsing.');
+        // Fallback: split by double newlines and take non-empty parts
+        const fallbackContinuations = content
+          .split(/\n\s*\n/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        
+        return fallbackContinuations.length > 0 ? fallbackContinuations : ['Generated continuation content unavailable'];
+      }
+      return continuations;
+    }
     
     // If we don't have the expected number of continuations, handle the mismatch
     if (continuations.length === 0) {
