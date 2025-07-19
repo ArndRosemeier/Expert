@@ -679,12 +679,13 @@ export class IdeaBoard {
    */
   private deleteSingleElement(element: BoardElement): void {
     if (element instanceof PostItNote) {
-      // Start deletion animation
+      // Start deletion animation (connections removed immediately, then animation)
       this.startDeletionAnimation([element.id], () => {
         this.performActualDeletion([element]);
       });
     } else {
-      // Non-PostIt elements don't get animation
+      // Non-PostIt elements don't get animation, remove connections and delete immediately
+      this.removeAllConnectionsForElement(element.id);
       this.performActualDeletion([element]);
     }
   }
@@ -710,10 +711,7 @@ export class IdeaBoard {
   private performActualDeletion(elementsToDelete: BoardElement[]): void {
     console.log(`🗑️ Performing actual deletion of ${elementsToDelete.length} elements`);
     
-    // Remove all connections involving any of these elements
-    for (const elementToDelete of elementsToDelete) {
-      this.removeAllConnectionsForElement(elementToDelete.id);
-    }
+    // Note: Connections were already removed when animation started for immediate visual feedback
     
     // Remove all elements from collections
     for (const elementToDelete of elementsToDelete) {
@@ -1979,6 +1977,12 @@ export class IdeaBoard {
    * Start deletion animation for one or more post-its
    */
   private startDeletionAnimation(postItIds: string[], onComplete: () => void): void {
+    // Immediately remove all connections involving these elements for visual feedback
+    console.log(`🔗 Immediately removing connections for ${postItIds.length} elements before animation`);
+    for (const postItId of postItIds) {
+      this.removeAllConnectionsForElement(postItId);
+    }
+    
     this.deletionAnimation = {
       isActive: true,
       postItIds: [...postItIds],
