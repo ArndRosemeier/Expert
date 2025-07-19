@@ -1697,38 +1697,6 @@ export function renderNodeDetails() {
                 <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
             </div>
-                
-                <!-- Progress Container (prominent, initially hidden) positioned directly below title -->
-                <div id="generation-progress-container" style="display: none; margin-top: 0.5rem;">
-                    <div class="progress-tier" style="margin-bottom: 0.25rem;">
-                        <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: left;"></div>
-                        <div class="progress-bar-wrapper" style="height: 20px;">
-                            <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
-            </div>
-        </div>
-
-                    <!-- Sub-progress bars -->
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
-                        <div class="progress-tier" style="flex: 1;">
-                            <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
-                            <div class="progress-bar-wrapper" style="height: 16px;">
-                                <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
-                </div>
-            </div>
-                        
-                        <div class="progress-tier" style="flex: 1;">
-                            <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
-                            <div class="progress-bar-wrapper" style="height: 16px;">
-                                <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
-                    </div>
-                
-                <!-- Template info positioned below progress indicators -->
-                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin-top: 0.5rem;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
                     </div>
                     
             <!-- Right Side: Generation Controls -->
@@ -1873,6 +1841,38 @@ export function renderNodeDetails() {
                         </div>
                     </div>
                 </div>
+                
+                <!-- Progress Container positioned below header grid -->
+                <div id="generation-progress-container" style="display: none; margin: 0.75rem 0;">
+                    <div class="progress-tier" style="margin-bottom: 0.25rem;">
+                        <div id="progress-text-operations" style="font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.2rem; text-align: left;"></div>
+                        <div class="progress-bar-wrapper" style="height: 20px;">
+                            <div id="progress-bar-operations" class="progress-bar" style="width: 0%;"></div>
+            </div>
+        </div>
+
+                    <!-- Sub-progress bars -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                        <div class="progress-tier" style="flex: 1;">
+                            <div id="progress-text-iterations" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                            <div class="progress-bar-wrapper" style="height: 16px;">
+                                <div id="progress-bar-iterations" class="progress-bar" style="width: 0%;"></div>
+                </div>
+            </div>
+                        
+                        <div class="progress-tier" style="flex: 1;">
+                            <div id="progress-text-stages" style="font-size: 0.65rem; color: #6b7280; margin-bottom: 0.1rem; text-align: center;"></div>
+                            <div class="progress-bar-wrapper" style="height: 16px;">
+                                <div id="progress-bar-stages" class="progress-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="progress-text-detail" style="font-style: italic; color: #6b7280; font-size: 0.6rem; margin-top: 0.25rem; text-align: left;"></div>
+                    </div>
+                
+                <!-- Template info positioned below progress indicators -->
+                ${node.level === 0 ? `<div class="template-info" style="font-size: 0.9rem; color: #6c757d; margin: 0.5rem 0;">Template: <strong>${projectManager.template.name}</strong></div>` : ''}
                 
                 <!-- Actions dropdown positioned below header, bottom left of container -->
                 <div style="margin: 1rem 0 0.5rem 0;">
