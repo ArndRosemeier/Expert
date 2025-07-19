@@ -447,6 +447,16 @@ export class IdeaBoard {
 
       // Handle drag end
       if (this.draggedElement) {
+        // Check for merge opportunity if dropping a post-it on another post-it
+        if (this.draggedElement instanceof PostItNote && !(this.draggedElement instanceof BackgroundRectangle)) {
+          const worldPoint = this.viewport.screenToWorld(point.x, point.y);
+          const targetPostIt = this.findPostItAtPoint(worldPoint, this.draggedElement);
+          
+          if (targetPostIt) {
+            this.handlePostItMerge(this.draggedElement, targetPostIt);
+          }
+        }
+        
         // Clean up hierarchical drag state
         this.cleanupHierarchicalDrag();
         
@@ -2908,6 +2918,102 @@ export class IdeaBoard {
   private cleanupBackgroundRectGroupMovement(): void {
     this.containedPostIts = [];
     this.containedPostItOffsets.clear();
+  }
+
+  /**
+   * Find a post-it note at the given world point, excluding the specified element and its descendants
+   */
+  private findPostItAtPoint(worldPoint: Point, excludeElement: PostItNote): PostItNote | null {
+    // Get all elements that should be excluded (dragged element + its descendants)
+    const excludedIds = new Set<string>();
+    excludedIds.add(excludeElement.id);
+    
+    // Add all descendants to exclusion list
+    for (const descendant of this.draggedDescendants) {
+      excludedIds.add(descendant.id);
+    }
+
+    // Test elements in reverse order (top to bottom) to find the topmost element
+    const elementsArray = Array.from(this.elements.values());
+    for (let i = elementsArray.length - 1; i >= 0; i--) {
+      const element = elementsArray[i];
+      
+      // Only check PostItNotes (excluding BackgroundRectangles) that aren't in the exclusion list
+      if (element instanceof PostItNote && 
+          !(element instanceof BackgroundRectangle) && 
+          !excludedIds.has(element.id) &&
+          element.hitTest(worldPoint)) {
+        return element;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Handle merging a dragged post-it into a target post-it
+   */
+  private handlePostItMerge(draggedPostIt: PostItNote, targetPostIt: PostItNote): void {
+    // Don't merge if either post-it has no content
+    if (!draggedPostIt.content.trim() && !targetPostIt.content.trim()) {
+      return;
+    }
+
+    const draggedContent = draggedPostIt.content.trim();
+    const targetContent = targetPostIt.content.trim();
+    
+    // Create preview of merged content
+    let mergedContent = '';
+    if (targetContent && draggedContent) {
+      mergedContent = `${targetContent}\n\n${draggedContent}`;
+    } else if (targetContent) {
+      mergedContent = targetContent;
+    } else {
+      mergedContent = draggedContent;
+    }
+
+    // Show confirmation dialog with preview
+    const userConfirmed = confirm(
+      `🔗 Merge Post-its\n\n` +
+      `Do you want to append the dragged post-it content to the target post-it?\n\n` +
+      `Target post-it content:\n"${targetContent || '(empty)'}"\n\n` +
+      `Dragged post-it content:\n"${draggedContent || '(empty)'}"\n\n` +
+      `Result will be:\n"${mergedContent}"\n\n` +
+      `The dragged post-it will be removed after merging.`
+    );
+
+    if (!userConfirmed) {
+      console.log('📝 Post-it merge cancelled by user.');
+      return;
+    }
+
+    // Perform the merge
+    targetPostIt.content = mergedContent;
+    this.updateElementData(targetPostIt);
+
+    // Delete the dragged post-it and all its descendants
+    const elementsToDelete = [draggedPostIt.id, ...this.draggedDescendants.map(d => d.id)];
+    
+    for (const elementId of elementsToDelete) {
+      // Remove all connections for this element
+      this.removeAllConnectionsForElement(elementId);
+      
+      // Remove the element itself
+      this.elements.delete(elementId);
+      
+      // Remove from board state
+      const elementIndex = this.boardState.elements.findIndex(e => e.id === elementId);
+      if (elementIndex >= 0) {
+        this.boardState.elements.splice(elementIndex, 1);
+      }
+    }
+
+    // Select the target post-it to show the result
+    this.selectElement(targetPostIt);
+    this.requestRedraw();
+    this.autoSave();
+
+    console.log(`📝 Successfully merged ${elementsToDelete.length} element(s) into target post-it.`);
   }
 
   /**
