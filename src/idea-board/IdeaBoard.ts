@@ -1348,7 +1348,21 @@ export class IdeaBoard {
     // Draw grid
     this.drawGrid();
 
-    // Draw connections first (behind post-its)
+    // Draw all elements with proper layering (background rectangles first, then connections, then post-its)
+    const elements = Array.from(this.elements.values());
+    const backgroundRectangles = elements.filter(element => element instanceof BackgroundRectangle);
+    const postItNotes = elements.filter(element => element instanceof PostItNote);
+    
+    // Draw background rectangles first (bottom layer)
+    for (const element of backgroundRectangles) {
+      // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
+      if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
+        continue;
+      }
+      element.render(this.context, this.viewport);
+    }
+
+    // Draw connections on top of background rectangles but below post-its (middle layer)
     for (const connection of this.connections.values()) {
       const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
       const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
@@ -1362,22 +1376,8 @@ export class IdeaBoard {
     if (this.isConnecting && this.connectionStart && this.dragConnectionEnd) {
       this.renderConnectionPreview();
     }
-
-    // Draw all elements with proper layering (background rectangles first, then post-its)
-    const elements = Array.from(this.elements.values());
-    const backgroundRectangles = elements.filter(element => element instanceof BackgroundRectangle);
-    const postItNotes = elements.filter(element => element instanceof PostItNote);
     
-    // Draw background rectangles first (behind everything else)
-    for (const element of backgroundRectangles) {
-      // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
-      if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
-        continue;
-      }
-      element.render(this.context, this.viewport);
-    }
-    
-    // Draw post-it notes on top
+    // Draw post-it notes on top (top layer)
     for (const element of postItNotes) {
       // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
       if (this.deletionAnimation.isActive && this.deletionAnimation.postItIds.includes(element.id)) {
