@@ -1398,6 +1398,9 @@ export function renderNodeDetails() {
             }
             .header-left {
                 min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0;
             }
             .header-right {
                 display: flex;
