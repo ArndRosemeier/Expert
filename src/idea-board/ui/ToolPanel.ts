@@ -106,8 +106,8 @@ export class ToolPanel {
       this.config.onSummarize();
     });
 
-    // Expand button
-    const expandBtn = this.createToolButton('🔄', 'Expand', () => {
+    // Continue button
+    const continueBtn = this.createToolButton('🔄', 'Continue', () => {
       this.config.onExpand();
     });
 
@@ -134,7 +134,7 @@ export class ToolPanel {
     this.container.appendChild(colorBtn);
     this.container.appendChild(searchBtn);
     this.container.appendChild(summarizeBtn);
-    this.container.appendChild(expandBtn);
+    this.container.appendChild(continueBtn);
     this.container.appendChild(ideasBtn);
     this.container.appendChild(exportBtn);
     this.container.appendChild(clearBtn);

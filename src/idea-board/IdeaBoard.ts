@@ -112,7 +112,7 @@ export class IdeaBoard {
         this.summarizeSelectedPostIt();
       },
       onExpand: () => {
-        this.expandSelectedPostIt();
+        this.continueSelectedPostIt();
       },
       onGenerateIdeas: () => {
         this.generateIdeasForSelectedPostIt();
@@ -2325,11 +2325,11 @@ export class IdeaBoard {
   }
 
   /**
-   * Expand the content of the currently selected post-it note and distribute to child post-its (outgoing connections)
+   * Continue the content of the currently selected post-it note and distribute to child post-its (outgoing connections)
    */
-  private async expandSelectedPostIt(): Promise<void> {
+  private async continueSelectedPostIt(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('❌ No post-it note selected. Please select a post-it to expand.');
+      console.log('❌ No post-it note selected. Please select a post-it to continue.');
       return;
     }
 
@@ -2338,12 +2338,12 @@ export class IdeaBoard {
     const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
     
     if (childPostIts.length === 0) {
-      console.log('❌ No child post-its found. Please connect other post-its as children (outgoing connections) to use expansion.');
+      console.log('❌ No child post-its found. Please connect other post-its as children (outgoing connections) to use continuation.');
       return;
     }
 
     if (!originalContent.trim()) {
-      console.log('❌ The selected post-it has no content to expand.');
+      console.log('❌ The selected post-it has no content to continue.');
       return;
     }
 
@@ -2352,16 +2352,16 @@ export class IdeaBoard {
     if (postItsWithContent.length > 0) {
       const userConfirmed = confirm(
         `⚠️ Warning: ${postItsWithContent.length} child post-it(s) contain content.\n\n` +
-        'Expanding will replace all content in the child post-its with expanded sections.\n\n' +
+        'Continuing will replace all content in the child post-its with different continuations.\n\n' +
         'Do you want to continue and replace the existing content?'
       );
       
       if (!userConfirmed) {
-        console.log('📝 Expansion cancelled by user to preserve existing content.');
+        console.log('📝 Continuation cancelled by user to preserve existing content.');
         return;
       }
       
-      console.log('✅ User confirmed to proceed with expansion, replacing existing content.');
+      console.log('✅ User confirmed to proceed with continuation, replacing existing content.');
     }
 
     // Store original content for error recovery (outside try block for scope)
@@ -2379,14 +2379,14 @@ export class IdeaBoard {
         return;
       }
 
-      console.log(`🔄 Expanding content to ${childPostIts.length} child post-its...`);
+      console.log(`🔄 Continuing content to ${childPostIts.length} child post-its...`);
 
       // Start connection animations to show data flow
       this.startOutgoingConnectionAnimations(selectedPostIt.id);
 
       // Show working indicators in all target post-its
       for (const postIt of childPostIts) {
-        postIt.content = `🔄 Expanding content...\n\nReceiving expanded section from main post-it.`;
+        postIt.content = `🔄 Continuing content...\n\nReceiving continuation from main post-it.`;
         this.updateElementData(postIt);
       }
       this.requestRedraw();
@@ -2399,40 +2399,40 @@ export class IdeaBoard {
       const promptContext = {
         node: {
           content: originalContent.trim(),
-          title: 'Post-it Content to Expand',
+          title: 'Post-it Content to Continue',
           isLeaf: true
         },
         project: {
           language: settingsManager.getLanguage(),
-          criteria: [] // Not needed for expansion
+          criteria: [] // Not needed for continuation
         },
         custom: {
           expand_count: childPostIts.length.toString()
         }
       };
       
-      const expandPrompt = expansionService.expandPrompt(prompts.expand_system, promptContext);
+      const continuePrompt = expansionService.expandPrompt(prompts.expand_system, promptContext);
 
-      // Use OpenRouterClient to get expanded content
+      // Use OpenRouterClient to get continued content
       const client = OpenRouterClient.getInstance();
       client.setSettingsManager(settingsManager);
-      const expandedContent = await client.chat(this.selectedModelPurpose, expandPrompt);
+      const continuedContent = await client.chat(this.selectedModelPurpose, continuePrompt);
 
-      // Parse the expanded content into sections
-      const sections = this.parseExpandedSections(expandedContent, childPostIts.length);
+      // Parse the continued content into continuations
+      const continuations = this.parseContinuations(continuedContent, childPostIts.length);
 
-      if (sections.length !== childPostIts.length) {
-        console.warn(`⚠️ Expected ${childPostIts.length} sections but got ${sections.length}. Adjusting distribution.`);
+      if (continuations.length !== childPostIts.length) {
+        console.warn(`⚠️ Expected ${childPostIts.length} continuations but got ${continuations.length}. Adjusting distribution.`);
       }
 
-      // Distribute sections to child post-its
+      // Distribute continuations to child post-its
       for (let i = 0; i < childPostIts.length; i++) {
         const postIt = childPostIts[i];
         if (!postIt) continue; // Skip if postIt is undefined
         
-        const section = sections[i] || `Section ${i + 1}: (Content unavailable)`;
+        const continuation = continuations[i] || `Continuation ${i + 1}: (Content unavailable)`;
         
-        postIt.content = section.trim();
+        postIt.content = continuation.trim();
         this.updateElementData(postIt);
       }
 
@@ -2442,11 +2442,11 @@ export class IdeaBoard {
       // Stop connection animations
       this.stopConnectionAnimations(selectedPostIt.id);
 
-      console.log(`✅ Successfully expanded content to ${childPostIts.length} child post-its.`);
+      console.log(`✅ Successfully continued content to ${childPostIts.length} child post-its.`);
       
     } catch (error) {
-      console.error('❌ Failed to expand post-it content:', error);
-      console.log('❌ Expansion failed. Please check your API key and try again.');
+      console.error('❌ Failed to continue post-it content:', error);
+      console.log('❌ Continuation failed. Please check your API key and try again.');
       
       // Stop connection animations on error
       this.stopConnectionAnimations(selectedPostIt.id);
@@ -2465,57 +2465,57 @@ export class IdeaBoard {
   }
 
   /**
-   * Parse expanded content into sections using precise section markers
+   * Parse continued content into continuations using precise continuation markers
    */
-  private parseExpandedSections(content: string, expectedCount: number): string[] {
-    const sections: string[] = [];
+  private parseContinuations(content: string, expectedCount: number): string[] {
+    const continuations: string[] = [];
     
-    // Use regex to find content between section markers
-    const sectionRegex = /=== SECTION START ===([\s\S]*?)=== SECTION END ===/g;
+    // Use regex to find content between continuation markers
+    const continuationRegex = /=== CONTINUATION START ===([\s\S]*?)=== CONTINUATION END ===/g;
     let match;
     
-    while ((match = sectionRegex.exec(content)) !== null) {
-      const sectionContent = match[1]?.trim();
-      if (sectionContent) {
-        sections.push(sectionContent);
+    while ((match = continuationRegex.exec(content)) !== null) {
+      const continuationContent = match[1]?.trim();
+      if (continuationContent) {
+        continuations.push(continuationContent);
       }
     }
     
-    console.log(`📝 Parsed ${sections.length} sections from AI response (expected ${expectedCount})`);
+    console.log(`📝 Parsed ${continuations.length} continuations from AI response (expected ${expectedCount})`);
     
-    // If we don't have the expected number of sections, handle the mismatch
-    if (sections.length === 0) {
-      console.warn('⚠️ No sections found with expected markers. Using fallback parsing.');
+    // If we don't have the expected number of continuations, handle the mismatch
+    if (continuations.length === 0) {
+      console.warn('⚠️ No continuations found with expected markers. Using fallback parsing.');
       // Fallback: split by double newlines and take first N non-empty parts
-      const fallbackSections = content
+      const fallbackContinuations = content
         .split(/\n\s*\n/)
         .map(s => s.trim())
         .filter(s => s.length > 0)
         .slice(0, expectedCount);
       
-      // Pad if not enough sections
-      while (fallbackSections.length < expectedCount) {
-        fallbackSections.push(`Section ${fallbackSections.length + 1}: Content parsing failed`);
+      // Pad if not enough continuations
+      while (fallbackContinuations.length < expectedCount) {
+        fallbackContinuations.push(`Continuation ${fallbackContinuations.length + 1}: Content parsing failed`);
       }
       
-      return fallbackSections;
+      return fallbackContinuations;
     }
     
-    // If we have fewer sections than expected, pad with error messages
-    if (sections.length < expectedCount) {
-      console.warn(`⚠️ Got ${sections.length} sections but expected ${expectedCount}. Padding with error messages.`);
-      while (sections.length < expectedCount) {
-        sections.push(`Section ${sections.length + 1}: Content generation incomplete`);
+    // If we have fewer continuations than expected, pad with error messages
+    if (continuations.length < expectedCount) {
+      console.warn(`⚠️ Got ${continuations.length} continuations but expected ${expectedCount}. Padding with error messages.`);
+      while (continuations.length < expectedCount) {
+        continuations.push(`Continuation ${continuations.length + 1}: Content generation incomplete`);
       }
     }
     
-    // If we have more sections than expected, truncate
-    if (sections.length > expectedCount) {
-      console.warn(`⚠️ Got ${sections.length} sections but expected ${expectedCount}. Truncating excess sections.`);
-      sections.splice(expectedCount);
+    // If we have more continuations than expected, truncate
+    if (continuations.length > expectedCount) {
+      console.warn(`⚠️ Got ${continuations.length} continuations but expected ${expectedCount}. Truncating excess continuations.`);
+      continuations.splice(expectedCount);
     }
     
-    return sections;
+    return continuations;
   }
 
   /**

@@ -169,36 +169,36 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
     expand_system: {
         text: `
-            Generate expanded content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            Generate continued content in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
-            You are an expert at expanding and elaborating on content. Take the following content and expand it into exactly {{expand_count}} distinct, well-developed sections.
+            You are an expert at continuing and developing written content. Take the following content and continue it in exactly {{expand_count}} different ways, each building naturally from where the original content left off.
 
-            Original content to expand:
+            Original content to continue:
             ---
             {{content}}
             ---
 
             CRITICAL FORMAT REQUIREMENTS:
-            1. Create exactly {{expand_count}} sections
-            2. Each section must start with the exact marker: "=== SECTION START ==="
-            3. Each section must end with the exact marker: "=== SECTION END ==="
-            4. Put substantial, detailed content between the markers
-            5. Make each section unique and complementary to the others
-            6. Maintain the overall theme and intent of the original content
-            7. Do NOT include any text outside the section markers
+            1. Create exactly {{expand_count}} continuations
+            2. Each continuation must start with the exact marker: "=== CONTINUATION START ==="
+            3. Each continuation must end with the exact marker: "=== CONTINUATION END ==="
+            4. Put substantial, detailed content between the markers that continues naturally from the original
+            5. Make each continuation explore different directions or aspects while maintaining the original style and voice
+            6. Each continuation should pick up where the original content ended and flow seamlessly
+            7. Do NOT include any text outside the continuation markers
 
             EXACT FORMAT EXAMPLE:
-            === SECTION START ===
-            [Detailed content for first section goes here]
-            === SECTION END ===
-            === SECTION START ===
-            [Detailed content for second section goes here]
-            === SECTION END ===
+            === CONTINUATION START ===
+            [Natural continuation of the original content, building from where it left off]
+            === CONTINUATION END ===
+            === CONTINUATION START ===
+            [Alternative continuation exploring a different direction or aspect]
+            === CONTINUATION END ===
 
-            Generate exactly {{expand_count}} sections following this format precisely.
+            Generate exactly {{expand_count}} continuations following this format precisely.
         `.trim(),
         placeholders: ['content', 'language', 'expand_count'],
-        description: "The system prompt for expanding content into multiple sections with precise formatting markers for reliable parsing."
+        description: "The system prompt for continuing content in multiple different ways with precise formatting markers for reliable parsing."
     },
 
     idea_generation_system: {
