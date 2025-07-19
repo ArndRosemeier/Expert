@@ -48,6 +48,9 @@ export class IdeaBoard {
   private connectionStart: { postIt: PostItNote; side: 'top' | 'right' | 'bottom' | 'left' } | null = null;
   private dragConnectionEnd: Point | null = null;
   
+  // Mouse position tracking for context-aware operations
+  private lastMousePosition: Point | null = null;
+  
   // Rendering
   private animationFrameId: number | null = null;
   private needsRedraw: boolean = true;
@@ -334,6 +337,9 @@ export class IdeaBoard {
 
     this.inputManager.on('onMouseMove', (point) => {
       const worldPoint = this.viewport.screenToWorld(point.x, point.y);
+      
+      // Track mouse position for context-aware operations like paste
+      this.lastMousePosition = worldPoint;
 
       // Handle connection dragging
       if (this.isConnecting) {
@@ -455,6 +461,16 @@ export class IdeaBoard {
     this.canvas.addEventListener('contextmenu', (event) => {
       event.preventDefault();
       this.handleContextMenu(event);
+    });
+
+    // Track mouse position when entering canvas area
+    this.canvas.addEventListener('mouseenter', (event) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const screenPoint = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+      this.lastMousePosition = this.viewport.screenToWorld(screenPoint.x, screenPoint.y);
     });
   }
 
@@ -586,17 +602,28 @@ export class IdeaBoard {
       return;
     }
 
-    // Create new post-it at center of viewport or offset from last paste
-    const viewportCenter = this.viewport.screenToWorld(this.viewport.width / 2, this.viewport.height / 2);
+    // Create new post-it at mouse position if available, otherwise center of viewport
+    let basePosition: Point;
+    
+    if (this.lastMousePosition) {
+      // Use current mouse position for intuitive pasting
+      basePosition = { ...this.lastMousePosition };
+      console.log('📋 Pasting at mouse position');
+    } else {
+      // Fallback to viewport center if no mouse position tracked
+      basePosition = this.viewport.screenToWorld(this.viewport.width / 2, this.viewport.height / 2);
+      console.log('📋 Pasting at viewport center (no mouse position available)');
+    }
+    
     const pasteOffset = 20; // Offset each paste by 20 pixels
     
-    // Add some randomness to avoid exact overlap
+    // Add some randomness to avoid exact overlap when pasting multiple times
     const offsetX = (Math.random() - 0.5) * pasteOffset;
     const offsetY = (Math.random() - 0.5) * pasteOffset;
     
     const pastePosition = {
-      x: viewportCenter.x + offsetX,
-      y: viewportCenter.y + offsetY
+      x: basePosition.x + offsetX,
+      y: basePosition.y + offsetY
     };
 
     // Create new post-it with clipboard data
