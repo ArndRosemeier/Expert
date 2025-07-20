@@ -24,6 +24,8 @@ interface ToolPanelConfig {
   onGenerateIdeas: () => void;
   onTransform: () => void;
   onExportMarkdown: () => void;
+  onExportJson: () => void;
+  onImportJson: () => void;
   onClearAll: () => void;
   onModelChange: (modelPurpose: string) => void;
 }
@@ -129,10 +131,8 @@ export class ToolPanel {
       this.config.onTransform();
     });
 
-    // Export as Markdown button
-    const exportBtn = this.createToolButton('📁', 'Export as Markdown', () => {
-      this.config.onExportMarkdown();
-    });
+    // Export/Import dropdown
+    const exportDropdown = this.createExportDropdown();
 
     // Clear All button
     const clearBtn = this.createToolButton('🗑️', 'Clear All', () => {
@@ -151,7 +151,7 @@ export class ToolPanel {
     this.container.appendChild(continueBtn);
     this.container.appendChild(ideasBtn);
     this.container.appendChild(transformBtn);
-    this.container.appendChild(exportBtn);
+    this.container.appendChild(exportDropdown);
     this.container.appendChild(clearBtn);
     this.container.appendChild(modelDropdown);
   }
@@ -185,6 +185,107 @@ export class ToolPanel {
 
     button.addEventListener('click', onClick);
     return button;
+  }
+
+  private createExportDropdown(): HTMLElement {
+    const container = document.createElement('div');
+    container.style.cssText = `
+      position: relative;
+      display: inline-block;
+    `;
+
+    const button = document.createElement('button');
+    button.innerHTML = '📁';
+    button.title = 'Export/Import';
+    button.style.cssText = `
+      background: none;
+      border: none;
+      font-size: 18px;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+    `;
+
+    const dropdown = document.createElement('div');
+    dropdown.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 10002;
+      min-width: 180px;
+      display: none;
+      overflow: hidden;
+    `;
+
+    const options = [
+      { text: 'Export as Markdown', icon: '📄', action: () => this.config.onExportMarkdown() },
+      { text: 'Export as JSON', icon: '📦', action: () => this.config.onExportJson() },
+      { text: 'Import from JSON', icon: '📥', action: () => this.config.onImportJson() }
+    ];
+
+    options.forEach((option, index) => {
+      const optionElement = document.createElement('div');
+      optionElement.style.cssText = `
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        transition: background-color 0.2s ease;
+        ${index < options.length - 1 ? 'border-bottom: 1px solid #eee;' : ''}
+      `;
+
+      optionElement.innerHTML = `<span>${option.icon}</span><span>${option.text}</span>`;
+
+      optionElement.addEventListener('mouseenter', () => {
+        optionElement.style.backgroundColor = '#f5f5f5';
+      });
+
+      optionElement.addEventListener('mouseleave', () => {
+        optionElement.style.backgroundColor = 'transparent';
+      });
+
+      optionElement.addEventListener('click', () => {
+        dropdown.style.display = 'none';
+        option.action();
+      });
+
+      dropdown.appendChild(optionElement);
+    });
+
+    button.addEventListener('mouseenter', () => {
+      button.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.backgroundColor = 'transparent';
+    });
+
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = dropdown.style.display === 'block';
+      dropdown.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+    });
+
+    container.appendChild(button);
+    container.appendChild(dropdown);
+    return container;
   }
 
   private toggleColorPicker(): void {

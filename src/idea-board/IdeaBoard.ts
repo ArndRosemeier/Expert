@@ -149,6 +149,12 @@ export class IdeaBoard {
       onExportMarkdown: () => {
         this.exportAsMarkdown();
       },
+      onExportJson: () => {
+        this.exportAsJson();
+      },
+      onImportJson: () => {
+        this.importFromJson();
+      },
       onClearAll: () => {
         this.clearAll();
       },
@@ -1252,6 +1258,68 @@ export class IdeaBoard {
     this.requestRedraw();
     console.log(`📂 Loaded board: ${loadedState.name} with ${this.elements.size} elements`);
     return true;
+  }
+
+  /**
+   * Load board from a board state object (used for imports)
+   */
+  private async loadBoardState(boardState: IdeaBoardState): Promise<void> {
+    // Convert dates from strings to Date objects if needed
+    if (typeof boardState.created === 'string') {
+      boardState.created = new Date(boardState.created);
+    }
+    if (typeof boardState.lastModified === 'string') {
+      boardState.lastModified = new Date(boardState.lastModified);
+    }
+
+    // Convert element dates if needed
+    for (const elementData of boardState.elements) {
+      if (typeof elementData.metadata.created === 'string') {
+        elementData.metadata.created = new Date(elementData.metadata.created);
+      }
+      if (typeof elementData.metadata.lastEdited === 'string') {
+        elementData.metadata.lastEdited = new Date(elementData.metadata.lastEdited);
+      }
+    }
+
+    this.boardState = boardState;
+    this.viewport.x = boardState.viewport.x;
+    this.viewport.y = boardState.viewport.y;
+    this.viewport.zoom = boardState.viewport.zoom;
+
+    // Clear existing elements and connections
+    this.elements.clear();
+    this.connections.clear();
+
+    // Recreate elements
+    for (const elementData of boardState.elements) {
+      if (elementData.type === 'post-it') {
+        const postIt = new PostItNote({ x: 0, y: 0 });
+        postIt.deserialize(elementData);
+        this.elements.set(postIt.id, postIt);
+      } else if (elementData.type === 'background-rect') {
+        const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
+        backgroundRect.deserialize(elementData);
+        this.elements.set(backgroundRect.id, backgroundRect);
+      }
+    }
+
+    // Recreate connections
+    for (const connectionData of boardState.connections) {
+      const connection = new Connection(connectionData.fromPostItId, connectionData.fromSide, connectionData.toPostItId, connectionData.toSide);
+      connection.deserialize(connectionData);
+      this.connections.set(connection.id, connection);
+    }
+
+    // Clear any selection state
+    this.selectedElement = null;
+    this.editingElement = null;
+
+    // Auto-save the imported board
+    this.autoSave();
+
+    this.requestRedraw();
+    console.log(`📥 Imported board: ${boardState.name} with ${this.elements.size} elements and ${this.connections.size} connections`);
   }
 
   /**
@@ -3135,6 +3203,164 @@ export class IdeaBoard {
     URL.revokeObjectURL(url);
     
     console.log('✅ Markdown export downloaded');
+  }
+
+  /**
+   * Export the idea board as JSON and download it
+   */
+  private async exportAsJson(): Promise<void> {
+    try {
+      console.log('📦 Generating JSON export...');
+
+      // Update board state with current viewport and elements
+      this.boardState.viewport.x = this.viewport.x;
+      this.boardState.viewport.y = this.viewport.y;
+      this.boardState.viewport.zoom = this.viewport.zoom;
+      this.boardState.elements = Array.from(this.elements.values()).map(element => element.serialize());
+      this.boardState.connections = Array.from(this.connections.values()).map(connection => connection.serialize());
+      this.boardState.metadata.totalElements = this.elements.size;
+      this.boardState.lastModified = new Date();
+
+      // Generate JSON content
+      const jsonContent = JSON.stringify(this.boardState, null, 2);
+
+      // Create blob and download
+      const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
+      
+      // Use the file save dialog
+      if ('showSaveFilePicker' in window) {
+        // Modern browsers with File System Access API
+        try {
+          const fileHandle = await (window as any).showSaveFilePicker({
+            suggestedName: `${this.boardState.name}.json`,
+            types: [{
+              description: 'JSON files',
+              accept: {'application/json': ['.json']},
+            }],
+          });
+          
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          
+          console.log('✅ JSON export saved successfully');
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('Error saving file:', error);
+            // Fallback to download
+            this.downloadJsonFile(blob);
+          }
+        }
+      } else {
+        // Fallback for older browsers
+        this.downloadJsonFile(blob);
+      }
+    } catch (error) {
+      console.error('❌ Failed to export JSON:', error);
+      console.log('❌ Export failed. Please try again.');
+    }
+  }
+
+  /**
+   * Fallback method to download JSON file
+   */
+  private downloadJsonFile(blob: Blob): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${this.boardState.name}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ JSON export downloaded');
+  }
+
+  /**
+   * Import idea board from JSON file
+   */
+  private async importFromJson(): Promise<void> {
+    try {
+      console.log('📥 Opening JSON import...');
+
+      // Create file input element
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.json,application/json';
+      fileInput.style.display = 'none';
+
+      // Handle file selection
+      fileInput.addEventListener('change', async (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) {
+          console.log('❌ No file selected');
+          return;
+        }
+
+        try {
+          const text = await file.text();
+          const importedBoardState = JSON.parse(text) as IdeaBoardState;
+          
+          // Validate the imported data
+          if (!this.validateImportedBoardState(importedBoardState)) {
+            console.error('❌ Invalid board state format');
+            alert('❌ The selected file is not a valid Idea Board JSON file.');
+            return;
+          }
+
+          // Confirm import (this will replace current board)
+          const confirmImport = confirm(
+            `⚠️ Import Idea Board\n\n` +
+            `This will replace the current board with:\n` +
+            `• Board: "${importedBoardState.name}"\n` +
+            `• Elements: ${importedBoardState.elements.length}\n` +
+            `• Connections: ${importedBoardState.connections.length}\n\n` +
+            `Current board data will be lost. Continue?`
+          );
+
+          if (!confirmImport) {
+            console.log('📥 Import cancelled by user');
+            return;
+          }
+
+          // Import the board state
+          await this.loadBoardState(importedBoardState);
+          console.log('✅ Board imported successfully');
+
+        } catch (error) {
+          console.error('❌ Failed to import JSON:', error);
+          alert('❌ Failed to import board. Please check that the file is a valid JSON format.');
+        }
+      });
+
+      // Trigger file selection
+      document.body.appendChild(fileInput);
+      fileInput.click();
+      document.body.removeChild(fileInput);
+
+    } catch (error) {
+      console.error('❌ Failed to open import dialog:', error);
+      console.log('❌ Import failed. Please try again.');
+    }
+  }
+
+  /**
+   * Validate imported board state structure
+   */
+  private validateImportedBoardState(boardState: any): boardState is IdeaBoardState {
+    return (
+      typeof boardState === 'object' &&
+      typeof boardState.id === 'string' &&
+      typeof boardState.name === 'string' &&
+      Array.isArray(boardState.elements) &&
+      Array.isArray(boardState.connections) &&
+      typeof boardState.viewport === 'object' &&
+      typeof boardState.viewport.x === 'number' &&
+      typeof boardState.viewport.y === 'number' &&
+      typeof boardState.viewport.zoom === 'number' &&
+      typeof boardState.metadata === 'object'
+    );
   }
 
   /**
