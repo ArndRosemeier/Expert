@@ -19,6 +19,7 @@ export class ContextItemsEditorModal extends BaseModal {
     private isTransforming = false;
     private compareWithParent: boolean = false;
     private parentNode: DocumentNode | null = null;
+    private originalValues = new Map<number, string>(); // Track original values for propagation
 
     constructor(node: DocumentNode) {
         super({
@@ -524,6 +525,16 @@ export class ContextItemsEditorModal extends BaseModal {
             // Auto-resize on load
             this.autoResizeTextarea(textareaElement);
             
+            // Store original value when editing starts
+            addEventListenerWithCleanup(
+                textarea,
+                'focus',
+                (e) => {
+                    this.handleItemFocus(e);
+                },
+                this.cleanupHandlers
+            );
+            
             addEventListenerWithCleanup(
                 textarea,
                 'blur',
@@ -587,9 +598,31 @@ export class ContextItemsEditorModal extends BaseModal {
         textarea.style.height = newHeight + 'px';
     }
 
+    private handleItemFocus(e: Event): void {
+        const textarea = e.target as HTMLTextAreaElement;
+        const indexStr = textarea.dataset['index'];
+        if (!indexStr) return;
+        
+        const index = parseInt(indexStr);
+        
+        // Safety check: don't track parent items or invalid indices
+        if (index < 0 || index >= this.contextItems.length) {
+            return;
+        }
+        
+        const originalValue = this.contextItems[index];
+        if (originalValue !== undefined) {
+            // Store the original value before any edits
+            this.originalValues.set(index, originalValue);
+        }
+    }
+
     private handleItemChange(e: Event): void {
         const textarea = e.target as HTMLTextAreaElement;
-        const index = parseInt(textarea.dataset['index'] || '0');
+        const indexStr = textarea.dataset['index'];
+        if (!indexStr) return;
+        
+        const index = parseInt(indexStr);
         const value = textarea.value;
         
         // Safety check: don't allow changes to parent items or invalid indices
@@ -620,13 +653,19 @@ export class ContextItemsEditorModal extends BaseModal {
         this.contextItems[index] = value;
         this.isDirty = true;
         
+        // Check for propagation to descendants
+        this.checkAndOfferPropagation(index, value);
+        
         // Immediately update the node context
         this.updateNodeContext();
     }
 
     private handleRemoveItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
-        const index = parseInt(button.dataset['index'] || '0');
+        const indexStr = button.dataset['index'];
+        if (!indexStr) return;
+        
+        const index = parseInt(indexStr);
         
         // Safety check: don't allow removal of parent items or invalid indices
         if (index < 0 || index >= this.contextItems.length) {
@@ -649,7 +688,10 @@ export class ContextItemsEditorModal extends BaseModal {
 
     private handlePropagateItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
-        const index = parseInt(button.dataset['index'] || '0');
+        const indexStr = button.dataset['index'];
+        if (!indexStr) return;
+        
+        const index = parseInt(indexStr);
         
         // Safety check: don't allow propagation of parent items or invalid indices
         if (index < 0 || index >= this.contextItems.length) {
@@ -681,7 +723,10 @@ export class ContextItemsEditorModal extends BaseModal {
 
     private handleRemoveRecursivelyItem(e: Event): void {
         const button = e.target as HTMLButtonElement;
-        const index = parseInt(button.dataset['index'] || '0');
+        const indexStr = button.dataset['index'];
+        if (!indexStr) return;
+        
+        const index = parseInt(indexStr);
         
         // Safety check: don't allow removal of parent items or invalid indices
         if (index < 0 || index >= this.contextItems.length) {
@@ -957,6 +1002,106 @@ export class ContextItemsEditorModal extends BaseModal {
                 }, 10);
             }
         }
+    }
+
+    /**
+     * Check if edit should propagate to descendants and offer user the choice
+     */
+    private checkAndOfferPropagation(index: number, newValue: string): void {
+        // Get the original value that was stored when editing started
+        const originalValue = this.originalValues.get(index);
+        if (!originalValue || originalValue === newValue) {
+            return; // No change or no original value tracked
+        }
+        
+        // Find all descendant nodes that have the same original context item
+        const descendantsWithOriginal = this.findDescendantsWithContextItem(originalValue);
+        
+        if (descendantsWithOriginal.length === 0) {
+            return; // No descendants to propagate to
+        }
+        
+        // Ask user if they want to propagate the change
+        const confirmMessage = `Found ${descendantsWithOriginal.length} descendant node(s) with the same context item.\n\nDo you want to propagate this edit to all descendant nodes?\n\nOriginal: "${originalValue.substring(0, 100)}${originalValue.length > 100 ? '...' : ''}"\nEdited: "${newValue.substring(0, 100)}${newValue.length > 100 ? '...' : ''}"`;
+        
+        if (confirm(confirmMessage)) {
+            // Propagate the change to all descendants
+            const updatedCount = this.propagateContextItemChange(originalValue, newValue, descendantsWithOriginal);
+            
+            if (updatedCount > 0) {
+                alert(`Context item updated in ${updatedCount} descendant node(s).`);
+            }
+        }
+        
+        // Clear the original value since we've processed this edit
+        this.originalValues.delete(index);
+    }
+
+    /**
+     * Find all descendant nodes that contain the specified context item
+     */
+    private findDescendantsWithContextItem(contextItem: string): DocumentNode[] {
+        const results: DocumentNode[] = [];
+        const trimmedItem = contextItem.trim();
+        
+        const searchRecursively = (node: DocumentNode) => {
+            for (const child of node.children) {
+                // Check if this child has the context item
+                if (child.context) {
+                    const childContextItems = getContextItems(child.context);
+                    if (childContextItems.some(item => item.trim() === trimmedItem)) {
+                        results.push(child);
+                    }
+                }
+                
+                // Recursively search in grandchildren
+                searchRecursively(child);
+            }
+        };
+        
+        searchRecursively(this.node);
+        return results;
+    }
+
+    /**
+     * Propagate context item change to specified descendant nodes
+     */
+    private propagateContextItemChange(originalValue: string, newValue: string, descendants: DocumentNode[]): number {
+        let updatedCount = 0;
+        const trimmedOriginal = originalValue.trim();
+        
+        for (const descendant of descendants) {
+            if (!descendant.context) continue;
+            
+            const contextItems = getContextItems(descendant.context);
+            let hasChanged = false;
+            
+            // Replace matching context items
+            const updatedItems = contextItems.map(item => {
+                if (item.trim() === trimmedOriginal) {
+                    hasChanged = true;
+                    return newValue; // Use the exact new value (with original formatting)
+                }
+                return item;
+            });
+            
+            if (hasChanged) {
+                // Update the node's context
+                const newContext = formatContextItems(updatedItems);
+                descendant.setContextWithTags(newContext, ['edited', 'context_edited', 'context_propagated']);
+                updatedCount++;
+            }
+        }
+        
+        // Save changes to storage
+        void import('../../state').then(({ getActiveProject }) => {
+            const project = getActiveProject();
+            if (project) {
+                void project.saveToStorage();
+            }
+        });
+        
+        return updatedCount;
     }
 
     /**
