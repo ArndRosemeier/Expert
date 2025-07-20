@@ -145,7 +145,8 @@ The interface is organized into three main sections:
 - Node details and editing interface
 - Content generation controls
 - Version management
-- Quality ratings display
+- Quality ratings display (shows ratings from currently selected version)
+- Historical ratings accessible through version management
 
 **3. Context Panel (Bottom)**
 - Inherited context display
@@ -252,7 +253,7 @@ Book Project Template:
 
 1. **Draft Level**: Deepest level for which child nodes are created
 2. **Content Level**: Which levels receive AI-generated content (≤ Draft Level)
-3. **Context Prune Level**: Which levels get automatic context cleanup
+3. **Context Prune Level**: Which levels get automatic context cleanup (works on master versions directly)
 4. **Coherence Level**: Which levels get consistency checking (< Draft Level)
 
 **Example Configuration:**
@@ -334,10 +335,12 @@ The system automatically chooses between Creator and Prose models based on node 
 2. System compiles context from hierarchy
 3. Creator generates initial content
 4. Rater evaluates against quality criteria
-5. If scores below goals: Editor provides feedback
-6. Creator regenerates with feedback
-7. Process repeats until quality goals met
-8. Final content saved to node
+5. Ratings are captured and stored in generation session iterations
+6. If scores below goals: Editor provides feedback
+7. Creator regenerates with feedback
+8. Process repeats until quality goals met
+9. Final content and ratings saved to node versions
+10. Generation session preserves complete rating history
 
 **Batch Generation:**
 1. User selects parent node and generation levels
@@ -380,6 +383,8 @@ Automatic cleanup to prevent context overflow:
 - Condense repeated information
 - Prioritize relevant context
 - Maintain context size within AI model limits
+- Works directly on master versions without creating new version entries
+- Preserves existing tags like "context_ai_adjusted" during updates
 
 ---
 
@@ -576,12 +581,26 @@ Different profiles can have different quality criteria:
 
 ### Rating System
 
+**Unified Rating Interface:**
+Expert uses a unified Rating interface across all components to ensure consistency and prevent type errors. Each rating contains:
+- **actual**: The numerical score (1-10) assigned by the Rater AI
+- **criterion**: The quality criterion being evaluated (as a string identifier)
+- **feedback**: Written justification and suggestions for improvement
+
 **Scoring Process:**
 1. Rater AI evaluates content against each criterion
 2. Assigns numerical score (1-10) based on criterion goals
 3. Provides written justification for each score
-4. Overall score calculated as weighted average
-5. Identifies areas needing improvement
+4. Ratings are automatically captured and stored in generation sessions
+5. Ratings are preserved in content versions for historical tracking
+6. Overall score calculated as weighted average
+7. Identifies areas needing improvement
+
+**Rating Storage:**
+- Ratings are stored in generation session iterations
+- Each content version preserves its associated ratings
+- Node Inspector displays ratings from the currently selected version
+- Historical ratings remain accessible through version management
 
 **Score Interpretation:**
 - **9-10**: Excellent, exceeds expectations
@@ -773,11 +792,18 @@ Analyze consistency between outline and expanded content using AI.
 
 **How It Works:**
 1. Select parent node with expanded children
-2. Click "Check Coherence" in actions menu
+2. Click "Check Coherence" in actions menu or enable automatic coherence checking
 3. AI analyzes parent outline vs. children content
 4. Identifies factual contradictions and inconsistencies
 5. Provides severity ratings (1-10) for each issue
 6. Suggests corrections for identified problems
+
+**Automatic Coherence Checking:**
+- Runs automatically during level-based generation when coherence level is set
+- Processes nodes systematically as content is generated
+- Handles errors gracefully - if coherence check fails due to technical issues (network errors, API timeouts), nodes remain untagged for future analysis
+- Successfully analyzed nodes are tagged as "consistent_to_parent"
+- Failed coherence checks do not incorrectly mark nodes as consistent
 
 **Coherence Results:**
 - **Contradiction Description**: Clear explanation of the issue
@@ -785,6 +811,12 @@ Analyze consistency between outline and expanded content using AI.
 - **Source Identification**: Which child node contains the contradiction
 - **Suggested Fix**: AI recommendation for resolution
 - **Auto-Fix Option**: Apply AI-suggested correction automatically
+
+**Error Handling:**
+- Network or API failures during coherence checking leave nodes untagged
+- Nodes can be re-analyzed later when technical issues are resolved
+- Error messages provide clear information about what went wrong
+- No false positive "consistent" tags are applied on failed checks
 
 ### Context Extraction
 
@@ -910,6 +942,12 @@ Interactive chat with AI models using project context.
 - **Review**: Template structure and hierarchy
 - **Use**: Batch operations for consistency
 
+**Problem**: Ratings not displaying in Node Inspector
+- **Check**: That the selected version has associated ratings
+- **Verify**: Generation completed successfully and ratings were captured
+- **Note**: Only completed generation sessions store ratings in versions
+- **Switch**: Between versions to see different rating sets
+
 #### Data Loss Prevention
 
 **Problem**: Lost work or corrupted projects
@@ -996,6 +1034,8 @@ Interactive chat with AI models using project context.
 - Adjust criteria weights based on project priorities
 - Use iterative refinement rather than perfect first drafts
 - Review AI suggestions before accepting changes
+- Ratings are automatically preserved in content versions for historical tracking
+- Failed operations (network errors, API timeouts) are handled gracefully without data corruption
 
 ### Performance Optimization
 
