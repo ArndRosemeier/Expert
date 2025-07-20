@@ -1476,6 +1476,10 @@ export class IdeaBoard {
     // Draw deletion animation if active (render on top of everything)
     this.renderDeletionAnimation();
 
+    // Draw ghost outlines on top of everything (so structures are always visible)
+    this.renderGhostBackgroundBorders(backgroundRectangles);
+    this.renderGhostConnections();
+
     // Keep redrawing if any animation is active
     const hasActiveAnimations = this.ideaGenerationAnimation.isActive || 
                                this.selfSummarizeAnimation.isActive ||
@@ -1515,6 +1519,79 @@ export class IdeaBoard {
     this.context.moveTo(fromDot.x, fromDot.y);
     this.context.lineTo(this.dragConnectionEnd.x, this.dragConnectionEnd.y);
     this.context.stroke();
+
+    this.context.restore();
+  }
+
+  /**
+   * Render ghost outlines of background rectangle borders
+   */
+  private renderGhostBackgroundBorders(backgroundRectangles: BoardElement[]): void {
+    if (backgroundRectangles.length === 0) return;
+
+    this.context.save();
+    this.context.strokeStyle = 'rgba(100, 100, 100, 0.3)'; // Semi-transparent gray
+    this.context.lineWidth = 1;
+    this.context.setLineDash([3, 3]); // Small dotted pattern
+    this.context.lineCap = 'round';
+
+    for (const backgroundRect of backgroundRectangles) {
+      // Get screen coordinates
+      const screenPos = this.viewport.worldToScreen(backgroundRect.position.x, backgroundRect.position.y);
+      const screenWidth = backgroundRect.size.width * this.viewport.zoom;
+      const screenHeight = backgroundRect.size.height * this.viewport.zoom;
+
+      // Only render if visible
+      if (this.viewport.isVisible(backgroundRect)) {
+        this.context.beginPath();
+        this.context.strokeRect(screenPos.x, screenPos.y, screenWidth, screenHeight);
+      }
+    }
+
+    this.context.restore();
+  }
+
+  /**
+   * Render ghost outlines of all connections
+   */
+  private renderGhostConnections(): void {
+    if (this.connections.size === 0) return;
+
+    this.context.save();
+    this.context.strokeStyle = 'rgba(100, 100, 100, 0.25)'; // Semi-transparent gray
+    this.context.lineWidth = 1;
+    this.context.setLineDash([2, 4]); // Small dotted pattern
+    this.context.lineCap = 'round';
+
+    for (const connection of this.connections.values()) {
+      const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
+      const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
+      
+      if (fromPostIt && toPostIt) {
+        // Get screen positions
+        const fromScreenPos = this.viewport.worldToScreen(fromPostIt.position.x, fromPostIt.position.y);
+        const fromScreenWidth = fromPostIt.size.width * this.viewport.zoom;
+        const fromScreenHeight = fromPostIt.size.height * this.viewport.zoom;
+
+        const toScreenPos = this.viewport.worldToScreen(toPostIt.position.x, toPostIt.position.y);
+        const toScreenWidth = toPostIt.size.width * this.viewport.zoom;
+        const toScreenHeight = toPostIt.size.height * this.viewport.zoom;
+
+        // Get connection dot positions
+        const fromDots = fromPostIt.getConnectionDotPositions(fromScreenPos, fromScreenWidth, fromScreenHeight);
+        const toDots = toPostIt.getConnectionDotPositions(toScreenPos, toScreenWidth, toScreenHeight);
+
+        const fromDot = fromDots.find(dot => dot.side === connection.fromSide);
+        const toDot = toDots.find(dot => dot.side === connection.toSide);
+
+        if (fromDot && toDot) {
+          this.context.beginPath();
+          this.context.moveTo(fromDot.x, fromDot.y);
+          this.context.lineTo(toDot.x, toDot.y);
+          this.context.stroke();
+        }
+      }
+    }
 
     this.context.restore();
   }
