@@ -1102,78 +1102,91 @@ export async function initialize() {
                 const fileName = file.name.toLowerCase();
                 const isPdfFile = fileName.endsWith('.pdf');
                 
-                if (isPdfFile) {
-                    // Extract text from PDF
-                    textContent = await extractTextFromPDF(file);
-                    if (!textContent.trim()) {
-                        closeProgressModal(progressModal);
-                        throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
+                try {
+                    if (isPdfFile) {
+                        // Extract text from PDF
+                        textContent = await extractTextFromPDF(file);
+                        if (!textContent.trim()) {
+                            throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
+                        }
+                    } else {
+                        // Read text file
+                        textContent = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                resolve(event.target?.result as string);
+                            };
+                            reader.onerror = () => {
+                                reject(new Error('Failed to read file'));
+                            };
+                            reader.readAsText(file);
+                        });
                     }
-                } else {
-                    // Read text file
-                    textContent = await new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            resolve(event.target?.result as string);
-                        };
-                        reader.onerror = () => {
-                            reject(new Error('Failed to read file'));
-                        };
-                        reader.readAsText(file);
+                    
+                    // Use DocumentImportService to parse the document
+                    const { DocumentImportService } = await import('./DocumentImportService');
+                    const importService = new DocumentImportService({
+                        detection: { minimumConfidence: 0.1 } // Lower threshold for more permissive detection
                     });
+                    
+                    const parsedDocument = importService.parseDocument(textContent, file.name);
+                    
+                    closeProgressModal(progressModal);
+                    
+                    // Show import preview with confidence warning if low
+                    let confirmMessage = `📄 Hierarchical Document Import\n\n` +
+                        `Document: "${file.name}"\n` +
+                        `Format: ${parsedDocument.format.toUpperCase()}\n` +
+                        `Detected: ${parsedDocument.hierarchy.length} top-level sections\n` +
+                        `Confidence: ${(parsedDocument.totalConfidence * 100).toFixed(1)}%\n` +
+                        `Words: ${parsedDocument.metadata.wordCount}\n`;
+                    
+                    if (parsedDocument.totalConfidence < 0.3) {
+                        confirmMessage += `\n⚠️ Low confidence detection. The structure may not be accurate.\n`;
+                    }
+                    
+                    confirmMessage += `\nCreate project from this structure?`;
+                    
+                    const confirmImport = confirm(confirmMessage);
+                    
+                    if (!confirmImport) {
+                        return;
+                    }
+                    
+                    // Convert hierarchy to project structure
+                    const projectTitle = parsedDocument.metadata.title || file.name.replace(/\.[^/.]+$/, '');
+                    const hierarchyLevels = extractHierarchyLevels(parsedDocument.hierarchy);
+                    
+                    // Create template from detected hierarchy
+                    const template = new ProjectTemplate(
+                        `Imported from ${file.name}`,
+                        hierarchyLevels,
+                        []
+                    );
+                    
+                    // Create import data structure
+                    const importData = {
+                        title: projectTitle,
+                        content: buildProjectContent(parsedDocument.hierarchy),
+                        template: {
+                            name: template.name,
+                            hierarchyLevels: template.hierarchyLevels,
+                            scaffoldingDocuments: template.scaffoldingDocuments
+                        },
+                        isHierarchicalImport: true,
+                        originalFileName: file.name,
+                        detectionConfidence: parsedDocument.totalConfidence,
+                        parsedHierarchy: parsedDocument.hierarchy
+                    };
+                    
+                    // Import the project
+                    handleImportProject(projectTitle, template, importData);
+                    
+                } catch (error) {
+                    // Always close progress modal on any error
+                    closeProgressModal(progressModal);
+                    throw error; // Re-throw to be caught by outer catch
                 }
-                
-                // Use DocumentImportService to parse the document
-                const { DocumentImportService } = await import('./DocumentImportService');
-                const importService = new DocumentImportService();
-                
-                const parsedDocument = importService.parseDocument(textContent, file.name);
-                
-                closeProgressModal(progressModal);
-                
-                // Show import preview and create project
-                const confirmImport = confirm(
-                    `📄 Hierarchical Document Import\n\n` +
-                    `Document: "${file.name}"\n` +
-                    `Format: ${parsedDocument.format.toUpperCase()}\n` +
-                    `Detected: ${parsedDocument.hierarchy.length} top-level sections\n` +
-                    `Confidence: ${(parsedDocument.totalConfidence * 100).toFixed(1)}%\n` +
-                    `Words: ${parsedDocument.metadata.wordCount}\n\n` +
-                    `Create project from this structure?`
-                );
-                
-                if (!confirmImport) {
-                    return;
-                }
-                
-                // Convert hierarchy to project structure
-                const projectTitle = parsedDocument.metadata.title || file.name.replace(/\.[^/.]+$/, '');
-                const hierarchyLevels = extractHierarchyLevels(parsedDocument.hierarchy);
-                
-                // Create template from detected hierarchy
-                const template = new ProjectTemplate(
-                    `Imported from ${file.name}`,
-                    hierarchyLevels,
-                    []
-                );
-                
-                // Create import data structure
-                const importData = {
-                    title: projectTitle,
-                    content: buildProjectContent(parsedDocument.hierarchy),
-                    template: {
-                        name: template.name,
-                        hierarchyLevels: template.hierarchyLevels,
-                        scaffoldingDocuments: template.scaffoldingDocuments
-                    },
-                    isHierarchicalImport: true,
-                    originalFileName: file.name,
-                    detectionConfidence: parsedDocument.totalConfidence,
-                    parsedHierarchy: parsedDocument.hierarchy
-                };
-                
-                // Import the project
-                handleImportProject(projectTitle, template, importData);
                 
             } catch (error) {
                 console.error('Hierarchical import failed:', error);
