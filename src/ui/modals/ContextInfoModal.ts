@@ -772,48 +772,22 @@ export class ContextItemsEditorModal extends BaseModal {
         // Recursively traverse all descendants
         const propagateRecursively = (node: DocumentNode) => {
             for (const child of node.children) {
-                // Get all versions of the child node
-                const allVersions = child.getAllVersions();
-                let childUpdated = false;
+                // Work only on the master version
+                const childContextItems = getContextItems(child.context || '');
                 
-                for (const version of allVersions) {
-                    // Get current context items from this version
-                    const versionContextItems = getContextItems(version.context || '');
-                    
-                    // Check if this item is already present (case-insensitive and trimmed comparison)
-                    const normalizedItemText = itemText.toLowerCase().trim();
-                    const alreadyPresent = versionContextItems.some(existingItem => 
-                        existingItem.toLowerCase().trim() === normalizedItemText
-                    );
-                    
-                    if (!alreadyPresent) {
-                        // Add the item to this version's context
-                        const updatedItems = [...versionContextItems, itemText];
-                        const newContext = formatContextItems(updatedItems);
-                        
-                        // Create a new version with updated context instead of mutating existing version
-                        const newVersionId = child.addVersion(
-                            [...version.tags, 'context_propagated'].filter(tag => tag !== 'master'), // Remove master tag temporarily
-                            {
-                                content: version.content,
-                                title: version.title,
-                                context: newContext
-                            },
-                            { ...version.metadata },
-                            version.ratings ? [...version.ratings] : undefined
-                        );
-                        
-                        // If this was the master version, promote the new version to master
-                        if (version.tags.has('master') && newVersionId) {
-                            child.promoteToMaster(newVersionId, ['context_propagated']);
-                        }
-                        
-                        childUpdated = true;
-                    }
-                }
+                // Check if this item is already present (case-insensitive and trimmed comparison)
+                const normalizedItemText = itemText.toLowerCase().trim();
+                const alreadyPresent = childContextItems.some(existingItem => 
+                    existingItem.toLowerCase().trim() === normalizedItemText
+                );
                 
-                // Count this child as updated if any of its versions were updated
-                if (childUpdated) {
+                if (!alreadyPresent) {
+                    // Add the item to the child's master version context
+                    const updatedItems = [...childContextItems, itemText];
+                    const newContext = formatContextItems(updatedItems);
+                    
+                    // Update the master version directly
+                    child.setContextWithTags(newContext, ['context_propagated']);
                     propagatedCount++;
                 }
                 
@@ -843,47 +817,21 @@ export class ContextItemsEditorModal extends BaseModal {
         // Recursively traverse all descendants
         const removeRecursively = (node: DocumentNode) => {
             for (const child of node.children) {
-                // Get all versions of the child node
-                const allVersions = child.getAllVersions();
-                let childUpdated = false;
+                // Work only on the master version
+                const childContextItems = getContextItems(child.context || '');
                 
-                for (const version of allVersions) {
-                    // Get current context items from this version
-                    const versionContextItems = getContextItems(version.context || '');
-                    
-                    // Filter out the item to remove (case-insensitive and trimmed comparison)
-                    const normalizedItemText = itemText.toLowerCase().trim();
-                    const filteredItems = versionContextItems.filter(existingItem => 
-                        existingItem.toLowerCase().trim() !== normalizedItemText
-                    );
-                    
-                    // If items were removed from this version, update it
-                    if (filteredItems.length < versionContextItems.length) {
-                        const newContext = formatContextItems(filteredItems);
-                        
-                        // Create a new version with updated context instead of mutating existing version
-                        const newVersionId = child.addVersion(
-                            [...version.tags, 'context_removed'].filter(tag => tag !== 'master'), // Remove master tag temporarily
-                            {
-                                content: version.content,
-                                title: version.title,
-                                context: newContext
-                            },
-                            { ...version.metadata },
-                            version.ratings ? [...version.ratings] : undefined
-                        );
-                        
-                        // If this was the master version, promote the new version to master
-                        if (version.tags.has('master') && newVersionId) {
-                            child.promoteToMaster(newVersionId, ['context_removed']);
-                        }
-                        
-                        childUpdated = true;
-                    }
-                }
+                // Filter out the item to remove (case-insensitive and trimmed comparison)
+                const normalizedItemText = itemText.toLowerCase().trim();
+                const filteredItems = childContextItems.filter(existingItem => 
+                    existingItem.toLowerCase().trim() !== normalizedItemText
+                );
                 
-                // Count this child as updated if any of its versions were updated
-                if (childUpdated) {
+                // If items were removed, update the master version
+                if (filteredItems.length < childContextItems.length) {
+                    const newContext = formatContextItems(filteredItems);
+                    
+                    // Update the master version directly
+                    child.setContextWithTags(newContext, ['context_removed']);
                     removedCount++;
                 }
                 

@@ -561,34 +561,11 @@ export class DocumentNode {
             throw new Error(`Version with id ${versionId} not found`);
         }
         
-        // Get the current master version to preserve important tags
-        const currentMaster = this.getMasterVersion();
-        const importantTagsToPreserve = new Set<string>();
-        
-        if (currentMaster) {
-            // Preserve important AI-related and system tags that should persist across promotions
-            const preservableTagPatterns = [
-                'context_ai_adjusted',
-                'context_rated',
-                'reviewed',
-                'approved',
-                'final',
-                'important'
-            ];
-            
-            for (const tag of currentMaster.tags) {
-                if (preservableTagPatterns.some(pattern => tag.includes(pattern))) {
-                    importantTagsToPreserve.add(tag);
-                }
-            }
-        }
-        
         // Remove master tag from all versions
         this.versions.forEach(v => v.tags.delete('master'));
         
-        // Add master tag, preserved important tags, and any additional tags to the promoted version
+        // Add master tag and any additional tags to the promoted version
         version.tags.add('master');
-        importantTagsToPreserve.forEach(tag => version.tags.add(tag));
         additionalTags.forEach(tag => version.tags.add(tag));
         version.timestamp = new Date();
     }
