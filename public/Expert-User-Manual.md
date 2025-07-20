@@ -711,6 +711,7 @@ The Idea Board is a visual workspace featuring:
 - **AI Integration**: Smart features for summarization, continuation and idea generation... also make your own.
 - **Project Integration**: Connect ideas to your document projects
 - **Visual Organization**: Color coding, grouping, and connection tools
+- **Ghost Outlines**: Semi-transparent guides ensure hidden structures remain visible
 
 **When to Use the Idea Board:**
 - **Brainstorming**: Generate and organize initial project ideas
@@ -755,10 +756,17 @@ The Idea Board is a visual workspace featuring:
 - **Zoom Range**: 10% to 500% for detail work or overview
 - **Smooth Animation**: Fluid movement for comfortable navigation
 
+**Visual Aids:**
+- **Ghost Outlines**: Semi-transparent dotted lines show hidden structures
+- **Background Areas**: Always visible as dotted borders even when covered by notes
+- **Connections**: Always visible as dotted lines even when behind other elements
+- **Spatial Awareness**: Maintains visual structure reference at all times
+
 **Navigation Tips:**
 - Use zoom out for overview of all ideas
 - Zoom in for detailed editing of specific notes
 - Pan to explore different areas of your brainstorm
+- Ghost outlines help navigate complex layered structures
 - No boundaries - canvas extends infinitely in all directions
 
 **AI Assistance Types:**
@@ -804,23 +812,14 @@ The Idea Board is a visual workspace featuring:
 
 **Saving and Loading:**
 - **Auto-Save**: Boards save automatically when you switch focus
-- **Manual Save**: Use save button for explicit control
-- **Multiple Boards**: Create separate boards for different projects
-- **Board List**: Access all your saved boards from the interface
 
 **Export Options:**
 - **Export Dropdown**: Click the 📁 button to see export options:
   - **Export as Markdown**: Convert board to structured document format
   - **Export as JSON**: Save complete board data for backup or sharing
-- **Content Organization**: Exports maintain note groupings and relationships
-- **Timestamp**: Exported files include creation date and time
-- **Sharing**: Use exported files for collaboration or backup
 
 **Import Options:**
 - **Import from JSON**: Restore complete board from previously exported JSON file
-- **Data Validation**: Imported files are checked for proper format
-- **Confirmation Dialog**: Review import details before replacing current board
-- **Complete Restoration**: Imports restore all notes, connections, and layout
 
 ### Best Practices
 
