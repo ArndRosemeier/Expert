@@ -530,13 +530,13 @@ export class SettingsModal extends BaseModal {
                 try {
                     // Apply profile changes synchronously
                     await this.applyProfileToUI(event.profile);
-                    this.updateCurrentProfileDisplay(event.profileName);
+                this.updateCurrentProfileDisplay(event.profileName);
                     
                     // Emit events
-                    this.emit('profileChanged', event.profileName);
-                    
-                    // Refresh the global profile selector to maintain consistency
-                    this.refreshGlobalProfileSelector?.();
+                this.emit('profileChanged', event.profileName);
+                
+                // Refresh the global profile selector to maintain consistency
+                this.refreshGlobalProfileSelector?.();
                     
                 } finally {
                     // Always re-enable UI and auto-save
@@ -592,11 +592,11 @@ export class SettingsModal extends BaseModal {
                 `;
             } else {
                 // Normal model selector initialization
-                // Wait for ModelSelector initialization before rendering
-                await this.modelSelector.waitForInitialization();
-                this.modelSelector.render(modelsContainer);
-                modelsContainer.addEventListener('change', () => this.autoSave());
-                modelsContainer.addEventListener('input', () => this.autoSave());
+            // Wait for ModelSelector initialization before rendering
+            await this.modelSelector.waitForInitialization();
+            this.modelSelector.render(modelsContainer);
+            modelsContainer.addEventListener('change', () => this.autoSave());
+            modelsContainer.addEventListener('input', () => this.autoSave());
             }
         }
 
