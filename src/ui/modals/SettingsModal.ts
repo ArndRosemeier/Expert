@@ -42,6 +42,8 @@ export class SettingsModal extends BaseModal {
     // State
     private hasUnsavedChanges: boolean = false;
     private saveTimeout: number | null = null;
+    private autoSaveEnabled: boolean = true;
+    private isUILocked: boolean = false;
     
     // UI Elements
     private maxIterationsInput?: HTMLInputElement;
@@ -520,13 +522,27 @@ export class SettingsModal extends BaseModal {
         const profileContainer = this.element?.querySelector('.profile-container') as HTMLElement;
         if (profileContainer) {
             this.profileSelector = new ProfileSelector(profileContainer, this.settingsService);
-            this.profileSelector.onSelectionChange((event) => {
-                this.applyProfileToUI(event.profile);
-                this.updateCurrentProfileDisplay(event.profileName);
-                this.emit('profileChanged', event.profileName);
+            this.profileSelector.onSelectionChange(async (event) => {
+                // Lock UI and disable auto-save during profile switch
+                this.disableAutoSave();
+                this.setUILocked(true);
                 
-                // Refresh the global profile selector to maintain consistency
-                this.refreshGlobalProfileSelector?.();
+                try {
+                    // Apply profile changes synchronously
+                    await this.applyProfileToUI(event.profile);
+                    this.updateCurrentProfileDisplay(event.profileName);
+                    
+                    // Emit events
+                    this.emit('profileChanged', event.profileName);
+                    
+                    // Refresh the global profile selector to maintain consistency
+                    this.refreshGlobalProfileSelector?.();
+                    
+                } finally {
+                    // Always re-enable UI and auto-save
+                    this.setUILocked(false);
+                    this.enableAutoSave();
+                }
             });
 
             this.profileSelector.onAction((_event) => {
@@ -608,16 +624,16 @@ export class SettingsModal extends BaseModal {
         }
 
         // Load current settings
-        this.loadCurrentSettings();
+        await this.loadCurrentSettings();
     }
 
     /**
      * Loads current settings into the UI
      */
-    private loadCurrentSettings(): void {
+    private async loadCurrentSettings(): Promise<void> {
         const lastUsedProfile = this.settingsService.getLastUsedProfile();
         if (lastUsedProfile) {
-            this.applyProfileToUI(lastUsedProfile);
+            await this.applyProfileToUI(lastUsedProfile);
         }
 
         if (this.aiLoggingCheckbox) {
@@ -631,7 +647,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Applies a profile to the UI components
      */
-    private applyProfileToUI(profile: any): void {
+    private async applyProfileToUI(profile: any): Promise<void> {
         if (!profile) return;
 
         // Clear pending auto-save to prevent race conditions
@@ -642,7 +658,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply to model selector
         if (profile.selectedModels) {
-            void this.modelSelector.setSelectedModels(profile.selectedModels);
+            await this.modelSelector.setSelectedModels(profile.selectedModels);
         }
 
         // Apply to criteria editor
@@ -691,6 +707,11 @@ export class SettingsModal extends BaseModal {
      * Auto-save with debouncing
      */
     private autoSave(): void {
+        // Skip auto-save if disabled or UI is locked
+        if (!this.autoSaveEnabled || this.isUILocked) {
+            return;
+        }
+
         this.updateUnsavedIndicator(true);
 
         if (this.saveTimeout) {
@@ -698,6 +719,11 @@ export class SettingsModal extends BaseModal {
         }
 
         this.saveTimeout = window.setTimeout(async () => {
+            // Double-check auto-save is still enabled before executing
+            if (!this.autoSaveEnabled || this.isUILocked) {
+                return;
+            }
+
             console.log('🔄 Auto-saving settings and prompts...');
             
             // Save profile settings (criteria, models, etc.)
@@ -709,6 +735,72 @@ export class SettingsModal extends BaseModal {
             console.log('✅ Auto-save completed');
             this.updateUnsavedIndicator(false);
         }, 2000);
+    }
+
+    /**
+     * Disables auto-save and clears any pending saves
+     */
+    public disableAutoSave(): void {
+        this.autoSaveEnabled = false;
+        if (this.saveTimeout) {
+            window.clearTimeout(this.saveTimeout);
+            this.saveTimeout = null;
+        }
+    }
+
+    /**
+     * Re-enables auto-save
+     */
+    public enableAutoSave(): void {
+        this.autoSaveEnabled = true;
+    }
+
+    /**
+     * Locks/unlocks the UI to prevent user interaction during operations
+     */
+    public setUILocked(locked: boolean): void {
+        this.isUILocked = locked;
+        
+        // Simply disable interactive elements without visual changes
+        const interactiveElements = this.element?.querySelectorAll('input, select, button, textarea');
+        interactiveElements?.forEach(element => {
+            if (element instanceof HTMLInputElement || 
+                element instanceof HTMLSelectElement || 
+                element instanceof HTMLButtonElement || 
+                element instanceof HTMLTextAreaElement) {
+                element.disabled = locked;
+            }
+        });
+
+        // Show/hide simple loading text instead of overlay
+        if (locked) {
+            this.showSimpleLoadingState();
+        } else {
+            this.hideSimpleLoadingState();
+        }
+    }
+
+    /**
+     * Shows simple loading state without overlay
+     */
+    private showSimpleLoadingState(): void {
+        // Just update the profile display to show loading
+        if (this.currentProfileDisplay) {
+            this.currentProfileDisplay.textContent = '(switching...)';
+            this.currentProfileDisplay.style.fontStyle = 'italic';
+            this.currentProfileDisplay.style.color = '#6b7280';
+        }
+    }
+
+    /**
+     * Hides simple loading state
+     */
+    private hideSimpleLoadingState(): void {
+        // Profile display will be updated by the normal flow
+        if (this.currentProfileDisplay) {
+            this.currentProfileDisplay.style.fontStyle = '';
+            this.currentProfileDisplay.style.color = '';
+        }
     }
 
     /**

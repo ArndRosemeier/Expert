@@ -303,13 +303,70 @@ export class ExportModal extends BaseModal {
             }
         }) as HTMLInputElement;
         
-        // Default value
-        this.epubAuthorInput.value = 'Expert Application';
+        // Load saved author value or use default
+        void this.loadAuthorValue();
+
+        // Save author value when it changes
+        this.epubAuthorInput.addEventListener('input', () => {
+            void this.saveAuthorValue();
+        });
+
+        // Also save on blur to ensure we catch paste operations
+        this.epubAuthorInput.addEventListener('blur', () => {
+            void this.saveAuthorValue();
+        });
 
         option.appendChild(label);
         option.appendChild(this.epubAuthorInput);
 
         return option;
+    }
+
+    /**
+     * Load saved author value from storage
+     */
+    private async loadAuthorValue(): Promise<void> {
+        if (!this.epubAuthorInput) return;
+        
+        try {
+            const { StorageService } = await import('../../StorageService');
+            const storage = await StorageService.getInstance();
+            const savedAuthor = await storage.get('epub_export_author') as string | undefined;
+            
+            if (savedAuthor) {
+                this.epubAuthorInput.value = savedAuthor;
+                console.log('✅ Loaded saved EPUB author:', savedAuthor);
+            } else {
+                // Use default value
+                this.epubAuthorInput.value = 'Expert Application';
+                console.log('🔄 No saved EPUB author found, using default');
+            }
+        } catch (error) {
+            console.error('❌ Failed to load saved EPUB author:', error);
+            // Fallback to default
+            this.epubAuthorInput.value = 'Expert Application';
+        }
+    }
+
+    /**
+     * Save author value to storage
+     */
+    private async saveAuthorValue(): Promise<void> {
+        if (!this.epubAuthorInput) return;
+        
+        try {
+            const { StorageService } = await import('../../StorageService');
+            const storage = await StorageService.getInstance();
+            const authorValue = this.epubAuthorInput.value.trim();
+            
+            // Only save non-empty values
+            if (authorValue) {
+                await storage.set('epub_export_author', authorValue);
+                console.log('💾 Saved EPUB author:', authorValue);
+            }
+        } catch (error) {
+            console.error('❌ Failed to save EPUB author:', error);
+        }
     }
 
     /**

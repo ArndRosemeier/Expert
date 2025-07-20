@@ -64,6 +64,7 @@ export class ReaderGUI {
     private searchResults: Array<{nodeId: string, startPos: number, endPos: number}> = [];
     private currentSearchIndex: number = -1;
     private isSearchVisible: boolean = false;
+    private findHighlights: Map<string, string[]> = new Map(); // nodeId -> highlight IDs
     
     // Bound method references for proper event listener removal
     private boundHandleClick: (event: MouseEvent) => void;
@@ -485,6 +486,10 @@ export class ReaderGUI {
                                 <input type="text" id="replace-input" placeholder="Replace..." />
                                 <button id="replace-button" class="find-btn-small" disabled>Replace</button>
                                 <button id="replace-all-button" class="find-btn-small" disabled>Replace All</button>
+                                <label class="find-option-checkbox">
+                                    <input type="checkbox" id="case-sensitive-checkbox" />
+                                    <span class="checkbox-label">Case sensitive</span>
+                                </label>
                             </div>
                         </div>
                         <button id="reader-actions-config" class="control-btn">🔧 Configure Actions</button>
@@ -1760,6 +1765,27 @@ export class ReaderGUI {
                 min-width: 60px;
             }
 
+            .find-option-checkbox {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-left: 8px;
+                font-size: 11px;
+                color: #64748b;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .find-option-checkbox input[type="checkbox"] {
+                margin: 0;
+                cursor: pointer;
+            }
+
+            .checkbox-label {
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
             /* Dark theme support for inline find interface */
             .reader-theme-dark .reader-find-interface-inline {
                 background: rgba(30, 41, 59, 0.95);
@@ -1875,6 +1901,12 @@ export class ReaderGUI {
             this.toggleFindInterface();
         } else if (target.id === 'find-button') {
             this.performSearch();
+            // Navigate to first result if available
+            if (this.searchResults.length > 0 && this.currentSearchIndex === -1) {
+                this.currentSearchIndex = 0;
+                this.navigateToSearchResult(0);
+                this.updateResultsInfoWithPosition();
+            }
         } else if (target.id === 'find-next-button') {
             this.findNext();
         } else if (target.id === 'find-close-button') {
@@ -3164,14 +3196,22 @@ export class ReaderGUI {
         const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
         if (!findInput) return;
 
-        const searchTerm = findInput.value.trim();
-        if (!searchTerm) {
+        // FIXED: Don't trim whitespace - preserve it for accurate searching
+        const originalSearchTerm = findInput.value;
+        if (originalSearchTerm === '') {
             this.updateSearchResults([]);
             return;
         }
 
-        this.searchTerm = searchTerm.toLowerCase();
-        const results = this.searchInAllEditors(this.searchTerm);
+        // Check case sensitivity option
+        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox') as HTMLInputElement;
+        const caseSensitive = caseSensitiveCheckbox?.checked || false;
+
+        // Store both original and processed search terms
+        this.searchTerm = originalSearchTerm;
+        const processedSearchTerm = caseSensitive ? originalSearchTerm : originalSearchTerm.toLowerCase();
+        
+        const results = this.searchInAllEditors(processedSearchTerm, caseSensitive);
         this.updateSearchResults(results);
 
         if (results.length > 0) {
@@ -3181,6 +3221,8 @@ export class ReaderGUI {
             if (!findInputHasFocus) {
                 this.navigateToSearchResult(0);
             }
+            // Update results info to show current position
+            this.updateResultsInfoWithPosition();
         }
     }
 
@@ -3192,12 +3234,15 @@ export class ReaderGUI {
 
         this.currentSearchIndex = (this.currentSearchIndex + 1) % this.searchResults.length;
         this.navigateToSearchResult(this.currentSearchIndex);
+        
+        // Update results info to show current position
+        this.updateResultsInfoWithPosition();
     }
 
     /**
      * Search in all text editors for the given term
      */
-    private searchInAllEditors(searchTerm: string): Array<{nodeId: string, startPos: number, endPos: number}> {
+    private searchInAllEditors(searchTerm: string, caseSensitive: boolean = false): Array<{nodeId: string, startPos: number, endPos: number}> {
         const results: Array<{nodeId: string, startPos: number, endPos: number}> = [];
         
         // Get all editors from ReaderEditor
@@ -3205,7 +3250,10 @@ export class ReaderGUI {
         if (!nodeEditors) return results;
 
         nodeEditors.forEach((editor: unknown, nodeId: string) => {
-            const text = (editor as any).editor.getText().toLowerCase();
+            // FIXED: Respect case sensitivity option and preserve whitespace
+            const text = caseSensitive 
+                ? (editor as any).editor.getText()
+                : (editor as any).editor.getText().toLowerCase();
             let index = 0;
             
             while ((index = text.indexOf(searchTerm, index)) !== -1) {
@@ -3236,6 +3284,9 @@ export class ReaderGUI {
         const editor = nodeEditors.get(result.nodeId);
         if (!editor) return;
 
+        // Clear previous current result highlighting and add new current result highlighting
+        this.highlightCurrentResult(resultIndex);
+
         // Scroll to the node first
         this.scrollToNode(result.nodeId);
 
@@ -3244,12 +3295,15 @@ export class ReaderGUI {
         const findInputHasFocus = findInput && document.activeElement === findInput;
 
         // Focus the editor and set selection to the found text
-        // Only if find input doesn't have focus (user is actively typing)
+        // Also ensure the specific highlighted text is scrolled into view
         void void setTimeout(() => {
             if (!findInputHasFocus) {
                 editor.editor.focus();
             }
             editor.editor.setSelection(result.startPos, result.endPos);
+            
+            // ENHANCEMENT: Scroll the specific highlighted text into view
+            this.scrollHighlightIntoView(resultIndex);
         }, 300);
     }
 
@@ -3257,8 +3311,16 @@ export class ReaderGUI {
      * Update search results and UI
      */
     private updateSearchResults(results: Array<{nodeId: string, startPos: number, endPos: number}>): void {
+        // Clear previous find highlights
+        this.clearFindHighlights();
+        
         this.searchResults = results;
         this.currentSearchIndex = -1;
+
+        // Highlight all found results
+        if (results.length > 0) {
+            this.highlightAllResults();
+        }
 
         // Update find next button state
         const findNextBtn = this.container.querySelector('#find-next-button') as HTMLButtonElement;
@@ -3280,7 +3342,15 @@ export class ReaderGUI {
         const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
         if (resultsInfo) {
             if (results.length === 0) {
-                resultsInfo.textContent = this.searchTerm ? 'No matches found' : '';
+                if (this.searchTerm) {
+                    // Show the actual search term (with preserved whitespace) in quotes for clarity
+                    const displayTerm = this.searchTerm.length > 20 
+                        ? `"${this.searchTerm.substring(0, 17)}..."` 
+                        : `"${this.searchTerm}"`;
+                    resultsInfo.textContent = `No matches for ${displayTerm}`;
+                } else {
+                    resultsInfo.textContent = '';
+                }
             } else {
                 resultsInfo.textContent = `${results.length} match${results.length === 1 ? '' : 'es'}`;
             }
@@ -3295,6 +3365,146 @@ export class ReaderGUI {
         this.searchTerm = '';
         this.currentSearchIndex = -1;
         this.updateSearchResults([]);
+    }
+
+    /**
+     * Clear all find highlights from all editors
+     */
+    private clearFindHighlights(): void {
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        this.findHighlights.forEach((highlightIds, nodeId) => {
+            const editor = nodeEditors.get(nodeId);
+            if (editor) {
+                highlightIds.forEach(highlightId => {
+                    editor.editor.removeHighlight(highlightId);
+                });
+            }
+        });
+
+        this.findHighlights.clear();
+    }
+
+    /**
+     * Highlight all search results
+     */
+    private highlightAllResults(): void {
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        this.searchResults.forEach((result, index) => {
+            const editor = nodeEditors.get(result.nodeId);
+            if (editor) {
+                const highlightId = `find-result-${index}`;
+                editor.editor.addHighlight(
+                    highlightId, 
+                    result.startPos, 
+                    result.endPos, 
+                    'highlight-find-result'
+                );
+
+                // Track the highlight
+                if (!this.findHighlights.has(result.nodeId)) {
+                    this.findHighlights.set(result.nodeId, []);
+                }
+                this.findHighlights.get(result.nodeId)!.push(highlightId);
+            }
+        });
+    }
+
+    /**
+     * Highlight the current search result with special styling
+     */
+    private highlightCurrentResult(resultIndex: number): void {
+        const nodeEditors = (this.readerEditor as any).nodeEditors;
+        if (!nodeEditors) return;
+
+        // First, reset all highlights to normal find-result style
+        this.searchResults.forEach((result, index) => {
+            const editor = nodeEditors.get(result.nodeId);
+            if (editor) {
+                const highlightId = `find-result-${index}`;
+                editor.editor.removeHighlight(highlightId);
+                editor.editor.addHighlight(
+                    highlightId, 
+                    result.startPos, 
+                    result.endPos, 
+                    'highlight-find-result'
+                );
+            }
+        });
+
+        // Then highlight the current result with special style
+        if (resultIndex >= 0 && resultIndex < this.searchResults.length) {
+            const currentResult = this.searchResults[resultIndex];
+            if (currentResult) {
+                const editor = nodeEditors.get(currentResult.nodeId);
+                if (editor) {
+                    const highlightId = `find-result-${resultIndex}`;
+                    editor.editor.removeHighlight(highlightId);
+                    editor.editor.addHighlight(
+                        highlightId, 
+                        currentResult.startPos, 
+                        currentResult.endPos, 
+                        'highlight-find-current'
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Scroll the specific highlighted text into view within the editor
+     */
+    private scrollHighlightIntoView(resultIndex: number): void {
+        // Wait a bit longer to ensure highlighting is complete
+        void void setTimeout(() => {
+            // Find the highlight span element for the current result
+            const highlightId = `find-result-${resultIndex}`;
+            const highlightSpan = this.container.querySelector(`[data-highlight-id="${highlightId}"]`) as HTMLElement;
+            
+            if (highlightSpan) {
+                // Use scrollIntoView with smooth scrolling and optimal positioning
+                highlightSpan.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',    // Center the highlighted text vertically
+                    inline: 'nearest'   // Keep horizontal position reasonable
+                });
+                
+                console.log(`📍 Scrolled highlight into view: result ${resultIndex + 1}`);
+            } else {
+                console.warn(`⚠️ Could not find highlight span for result ${resultIndex}`);
+                
+                // Fallback: try to scroll using the editor's container
+                const result = this.searchResults[resultIndex];
+                if (result) {
+                    const nodeEditors = (this.readerEditor as any).nodeEditors;
+                    const editor = nodeEditors?.get(result.nodeId);
+                    if (editor && editor.element) {
+                        // Scroll the editor element into view as fallback
+                        editor.element.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                            inline: 'nearest'
+                        });
+                        console.log(`📍 Fallback: Scrolled editor element into view for node ${result.nodeId}`);
+                    }
+                }
+            }
+        }, 100); // Small delay to ensure DOM is updated with highlights
+    }
+
+    /**
+     * Update results info to show current position
+     */
+    private updateResultsInfoWithPosition(): void {
+        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
+        if (resultsInfo && this.searchResults.length > 0) {
+            const currentPos = this.currentSearchIndex + 1;
+            const total = this.searchResults.length;
+            resultsInfo.textContent = `${currentPos} of ${total} match${total === 1 ? '' : 'es'}`;
+        }
     }
 
     /**
@@ -3407,6 +3617,17 @@ export class ReaderGUI {
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
                     this.closeFindInterface();
+                }
+            });
+        }
+
+        // Add event listener for case sensitivity checkbox
+        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox') as HTMLInputElement;
+        if (caseSensitiveCheckbox) {
+            caseSensitiveCheckbox.addEventListener('change', () => {
+                // Re-perform search when case sensitivity option changes
+                if (this.searchTerm) {
+                    this.performSearch();
                 }
             });
         }

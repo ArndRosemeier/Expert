@@ -4545,14 +4545,9 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         const selectedVersion = availableVersions[currentVersionIndex];
         // Use version management system to update content
         node.setContent(selectedVersion.content, 'master');
-        if (!selectedVersion.generationHistory) {
-            throw new Error(`Selected version ${selectedVersion.id} is missing generationHistory - data corruption detected`);
-        }
-        if (!selectedVersion.generationSessions) {
-            throw new Error(`Selected version ${selectedVersion.id} is missing generationSessions - data corruption detected`);
-        }
-        node.generationHistory = selectedVersion.generationHistory;
-        node.generationSessions = selectedVersion.generationSessions;
+        // Safely restore generation metadata, defaulting to empty arrays if missing
+        node.generationHistory = selectedVersion.generationHistory || [];
+        node.generationSessions = selectedVersion.generationSessions || [];
         
         // Set creator model in version metadata if it exists
         if (selectedVersion.creatorModel) {

@@ -55,12 +55,45 @@
     padding: 1px 2px;
 }
 
+/* Find Result Highlight */
+.highlight-find-result {
+    background-color: #ffeb3b;
+    border: 2px solid #f57f17;
+    border-radius: 2px;
+    padding: 1px 2px;
+    box-shadow: 0 0 4px rgba(245, 127, 23, 0.3);
+    animation: pulse-find 1s ease-in-out;
+}
+
+@keyframes pulse-find {
+    0% { background-color: #ffeb3b; }
+    50% { background-color: #fff176; }
+    100% { background-color: #ffeb3b; }
+}
+
+/* Current Find Result (more prominent) */
+.highlight-find-current {
+    background-color: #ff9800;
+    border: 2px solid #e65100;
+    border-radius: 2px;
+    padding: 1px 2px;
+    box-shadow: 0 0 6px rgba(230, 81, 0, 0.5);
+    animation: pulse-current 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-current {
+    0%, 100% { box-shadow: 0 0 6px rgba(230, 81, 0, 0.5); }
+    50% { box-shadow: 0 0 10px rgba(230, 81, 0, 0.8); }
+}
+
 /* Hover effects for highlights */
 .highlight-ai-replacement:hover,
 .highlight-more-details:hover,
 .highlight-simplify:hover,
 .highlight-improve-clarity:hover,
-.highlight-add-examples:hover {
+.highlight-add-examples:hover,
+.highlight-find-result:hover,
+.highlight-find-current:hover {
     opacity: 0.8;
     cursor: pointer;
 } 

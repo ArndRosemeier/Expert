@@ -415,8 +415,8 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
                 parentId: null,
                 template: template.hierarchyLevels, // Use the project template's hierarchy levels
                 generationPrompt: importData.generationPrompt,
-                generationHistory: importData.generationHistory ?? (() => { throw new Error('Import data missing generationHistory'); })(),
-                generationSessions: importData.generationSessions ?? (() => { throw new Error('Import data missing generationSessions'); })(),
+                generationHistory: importData.generationHistory ?? [],
+                generationSessions: importData.generationSessions ?? [],
                 versions: importData.versions, // This will be properly handled by DocumentNode.fromJSON
                 collapsed: importData.collapsed ?? false,
                 children: [] // Will be handled recursively

@@ -188,9 +188,19 @@ export class ProfileSelector {
 
         this.profileSelect.addEventListener('change', async () => {
             const profileName = this.profileSelect.value;
-            const profile = await this.settingsService.switchToProfile(profileName);
-            this.updateCurrentProfileDisplay(profileName);
-            this.emitSelection(profileName, profile);
+            
+            // Disable the select dropdown during profile switch
+            this.profileSelect.disabled = true;
+            
+            try {
+                // Switch profile synchronously and wait for completion
+                const profile = await this.settingsService.switchToProfile(profileName);
+                this.updateCurrentProfileDisplay(profileName);
+                this.emitSelection(profileName, profile);
+            } finally {
+                // Always re-enable the dropdown
+                this.profileSelect.disabled = false;
+            }
         });
 
         this.currentProfileDisplay = createElement('span', {
