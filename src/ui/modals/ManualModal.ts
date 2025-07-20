@@ -4,7 +4,6 @@ import { createElement } from './core/modal-utils';
 
 export class ManualModal extends BaseModal {
     private manualContent: string = '';
-    private searchQuery: string = '';
 
     constructor(config: ModalConfig = { id: 'manual-modal' }, hooks: ModalHooks = {}) {
         super({
@@ -595,7 +594,6 @@ export class ManualModal extends BaseModal {
     }
 
     private performSearch(query: string): void {
-        this.searchQuery = query.toLowerCase();
         const content = document.getElementById('manualContent');
         if (!content) return;
         

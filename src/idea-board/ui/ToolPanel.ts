@@ -13,7 +13,7 @@ const AI_MODEL_PURPOSES = [
   { key: 'prose', label: 'Prose' },
 ] as const;
 
-export interface ToolPanelConfig {
+interface ToolPanelConfig {
   onColorChange: (color: string) => void;
   onSearchToggle: () => void;
   onAddPostIt: () => void;

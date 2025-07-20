@@ -856,10 +856,7 @@ export class SettingsManager {
         );
     }
 
-    private static isValidProfilesData(data: any): boolean {
-        if (typeof data !== 'object' || data === null) return false;
-        return Object.values(data).every((profile: any) => this.validateProfileStructure(profile));
-    }
+
 
     /**
      * Exports a profile to a downloadable JSON file

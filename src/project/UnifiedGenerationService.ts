@@ -13,7 +13,7 @@ import { CoherenceService } from '../ui/modals/services/CoherenceService';
 import { GenerationErrorService } from '../ui/modals/services/GenerationErrorService';
 import { GenerationCoordinator } from './GenerationCoordinator';
 import { QualityCriterion, CreatorPayload } from '../types';
-import { LoopProgress, RaterProgressPayload, Rating } from '../LoopOrchestrator';
+import { LoopProgress } from '../LoopOrchestrator';
 import { TaskModelService } from '../services/TaskModelService';
 
 /**
@@ -239,21 +239,9 @@ export class UnifiedGenerationService {
      * Main entry point for unified generation using stateless target-state approach
      */
     public async generateWithLevels(startNodeId: string, inputLevels: Omit<GenerationLevels, 'frozenSettings'>): Promise<void> {
-        // Capture frozen settings at generation start for consistent behavior
-        const prompts = this.deps.settingsManager.getPrompts();
-        const profile = this.deps.settingsManager.getLastUsedProfile();
-        
-        const frozenSettings: FrozenSettings = {
-            coherenceAnalysisPrompt: prompts.coherence_analysis || '',
-            fixContradictionPrompt: prompts.fix_contradiction || '',
-            language: this.deps.settingsManager.getLanguage(),
-            taskModelConfigs: profile?.taskModelConfigs || {
-                coherence_analysis: { outline: 'creator', prose: 'prose' },
-                fix_contradiction: { outline: 'creator', prose: 'prose' },
-                context_adjustment: { outline: 'creator', prose: 'prose' },
-                text_polishing: { outline: 'creator', prose: 'prose' }
-            }
-        };
+        // Capture frozen settings at generation start for consistent behavior using centralized utility
+        const { CoherenceUtils } = await import('../ui/utils/CoherenceUtils');
+        const frozenSettings: FrozenSettings = CoherenceUtils.prepareFrozenSettings(this.deps.settingsManager);
         
         // Create complete levels object with frozen settings
         const levels: GenerationLevels = {
@@ -372,7 +360,7 @@ export class UnifiedGenerationService {
                 }
 
                 // Determine what work is needed for this node
-                const currentState = this.getNodeCurrentState(node);
+                // const currentState = this.getNodeCurrentState(node);
                 const workNeeded = this.getWorkNeeded(node, targetState);
 
                 // Do ONLY the first type of work needed, then exit and reassess
@@ -1427,7 +1415,7 @@ export class UnifiedGenerationService {
         // Start a new generation session
         node.startGenerationSession(loopInput.prompt);
         let currentIterationContent: string | null = null;
-        let currentIterationRatings: Rating[] = [];
+        // let currentIterationRatings: Rating[] = [];
         
         // Subscribe to progress updates from the orchestrator - just for content tracking, not UI
         const onProgress = (progress: LoopProgress) => {

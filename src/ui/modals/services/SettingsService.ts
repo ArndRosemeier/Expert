@@ -469,11 +469,11 @@ export class SettingsService {
         const criteriaDiffs: CriteriaDifference[] = [];
         const allCriteriaNames = new Set([
             ...currentCriteria.map((c: QualityCriterion) => c.name),
-            ...savedCriteria.map((c: QualityCriterion) => c.name)
+            ...(savedCriteria || []).map((c: QualityCriterion) => c.name)
         ]);
 
         for (const criterionName of allCriteriaNames) {
-            const savedCriterion = savedCriteria.find((c: QualityCriterion) => c.name === criterionName);
+            const savedCriterion = savedCriteria?.find((c: QualityCriterion) => c.name === criterionName);
             const defaultCriterion = currentCriteria.find((c: QualityCriterion) => c.name === criterionName);
             
             const inSaved = !!savedCriterion;

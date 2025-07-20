@@ -25,13 +25,6 @@ export interface Rating {
     description?: string;
 }
 
-export interface RaterProgressPayload {
-    criterion: string;
-    rating: Rating;
-}
-
-type LoopProgressPayload = CreatorPayload | RaterProgressPayload | EditorPayload;
-
 export interface LoopProgress {
     iteration: number;
     maxIterations: number;
@@ -234,20 +227,20 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         let success = false;
         let aborted = false;
         let creatorIteration = 1; // Track which creator iteration we're on
-        const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
+        // const totalStepsInIteration = 3; // 1. Creator, 2. Rater, 3. Editor
 
         // Track iteration results for best attempt selection
         const iterationResults: IterationResult[] = [];
 
         // Determine which model to use based on node type
         const generationModel = input.isLeafNode ? 'prose' : 'creator';
-        const contentType = input.isLeafNode ? 'prose' : 'outline';
+        // const contentType = input.isLeafNode ? 'prose' : 'outline';
 
         try {
             
             // Get model names for progress messaging
             const creatorModelName = await this.getModelNameForPurpose(generationModel);
-            const raterModelName = await this.getModelNameForPurpose('rater');
+            // const raterModelName = await this.getModelNameForPurpose('rater');
             const editorModelName = await this.getModelNameForPurpose('editor');
             
             // Determine the initial prompt and response

@@ -981,11 +981,16 @@ export class CoherenceModal extends BaseModal {
             const openRouterClient = OpenRouterClient.getInstance();
             const coherenceService = new CoherenceService(openRouterClient, settingsManager);
             
+            // Prepare frozen settings for consistency
+            const { CoherenceUtils } = await import('../utils/CoherenceUtils');
+            const frozenSettings = CoherenceUtils.prepareFrozenSettings(settingsManager);
+            
             // Generate the proposed fix (but don't apply it yet) with progress feedback
             const fixedContent = await coherenceService.fixContradiction(
                 actualParentNode,
                 childNode,
                 contradiction,
+                frozenSettings,
                 (message) => {
                     // Update button text with progress
                     button.textContent = `🔄 ${message.substring(0, 20)}...`;
@@ -1037,6 +1042,17 @@ export class CoherenceModal extends BaseModal {
         
         // Remove event listeners
         document.removeEventListener('keydown', this.handleEscKey.bind(this));
+        
+        // Refresh the main UI to show the updated coherence status icons
+        try {
+            const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
+            renderMultiProjectTree(); // Updates tree titles and coherence icons
+            renderNodeDetails();      // Updates details panel content
+            console.log('✅ Main UI refreshed after coherence check');
+        } catch (refreshError) {
+            console.warn('⚠️ Failed to refresh main UI after coherence check:', refreshError);
+            // Don't fail the modal close if UI refresh fails
+        }
         
         // Clear data
         this.analysisResult = null;

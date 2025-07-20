@@ -2,7 +2,7 @@ import { BaseModal } from './core/BaseModal';
 import { createElement } from './core/modal-utils';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
-import { UnifiedGenerationService } from '../../project/UnifiedGenerationService';
+
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 
 export interface ConversationalGenerationModalConfig {

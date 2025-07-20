@@ -1,4 +1,4 @@
-import type { Point, Size, BoardElement, ElementData, Viewport } from '../types/BoardTypes';
+import type { Point, ElementData, Viewport } from '../types/BoardTypes';
 import { PostItNote } from './PostItNote';
 
 export class BackgroundRectangle extends PostItNote {
@@ -133,7 +133,7 @@ export class BackgroundRectangle extends PostItNote {
   /**
    * Override to prevent content setting
    */
-  public override setContent(content: string): void {
+  public override setContent(_content: string): void {
     // Do nothing - background rectangles don't have content
   }
 

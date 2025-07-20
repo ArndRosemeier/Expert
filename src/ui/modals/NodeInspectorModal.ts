@@ -3,6 +3,7 @@ import type { DocumentNode, ContentVersion } from '../../DocumentNode';
 import { analyzeTagsInHierarchy } from '../../ProjectUtils';
 import { getActiveProject } from '../../state';
 
+
 // ============================================================================
 // INTERFACES & TYPES
 // ============================================================================
@@ -553,7 +554,16 @@ export class NodeInspectorModal extends BaseModal {
         let ratingsHtml = '';
         
         if (hasRatings) {
-            ratingsHtml = this.renderVersionRatings(version.ratings!);
+            // Convert LoopOrchestrator.Rating[] to local Rating[] format
+            const convertedRatings: Rating[] = version.ratings!.map(loopRating => ({
+                score: loopRating.actual,
+                goal: loopRating.goal,
+                criterion: {
+                    name: loopRating.criterion,
+                    displayName: loopRating.criterion
+                }
+            }));
+            ratingsHtml = this.renderVersionRatings(convertedRatings);
         }
         
         wrapper.innerHTML = `

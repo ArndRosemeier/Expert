@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js';
+import checker from 'vite-plugin-checker';
 
 function getVersionInfo() {
   try {
@@ -52,7 +53,15 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     plugins: [
-      cssInjectedByJsPlugin()
+      cssInjectedByJsPlugin(),
+      checker({
+        typescript: true,
+        enableBuild: true,
+        overlay: {
+          initialIsOpen: false,
+          position: 'br'
+        }
+      })
     ],
     define: {
       // Inject version info as compile-time constants

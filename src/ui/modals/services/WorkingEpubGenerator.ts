@@ -39,15 +39,7 @@ export class WorkingEpubGenerator {
             .replace(/"/g, '&quot;');
     }
 
-    private formatContentForEpub(content: string): string {
-        // Convert line breaks to proper paragraphs
-        const paragraphs = content
-            .split(/\n\s*\n/)
-            .map(p => p.trim())
-            .filter(p => p.length > 0);
-        
-        return paragraphs.map(p => `<p>${this.escapeHtml(p)}</p>`).join('\n        ');
-    }
+
 
     private extractContentFromNode(node: DocumentNode): string {
         console.log('[WorkingEpubGenerator] Extracting content from node:', node.title);
@@ -100,7 +92,7 @@ export class WorkingEpubGenerator {
         return leafNodes;
     }
 
-    async generate(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<Blob> {
+    async generate(node: DocumentNode, config: ExportConfig, _projectManager?: ProjectManager): Promise<Blob> {
         console.log('[WorkingEpubGenerator] Starting EPUB generation for:', node.title);
         console.log('[WorkingEpubGenerator] Scope:', config.scope);
         
@@ -174,11 +166,11 @@ export class WorkingEpubGenerator {
     }
 
     private addPackageOpf(bookTitle: string, contentNodes: DocumentNode[], author: string = 'Expert Application'): void {
-        const manifestItems = contentNodes.map((node, index) => 
+        const manifestItems = contentNodes.map((_node, index) => 
             `        <item id="chapter${index + 1}" href="chapter${index + 1}.xhtml" media-type="application/xhtml+xml"/>`
         ).join('\n');
         
-        const spineItems = contentNodes.map((node, index) => 
+        const spineItems = contentNodes.map((_node, index) => 
             `        <itemref idref="chapter${index + 1}"/>`
         ).join('\n');
 
@@ -204,7 +196,7 @@ ${spineItems}
         this.zip.file('OEBPS/content.opf', packageOpf);
     }
 
-    private addNavXhtml(bookTitle: string, contentNodes: DocumentNode[]): void {
+    private addNavXhtml(_bookTitle: string, contentNodes: DocumentNode[]): void {
         const navItems = contentNodes.map((node, index) => 
             `                <li><a href="chapter${index + 1}.xhtml">${this.escapeHtml(node.title)}</a></li>`
         ).join('\n');

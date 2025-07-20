@@ -539,7 +539,7 @@ export class OpenRouterClient {
 
   async sendMessage(request: OpenRouterRequest, apiKey: string, abortSignal: AbortSignal): Promise<OpenRouterResponse> {
 
-    const fetchStartTime = Date.now();
+
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -552,7 +552,7 @@ export class OpenRouterClient {
         signal: abortSignal
       });
       
-      const fetchDuration = Date.now() - fetchStartTime;
+
 
       if (!response.ok) {
         // Try to parse error body as JSON

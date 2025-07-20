@@ -6,8 +6,8 @@ import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 
-import { StorageService, IStorageService } from './StorageService';
-import { IndexedDBService } from './IndexedDBService';
+
+
 import * as state from './state';
 import { 
     TreeService, 
@@ -70,7 +70,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     private selectedNodeId: string | null = null;
     // Legacy generation state removed - managed by GenerationService
     public _listenersSetup: boolean = false;
-    private static storageService: Promise<IStorageService> | null = null;
+
     
     // Extracted services
     private treeService: TreeService;
@@ -154,15 +154,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         });
     }
 
-    /**
-     * Gets the storage service instance
-     */
-    private static async getStorageService(): Promise<IStorageService> {
-        if (!ProjectManager.storageService) {
-            ProjectManager.storageService = StorageService.getInstance();
-        }
-        return ProjectManager.storageService;
-    }
+
 
 
 

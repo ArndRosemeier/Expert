@@ -2,7 +2,7 @@
  * Type definitions for export functionality
  */
 
-import { DocumentNode, ContentVersion } from '../../../DocumentNode';
+import { DocumentNode } from '../../../DocumentNode';
 import { FileDownloadResult } from '../../../utils/FileDownloadService';
 
 /**

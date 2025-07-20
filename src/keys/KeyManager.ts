@@ -13,7 +13,7 @@ export interface KeyValidationResult {
     data?: KeyData;
 }
 
-interface KeyCreationResult {
+export interface KeyCreationResult {
     key: string;
     data: KeyData;
 }

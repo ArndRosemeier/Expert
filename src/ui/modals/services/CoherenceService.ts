@@ -7,12 +7,10 @@ import { CoherenceLog } from '../../../CoherenceLog';
 
 export class CoherenceService {
     private openRouterClient: OpenRouterClient;
-    private settingsManager: SettingsManager;
     private taskModelService: TaskModelService;
 
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
         this.openRouterClient = openRouterClient;
-        this.settingsManager = settingsManager;
         this.taskModelService = new TaskModelService(settingsManager);
     }
 
@@ -160,7 +158,7 @@ export class CoherenceService {
             console.log(`🤖 Using ${modelPurpose} model for coherence analysis of ${isLeafNode ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
             
             // Get model name for error reporting
-            const modelName = this.taskModelService.getCurrentModelName(modelPurpose as any);
+            // const modelName = this.taskModelService.getCurrentModelName(modelPurpose as any);
             
             const response = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
             

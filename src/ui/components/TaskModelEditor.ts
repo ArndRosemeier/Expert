@@ -185,7 +185,8 @@ export class TaskModelEditor {
             coherence_analysis: 'Analyzes content for contradictions between parent outlines and child content.',
             fix_contradiction: 'Fixes contradictions found in child content to match parent outlines.',
             text_polishing: 'Enhances and polishes text content for better clarity, style, and quality.',
-            context_adjustment: 'Analyzes inherited context to identify problematic items for procedural removal.'
+            context_adjustment: 'Analyzes inherited context to identify problematic items for procedural removal.',
+            context_rating: 'Evaluates and rates context items based on their relevance and quality for content generation.'
         };
         return descriptions[taskType] ? `<p class="task-description">${descriptions[taskType]}</p>` : '';
     }

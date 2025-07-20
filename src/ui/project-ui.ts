@@ -14,7 +14,7 @@ import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
 
-import { getContextItemCount, getContextInfoText } from '../ContextFormat';
+import { getContextInfoText } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 import { LoopProgress } from '../LoopOrchestrator';
@@ -1155,19 +1155,24 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                         const analysisModal = new CoherenceModal(manager.rootNode);
                         analysisModal.openInLoadingState(completedNode);
                         
-                        // Perform analysis
-                        coherenceService.analyzeCoherence(completedNode)
-                            .then((result) => {
-                                console.log('Coherence analysis completed, updating modal with results:', result);
-                                // Update modal with results
-                                analysisModal.updateWithResults(result);
-                            })
-                            .catch((error) => {
-                                console.error('Coherence analysis failed:', error);
-                                // Close loading modal and show error
-                                void analysisModal.close();
-                                alert('Coherence analysis failed: ' + error.message);
-                            });
+                        // Prepare frozen settings using centralized utility
+                        void import('./utils/CoherenceUtils').then(({ CoherenceUtils }) => {
+                            const frozenSettings = CoherenceUtils.prepareFrozenSettings(state.getSettingsManager()!);
+                            
+                            // Perform analysis with proper frozen settings (same as UnifiedGenerationService)
+                            coherenceService.analyzeCoherence(completedNode, frozenSettings)
+                                .then((result) => {
+                                    console.log('Coherence analysis completed, updating modal with results:', result);
+                                    // Update modal with results
+                                    analysisModal.updateWithResults(result);
+                                })
+                                .catch((error) => {
+                                    console.error('Coherence analysis failed:', error);
+                                    // Close loading modal and show error
+                                    void analysisModal.close();
+                                    alert('Coherence analysis failed: ' + error.message);
+                                });
+                        });
                     }).catch((error: unknown) => {
                         console.error('Failed to load CoherenceService:', error);
                     });
@@ -3010,19 +3015,24 @@ This action cannot be undone.`;
                 const analysisModal = new CoherenceModal(projectManager.rootNode);
                 void analysisModal.openInLoadingState(node);
                 
-                // Perform analysis
-                coherenceService.analyzeCoherence(node)
-                    .then((result) => {
-                        console.log('Coherence analysis completed, updating modal with results:', result);
-                        // Update modal with results
-                        analysisModal.updateWithResults(result);
-                    })
-                    .catch((error) => {
-                        console.error('Coherence analysis failed:', error);
-                        // Close loading modal and show error
-                        void analysisModal.close();
-                        alert('Coherence analysis failed: ' + error.message);
-                    });
+                // Prepare frozen settings using centralized utility
+                void import('./utils/CoherenceUtils').then(({ CoherenceUtils }) => {
+                    const frozenSettings = CoherenceUtils.prepareFrozenSettings(state.getSettingsManager()!);
+                    
+                    // Perform analysis with proper frozen settings (same as UnifiedGenerationService)
+                    coherenceService.analyzeCoherence(node, frozenSettings)
+                        .then((result) => {
+                            console.log('Coherence analysis completed, updating modal with results:', result);
+                            // Update modal with results
+                            analysisModal.updateWithResults(result);
+                        })
+                        .catch((error) => {
+                            console.error('Coherence analysis failed:', error);
+                            // Close loading modal and show error
+                            void analysisModal.close();
+                            alert('Coherence analysis failed: ' + error.message);
+                        });
+                });
             }
             break;
 

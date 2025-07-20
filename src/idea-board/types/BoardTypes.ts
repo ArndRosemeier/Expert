@@ -10,12 +10,6 @@ export interface Size {
   height: number;
 }
 
-export interface BoundingRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 export interface IdeaBoardState {
   id: string;

@@ -1,7 +1,7 @@
 import { StorageService } from '../StorageService.js';
 import { KeyData } from './KeyManager.js';
 
-interface StoredAppKey {
+export interface StoredAppKey {
     key: string;
     data: KeyData;
     storedAt: Date;

@@ -251,11 +251,11 @@ function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Rec
     
     const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
     const activeProfile = settingsManager.getProfile(activeProfileName) || { 
-        prompt: '', 
         criteria: [], 
         maxIterations: DEFAULT_MAX_ITERATIONS, 
         selectedModels: {},
         webSearchEnabled: {},
+        selectedProviders: {},
         contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
     };
     activeProfile.selectedModels = models;

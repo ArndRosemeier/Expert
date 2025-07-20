@@ -1,6 +1,6 @@
 import type { Point } from '../types/BoardTypes';
 
-export interface InputManagerEvents {
+interface InputManagerEvents {
   onMouseDown: (point: Point, event: MouseEvent) => void;
   onMouseMove: (point: Point, event: MouseEvent) => void;
   onMouseUp: (point: Point, event: MouseEvent) => void;

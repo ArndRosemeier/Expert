@@ -25,7 +25,6 @@ export class PolisherModal extends BaseModal {
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
     private taskModelService: TaskModelService;
-    private currentPolishedContent: string | null = null;
     private isGenerating: boolean = false;
     private originalContent: string = ''; // Store original content for undo functionality
     private polishingInstructions: string = ''; // Store custom polishing instructions
@@ -97,7 +96,6 @@ export class PolisherModal extends BaseModal {
      */
     async openWithNode(node: DocumentNode): Promise<void> {
         this.node = node;
-        this.currentPolishedContent = null;
         this.isGenerating = false;
         
         // Store original content for undo functionality
@@ -666,8 +664,7 @@ export class PolisherModal extends BaseModal {
             }
         });
 
-        // Reset polished content and refresh UI
-        this.currentPolishedContent = null;
+        // Refresh UI
         void this.refresh();
         
         // Show confirmation

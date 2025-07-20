@@ -11,14 +11,10 @@ import { SettingsService } from './services/SettingsService';
 
 // NEW: Import our duplication-eliminating utilities
 import { 
-    createButton, 
-    createButtonContainer, 
     ButtonStateManager 
 } from '../utils/DOMUtils';
 
-import { 
-    executeWithErrorHandling 
-} from '../utils/ServiceUtils';
+
 
 // Simplified types for migration to avoid complex TypeScript issues for now
 export interface SimpleMigrationAnalysis {
