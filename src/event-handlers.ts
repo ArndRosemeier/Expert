@@ -783,204 +783,519 @@ export async function initialize() {
 
 
 
-        getElementById('importProjectBtn').addEventListener('click', () => {
+        getElementById('importProjectBtn').addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
             
-            // Create file input element (now accepts JSON, text, and PDF files)
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.json,.txt,.pdf';
-            fileInput.style.display = 'none';
+            // Create or get existing dropdown
+            let dropdown = document.getElementById('import-dropdown') as HTMLDivElement;
             
-            fileInput.addEventListener('change', async (e) => {
-                const target = e.target as HTMLInputElement;
-                const file = target.files?.[0];
-                if (!file) return;
-                
-                try {
-                    // Determine file type and handle accordingly
-                    const fileName = file.name.toLowerCase();
-                    const isJsonFile = fileName.endsWith('.json');
-                    const isPdfFile = fileName.endsWith('.pdf');
-                    
-                    if (isJsonFile) {
-                        // Handle JSON file (existing logic)
-                        const reader = new FileReader();
-                        reader.onload = async (event) => {
-                            try {
-                                const content = event.target?.result as string;
-                                const importData = JSON.parse(content);
-                                
-                                // Extract template - first try from project level, then from root node, then from child nodes
-                                let templateData = importData.template;
-                                
-                                if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
-                                    // Check if root node has template as array (node export format)
-                                    if (importData.template && Array.isArray(importData.template)) {
-                                        templateData = {
-                                            name: `Imported Template (${importData.title || 'Unknown'})`,
-                                            hierarchyLevels: importData.template,
-                                            scaffoldingDocuments: []
-                                        };
-                                    } else if (importData.children && importData.children.length > 0) {
-                                        // Try to extract template from first child that has one
-                                        let foundTemplate = null;
-                                        for (const child of importData.children) {
-                                            if (child.template && Array.isArray(child.template)) {
-                                                foundTemplate = child.template;
-                                                break;
-                                            }
-                                        }
-                                        
-                                        if (foundTemplate) {
-                                            templateData = {
-                                                name: `Imported Template (${importData.title || 'Unknown'})`,
-                                                hierarchyLevels: foundTemplate,
-                                                scaffoldingDocuments: []
-                                            };
-                                        } else {
-                                            throw new Error('Invalid import file: Missing or incomplete template information');
-                                        }
-                                    } else {
-                                        throw new Error('Invalid import file: Missing or incomplete template information');
-                                    }
-                                }
-                                
-                                // Create template from extracted data
-                                const bestTemplate = new ProjectTemplate(
-                                    templateData.name,
-                                    templateData.hierarchyLevels,
-                                    templateData.scaffoldingDocuments
-                                );
-                                
-                                // Import project data
-                                handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
-                                
-                            } catch (error) {
-                                console.error('JSON import failed:', error);
-                                alert('JSON import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                            }
-                        };
-                        
-                        reader.onerror = () => {
-                            alert('Failed to read JSON file. Please try again.');
-                        };
-                        
-                        reader.readAsText(file);
-                        
-                    } else if (isPdfFile) {
-                        // Handle PDF file - extract text then analyze with AI
-                        const progressModal = showProgressModal('Extracting text from PDF...');
-                        
-                        try {
-                            const textContent = await extractTextFromPDF(file);
-                            closeProgressModal(progressModal);
-                            
-                            if (!textContent.trim()) {
-                                throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
-                            }
-                            
-                            // Pass extracted text to text import handler
-                            await handleTextImport(textContent, file.name);
-                            
-                        } catch (error) {
-                            closeProgressModal(progressModal);
-                            console.error('PDF import failed:', error);
-                            alert('PDF import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                        }
-                        
-                    } else {
-                        // Handle text file - analyze with AI
-                        const reader = new FileReader();
-                        reader.onload = async (event) => {
-                            try {
-                                const content = event.target?.result as string;
-                                await handleTextImport(content, file.name);
-                            } catch (error) {
-                                console.error('Text import failed:', error);
-                                alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                            }
-                        };
-                        
-                        reader.onerror = () => {
-                            alert('Failed to read text file. Please try again.');
-                        };
-                        
-                        reader.readAsText(file);
-                    }
-                    
-                } catch (error) {
-                    console.error('Import failed:', error);
-                    alert('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                }
-            });
-            
-            // Helper function to handle text import with AI analysis
-            async function handleTextImport(textContent: string, fileName: string): Promise<void> {
-                const settingsManager = state.getSettingsManager();
-                const openRouterClient = state.getOpenRouterClient();
-                
-                if (!settingsManager || !openRouterClient) {
-                    throw new Error('Core services not initialized. Cannot analyze text file.');
-                }
-                
-                // Show progress indicator
-                const progressModal = showProgressModal('Analyzing text content...');
-                
-                try {
-                    // Create analysis prompt using PromptManager
-                    const prompts = settingsManager.getPrompts();
-                    const analysisPrompt = prompts.text_import_analysis
-                        .replace(/\{\{file_name\}\}/g, fileName)
-                        .replace(/\{\{text_content\}\}/g, textContent)
-                        .replace(/\{\{language\}\}/g, settingsManager.getLanguage());
-                    
-                    // Use creator model for analysis
-                    const response = await openRouterClient.chat('creator', analysisPrompt);
-                    
-                    // Parse the AI response using the same parser as AI project generation
-                    const { SmartContentParser } = await import('./project/SmartContentParser');
-                    const parsedContent = SmartContentParser.parseGenerationResponse(response, 'project');
-                    
-                    if (!parsedContent.hasStructuredData || !parsedContent.template) {
-                        throw new Error('Failed to extract project structure from text. The AI could not identify clear project elements.');
-                    }
-                    
-                    // Create template from parsed data
-                    const template = new ProjectTemplate(
-                        parsedContent.template.name,
-                        parsedContent.template.hierarchyLevels,
-                        parsedContent.template.scaffoldingDocuments
-                    );
-                    
-                    // Create import data in the same format as JSON import
-                    const importData = {
-                        title: parsedContent.metadata['title'] || fileName.replace(/\.[^/.]+$/, ''), // Remove file extension
-                        content: parsedContent.content,
-                        context: parsedContent.context,
-                        template: parsedContent.template,
-                        isTextImport: true,
-                        originalFileName: fileName
-                    };
-                    
-                    // Hide progress modal
-                    closeProgressModal(progressModal);
-                    
-                    // Import the analyzed project
-                    handleImportProject(importData.title, template, importData);
-                    
-                } catch (error) {
-                    closeProgressModal(progressModal);
-                    throw error;
-                }
+            if (dropdown) {
+                // Toggle visibility
+                const isVisible = dropdown.style.display === 'block';
+                dropdown.style.display = isVisible ? 'none' : 'block';
+                return;
             }
             
-            // Trigger file selection
-            document.body.appendChild(fileInput);
-            fileInput.click();
-            document.body.removeChild(fileInput);
-        });
+            // Create dropdown
+            dropdown = document.createElement('div');
+            dropdown.id = 'import-dropdown';
+            dropdown.style.cssText = `
+                position: absolute;
+                top: 100%;
+                right: 0;
+                background: white;
+                border: 1px solid var(--secondary-300);
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                z-index: 1000;
+                min-width: 200px;
+                display: block;
+            `;
+            
+            dropdown.innerHTML = `
+                <button class="import-option" data-action="expert-project" style="
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: none;
+                    background: white;
+                    text-align: left;
+                    cursor: pointer;
+                    border-radius: 8px 8px 0 0;
+                    font-size: 14px;
+                    color: var(--text-primary);
+                ">
+                    📁 Import Expert Project
+                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                        Load complete Expert project files (JSON)
+                    </div>
+                </button>
+                <button class="import-option" data-action="import-concept" style="
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: none;
+                    background: white;
+                    text-align: left;
+                    cursor: pointer;
+                    border-top: 1px solid var(--secondary-200);
+                    font-size: 14px;
+                    color: var(--text-primary);
+                ">
+                    🧠 Import Concept
+                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                        AI analysis of text/PDF files for concepts
+                    </div>
+                </button>
+                <button class="import-option" data-action="hierarchical-document" style="
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: none;
+                    background: white;
+                    text-align: left;
+                    cursor: pointer;
+                    border-top: 1px solid var(--secondary-200);
+                    border-radius: 0 0 8px 8px;
+                    font-size: 14px;
+                    color: var(--text-primary);
+                ">
+                    📄 Import Hierarchical Document
+                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                        Pattern-based hierarchy detection (MD, TXT, PDF)
+                    </div>
+                </button>
+            `;
+            
+            // Add hover effects
+            const options = dropdown.querySelectorAll('.import-option');
+            options.forEach(option => {
+                option.addEventListener('mouseenter', () => {
+                    (option as HTMLElement).style.backgroundColor = 'var(--secondary-50)';
+                });
+                option.addEventListener('mouseleave', () => {
+                    (option as HTMLElement).style.backgroundColor = 'white';
+                });
+            });
+            
+                         // Position dropdown relative to button
+             const button = getElementById('importProjectBtn');
+             const buttonRect = button.getBoundingClientRect();
+             const headerContainer = button.closest('.header-buttons') as HTMLElement;
+             
+             if (headerContainer) {
+                 headerContainer.style.position = 'relative';
+                 headerContainer.appendChild(dropdown);
+             } else {
+                 document.body.appendChild(dropdown);
+                 dropdown.style.position = 'fixed';
+                 dropdown.style.top = `${buttonRect.bottom + 5}px`;
+                 dropdown.style.right = `${window.innerWidth - buttonRect.right}px`;
+             }
+             
+             // Handle dropdown clicks
+             dropdown.addEventListener('click', async (e) => {
+                 const target = e.target as HTMLElement;
+                 const actionButton = target.closest('[data-action]') as HTMLElement;
+                 
+                 if (actionButton) {
+                     const action = actionButton.dataset['action'];
+                     dropdown.style.display = 'none';
+                     
+                     try {
+                         switch (action) {
+                             case 'expert-project':
+                                 await handleExpertProjectImport();
+                                 break;
+                             case 'import-concept':
+                                 await handleConceptImport();
+                                 break;
+                             case 'hierarchical-document':
+                                 await handleHierarchicalDocumentImport();
+                                 break;
+                         }
+                     } catch (error) {
+                         console.error('Import failed:', error);
+                         alert('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                     }
+                 }
+             });
+            
+            // Close dropdown when clicking outside
+            const closeDropdown = (e: Event) => {
+                if (!dropdown.contains(e.target as Node) && e.target !== button) {
+                    dropdown.style.display = 'none';
+                    document.removeEventListener('click', closeDropdown);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeDropdown);
+            }, 0);
+                 });
     } catch (error) {
         console.error('❌ Failed to attach import project button listener:', error);
+    }
+
+    // Handler functions for the import dropdown options
+    async function handleExpertProjectImport(): Promise<void> {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', async (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const content = event.target?.result as string;
+                    const importData = JSON.parse(content);
+                    
+                    // Extract template - first try from project level, then from root node, then from child nodes
+                    let templateData = importData.template;
+                    
+                    if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                        // Check if root node has template as array (node export format)
+                        if (importData.template && Array.isArray(importData.template)) {
+                            templateData = {
+                                name: `Imported Template (${importData.title || 'Unknown'})`,
+                                hierarchyLevels: importData.template,
+                                scaffoldingDocuments: []
+                            };
+                        } else if (importData.children && importData.children.length > 0) {
+                            // Try to extract template from first child that has one
+                            let foundTemplate = null;
+                            for (const child of importData.children) {
+                                if (child.template && Array.isArray(child.template)) {
+                                    foundTemplate = child.template;
+                                    break;
+                                }
+                            }
+                            
+                            if (foundTemplate) {
+                                templateData = {
+                                    name: `Imported Template (${importData.title || 'Unknown'})`,
+                                    hierarchyLevels: foundTemplate,
+                                    scaffoldingDocuments: []
+                                };
+                            } else {
+                                throw new Error('Invalid import file: Missing or incomplete template information');
+                            }
+                        } else {
+                            throw new Error('Invalid import file: Missing or incomplete template information');
+                        }
+                    }
+                    
+                    // Create template from extracted data
+                    const bestTemplate = new ProjectTemplate(
+                        templateData.name,
+                        templateData.hierarchyLevels,
+                        templateData.scaffoldingDocuments
+                    );
+                    
+                    // Import project data
+                    handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
+                    
+                } catch (error) {
+                    console.error('JSON import failed:', error);
+                    alert('JSON import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                }
+            };
+            
+            reader.onerror = () => {
+                alert('Failed to read JSON file. Please try again.');
+            };
+            
+            reader.readAsText(file);
+        });
+        
+        // Trigger file selection
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+    }
+
+    async function handleConceptImport(): Promise<void> {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.txt,.pdf';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', async (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+            
+            try {
+                const fileName = file.name.toLowerCase();
+                const isPdfFile = fileName.endsWith('.pdf');
+                
+                if (isPdfFile) {
+                    // Handle PDF file - extract text then analyze with AI
+                    const progressModal = showProgressModal('Extracting text from PDF...');
+                    
+                    try {
+                        const textContent = await extractTextFromPDF(file);
+                        closeProgressModal(progressModal);
+                        
+                        if (!textContent.trim()) {
+                            throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
+                        }
+                        
+                        // Pass extracted text to text import handler
+                        await handleTextImportWithAI(textContent, file.name);
+                        
+                    } catch (error) {
+                        closeProgressModal(progressModal);
+                        throw error;
+                    }
+                    
+                } else {
+                    // Handle text file - analyze with AI
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                        try {
+                            const content = event.target?.result as string;
+                            await handleTextImportWithAI(content, file.name);
+                        } catch (error) {
+                            console.error('Text import failed:', error);
+                            alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                        }
+                    };
+                    
+                    reader.onerror = () => {
+                        alert('Failed to read text file. Please try again.');
+                    };
+                    
+                    reader.readAsText(file);
+                }
+                
+            } catch (error) {
+                console.error('Concept import failed:', error);
+                alert('Concept import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+            }
+        });
+        
+        // Trigger file selection
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+    }
+
+    async function handleHierarchicalDocumentImport(): Promise<void> {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.md,.txt,.pdf';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', async (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+            
+            try {
+                const progressModal = showProgressModal('Analyzing document structure...');
+                
+                let textContent: string;
+                const fileName = file.name.toLowerCase();
+                const isPdfFile = fileName.endsWith('.pdf');
+                
+                if (isPdfFile) {
+                    // Extract text from PDF
+                    textContent = await extractTextFromPDF(file);
+                    if (!textContent.trim()) {
+                        closeProgressModal(progressModal);
+                        throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
+                    }
+                } else {
+                    // Read text file
+                    textContent = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            resolve(event.target?.result as string);
+                        };
+                        reader.onerror = () => {
+                            reject(new Error('Failed to read file'));
+                        };
+                        reader.readAsText(file);
+                    });
+                }
+                
+                // Use DocumentImportService to parse the document
+                const { DocumentImportService } = await import('./DocumentImportService');
+                const importService = new DocumentImportService();
+                
+                const parsedDocument = importService.parseDocument(textContent, file.name);
+                
+                closeProgressModal(progressModal);
+                
+                // Show import preview and create project
+                const confirmImport = confirm(
+                    `📄 Hierarchical Document Import\n\n` +
+                    `Document: "${file.name}"\n` +
+                    `Format: ${parsedDocument.format.toUpperCase()}\n` +
+                    `Detected: ${parsedDocument.hierarchy.length} top-level sections\n` +
+                    `Confidence: ${(parsedDocument.totalConfidence * 100).toFixed(1)}%\n` +
+                    `Words: ${parsedDocument.metadata.wordCount}\n\n` +
+                    `Create project from this structure?`
+                );
+                
+                if (!confirmImport) {
+                    return;
+                }
+                
+                // Convert hierarchy to project structure
+                const projectTitle = parsedDocument.metadata.title || file.name.replace(/\.[^/.]+$/, '');
+                const hierarchyLevels = extractHierarchyLevels(parsedDocument.hierarchy);
+                
+                // Create template from detected hierarchy
+                const template = new ProjectTemplate(
+                    `Imported from ${file.name}`,
+                    hierarchyLevels,
+                    []
+                );
+                
+                // Create import data structure
+                const importData = {
+                    title: projectTitle,
+                    content: buildProjectContent(parsedDocument.hierarchy),
+                    template: {
+                        name: template.name,
+                        hierarchyLevels: template.hierarchyLevels,
+                        scaffoldingDocuments: template.scaffoldingDocuments
+                    },
+                    isHierarchicalImport: true,
+                    originalFileName: file.name,
+                    detectionConfidence: parsedDocument.totalConfidence,
+                    parsedHierarchy: parsedDocument.hierarchy
+                };
+                
+                // Import the project
+                handleImportProject(projectTitle, template, importData);
+                
+            } catch (error) {
+                console.error('Hierarchical import failed:', error);
+                alert('Hierarchical import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+            }
+        });
+        
+        // Trigger file selection
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+    }
+
+    // Helper function to handle text import with AI analysis (extracted from original function)
+    async function handleTextImportWithAI(textContent: string, fileName: string): Promise<void> {
+        const settingsManager = state.getSettingsManager();
+        const openRouterClient = state.getOpenRouterClient();
+        
+        if (!settingsManager || !openRouterClient) {
+            throw new Error('Core services not initialized. Cannot analyze text file.');
+        }
+        
+        // Show progress indicator
+        const progressModal = showProgressModal('Analyzing text content...');
+        
+        try {
+            // Create analysis prompt using PromptManager
+            const prompts = settingsManager.getPrompts();
+            const analysisPrompt = prompts.text_import_analysis
+                .replace(/\{\{file_name\}\}/g, fileName)
+                .replace(/\{\{text_content\}\}/g, textContent)
+                .replace(/\{\{language\}\}/g, settingsManager.getLanguage());
+            
+            // Use creator model for analysis
+            const response = await openRouterClient.chat('creator', analysisPrompt);
+            
+            // Parse the AI response using the same parser as AI project generation
+            const { SmartContentParser } = await import('./project/SmartContentParser');
+            const parsedContent = SmartContentParser.parseGenerationResponse(response, 'project');
+            
+            if (!parsedContent.hasStructuredData || !parsedContent.template) {
+                throw new Error('Failed to extract project structure from text. The AI could not identify clear project elements.');
+            }
+            
+            // Create template from parsed data
+            const template = new ProjectTemplate(
+                parsedContent.template.name,
+                parsedContent.template.hierarchyLevels,
+                parsedContent.template.scaffoldingDocuments
+            );
+            
+            // Create import data in the same format as JSON import
+            const importData = {
+                title: parsedContent.metadata['title'] || fileName.replace(/\.[^/.]+$/, ''), // Remove file extension
+                content: parsedContent.content,
+                context: parsedContent.context,
+                template: parsedContent.template,
+                isTextImport: true,
+                originalFileName: fileName
+            };
+            
+            // Hide progress modal
+            closeProgressModal(progressModal);
+            
+            // Import the analyzed project
+            handleImportProject(importData.title, template, importData);
+            
+        } catch (error) {
+            closeProgressModal(progressModal);
+            throw error;
+        }
+    }
+
+    // Helper functions for hierarchical document import
+    function extractHierarchyLevels(hierarchyNodes: any[]): string[] {
+        const levels = new Set<number>();
+        
+        function collectLevels(nodes: any[]): void {
+            for (const node of nodes) {
+                levels.add(node.level);
+                if (node.children && node.children.length > 0) {
+                    collectLevels(node.children);
+                }
+            }
+        }
+        
+        collectLevels(hierarchyNodes);
+        
+        const sortedLevels = Array.from(levels).sort((a, b) => a - b);
+        const levelNames: string[] = [];
+        
+        for (let i = 0; i < sortedLevels.length; i++) {
+            switch (i) {
+                case 0: levelNames.push('Book'); break;
+                case 1: levelNames.push('Chapter'); break;
+                case 2: levelNames.push('Section'); break;
+                case 3: levelNames.push('Subsection'); break;
+                default: levelNames.push(`Level ${i + 1}`); break;
+            }
+        }
+        
+        return levelNames.length > 0 ? levelNames : ['Document', 'Section'];
+    }
+
+    function buildProjectContent(hierarchyNodes: any[]): string {
+        let content = '';
+        
+        function processNodes(nodes: any[], depth: number = 0): void {
+            for (const node of nodes) {
+                const indent = '  '.repeat(depth);
+                content += `${indent}${node.title}\n`;
+                if (node.content && node.content.trim()) {
+                    content += `${indent}${node.content.trim()}\n\n`;
+                }
+                if (node.children && node.children.length > 0) {
+                    processNodes(node.children, depth + 1);
+                }
+            }
+        }
+        
+        processNodes(hierarchyNodes);
+        return content.trim();
     }
     
     try {
