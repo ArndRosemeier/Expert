@@ -14,6 +14,7 @@ import { GenerationErrorService } from '../ui/modals/services/GenerationErrorSer
 import { GenerationCoordinator } from './GenerationCoordinator';
 import { QualityCriterion, CreatorPayload } from '../types';
 import { LoopProgress } from '../LoopOrchestrator';
+import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
 
 /**
@@ -1415,19 +1416,36 @@ export class UnifiedGenerationService {
         // Start a new generation session
         node.startGenerationSession(loopInput.prompt);
         let currentIterationContent: string | null = null;
-        // let currentIterationRatings: Rating[] = [];
+        let currentIterationRatings: Rating[] = [];
+        let currentIterationNumber = 0;
         
-        // Subscribe to progress updates from the orchestrator - just for content tracking, not UI
+        // Subscribe to progress updates from the orchestrator - capture content and ratings
         const onProgress = (progress: LoopProgress) => {
             if (this.abortRequested) {
                 return;
             }
             
-            // Only track content for generation session - UI gets progress directly from LoopOrchestrator
+            // Track content from creation phase
             if (progress.phase === 'create') {
                 const payload = progress.payload as CreatorPayload;
                 if (!payload.response.includes('is working')) {
                     currentIterationContent = payload.response;
+                    currentIterationNumber = progress.iteration;
+                }
+            }
+            
+            // Track ratings from rating phase and store complete iteration
+            if (progress.phase === 'rate' && progress.ratings && progress.ratings.length > 0) {
+                currentIterationRatings = progress.ratings;
+                
+                // If we have both content and ratings, store the iteration
+                if (currentIterationContent && currentIterationNumber > 0) {
+                    try {
+                        node.addGenerationIteration(currentIterationNumber, currentIterationContent, currentIterationRatings);
+                        console.log(`📊 Stored iteration ${currentIterationNumber} with ${currentIterationRatings.length} ratings for "${node.title}"`);
+                    } catch (error) {
+                        console.warn(`Failed to store iteration ${currentIterationNumber} for "${node.title}":`, error);
+                    }
                 }
             }
         };
