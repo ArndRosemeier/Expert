@@ -2322,12 +2322,13 @@ function renderRatingsView() {
             return;
         }
         
-        // Convert ratings to expected format
+        // Convert ratings to expected format for unified Rating interface
         const formattedRatings = versionRatings.map((rating: any) => ({
-            score: rating.score as number,
+            actual: rating.actual || rating.score || 0, // Support both old and new formats
             goal: rating.goal as number,
             criterion: rating.criterion as string,
-            justification: rating.justification as string
+            justification: rating.justification as string,
+            passed: (rating.actual || rating.score || 0) >= (rating.goal || 0)
         }));
         
         // Render using shared component

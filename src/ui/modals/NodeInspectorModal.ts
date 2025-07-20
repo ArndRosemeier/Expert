@@ -1,24 +1,13 @@
 import { BaseModal } from './core/BaseModal';
 import type { DocumentNode, ContentVersion } from '../../DocumentNode';
 import { analyzeTagsInHierarchy } from '../../ProjectUtils';
+import { Rating } from '../../types/RatingTypes';
 import { getActiveProject } from '../../state';
 
 
 // ============================================================================
 // INTERFACES & TYPES
 // ============================================================================
-
-interface Rating {
-    score: number;
-    goal: number;
-    criterion: {
-        name?: string;
-        displayName?: string;
-        shortDisplay?: string;
-        title?: string;
-    } | string;
-    justification?: string;
-}
 
 // ============================================================================
 // EVENT SYSTEM
@@ -268,24 +257,14 @@ class ContentViewer extends UIComponent {
         try {
             const { RatingsRenderer } = require('../components/RatingsRenderer');
             
-            // Convert ratings to expected format
+            // Convert ratings to expected format for RatingsRenderer
             const formattedRatings = ratings.map(rating => {
-                let criterionName = 'Unknown';
-                if (typeof rating.criterion === 'string') {
-                    criterionName = rating.criterion;
-                } else if (rating.criterion) {
-                    criterionName = rating.criterion.name || 
-                                  rating.criterion.displayName ||
-                                  rating.criterion.shortDisplay || 
-                                  rating.criterion.title ||
-                                  'Unknown';
-                }
-                
                 return {
-                    score: rating.score || 0,
+                    actual: rating.actual || 0,
                     goal: rating.goal || 10,
-                    criterion: criterionName,
-                    justification: rating.justification
+                    criterion: rating.criterion || 'Unknown',
+                    justification: rating.justification,
+                    passed: rating.passed
                 };
             });
             
@@ -301,19 +280,10 @@ class ContentViewer extends UIComponent {
             console.warn('RatingsRenderer not available, using fallback', error);
             // Fallback to simple display
             const ratingsHtml = ratings.map(rating => {
-                const score = rating.score || 0;
+                const score = rating.actual || 0;
                 const goal = rating.goal || 10;
                 
-                let criterionName = 'Unknown';
-                if (typeof rating.criterion === 'string') {
-                    criterionName = rating.criterion;
-                } else if (rating.criterion) {
-                    criterionName = rating.criterion.name || 
-                                  rating.criterion.displayName ||
-                                  rating.criterion.shortDisplay || 
-                                  rating.criterion.title ||
-                                  'Unknown';
-                }
+                const criterionName = rating.criterion || 'Unknown';
                 
                 return `
                     <div style="margin-bottom: 0.5rem;">
@@ -554,16 +524,8 @@ export class NodeInspectorModal extends BaseModal {
         let ratingsHtml = '';
         
         if (hasRatings) {
-            // Convert LoopOrchestrator.Rating[] to local Rating[] format
-            const convertedRatings: Rating[] = version.ratings!.map(loopRating => ({
-                score: loopRating.actual,
-                goal: loopRating.goal,
-                criterion: {
-                    name: loopRating.criterion,
-                    displayName: loopRating.criterion
-                }
-            }));
-            ratingsHtml = this.renderVersionRatings(convertedRatings);
+            // No conversion needed - version.ratings already uses unified Rating interface
+            ratingsHtml = this.renderVersionRatings(version.ratings!);
         }
         
         wrapper.innerHTML = `
@@ -918,21 +880,12 @@ export class NodeInspectorModal extends BaseModal {
     private renderVersionRatings(ratings: Rating[]): string {
         // Use 3-column layout with visual progress bars (0-10 scale)
         const ratingsHtml = ratings.map(rating => {
-            const score = rating.score || 0;
+            const score = rating.actual || 0;
             const goal = rating.goal || 10;
             const scorePercentage = Math.min((score / 10) * 100, 100); // Always scale to 10
             const goalPercentage = Math.min((goal / 10) * 100, 100); // Goal indicator position
             
-            let criterionName = 'Unknown';
-            if (typeof rating.criterion === 'string') {
-                criterionName = rating.criterion;
-            } else if (rating.criterion) {
-                criterionName = rating.criterion.name || 
-                              rating.criterion.displayName ||
-                              rating.criterion.shortDisplay || 
-                              rating.criterion.title ||
-                              'Unknown';
-            }
+            const criterionName = rating.criterion || 'Unknown';
             
             const barColor = score >= goal ? '#28a745' : (score >= goal * 0.7 ? '#ffc107' : '#dc3545');
             const textColor = score >= goal ? '#28a745' : '#dc3545';

@@ -6,6 +6,7 @@ import { createPromptExpansionService } from './services/PromptExpansionService.
 import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
 import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { OpenRouterClient } from './OpenRouterClient';
+import { Rating } from './types/RatingTypes';
 import * as state from './state';
 
 export interface LoopInput {
@@ -17,13 +18,7 @@ export interface LoopInput {
     isLeafNode?: boolean; // Determines whether to use 'prose' or 'creator' model
 }
 
-export interface Rating {
-    criterion: string;  // Fix: Change back to 'criterion' to match AI response
-    goal: number;
-    actual: number;
-    passed: boolean;
-    description?: string;
-}
+
 
 export interface LoopProgress {
     iteration: number;

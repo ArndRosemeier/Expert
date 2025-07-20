@@ -1,4 +1,5 @@
-import { LoopHistoryItem, Rating } from './LoopOrchestrator';
+import { LoopHistoryItem } from './LoopOrchestrator';
+import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

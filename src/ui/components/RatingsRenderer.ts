@@ -1,9 +1,4 @@
-export interface Rating {
-    score: number;
-    goal: number;
-    criterion: string;
-    justification?: string;
-}
+import { Rating } from '../../types/RatingTypes';
 
 export interface RatingsDisplayOptions {
     title?: string;
@@ -35,7 +30,7 @@ export class RatingsRenderer {
             return this.renderNoRatings(title, compact);
         }
 
-        const maxScore = Math.max(...ratings.map(r => Math.max(r.score, r.goal)), 10);
+        const maxScore = Math.max(...ratings.map(r => Math.max(r.actual, r.goal)), 10);
         
         const ratingsHtml = ratings.map(rating => 
             this.renderRatingItem(rating, maxScore, { 
@@ -64,9 +59,9 @@ export class RatingsRenderer {
         options: { compact: boolean; showGoalLine: boolean; showJustification: boolean }
     ): string {
         const { compact, showGoalLine, showJustification } = options;
-        const scorePercentage = (rating.score / maxScore) * 100;
+        const scorePercentage = (rating.actual / maxScore) * 100;
         const goalPercentage = (rating.goal / maxScore) * 100;
-        const metGoal = rating.score >= rating.goal;
+        const metGoal = rating.actual >= rating.goal;
         const statusColor = metGoal ? '#28a745' : '#dc3545';
         const statusIcon = metGoal ? '✓' : '✗';
         
@@ -79,7 +74,7 @@ export class RatingsRenderer {
                     <div class="rating-criterion">${this.escapeHtml(rating.criterion)}</div>
                     <div class="rating-score-display">
                         <span class="rating-status" style="color: ${statusColor}; font-size: 1.1rem;">${statusIcon}</span>
-                        <span class="rating-score" style="font-weight: 600; color: ${statusColor};">${rating.score}/${rating.goal}</span>
+                        <span class="rating-score" style="font-weight: 600; color: ${statusColor};">${rating.actual}/${rating.goal}</span>
                     </div>
                 </div>
                 
