@@ -708,7 +708,7 @@ The Idea Board is an infinite canvas visual brainstorming environment that compl
 The Idea Board is a visual workspace featuring:
 - **Infinite Canvas**: Pan and zoom freely in any direction
 - **Post-It Notes**: Moveable, resizable sticky notes for capturing ideas
-- **AI Integration**: Built-in chat interface for idea generation and analysis
+- **AI Integration**: Smart features for summarization, continuation and idea generation... also make your own.
 - **Project Integration**: Connect ideas to your document projects
 - **Visual Organization**: Color coding, grouping, and connection tools
 
@@ -725,11 +725,6 @@ The Idea Board is a visual workspace featuring:
 1. Click the **🧠 Idea Board** button in the main interface header
 2. The Idea Board opens in a full-screen modal overlay
 3. Multiple boards can be created and managed separately
-
-**Board Management:**
-- **Create New Board**: Start fresh brainstorming sessions
-- **Save/Load Boards**: Persistent storage for ongoing projects
-- **Export Boards**: Save as markdown files for sharing or documentation
 
 ### Core Features
 
@@ -766,17 +761,6 @@ The Idea Board is a visual workspace featuring:
 - Pan to explore different areas of your brainstorm
 - No boundaries - canvas extends infinitely in all directions
 
-#### AI Integration
-
-**AI Chat Interface:**
-The Idea Board includes a powerful AI chat system for creative collaboration:
-
-**Chat Features:**
-- **Floating Panel**: Collapsible chat interface that doesn't obstruct your work
-- **Context Awareness**: AI understands your current board content
-- **Model Selection**: Choose from available AI models for different perspectives
-- **Project Integration**: Insert content from your document projects
-
 **AI Assistance Types:**
 
 **Idea Generation:**
@@ -784,49 +768,30 @@ The Idea Board includes a powerful AI chat system for creative collaboration:
 - "Suggest plot twists for my mystery novel"
 - "What are innovative features for a mobile app?"
 
-**Board Analysis:**
-- "Analyze the connections between these concepts"
-- "Find gaps in my research organization"
-- "Suggest how to group these ideas logically"
+**Summarize:**
+- Auto-summarize one post-it or summarize several post-its into a new one
 
-**Content Development:**
-- "Expand this concept into a detailed outline"
-- "Find contradictions in these story elements"
-- "Suggest how to connect these seemingly unrelated ideas"
+**Continue:**
+- Auto continue a post-it with alternatives in multiple post-it or connect exactly as many as you want continuations
 
-**Export Assistance:**
-- "Help organize these ideas into a document structure"
-- "Which concepts should become main chapters?"
-- "Create a logical flow from these scattered thoughts"
+**Export/Import:**
+- Export boards as Markdown for documentation
+- Export boards as JSON for complete backup and sharing  
+- Import boards from JSON to restore or share between users
 
 #### Advanced Operations
-
-**Selection and Multi-Operations:**
-- **Click** to select individual notes
-- **Ctrl+Click** to select multiple notes
-- **Drag Selection Box** to select groups of notes
-- **Group Operations**: Move, delete, or modify multiple notes at once
 
 **Copy and Paste:**
 - **Ctrl+C**: Copy selected notes
 - **Ctrl+V**: Paste notes at cursor location
-- **Duplicates** maintain content and formatting
-- **Smart Positioning** prevents overlapping
 
 **Keyboard Shortcuts:**
-- **Delete**: Remove selected notes
-- **Ctrl+Z**: Undo last action
-- **Ctrl+Y**: Redo last undone action
-- **Escape**: Clear selections or exit editing mode
-- **Ctrl+A**: Select all notes on visible canvas
+- **Delete**: Remove selected note. Can include descendant notes optionally.
 
 ### Integration with Document Projects
 
 **Project Connections:**
 - **Reference Nodes**: Insert content from document project nodes
-- **Context Import**: Pull project context into AI chat
-- **Idea Export**: Transform board concepts into document structures
-- **Cross-Pollination**: Use board insights to enhance project content
 
 **Workflow Integration:**
 1. **Brainstorm** initial concepts on Idea Board
@@ -844,10 +809,18 @@ The Idea Board includes a powerful AI chat system for creative collaboration:
 - **Board List**: Access all your saved boards from the interface
 
 **Export Options:**
-- **Markdown Export**: Convert board to structured markdown document
-- **Content Organization**: Export maintains note groupings and relationships
+- **Export Dropdown**: Click the 📁 button to see export options:
+  - **Export as Markdown**: Convert board to structured document format
+  - **Export as JSON**: Save complete board data for backup or sharing
+- **Content Organization**: Exports maintain note groupings and relationships
 - **Timestamp**: Exported files include creation date and time
-- **Sharing**: Use exported markdown for collaboration or backup
+- **Sharing**: Use exported files for collaboration or backup
+
+**Import Options:**
+- **Import from JSON**: Restore complete board from previously exported JSON file
+- **Data Validation**: Imported files are checked for proper format
+- **Confirmation Dialog**: Review import details before replacing current board
+- **Complete Restoration**: Imports restore all notes, connections, and layout
 
 ### Best Practices
 
