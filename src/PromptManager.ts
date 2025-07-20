@@ -247,31 +247,23 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
         text: `
             You are a creative genius.
 
-            Original content to generate ideas for:
+            Original prompt to generate ideas for:
             ---
             {{content}}
             ---
 
-            Please generate {{idea_count}} distinct ideas in {{language}}.
-            If the original content looks like finished text, give ideas how to immprove it.
-            If the original content looks like a draft, give ideas how to develop it.
-            If the original content looks like a list, give ideas how to expand it.
-            If the original content looks like a question, give ideas how to answer it.
-            If the original content looks like a list of tasks, give ideas how to complete them.
-            If the original content looks like character(s), give ideas how to develop them.
-            If the original content looks like a concept, give ideas for implementations.
-            The guiding principle is to anticipate where the user could use ideas for his input.
+            The guiding principle is to anticipate which answers are the most usefull for the user.
             Any structural elements (such as section headers) must always remain in English.
 
             EXACT FORMAT EXAMPLE:
             === IDEA START ===
-            [First creative idea related to the content]
+            [First creative idea]
             === IDEA END ===
             === IDEA START ===
-            [Second creative idea exploring different aspects]
+            [Second creative idea]
             === IDEA END ===
 
-            Generate {{idea_count}} ideas following this format precisely.
+            Generate {{idea_count}} ideas in {{language}} following this format precisely.
         `.trim(),
         placeholders: ['content', 'language', 'idea_count'],
         description: "The system prompt for generating creative ideas related to given content with precise formatting markers for reliable parsing."

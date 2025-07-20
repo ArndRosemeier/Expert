@@ -56,7 +56,7 @@ export class ReaderGUI {
     private isListeningForUpdates: boolean = false;
     private isSettingsPanelOpen: boolean = false;
     private readerEditor: ReaderEditor;
-    private hasBeenRendered: boolean = false; // Track if this instance has been rendered
+
     private rootNode: DocumentNode; // The starting node for the reader view
     
     // Search state
@@ -69,7 +69,7 @@ export class ReaderGUI {
     private boundHandleClick: (event: MouseEvent) => void;
     private boundHandleDoubleClick: (event: MouseEvent) => void;
     // Bound method references for project manager event listeners
-    private boundHandleNodeGenerationComplete: (e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }) => void;
+    private boundHandleTreeUpdate: (e: { nodeId: string, reason: string }) => void;
     private boundHandleNodeSummaryGenerated: (e: { nodeId: string, summary: string }) => void;
     private boundHandleProjectUpdate: () => void;
 
@@ -83,7 +83,7 @@ export class ReaderGUI {
         this.boundHandleClick = this.handleClick.bind(this);
         this.boundHandleDoubleClick = this.handleDoubleClick.bind(this);
         // Bind project manager event handlers
-        this.boundHandleNodeGenerationComplete = this.handleNodeGenerationComplete.bind(this);
+        this.boundHandleTreeUpdate = this.handleTreeUpdate.bind(this);
         this.boundHandleNodeSummaryGenerated = this.handleNodeSummaryGenerated.bind(this);
         this.boundHandleProjectUpdate = this.handleProjectUpdate.bind(this);
         
@@ -123,9 +123,6 @@ export class ReaderGUI {
         
         // Initialize the editor after DOM is ready (async)
         void this.readerEditor.initialize();
-        
-        // Mark this instance as having been rendered
-        this.hasBeenRendered = true;
     }
 
     /**
@@ -3455,9 +3452,6 @@ export class ReaderGUI {
         // Restore the main page scrollbar
         document.body.style.overflow = '';
         
-        // Reset render flag
-        this.hasBeenRendered = false;
-        
         // Clear global instance
         if (globalReaderInstance === this) {
             globalReaderInstance = null;
@@ -3489,10 +3483,8 @@ export class ReaderGUI {
         
         await this.loadReaderConfig();
         
-        // Only render if this instance has never been rendered before
-        if (!this.hasBeenRendered) {
-            this.render(); // Only render once per instance
-        }
+        // Always render fresh to show current document state
+        this.render();
         
         this.applySettings();
         this.startListeningForUpdates();
@@ -3533,8 +3525,8 @@ export class ReaderGUI {
         
         this.isListeningForUpdates = true;
         
-        // Listen for node generation completion to update reader content
-        this.projectManager.on('nodeGenerationComplete', this.boundHandleNodeGenerationComplete);
+        // Listen for tree updates from the new UnifiedGenerationService
+        this.projectManager.on('tree-update-needed', this.boundHandleTreeUpdate);
         
         // Listen for summary generation
         this.projectManager.on('nodeSummaryGenerated', this.boundHandleNodeSummaryGenerated);
@@ -3552,7 +3544,7 @@ export class ReaderGUI {
         this.isListeningForUpdates = false;
         
         // Remove event listeners (matching what we actually listen for)
-        this.projectManager.off('nodeGenerationComplete', this.boundHandleNodeGenerationComplete);
+        this.projectManager.off('tree-update-needed', this.boundHandleTreeUpdate);
         this.projectManager.off('nodeSummaryGenerated', this.boundHandleNodeSummaryGenerated);
         this.projectManager.off('project-loaded', this.boundHandleProjectUpdate);
     }
@@ -3560,30 +3552,36 @@ export class ReaderGUI {
 
 
     /**
-     * Handle node generation completion - update reader content without breaking editor
+     * Handle tree updates from UnifiedGenerationService - update reader content without breaking editor
      */
-    private handleNodeGenerationComplete(e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }): void {
+    private handleTreeUpdate(e: { nodeId: string, reason: string }): void {
         // Check if any AI actions are in progress - block all updates if so
         if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
-            console.log(`🚫 Reader update blocked - AI action in progress, skipping update for: "${e.node.title}" (${e.nodeId})`);
+            console.log(`🚫 Reader update blocked - AI action in progress, skipping update for node: ${e.nodeId} (${e.reason})`);
             return;
         }
         
-        if (e.success) {
-            console.log(`📖 Reader auto-updating content for: "${e.node.title}" (${e.nodeId})`);
-            
-            // Check if this is a new node that wasn't in the reader when it was built
-            const existingContentNode = this.contentNodes.find(cn => cn.id === e.nodeId);
-            if (!existingContentNode) {
-                console.log(`🆕 New node detected: "${e.node.title}" - rebuilding reader content`);
-                this.refreshReaderForNewNodes();
-                return;
+        // Handle different types of updates
+        if (e.reason === 'content-generated' || e.reason === 'generation-completed') {
+            const node = this.projectManager.findNodeById(e.nodeId);
+            if (node) {
+                console.log(`📖 Reader auto-updating content for: "${node.title}" (${e.nodeId}) - reason: ${e.reason}`);
+                
+                // Check if this is a new node that wasn't in the reader when it was built
+                const existingContentNode = this.contentNodes.find(cn => cn.id === e.nodeId);
+                if (!existingContentNode) {
+                    console.log(`🆕 New node detected: "${node.title}" - rebuilding reader content`);
+                    this.refreshReaderForNewNodes();
+                    return;
+                }
+                
+                // Update the reader content for this specific node
+                this.updateNodeContentInReader(e.nodeId, node.content);
             }
-            
-            // Update the reader content for this specific node
-            this.updateNodeContentInReader(e.nodeId, e.node.content);
-        } else {
-            console.log(`❌ Node generation failed for: "${e.node.title}" (${e.nodeId}) - Reader not updated`);
+        } else if (e.reason === 'children-created' || e.reason === 'draft-creation-completed') {
+            // New nodes were created - need to rebuild reader to include them
+            console.log(`🆕 New children created - rebuilding reader content (reason: ${e.reason})`);
+            this.refreshReaderForNewNodes();
         }
     }
 

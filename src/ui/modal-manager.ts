@@ -1128,8 +1128,11 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                                 }
                             }
                             
-                            // Create the tree data structure
+                            // Create the tree data structure (string representation for prompt)
                             const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
+                            
+                            // Create depth-limited node structure for roleplay functionality
+                            const depthLimitedNode = contextService.createDepthLimitedNodeStructure(node, depth);
                             
                             // Get the node chat system prompt
                             const prompts = projectManager.getSettingsManager().getPrompts();
@@ -1150,8 +1153,8 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                                 void modalInstance.close();
                             }
                             
-                            // Open the chat interface
-                            void openNodeChatInterface(projectManager, systemPrompt, node.title, node);
+                            // Open the chat interface with depth-limited node structure
+                            void openNodeChatInterface(projectManager, systemPrompt, node.title, depthLimitedNode);
                             
                         } catch (error: any) {
                             alert('Error preparing chat:\n\n' + error.message);

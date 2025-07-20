@@ -399,4 +399,50 @@ export class ContextExtractionService {
         
         return parts.join('\n');
     }
+
+    /**
+     * Creates a depth-limited clone of the DocumentNode structure for chat context.
+     * This ensures roleplay and other features only see nodes within the selected depth.
+     * @param node The root node to clone
+     * @param depth Maximum depth to include
+     * @param currentDepth Current traversal depth
+     * @returns A new DocumentNode with only children up to the specified depth
+     */
+    public createDepthLimitedNodeStructure(node: DocumentNode, depth: number, currentDepth: number = 0): DocumentNode {
+        // Create a new node with the same properties but empty children array
+        const clonedNode = new DocumentNode(node.level, node.title, node.parentId, node.template);
+        
+        // Copy all properties
+        clonedNode.setContent(node.content, 'master');
+        clonedNode.setContext(node.context, 'master');
+        clonedNode.generationPrompt = node.generationPrompt;
+        clonedNode.isPromptGenerating = node.isPromptGenerating;
+        clonedNode.collapsed = node.collapsed;
+        clonedNode.generationHistory = [...node.generationHistory];
+        clonedNode.isGenerating = node.isGenerating;
+        clonedNode.generationSessions = node.generationSessions.map(session => ({...session}));
+        
+        // Copy creator model metadata if it exists
+        if (node.creatorModel) {
+            const masterVersion = clonedNode.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['creatorModel'] = node.creatorModel;
+            }
+        }
+        
+        // Only include children if we haven't reached the depth limit
+        if (currentDepth < depth && node.children.length > 0) {
+            clonedNode.children = node.children.map(child => 
+                this.createDepthLimitedNodeStructure(child, depth, currentDepth + 1)
+            );
+            
+            // Update parent IDs for the cloned children
+            clonedNode.children.forEach(child => {
+                child.parentId = clonedNode.id;
+            });
+        }
+        
+        return clonedNode;
+    }
 } 

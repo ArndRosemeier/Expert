@@ -1158,7 +1158,7 @@ export class IdeaBoard {
     // Deselect previously selected element
     if (this.selectedElement) {
       if (this.selectedElement instanceof PostItNote || this.selectedElement instanceof BackgroundRectangle) {
-        this.selectedElement.setSelected(false);
+      this.selectedElement.setSelected(false);
       }
     }
 
@@ -1166,7 +1166,7 @@ export class IdeaBoard {
     this.selectedElement = element;
     if (element) {
       if (element instanceof PostItNote || element instanceof BackgroundRectangle) {
-        element.setSelected(true);
+      element.setSelected(true);
       }
     }
 
@@ -1389,7 +1389,7 @@ export class IdeaBoard {
     if (this.isConnecting && this.connectionStart && this.dragConnectionEnd) {
       this.renderConnectionPreview();
     }
-    
+
     // Draw post-it notes on top (top layer)
     for (const element of postItNotes) {
       // Skip rendering elements that are being deleted (they will be rendered with scaling in deletion animation)
@@ -1646,8 +1646,8 @@ export class IdeaBoard {
       }
     } else {
       // For post-it notes, use normal front-bringing (but they stay after background rectangles)
-      this.elements.delete(element.id);
-      this.elements.set(element.id, element);
+    this.elements.delete(element.id);
+    this.elements.set(element.id, element);
     }
     
     // Also update the order in boardState.elements
@@ -1794,17 +1794,17 @@ export class IdeaBoard {
       if (nonEmptyChildPostIts.length > 0) {
         // Only show warning if there's content that would be overwritten
         const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(0, -1);
-        const userConfirmed = confirm(
+      const userConfirmed = confirm(
           `🔄 Generate ${typeCapitalized}: Connected Mode\n\n` +
           `The selected post-it has ${childPostIts.length} child post-it(s).\n` +
           `${nonEmptyChildPostIts.length} of them contain content that will be replaced.\n` +
           `This will generate exactly ${childPostIts.length} ${type} and replace the content in all child post-its.\n\n` +
-          'Do you want to continue and replace the existing content?'
-        );
-        
-        if (!userConfirmed) {
+        'Do you want to continue and replace the existing content?'
+      );
+      
+      if (!userConfirmed) {
           console.log(`🔄 ${typeCapitalized} generation cancelled by user.`);
-          return;
+        return;
         }
       }
       
@@ -2776,8 +2776,8 @@ export class IdeaBoard {
       if (connection.fromPostItId === postItId || connection.toPostItId === postItId) {
         connection.stopAnimation();
       }
-    }
-    this.requestRedraw();
+      }
+      this.requestRedraw();
   }
 
 
@@ -2914,9 +2914,9 @@ export class IdeaBoard {
         // Update post-it position based on background rectangle's new position + stored offset
         postIt.position.x = backgroundRect.position.x + offset.x;
         postIt.position.y = backgroundRect.position.y + offset.y;
-        this.updateElementData(postIt);
+          this.updateElementData(postIt);
+        }
       }
-    }
   }
 
   /**
