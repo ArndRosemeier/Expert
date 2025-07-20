@@ -10,10 +10,11 @@
 7. [Templates & Structure](#templates--structure)
 8. [Quality Control System](#quality-control-system)
 9. [Profile & Model Management](#profile--model-management)
-10. [Reader View & Export](#reader-view--export)
-11. [Advanced Features](#advanced-features)
-12. [Troubleshooting](#troubleshooting)
-13. [Best Practices](#best-practices)
+10. [Idea Board](#idea-board)
+11. [Reader View & Export](#reader-view--export)
+12. [Advanced Features](#advanced-features)
+13. [Troubleshooting](#troubleshooting)
+14. [Best Practices](#best-practices)
 
 ---
 
@@ -115,6 +116,7 @@ API keys are stored locally in your browser's IndexedDB. Only you have access to
 - **📝 New Project**: Create a new document project
 - **📁 Import Project**: Load existing project data
 - **📦 Save/Load All**: Comprehensive export/import system
+- **🧠 Idea Board**: Open visual brainstorming canvas
 - **⚙️ Settings**: Access configuration and profiles
 - **🎯 Manage Templates**: Create and edit document templates
 
@@ -145,8 +147,7 @@ The interface is organized into three main sections:
 - Node details and editing interface
 - Content generation controls
 - Version management
-- Quality ratings display (shows ratings from currently selected version)
-- Historical ratings accessible through version management
+- Quality ratings display
 
 **3. Context Panel (Bottom)**
 - Inherited context display
@@ -253,7 +254,7 @@ Book Project Template:
 
 1. **Draft Level**: Deepest level for which child nodes are created
 2. **Content Level**: Which levels receive AI-generated content (≤ Draft Level)
-3. **Context Prune Level**: Which levels get automatic context cleanup (works on master versions directly)
+3. **Context Prune Level**: Which levels get automatic context cleanup
 4. **Coherence Level**: Which levels get consistency checking (< Draft Level)
 
 **Example Configuration:**
@@ -335,12 +336,10 @@ The system automatically chooses between Creator and Prose models based on node 
 2. System compiles context from hierarchy
 3. Creator generates initial content
 4. Rater evaluates against quality criteria
-5. Ratings are captured and stored in generation session iterations
-6. If scores below goals: Editor provides feedback
-7. Creator regenerates with feedback
-8. Process repeats until quality goals met
-9. Final content and ratings saved to node versions
-10. Generation session preserves complete rating history
+5. If scores below goals: Editor provides feedback
+6. Creator regenerates with feedback
+7. Process repeats until quality goals met
+8. Final content and ratings saved to node
 
 **Batch Generation:**
 1. User selects parent node and generation levels
@@ -383,8 +382,6 @@ Automatic cleanup to prevent context overflow:
 - Condense repeated information
 - Prioritize relevant context
 - Maintain context size within AI model limits
-- Works directly on master versions without creating new version entries
-- Preserves existing tags like "context_ai_adjusted" during updates
 
 ---
 
@@ -581,25 +578,22 @@ Different profiles can have different quality criteria:
 
 ### Rating System
 
-**Unified Rating Interface:**
-Expert uses a unified Rating interface across all components to ensure consistency and prevent type errors. Each rating contains:
-- **actual**: The numerical score (1-10) assigned by the Rater AI
-- **criterion**: The quality criterion being evaluated (as a string identifier)
-- **feedback**: Written justification and suggestions for improvement
+**Rating Components:**
+Each rating contains:
+- **Score**: The numerical score (1-10) assigned by the Rater AI
+- **Criterion**: The quality aspect being evaluated
+- **Feedback**: Written justification and suggestions for improvement
 
 **Scoring Process:**
 1. Rater AI evaluates content against each criterion
 2. Assigns numerical score (1-10) based on criterion goals
 3. Provides written justification for each score
-4. Ratings are automatically captured and stored in generation sessions
-5. Ratings are preserved in content versions for historical tracking
-6. Overall score calculated as weighted average
-7. Identifies areas needing improvement
+4. Overall score calculated as weighted average
+5. Identifies areas needing improvement
 
-**Rating Storage:**
-- Ratings are stored in generation session iterations
-- Each content version preserves its associated ratings
-- Node Inspector displays ratings from the currently selected version
+**Rating Display:**
+- Ratings appear in the Node Inspector for generated content
+- Each content version shows its associated ratings
 - Historical ratings remain accessible through version management
 
 **Score Interpretation:**
@@ -704,6 +698,180 @@ For each AI role, choose from available OpenRouter models:
 
 ---
 
+## Idea Board
+
+The Idea Board is an infinite canvas visual brainstorming environment that complements Expert's hierarchical document structure. It provides a flexible space for organizing ideas, exploring connections, and collaborating with AI on creative projects.
+
+### Overview
+
+**What is the Idea Board?**
+The Idea Board is a visual workspace featuring:
+- **Infinite Canvas**: Pan and zoom freely in any direction
+- **Post-It Notes**: Moveable, resizable sticky notes for capturing ideas
+- **AI Integration**: Built-in chat interface for idea generation and analysis
+- **Project Integration**: Connect ideas to your document projects
+- **Visual Organization**: Color coding, grouping, and connection tools
+
+**When to Use the Idea Board:**
+- **Brainstorming**: Generate and organize initial project ideas
+- **Plot Development**: Visually map story elements, character arcs, and scenes
+- **Research Organization**: Collect and categorize research materials
+- **Problem Solving**: Break down complex problems into manageable parts
+- **Creative Exploration**: Experiment with concepts before committing to document structure
+
+### Accessing the Idea Board
+
+**Opening the Idea Board:**
+1. Click the **🧠 Idea Board** button in the main interface header
+2. The Idea Board opens in a full-screen modal overlay
+3. Multiple boards can be created and managed separately
+
+**Board Management:**
+- **Create New Board**: Start fresh brainstorming sessions
+- **Save/Load Boards**: Persistent storage for ongoing projects
+- **Export Boards**: Save as markdown files for sharing or documentation
+
+### Core Features
+
+#### Post-It Notes
+
+**Creating Notes:**
+- **Double-click** empty canvas space to create a new note
+- **Right-click** for context menu with creation options
+- Notes appear with default yellow color and standard size
+
+**Editing Notes:**
+- **Double-click** note to enter text editing mode
+- **Type** to add or modify content
+- **Click outside** or press Escape to finish editing
+- **Markdown formatting** supported for rich text
+
+**Customizing Notes:**
+- **Color Options**: Yellow, blue, green, pink, orange, white
+- **Resize**: Drag corner handles to adjust size
+- **Move**: Click and drag to reposition anywhere on canvas
+- **Layer Order**: Right-click to bring forward or send backward
+
+#### Canvas Navigation
+
+**Pan and Zoom:**
+- **Mouse Wheel**: Zoom in/out at cursor position
+- **Click and Drag**: Pan around the infinite canvas
+- **Zoom Range**: 10% to 500% for detail work or overview
+- **Smooth Animation**: Fluid movement for comfortable navigation
+
+**Navigation Tips:**
+- Use zoom out for overview of all ideas
+- Zoom in for detailed editing of specific notes
+- Pan to explore different areas of your brainstorm
+- No boundaries - canvas extends infinitely in all directions
+
+#### AI Integration
+
+**AI Chat Interface:**
+The Idea Board includes a powerful AI chat system for creative collaboration:
+
+**Chat Features:**
+- **Floating Panel**: Collapsible chat interface that doesn't obstruct your work
+- **Context Awareness**: AI understands your current board content
+- **Model Selection**: Choose from available AI models for different perspectives
+- **Project Integration**: Insert content from your document projects
+
+**AI Assistance Types:**
+
+**Idea Generation:**
+- "Generate 10 character concepts for a sci-fi story"
+- "Suggest plot twists for my mystery novel"
+- "What are innovative features for a mobile app?"
+
+**Board Analysis:**
+- "Analyze the connections between these concepts"
+- "Find gaps in my research organization"
+- "Suggest how to group these ideas logically"
+
+**Content Development:**
+- "Expand this concept into a detailed outline"
+- "Find contradictions in these story elements"
+- "Suggest how to connect these seemingly unrelated ideas"
+
+**Export Assistance:**
+- "Help organize these ideas into a document structure"
+- "Which concepts should become main chapters?"
+- "Create a logical flow from these scattered thoughts"
+
+#### Advanced Operations
+
+**Selection and Multi-Operations:**
+- **Click** to select individual notes
+- **Ctrl+Click** to select multiple notes
+- **Drag Selection Box** to select groups of notes
+- **Group Operations**: Move, delete, or modify multiple notes at once
+
+**Copy and Paste:**
+- **Ctrl+C**: Copy selected notes
+- **Ctrl+V**: Paste notes at cursor location
+- **Duplicates** maintain content and formatting
+- **Smart Positioning** prevents overlapping
+
+**Keyboard Shortcuts:**
+- **Delete**: Remove selected notes
+- **Ctrl+Z**: Undo last action
+- **Ctrl+Y**: Redo last undone action
+- **Escape**: Clear selections or exit editing mode
+- **Ctrl+A**: Select all notes on visible canvas
+
+### Integration with Document Projects
+
+**Project Connections:**
+- **Reference Nodes**: Insert content from document project nodes
+- **Context Import**: Pull project context into AI chat
+- **Idea Export**: Transform board concepts into document structures
+- **Cross-Pollination**: Use board insights to enhance project content
+
+**Workflow Integration:**
+1. **Brainstorm** initial concepts on Idea Board
+2. **Organize** ideas visually with colors and grouping
+3. **Develop** concepts using AI chat assistance
+4. **Export** structured ideas to create new document projects
+5. **Iterate** between board exploration and document creation
+
+### Board Management
+
+**Saving and Loading:**
+- **Auto-Save**: Boards save automatically when you switch focus
+- **Manual Save**: Use save button for explicit control
+- **Multiple Boards**: Create separate boards for different projects
+- **Board List**: Access all your saved boards from the interface
+
+**Export Options:**
+- **Markdown Export**: Convert board to structured markdown document
+- **Content Organization**: Export maintains note groupings and relationships
+- **Timestamp**: Exported files include creation date and time
+- **Sharing**: Use exported markdown for collaboration or backup
+
+### Best Practices
+
+**Effective Brainstorming:**
+- **Start Small**: Begin with simple one-line concepts
+- **Use Colors**: Organize by theme, priority, or development stage
+- **Think Spatially**: Position related ideas near each other
+- **Embrace Chaos**: Don't worry about organization initially
+- **Regular Review**: Step back and zoom out to see the big picture
+
+**AI Collaboration:**
+- **Be Specific**: Give AI clear context about your project goals
+- **Iterative Refinement**: Use multiple AI conversations to develop ideas
+- **Cross-Reference**: Connect AI suggestions back to your existing notes
+- **Critical Evaluation**: AI provides suggestions, you make creative decisions
+
+**Project Development:**
+- **Document Progression**: Use board for initial exploration, documents for development
+- **Maintain Connection**: Keep boards updated as projects evolve
+- **Archive Completed**: Save finished brainstorms for future reference
+- **Template Creation**: Develop board templates for recurring project types
+
+---
+
 ## Reader View & Export
 
 ### Reader View
@@ -801,9 +969,7 @@ Analyze consistency between outline and expanded content using AI.
 **Automatic Coherence Checking:**
 - Runs automatically during level-based generation when coherence level is set
 - Processes nodes systematically as content is generated
-- Handles errors gracefully - if coherence check fails due to technical issues (network errors, API timeouts), nodes remain untagged for future analysis
 - Successfully analyzed nodes are tagged as "consistent_to_parent"
-- Failed coherence checks do not incorrectly mark nodes as consistent
 
 **Coherence Results:**
 - **Contradiction Description**: Clear explanation of the issue
@@ -812,11 +978,7 @@ Analyze consistency between outline and expanded content using AI.
 - **Suggested Fix**: AI recommendation for resolution
 - **Auto-Fix Option**: Apply AI-suggested correction automatically
 
-**Error Handling:**
-- Network or API failures during coherence checking leave nodes untagged
-- Nodes can be re-analyzed later when technical issues are resolved
-- Error messages provide clear information about what went wrong
-- No false positive "consistent" tags are applied on failed checks
+
 
 ### Context Extraction
 
@@ -943,10 +1105,9 @@ Interactive chat with AI models using project context.
 - **Use**: Batch operations for consistency
 
 **Problem**: Ratings not displaying in Node Inspector
-- **Check**: That the selected version has associated ratings
-- **Verify**: Generation completed successfully and ratings were captured
-- **Note**: Only completed generation sessions store ratings in versions
-- **Switch**: Between versions to see different rating sets
+- **Check**: That content was generated (not manually entered)
+- **Try**: Switching between different content versions
+- **Verify**: Generation completed successfully
 
 #### Data Loss Prevention
 
@@ -1034,8 +1195,6 @@ Interactive chat with AI models using project context.
 - Adjust criteria weights based on project priorities
 - Use iterative refinement rather than perfect first drafts
 - Review AI suggestions before accepting changes
-- Ratings are automatically preserved in content versions for historical tracking
-- Failed operations (network errors, API timeouts) are handled gracefully without data corruption
 
 ### Performance Optimization
 
