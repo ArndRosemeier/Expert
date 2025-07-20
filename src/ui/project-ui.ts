@@ -2044,10 +2044,10 @@ export function renderNodeDetails() {
             errorMessage = 'Content level cannot be higher than draft level';
         }
         
-        // Coherence level must be less than draft level
-        if (coherenceLevel >= draftLevel && draftLevel !== -1) {
+        // Coherence level cannot be higher than draft level
+        if (coherenceLevel > draftLevel && draftLevel !== -1) {
             isValid = false;
-            errorMessage = 'Coherence level must be less than draft level';
+            errorMessage = 'Coherence level cannot be higher than draft level';
         }
         
         // Show/hide validation message
@@ -4286,8 +4286,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             return;
         }
         
-    if (coherenceLevel >= draftLevel && draftLevel !== -1) {
-        alert('Coherence level must be less than draft level');
+    if (coherenceLevel > draftLevel && draftLevel !== -1) {
+        alert('Coherence level cannot be higher than draft level');
         return;
     }
     

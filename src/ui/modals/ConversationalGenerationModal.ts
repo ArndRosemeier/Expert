@@ -94,15 +94,15 @@ export class ConversationalGenerationModal extends BaseModal {
     }
 
     /**
-     * Get coherence levels (parent levels only, limited by draft level)
+     * Get coherence levels (can be up to and including draft level)
      */
     private getCoherenceLevels(): Array<{ value: number; name: string }> {
         const levels: Array<{ value: number; name: string }> = [];
         
-        // Coherence level must be less than draft level and structure creation must be enabled
+        // Coherence checking requires structure creation to be enabled
         if (this.draftLevel === -1) return levels; // No coherence checking if no structure creation
         
-        const maxLevel = Math.min(this.draftLevel - 1, this.node.template.length - 2);
+        const maxLevel = Math.min(this.draftLevel, this.node.template.length - 2);
         
         for (let i = this.node.level; i <= maxLevel; i++) {
             levels.push({
@@ -635,9 +635,9 @@ export class ConversationalGenerationModal extends BaseModal {
             errors.push('Content level cannot be higher than structure creation level.');
         }
 
-        // Check if coherence level >= draft level
-        if (this.coherenceLevel >= this.draftLevel && this.draftLevel !== -1) {
-            errors.push('Quality checking level must be less than structure creation level.');
+        // Check if coherence level > draft level
+        if (this.coherenceLevel > this.draftLevel && this.draftLevel !== -1) {
+            errors.push('Quality checking level cannot be higher than structure creation level.');
         }
 
         // Check if context prune level > draft level

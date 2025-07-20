@@ -317,8 +317,8 @@ export class UnifiedGenerationService {
         if (levels.contentLevel > levels.draftLevel) {
             throw new Error('Content level cannot be higher than draft level');
         }
-        if (levels.coherenceLevel >= levels.draftLevel && levels.draftLevel !== -1) {
-            throw new Error('Coherence level must be less than draft level');
+        if (levels.coherenceLevel > levels.draftLevel && levels.draftLevel !== -1) {
+            throw new Error('Coherence level cannot be higher than draft level');
         }
     }
 

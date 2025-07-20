@@ -76,7 +76,7 @@ export class GenerationLevelsHelpModal extends BaseModal {
                         </div>
                         <p><strong>What it does:</strong> Checks for contradictions between outline and expanded content.</p>
                         <p><strong>Example:</strong> Ensures chapter content actually matches the chapter's outline description</p>
-                        <div class="tip">💡 Must be < Draft Level. Triggers after all children of a level are completed.</div>
+                        <div class="tip">💡 Can be ≤ Draft Level. Triggers after all children of a level are completed.</div>
                     </div>
                 </div>
 
@@ -151,7 +151,7 @@ export class GenerationLevelsHelpModal extends BaseModal {
                     <h3>⚠️ Important Rules</h3>
                     <ul>
                         <li><strong>Content Level ≤ Draft Level:</strong> You can't write content for levels that don't exist yet</li>
-                        <li><strong>Coherence Level < Draft Level:</strong> Coherence checks the parent of completed levels</li>
+                        <li><strong>Coherence Level ≤ Draft Level:</strong> Coherence checks the parent of completed levels</li>
                         <li><strong>"None" option:</strong> Use this to skip any step completely</li>
                         <li><strong>Lower numbers = higher in hierarchy:</strong> 0 is the root, 1 is first level down, etc.</li>
                     </ul>
