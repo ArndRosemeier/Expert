@@ -401,6 +401,17 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
                 if (aborted) break;
 
+                // Emit progress with actual ratings after rating completion
+                this.emit('progress', { 
+                    iteration: i, 
+                    maxIterations: maxIterations, 
+                    phase: 'rate', 
+                    payload: { ratings: ratingsFromAI, goalResults },
+                    ratings: ratingsFromAI,
+                    failureScore: this.calculateFailureScore(ratingsFromAI),
+                    progress: 0
+                });
+
                 // Store this iteration's result for best attempt selection
                 const failureScore = this.calculateFailureScore(ratingsFromAI);
                 const iterationResult: IterationResult = {
