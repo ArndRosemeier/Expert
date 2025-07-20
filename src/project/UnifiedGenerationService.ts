@@ -1187,8 +1187,9 @@ export class UnifiedGenerationService {
                 }
             );
             
-            // On error, still tag nodes to prevent them from being stuck in inconsistent state
-            await this.tagAnalyzedSubnodesAsConsistent();
+            // Do NOT tag nodes on error - if coherence check failed, we don't know if they're consistent
+            // Nodes will remain untagged and can be checked again later
+            console.log(`⚠️ Coherence check failed due to error - nodes remain untagged for future analysis`);
         }
     }
 
@@ -1219,42 +1220,7 @@ export class UnifiedGenerationService {
         await this.saveProjectAfterBatchTagging();
     }
 
-    /**
-     * Tag all analyzed nodes' subnodes as consistent to parent
-     */
-    private async tagAnalyzedSubnodesAsConsistent(): Promise<void> {
-        console.log(`🏷️ Tagging subnodes from accumulated coherence analysis as consistent to parent`);
-        
-        let totalTaggedCount = 0;
-        
-        for (const parentNode of this.accumulatedContradictions.analyzedNodes) {
-            console.log(`🏷️ Tagging subnodes of "${parentNode.title}" as consistent to parent`);
-            
-            let nodeTaggedCount = 0;
-            
-            // Tag all children's master versions
-            for (const childNode of parentNode.children) {
-                const masterVersion = childNode.getMasterVersion();
-                if (masterVersion) {
-                    // Add the consistent_to_parent tag
-                    masterVersion.tags.add('consistent_to_parent');
-                    masterVersion.timestamp = new Date(); // Update timestamp
-                    nodeTaggedCount++;
-                    totalTaggedCount++;
 
-                } else {
-                    console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
-                }
-            }
-            
-
-        }
-        
-        console.log(`✅ Batch tagging completed: ${totalTaggedCount} total subnodes tagged as consistent`);
-        
-        // Save the project after tagging
-        await this.saveProjectAfterBatchTagging();
-    }
 
     /**
      * Save project after batch tagging subnodes
