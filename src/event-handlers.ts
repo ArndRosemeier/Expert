@@ -1126,7 +1126,15 @@ export async function initialize() {
                     // Use DocumentImportService to parse the document
                     const { DocumentImportService } = await import('./DocumentImportService');
                     const importService = new DocumentImportService({
-                        detection: { minimumConfidence: 0.1 } // Lower threshold for more permissive detection
+                        detection: { 
+                            minimumConfidence: 0.1,
+                            enableHeaderDetection: true,
+                            enableNumberingDetection: true,
+                            enableKeywordDetection: true,
+                            enableIndentationDetection: true,
+                            enableFormattingDetection: true,
+                            maxContentLength: 10000
+                        }
                     });
                     
                     const parsedDocument = importService.parseDocument(textContent, file.name);
@@ -1164,23 +1172,8 @@ export async function initialize() {
                         []
                     );
                     
-                    // Create import data structure
-                    const importData = {
-                        title: projectTitle,
-                        content: buildProjectContent(parsedDocument.hierarchy),
-                        template: {
-                            name: template.name,
-                            hierarchyLevels: template.hierarchyLevels,
-                            scaffoldingDocuments: template.scaffoldingDocuments
-                        },
-                        isHierarchicalImport: true,
-                        originalFileName: file.name,
-                        detectionConfidence: parsedDocument.totalConfidence,
-                        parsedHierarchy: parsedDocument.hierarchy
-                    };
-                    
-                    // Import the project
-                    handleImportProject(projectTitle, template, importData);
+                    // Create project with proper hierarchical structure
+                    await createHierarchicalProject(projectTitle, template, parsedDocument.hierarchy, file.name, parsedDocument.totalConfidence);
                     
                 } catch (error) {
                     // Always close progress modal on any error
@@ -1198,6 +1191,86 @@ export async function initialize() {
         document.body.appendChild(fileInput);
         fileInput.click();
         document.body.removeChild(fileInput);
+    }
+
+    // Function to create project with proper hierarchical structure from DocumentImportService
+    async function createHierarchicalProject(projectTitle: string, template: ProjectTemplate, hierarchyNodes: any[], fileName: string, confidence: number): Promise<void> {
+        const orchestrator = state.getOrchestrator();
+        const settingsManager = state.getSettingsManager();
+        const client = state.getOpenRouterClient();
+
+        if (!orchestrator || !settingsManager || !client) {
+            throw new Error('Core services not initialized. Cannot create hierarchical project.');
+        }
+
+        // Create the project
+        const project = new ProjectManager(projectTitle, template, orchestrator, settingsManager, client);
+        
+        // Ensure all nodes share the same template reference
+        AssertFlatTemplateCopy(project);
+
+        // Set root node title and add metadata about the import
+        const rootNode = project.rootNode;
+        rootNode.setTitle(projectTitle, 'master');
+        
+        // Add import metadata to root node
+        const rootMasterVersion = rootNode.getMasterVersion();
+        if (rootMasterVersion) {
+            rootMasterVersion.metadata = rootMasterVersion.metadata || {};
+            rootMasterVersion.metadata['importSource'] = fileName;
+            rootMasterVersion.metadata['detectionConfidence'] = confidence;
+            rootMasterVersion.metadata['importType'] = 'hierarchical';
+            rootMasterVersion.metadata['importTimestamp'] = new Date().toISOString();
+        }
+
+        // Recursively create nodes from hierarchy
+        await createNodesFromHierarchy(project, rootNode.id, hierarchyNodes);
+
+        // Add to state and save
+        state.addProject(project);
+        
+        // Set the new project as active and select its root node
+        state.setActiveProject(project.rootNode.id);
+        
+        // Recreate and configure services for the new project
+        recreateAndReconfigureServices();
+        
+        // Save to storage
+        await project.saveToStorage();
+        
+        // Initialize the project UI
+        await initializeProjectUI(project);
+        
+        console.log(`✅ Hierarchical project "${projectTitle}" created successfully with ${hierarchyNodes.length} top-level sections`);
+    }
+
+    // Helper function to recursively create DocumentNode instances from hierarchy
+    async function createNodesFromHierarchy(project: ProjectManager, parentId: string | null, hierarchyNodes: any[]): Promise<void> {
+        for (const hierarchyNode of hierarchyNodes) {
+            // Create the node using ProjectManager's addNode method
+            const documentNode = project.addNode(hierarchyNode.title, parentId);
+            
+            // Set the content for this node
+            if (hierarchyNode.content && hierarchyNode.content.trim()) {
+                documentNode.setContent(hierarchyNode.content.trim(), 'master');
+            }
+            
+            // Add detection metadata
+            const masterVersion = documentNode.getMasterVersion();
+            if (masterVersion) {
+                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata['detectionMethod'] = hierarchyNode.detectionMethod;
+                masterVersion.metadata['detectionConfidence'] = hierarchyNode.confidence;
+                masterVersion.metadata['hierarchyLevel'] = hierarchyNode.level;
+                masterVersion.metadata['startPosition'] = hierarchyNode.startPosition;
+                masterVersion.metadata['endPosition'] = hierarchyNode.endPosition;
+            }
+            
+            // Recursively create children
+            if (hierarchyNode.children && hierarchyNode.children.length > 0) {
+                await createNodesFromHierarchy(project, documentNode.id, hierarchyNode.children);
+            }
+        }
     }
 
     // Helper function to handle text import with AI analysis (extracted from original function)
