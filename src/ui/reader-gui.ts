@@ -1394,13 +1394,12 @@ export class ReaderGUI {
                 }
                 
                 .reader-node {
-                    page-break-inside: avoid;
                     margin-bottom: 1rem;
                     padding: 1rem;
                 }
                 
                 .reader-separator.major {
-                    page-break-after: always;
+                    /* Page breaks removed for better ebook flow */
                 }
 
                 .node-minimal-title {

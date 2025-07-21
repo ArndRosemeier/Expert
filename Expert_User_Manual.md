@@ -5,12 +5,13 @@
 2. [Authentication & Key Management](#authentication--key-management)
 3. [Main Interface Overview](#main-interface-overview)
 4. [Project Management](#project-management)
-5. [Document Editing](#document-editing)
-6. [AI-Powered Features](#ai-powered-features)
-7. [Settings & Configuration](#settings--configuration)
-8. [Templates](#templates)
-9. [Export Functionality](#export-functionality)
-10. [Troubleshooting](#troubleshooting)
+5. [Document Import](#document-import)
+6. [Document Editing](#document-editing)
+7. [AI-Powered Features](#ai-powered-features)
+8. [Settings & Configuration](#settings--configuration)
+9. [Templates](#templates)
+10. [Export Functionality](#export-functionality)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -49,7 +50,7 @@
 - **Project Actions**:
   - **Delete Project**: Remove current project
   - **Export**: Save project in various formats
-  - **Import**: Load content into project
+  - **Import**: Load content into project (three import types available)
   - **Edit**: Modify project settings
 
 ### Generation Panel
@@ -96,7 +97,10 @@ Projects are organized with the following elements:
 ### Project Operations
 - **Delete Project**: Remove the entire project (red button)
 - **Export**: Save project in various formats (green button)
-- **Import**: Load content from external sources
+- **Import**: Load content from external sources with three options:
+  - **Import Expert Project**: Load existing Expert project files
+  - **Import Concept**: AI-powered analysis for concept extraction
+  - **Import Hierarchical Document**: Pattern-based import creating structured hierarchy
 - **Edit**: Access project settings and configuration
 
 ### Content Generation Workflow
@@ -111,6 +115,288 @@ Projects are organized with the following elements:
 - Active profile affects generation behavior
 - Use Export feature for backups and sharing
 - Content persists between sessions
+
+---
+
+## Document Import
+
+Expert supports importing structured documents in multiple formats, automatically detecting hierarchy and creating a properly organized project. The system can import PDF files, Markdown documents, and plain text files with intelligent structure recognition.
+
+### Import Options
+
+When you click the "Import" button, you'll see three import options:
+
+1. **Import Expert Project**: Load an existing Expert project (JSON format)
+2. **Import Concept**: AI-powered analysis of documents for concept extraction
+3. **Import Hierarchical Document**: Pattern-based import that creates structured project hierarchy
+
+### Supported Document Formats
+
+#### PDF Documents
+- Any PDF with structured text content
+- Headers, sections, and chapters will be automatically detected
+- Text-based PDFs work best (not scanned images)
+- File size limit: Reasonable size for browser processing
+
+#### Markdown Documents
+- Standard Markdown format (`.md` files)
+- Headers (`#`, `##`, `###`, etc.) define hierarchy levels
+- Nested structure supported up to 6 levels deep
+- Content between headers becomes node content
+
+#### Plain Text Documents
+- Text files (`.txt`) with clear structural patterns
+- Multiple header detection methods supported
+- Works with various formatting conventions
+
+### Document Structure Requirements
+
+For successful hierarchical import, your documents should follow clear structural patterns:
+
+#### Markdown Structure (Recommended)
+
+```markdown
+# Main Title or Book Title
+
+Introduction or book overview content.
+
+## Chapter 1: Beginning
+
+Content for the first chapter goes here.
+
+### Section 1.1: Character Introduction
+
+Detailed content about characters.
+
+### Section 1.2: Setting
+
+Description of the setting.
+
+## Chapter 2: Development
+
+Content for the second chapter.
+
+### Section 2.1: Plot Development
+
+Story progression details.
+
+# Part Two: Advanced Topics
+
+Second major section of the document.
+
+## Chapter 3: Resolution
+
+Final chapter content.
+```
+
+#### Numbered Sections
+
+```text
+1. Executive Summary
+
+Overview content for the entire document.
+
+1.1. Project Goals
+
+Specific goals and objectives.
+
+1.2. Timeline
+
+Project timeline information.
+
+2. Technical Requirements
+
+Technical specification details.
+
+2.1. System Requirements
+
+Hardware and software requirements.
+
+2.1.1. Server Specifications
+
+Detailed server requirements.
+
+2.2. Implementation Steps
+
+Step-by-step implementation guide.
+
+3. Conclusion
+
+Final thoughts and next steps.
+```
+
+#### Plain Text Headers
+
+```text
+PART ONE: FOUNDATION
+====================
+
+Introduction content for the first part.
+
+Chapter 1: Getting Started
+--------------------------
+
+Content for the first chapter.
+
+Section A: Prerequisites
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Prerequisites information.
+
+Section B: Installation
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Installation instructions.
+
+Chapter 2: Advanced Topics
+---------------------------
+
+Advanced content here.
+
+PART TWO: IMPLEMENTATION
+========================
+
+Second major section content.
+```
+
+#### Keyword-Based Sections
+
+```text
+Chapter 1: The Journey Begins
+
+Chapter content describing the start of the journey.
+
+Section 1: Preparation
+
+Preparation details and requirements.
+
+Section 2: First Steps
+
+Initial steps in the process.
+
+Chapter 2: Advanced Techniques
+
+More advanced topics and techniques.
+
+Episode 1: Troubleshooting
+
+Common problems and solutions.
+
+Episode 2: Best Practices
+
+Recommended approaches and practices.
+```
+
+### Structure Detection Patterns
+
+The import system recognizes these patterns for hierarchy detection:
+
+#### Headers (Highest Confidence)
+- **Markdown headers**: `#`, `##`, `###`, `####`, `#####`, `######`
+- **Underlined headers**: Lines with `====` or `----` underneath
+- **ALL CAPS headers**: Lines in ALL CAPITAL LETTERS
+
+#### Numbering Systems (High Confidence)
+- **Decimal numbering**: `1.`, `1.1.`, `1.1.1.`, `1.1.1.1.`
+- **Roman numerals**: `I.`, `II.`, `III.`, `IV.`
+- **Letter sequences**: `A.`, `B.`, `C.`, `a.`, `b.`, `c.`
+- **Mixed systems**: `1.A.`, `1.A.i.`, etc.
+
+#### Keywords (Medium Confidence)
+- **Chapter**: "Chapter 1", "Chapter One", "Ch. 1"
+- **Section**: "Section A", "Section 1.1", "Sect. 1"
+- **Part**: "Part I", "Part One", "Part 1"
+- **Book**: "Book 1", "Book I", "Book One"
+- **Episode**: "Episode 1", "Ep. 1"
+- **Volume**: "Volume 1", "Vol. 1"
+
+#### Formatting (Lower Confidence)
+- **Bold text**: `**Bold Header**` or similar formatting
+- **Indentation**: Consistent spacing patterns
+- **Special characters**: Lines with repeated characters (`===`, `---`, `***`)
+
+### Import Process
+
+1. **Select File**: Choose your document file (PDF, Markdown, or Plain Text)
+2. **Automatic Detection**: The system analyzes the document structure
+3. **Confidence Assessment**: Shows detection confidence percentage
+4. **Preview Structure**: Review the detected hierarchy before import
+5. **Import Confirmation**: Confirm or adjust the detected structure
+6. **Project Creation**: A new project is created with the hierarchical structure
+
+### Detection Confidence
+
+The system provides confidence scores for detected structures:
+
+- **90%+ (Excellent)**: Strong, clear patterns detected - high success rate
+- **70-89% (Good)**: Solid structure with minor ambiguities
+- **50-69% (Fair)**: Moderate structure detection - review recommended  
+- **30-49% (Low)**: Weak patterns - manual review required
+- **Below 30%**: Very low confidence - consider restructuring document
+
+### Tips for Better Import Results
+
+#### Document Preparation
+1. **Use consistent formatting** throughout your document
+2. **Clear header hierarchy**: Don't skip levels (e.g., don't go from `#` to `###`)
+3. **Meaningful titles**: Use descriptive headers that reflect content
+4. **Avoid mixed patterns**: Stick to one numbering/header system per document
+5. **Proper spacing**: Leave blank lines around headers for clarity
+
+#### Markdown Best Practices
+- Start with a single `#` for the main title
+- Use sequential header levels (`#`, `##`, `###`)
+- Include content between headers (not just header lists)
+- Use standard Markdown formatting
+
+#### Plain Text Optimization
+- Use consistent underlining patterns (`====` for main headers, `----` for subheaders)
+- Maintain consistent indentation if using indented structures
+- Use ALL CAPS sparingly for major section headers only
+- Include clear content separation between sections
+
+#### PDF Considerations
+- Ensure text is selectable (not scanned images)
+- Use consistent font sizes for headers
+- Maintain clear visual hierarchy
+- Avoid complex layouts with multiple columns
+
+### Template Recommendations
+
+Based on detected structure, Expert will suggest appropriate project templates:
+
+- **Novel Template**: For books with chapters and scenes
+- **Technical Manual**: For documentation with numbered sections
+- **Report Template**: For business or academic reports
+- **Custom Template**: Generated based on your specific structure
+
+### Troubleshooting Import Issues
+
+#### Low Confidence Detection
+- **Check structure consistency**: Ensure headers follow patterns
+- **Review formatting**: Look for mixed or inconsistent styles
+- **Simplify structure**: Reduce complexity if too many patterns detected
+- **Manual adjustment**: Edit document before import for clearer structure
+
+#### Missing Content
+- **Verify text selection**: Ensure text is selectable in PDFs
+- **Check file encoding**: Use UTF-8 encoding for text files
+- **Review file size**: Large files may have processing limitations
+- **Format validation**: Ensure proper Markdown syntax
+
+#### Incorrect Hierarchy
+- **Review header levels**: Check for skipped or inconsistent levels
+- **Validate numbering**: Ensure numbering sequences are logical
+- **Check mixed patterns**: Avoid combining different structure systems
+- **Consider manual editing**: Adjust structure before re-importing
+
+### Import Limitations
+
+- **File size**: Large documents may take longer to process
+- **Complex layouts**: Multi-column or table-heavy documents may not import cleanly
+- **Scanned PDFs**: Image-based PDFs require OCR processing
+- **Mixed formats**: Documents combining multiple structure patterns may have lower confidence
+- **Unicode support**: Special characters may need UTF-8 encoding
 
 ---
 

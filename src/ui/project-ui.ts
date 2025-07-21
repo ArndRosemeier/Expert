@@ -3654,9 +3654,16 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     if (languageContainer && settingsManager) {
         new LanguageSelector(languageContainer, {
             currentLanguage: settingsManager.getLanguage(),
-            onLanguageChange: (language: string) => {
-                void settingsManager.setLanguage(language);
-                // No need to save manually as SettingsManager auto-saves
+            onLanguageChange: async (language: string) => {
+                await settingsManager.setLanguage(language);
+                
+                // Also sync to active project
+                try {
+                    const { handleLanguageChange } = await import('../state');
+                    handleLanguageChange(language);
+                } catch (error) {
+                    console.error('Failed to sync language to project:', error);
+                }
             }
         });
     }

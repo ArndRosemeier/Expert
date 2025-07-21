@@ -21,6 +21,75 @@ let currentlyLoadedProfileName: string | null = null;
 type ActiveProjectChangeListener = (activeProject: ProjectManager | null) => void;
 const activeProjectChangeListeners: ActiveProjectChangeListener[] = [];
 
+// Language synchronization functionality
+let isLanguageSyncEnabled = true; // Flag to prevent infinite loops during sync
+
+/**
+ * Initialize language synchronization between projects and settings
+ */
+export const initializeLanguageSync = () => {
+    // Subscribe to active project changes to sync language when projects switch
+    onActiveProjectChange((activeProject) => {
+        if (!isLanguageSyncEnabled || !activeProject || !settingsManager) return;
+        
+        const projectLanguage = activeProject.getLanguage();
+        if (projectLanguage) {
+            // Project has a language set, sync it to the active language setting
+            const currentLanguage = settingsManager.getLanguage();
+            if (currentLanguage !== projectLanguage) {
+                console.log(`🌐 Syncing project language "${projectLanguage}" to active language setting`);
+                isLanguageSyncEnabled = false; // Prevent recursion
+                settingsManager.setLanguage(projectLanguage).then(() => {
+                    // Update language selector UI if it exists
+                    updateLanguageSelectorUI(projectLanguage);
+                    isLanguageSyncEnabled = true;
+                }).catch((error) => {
+                    console.error('Failed to sync project language to settings:', error);
+                    isLanguageSyncEnabled = true;
+                });
+            }
+        }
+    });
+};
+
+/**
+ * Handle language change from settings - sync to active project
+ */
+export const handleLanguageChange = (newLanguage: string) => {
+    if (!isLanguageSyncEnabled) return;
+    
+    const activeProject = getActiveProject();
+    if (activeProject) {
+        console.log(`🌐 Syncing language setting "${newLanguage}" to active project`);
+        isLanguageSyncEnabled = false; // Prevent recursion
+        activeProject.setLanguage(newLanguage);
+        
+        // Save the project to persist the language change
+        activeProject.saveToStorage().then(() => {
+            isLanguageSyncEnabled = true;
+        }).catch((error) => {
+            console.error('Failed to save project language:', error);
+            isLanguageSyncEnabled = true;
+        });
+    }
+};
+
+/**
+ * Update language selector UI component if it exists
+ */
+const updateLanguageSelectorUI = (language: string) => {
+    // Find language selector in the DOM and update it
+    const languageContainer = document.getElementById('language-selector-container');
+    if (languageContainer) {
+        // Try to find the LanguageSelector instance
+        // We'll need to trigger a custom event that the LanguageSelector can listen to
+        const event = new CustomEvent('externalLanguageChange', { 
+            detail: { language } 
+        });
+        languageContainer.dispatchEvent(event);
+    }
+};
+
 // --- Getters ---
 export const getOrchestrator = () => orchestrator;
 export const getProjects = () => projects;

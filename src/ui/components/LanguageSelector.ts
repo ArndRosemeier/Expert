@@ -200,6 +200,13 @@ export class LanguageSelector {
                 }
             }
         });
+
+        // Listen for external language changes (from project switching)
+        this.container.addEventListener('externalLanguageChange', (e: Event) => {
+            const customEvent = e as CustomEvent<{ language: string }>;
+            const newLanguage = customEvent.detail.language;
+            this.setLanguage(newLanguage);
+        });
     }
 
     /**

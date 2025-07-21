@@ -321,6 +321,15 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     
     const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
     
+    // Set the project language to match current language setting
+    try {
+        const currentLanguage = settingsManager.getLanguage();
+        project.setLanguage(currentLanguage);
+        console.log(`🌐 New project language set to: ${currentLanguage}`);
+    } catch (error) {
+        console.warn('Could not set project language:', error);
+    }
+    
     // Ensure all nodes share the same template reference
     AssertFlatTemplateCopy(project);
     
@@ -711,6 +720,9 @@ export async function initialize() {
     
     // Initialize the UI with projects (if any)
     void initializeProjectUI();
+
+    // Initialize language synchronization between projects and settings
+    state.initializeLanguageSync();
 
     // Attach event listeners
     try {
@@ -1206,6 +1218,15 @@ export async function initialize() {
         // Create the project
         const project = new ProjectManager(projectTitle, template, orchestrator, settingsManager, client);
         
+        // Set the project language to match current language setting
+        try {
+            const currentLanguage = settingsManager.getLanguage();
+            project.setLanguage(currentLanguage);
+            console.log(`🌐 Imported project language set to: ${currentLanguage}`);
+        } catch (error) {
+            console.warn('Could not set imported project language:', error);
+        }
+        
         // Ensure all nodes share the same template reference
         AssertFlatTemplateCopy(project);
 
@@ -1333,7 +1354,7 @@ export async function initialize() {
         }
     }
 
-    // Helper functions for hierarchical document import
+    // Helper function to extract hierarchy levels for template creation
     function extractHierarchyLevels(hierarchyNodes: any[]): string[] {
         const levels = new Set<number>();
         
@@ -1362,26 +1383,6 @@ export async function initialize() {
         }
         
         return levelNames.length > 0 ? levelNames : ['Document', 'Section'];
-    }
-
-    function buildProjectContent(hierarchyNodes: any[]): string {
-        let content = '';
-        
-        function processNodes(nodes: any[], depth: number = 0): void {
-            for (const node of nodes) {
-                const indent = '  '.repeat(depth);
-                content += `${indent}${node.title}\n`;
-                if (node.content && node.content.trim()) {
-                    content += `${indent}${node.content.trim()}\n\n`;
-                }
-                if (node.children && node.children.length > 0) {
-                    processNodes(node.children, depth + 1);
-                }
-            }
-        }
-        
-        processNodes(hierarchyNodes);
-        return content.trim();
     }
     
     try {

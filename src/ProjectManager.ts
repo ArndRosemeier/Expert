@@ -64,6 +64,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     projectTitle: string;
     template: ProjectTemplate;
     rootNode!: DocumentNode;
+    language: string | null = null; // Project-specific language setting
     private loopOrchestrator: LoopOrchestrator;
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
@@ -94,6 +95,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getContextExtractionService(): ContextExtractionService { return this.contextExtractionService; }
     public getGenerationCoordinator(): GenerationCoordinator { return this.generationCoordinator; }
     public getSettingsManager(): SettingsManager { return this.settingsManager; }
+
+    // Language management
+    public getLanguage(): string | null { return this.language; }
+    public setLanguage(language: string | null): void { this.language = language; }
 
 
     constructor(
@@ -237,7 +242,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 scaffoldingDocuments: this.template.scaffoldingDocuments
             },
             rootNode: this.rootNode,
-            selectedNodeId: this.selectedNodeId
+            selectedNodeId: this.selectedNodeId,
+            language: this.language
         };
         
         return JSON.stringify(serializableData, null, 2);
@@ -368,6 +374,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Restore selectedNodeId if it was saved
         if (plainObject.selectedNodeId) {
             project.selectedNodeId = plainObject.selectedNodeId;
+        }
+        
+        // Restore language if it was saved
+        if (plainObject.language) {
+            project.language = plainObject.language;
         }
         
         // Ensure all nodes share the same template reference
