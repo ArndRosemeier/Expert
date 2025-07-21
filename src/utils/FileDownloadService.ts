@@ -242,13 +242,20 @@ export class FileDownloadService {
 
     /**
      * Convenience method for ZIP downloads with file selector preference
+     * 
+     * ⚠️ CRITICAL: DO NOT CHANGE forceFileSelector TO false!
+     * This method is used for save/load all functionality (comprehensive export/import).
+     * Users expect to choose where their backup files are saved, not have them dumped to Downloads.
+     * 
+     * AI DEVELOPERS: This has regressed before. The user specifically wants file selector behavior
+     * for the save/load all button functionality. Keep forceFileSelector: true!
      */
     public static async downloadZip(blob: Blob, filename: string, description?: string): Promise<FileDownloadResult> {
         return await this.downloadBlob(blob, {
             filename,
             mimeType: 'application/zip',
             description: description || 'ZIP Archive',
-            forceFileSelector: false // Allow fallback for browser compatibility
+            forceFileSelector: true // CRITICAL: Force file selector for save/load all functionality - DO NOT CHANGE TO false!
         });
     }
 

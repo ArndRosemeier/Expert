@@ -1,6 +1,10 @@
 /**
  * ComprehensiveExportService - Creates a complete backup of all application data
  * 
+ * ⚠️ CRITICAL: This service implements the "Save All" functionality behind the save/load all button.
+ * It MUST use FileDownloadService.downloadZip with forceFileSelector: true, NOT false!
+ * This has regressed before - users expect file selector behavior, not downloads folder dumps!
+ * 
  * ✅ SIMPLIFIED & FUTURE-PROOF APPROACH:
  * - Exports ALL data from IndexedDB stores
  * - Automatically includes any new data types we add
@@ -113,6 +117,8 @@ export class ComprehensiveExportService {
                 }
             });
             
+            // CRITICAL: FileDownloadService.downloadZip MUST use forceFileSelector: true for save/load all functionality
+            // DO NOT change the downloadZip method to use forceFileSelector: false - users expect file selector behavior!
             const downloadResult = await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
             
             // Check if user cancelled or download failed

@@ -1,6 +1,10 @@
 /**
  * ComprehensiveImportService - Restores complete application data from backup files
  * 
+ * ⚠️ CRITICAL: This service implements the "Load All" functionality behind the save/load all button.
+ * It MUST use modern file selector APIs (showOpenFilePicker) when available, NOT hidden input elements!
+ * This has regressed before - do not revert to the old approach!
+ * 
  * ✅ COMPLETE RESTORATION APPROACH:
  * - Imports ALL data from comprehensive backup ZIP files
  * - Clears IndexedDB stores before import (preserves sensitive keys)
@@ -359,28 +363,56 @@ export class ComprehensiveImportService {
     
     /**
      * Show file picker dialog for selecting backup file
+     * 
+     * ⚠️ CRITICAL: This MUST use the modern File System Access API (showOpenFilePicker)!
+     * DO NOT revert to the old hidden input element approach!
+     * 
+     * AI DEVELOPERS: This has regressed before. The user specifically wants file selector behavior
+     * for the save/load all button functionality, not the old hidden file input approach.
+     * Always use showOpenFilePicker when available, with proper fallback messaging.
      */
     public static async showFilePickerDialog(): Promise<File | null> {
-        return new Promise((resolve) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.zip';
-            input.style.display = 'none';
-            
-            input.onchange = () => {
-                const file = input.files?.[0] || null;
-                document.body.removeChild(input);
-                resolve(file);
-            };
-            
-            input.oncancel = () => {
-                document.body.removeChild(input);
-                resolve(null);
-            };
-            
-            document.body.appendChild(input);
-            input.click();
-        });
+        try {
+            // CRITICAL: Use modern File System Access API when available - DO NOT REMOVE!
+            if ('showOpenFilePicker' in window) {
+                const [fileHandle] = await (window as any).showOpenFilePicker({
+                    multiple: false,
+                    types: [{
+                        description: 'Expert Application Backup',
+                        accept: { 'application/zip': ['.zip'] }
+                    }]
+                });
+                return await fileHandle.getFile();
+            } else {
+                // Only fall back to input element if File System Access API is not available
+                console.warn('⚠️ File System Access API not available, falling back to file input');
+                alert('Your browser does not support file selectors. Please use Chrome 86+ or Edge 86+ for the best experience.');
+                
+                return new Promise((resolve) => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.zip';
+                    input.style.display = 'none';
+                    
+                    input.onchange = () => {
+                        const file = input.files?.[0] || null;
+                        document.body.removeChild(input);
+                        resolve(file);
+                    };
+                    
+                    input.oncancel = () => {
+                        document.body.removeChild(input);
+                        resolve(null);
+                    };
+                    
+                    document.body.appendChild(input);
+                    input.click();
+                });
+            }
+        } catch (error) {
+            console.error('❌ File picker failed:', error);
+            return null;
+        }
     }
     
     /**
