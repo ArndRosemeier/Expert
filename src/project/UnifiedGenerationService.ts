@@ -1684,6 +1684,9 @@ export class UnifiedGenerationService {
      * Build loop input for content generation
      */
     private buildLoopInput(node: DocumentNode): LoopInput {
+        // CRITICAL: Capture language BEFORE any profile switching to prevent race conditions
+        const capturedLanguage = this.deps.settingsManager.getLanguage();
+        
         // Check for settings override from parent node
         const settingsOverride = this.extractSettingsOverride(node);
         const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() || null : null;
@@ -1720,7 +1723,8 @@ export class UnifiedGenerationService {
             criteria: filteredCriteria,
             maxIterations: profile.maxIterations || 3,
             response: '', // Initial response is empty
-            isLeafNode: isLeafNode
+            isLeafNode: isLeafNode,
+            language: capturedLanguage // Captured language prevents race conditions during generation
         };
 
         // Restore original profile if we used an override

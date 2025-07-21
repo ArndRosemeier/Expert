@@ -16,6 +16,7 @@ export interface LoopInput {
     initialContent?: string;
     response: string;
     isLeafNode?: boolean; // Determines whether to use 'prose' or 'creator' model
+    language?: string; // Captured language to prevent race conditions during generation
 }
 
 
@@ -212,6 +213,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         this.abortController = new AbortController();
         this.isRunning = true;
         this.currentIteration = 0;
+        
+        // CRITICAL: Use captured language from LoopInput to prevent race conditions
+        if (input.language) {
+            this.language = input.language;
+            console.log(`🌐 Using captured language for generation: "${input.language}"`);
+        }
         
         // Emit started event immediately for UI to show initial state
         this.emit('started', input);
@@ -583,6 +590,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     language: this.language
                 }
             );
+            // Use global override to ensure captured language is used even if project switches
+            context.globalOverrides = { language: this.language };
             return this.expansionService.expandPrompt(this.prompts.content_generation_initial, context);
         }
         
@@ -602,6 +611,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
+        // Use global override to ensure captured language is used even if project switches
+        context.globalOverrides = { language: this.language };
         return this.expansionService.expandPrompt(this.prompts.content_generation_iterative, context);
     }
 
@@ -619,6 +630,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
+        // Use global override to ensure captured language is used even if project switches
+        context.globalOverrides = { language: this.language };
         return this.expansionService.expandPrompt(this.prompts.rater, context);
     }
 
@@ -687,6 +700,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
+        // Use global override to ensure captured language is used even if project switches
+        context.globalOverrides = { language: this.language };
         return this.expansionService.expandPrompt(this.prompts.editor, context);
     }
 

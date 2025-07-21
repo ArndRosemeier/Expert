@@ -347,6 +347,28 @@ export class OverviewRenderer {
   }
   
   /**
+   * Bring selected element and its connected elements to front (render last)
+   */
+  private bringElementsToFront(selectedElement: OverviewElement): void {
+    const connectedIds = this.getConnectedElementIds(selectedElement);
+    
+    // Find elements to bring to front: selected element + connected elements
+    const elementsToMove: OverviewElement[] = [];
+    const remainingElements: OverviewElement[] = [];
+    
+    for (const element of this.elements) {
+      if (element === selectedElement || connectedIds.has(element.id)) {
+        elementsToMove.push(element);
+      } else {
+        remainingElements.push(element);
+      }
+    }
+    
+    // Reorder: remaining elements first, then elements to bring to front
+    this.elements = [...remainingElements, ...elementsToMove];
+  }
+
+  /**
    * Get cloud centers for element positioning - ensures exact coordinate match
    */
   public getCloudCenters(): { events: Point; characters: Point; places: Point } {
@@ -446,6 +468,7 @@ export class OverviewRenderer {
         y: worldPos.y - hitElement.position.y
       };
       this.updateConnectionHighlights(hitElement);
+      this.bringElementsToFront(hitElement);
       this.canvas.style.cursor = 'grabbing';
     } else {
       this.interactionState.selectedElement = null;

@@ -66,6 +66,9 @@ export interface PlaceholderContext {
     
     // Custom placeholders for specific contexts
     custom?: Record<string, string>;
+    
+    // Global placeholder overrides - these override the dynamic global providers
+    globalOverrides?: Record<string, string>;
 }
 
 interface PlaceholderValue {
@@ -115,12 +118,14 @@ class PromptExpansionService {
     expandPrompt(template: string, context: PlaceholderContext = {}): string {
         let expanded = template;
         
-        // Handle global placeholders
+        // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
             const placeholder = `{{${name}}}`;
             if (expanded.includes(placeholder)) {
-                const result = provider();
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), result.value);
+                // Check for override first
+                const overrideValue = context.globalOverrides?.[name];
+                const value = overrideValue !== undefined ? overrideValue : provider().value;
+                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
         
@@ -149,12 +154,14 @@ class PromptExpansionService {
     async expandPromptAsync(template: string, context: PlaceholderContext = {}): Promise<string> {
         let expanded = template;
         
-        // Handle global placeholders
+        // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
             const placeholder = `{{${name}}}`;
             if (expanded.includes(placeholder)) {
-                const result = provider();
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), result.value);
+                // Check for override first
+                const overrideValue = context.globalOverrides?.[name];
+                const value = overrideValue !== undefined ? overrideValue : provider().value;
+                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
         
