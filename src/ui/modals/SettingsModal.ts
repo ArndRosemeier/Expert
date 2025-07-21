@@ -656,10 +656,8 @@ export class SettingsModal extends BaseModal {
             this.saveTimeout = null;
         }
 
-        // Apply to model selector
-        if (profile.selectedModels) {
-            await this.modelSelector.setSelectedModels(profile.selectedModels);
-        }
+        // Load all settings from the profile (models, web search, providers)
+        await this.modelSelector.loadFromCurrentProfile();
 
         // Apply to criteria editor
         if (this.criteriaEditor && profile.criteria) {

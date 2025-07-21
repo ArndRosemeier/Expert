@@ -179,19 +179,9 @@ export class OpenRouterClient {
       
       if (uiSelectedProfile) {
         const profile = settingsManager.getProfile(uiSelectedProfile);
-        if (profile && profile.selectedModels) {
-          // Load the correct profile models
-          modelSelector.setSelectedModels(profile.selectedModels);
-          
-          // Load web search settings if they exist in the profile
-          if (profile.webSearchEnabled) {
-            await modelSelector.setWebSearchEnabled(profile.webSearchEnabled);
-          }
-          
-          // Load provider selections if they exist in the profile
-          if (profile.selectedProviders) {
-            await modelSelector.setSelectedProviders(profile.selectedProviders);
-          }
+        if (profile) {
+          // Load all settings from the profile (models, web search, providers)
+          await modelSelector.loadFromCurrentProfile();
           
           state.setCurrentlyLoadedProfileName(uiSelectedProfile);
         } else {

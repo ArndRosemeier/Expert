@@ -68,6 +68,9 @@ export class DocumentNode {
     generationSessions: GenerationSession[] = [];
     currentGenerationSession: GenerationSession | null = null;
 
+    // --- Overview Board Cache ---
+    overviewBoardCache: Map<string, any> = new Map(); // CachedOverviewAnalysis by layer name
+
     constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
@@ -82,6 +85,7 @@ export class DocumentNode {
         this.generationSessions = [];
         this.currentGenerationSession = null;
         this.collapsed = false; // Initialize as expanded
+        this.overviewBoardCache = new Map(); // Initialize cache
         
         // Create initial master version
         const initialVersion = {
@@ -168,7 +172,8 @@ export class DocumentNode {
             versions: this.versions.map(v => ({
                 ...v,
                 tags: Array.from(v.tags) // Convert Set to Array for JSON
-            }))
+            })),
+            overviewBoardCache: Array.from(this.overviewBoardCache.entries()) // Convert Map to Array for JSON
         };
     }
 
@@ -190,6 +195,111 @@ export class DocumentNode {
         node.generationHistory = data.generationHistory || [];
         node.isGenerating = false; // Always reset transient state on load
         node.generationSessions = data.generationSessions || [];
+        
+        // Restore overview board cache - FAIL LOUDLY on corruption
+        if (data.overviewBoardCache && Array.isArray(data.overviewBoardCache)) {
+            node.overviewBoardCache = new Map();
+            for (const [layerName, cachedData] of data.overviewBoardCache) {
+                // FAIL LOUDLY: Don't silently skip null/undefined cache data
+                if (!cachedData) {
+                    throw new Error(`❌ CACHE CORRUPTION: Null cache data for layer "${layerName}" during project load`);
+                }
+                
+                // FAIL LOUDLY: Validate required cache structure
+                if (!cachedData.timestamp || !cachedData.data || !cachedData.analyzedNodeIds) {
+                    throw new Error(`❌ CACHE CORRUPTION: Missing required fields in cache for layer "${layerName}". Found: ${Object.keys(cachedData)}`);
+                }
+                
+                // FAIL LOUDLY: Validate timestamp conversion
+                let timestamp: Date;
+                try {
+                    timestamp = new Date(cachedData.timestamp);
+                    if (isNaN(timestamp.getTime())) {
+                        throw new Error(`Invalid timestamp: ${cachedData.timestamp}`);
+                    }
+                } catch (error) {
+                    throw new Error(`❌ CACHE CORRUPTION: Invalid timestamp in cache for layer "${layerName}": ${cachedData.timestamp}. Error: ${error}`);
+                }
+                cachedData.timestamp = timestamp;
+                
+                // FAIL LOUDLY: Validate data structure exists
+                if (!cachedData.data || typeof cachedData.data !== 'object') {
+                    throw new Error(`❌ CACHE CORRUPTION: Invalid data structure in cache for layer "${layerName}". Expected object, got: ${typeof cachedData.data}`);
+                }
+                
+                // FAIL LOUDLY: Validate lastUpdated timestamp
+                if (cachedData.data.lastUpdated) {
+                    try {
+                        const lastUpdated = new Date(cachedData.data.lastUpdated);
+                        if (isNaN(lastUpdated.getTime())) {
+                            throw new Error(`Invalid lastUpdated timestamp: ${cachedData.data.lastUpdated}`);
+                        }
+                        cachedData.data.lastUpdated = lastUpdated;
+                    } catch (error) {
+                        throw new Error(`❌ CACHE CORRUPTION: Invalid lastUpdated timestamp in cache for layer "${layerName}": ${cachedData.data.lastUpdated}. Error: ${error}`);
+                    }
+                }
+                
+                // FAIL LOUDLY: Restore Map objects with strict validation
+                ['events', 'characters', 'places'].forEach(mapName => {
+                    const mapData = cachedData.data[mapName];
+                    if (mapData && !mapData.has) { // Not already a Map
+                        try {
+                            if (Array.isArray(mapData)) {
+                                // Validate array format
+                                if (!mapData.every(item => Array.isArray(item) && item.length === 2)) {
+                                    throw new Error(`Invalid array format for ${mapName}: expected [key, value] pairs`);
+                                }
+                                const restoredMap = new Map(mapData);
+                                
+                                // FAIL LOUDLY: Validate that array properties in the data remain arrays
+                                for (const [key, value] of restoredMap.entries()) {
+                                    const item = value as any; // Cast for cache validation
+                                    if (mapName === 'events') {
+                                        if (!Array.isArray(item.connectedCharacters)) {
+                                            throw new Error(`Event ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
+                                        }
+                                        if (!Array.isArray(item.connectedPlaces)) {
+                                            throw new Error(`Event ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
+                                        }
+                                    } else if (mapName === 'characters') {
+                                        if (!Array.isArray(item.aliases)) {
+                                            throw new Error(`Character ${key} aliases is not an array: ${typeof item.aliases}`);
+                                        }
+                                        if (!Array.isArray(item.connectedEvents)) {
+                                            throw new Error(`Character ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
+                                        }
+                                        if (!Array.isArray(item.connectedPlaces)) {
+                                            throw new Error(`Character ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
+                                        }
+                                    } else if (mapName === 'places') {
+                                        if (!Array.isArray(item.connectedEvents)) {
+                                            throw new Error(`Place ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
+                                        }
+                                        if (!Array.isArray(item.connectedCharacters)) {
+                                            throw new Error(`Place ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
+                                        }
+                                    }
+                                }
+                                
+                                cachedData.data[mapName] = restoredMap;
+                            } else if (typeof mapData === 'object') {
+                                // Fallback to object format
+                                cachedData.data[mapName] = new Map(Object.entries(mapData));
+                            } else {
+                                throw new Error(`Invalid ${mapName} data type: ${typeof mapData}`);
+                            }
+                        } catch (error) {
+                            throw new Error(`❌ CACHE CORRUPTION: Failed to restore ${mapName} Map for layer "${layerName}": ${error}`);
+                        }
+                    }
+                });
+                
+                node.overviewBoardCache.set(layerName, cachedData);
+            }
+        } else {
+            node.overviewBoardCache = new Map();
+        }
         
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {

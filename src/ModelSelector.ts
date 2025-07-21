@@ -6,7 +6,6 @@ import { showBalanceModal } from './ui/modals/BalanceModal';
 // Use IndexedDB storage keys instead of localStorage
 const STORAGE_KEY_API_KEY = 'openrouter_api_key';
 const STORAGE_KEY_MODELS = 'openrouter_model_purposes';
-const STORAGE_KEY_WEB_SEARCH = 'openrouter_web_search_preferences';
 const STORAGE_KEY_PROVIDERS = 'openrouter_provider_selections';
 const PURPOSES = [
   { key: 'creator', label: 'Creator' },
@@ -83,7 +82,8 @@ export class ModelSelector {
   }
 
   private async initializeAsync(): Promise<void> {
-    await this.loadFromStorage();
+    await this.loadAPIKeyFromStorage();
+    await this.loadFromCurrentProfile();
     if (this.apiKey && !this.fetched) {
       try {
         await this.fetchModels();
@@ -610,8 +610,10 @@ export class ModelSelector {
 
         webSearchCheckbox.addEventListener('change', async () => {
           this.webSearchEnabled[purpose.key] = webSearchCheckbox.checked;
-          // Save to storage immediately when web search preference changes
-          await this.saveToStorage();
+          
+          // Save to current profile only (no global storage)
+          await this.saveWebSearchToCurrentProfile();
+          
           // Re-render to update pricing display
           this.update();
         });
@@ -1072,6 +1074,27 @@ export class ModelSelector {
     }
   }
 
+  /**
+   * Load only the API key from IndexedDB storage
+   */
+  async loadAPIKeyFromStorage(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      
+      const key = await storage.get<string>(STORAGE_KEY_API_KEY);
+      if (key) {
+        this.apiKey = key;
+      } else {
+        console.log('ℹ️ No OpenRouter API key found in IndexedDB');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load API key from storage:', error);
+    }
+  }
+
+  /**
+   * @deprecated Use loadFromCurrentProfile() for settings and loadAPIKeyFromStorage() for API key
+   */
   async loadFromStorage(): Promise<void> {
     try {
       const storage = await this.storageService;
@@ -1130,13 +1153,8 @@ export class ModelSelector {
         }
       });
 
-      const webSearchPrefs = await storage.get<Record<string, boolean>>(STORAGE_KEY_WEB_SEARCH);
-      if (webSearchPrefs) {
-        this.webSearchEnabled = webSearchPrefs;
-        console.log('✅ OpenRouter web search preferences loaded from IndexedDB:', webSearchPrefs);
-      } else {
-        console.log('ℹ️ No OpenRouter web search preferences found in IndexedDB');
-      }
+      // Web search preferences are now loaded from the current profile, not global storage
+      await this.loadWebSearchFromCurrentProfile();
     } catch (error) {
       console.error('❌ CRITICAL: Failed to load OpenRouter configuration from storage:', error);
       this.selectedModels = {};
@@ -1155,7 +1173,7 @@ export class ModelSelector {
       await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
       await storage.set(STORAGE_KEY_MODELS, this.selectedModels);
       await storage.set(STORAGE_KEY_PROVIDERS, this.selectedProviders);
-      await storage.set(STORAGE_KEY_WEB_SEARCH, this.webSearchEnabled);
+      // Web search preferences are now saved only to profiles, not global storage
       console.log('✅ OpenRouter configuration saved to IndexedDB');
     } catch (error) {
       console.error('❌ Failed to save OpenRouter configuration to IndexedDB:', error);
@@ -1254,11 +1272,153 @@ export class ModelSelector {
   }
 
   /**
-   * Set web search preferences
+   * Set web search preferences (called when loading from profile)
    */
   public async setWebSearchEnabled(webSearchEnabled: Record<string, boolean>): Promise<void> {
     this.webSearchEnabled = webSearchEnabled;
-    await this.saveToStorage();
+    // No global storage - web search settings are profile-only now
+  }
+
+  /**
+   * Load all settings from the current profile (models, web search, providers)
+   */
+  public async loadFromCurrentProfile(): Promise<void> {
+    try {
+      const state = await import('./state');
+      const settingsManager = state.getSettingsManager();
+      if (!settingsManager) {
+        console.warn('⚠️ SettingsManager not available - using empty settings');
+        this.selectedModels = {};
+        this.webSearchEnabled = {};
+        this.selectedProviders = {};
+        return;
+      }
+
+      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfile = settingsManager.getProfile(activeProfileName);
+      
+      if (activeProfile) {
+        // Load models
+        if (activeProfile.selectedModels) {
+          this.selectedModels = { ...activeProfile.selectedModels };
+        } else {
+          this.selectedModels = {};
+        }
+        
+        // Load web search settings
+        if (activeProfile.webSearchEnabled) {
+          this.webSearchEnabled = { ...activeProfile.webSearchEnabled };
+        } else {
+          this.webSearchEnabled = {};
+        }
+        
+        // Load provider settings
+        if (activeProfile.selectedProviders) {
+          this.selectedProviders = { ...activeProfile.selectedProviders };
+        } else {
+          this.selectedProviders = {};
+        }
+        
+        // Ensure all purposes have a provider selection (default to automatic)
+        PURPOSES.forEach(purpose => {
+          if (!this.selectedProviders[purpose.key]) {
+            this.selectedProviders[purpose.key] = 'automatic';
+          }
+        });
+        
+        console.log(`✅ All settings loaded from profile: ${activeProfileName}`);
+      } else {
+        this.selectedModels = {};
+        this.webSearchEnabled = {};
+        this.selectedProviders = {};
+        console.log(`ℹ️ No profile found: ${activeProfileName}`);
+      }
+      
+      // Pre-fetch endpoint information for loaded models
+      const fetchPromises: Promise<void>[] = [];
+      for (const purpose of PURPOSES) {
+        const selectedModel = this.selectedModels[purpose.key];
+        if (selectedModel && !this.modelEndpoints[selectedModel]) {
+          fetchPromises.push(this.fetchModelEndpoints(selectedModel));
+        }
+      }
+      
+      if (fetchPromises.length > 0) {
+        try {
+          await Promise.all(fetchPromises);
+          console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} models`);
+        } catch (error) {
+          console.error('❌ Some endpoint fetches failed:', error);
+        }
+      }
+      
+      this.update();
+    } catch (error) {
+      console.error('❌ Failed to load settings from profile:', error);
+      this.selectedModels = {};
+      this.webSearchEnabled = {};
+      this.selectedProviders = {};
+    }
+  }
+
+  /**
+   * Load web search settings from the current profile
+   * @deprecated Use loadFromCurrentProfile() instead
+   */
+  public async loadWebSearchFromCurrentProfile(): Promise<void> {
+    try {
+      const state = await import('./state');
+      const settingsManager = state.getSettingsManager();
+      if (!settingsManager) {
+        console.warn('⚠️ SettingsManager not available - using empty web search settings');
+        this.webSearchEnabled = {};
+        return;
+      }
+
+      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfile = settingsManager.getProfile(activeProfileName);
+      
+      if (activeProfile && activeProfile.webSearchEnabled) {
+        this.webSearchEnabled = { ...activeProfile.webSearchEnabled };
+        console.log(`✅ Web search settings loaded from profile: ${activeProfileName}`, this.webSearchEnabled);
+      } else {
+        this.webSearchEnabled = {};
+        console.log(`ℹ️ No web search settings found in profile: ${activeProfileName}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load web search settings from profile:', error);
+      this.webSearchEnabled = {};
+    }
+  }
+
+  /**
+   * Save current web search settings to the active profile
+   */
+  private async saveWebSearchToCurrentProfile(): Promise<void> {
+    try {
+      const state = await import('./state');
+      const settingsManager = state.getSettingsManager();
+      if (!settingsManager) {
+        console.warn('⚠️ SettingsManager not available - web search settings not saved to profile');
+        return;
+      }
+
+      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfile = settingsManager.getProfile(activeProfileName);
+      
+      if (activeProfile) {
+        // Update the profile with current web search settings
+        const updatedProfile = {
+          ...activeProfile,
+          webSearchEnabled: { ...this.webSearchEnabled }
+        };
+        
+        await settingsManager.saveProfile(activeProfileName, updatedProfile);
+        console.log(`✅ Web search settings saved to profile: ${activeProfileName}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save web search settings to profile:', error);
+    }
   }
 
   /**

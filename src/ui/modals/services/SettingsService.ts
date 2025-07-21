@@ -290,16 +290,14 @@ export class SettingsService {
     public applyProfileToComponents(profile: SettingsProfile | null): void {
         if (!profile) return;
 
-        // Apply models
-        if (profile.selectedModels) {
-            this.modelSelector.setSelectedModels(profile.selectedModels);
-            
-            // Update global state to track which profile is actually loaded
-            const profileName = this.getLastUsedProfileName();
-            if (profileName) {
-                state.setCurrentlyLoadedProfileName(profileName);
-                console.log(`📋 Profile "${profileName}" models loaded into ModelSelector`);
-            }
+        // Load all settings from the profile (models, web search, providers)
+        void this.modelSelector.loadFromCurrentProfile();
+        
+        // Update global state to track which profile is actually loaded
+        const profileName = this.getLastUsedProfileName();
+        if (profileName) {
+            state.setCurrentlyLoadedProfileName(profileName);
+            console.log(`📋 Profile "${profileName}" loaded into ModelSelector`);
         }
 
         this.emitChange({

@@ -1742,7 +1742,12 @@ export function renderNodeDetails() {
                 </div>
                 
                 <!-- Actions Button Row (inside title column) -->
-                <div style="margin-top: auto;">
+                <div style="margin-top: auto; display: flex; align-items: center; gap: 0.5rem;">
+                    <button id="overview-board-btn" class="button button-secondary" 
+                            title="Overview Board - Visualize narrative elements" 
+                            style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
+                        📊
+                    </button>
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
@@ -3206,15 +3211,12 @@ export function setupEventListeners() {
             if (settingsManager && modelSelector) {
                 await settingsManager.setLastUsedProfile(select.value);
                 
-                // Actually load the profile models into the ModelSelector to ensure consistency
-                const profile = settingsManager.getProfile(select.value);
-                if (profile && profile.selectedModels) {
-                    modelSelector.setSelectedModels(profile.selectedModels);
-                    
-                    // Update global state to track which profile is actually loaded
-                    state.setCurrentlyLoadedProfileName(select.value);
-                    console.log(`📋 Profile "${select.value}" models loaded into ModelSelector from dropdown change`);
-                }
+                // Load all profile settings into the ModelSelector to ensure consistency
+                await modelSelector.loadFromCurrentProfile();
+                
+                // Update global state to track which profile is actually loaded
+                state.setCurrentlyLoadedProfileName(select.value);
+                console.log(`📋 Profile "${select.value}" loaded into ModelSelector from dropdown change`);
                 
                 // Force refresh of node details to pick up new profile settings
                 if (selectedNodeId) {
@@ -3620,7 +3622,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">
                     ⚡ Generate
                 </button>
-                <button id="open-reader-btn" class="button button-primary top-bar-element">📖 Reader View</button>
+                <button id="open-reader-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">📖 Reader View</button>
             </div>
         </div>
         <div id="project-container">
@@ -4526,6 +4528,56 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         }).catch((error: unknown) => {
             console.error('Failed to open reader view:', error);
             alert('Failed to open reader view. Please try again.');
+        });
+    },
+    
+    'overview-board-btn': (_e: Event) => {
+        if (!projectManager) {
+            alert('No active project found. Please select or create a project first.');
+            return;
+        }
+        
+        if (!selectedNodeId) {
+            alert('No node selected. Please select a node to analyze.');
+            return;
+        }
+        
+        const selectedNode = projectManager.findNodeById(selectedNodeId);
+        if (!selectedNode) {
+            alert('Selected node not found. Please select a valid node.');
+            return;
+        }
+
+        const settingsManager = state.getSettingsManager();
+        const openRouterClient = state.getOpenRouterClient();
+        
+        if (!settingsManager || !openRouterClient) {
+            alert('Required services not available. Please ensure the application is fully loaded.');
+            return;
+        }
+
+        // Import and open the Overview Board Modal
+        import('../overview-board/OverviewBoardModal').then(({ OverviewBoardModal }) => {
+            try {
+                const modal = new OverviewBoardModal({
+                    id: 'overview-board-modal',
+                    selectedNode: selectedNode,
+                    openRouterClient: openRouterClient,
+                    settingsManager: settingsManager
+                });
+                
+                modal.open().catch((error: unknown) => {
+                    console.error('Failed to open Overview Board modal:', error);
+                    alert('Failed to open Overview Board. Please try again.');
+                });
+                
+            } catch (error) {
+                console.error('Failed to create Overview Board modal:', error);
+                alert('Failed to initialize Overview Board. Please try again.');
+            }
+        }).catch((error: unknown) => {
+            console.error('Failed to load Overview Board module:', error);
+            alert('Failed to load Overview Board. Please try again.');
         });
     },
     

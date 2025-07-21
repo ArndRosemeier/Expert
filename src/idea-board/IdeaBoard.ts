@@ -524,8 +524,13 @@ export class IdeaBoard {
    * Handle keyboard shortcuts
    */
   private handleKeyDown(event: KeyboardEvent): void {
-    // Handle copy/cut/paste shortcuts
-    if (event.ctrlKey || event.metaKey) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
+    // Only handle keyboard shortcuts when the canvas has focus or is being interacted with
+    // Exception: copy/cut/paste should work when an element is selected, even if canvas not focused
+    const canvasHasFocus = this.canvas.matches(':focus');
+    const hasSelection = !!this.selectedElement;
+    
+    // Handle copy/cut/paste shortcuts (work when element is selected, even without canvas focus)
+    if ((event.ctrlKey || event.metaKey) && hasSelection) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
       switch (event.key.toLowerCase()) {
         case 'c':
           event.preventDefault();
@@ -540,6 +545,11 @@ export class IdeaBoard {
           this.pasteElement();
           break;
       }
+      return;
+    }
+
+    // For other shortcuts, only handle when canvas has focus or we have a selection
+    if (!canvasHasFocus && !hasSelection) {
       return;
     }
 
@@ -559,9 +569,12 @@ export class IdeaBoard {
         break;
         
       case ' ': // Spacebar for pan mode
-        event.preventDefault();
-        if (!this.isPanning) {
-          this.canvas.style.cursor = 'grab';
+        // Only prevent default if canvas has focus
+        if (canvasHasFocus) {
+          event.preventDefault();
+          if (!this.isPanning) {
+            this.canvas.style.cursor = 'grab';
+          }
         }
         break;
     }

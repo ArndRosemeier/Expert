@@ -64,6 +64,9 @@ export interface OrchestratorPrompts {
     
     // For context transformation
     context_transformation: string;
+    
+    // For overview board analysis
+    overview_board_analysis: string;
 }
 
 interface PromptDefinition {
@@ -1061,6 +1064,73 @@ IMPORTANT: Your response should contain ONLY the transformed context text, nothi
         `.trim(),
         placeholders: ['original_context', 'language'],
         description: "System prompt for transforming arbitrary context text into the properly formatted paragraph-based context item format. Preserves all information while organizing it into separate paragraphs."
+    },
+
+    overview_board_analysis: {
+        text: `
+            You are analyzing a story layer to create a visual overview board. Extract narrative elements and their relationships from the provided content.
+
+LAYER: {{layer_name}}
+
+CONTENT:
+{{content}}
+
+Your task is to extract three types of narrative elements:
+
+1. **EVENTS** - Key plot points, scenes, or significant actions that drive the story forward
+2. **CHARACTERS** - People, entities, or beings with agency who participate in events  
+3. **PLACES** - Locations, settings, or environments where events occur
+
+For each element, determine its significance:
+- **major**: Central to the story, appears frequently, has significant impact
+- **minor**: Supporting element, appears occasionally, has limited impact
+
+Return your analysis as valid JSON with this EXACT structure:
+
+{
+  "events": [
+    {
+      "title": "Concise event name",
+      "description": "Brief description of what happens", 
+      "significance": "major|minor",
+      "characters": ["character names who participate"],
+      "places": ["places where this event occurs"]
+    }
+  ],
+  "characters": [
+    {
+      "name": "Full character name (primary identifier)",
+      "aliases": ["Nickname", "Title", "Alternative names"],
+      "role": "protagonist|antagonist|supporting|minor",
+      "description": "Brief character description focusing on role and traits"
+    }
+  ],
+  "places": [
+    {
+      "name": "Place name",
+      "type": "location|building|region|world", 
+      "significance": "major|minor",
+      "description": "Brief description of the place and its importance"
+    }
+  ]
+}
+
+While the JSON field names must always stay exactly as they are here (english, for parsing), the content of the JSON must be in {{language}}.
+
+**IMPORTANT GUIDELINES:**
+- Extract only elements that actually exist in the provided content
+- Do not invent or create new elements not mentioned in the text
+- Be consistent with character names - use the most complete form mentioned
+- Include all aliases/variations of character names you find
+- Focus on extracting relationships - which characters appear in which events, at which places
+- Keep descriptions concise but informative
+- Ensure all JSON is properly formatted and valid
+
+
+The connections between elements will be determined from the character/place arrays in events.
+        `.trim(),
+        placeholders: ['layer_name', 'content', 'language'],
+        description: "System prompt for analyzing story layers to extract events, characters, and places for the Overview Board visualization. Returns structured JSON data with narrative elements and their relationships."
     }
 };
 
