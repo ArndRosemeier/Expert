@@ -67,7 +67,7 @@ export class ContextRatingService {
     /**
      * Perform context rating using AI with retry logic
      */
-    async rateContext(node: DocumentNode, projectManager: ProjectManager): Promise<ContextRatingResult> {
+    async rateContext(node: DocumentNode, projectManager: ProjectManager, capturedLanguage?: string): Promise<ContextRatingResult> {
         if (!this.isNodeEligible(node)) {
             throw new Error(this.getIneligibilityReason(node));
         }
@@ -110,11 +110,13 @@ export class ContextRatingService {
         
         // Create rating prompt
         const prompts = this.settingsManager.getPrompts();
+        // Use captured language if provided (during generation), otherwise current language (manual operation)
+        const languageToUse = capturedLanguage || this.settingsManager.getLanguage();
         const ratingPrompt = prompts.context_rating
             .replace(/\{\{node_title\}\}/g, request.nodeTitle)
             .replace(/\{\{node_content\}\}/g, request.nodeContent)
             .replace(/\{\{numbered_context_items\}\}/g, numberedContextItems)
-            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
+            .replace(/\{\{language\}\}/g, languageToUse);
 
         // Use configurable model based on template-defined leaf status, not current children count
         const isLeaf = node.isLeaf;

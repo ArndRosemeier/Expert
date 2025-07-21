@@ -98,7 +98,7 @@ export class ContextAdjusterModal extends BaseModal {
      * Run context adjustment in automatic mode - analyze and remove all problematic items automatically
      * Returns true if any changes were made, false otherwise
      */
-    async runAutomaticMode(targetNode: DocumentNode): Promise<boolean> {
+    async runAutomaticMode(targetNode: DocumentNode, capturedLanguage?: string): Promise<boolean> {
         this.targetNode = targetNode;
         this.isLoading = true;
         this.analysisResult = null;
@@ -113,7 +113,7 @@ export class ContextAdjusterModal extends BaseModal {
             const projectManager = getActiveProject()!;
             
             // Analyze context
-            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager);
+            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager, capturedLanguage);
             this.analysisResult = result;
             this.isLoading = false;
             

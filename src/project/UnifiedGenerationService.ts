@@ -368,7 +368,7 @@ export class UnifiedGenerationService {
                 
                 // Priority 1: Context pruning
                 if (workNeeded.contextPruning) {
-                    await this.handleContextPruning(node.id, levels.contextRatingThreshold);
+                    await this.handleContextPruning(node.id, levels.contextRatingThreshold, levels.frozenSettings.language);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
@@ -529,7 +529,7 @@ export class UnifiedGenerationService {
     /**
      * Handle context pruning for a node
      */
-    private async handleContextPruning(nodeId: string, contextRatingThreshold: number = -1): Promise<void> {
+    private async handleContextPruning(nodeId: string, contextRatingThreshold: number = -1, capturedLanguage?: string): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
             throw new Error('Generation was aborted by user');
@@ -578,7 +578,7 @@ export class UnifiedGenerationService {
                 };
                 this.emitUnifiedProgress();
                 
-                contextChanged = await this.runContextRatingMode(node, contextRatingThreshold);
+                contextChanged = await this.runContextRatingMode(node, contextRatingThreshold, capturedLanguage);
             } else {
                 // Use legacy context adjustment service (issue-based)
                 console.log(`🔧 Using legacy context analysis mode for "${node.title}"`);
@@ -594,7 +594,7 @@ export class UnifiedGenerationService {
                 // Import the ContextAdjusterModal and run in automatic mode
                 const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
                 const contextAdjuster = new ContextAdjusterModal();
-                contextChanged = await contextAdjuster.runAutomaticMode(node);
+                contextChanged = await contextAdjuster.runAutomaticMode(node, capturedLanguage);
             }
             
             // Emit completion progress
@@ -618,7 +618,7 @@ export class UnifiedGenerationService {
     /**
      * Run context rating mode - rate context items and remove those below threshold
      */
-    private async runContextRatingMode(node: DocumentNode, threshold: number): Promise<boolean> {
+    private async runContextRatingMode(node: DocumentNode, threshold: number, capturedLanguage?: string): Promise<boolean> {
         const { getContextItems } = await import('../ContextFormat');
         const { ContextRatingService } = await import('../ui/modals/services/ContextRatingService');
         
@@ -634,7 +634,7 @@ export class UnifiedGenerationService {
         };
         
         // Analyze context using rating service
-        const ratingResult = await contextRatingService.rateContext(node, projectManagerInterface as any);
+        const ratingResult = await contextRatingService.rateContext(node, projectManagerInterface as any, capturedLanguage);
         
         if (ratingResult.ratings.length === 0) {
             // No ratings (probably all protected items), mark as adjusted and return
