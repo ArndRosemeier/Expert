@@ -36,8 +36,10 @@ export class ComprehensiveExportService {
     /**
      * Creates a comprehensive backup of ALL application data from IndexedDB
      * This is future-proof - any new data we add will automatically be included
+     * 
+     * @param fileHandle Optional file handle for direct writing (preserves user gesture)
      */
-    public static async createComprehensiveBackup(): Promise<ComprehensiveExportResult> {
+    public static async createComprehensiveBackup(fileHandle?: any): Promise<ComprehensiveExportResult> {
         try {
             const zip = new JSZip();
             const exportedItems: string[] = [];
@@ -117,32 +119,52 @@ export class ComprehensiveExportService {
                 }
             });
             
-            // CRITICAL: FileDownloadService.downloadZip MUST use forceFileSelector: true for save/load all functionality
-            // DO NOT change the downloadZip method to use forceFileSelector: false - users expect file selector behavior!
-            const downloadResult = await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
+            // Handle file writing - use provided file handle or fall back to download service
+            let actualFilename = filename;
             
-            // Check if user cancelled or download failed
-            if (!downloadResult.success || downloadResult.cancelled) {
-                return {
-                    success: false,
-                    filename: '',
-                    message: downloadResult.cancelled 
-                        ? 'Export cancelled by user' 
-                        : downloadResult.error 
-                            ? `Export failed: ${downloadResult.error}` 
-                            : 'Export failed to save file',
-                    exportedItems: []
-                };
-            }
-
-            // Provide user feedback about download method
-            if (downloadResult.method === 'download') {
-                console.info('💡 Backup saved to Downloads folder. For file location control, consider using Chrome or Edge.');
+            if (fileHandle) {
+                // Write directly to the provided file handle (preserves user gesture)
+                try {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(zipBlob);
+                    await writable.close();
+                    actualFilename = fileHandle.name || filename;
+                    console.log('✅ Backup saved using file handle:', actualFilename);
+                } catch (writeError) {
+                    console.error('❌ Failed to write to file handle:', writeError);
+                    return {
+                        success: false,
+                        filename: '',
+                        message: `Failed to save backup file: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`,
+                        exportedItems: []
+                    };
+                }
+            } else {
+                // Fallback to download service (for browsers without File System Access API)
+                // CRITICAL: FileDownloadService.downloadZip MUST use forceFileSelector: true for save/load all functionality
+                // DO NOT change the downloadZip method to use forceFileSelector: false - users expect file selector behavior!
+                const downloadResult = await FileDownloadService.downloadZip(zipBlob, filename, 'Expert Application Backup');
+                
+                // Check if user cancelled or download failed
+                if (!downloadResult.success || downloadResult.cancelled) {
+                    return {
+                        success: false,
+                        filename: '',
+                        message: downloadResult.cancelled 
+                            ? 'Export cancelled by user' 
+                            : downloadResult.error 
+                                ? `Export failed: ${downloadResult.error}` 
+                                : 'Export failed to save file',
+                        exportedItems: []
+                    };
+                }
+                
+                actualFilename = downloadResult.actualFilename || filename;
             }
 
             return {
                 success: true,
-                filename: downloadResult.actualFilename || filename,
+                filename: actualFilename,
                 message: `Successfully exported complete IndexedDB backup with ${exportedItems.length} data categories`,
                 exportedItems
             };

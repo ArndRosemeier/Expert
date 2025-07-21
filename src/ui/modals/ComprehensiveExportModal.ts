@@ -212,10 +212,47 @@ export class ComprehensiveExportModal extends BaseModal {
 
         this.isLoading = true;
         this.exportButton.disabled = true;
-        this.exportButton.textContent = '⏳ Creating backup...';
+        this.exportButton.textContent = '📁 Choose save location...';
 
         try {
-            const result = await ComprehensiveExportService.createComprehensiveBackup();
+            // CRITICAL: Get file handle immediately while we still have user gesture
+            // The File System Access API requires direct user interaction
+            let fileHandle: any = null;
+            const hasFileSystemAPI = 'showSaveFilePicker' in window;
+            
+            if (hasFileSystemAPI) {
+                try {
+                    const timestamp = new Date().toISOString().split('T')[0];
+                    const filename = `expert-app-complete-backup-${timestamp}.zip`;
+                    
+                    fileHandle = await (window as any).showSaveFilePicker({
+                        suggestedName: filename,
+                        types: [{
+                            description: 'Expert Application Backup',
+                            accept: { 'application/zip': ['.zip'] }
+                        }]
+                    });
+                } catch (error) {
+                    // User cancelled or picker failed
+                    this.isLoading = false;
+                    this.exportButton.disabled = false;
+                    this.exportButton.textContent = '💾 Export All Data';
+                    
+                    if (error instanceof Error && error.name === 'AbortError') {
+                        console.log('Export cancelled by user');
+                        return;
+                    }
+                    
+                    console.error('File picker failed:', error);
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    alert(`Failed to open file picker: ${errorMessage}\n\nPlease try again or use a supported browser (Chrome/Edge 86+).`);
+                    return;
+                }
+            }
+
+            this.exportButton.textContent = '⏳ Creating backup...';
+            
+            const result = await ComprehensiveExportService.createComprehensiveBackup(fileHandle);
             
             if (result.success) {
                 // Show success message
