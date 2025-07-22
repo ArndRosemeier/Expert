@@ -781,7 +781,7 @@ export class IdeaBoard {
       border-radius: 4px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       z-index: 10000;
-      min-width: 180px;
+      min-width: 200px;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 14px;
     `;
@@ -866,6 +866,81 @@ export class IdeaBoard {
       this.deleteElement(postIt);
     });
 
+    // Color section
+    const colorSectionHeader = document.createElement('div');
+    colorSectionHeader.textContent = 'Colors';
+    colorSectionHeader.style.cssText = `
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      background: #f9f9f9;
+      border-bottom: 1px solid #eee;
+    `;
+
+    // Available colors (same as ToolPanel)
+    const colors = [
+      { name: 'Yellow', value: '#fff9c4' },
+      { name: 'Blue', value: '#bbdefb' },
+      { name: 'Green', value: '#c8e6c9' },
+      { name: 'Pink', value: '#f8bbd9' },
+      { name: 'Orange', value: '#ffcc80' },
+      { name: 'White', value: '#ffffff' },
+      { name: 'Purple', value: '#e1bee7' },
+      { name: 'Red', value: '#ffcdd2' }
+    ];
+
+    // Create color options container
+    const colorOptionsContainer = document.createElement('div');
+    colorOptionsContainer.style.cssText = `
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+    `;
+
+    colors.forEach(color => {
+      const colorOption = document.createElement('div');
+      colorOption.title = color.name;
+      colorOption.style.cssText = `
+        width: 24px;
+        height: 24px;
+        background-color: ${color.value};
+        border: 2px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+        ${color.value === postIt.style.backgroundColor ? 'border-color: #333; box-shadow: 0 0 0 2px rgba(51,51,51,0.3);' : ''}
+      `;
+      
+      colorOption.addEventListener('mouseover', () => {
+        if (color.value !== postIt.style.backgroundColor) {
+          colorOption.style.borderColor = '#999';
+          colorOption.style.transform = 'scale(1.1)';
+        }
+      });
+      
+      colorOption.addEventListener('mouseout', () => {
+        if (color.value !== postIt.style.backgroundColor) {
+          colorOption.style.borderColor = '#ddd';
+          colorOption.style.transform = 'scale(1)';
+        }
+      });
+      
+      colorOption.addEventListener('click', () => {
+        // Apply color to the post-it
+        postIt.setColor(color.value);
+        this.updateElementData(postIt);
+        this.requestRedraw();
+        this.autoSave();
+        console.log(`🎨 Changed post-it color to ${color.name} (${color.value})`);
+        this.removeContextMenu();
+      });
+      
+      colorOptionsContainer.appendChild(colorOption);
+    });
+
     const deleteDescendantsOption = createMenuOption('🗑️💥', 'Delete All Descendants', () => {
       const descendants = this.findAllDescendants(postIt.id);
       
@@ -898,6 +973,8 @@ export class IdeaBoard {
     contextMenu.appendChild(summarizeOption);
     contextMenu.appendChild(continueOption);
     contextMenu.appendChild(transformOption);
+    contextMenu.appendChild(colorSectionHeader);
+    contextMenu.appendChild(colorOptionsContainer);
     contextMenu.appendChild(basicSectionHeader);
     contextMenu.appendChild(editOption);
     contextMenu.appendChild(deleteOption);
