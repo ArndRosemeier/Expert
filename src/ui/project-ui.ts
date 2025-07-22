@@ -1748,11 +1748,41 @@ export function renderNodeDetails() {
                             style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
                         📊
                     </button>
-                    <button id="send-to-idea-board-btn" class="button button-secondary" 
-                            title="Send to Idea Board - Transfer content and context" 
-                            style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
-                        ➡️🧠
-                    </button>
+                    <div class="dropdown" style="position: relative;">
+                        <button id="send-to-idea-board-btn" class="button button-secondary" 
+                                title="Send to Idea Board - Transfer content and/or context" 
+                                style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
+                            ➡️🧠
+                        </button>
+                        <div id="send-to-idea-board-dropdown" class="dropdown-menu" style="
+                            display: none;
+                            position: absolute;
+                            top: 100%;
+                            left: 0;
+                            background: white;
+                            border: 1px solid #ccc;
+                            border-radius: 4px;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            z-index: 1000;
+                            min-width: 120px;
+                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 14px;
+                            margin-top: 2px;
+                        ">
+                            <div style="padding: 6px 12px; font-size: 12px; font-weight: bold; color: #666; background: #f9f9f9; border-bottom: 1px solid #eee;">
+                                Send to idea board:
+                            </div>
+                            <div id="send-content-only" class="dropdown-option" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;">
+                                📝 Content
+                            </div>
+                            <div id="send-context-only" class="dropdown-option" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;">
+                                🗂️ Context
+                            </div>
+                            <div id="send-both" class="dropdown-option" style="padding: 8px 12px; cursor: pointer;">
+                                📦 Both
+                            </div>
+                        </div>
+                    </div>
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
@@ -4408,31 +4438,114 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
 // === IDEA BOARD INTEGRATION ===
 
 /**
- * Send node content and context to the idea board
+ * Handle send to idea board with different options
  */
-async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
-    // Check if idea board modal is already open
+async function handleSendToIdeaBoard(option: 'content' | 'context' | 'both'): Promise<void> {
+    // Hide dropdown
+    const dropdown = document.getElementById('send-to-idea-board-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+
+    if (!projectManager || !selectedNodeId) {
+        alert('No node selected. Please select a node to send to the idea board.');
+        return;
+    }
+
+    const selectedNode = projectManager.findNodeById(selectedNodeId);
+    if (!selectedNode) {
+        alert('Selected node not found.');
+        return;
+    }
+
+    try {
+        switch (option) {
+            case 'content':
+                await sendContentToIdeaBoard(selectedNode);
+                break;
+            case 'context':
+                await sendContextToIdeaBoard(selectedNode);
+                break;
+            case 'both':
+                await sendBothToIdeaBoard(selectedNode);
+                break;
+        }
+    } catch (error) {
+        console.error('Failed to send to idea board:', error);
+        alert('Failed to send content to idea board. Please try again.');
+    }
+}
+
+/**
+ * Ensure idea board modal is open
+ */
+async function ensureIdeaBoardOpen(): Promise<void> {
     let ideaBoardModal = document.getElementById('idea-board-modal');
-    
     if (!ideaBoardModal) {
-        // Create and open idea board modal
         await openIdeaBoardModal();
-        ideaBoardModal = document.getElementById('idea-board-modal');
+        // Wait a moment for the board to initialize
+        await new Promise(resolve => setTimeout(resolve, 300));
     }
+}
 
-    if (!ideaBoardModal) {
-        throw new Error('Failed to open idea board modal');
-    }
-
-    // Wait a moment for the board to initialize
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Access the idea board through the global window object
+/**
+ * Get idea board instance from global window object
+ */
+async function getIdeaBoardInstance(): Promise<any> {
     const ideaBoard = (window as any).currentIdeaBoard;
     if (!ideaBoard) {
-        console.error('❌ No idea board instance found. Available:', (window as any));
         throw new Error('Could not access idea board instance');
     }
+    return ideaBoard;
+}
+
+/**
+ * Get viewport center position for placing single stickers
+ */
+function getViewportCenter(ideaBoard: any): { x: number; y: number } {
+    const centerX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
+    const centerY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
+    return { x: centerX, y: centerY };
+}
+
+/**
+ * Send only content to idea board as a single sticker
+ */
+async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
+    await ensureIdeaBoardOpen();
+    const ideaBoard = await getIdeaBoardInstance();
+    const centerPosition = getViewportCenter(ideaBoard);
+    
+    // Create single content sticker at center
+    const contentSticker = ideaBoard.createNewPostIt(centerPosition, node.content);
+    contentSticker.setColor('#fff9c4'); // Default yellow
+    
+    ideaBoard.requestRedraw();
+    ideaBoard.selectElement(contentSticker);
+}
+
+/**
+ * Send only context to idea board as a single sticker
+ */
+async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
+    await ensureIdeaBoardOpen();
+    const ideaBoard = await getIdeaBoardInstance();
+    const centerPosition = getViewportCenter(ideaBoard);
+    
+    // Create single context sticker at center
+    const contextSticker = ideaBoard.createNewPostIt(centerPosition, node.context || 'No context available');
+    contextSticker.setColor('#fff9c4'); // Default yellow
+    
+    ideaBoard.requestRedraw();
+    ideaBoard.selectElement(contextSticker);
+}
+
+/**
+ * Send both content and context to idea board (original functionality)
+ */
+async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
+    await ensureIdeaBoardOpen();
+    const ideaBoard = await getIdeaBoardInstance();
     
     // Find free space on the canvas
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
@@ -4743,24 +4856,48 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
 
-    'send-to-idea-board-btn': async (_e: Event) => {
-        if (!projectManager || !selectedNodeId) {
-            alert('No node selected. Please select a node to send to the idea board.');
-            return;
+    'send-to-idea-board-btn': (_e: Event) => {
+        // Toggle dropdown visibility
+        const dropdown = document.getElementById('send-to-idea-board-dropdown');
+        if (dropdown) {
+            const isVisible = dropdown.style.display !== 'none';
+            dropdown.style.display = isVisible ? 'none' : 'block';
+            
+            // Close dropdown when clicking elsewhere
+            if (!isVisible) {
+                const closeDropdown = (event: MouseEvent) => {
+                    const target = event.target as Element;
+                    if (!dropdown.contains(target) && !target.closest('#send-to-idea-board-btn')) {
+                        dropdown.style.display = 'none';
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+                
+                // Add hover effects to dropdown options
+                const options = dropdown.querySelectorAll('.dropdown-option');
+                options.forEach(option => {
+                    option.addEventListener('mouseenter', () => {
+                        (option as HTMLElement).style.backgroundColor = '#f5f5f5';
+                    });
+                    option.addEventListener('mouseleave', () => {
+                        (option as HTMLElement).style.backgroundColor = 'transparent';
+                    });
+                });
+            }
         }
+    },
 
-        const selectedNode = projectManager.findNodeById(selectedNodeId);
-        if (!selectedNode) {
-            alert('Selected node not found.');
-            return;
-        }
+    'send-content-only': async (_e: Event) => {
+        await handleSendToIdeaBoard('content');
+    },
 
-        try {
-            await sendNodeToIdeaBoard(selectedNode);
-        } catch (error) {
-            console.error('Failed to send node to idea board:', error);
-            alert('Failed to send content to idea board. Please try again.');
-        }
+    'send-context-only': async (_e: Event) => {
+        await handleSendToIdeaBoard('context');
+    },
+
+    'send-both': async (_e: Event) => {
+        await handleSendToIdeaBoard('both');
     },
     
     'version-prev-btn': (_e: Event) => {
