@@ -12,6 +12,7 @@ export interface TransformModalConfig extends ModalConfig {
   onTransformConfirmed?: (result: TransformResult) => void;
   defaultInstruction?: string;
   outgoingConnectionCount?: number; // If provided, count field is locked to this value
+  triggeringContent?: string; // Content of the post-it that triggered the transform
 }
 
 const STORAGE_KEY_TRANSFORM_HISTORY = 'idea_board_transform_history';
@@ -25,6 +26,7 @@ export class TransformModal extends BaseModal {
   private storageService: Promise<IStorageService>;
   private transformHistory: string[] = [];
   private outgoingConnectionCount: number | undefined;
+  private triggeringContent: string | undefined;
 
   constructor(config: TransformModalConfig, hooks: ModalHooks = {}) {
     super({
@@ -39,6 +41,7 @@ export class TransformModal extends BaseModal {
     
     this.onTransformConfirmed = config.onTransformConfirmed;
     this.outgoingConnectionCount = config.outgoingConnectionCount;
+    this.triggeringContent = config.triggeringContent;
     this.storageService = StorageService.getInstance();
   }
 
@@ -89,6 +92,41 @@ export class TransformModal extends BaseModal {
           display: flex;
           flex-direction: column;
           gap: 1rem;
+        }
+        
+        .transform-content-section {
+          display: flex;
+          gap: 1rem;
+          flex: 1;
+        }
+        
+        .instruction-area {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        
+        .triggering-content-area {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        
+        .triggering-content-display {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 0.75rem;
+          font-family: inherit;
+          font-size: 14px;
+          line-height: 1.5;
+          color: #374151;
+          max-height: 200px;
+          overflow-y: auto;
+          white-space: pre-wrap;
+          word-wrap: break-word;
         }
         
         .transform-history-section {
@@ -247,15 +285,26 @@ export class TransformModal extends BaseModal {
     return `
        <div class="transform-modal-content">
         <div class="transform-input-section">
-          <div>
-            <label class="form-label" for="instruction-textarea">
-              What would you like to do with the content?
-            </label>
-            <textarea 
-              id="instruction-textarea" 
-              class="instruction-textarea"
-              placeholder="Describe how you want to transform the content...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Translate to Spanish"
-            ></textarea>
+          <div class="transform-content-section">
+            <div class="instruction-area">
+              <div>
+                <label class="form-label" for="instruction-textarea">
+                  What would you like to do with the content?
+                </label>
+                <textarea 
+                  id="instruction-textarea" 
+                  class="instruction-textarea"
+                  placeholder="Describe how you want to transform the content...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Translate to Spanish"
+                ></textarea>
+              </div>
+            </div>
+            
+            ${this.triggeringContent ? `
+            <div class="triggering-content-area">
+              <label class="form-label">Current Content:</label>
+              <div class="triggering-content-display">${this.escapeHtml(this.triggeringContent)}</div>
+            </div>
+            ` : ''}
           </div>
           
           <div class="count-container">

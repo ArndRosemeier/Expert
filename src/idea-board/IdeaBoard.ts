@@ -2266,7 +2266,8 @@ export class IdeaBoard {
           id: 'transform-content-modal',
           onTransformConfirmed: (result: TransformResult) => {
             resolve(result);
-          }
+          },
+          triggeringContent: originalContent
         };
         
         // Only add outgoingConnectionCount if it's defined
