@@ -668,12 +668,12 @@ export class IdeaBoard {
         // Not valid JSON or not Expert post-it data
         // Check if we have plain text content that's not empty
         if (systemClipboard && systemClipboard.trim().length > 0) {
-          // Use plain text to create a new post-it
-          clipboardData = {
-            content: systemClipboard.trim(),
-            backgroundColor: '#ffeb3b', // Default yellow color
-            size: { width: 200, height: 150 } // Default size
-          };
+                     // Use plain text to create a new post-it
+           clipboardData = {
+             content: systemClipboard.trim(),
+             backgroundColor: '#fff9c4', // Same as default PostItNote color
+             size: { width: 225, height: 150 } // Same as default PostItNote size
+           };
           isPlainText = true;
           console.log('📋 Using plain text from clipboard for new post-it');
         }
