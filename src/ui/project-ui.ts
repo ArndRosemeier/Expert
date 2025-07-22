@@ -1748,6 +1748,11 @@ export function renderNodeDetails() {
                             style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
                         📊
                     </button>
+                    <button id="send-to-idea-board-btn" class="button button-secondary" 
+                            title="Send to Idea Board - Transfer content and context" 
+                            style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
+                        ➡️🧠
+                    </button>
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
@@ -4400,6 +4405,107 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
 
 // === CHECKBOX STATE MANAGEMENT ===
 
+// === IDEA BOARD INTEGRATION ===
+
+/**
+ * Send node content and context to the idea board
+ */
+async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
+    // Check if idea board modal is already open
+    let ideaBoardModal = document.getElementById('idea-board-modal');
+    
+    if (!ideaBoardModal) {
+        // Create and open idea board modal
+        await openIdeaBoardModal();
+        ideaBoardModal = document.getElementById('idea-board-modal');
+    }
+
+    if (!ideaBoardModal) {
+        throw new Error('Failed to open idea board modal');
+    }
+
+    // Wait a moment for the board to initialize
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Access the idea board through the global window object
+    const ideaBoard = (window as any).currentIdeaBoard;
+    if (!ideaBoard) {
+        throw new Error('Could not access idea board instance');
+    }
+
+    // Find free space on the canvas
+    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    
+    // Create background rectangle (light blue) - we'll need to implement this method
+    // For now, let's focus on creating the stickers
+    
+    // Create content sticker (light red)
+    const contentSticker = ideaBoard.createNewPostIt(
+        { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
+        `Content:\n${node.content}`
+    );
+    contentSticker.setColor('#ffebee'); // Very light red
+    
+    // Create context sticker (light red)  
+    const contextSticker = ideaBoard.createNewPostIt(
+        { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
+        `Context:\n${node.context || 'No context available'}`
+    );
+    contextSticker.setColor('#ffebee'); // Very light red
+    
+    console.log('✅ Node content and context sent to idea board');
+}
+
+/**
+ * Open idea board modal
+ */
+async function openIdeaBoardModal(): Promise<void> {
+    // Check if already open
+    if (document.getElementById('idea-board-modal')) {
+        return;
+    }
+
+    // Trigger the existing idea board button
+    const ideaBoardBtn = document.getElementById('idea-board-btn');
+    if (ideaBoardBtn) {
+        ideaBoardBtn.click();
+        
+        // Wait for the modal to be created
+        let attempts = 0;
+        while (!document.getElementById('idea-board-modal') && attempts < 20) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        
+        // Store reference to the idea board instance
+        // This is a bit hacky but works for now
+        const contentArea = document.querySelector('#idea-board-modal div[style*="flex: 1"]') as HTMLElement;
+        if (contentArea && (contentArea as any).ideaBoardInstance) {
+            (window as any).currentIdeaBoard = (contentArea as any).ideaBoardInstance;
+        }
+    }
+}
+
+/**
+ * Find free space on the idea board canvas
+ */
+function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
+    // Simple implementation - place items near center with some offset
+    const baseX = 200;
+    const baseY = 200;
+    
+    // Add some randomness to avoid exact overlap
+    const offsetX = Math.random() * 200 - 100;
+    const offsetY = Math.random() * 200 - 100;
+    
+    return { 
+        x: baseX + offsetX, 
+        y: baseY + offsetY, 
+        width: 300, 
+        height: 400 
+    };
+}
+
 // === CENTRALIZED EVENT LISTENER SYSTEM ===
 
 /**
@@ -4589,6 +4695,26 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
             console.error('Failed to load Overview Board module:', error);
             alert('Failed to load Overview Board. Please try again.');
         });
+    },
+
+    'send-to-idea-board-btn': async (_e: Event) => {
+        if (!projectManager || !selectedNodeId) {
+            alert('No node selected. Please select a node to send to the idea board.');
+            return;
+        }
+
+        const selectedNode = projectManager.findNodeById(selectedNodeId);
+        if (!selectedNode) {
+            alert('Selected node not found.');
+            return;
+        }
+
+        try {
+            await sendNodeToIdeaBoard(selectedNode);
+        } catch (error) {
+            console.error('Failed to send node to idea board:', error);
+            alert('Failed to send content to idea board. Please try again.');
+        }
     },
     
     'version-prev-btn': (_e: Event) => {
