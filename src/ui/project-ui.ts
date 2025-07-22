@@ -4436,17 +4436,22 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
     // Find free space on the canvas
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
     
-    // Create background rectangle (light blue) - we'll need to implement this method
-    // For now, let's focus on creating the stickers
+    // Create background rectangle (light blue)
+    const backgroundRect = ideaBoard.createBackgroundRectangle({ x: freeSpace.x, y: freeSpace.y });
+    backgroundRect.setBackgroundColor('#e3f2fd'); // Very light blue
     
-    // Create content sticker (light red)
+    // Size the background rectangle to contain both stickers with padding
+    backgroundRect.size = { width: 280, height: 420 }; // Adjusted to fit both stickers plus padding
+    ideaBoard.updateElementData(backgroundRect);
+    
+    // Create content sticker (light red) inside the background rectangle
     const contentSticker = ideaBoard.createNewPostIt(
         { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
         `Content:\n${node.content}`
     );
     contentSticker.setColor('#ffebee'); // Very light red
     
-    // Create context sticker (light red)  
+    // Create context sticker (light red) inside the background rectangle
     const contextSticker = ideaBoard.createNewPostIt(
         { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
         `Context:\n${node.context || 'No context available'}`
