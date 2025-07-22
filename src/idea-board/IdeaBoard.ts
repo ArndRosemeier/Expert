@@ -757,6 +757,8 @@ export class IdeaBoard {
   private showContextMenu(event: MouseEvent, postIt: PostItNote): void {
     const contextMenu = document.createElement('div');
     contextMenu.className = 'idea-board-context-menu';
+    
+    // Initial positioning (will be adjusted after measuring)
     contextMenu.style.cssText = `
       position: fixed;
       left: ${event.clientX}px;
@@ -769,6 +771,7 @@ export class IdeaBoard {
       min-width: 200px;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 14px;
+      visibility: hidden;
     `;
 
     // Helper function to create menu option
@@ -965,6 +968,33 @@ export class IdeaBoard {
     contextMenu.appendChild(deleteOption);
     contextMenu.appendChild(deleteDescendantsOption);
     document.body.appendChild(contextMenu);
+
+    // Adjust position to keep menu within viewport bounds
+    const menuRect = contextMenu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let left = event.clientX;
+    let top = event.clientY;
+    
+    // Adjust horizontal position if menu would go off the right edge
+    if (left + menuRect.width > viewportWidth) {
+      left = viewportWidth - menuRect.width - 10; // 10px margin from edge
+    }
+    
+    // Adjust vertical position if menu would go off the bottom edge  
+    if (top + menuRect.height > viewportHeight) {
+      top = viewportHeight - menuRect.height - 10; // 10px margin from edge
+    }
+    
+    // Ensure menu doesn't go off the left or top edges
+    left = Math.max(10, left);
+    top = Math.max(10, top);
+    
+    // Apply adjusted position and make visible
+    contextMenu.style.left = `${left}px`;
+    contextMenu.style.top = `${top}px`;
+    contextMenu.style.visibility = 'visible';
 
     // Remove context menu when clicking elsewhere
     const removeOnClick = (e: MouseEvent) => {
