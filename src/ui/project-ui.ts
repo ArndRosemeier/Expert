@@ -4499,14 +4499,7 @@ async function getIdeaBoardInstance(): Promise<any> {
     return ideaBoard;
 }
 
-/**
- * Get viewport center position for placing single stickers
- */
-function getViewportCenter(ideaBoard: any): { x: number; y: number } {
-    const centerX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
-    const centerY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
-    return { x: centerX, y: centerY };
-}
+
 
 /**
  * Send only content to idea board as a single sticker
@@ -4514,10 +4507,12 @@ function getViewportCenter(ideaBoard: any): { x: number; y: number } {
 async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
     await ensureIdeaBoardOpen();
     const ideaBoard = await getIdeaBoardInstance();
-    const centerPosition = getViewportCenter(ideaBoard);
     
-    // Create single content sticker at center
-    const contentSticker = ideaBoard.createNewPostIt(centerPosition, node.content);
+    // Find free space on the canvas
+    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    
+    // Create single content sticker at free space location
+    const contentSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.content);
     contentSticker.setColor('#fff9c4'); // Default yellow
     
     ideaBoard.requestRedraw();
@@ -4530,10 +4525,12 @@ async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
 async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
     await ensureIdeaBoardOpen();
     const ideaBoard = await getIdeaBoardInstance();
-    const centerPosition = getViewportCenter(ideaBoard);
     
-    // Create single context sticker at center
-    const contextSticker = ideaBoard.createNewPostIt(centerPosition, node.context || 'No context available');
+    // Find free space on the canvas
+    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    
+    // Create single context sticker at free space location
+    const contextSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.context || 'No context available');
     contextSticker.setColor('#fff9c4'); // Default yellow
     
     ideaBoard.requestRedraw();
