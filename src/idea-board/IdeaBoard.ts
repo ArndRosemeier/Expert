@@ -299,6 +299,14 @@ export class IdeaBoard {
       }
 
       if (hitElement) {
+        // Check for Shift+click on post-it to trigger transform functionality
+        if (event.shiftKey && hitElement instanceof PostItNote) {
+          this.selectElement(hitElement);
+          console.log('🔄 Shift+click detected - opening transform modal');
+          void this.transformSelectedPostIt();
+          return; // Don't proceed with dragging setup
+        }
+        
         // Only set up dragging if we're not resizing
         this.selectElement(hitElement);
         this.draggedElement = hitElement;
