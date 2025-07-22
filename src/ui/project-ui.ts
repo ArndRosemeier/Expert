@@ -4494,20 +4494,55 @@ async function openIdeaBoardModal(): Promise<void> {
  * Find free space on the idea board canvas
  */
 function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
-    // Simple implementation - place items near center with some offset
-    const baseX = 200;
-    const baseY = 200;
+    // Get all existing elements to avoid overlap
+    const existingElements: any[] = [];
     
-    // Add some randomness to avoid exact overlap
-    const offsetX = Math.random() * 200 - 100;
-    const offsetY = Math.random() * 200 - 100;
+    // Get elements from the idea board
+    if (ideaBoard.elements && typeof ideaBoard.elements.values === 'function') {
+        for (const element of ideaBoard.elements.values()) {
+            if (element && element.position) {
+                existingElements.push(element);
+            }
+        }
+    }
     
-    return { 
-        x: baseX + offsetX, 
-        y: baseY + offsetY, 
-        width: 300, 
-        height: 400 
-    };
+    // Define the space we need (background + 2 stickers with padding)
+    const neededWidth = 300;
+    const neededHeight = 400;
+    
+    // Start near center but not exactly center
+    const centerX = 200;
+    const centerY = 200;
+    
+    // Try to find free space in a spiral pattern
+    for (let radius = 0; radius < 500; radius += 50) {
+        for (let angle = 0; angle < 360; angle += 45) {
+            const x = centerX + Math.cos(angle * Math.PI / 180) * radius;
+            const y = centerY + Math.sin(angle * Math.PI / 180) * radius;
+            
+            // Check if this position has enough free space
+            const hasOverlap = existingElements.some((element: any) => {
+                if (!element.position) return false;
+                
+                const elementRight = element.position.x + (element.size?.width || 225);
+                const elementBottom = element.position.y + (element.size?.height || 150);
+                const testRight = x + neededWidth;
+                const testBottom = y + neededHeight;
+                
+                return !(x > elementRight || testRight < element.position.x || 
+                        y > elementBottom || testBottom < element.position.y);
+            });
+            
+            if (!hasOverlap) {
+                console.log(`✅ Found free space at (${Math.round(x)}, ${Math.round(y)}) after checking ${existingElements.length} elements`);
+                return { x, y, width: neededWidth, height: neededHeight };
+            }
+        }
+    }
+    
+    // Fallback to a position far from center if no free space found
+    console.log(`⚠️ No free space found, using fallback position. Checked ${existingElements.length} existing elements.`);
+    return { x: centerX + 600, y: centerY, width: neededWidth, height: neededHeight };
 }
 
 // === CENTRALIZED EVENT LISTENER SYSTEM ===
