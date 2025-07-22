@@ -45,6 +45,10 @@ export interface ElementData {
     created: Date;
     lastEdited: Date;
   };
+  source?: {
+    nodeId: string;
+    type: 'content' | 'context';
+  } | null;
 }
 
 export interface BoardElement {

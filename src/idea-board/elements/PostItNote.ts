@@ -15,6 +15,10 @@ export class PostItNote implements BoardElement {
     created: Date;
     lastEdited: Date;
   };
+  public source: {
+    nodeId: string;
+    type: 'content' | 'context';
+  } | null = null;
 
   private isSelected: boolean = false;
   private isEditing: boolean = false;
@@ -387,7 +391,8 @@ export class PostItNote implements BoardElement {
       size: { ...this.size },
       content: this.content,
       style: { ...this.style },
-      metadata: { ...this.metadata }
+      metadata: { ...this.metadata },
+      source: this.source ? { ...this.source } : null
     };
   }
 
@@ -401,6 +406,7 @@ export class PostItNote implements BoardElement {
     this.content = data.content;
     this.style = { ...data.style };
     this.metadata = { ...data.metadata };
+    this.source = data.source ? { ...data.source } : null;
   }
 
   /**

@@ -4514,6 +4514,7 @@ async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
     // Create single content sticker at free space location
     const contentSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.content);
     contentSticker.setColor('#fff9c4'); // Default yellow
+    contentSticker.source = { nodeId: node.id, type: 'content' };
     
     ideaBoard.requestRedraw();
     ideaBoard.selectElement(contentSticker);
@@ -4532,6 +4533,7 @@ async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
     // Create single context sticker at free space location
     const contextSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.context || 'No context available');
     contextSticker.setColor('#fff9c4'); // Default yellow
+    contextSticker.source = { nodeId: node.id, type: 'context' };
     
     ideaBoard.requestRedraw();
     ideaBoard.selectElement(contextSticker);
@@ -4562,6 +4564,7 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
             node.content
         );
         contentSticker.setColor('#fff9c4'); // Standard yellow
+        contentSticker.source = { nodeId: node.id, type: 'content' };
         
         // Create context sticker (standard yellow) inside the background rectangle
         const contextSticker = ideaBoard.createNewPostIt(
@@ -4569,6 +4572,7 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
             node.context || 'No context available'
         );
         contextSticker.setColor('#fff9c4'); // Standard yellow
+        contextSticker.source = { nodeId: node.id, type: 'context' };
         
         // Force a redraw and select the background rectangle to ensure visibility
         ideaBoard.requestRedraw();

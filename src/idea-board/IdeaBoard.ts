@@ -802,6 +802,14 @@ export class IdeaBoard {
 
     });
 
+    // Send back to origin option (only if sticker has source information)
+    let sendBackToOriginOption: HTMLElement | null = null;
+    if (postIt.source) {
+      sendBackToOriginOption = createMenuOption('↩️', 'Send back to origin', () => {
+        this.sendBackToOrigin(postIt);
+      });
+    }
+
     // AI Operations section
     const aiSectionHeader = document.createElement('div');
     aiSectionHeader.textContent = 'AI Operations';
@@ -956,6 +964,9 @@ export class IdeaBoard {
 
     // Add all options to context menu
     contextMenu.appendChild(copyContentOption);
+    if (sendBackToOriginOption) {
+      contextMenu.appendChild(sendBackToOriginOption);
+    }
     contextMenu.appendChild(aiSectionHeader);
     contextMenu.appendChild(generateIdeasOption);
     contextMenu.appendChild(summarizeOption);
@@ -1007,6 +1018,67 @@ export class IdeaBoard {
     setTimeout(() => {
       document.addEventListener('click', removeOnClick);
     }, 0);
+  }
+
+  /**
+   * Send sticker content back to its origin node
+   */
+  private async sendBackToOrigin(postIt: PostItNote): Promise<void> {
+    if (!postIt.source) {
+      return;
+    }
+
+    try {
+      // Get the project manager from global window object (same as idea board access)
+      const projectManager = (window as any).projectManager;
+      
+      if (!projectManager) {
+        alert('No project manager available');
+        return;
+      }
+
+      // Find the origin node
+      const originNode = projectManager.findNodeById(postIt.source.nodeId);
+      if (!originNode) {
+        alert('Origin node not found');
+        return;
+      }
+
+      // Show confirmation dialog
+      const confirmMessage = 
+        `📤 Send back to origin\n\n` +
+        `Send this sticker's content back to:\n` +
+        `Node: "${originNode.title}"\n` +
+        `Type: ${postIt.source.type}\n\n` +
+        `This will update the ${postIt.source.type} of the node and add an "idea_board" tag.\n\n` +
+        `Are you sure?`;
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // Update the node content
+      if (postIt.source.type === 'content') {
+        originNode.content = postIt.content;
+      } else {
+        originNode.context = postIt.content;
+      }
+
+      // Add the idea_board tag
+      if (!originNode.tags.includes('idea_board')) {
+        originNode.tags.push('idea_board');
+      }
+
+      // Save the changes
+      await projectManager.saveToStorage();
+
+      // Show success message
+      alert(`✅ Content sent back to node "${originNode.title}"`);
+
+    } catch (error) {
+      console.error('Failed to send back to origin:', error);
+      alert('Failed to send content back to origin');
+    }
   }
 
   /**
@@ -2479,6 +2551,11 @@ export class IdeaBoard {
       
       // Set the same size as the trigger post-it
       newPostIt.size = { ...triggerPostIt.size };
+      
+      // Inherit source information from parent
+      if (triggerPostIt.source) {
+        newPostIt.source = { ...triggerPostIt.source };
+      }
       
       this.updateElementData(newPostIt);
       newPostIts.push(newPostIt);
