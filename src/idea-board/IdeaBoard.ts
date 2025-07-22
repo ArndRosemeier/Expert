@@ -597,7 +597,6 @@ export class IdeaBoard {
    */
   private async copySelectedElement(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('📋 No post-it selected to copy');
       return;
     }
 
@@ -620,10 +619,8 @@ export class IdeaBoard {
       };
       
       await navigator.clipboard.writeText(JSON.stringify(clipboardData));
-      console.log('📋 Post-it copied to clipboard');
     } catch (error) {
       console.warn('Failed to write to system clipboard:', error);
-      console.log('📋 Post-it copied to internal clipboard only');
     }
   }
 
@@ -632,7 +629,6 @@ export class IdeaBoard {
    */
   private async cutSelectedElement(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('✂️ No post-it selected to cut');
       return;
     }
 
@@ -641,7 +637,7 @@ export class IdeaBoard {
     
     // Then delete
     this.deleteElement(this.selectedElement);
-    console.log('✂️ Post-it cut to clipboard');
+
   }
 
   /**
@@ -650,7 +646,6 @@ export class IdeaBoard {
    */
   private async pasteElement(): Promise<void> {
     let clipboardData = this.clipboard;
-    let isPlainText = false;
 
     // Try to read from system clipboard first
     try {
@@ -677,17 +672,14 @@ export class IdeaBoard {
              backgroundColor: '#fff9c4', // Same as default PostItNote color
              size: { width: 225, height: 150 } // Same as default PostItNote size
            };
-          isPlainText = true;
-          console.log('📋 Using plain text from clipboard for new post-it');
+
         }
       }
     } catch (error) {
       // System clipboard read failed, use internal clipboard if available
-      console.log('📋 System clipboard read failed, using internal clipboard');
     }
 
     if (!clipboardData) {
-      console.log('📋 No valid content in clipboard to paste');
       return;
     }
 
@@ -697,11 +689,9 @@ export class IdeaBoard {
     if (this.lastMousePosition) {
       // Use current mouse position for intuitive pasting
       basePosition = { ...this.lastMousePosition };
-      console.log(`📋 Pasting ${isPlainText ? 'plain text' : 'post-it'} at mouse position`);
     } else {
       // Fallback to viewport center if no mouse position tracked
       basePosition = this.viewport.screenToWorld(this.viewport.width / 2, this.viewport.height / 2);
-      console.log(`📋 Pasting ${isPlainText ? 'plain text' : 'post-it'} at viewport center (no mouse position available)`);
     }
     
     const pasteOffset = 20; // Offset each paste by 20 pixels
@@ -730,7 +720,7 @@ export class IdeaBoard {
     this.autoSave();
     this.requestRedraw();
     
-    console.log(`📋 ${isPlainText ? 'Plain text pasted as new post-it' : 'Post-it pasted from clipboard'}`);
+
   }
 
   /**
@@ -806,7 +796,7 @@ export class IdeaBoard {
     // Copy Content option
     const copyContentOption = createMenuOption('📋', 'Copy Content', () => {
       navigator.clipboard.writeText(postIt.content).catch(console.error);
-      console.log('📋 Copied post-it content to clipboard');
+
     });
 
     // AI Operations section
@@ -929,7 +919,7 @@ export class IdeaBoard {
         this.updateElementData(postIt);
         this.requestRedraw();
         this.autoSave();
-        console.log(`🎨 Changed post-it color to ${color.name} (${color.value})`);
+        
         this.removeContextMenu();
       });
       
@@ -951,7 +941,7 @@ export class IdeaBoard {
         `Are you sure you want to delete all ${descendants.length} descendants?`;
       
       if (confirm(confirmMessage)) {
-        console.log(`🗑️💥 Deleting ${descendants.length} descendants of post-it`);
+
         
         // Delete only the descendants, keep the main post-it
         const descendantIds = descendants.map(d => d.id);
@@ -1097,7 +1087,7 @@ export class IdeaBoard {
       `🗑️ Delete Background Rectangle\n\n` +
       `This background rectangle contains ${containedPostIts.length} sticker(s) inside it.\n\n` +
       `What would you like to do?\n\n` +
-      `• OK: Delete background rectangle AND all contained stickers (${containedPostIts.length + 1} total)\n` +
+      `• OK: Delete background rectangle AND all contained stickers\n` +
       `• Cancel: Delete only the background rectangle (stickers will remain)`;
 
     const deleteWithContained = confirm(confirmMessage);
@@ -1638,7 +1628,7 @@ export class IdeaBoard {
     const connection = new Connection(fromPostItId, fromSide, toPostItId, toSide);
     this.connections.set(connection.id, connection);
     
-    console.log(`🔗 Created connection from ${fromPostItId}:${fromSide} to ${toPostItId}:${toSide}`);
+
     this.autoSave();
   }
 
@@ -2177,13 +2167,12 @@ export class IdeaBoard {
       });
       
       if (!transformResult || !transformResult.instruction.trim()) {
-        console.log('❌ Transformation cancelled - no instruction provided.');
         return;
       }
       
       userInstruction = transformResult.instruction.trim();
       customCount = transformResult.count;
-      console.log(`🔄 Transforming content with instruction: "${userInstruction}" (${customCount} variations)`);
+      
     }
 
     let count: number;
@@ -2200,7 +2189,7 @@ export class IdeaBoard {
       } else {
         // Custom count different from connections - use free mode
         count = customCount;
-        console.log(`🔄 Generating ${customCount} ${type} and creating new post-its below the selected one...`);
+
         
         // Start animation around bottom dot in free mode
         this.startIdeaGenerationAnimation(selectedPostIt.id);
@@ -2225,17 +2214,17 @@ export class IdeaBoard {
       );
       
       if (!userConfirmed) {
-          console.log(`🔄 ${typeCapitalized} generation cancelled by user.`);
+  
         return;
         }
       }
       
       targetPostIts = childPostIts;
-      console.log(`🔄 Generating exactly ${count} ${type} for child post-its...`);
+      
     } else {
       // Free mode: LLM decides number, create new post-its
       count = 0; // Will be determined by LLM response
-      console.log(`🔄 Generating ${type} and creating new post-its below the selected one...`);
+      
       
       // Start animation around bottom dot in free mode
       this.startIdeaGenerationAnimation(selectedPostIt.id);
@@ -2318,7 +2307,7 @@ export class IdeaBoard {
         throw new Error(`No ${type} were generated by the AI`);
       }
 
-      console.log(`🔄 Generated ${results.length} ${type} from AI response`);
+
 
       if (isConnectedMode) {
         // Connected mode: distribute content to existing post-its
@@ -2350,11 +2339,11 @@ export class IdeaBoard {
       this.requestRedraw();
       this.autoSave();
 
-      console.log(`✅ Successfully generated ${results.length} ${type} ${isConnectedMode ? 'for child post-its' : 'as new post-its'}.`);
+
       
     } catch (error) {
       console.error(`❌ Failed to generate ${type}:`, error);
-      console.log(`❌ ${type.charAt(0).toUpperCase() + type.slice(0, -1)} generation failed. Please check your API key and try again.`);
+
       
       // Stop animations on error
       this.stopIdeaGenerationAnimation();
@@ -2434,7 +2423,7 @@ export class IdeaBoard {
   /**
    * Generic method to create new post-its arranged below the triggering post-it
    */
-  private createPostItsFromContent(triggerPostIt: PostItNote, contentItems: string[], contentType: string): void {
+  private createPostItsFromContent(triggerPostIt: PostItNote, contentItems: string[], _contentType: string): void {
     const gap = 20; // Gap between post-its
     const verticalOffset = 200; // Distance below the trigger post-it
     
@@ -2476,7 +2465,7 @@ export class IdeaBoard {
       );
     }
 
-    console.log(`📝 Created ${newPostIts.length} new ${contentType} post-its arranged below the trigger post-it`);
+
   }
 
 
@@ -2534,7 +2523,7 @@ export class IdeaBoard {
    */
   private startDeletionAnimation(postItIds: string[], onComplete: () => void): void {
     // Immediately remove all connections involving these elements for visual feedback
-    console.log(`🔗 Immediately removing connections for ${postItIds.length} elements before animation`);
+
     for (const postItId of postItIds) {
       this.removeAllConnectionsForElement(postItId);
     }
@@ -2877,7 +2866,7 @@ export class IdeaBoard {
     }
     this.requestRedraw();
     this.autoSave();
-    console.log(`🔗 Removed all connections from dot: ${dotId} on side: ${side}`);
+
   }
 
   /**
@@ -3218,7 +3207,7 @@ export class IdeaBoard {
       this.descendantOffsets.set(descendant.id, offset);
     }
     
-    console.log(`🔗 Hierarchical drag: Moving ${this.draggedDescendants.length} descendants with parent`);
+
   }
 
   /**
