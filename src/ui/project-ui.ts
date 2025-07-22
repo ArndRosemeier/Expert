@@ -4520,6 +4520,8 @@ async function openIdeaBoardModal(): Promise<void> {
  * Find free space on the idea board canvas
  */
 function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
+    console.log('🔍 Finding free space on canvas...');
+    
     // Get all existing elements to avoid overlap
     const existingElements: any[] = [];
     
@@ -4530,19 +4532,23 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
         }
     }
     
+    console.log(`📊 Found ${existingElements.length} existing elements`);
+    
     // Define the space we need (background + 2 stickers with padding)
     const neededWidth = 300;
     const neededHeight = 400;
     
-    // Start near center but not exactly center
-    const centerX = 200;
-    const centerY = 200;
+    // Get the center of the current viewport (where user is looking)
+    const viewportCenterX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
+    const viewportCenterY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
     
-    // Try to find free space in a spiral pattern
+    console.log(`🎯 Viewport center: (${Math.round(viewportCenterX)}, ${Math.round(viewportCenterY)})`);
+    
+    // Try to find free space in a spiral pattern starting from viewport center
     for (let radius = 0; radius < 500; radius += 50) {
         for (let angle = 0; angle < 360; angle += 45) {
-            const x = centerX + Math.cos(angle * Math.PI / 180) * radius;
-            const y = centerY + Math.sin(angle * Math.PI / 180) * radius;
+            const x = viewportCenterX + Math.cos(angle * Math.PI / 180) * radius - neededWidth / 2;
+            const y = viewportCenterY + Math.sin(angle * Math.PI / 180) * radius - neededHeight / 2;
             
             // Check if this position has enough free space
             const hasOverlap = existingElements.some((element: any) => {
@@ -4564,9 +4570,14 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
         }
     }
     
-    // Fallback to a position far from center if no free space found
-    console.log(`⚠️ No free space found, using fallback position. Checked ${existingElements.length} existing elements.`);
-    return { x: centerX + 600, y: centerY, width: neededWidth, height: neededHeight };
+    // Fallback to a position near viewport center if no free space found
+    console.log(`⚠️ No free space found, using fallback position near viewport center. Checked ${existingElements.length} existing elements.`);
+    return { 
+        x: viewportCenterX - neededWidth / 2 + 300, 
+        y: viewportCenterY - neededHeight / 2, 
+        width: neededWidth, 
+        height: neededHeight 
+    };
 }
 
 // === CENTRALIZED EVENT LISTENER SYSTEM ===
