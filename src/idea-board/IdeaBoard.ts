@@ -781,50 +781,101 @@ export class IdeaBoard {
       border-radius: 4px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       z-index: 10000;
-      min-width: 120px;
+      min-width: 180px;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 14px;
     `;
 
-    // Delete option
-    const deleteOption = document.createElement('div');
-    deleteOption.textContent = '🗑️ Delete';
-    deleteOption.style.cssText = `
-      padding: 8px 12px;
-      cursor: pointer;
+    // Helper function to create menu option
+    const createMenuOption = (icon: string, text: string, onClick: () => void, hasBorder: boolean = true) => {
+      const option = document.createElement('div');
+      option.textContent = `${icon} ${text}`;
+      option.style.cssText = `
+        padding: 8px 12px;
+        cursor: pointer;
+        ${hasBorder ? 'border-bottom: 1px solid #eee;' : ''}
+      `;
+      option.addEventListener('mouseover', () => {
+        option.style.backgroundColor = '#f5f5f5';
+      });
+      option.addEventListener('mouseout', () => {
+        option.style.backgroundColor = 'transparent';
+      });
+      option.addEventListener('click', () => {
+        onClick();
+        this.removeContextMenu();
+      });
+      return option;
+    };
+
+    // Copy Content option
+    const copyContentOption = createMenuOption('📋', 'Copy Content', () => {
+      navigator.clipboard.writeText(postIt.content).catch(console.error);
+      console.log('📋 Copied post-it content to clipboard');
+    });
+
+    // AI Operations section
+    const aiSectionHeader = document.createElement('div');
+    aiSectionHeader.textContent = 'AI Operations';
+    aiSectionHeader.style.cssText = `
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      background: #f9f9f9;
       border-bottom: 1px solid #eee;
     `;
-    deleteOption.addEventListener('mouseover', () => {
-      deleteOption.style.backgroundColor = '#f5f5f5';
-    });
-    deleteOption.addEventListener('mouseout', () => {
-      deleteOption.style.backgroundColor = 'transparent';
-    });
-    deleteOption.addEventListener('click', () => {
-      this.deleteElement(postIt);
-      this.removeContextMenu();
+
+    const generateIdeasOption = createMenuOption('💡', 'Generate Ideas', () => {
+      this.selectElement(postIt);
+      void this.generateIdeasForSelectedPostIt();
     });
 
-    // Edit option
-    const editOption = document.createElement('div');
-    editOption.textContent = '✏️ Edit';
-    editOption.style.cssText = `
-      padding: 8px 12px;
-      cursor: pointer;
+    const summarizeOption = createMenuOption('🗜️', 'Summarize', () => {
+      this.selectElement(postIt);
+      void this.summarizeSelectedPostIt();
+    });
+
+    const continueOption = createMenuOption('🔄', 'Continue', () => {
+      this.selectElement(postIt);
+      void this.continueSelectedPostIt();
+    });
+
+    const transformOption = createMenuOption('✨', 'Transform', () => {
+      this.selectElement(postIt);
+      void this.transformSelectedPostIt();
+    });
+
+    // Basic operations section
+    const basicSectionHeader = document.createElement('div');
+    basicSectionHeader.textContent = 'Basic Operations';
+    basicSectionHeader.style.cssText = `
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      background: #f9f9f9;
+      border-bottom: 1px solid #eee;
     `;
-    editOption.addEventListener('mouseover', () => {
-      editOption.style.backgroundColor = '#f5f5f5';
-    });
-    editOption.addEventListener('mouseout', () => {
-      editOption.style.backgroundColor = 'transparent';
-    });
-    editOption.addEventListener('click', () => {
+
+    const editOption = createMenuOption('✏️', 'Edit', () => {
       this.startEditing(postIt);
-      this.removeContextMenu();
     });
 
-    contextMenu.appendChild(deleteOption);
+    const deleteOption = createMenuOption('🗑️', 'Delete', () => {
+      this.deleteElement(postIt);
+    }, false); // No border for last item
+
+    // Add all options to context menu
+    contextMenu.appendChild(copyContentOption);
+    contextMenu.appendChild(aiSectionHeader);
+    contextMenu.appendChild(generateIdeasOption);
+    contextMenu.appendChild(summarizeOption);
+    contextMenu.appendChild(continueOption);
+    contextMenu.appendChild(transformOption);
+    contextMenu.appendChild(basicSectionHeader);
     contextMenu.appendChild(editOption);
+    contextMenu.appendChild(deleteOption);
     document.body.appendChild(contextMenu);
 
     // Remove context menu when clicking elsewhere
