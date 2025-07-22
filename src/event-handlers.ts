@@ -104,6 +104,9 @@ async function openIdeaBoard(): Promise<void> {
         
         const ideaBoard = new IdeaBoard(contentArea, boardName);
         
+        // Store globally for access from other parts of the application
+        (window as any).currentIdeaBoard = ideaBoard;
+        
         console.log('🗒️ Idea Board opened');
 
         // Close button handler
@@ -111,6 +114,7 @@ async function openIdeaBoard(): Promise<void> {
         closeBtn?.addEventListener('click', () => {
             ideaBoard.destroy();
             modalContainer.remove();
+            (window as any).currentIdeaBoard = null;
             console.log('🗒️ Idea Board closed');
         });
 
@@ -119,6 +123,7 @@ async function openIdeaBoard(): Promise<void> {
             if (e.target === modalContainer) {
                 ideaBoard.destroy();
                 modalContainer.remove();
+                (window as any).currentIdeaBoard = null;
                 console.log('🗒️ Idea Board closed');
             }
         });
@@ -128,6 +133,7 @@ async function openIdeaBoard(): Promise<void> {
             if (e.key === 'Escape') {
                 ideaBoard.destroy();
                 modalContainer.remove();
+                (window as any).currentIdeaBoard = null;
                 document.removeEventListener('keydown', handleEscape);
                 console.log('🗒️ Idea Board closed');
             }

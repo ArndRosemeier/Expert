@@ -4475,19 +4475,15 @@ async function openIdeaBoardModal(): Promise<void> {
     if (ideaBoardBtn) {
         ideaBoardBtn.click();
         
-        // Wait for the modal to be created
+        // Wait for the modal to be created and idea board instance to be available
         let attempts = 0;
         while (!document.getElementById('idea-board-modal') && attempts < 20) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
         
-        // Store reference to the idea board instance
-        // This is a bit hacky but works for now
-        const contentArea = document.querySelector('#idea-board-modal div[style*="flex: 1"]') as HTMLElement;
-        if (contentArea && (contentArea as any).ideaBoardInstance) {
-            (window as any).currentIdeaBoard = (contentArea as any).ideaBoardInstance;
-        }
+        // Wait a bit more for the idea board to be fully initialized
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
 }
 
