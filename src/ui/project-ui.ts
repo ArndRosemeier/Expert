@@ -4430,8 +4430,11 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
     // Access the idea board through the global window object
     const ideaBoard = (window as any).currentIdeaBoard;
     if (!ideaBoard) {
+        console.error('❌ No idea board instance found. Available:', (window as any));
         throw new Error('Could not access idea board instance');
     }
+    
+    console.log('✅ Successfully accessed idea board instance');
 
     // Find free space on the canvas
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
