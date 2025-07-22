@@ -529,20 +529,29 @@ export class IdeaBoard {
     const canvasHasFocus = this.canvas.matches(':focus');
     const hasSelection = !!this.selectedElement;
     
-    // Handle copy/cut/paste shortcuts (work when element is selected, even without canvas focus)
-    if ((event.ctrlKey || event.metaKey) && hasSelection) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
+    // Handle copy/cut/paste shortcuts
+    if (event.ctrlKey || event.metaKey) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
       switch (event.key.toLowerCase()) {
         case 'c':
-          event.preventDefault();
-          this.copySelectedElement();
+          // Copy requires selection
+          if (hasSelection) {
+            event.preventDefault();
+            this.copySelectedElement();
+          }
           break;
         case 'x':
-          event.preventDefault();
-          this.cutSelectedElement();
+          // Cut requires selection
+          if (hasSelection) {
+            event.preventDefault();
+            this.cutSelectedElement();
+          }
           break;
         case 'v':
-          event.preventDefault();
-          this.pasteElement();
+          // Paste works with selection (even without canvas focus) or without selection (only with canvas focus)
+          if (hasSelection || canvasHasFocus) {
+            event.preventDefault();
+            this.pasteElement();
+          }
           break;
       }
       return;
@@ -634,28 +643,48 @@ export class IdeaBoard {
 
   /**
    * Paste a post-it from clipboard
+   * Supports both Expert post-it data and plain text
    */
   private async pasteElement(): Promise<void> {
     let clipboardData = this.clipboard;
+    let isPlainText = false;
 
     // Try to read from system clipboard first
     try {
       const systemClipboard = await navigator.clipboard.readText();
-      const parsedData = JSON.parse(systemClipboard);
       
-      if (parsedData.type === 'expert-postit') {
-        clipboardData = {
-          content: parsedData.content,
-          backgroundColor: parsedData.backgroundColor,
-          size: parsedData.size
-        };
+      // First try to parse as Expert post-it JSON
+      try {
+        const parsedData = JSON.parse(systemClipboard);
+        
+        if (parsedData.type === 'expert-postit') {
+          clipboardData = {
+            content: parsedData.content,
+            backgroundColor: parsedData.backgroundColor,
+            size: parsedData.size
+          };
+        }
+      } catch (parseError) {
+        // Not valid JSON or not Expert post-it data
+        // Check if we have plain text content that's not empty
+        if (systemClipboard && systemClipboard.trim().length > 0) {
+          // Use plain text to create a new post-it
+          clipboardData = {
+            content: systemClipboard.trim(),
+            backgroundColor: '#ffeb3b', // Default yellow color
+            size: { width: 200, height: 150 } // Default size
+          };
+          isPlainText = true;
+          console.log('📋 Using plain text from clipboard for new post-it');
+        }
       }
     } catch (error) {
-      // System clipboard doesn't contain valid post-it data, use internal clipboard
+      // System clipboard read failed, use internal clipboard if available
+      console.log('📋 System clipboard read failed, using internal clipboard');
     }
 
     if (!clipboardData) {
-      console.log('📋 No post-it data in clipboard to paste');
+      console.log('📋 No valid content in clipboard to paste');
       return;
     }
 
@@ -665,11 +694,11 @@ export class IdeaBoard {
     if (this.lastMousePosition) {
       // Use current mouse position for intuitive pasting
       basePosition = { ...this.lastMousePosition };
-      console.log('📋 Pasting at mouse position');
+      console.log(`📋 Pasting ${isPlainText ? 'plain text' : 'post-it'} at mouse position`);
     } else {
       // Fallback to viewport center if no mouse position tracked
       basePosition = this.viewport.screenToWorld(this.viewport.width / 2, this.viewport.height / 2);
-      console.log('📋 Pasting at viewport center (no mouse position available)');
+      console.log(`📋 Pasting ${isPlainText ? 'plain text' : 'post-it'} at viewport center (no mouse position available)`);
     }
     
     const pasteOffset = 20; // Offset each paste by 20 pixels
@@ -698,7 +727,7 @@ export class IdeaBoard {
     this.autoSave();
     this.requestRedraw();
     
-    console.log('📋 Post-it pasted from clipboard');
+    console.log(`📋 ${isPlainText ? 'Plain text pasted as new post-it' : 'Post-it pasted from clipboard'}`);
   }
 
   /**
