@@ -4481,6 +4481,10 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
         ideaBoard.requestRedraw();
         console.log('🔄 Requested idea board redraw');
         
+        // Focus on the newly created background rectangle to ensure it's visible
+        console.log('🎯 Selecting newly created background rectangle');
+        ideaBoard.selectElement(backgroundRect);
+        
         console.log('✅ Node content and context sent to idea board successfully!');
         console.log(`📊 Total elements on board: ${ideaBoard.elements.size}`);
         
