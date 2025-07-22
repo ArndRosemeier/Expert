@@ -4478,13 +4478,11 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
         console.log('🎨 Context sticker color set to light red');
         
         // Force a redraw
-        if (ideaBoard.requestRedraw) {
-            ideaBoard.requestRedraw();
-            console.log('🔄 Requested idea board redraw');
-        }
+        ideaBoard.requestRedraw();
+        console.log('🔄 Requested idea board redraw');
         
         console.log('✅ Node content and context sent to idea board successfully!');
-        console.log(`📊 Total elements on board: ${ideaBoard.elements ? ideaBoard.elements.size : 'unknown'}`);
+        console.log(`📊 Total elements on board: ${ideaBoard.elements.size}`);
         
     } catch (error) {
         console.error('❌ Error creating stickers:', error);
@@ -4526,11 +4524,9 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
     const existingElements: any[] = [];
     
     // Get elements from the idea board
-    if (ideaBoard.elements && typeof ideaBoard.elements.values === 'function') {
-        for (const element of ideaBoard.elements.values()) {
-            if (element && element.position) {
-                existingElements.push(element);
-            }
+    for (const element of ideaBoard.elements.values()) {
+        if (element.position) {
+            existingElements.push(element);
         }
     }
     
