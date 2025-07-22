@@ -85,35 +85,31 @@ export class TransformModal extends BaseModal {
           display: flex;
           gap: 1.5rem;
           height: 100%;
-          min-height: 0; /* Allow flex children to shrink */
         }
         
-        .transform-input-section {
-          flex: 2;
+        .left-column {
+          flex: 1;
           display: flex;
           flex-direction: column;
           gap: 1rem;
           height: 100%;
         }
         
-        .top-section {
-          display: flex;
-          gap: 1rem;
+        .right-column {
           flex: 1;
-          min-height: 0; /* Allow flex children to shrink */
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          height: 100%;
+          border-left: 1px solid #e5e7eb;
+          padding-left: 1.5rem;
         }
         
         .instruction-area {
           flex: 1;
           display: flex;
           flex-direction: column;
-        }
-        
-        .bottom-section {
-          display: flex;
-          gap: 1rem;
-          align-items: flex-end; /* Bottom align items */
-          margin-top: 1rem;
+          gap: 0.5rem;
         }
         
         .triggering-content-area {
@@ -124,6 +120,7 @@ export class TransformModal extends BaseModal {
         }
         
         .triggering-content-display {
+          flex: 1;
           background: #f8fafc;
           border: 1px solid #e2e8f0;
           border-radius: 8px;
@@ -132,7 +129,7 @@ export class TransformModal extends BaseModal {
           font-size: 14px;
           line-height: 1.5;
           color: #374151;
-          max-height: 200px;
+          min-height: 100px;
           overflow-y: auto;
           white-space: pre-wrap;
           word-wrap: break-word;
@@ -143,15 +140,12 @@ export class TransformModal extends BaseModal {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
-          border-left: 1px solid #e5e7eb;
-          padding-left: 1.5rem;
-          min-height: 0; /* Allow flex children to shrink */
-          height: 100%;
         }
         
         .instruction-textarea {
           width: 100%;
-          min-height: 200px;
+          flex: 1;
+          min-height: 150px;
           padding: 0.75rem;
           border: 2px solid #d1d5db;
           border-radius: 8px;
@@ -177,7 +171,6 @@ export class TransformModal extends BaseModal {
           border-radius: 8px;
           border: 1px solid #e5e7eb;
           flex-shrink: 0; /* Don't shrink */
-          align-self: flex-end; /* Align to bottom */
         }
         
         .count-input {
@@ -207,7 +200,7 @@ export class TransformModal extends BaseModal {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
-          min-height: 0; /* Allow flex children to shrink */
+          min-height: 0; /* Allow content to shrink and scroll */
         }
         
         .history-item {
@@ -297,53 +290,51 @@ export class TransformModal extends BaseModal {
     
     return `
        <div class="transform-modal-content">
-        <div class="transform-input-section">
-          <div class="top-section">
-            <div class="instruction-area">
-              <label class="form-label" for="instruction-textarea">
-                What would you like to do with the content?
-              </label>
-              <textarea 
-                id="instruction-textarea" 
-                class="instruction-textarea"
-                placeholder="Describe how you want to transform the content...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Translate to Spanish"
-              ></textarea>
-            </div>
-            
-            <div class="transform-history-section">
-              <label class="form-label">Previous Instructions</label>
-              <div id="history-container" class="history-list">
-                ${this.renderHistoryItems()}
-              </div>
+        <div class="left-column">
+          <div class="instruction-area">
+            <label class="form-label" for="instruction-textarea">
+              What would you like to do with the content?
+            </label>
+            <textarea 
+              id="instruction-textarea" 
+              class="instruction-textarea"
+              placeholder="Describe how you want to transform the content...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Translate to Spanish"
+            ></textarea>
+          </div>
+          
+          ${this.triggeringContent ? `
+          <div class="triggering-content-area">
+            <label class="form-label">Current Content:</label>
+            <div class="triggering-content-display">${this.escapeHtml(this.triggeringContent)}</div>
+          </div>
+          ` : ''}
+        </div>
+        
+        <div class="right-column">
+          <div class="transform-history-section">
+            <label class="form-label">Previous Instructions</label>
+            <div id="history-container" class="history-list">
+              ${this.renderHistoryItems()}
             </div>
           </div>
           
-          <div class="bottom-section">
-            ${this.triggeringContent ? `
-            <div class="triggering-content-area">
-              <label class="form-label">Current Content:</label>
-              <div class="triggering-content-display">${this.escapeHtml(this.triggeringContent)}</div>
-            </div>
-            ` : ''}
-            
-            <div class="count-container">
-              <label class="form-label" style="margin: 0;">Number of variations:</label>
-              <input 
-                type="number" 
-                id="count-input" 
-                class="count-input"
-                min="1" 
-                max="10" 
-                value="${countValue}"
-                ${isCountLocked ? 'disabled' : ''}
-              />
-              <span class="count-explanation">
-                ${isCountLocked 
-                  ? `(Locked to ${countValue} - matches outgoing connections)`
-                  : '(1-10 variations)'
-                }
-              </span>
-            </div>
+          <div class="count-container">
+            <label class="form-label" style="margin: 0;">Number of variations:</label>
+            <input 
+              type="number" 
+              id="count-input" 
+              class="count-input"
+              min="1" 
+              max="10" 
+              value="${countValue}"
+              ${isCountLocked ? 'disabled' : ''}
+            />
+            <span class="count-explanation">
+              ${isCountLocked 
+                ? `(Locked to ${countValue} - matches outgoing connections)`
+                : '(1-10 variations)'
+              }
+            </span>
           </div>
         </div>
         </div>
