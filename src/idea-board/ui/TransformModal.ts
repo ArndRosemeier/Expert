@@ -85,6 +85,7 @@ export class TransformModal extends BaseModal {
           display: flex;
           gap: 1.5rem;
           height: 100%;
+          min-height: 0; /* Allow flex children to shrink */
         }
         
         .transform-input-section {
@@ -92,12 +93,14 @@ export class TransformModal extends BaseModal {
           display: flex;
           flex-direction: column;
           gap: 1rem;
+          height: 100%;
         }
         
         .top-section {
           display: flex;
           gap: 1rem;
           flex: 1;
+          min-height: 0; /* Allow flex children to shrink */
         }
         
         .instruction-area {
@@ -109,7 +112,8 @@ export class TransformModal extends BaseModal {
         .bottom-section {
           display: flex;
           gap: 1rem;
-          align-items: flex-start;
+          align-items: flex-end; /* Bottom align items */
+          margin-top: 1rem;
         }
         
         .triggering-content-area {
@@ -141,6 +145,8 @@ export class TransformModal extends BaseModal {
           gap: 0.5rem;
           border-left: 1px solid #e5e7eb;
           padding-left: 1.5rem;
+          min-height: 0; /* Allow flex children to shrink */
+          height: 100%;
         }
         
         .instruction-textarea {
@@ -170,6 +176,8 @@ export class TransformModal extends BaseModal {
           background: #f9fafb;
           border-radius: 8px;
           border: 1px solid #e5e7eb;
+          flex-shrink: 0; /* Don't shrink */
+          align-self: flex-end; /* Align to bottom */
         }
         
         .count-input {
@@ -199,7 +207,7 @@ export class TransformModal extends BaseModal {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
-          max-height: 350px;
+          min-height: 0; /* Allow flex children to shrink */
         }
         
         .history-item {
@@ -337,6 +345,7 @@ export class TransformModal extends BaseModal {
               </span>
             </div>
           </div>
+        </div>
         </div>
       </div>
       
