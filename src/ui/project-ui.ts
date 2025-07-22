@@ -4561,14 +4561,14 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
             { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
             node.content
         );
-        contentSticker.setColor('#ffebee'); // Very light red
+        contentSticker.setColor('#fff9c4'); // Standard yellow
         
-        // Create context sticker (light red) inside the background rectangle
+        // Create context sticker (standard yellow) inside the background rectangle
         const contextSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
             node.context || 'No context available'
         );
-        contextSticker.setColor('#ffebee'); // Very light red
+        contextSticker.setColor('#fff9c4'); // Standard yellow
         
         // Force a redraw and select the background rectangle to ensure visibility
         ideaBoard.requestRedraw();
