@@ -864,6 +864,31 @@ export class IdeaBoard {
 
     const deleteOption = createMenuOption('🗑️', 'Delete', () => {
       this.deleteElement(postIt);
+    });
+
+    const deleteDescendantsOption = createMenuOption('🗑️💥', 'Delete All Descendants', () => {
+      const descendants = this.findAllDescendants(postIt.id);
+      
+      if (descendants.length === 0) {
+        alert('This post-it has no descendants to delete.');
+        return;
+      }
+      
+      const confirmMessage = 
+        `🗑️💥 Delete All Descendants\n\n` +
+        `This will delete ${descendants.length} descendant post-it(s) connected downstream from this post-it.\n` +
+        `The main post-it will remain.\n\n` +
+        `Are you sure you want to delete all ${descendants.length} descendants?`;
+      
+      if (confirm(confirmMessage)) {
+        console.log(`🗑️💥 Deleting ${descendants.length} descendants of post-it`);
+        
+        // Delete only the descendants, keep the main post-it
+        const descendantIds = descendants.map(d => d.id);
+        this.startDeletionAnimation(descendantIds, () => {
+          this.performActualDeletion(descendants);
+        });
+      }
     }, false); // No border for last item
 
     // Add all options to context menu
@@ -876,6 +901,7 @@ export class IdeaBoard {
     contextMenu.appendChild(basicSectionHeader);
     contextMenu.appendChild(editOption);
     contextMenu.appendChild(deleteOption);
+    contextMenu.appendChild(deleteDescendantsOption);
     document.body.appendChild(contextMenu);
 
     // Remove context menu when clicking elsewhere
