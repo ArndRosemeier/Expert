@@ -1029,14 +1029,25 @@ export class IdeaBoard {
     }
 
     try {
-      // Get the current project manager - this will throw if no project is loaded
-      const { getCurrentProjectManager } = await import('../ui/project-ui');
-      const projectManager = getCurrentProjectManager();
+      // Search for the origin node across all projects
+      const state = await import('../state');
+      const allProjects = state.getProjects();
+      
+      let originNode: any = null;
+      let originProjectManager: any = null;
+      
+      // Search through all projects to find the origin node
+      for (const project of allProjects) {
+        const node = project.findNodeById(postIt.source.nodeId);
+        if (node) {
+          originNode = node;
+          originProjectManager = project;
+          break;
+        }
+      }
 
-      // Find the origin node
-      const originNode = projectManager.findNodeById(postIt.source.nodeId);
-      if (!originNode) {
-        alert('Origin node not found');
+      if (!originNode || !originProjectManager) {
+        alert('Origin node not found in any project');
         return;
       }
 
@@ -1061,10 +1072,10 @@ export class IdeaBoard {
       }
 
       // Save the changes
-      await projectManager.saveToStorage();
+      await originProjectManager.saveToStorage();
 
-      // Close the idea board and return to main UI
-      this.closeIdeaBoardAndReturnToNode(originNode.id);
+      // Close the idea board and return to main UI (switch to origin project if needed)
+      this.closeIdeaBoardAndReturnToNode(originNode.id, originProjectManager.rootNode.id);
 
     } catch (error) {
       console.error('Failed to send back to origin:', error);
@@ -1075,7 +1086,7 @@ export class IdeaBoard {
   /**
    * Close the idea board and return to main UI with specific node selected
    */
-  private closeIdeaBoardAndReturnToNode(nodeId: string): void {
+  private closeIdeaBoardAndReturnToNode(nodeId: string, projectId?: string): void {
     // Close the idea board modal
     const modalContainer = document.getElementById('idea-board-modal');
     if (modalContainer) {
@@ -1087,6 +1098,12 @@ export class IdeaBoard {
     // Import and trigger UI updates asynchronously
     void (async () => {
       try {
+        // Switch to the origin project if needed
+        if (projectId) {
+          const state = await import('../state');
+          state.setActiveProject(projectId);
+        }
+        
         const { setSelectedNodeAndRedraw } = await import('../ui/project-ui');
         setSelectedNodeAndRedraw(nodeId);
       } catch (error) {
