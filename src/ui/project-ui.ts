@@ -4434,62 +4434,38 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
         throw new Error('Could not access idea board instance');
     }
     
-    console.log('✅ Successfully accessed idea board instance');
-    console.log('🔍 Idea board methods available:', Object.getOwnPropertyNames(Object.getPrototypeOf(ideaBoard)));
-
     // Find free space on the canvas
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
-    console.log('📍 Free space found:', freeSpace);
     
     try {
         // Create background rectangle (light blue)
-        console.log('🟦 Creating background rectangle...');
         const backgroundRect = ideaBoard.createBackgroundRectangle({ x: freeSpace.x, y: freeSpace.y });
-        console.log('✅ Background rectangle created:', backgroundRect.id);
-        
         backgroundRect.setBackgroundColor('#e3f2fd'); // Very light blue
-        console.log('🎨 Background color set to light blue');
         
         // Size the background rectangle to contain both stickers with padding
         backgroundRect.size = { width: 280, height: 420 }; // Adjusted to fit both stickers plus padding
         ideaBoard.updateElementData(backgroundRect);
-        console.log('📏 Background rectangle resized to 280x420');
         
         // Create content sticker (light red) inside the background rectangle
-        console.log('📝 Creating content sticker...');
         const contentSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
             `Content:\n${node.content}`
         );
-        console.log('✅ Content sticker created:', contentSticker.id);
-        
         contentSticker.setColor('#ffebee'); // Very light red
-        console.log('🎨 Content sticker color set to light red');
         
         // Create context sticker (light red) inside the background rectangle
-        console.log('📋 Creating context sticker...');
         const contextSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
             `Context:\n${node.context || 'No context available'}`
         );
-        console.log('✅ Context sticker created:', contextSticker.id);
-        
         contextSticker.setColor('#ffebee'); // Very light red
-        console.log('🎨 Context sticker color set to light red');
         
-        // Force a redraw
+        // Force a redraw and select the background rectangle to ensure visibility
         ideaBoard.requestRedraw();
-        console.log('🔄 Requested idea board redraw');
-        
-        // Focus on the newly created background rectangle to ensure it's visible
-        console.log('🎯 Selecting newly created background rectangle');
         ideaBoard.selectElement(backgroundRect);
         
-        console.log('✅ Node content and context sent to idea board successfully!');
-        console.log(`📊 Total elements on board: ${ideaBoard.elements.size}`);
-        
     } catch (error) {
-        console.error('❌ Error creating stickers:', error);
+        console.error('Error creating stickers:', error);
         throw error;
     }
 }
@@ -4524,8 +4500,6 @@ async function openIdeaBoardModal(): Promise<void> {
  * Find free space on the idea board canvas
  */
 function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
-    console.log('🔍 Finding free space on canvas...');
-    
     // Get all existing elements to avoid overlap
     const existingElements: any[] = [];
     
@@ -4536,8 +4510,6 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
         }
     }
     
-    console.log(`📊 Found ${existingElements.length} existing elements`);
-    
     // Define the space we need (background + 2 stickers with padding)
     const neededWidth = 300;
     const neededHeight = 400;
@@ -4545,8 +4517,6 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
     // Get the center of the current viewport (where user is looking)
     const viewportCenterX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
     const viewportCenterY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
-    
-    console.log(`🎯 Viewport center: (${Math.round(viewportCenterX)}, ${Math.round(viewportCenterY)})`);
     
     // Try to find free space in a spiral pattern starting from viewport center
     for (let radius = 0; radius < 500; radius += 50) {
@@ -4568,14 +4538,12 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
             });
             
             if (!hasOverlap) {
-                console.log(`✅ Found free space at (${Math.round(x)}, ${Math.round(y)}) after checking ${existingElements.length} elements`);
                 return { x, y, width: neededWidth, height: neededHeight };
             }
         }
     }
     
     // Fallback to a position near viewport center if no free space found
-    console.log(`⚠️ No free space found, using fallback position near viewport center. Checked ${existingElements.length} existing elements.`);
     return { 
         x: viewportCenterX - neededWidth / 2 + 300, 
         y: viewportCenterY - neededHeight / 2, 
