@@ -8,7 +8,7 @@ import { ToolPanel } from './ui/ToolPanel';
 import { NodeSearchModal } from './ui/NodeSearchModal';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { createPromptExpansionService } from '../services/PromptExpansionService';
-import { showPrompt } from '../ui/modals/ModalFactory';
+import { TransformModal, type TransformResult } from './ui/TransformModal';
 import * as state from '../state';
 import type { IdeaBoardState, Point, BoardElement } from './types/BoardTypes';
 import type { DocumentNode } from '../DocumentNode';
@@ -1966,11 +1966,61 @@ export class IdeaBoard {
     }
 
     const childPostIts = this.findOutgoingPostIts(selectedPostIt.id);
+    
+    // Get user input for transformations first (before count logic)
+    let userInstruction = '';
+    let customCount: number | undefined;
+    if (type === 'transformations') {
+      // Count outgoing connections for smart count behavior
+      const outgoingConnectionCount = childPostIts.length > 0 ? childPostIts.length : undefined;
+      
+      const transformResult = await new Promise<{ instruction: string; count: number } | null>((resolve) => {
+        const modalConfig: any = {
+          id: 'transform-content-modal',
+          onTransformConfirmed: (result: TransformResult) => {
+            resolve(result);
+          }
+        };
+        
+        // Only add outgoingConnectionCount if it's defined
+        if (outgoingConnectionCount !== undefined) {
+          modalConfig.outgoingConnectionCount = outgoingConnectionCount;
+        }
+        
+        const modal = new TransformModal(modalConfig);
+        
+        modal.open().catch(error => {
+          console.error('Failed to open transform modal:', error);
+          resolve(null);
+        });
+      });
+      
+      if (!transformResult || !transformResult.instruction.trim()) {
+        console.log('❌ Transformation cancelled - no instruction provided.');
+        return;
+      }
+      
+      userInstruction = transformResult.instruction.trim();
+      customCount = transformResult.count;
+      console.log(`🔄 Transforming content with instruction: "${userInstruction}" (${customCount} variations)`);
+    }
+
     let count: number;
     let targetPostIts: PostItNote[] = [];
     let isConnectedMode = false;
 
-    if (childPostIts.length > 0) {
+    if (type === 'transformations' && customCount) {
+      // For transformations, use the custom count from the modal
+      if (childPostIts.length > 0 && customCount === childPostIts.length) {
+        // Custom count matches connections - use connected mode
+        isConnectedMode = true;
+        count = customCount;
+        targetPostIts = childPostIts;
+      } else {
+        // Custom count different from connections - use free mode
+        count = customCount;
+      }
+    } else if (childPostIts.length > 0) {
       // Connected mode: exact number to replace existing post-its
       isConnectedMode = true;
       count = childPostIts.length;
@@ -2043,23 +2093,7 @@ export class IdeaBoard {
       const prompts = settingsManager.getPrompts();
       const expansionService = createPromptExpansionService(settingsManager);
       
-      // Get user input for transformations
-      let userInstruction = '';
-      if (type === 'transformations') {
-        const instruction = await showPrompt(
-          'What would you like to do with the content?',
-          '',
-          'Transform Content'
-        );
-        
-        if (!instruction || !instruction.trim()) {
-          console.log('❌ Transformation cancelled - no instruction provided.');
-          return;
-        }
-        
-        userInstruction = instruction.trim();
-        console.log(`🔄 Transforming content with instruction: "${userInstruction}"`);
-      }
+      // User instruction already obtained above for transformations
 
       // Create context that matches the expected structure
       const promptContext = {
