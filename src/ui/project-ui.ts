@@ -256,6 +256,14 @@ export function getCurrentProjectManager(): ProjectManager {
   }
   return projectManager;
 }
+
+export function setSelectedNodeAndRedraw(nodeId: string): void {
+  if (!projectManager) {
+    throw new Error('No project is currently loaded - this is a programming error');
+  }
+  selectedNodeId = nodeId;
+  renderProjectUI(projectManager);
+}
 let selectedNodeId: string | null = null;
 
 // Persistent checkbox states

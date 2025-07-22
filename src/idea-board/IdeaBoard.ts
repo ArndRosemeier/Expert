@@ -1063,6 +1063,9 @@ export class IdeaBoard {
       // Save the changes
       await projectManager.saveToStorage();
 
+      // Close the idea board and return to main UI
+      this.closeIdeaBoardAndReturnToNode(originNode.id);
+
       // Show success message
       alert(`✅ Content sent back to node "${originNode.title}"`);
 
@@ -1070,6 +1073,29 @@ export class IdeaBoard {
       console.error('Failed to send back to origin:', error);
       alert('Failed to send content back to origin');
     }
+  }
+
+  /**
+   * Close the idea board and return to main UI with specific node selected
+   */
+  private closeIdeaBoardAndReturnToNode(nodeId: string): void {
+    // Close the idea board modal
+    const modalContainer = document.getElementById('idea-board-modal');
+    if (modalContainer) {
+      this.destroy();
+      modalContainer.remove();
+      (window as any).currentIdeaBoard = null;
+    }
+
+    // Import and trigger UI updates asynchronously
+    void (async () => {
+      try {
+        const { setSelectedNodeAndRedraw } = await import('../ui/project-ui');
+        setSelectedNodeAndRedraw(nodeId);
+      } catch (error) {
+        console.error('Failed to refresh UI after closing idea board:', error);
+      }
+    })();
   }
 
   /**
