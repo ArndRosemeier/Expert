@@ -3262,7 +3262,7 @@ export class IdeaBoard {
     const contained: PostItNote[] = [];
     
     for (const element of this.elements.values()) {
-      if (element instanceof PostItNote) {
+      if (element instanceof PostItNote && !(element instanceof BackgroundRectangle) && element.id !== backgroundRect.id) {
         // Check if the post-it note is completely inside the background rectangle
         const postItLeft = element.position.x;
         const postItTop = element.position.y;
