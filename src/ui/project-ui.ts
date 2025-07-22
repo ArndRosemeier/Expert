@@ -2946,14 +2946,19 @@ This action cannot be undone.`;
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (!node) return;
 
-                // Function to propagate context to all descendants
+                // Function to propagate context to all descendants and ALL their versions
                 const propagateContextToDescendants = (parentNode: DocumentNode) => {
                     const propagatedCount = { count: 0 };
                     
                     const propagateRecursively = (sourceNode: DocumentNode) => {
                         for (const child of sourceNode.children) {
-                            // Use version management system to update child context
-                            child.setContext(sourceNode.context, 'master');
+                            // Propagate to ALL versions of the child node
+                            const allVersions = child.getAllVersions();
+                            for (const version of allVersions) {
+                                version.context = sourceNode.context;
+                                version.timestamp = new Date();
+                                version.tags.add('context_propagated');
+                            }
                             propagatedCount.count++;
                             propagateRecursively(child);
                         }
@@ -4432,8 +4437,13 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
             
             const propagateRecursively = (sourceNode: DocumentNode) => {
                 for (const child of sourceNode.children) {
-                    // Use version management system to update child context
-                    child.setContext(sourceNode.context, 'master');
+                    // Propagate to ALL versions of the child node
+                    const allVersions = child.getAllVersions();
+                    for (const version of allVersions) {
+                        version.context = sourceNode.context;
+                        version.timestamp = new Date();
+                        version.tags.add('context_propagated');
+                    }
                     propagatedCount.count++;
                     propagateRecursively(child);
                 }

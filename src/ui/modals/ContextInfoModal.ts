@@ -454,10 +454,10 @@ export class ContextItemsEditorModal extends BaseModal {
                                 <button type="button" class="btn-danger btn-small" data-action="remove-item" data-index="${item.originalIndex}" title="Remove this item from this node only">
                             🗑️ Remove
                         </button>
-                                <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${item.originalIndex}" title="Add this item to all versions of all descendant nodes that don't already have it">
+                                <button type="button" class="btn-info btn-small" data-action="propagate" data-index="${item.originalIndex}" title="Add this item to ALL VERSIONS of all descendant nodes that don't already have it">
                             ↗️ Propagate
                         </button>
-                                <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${item.originalIndex}" title="Remove this item from all versions of all descendant nodes that contain it">
+                                <button type="button" class="btn-warning btn-small" data-action="remove-recursively" data-index="${item.originalIndex}" title="Remove this item from ALL VERSIONS of all descendant nodes that contain it">
                             🗑️ Remove Recursively
                         </button>
                     </div>
@@ -707,7 +707,7 @@ export class ContextItemsEditorModal extends BaseModal {
         }
 
         // Confirm action
-        if (!confirm(`Are you sure you want to propagate this context item to all versions of all descendant nodes?\n\nThis will add the item to every version of every subnode that doesn't already have it.\n\nItem: "${itemToPropagateText.substring(0, 100)}${itemToPropagateText.length > 100 ? '...' : ''}"`)) {
+        if (!confirm(`Are you sure you want to propagate this context item to ALL VERSIONS of all descendant nodes?\n\nThis will add the item to every version of every subnode that doesn't already have it.\n\nItem: "${itemToPropagateText.substring(0, 100)}${itemToPropagateText.length > 100 ? '...' : ''}"`)) {
             return;
         }
 
@@ -715,9 +715,9 @@ export class ContextItemsEditorModal extends BaseModal {
         const propagatedCount = this.propagateItemToDescendants(itemToPropagateText.trim());
         
         if (propagatedCount > 0) {
-            alert(`Context item propagated to all versions of ${propagatedCount} descendant node(s).`);
+            alert(`Context item propagated to ${propagatedCount} node version(s).`);
         } else {
-            alert('No descendant nodes found to propagate to.');
+            alert('No descendant node versions found that need this context item.');
         }
     }
 
@@ -742,7 +742,7 @@ export class ContextItemsEditorModal extends BaseModal {
         }
 
         // Confirm action
-        if (!confirm(`Are you sure you want to remove this context item from this node and all versions of all descendant nodes?\n\nThis will remove the item from this node and from every version of every subnode that contains it.\n\nItem: "${itemToRemoveText.substring(0, 100)}${itemToRemoveText.length > 100 ? '...' : ''}"`)) {
+        if (!confirm(`Are you sure you want to remove this context item from this node and ALL VERSIONS of all descendant nodes?\n\nThis will remove the item from this node and from every version of every subnode that contains it.\n\nItem: "${itemToRemoveText.substring(0, 100)}${itemToRemoveText.length > 100 ? '...' : ''}"`)) {
             return;
         }
 
@@ -760,9 +760,9 @@ export class ContextItemsEditorModal extends BaseModal {
         this.refreshItemsList();
         
         if (removedCount > 0) {
-            alert(`Context item removed from this node and all versions of ${removedCount} descendant node(s).`);
+            alert(`Context item removed from this node and ${removedCount} descendant node version(s).`);
         } else {
-            alert('Context item removed from this node. No descendant nodes found with this context item.');
+            alert('Context item removed from this node. No descendant node versions found with this context item.');
         }
     }
 
@@ -772,23 +772,29 @@ export class ContextItemsEditorModal extends BaseModal {
         // Recursively traverse all descendants
         const propagateRecursively = (node: DocumentNode) => {
             for (const child of node.children) {
-                // Work only on the master version
-                const childContextItems = getContextItems(child.context || '');
-                
-                // Check if this item is already present (case-insensitive and trimmed comparison)
+                // Work on ALL versions of the child node
+                const allVersions = child.getAllVersions();
                 const normalizedItemText = itemText.toLowerCase().trim();
-                const alreadyPresent = childContextItems.some(existingItem => 
-                    existingItem.toLowerCase().trim() === normalizedItemText
-                );
                 
-                if (!alreadyPresent) {
-                    // Add the item to the child's master version context
-                    const updatedItems = [...childContextItems, itemText];
-                    const newContext = formatContextItems(updatedItems);
+                for (const version of allVersions) {
+                    const childContextItems = getContextItems(version.context || '');
                     
-                    // Update the master version directly
-                    child.setContextWithTags(newContext, ['context_propagated']);
-                    propagatedCount++;
+                    // Check if this item is already present (case-insensitive and trimmed comparison)
+                    const alreadyPresent = childContextItems.some(existingItem => 
+                        existingItem.toLowerCase().trim() === normalizedItemText
+                    );
+                    
+                    if (!alreadyPresent) {
+                        // Add the item to this version's context
+                        const updatedItems = [...childContextItems, itemText];
+                        const newContext = formatContextItems(updatedItems);
+                        
+                        // Update this version directly
+                        version.context = newContext;
+                        version.timestamp = new Date();
+                        version.tags.add('context_propagated');
+                        propagatedCount++;
+                    }
                 }
                 
                 // Continue recursively to grandchildren
@@ -817,22 +823,28 @@ export class ContextItemsEditorModal extends BaseModal {
         // Recursively traverse all descendants
         const removeRecursively = (node: DocumentNode) => {
             for (const child of node.children) {
-                // Work only on the master version
-                const childContextItems = getContextItems(child.context || '');
-                
-                // Filter out the item to remove (case-insensitive and trimmed comparison)
+                // Work on ALL versions of the child node
+                const allVersions = child.getAllVersions();
                 const normalizedItemText = itemText.toLowerCase().trim();
-                const filteredItems = childContextItems.filter(existingItem => 
-                    existingItem.toLowerCase().trim() !== normalizedItemText
-                );
                 
-                // If items were removed, update the master version
-                if (filteredItems.length < childContextItems.length) {
-                    const newContext = formatContextItems(filteredItems);
+                for (const version of allVersions) {
+                    const childContextItems = getContextItems(version.context || '');
                     
-                    // Update the master version directly
-                    child.setContextWithTags(newContext, ['context_removed']);
-                    removedCount++;
+                    // Filter out the item to remove (case-insensitive and trimmed comparison)
+                    const filteredItems = childContextItems.filter(existingItem => 
+                        existingItem.toLowerCase().trim() !== normalizedItemText
+                    );
+                    
+                    // If items were removed, update this version
+                    if (filteredItems.length < childContextItems.length) {
+                        const newContext = formatContextItems(filteredItems);
+                        
+                        // Update this version directly
+                        version.context = newContext;
+                        version.timestamp = new Date();
+                        version.tags.add('context_removed');
+                        removedCount++;
+                    }
                 }
                 
                 // Continue recursively to grandchildren
@@ -970,14 +982,14 @@ export class ContextItemsEditorModal extends BaseModal {
         }
         
         // Ask user if they want to propagate the change
-        const confirmMessage = `Found ${descendantsWithOriginal.length} descendant node(s) with the same context item.\n\nDo you want to propagate this edit to all descendant nodes?\n\nOriginal: "${originalValue.substring(0, 100)}${originalValue.length > 100 ? '...' : ''}"\nEdited: "${newValue.substring(0, 100)}${newValue.length > 100 ? '...' : ''}"`;
+        const confirmMessage = `Found ${descendantsWithOriginal.length} descendant node(s) with the same context item in one or more versions.\n\nDo you want to propagate this edit to ALL VERSIONS of descendant nodes that contain the original item?\n\nOriginal: "${originalValue.substring(0, 100)}${originalValue.length > 100 ? '...' : ''}"\nEdited: "${newValue.substring(0, 100)}${newValue.length > 100 ? '...' : ''}"`;
         
         if (confirm(confirmMessage)) {
             // Propagate the change to all descendants
             const updatedCount = this.propagateContextItemChange(originalValue, newValue, descendantsWithOriginal);
             
             if (updatedCount > 0) {
-                alert(`Context item updated in ${updatedCount} descendant node(s).`);
+                alert(`Context item updated in ${updatedCount} node version(s).`);
             }
         }
         
@@ -994,12 +1006,18 @@ export class ContextItemsEditorModal extends BaseModal {
         
         const searchRecursively = (node: DocumentNode) => {
             for (const child of node.children) {
-                // Check if this child has the context item
-                if (child.context) {
-                    const childContextItems = getContextItems(child.context);
-                    if (childContextItems.some(item => item.trim() === trimmedItem)) {
-                        results.push(child);
+                // Check if ANY version of this child has the context item
+                const allVersions = child.getAllVersions();
+                const hasContextItem = allVersions.some(version => {
+                    if (version.context) {
+                        const contextItems = getContextItems(version.context);
+                        return contextItems.some(item => item.trim() === trimmedItem);
                     }
+                    return false;
+                });
+                
+                if (hasContextItem) {
+                    results.push(child);
                 }
                 
                 // Recursively search in grandchildren
@@ -1013,31 +1031,41 @@ export class ContextItemsEditorModal extends BaseModal {
 
     /**
      * Propagate context item change to specified descendant nodes
+     * Updates ALL versions that contain the original context item
      */
     private propagateContextItemChange(originalValue: string, newValue: string, descendants: DocumentNode[]): number {
         let updatedCount = 0;
         const trimmedOriginal = originalValue.trim();
         
         for (const descendant of descendants) {
-            if (!descendant.context) continue;
+            // Check all versions of this descendant node
+            const allVersions = descendant.getAllVersions();
             
-            const contextItems = getContextItems(descendant.context);
-            let hasChanged = false;
-            
-            // Replace matching context items
-            const updatedItems = contextItems.map(item => {
-                if (item.trim() === trimmedOriginal) {
-                    hasChanged = true;
-                    return newValue; // Use the exact new value (with original formatting)
+            for (const version of allVersions) {
+                if (!version.context) continue;
+                
+                const contextItems = getContextItems(version.context);
+                let hasChanged = false;
+                
+                // Replace matching context items in this version
+                const updatedItems = contextItems.map(item => {
+                    if (item.trim() === trimmedOriginal) {
+                        hasChanged = true;
+                        return newValue; // Use the exact new value (with original formatting)
+                    }
+                    return item;
+                });
+                
+                if (hasChanged) {
+                    // Update this version's context directly
+                    const newContext = formatContextItems(updatedItems);
+                    version.context = newContext;
+                    version.timestamp = new Date();
+                    version.tags.add('edited');
+                    version.tags.add('context_edited');
+                    version.tags.add('context_propagated');
+                    updatedCount++;
                 }
-                return item;
-            });
-            
-            if (hasChanged) {
-                // Update the node's context
-                const newContext = formatContextItems(updatedItems);
-                descendant.setContextWithTags(newContext, ['edited', 'context_edited', 'context_propagated']);
-                updatedCount++;
             }
         }
         

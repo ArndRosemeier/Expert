@@ -794,10 +794,16 @@ export class ContextAdjusterModal extends BaseModal {
             // Update the node's context using the proper method with AI adjustment tag
             this.targetNode.setContextWithTags(newContext, ['edited', 'context_edited', 'context_ai_adjusted']);
             
-            // Propagate context to all descendants (like in project-ui.ts)
+            // Propagate context to all descendants and ALL their versions (like in project-ui.ts)
             const propagateRecursively = (parentNode: DocumentNode) => {
                 for (const child of parentNode.children) {
-                    child.setContext(parentNode.context, 'master');
+                    // Propagate to ALL versions of the child node
+                    const allVersions = child.getAllVersions();
+                    for (const version of allVersions) {
+                        version.context = parentNode.context;
+                        version.timestamp = new Date();
+                        version.tags.add('context_propagated');
+                    }
                     propagateRecursively(child);
                 }
             };

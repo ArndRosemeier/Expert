@@ -866,7 +866,13 @@ export class NodeInspectorModal extends BaseModal {
             if (selectedVersion.tags.has('master')) {
                 const propagateRecursively = (parentNode: DocumentNode) => {
                     for (const child of parentNode.children) {
-                        child.setContext(parentNode.context, 'master');
+                        // Propagate to ALL versions of the child node
+                        const allVersions = child.getAllVersions();
+                        for (const version of allVersions) {
+                            version.context = parentNode.context;
+                            version.timestamp = new Date();
+                            version.tags.add('context_propagated');
+                        }
                         propagateRecursively(child);
                     }
                 };
