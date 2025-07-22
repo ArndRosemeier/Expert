@@ -81,10 +81,19 @@ export class TransformModal extends BaseModal {
 
   private getModalStyles(): string {
     return `
+        .top-controls {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid #e5e7eb;
+          margin-bottom: 1rem;
+        }
+        
         .transform-modal-content {
           display: flex;
           gap: 1.5rem;
-          height: 100%;
+          height: calc(100% - 80px); /* Account for top controls */
         }
         
         .left-column {
@@ -166,7 +175,7 @@ export class TransformModal extends BaseModal {
           display: flex;
           align-items: center;
           gap: 1rem;
-          padding: 1rem;
+          padding: 0.75rem 1rem;
           background: #f9fafb;
           border-radius: 8px;
           border: 1px solid #e5e7eb;
@@ -242,11 +251,7 @@ export class TransformModal extends BaseModal {
         
         .modal-actions {
           display: flex;
-          justify-content: flex-end;
           gap: 1rem;
-          margin-top: 1.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid #e5e7eb;
         }
         
         .btn {
@@ -289,7 +294,37 @@ export class TransformModal extends BaseModal {
     const countValue = isCountLocked ? this.outgoingConnectionCount : 1;
     
     return `
-       <div class="transform-modal-content">
+      <div class="top-controls">
+        <div class="count-container">
+          <label class="form-label" style="margin: 0;">Number of variations:</label>
+          <input 
+            type="number" 
+            id="count-input" 
+            class="count-input"
+            min="1" 
+            max="10" 
+            value="${countValue}"
+            ${isCountLocked ? 'disabled' : ''}
+          />
+          <span class="count-explanation">
+            ${isCountLocked 
+              ? `(Locked to ${countValue} - matches outgoing connections)`
+              : '(1-10 variations)'
+            }
+          </span>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancel-btn">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" id="transform-btn">
+            Transform Content
+          </button>
+        </div>
+      </div>
+       
+      <div class="transform-modal-content">
         <div class="left-column">
           <div class="instruction-area">
             <label class="form-label" for="instruction-textarea">
@@ -317,36 +352,7 @@ export class TransformModal extends BaseModal {
               ${this.renderHistoryItems()}
             </div>
           </div>
-          
-          <div class="count-container">
-            <label class="form-label" style="margin: 0;">Number of variations:</label>
-            <input 
-              type="number" 
-              id="count-input" 
-              class="count-input"
-              min="1" 
-              max="10" 
-              value="${countValue}"
-              ${isCountLocked ? 'disabled' : ''}
-            />
-            <span class="count-explanation">
-              ${isCountLocked 
-                ? `(Locked to ${countValue} - matches outgoing connections)`
-                : '(1-10 variations)'
-              }
-            </span>
-          </div>
         </div>
-        </div>
-      </div>
-      
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="cancel-btn">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" id="transform-btn">
-          Transform Content
-        </button>
       </div>
     `;
   }
