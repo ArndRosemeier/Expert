@@ -2019,6 +2019,10 @@ export class IdeaBoard {
       } else {
         // Custom count different from connections - use free mode
         count = customCount;
+        console.log(`🔄 Generating ${customCount} ${type} and creating new post-its below the selected one...`);
+        
+        // Start animation around bottom dot in free mode
+        this.startIdeaGenerationAnimation(selectedPostIt.id);
       }
     } else if (childPostIts.length > 0) {
       // Connected mode: exact number to replace existing post-its
@@ -2107,7 +2111,9 @@ export class IdeaBoard {
           criteria: [] // Not needed for generation
         },
         custom: {
-          [type === 'ideas' ? 'idea_count' : type === 'continuations' ? 'expand_count' : 'transform_count']: isConnectedMode ? count.toString() : 'some',
+          [type === 'ideas' ? 'idea_count' : type === 'continuations' ? 'expand_count' : 'transform_count']: 
+            (type === 'transformations' && customCount) ? customCount.toString() : 
+            (isConnectedMode ? count.toString() : 'some'),
           ...(type === 'transformations' && { user_instruction: userInstruction })
         }
       };
