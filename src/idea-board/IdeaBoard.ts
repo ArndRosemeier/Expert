@@ -181,8 +181,6 @@ export class IdeaBoard {
     // Start render loop
     this.startRenderLoop();
 
-    console.log(`🎨 Idea board initialized: ${boardName}`);
-    
     // Initialize board with existing data if available (async)
     this.initializeBoard(boardName).catch(error => {
       console.error('Failed to initialize board data:', error);
@@ -232,7 +230,6 @@ export class IdeaBoard {
       }
 
       this.requestRedraw();
-      console.log(`📂 Board initialized with ${this.elements.size} elements and ${this.connections.size} connections`);
     } catch (error) {
       console.error('Failed to initialize board from storage:', error);
       // Fallback to new board if loading fails
@@ -302,7 +299,6 @@ export class IdeaBoard {
         // Check for Shift+click on post-it to trigger transform functionality
         if (event.shiftKey && hitElement instanceof PostItNote) {
           this.selectElement(hitElement);
-          console.log('🔄 Shift+click detected - opening transform modal');
           void this.transformSelectedPostIt();
           return; // Don't proceed with dragging setup
         }
@@ -496,7 +492,6 @@ export class IdeaBoard {
     this.inputManager.on('onWheel', (delta, point) => {
       // Disable zooming while editing
       if (this.disableZoomingWhileEditing) {
-        console.log('🔒 Zooming disabled during edit mode');
         return;
       }
       
@@ -1043,7 +1038,6 @@ export class IdeaBoard {
     this.requestRedraw();
     this.autoSave();
     
-    console.log(`🔲 Created background rectangle at (${position.x.toFixed(0)}, ${position.y.toFixed(0)})`);
     return rectangle;
   }
 
@@ -1051,7 +1045,16 @@ export class IdeaBoard {
    * Delete an element with optional descendant deletion
    */
   deleteElement(element: BoardElement): void {
-    if (element instanceof PostItNote) {
+    if (element instanceof BackgroundRectangle) {
+      // Check for contained post-its using existing logic
+      const containedPostIts = this.findPostItsInsideBackgroundRect(element);
+      
+      if (containedPostIts.length > 0) {
+        // Show confirmation dialog for background rectangle deletion with contained stickers
+        this.showBackgroundRectDeletionDialog(element, containedPostIts);
+        return;
+      }
+    } else if (element instanceof PostItNote) {
       const descendants = this.findAllDescendants(element.id);
       
       if (descendants.length > 0) {
@@ -1061,7 +1064,7 @@ export class IdeaBoard {
       }
     }
     
-    // Delete single element (no descendants)
+    // Delete single element (no descendants or contained elements)
     this.deleteSingleElement(element);
   }
 
@@ -1088,6 +1091,28 @@ export class IdeaBoard {
   }
 
   /**
+   * Show deletion confirmation dialog for background rectangle with contained stickers
+   */
+  private showBackgroundRectDeletionDialog(backgroundRect: BackgroundRectangle, containedPostIts: PostItNote[]): void {
+    const confirmMessage = 
+      `🗑️ Delete Background Rectangle\n\n` +
+      `This background rectangle contains ${containedPostIts.length} sticker(s) inside it.\n\n` +
+      `What would you like to do?\n\n` +
+      `• OK: Delete background rectangle AND all contained stickers (${containedPostIts.length + 1} total)\n` +
+      `• Cancel: Delete only the background rectangle (stickers will remain)`;
+
+    const deleteWithContained = confirm(confirmMessage);
+    
+    if (deleteWithContained) {
+      // Delete background rectangle and all contained stickers
+      this.deleteBackgroundRectWithContained(backgroundRect, containedPostIts);
+    } else {
+      // Delete only the background rectangle
+      this.deleteSingleElement(backgroundRect);
+    }
+  }
+
+  /**
    * Delete a single element without descendants
    */
   private deleteSingleElement(element: BoardElement): void {
@@ -1110,7 +1135,18 @@ export class IdeaBoard {
     const allElementsToDelete = [element, ...descendants];
     const allElementIds = allElementsToDelete.map(el => el.id);
     
-    console.log(`🗑️ Deleting ${allElementsToDelete.length} elements (parent + descendants)`);
+    // Start deletion animation for all elements
+    this.startDeletionAnimation(allElementIds, () => {
+      this.performActualDeletion(allElementsToDelete);
+    });
+  }
+
+  /**
+   * Delete a background rectangle and all its contained post-its
+   */
+  private deleteBackgroundRectWithContained(backgroundRect: BackgroundRectangle, containedPostIts: PostItNote[]): void {
+    const allElementsToDelete = [backgroundRect, ...containedPostIts];
+    const allElementIds = allElementsToDelete.map(el => el.id);
     
     // Start deletion animation for all elements
     this.startDeletionAnimation(allElementIds, () => {
@@ -1122,7 +1158,7 @@ export class IdeaBoard {
    * Perform the actual deletion of elements after animation completes
    */
   private performActualDeletion(elementsToDelete: BoardElement[]): void {
-    console.log(`🗑️ Performing actual deletion of ${elementsToDelete.length} elements`);
+
     
     // Note: Connections were already removed when animation started for immediate visual feedback
     
@@ -1140,7 +1176,7 @@ export class IdeaBoard {
     this.requestRedraw();
     this.autoSave();
     
-    console.log(`🗑️ Successfully deleted ${elementsToDelete.length} elements`);
+
   }
 
   /**
@@ -1159,9 +1195,7 @@ export class IdeaBoard {
       this.connections.delete(connectionId);
     }
     
-    if (connectionsToRemove.length > 0) {
-      console.log(`🔗 Removed ${connectionsToRemove.length} connections for element: ${elementId}`);
-    }
+
   }
 
   /**
@@ -1460,7 +1494,6 @@ export class IdeaBoard {
     }
 
     this.requestRedraw();
-    console.log(`📂 Loaded board: ${loadedState.name} with ${this.elements.size} elements`);
     return true;
   }
 
@@ -1523,7 +1556,6 @@ export class IdeaBoard {
     this.autoSave();
 
     this.requestRedraw();
-    console.log(`📥 Imported board: ${boardState.name} with ${this.elements.size} elements and ${this.connections.size} connections`);
   }
 
   /**
@@ -2034,11 +2066,9 @@ export class IdeaBoard {
    */
   private clearAll(): void {
     if (this.elements.size === 0 && this.connections.size === 0) {
-      console.log('📝 Board is already empty.');
       return;
     }
 
-    const totalItems = this.elements.size + this.connections.size;
     const userConfirmed = confirm(
       `⚠️ Warning: This will clear all content from the board.\n\n` +
       `This will remove:\n` +
@@ -2048,11 +2078,8 @@ export class IdeaBoard {
     );
 
     if (!userConfirmed) {
-      console.log('📝 Clear all cancelled by user.');
       return;
     }
-
-    console.log(`🗑️ Clearing ${totalItems} items from the board...`);
 
     // Stop any editing in progress
     if (this.editingElement) {
@@ -2083,8 +2110,6 @@ export class IdeaBoard {
 
     // Save the cleared state
     this.autoSave();
-
-    console.log('✅ Board cleared successfully.');
   }
 
   /**
@@ -2105,17 +2130,14 @@ export class IdeaBoard {
     endMarker: string
   ): Promise<void> {
     if (!this.selectedElement) {
-      console.log(`❌ No element selected. Please select a post-it to generate ${type} for.`);
       return;
     }
     
     if (this.selectedElement instanceof BackgroundRectangle) {
-      console.log(`❌ Background rectangles are visual elements only and cannot be used for AI operations.`);
       return;
     }
     
     if (!(this.selectedElement instanceof PostItNote)) {
-      console.log(`❌ Selected element is not a post-it note. Please select a post-it to generate ${type} for.`);
       return;
     }
 
@@ -2123,7 +2145,6 @@ export class IdeaBoard {
     const originalContent = selectedPostIt.content;
     
     if (!originalContent.trim()) {
-      console.log(`❌ The selected post-it has no content to generate ${type} from.`);
       return;
     }
 
@@ -2391,8 +2412,7 @@ export class IdeaBoard {
       }
     }
     
-    const expectedText = expectedCount === 0 ? 'any number' : expectedCount.toString();
-    console.log(`📝 Parsed ${items.length} ${contentType} from AI response (expected ${expectedText})`);
+
     
     // NO FALLBACKS - Fail fast and loud
     if (items.length === 0) {
@@ -2868,7 +2888,6 @@ export class IdeaBoard {
    */
   private async summarizeSelectedPostIt(): Promise<void> {
     if (!this.selectedElement || !(this.selectedElement instanceof PostItNote)) {
-      console.log('❌ No post-it note selected. Please select a post-it to summarize.');
       return;
     }
 
@@ -2880,7 +2899,6 @@ export class IdeaBoard {
       const settingsManager = state.getSettingsManager();
       
       if (!settingsManager) {
-        console.log('❌ Settings not available. Please configure your settings first.');
         return;
       }
 
@@ -2890,12 +2908,10 @@ export class IdeaBoard {
     // Check if we should do self-summarization
     if (parentPostIts.length === 0) {
       if (!originalContent.trim()) {
-        console.log('❌ No parent post-its found and no content to self-summarize. Please add content or connect parent post-its.');
         return;
       }
       
       // Self-summarization mode
-      console.log('🧠 Self-summarizing post-it content...');
       await this.performSelfSummarization(selectedPostIt, originalContent, settingsManager);
         return;
       }
@@ -2909,11 +2925,8 @@ export class IdeaBoard {
         );
         
         if (!userConfirmed) {
-          console.log('📝 Summarization cancelled by user to preserve existing content.');
           return;
         }
-        
-        console.log('✅ User confirmed to proceed with summarization, replacing existing content.');
       }
 
       // Concatenate only the parent post-its (exclude the triggering one)
@@ -2926,11 +2939,8 @@ export class IdeaBoard {
       }
 
       if (!combinedText.trim()) {
-        console.log('❌ No content found in the parent post-its to summarize. The parent post-its appear to be empty.');
         return;
       }
-
-      console.log(`🧠 Summarizing content from ${parentPostIts.length} parent post-its...`);
 
       // Start connection animations to show data flow
       this.startIncomingConnectionAnimations(selectedPostIt.id);
@@ -2973,8 +2983,6 @@ export class IdeaBoard {
 
       // Stop connection animations
       this.stopConnectionAnimations(selectedPostIt.id);
-
-      console.log(`✅ Successfully summarized content from ${parentPostIts.length} parent post-its into the selected post-it.`);
       
     } catch (error) {
       console.error('❌ Failed to summarize post-it content:', error);
@@ -3258,7 +3266,7 @@ export class IdeaBoard {
       this.containedPostItOffsets.set(postIt.id, offset);
     }
     
-    console.log(`🔲 Background group drag: Moving ${this.containedPostIts.length} post-its with background rectangle`);
+
   }
 
   /**
@@ -3468,8 +3476,6 @@ export class IdeaBoard {
    */
   private async exportAsMarkdown(): Promise<void> {
     try {
-      console.log('📁 Generating markdown export...');
-
       // Generate markdown content
       const markdownContent = this.generateMarkdownContent();
 
@@ -3491,8 +3497,6 @@ export class IdeaBoard {
           const writable = await fileHandle.createWritable();
           await writable.write(blob);
           await writable.close();
-          
-          console.log('✅ Markdown export saved successfully');
         } catch (error) {
           if ((error as Error).name !== 'AbortError') {
             console.error('Error saving file:', error);
@@ -3522,8 +3526,6 @@ export class IdeaBoard {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
-    console.log('✅ Markdown export downloaded');
   }
 
   /**
@@ -3531,8 +3533,6 @@ export class IdeaBoard {
    */
   private async exportAsJson(): Promise<void> {
     try {
-      console.log('📦 Generating JSON export...');
-
       // Update board state with current viewport and elements
       this.boardState.viewport.x = this.viewport.x;
       this.boardState.viewport.y = this.viewport.y;
@@ -3563,8 +3563,6 @@ export class IdeaBoard {
           const writable = await fileHandle.createWritable();
           await writable.write(blob);
           await writable.close();
-          
-          console.log('✅ JSON export saved successfully');
         } catch (error) {
           if ((error as Error).name !== 'AbortError') {
             console.error('Error saving file:', error);
@@ -3603,8 +3601,6 @@ export class IdeaBoard {
    */
   private async importFromJson(): Promise<void> {
     try {
-      console.log('📥 Opening JSON import...');
-
       // Create file input element
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
@@ -3615,7 +3611,6 @@ export class IdeaBoard {
       fileInput.addEventListener('change', async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) {
-          console.log('❌ No file selected');
           return;
         }
 
@@ -3641,13 +3636,11 @@ export class IdeaBoard {
           );
 
           if (!confirmImport) {
-            console.log('📥 Import cancelled by user');
             return;
           }
 
           // Import the board state
           await this.loadBoardState(importedBoardState);
-          console.log('✅ Board imported successfully');
 
         } catch (error) {
           console.error('❌ Failed to import JSON:', error);
