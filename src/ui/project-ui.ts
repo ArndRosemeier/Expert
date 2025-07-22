@@ -249,6 +249,13 @@ function getNodeStatusTooltip(node: DocumentNode): string {
 
 // --- State Variables ---
 let projectManager: ProjectManager | null = null;
+
+export function getCurrentProjectManager(): ProjectManager {
+  if (!projectManager) {
+    throw new Error('No project is currently loaded - this is a programming error');
+  }
+  return projectManager;
+}
 let selectedNodeId: string | null = null;
 
 // Persistent checkbox states

@@ -1029,13 +1029,9 @@ export class IdeaBoard {
     }
 
     try {
-      // Get the project manager from global window object (same as idea board access)
-      const projectManager = (window as any).projectManager;
-      
-      if (!projectManager) {
-        alert('No project manager available');
-        return;
-      }
+      // Get the current project manager - this will throw if no project is loaded
+      const { getCurrentProjectManager } = await import('../ui/project-ui');
+      const projectManager = getCurrentProjectManager();
 
       // Find the origin node
       const originNode = projectManager.findNodeById(postIt.source.nodeId);
@@ -1057,16 +1053,11 @@ export class IdeaBoard {
         return;
       }
 
-      // Update the node content
+      // Update the node content and add idea_board tag
       if (postIt.source.type === 'content') {
-        originNode.content = postIt.content;
+        originNode.setContent(postIt.content, 'idea_board');
       } else {
-        originNode.context = postIt.content;
-      }
-
-      // Add the idea_board tag
-      if (!originNode.tags.includes('idea_board')) {
-        originNode.tags.push('idea_board');
+        originNode.setContext(postIt.content, 'idea_board');
       }
 
       // Save the changes
