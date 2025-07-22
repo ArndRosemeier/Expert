@@ -4449,14 +4449,14 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
         // Create content sticker (light red) inside the background rectangle
         const contentSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
-            `Content:\n${node.content}`
+            node.content
         );
         contentSticker.setColor('#ffebee'); // Very light red
         
         // Create context sticker (light red) inside the background rectangle
         const contextSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
-            `Context:\n${node.context || 'No context available'}`
+            node.context || 'No context available'
         );
         contextSticker.setColor('#ffebee'); // Very light red
         
