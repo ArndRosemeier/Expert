@@ -1066,9 +1066,6 @@ export class IdeaBoard {
       // Close the idea board and return to main UI
       this.closeIdeaBoardAndReturnToNode(originNode.id);
 
-      // Show success message
-      alert(`✅ Content sent back to node "${originNode.title}"`);
-
     } catch (error) {
       console.error('Failed to send back to origin:', error);
       alert('Failed to send content back to origin');
