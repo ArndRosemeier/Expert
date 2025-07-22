@@ -1012,7 +1012,6 @@ export class IdeaBoard {
     this.requestRedraw();
     this.autoSave();
     
-    console.log(`📝 Created new post-it at (${position.x.toFixed(0)}, ${position.y.toFixed(0)})`);
     return postIt;
   }
 
@@ -1244,7 +1243,7 @@ export class IdeaBoard {
       this.requestRedraw();
       this.autoSave();
       this.disableZoomingWhileEditing = false; // Re-enable zooming
-      console.log('🔓 Zooming re-enabled after edit mode');
+
     }
   }
 
@@ -1334,9 +1333,8 @@ export class IdeaBoard {
       textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }, 10);
     
-    // Disable zooming while editing
-    this.disableZoomingWhileEditing = true;
-    console.log('🔒 Zooming disabled during edit mode');
+          // Disable zooming while editing
+      this.disableZoomingWhileEditing = true;
     
     // Event handlers
     const handleInput = () => {
@@ -2117,7 +2115,7 @@ export class IdeaBoard {
    */
   private setSelectedModelPurpose(modelPurpose: string): void {
     this.selectedModelPurpose = modelPurpose;
-    console.log(`🤖 IdeaBoard AI model purpose set to: ${modelPurpose}`);
+    
   }
 
   /**
@@ -2256,7 +2254,6 @@ export class IdeaBoard {
       const settingsManager = state.getSettingsManager();
       
       if (!settingsManager) {
-        console.log('❌ Settings not available. Please configure your settings first.');
         return;
       }
 
