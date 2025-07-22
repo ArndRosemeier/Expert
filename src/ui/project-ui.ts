@@ -4435,33 +4435,61 @@ async function sendNodeToIdeaBoard(node: DocumentNode): Promise<void> {
     }
     
     console.log('✅ Successfully accessed idea board instance');
+    console.log('🔍 Idea board methods available:', Object.getOwnPropertyNames(Object.getPrototypeOf(ideaBoard)));
 
     // Find free space on the canvas
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    console.log('📍 Free space found:', freeSpace);
     
-    // Create background rectangle (light blue)
-    const backgroundRect = ideaBoard.createBackgroundRectangle({ x: freeSpace.x, y: freeSpace.y });
-    backgroundRect.setBackgroundColor('#e3f2fd'); // Very light blue
-    
-    // Size the background rectangle to contain both stickers with padding
-    backgroundRect.size = { width: 280, height: 420 }; // Adjusted to fit both stickers plus padding
-    ideaBoard.updateElementData(backgroundRect);
-    
-    // Create content sticker (light red) inside the background rectangle
-    const contentSticker = ideaBoard.createNewPostIt(
-        { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
-        `Content:\n${node.content}`
-    );
-    contentSticker.setColor('#ffebee'); // Very light red
-    
-    // Create context sticker (light red) inside the background rectangle
-    const contextSticker = ideaBoard.createNewPostIt(
-        { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
-        `Context:\n${node.context || 'No context available'}`
-    );
-    contextSticker.setColor('#ffebee'); // Very light red
-    
-    console.log('✅ Node content and context sent to idea board');
+    try {
+        // Create background rectangle (light blue)
+        console.log('🟦 Creating background rectangle...');
+        const backgroundRect = ideaBoard.createBackgroundRectangle({ x: freeSpace.x, y: freeSpace.y });
+        console.log('✅ Background rectangle created:', backgroundRect.id);
+        
+        backgroundRect.setBackgroundColor('#e3f2fd'); // Very light blue
+        console.log('🎨 Background color set to light blue');
+        
+        // Size the background rectangle to contain both stickers with padding
+        backgroundRect.size = { width: 280, height: 420 }; // Adjusted to fit both stickers plus padding
+        ideaBoard.updateElementData(backgroundRect);
+        console.log('📏 Background rectangle resized to 280x420');
+        
+        // Create content sticker (light red) inside the background rectangle
+        console.log('📝 Creating content sticker...');
+        const contentSticker = ideaBoard.createNewPostIt(
+            { x: freeSpace.x + 20, y: freeSpace.y + 20 }, 
+            `Content:\n${node.content}`
+        );
+        console.log('✅ Content sticker created:', contentSticker.id);
+        
+        contentSticker.setColor('#ffebee'); // Very light red
+        console.log('🎨 Content sticker color set to light red');
+        
+        // Create context sticker (light red) inside the background rectangle
+        console.log('📋 Creating context sticker...');
+        const contextSticker = ideaBoard.createNewPostIt(
+            { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
+            `Context:\n${node.context || 'No context available'}`
+        );
+        console.log('✅ Context sticker created:', contextSticker.id);
+        
+        contextSticker.setColor('#ffebee'); // Very light red
+        console.log('🎨 Context sticker color set to light red');
+        
+        // Force a redraw
+        if (ideaBoard.requestRedraw) {
+            ideaBoard.requestRedraw();
+            console.log('🔄 Requested idea board redraw');
+        }
+        
+        console.log('✅ Node content and context sent to idea board successfully!');
+        console.log(`📊 Total elements on board: ${ideaBoard.elements ? ideaBoard.elements.size : 'unknown'}`);
+        
+    } catch (error) {
+        console.error('❌ Error creating stickers:', error);
+        throw error;
+    }
 }
 
 /**
