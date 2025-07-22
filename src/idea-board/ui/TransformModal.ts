@@ -223,6 +223,38 @@ export class TransformModal extends BaseModal {
           line-height: 1.4;
           word-wrap: break-word;
           hyphens: auto;
+          position: relative;
+          display: flex;
+          align-items: flex-start;
+          gap: 0.5rem;
+        }
+        
+        .history-item-content {
+          flex: 1;
+        }
+        
+        .history-item-delete {
+          flex-shrink: 0;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #ef4444;
+          color: white;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          transition: all 0.2s;
+          opacity: 0.7;
+        }
+        
+        .history-item-delete:hover {
+          opacity: 1;
+          background: #dc2626;
+          transform: scale(1.1);
         }
         
         .history-item:hover {
@@ -365,9 +397,14 @@ export class TransformModal extends BaseModal {
     return this.transformHistory
       .slice() // Create a copy
       .reverse() // Show most recent first
-      .map((instruction) => `
+      .map((instruction, index) => `
         <div class="history-item" data-instruction="${this.escapeHtml(instruction)}" title="Click to use this instruction">
-          ${this.escapeHtml(instruction)}
+          <div class="history-item-content">
+            ${this.escapeHtml(instruction)}
+          </div>
+          <button class="history-item-delete" data-delete-index="${this.transformHistory.length - 1 - index}" title="Remove this instruction">
+            ×
+          </button>
         </div>
       `)
       .join('');
@@ -404,6 +441,15 @@ export class TransformModal extends BaseModal {
     // History item clicks
     if (this.historyContainer) {
       this.historyContainer.addEventListener('click', (event) => {
+        const deleteButton = (event.target as HTMLElement).closest('.history-item-delete');
+        if (deleteButton) {
+          // Handle delete button click
+          event.stopPropagation(); // Prevent triggering the history item click
+          const deleteIndex = parseInt(deleteButton.getAttribute('data-delete-index') || '0');
+          void this.deleteHistoryItem(deleteIndex);
+          return;
+        }
+        
         const historyItem = (event.target as HTMLElement).closest('.history-item');
         if (historyItem && this.instructionTextarea) {
           const instruction = historyItem.getAttribute('data-instruction');
@@ -491,6 +537,26 @@ export class TransformModal extends BaseModal {
       await storage.set(STORAGE_KEY_TRANSFORM_HISTORY, this.transformHistory);
     } catch (error) {
       console.warn('Failed to save transform history:', error);
+    }
+  }
+
+  private async deleteHistoryItem(index: number): Promise<void> {
+    try {
+      // Remove item from history array
+      if (index >= 0 && index < this.transformHistory.length) {
+        this.transformHistory.splice(index, 1);
+        
+        // Save updated history to storage
+        const storage = await this.storageService;
+        await storage.set(STORAGE_KEY_TRANSFORM_HISTORY, this.transformHistory);
+        
+        // Update the UI
+        if (this.historyContainer) {
+          this.historyContainer.innerHTML = this.renderHistoryItems();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to delete history item:', error);
     }
   }
 } 
