@@ -111,7 +111,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         goal: 8,
         description: "Avoid overused fantasy/AI-generated names when introducing a new name. Names like Elara, Lyra, Aris, Thorne, Lyria, Chen, Stormrider, Dawnwalker, Shadowblade, Emberheart, Snowsong, Park, Johnson, Thorne, Vance, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian are overused. Instead, use more natural, varied names that feel authentic and less predictable. Do not change names that are already established. If a name that matches the name list exactly is introduced, that is a major flaw.",
         outline: true,
-        leaf: false
+        leaf: true
     },
     {
         name: "Avoids Dramatical Reframing",

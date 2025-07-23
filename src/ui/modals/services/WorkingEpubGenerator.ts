@@ -140,10 +140,8 @@ export class WorkingEpubGenerator {
         this.addNavXhtml(node.title, contentNodes);
         this.addStyles();
         
-        // Add chapters
-        contentNodes.forEach((contentNode, index) => {
-            this.addChapter(contentNode, index + 1);
-        });
+        // Add chapters - combine all content into a single chapter to avoid page breaks
+        this.addCombinedChapter(node.title, contentNodes);
         
         // Generate and return blob
         const blob = await this.zip.generateAsync({ type: 'blob' });
@@ -165,14 +163,10 @@ export class WorkingEpubGenerator {
         this.zip.file('META-INF/container.xml', containerXml);
     }
 
-    private addPackageOpf(bookTitle: string, contentNodes: DocumentNode[], author: string = 'Expert Application'): void {
-        const manifestItems = contentNodes.map((_node, index) => 
-            `        <item id="chapter${index + 1}" href="chapter${index + 1}.xhtml" media-type="application/xhtml+xml"/>`
-        ).join('\n');
-        
-        const spineItems = contentNodes.map((_node, index) => 
-            `        <itemref idref="chapter${index + 1}"/>`
-        ).join('\n');
+    private addPackageOpf(bookTitle: string, _contentNodes: DocumentNode[], author: string = 'Expert Application'): void {
+        // Single chapter file instead of multiple files to avoid page breaks
+        const manifestItems = `        <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`;
+        const spineItems = `        <itemref idref="chapter1"/>`;
 
         const packageOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
@@ -197,9 +191,11 @@ ${spineItems}
     }
 
     private addNavXhtml(_bookTitle: string, contentNodes: DocumentNode[]): void {
-        const navItems = contentNodes.map((node, index) => 
-            `                <li><a href="chapter${index + 1}.xhtml">${this.escapeHtml(node.title)}</a></li>`
-        ).join('\n');
+        // Create navigation items that link to sections within the single chapter
+        const navItems = contentNodes.map((node, index) => {
+            const sectionId = `section-${index}`;
+            return `                <li><a href="chapter1.xhtml#${sectionId}">${this.escapeHtml(node.title)}</a></li>`;
+        }).join('\n');
 
         const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -250,6 +246,18 @@ p {
     text-align: justify;
 }
 
+.node-section {
+    margin-bottom: 3em;
+    padding-bottom: 2em;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.node-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
 nav ol {
     list-style-type: none;
     padding-left: 0;
@@ -271,23 +279,41 @@ nav a:hover {
         this.zip.file('OEBPS/styles.css', styles);
     }
 
-    private addChapter(node: DocumentNode, chapterNumber: number): void {
-        const content = this.extractContentFromNode(node);
+    private addCombinedChapter(bookTitle: string, contentNodes: DocumentNode[]): void {
+        // Combine all content into a single chapter to avoid page breaks between nodes
+        let combinedContent = '';
+        
+        contentNodes.forEach((node, index) => {
+            const nodeContent = this.extractContentFromNode(node);
+            const sectionId = `section-${index}`;
+            
+            // Add section heading for each node (except the first if it matches the book title)
+            if (index > 0 || node.title !== bookTitle) {
+                combinedContent += `\n    <h2 id="${sectionId}">${this.escapeHtml(node.title)}</h2>\n`;
+            } else {
+                // For the first section that matches book title, add an invisible anchor
+                combinedContent += `\n    <a id="${sectionId}"></a>\n`;
+            }
+            
+            combinedContent += `    <div class="node-section">\n        ${nodeContent}\n    </div>\n`;
+        });
         
         const chapterHtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <title>${this.escapeHtml(node.title)}</title>
+    <title>${this.escapeHtml(bookTitle)}</title>
     <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-    <h1>${this.escapeHtml(node.title)}</h1>
+    <h1>${this.escapeHtml(bookTitle)}</h1>
     <div class="content">
-        ${content}
+${combinedContent}
     </div>
 </body>
 </html>`;
-        this.zip.file(`OEBPS/chapter${chapterNumber}.xhtml`, chapterHtml);
+        this.zip.file('OEBPS/chapter1.xhtml', chapterHtml);
     }
+
+
 } 
