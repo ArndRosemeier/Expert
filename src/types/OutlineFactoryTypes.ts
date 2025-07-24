@@ -16,7 +16,7 @@ export interface GenreSelection {
 }
 
 export interface StyleSelection {
-  narrative: string[];              // 'show-dont-tell', 'explicit', 'subtle'
+  narrative: string[];              // 'show-dont-tell', 'explicit', 'subtle', 'direct-speech-is-king'
   voice: string[];                  // 'warm', 'cold', 'intimate', 'distant'
   pacing: string[];                 // 'fast-paced', 'slow-burn', 'episodic'
   perspective: string[];            // 'first-person', 'third-limited', 'omniscient'
@@ -126,7 +126,8 @@ export const STYLE_OPTIONS = {
     { id: 'descriptive', label: 'Descriptive' },
     { id: 'minimalist', label: 'Minimalist' },
     { id: 'verbose', label: 'Verbose' },
-    { id: 'atmospheric', label: 'Atmospheric' }
+    { id: 'atmospheric', label: 'Atmospheric' },
+    { id: 'direct-speech-is-king', label: 'Direct Speech is King' }
   ],
   voice: [
     { id: 'warm', label: 'Warm' },
@@ -175,7 +176,7 @@ export const DEFAULT_OUTLINE_FACTORY_CONFIG: OutlineFactoryConfig = {
     subgenres: []
   },
   styleGuide: {
-    narrative: ['show-dont-tell'],
+    narrative: ['show-dont-tell', 'direct-speech-is-king'],
     voice: ['warm'],
     pacing: [],
     perspective: []
