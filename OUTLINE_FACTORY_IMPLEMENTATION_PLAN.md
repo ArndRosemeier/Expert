@@ -11,8 +11,7 @@ src/ui/modals/components/
 ├── OutlineFactory.ts              # Main outline factory component
 ├── GenreSelector.ts               # Genre/theme checkboxes component
 ├── StyleGuideSelector.ts          # Style guide checkboxes component  
-├── ContextConfiguration.ts        # Character/location/worldbuilding numbers
-└── OutlineFactoryPrompts.ts       # Prompt templates for outline generation
+└── ContextConfiguration.ts        # Character/location/worldbuilding numbers
 
 src/types/
 └── OutlineFactoryTypes.ts         # Type definitions for outline factory
@@ -26,6 +25,14 @@ src/ui/modals/services/
 src/ui/modals/NewProjectModal.ts   # Add third tab and resize dialog
 src/ui/modals/core/BaseModal.ts    # Support larger modal sizes
 src/types/ModalTypes.ts            # Add outline factory types
+src/PromptManager.ts               # Add outline_generation_system and outline_generation_user prompts
+```
+
+### PromptManager.ts Required Changes
+```typescript
+// Add these to the orchestratorPrompts object in PromptManager.ts:
+outline_generation_system: `You are a creative writing assistant that generates detailed project outlines...`,
+outline_generation_user: `Generate a creative project outline based on these specifications:...`
 ```
 
 ## 2. Data Structures
@@ -81,6 +88,11 @@ export interface OutlineFactoryPersistence {
   lastUsedConfig: OutlineFactoryConfig;
   defaults: OutlineFactoryDefaults;
 }
+
+export interface ValidationResult {
+  isValid: boolean;
+  message: string;
+}
 ```
 
 ## 3. UI Design & Layout
@@ -131,24 +143,81 @@ export interface OutlineFactoryPersistence {
 
 ### OutlineFactory.ts (Main Component)
 ```typescript
+import { StorageService, IStorageService } from '../../../StorageService';
+import { OpenRouterClient } from '../../../OpenRouterClient';
+import { OutlineFactoryService } from '../services/OutlineFactoryService';
+import type { OutlineFactoryConfig, OutlineGenerationResult } from '../../../types/OutlineFactoryTypes';
+
 export class OutlineFactory {
   private container: HTMLElement;
   private config: OutlineFactoryConfig;
   private genreSelector: GenreSelector;
   private styleSelector: StyleGuideSelector;
   private contextConfig: ContextConfiguration;
-  private storageService: StorageService;
+  private service: OutlineFactoryService;
+  private changeHandlers: ((config: OutlineFactoryConfig) => void)[] = [];
+  private saveTimeout: number | null = null;
+  private readonly SAVE_DEBOUNCE_MS = 500;
+  
+  constructor(container: HTMLElement) {
+    this.container = container;
+    this.service = new OutlineFactoryService();
+    this.config = this.service.getDefaultConfiguration();
+  }
   
   // Render main layout and sub-components
-  // Handle form validation
-  // Coordinate with OutlineFactoryService for generation
-  // Load/save configuration to persistent storage
-  // Handle reset to defaults functionality
-  // Emit events for project creation
+  async render(): Promise<void> {
+    // Initialize sub-components
+    // Set up event listeners with debounced auto-save
+    // Load persisted configuration
+  }
   
-  async loadPersistedConfig(): Promise<void>
-  async saveCurrentConfig(): Promise<void>
-  resetToDefaults(): void
+  // Handle form validation and coordinate with service
+  async generateOutline(): Promise<OutlineGenerationResult> {
+    return await this.service.generateOutline(this.config);
+  }
+  
+  // Load/save configuration with auto-save
+  async loadPersistedConfig(): Promise<void> {
+    const saved = await this.service.loadConfiguration();
+    if (saved) {
+      this.config = saved;
+      this.applyConfigToUI();
+    }
+  }
+  
+  private debouncedSave(): void {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = window.setTimeout(async () => {
+      await this.service.saveConfiguration(this.config);
+    }, this.SAVE_DEBOUNCE_MS);
+  }
+  
+  async resetToDefaults(): Promise<void> {
+    await this.service.resetToDefaults();
+    this.config = this.service.getDefaultConfiguration();
+    this.applyConfigToUI();
+  }
+  
+  // Event handling
+  onChange(handler: (config: OutlineFactoryConfig) => void): void {
+    this.changeHandlers.push(handler);
+  }
+  
+  private notifyChange(): void {
+    this.changeHandlers.forEach(handler => handler(this.config));
+    this.debouncedSave();
+  }
+  
+  private applyConfigToUI(): void {
+    // Update all sub-components with current config
+  }
+  
+  getCurrentConfig(): OutlineFactoryConfig {
+    return { ...this.config };
+  }
 }
 ```
 
@@ -184,33 +253,52 @@ export class ContextConfiguration {
 
 ## 5. Prompt Engineering
 
-### OutlineFactoryPrompts.ts
+### PromptManager.ts Integration
 ```typescript
-export const OUTLINE_GENERATION_PROMPT = `
-Generate a creative project outline based on:
+// Add to src/PromptManager.ts in orchestratorPrompts object:
 
-User Ideas: {{ideas}}
-Selected Genres: {{genres}}
-Tone & Themes: {{themes}}
-Context Requirements:
-- {{protagonists}} protagonists
-- {{antagonists}} antagonists  
+outline_generation_system: `You are a creative writing assistant that generates detailed project outlines based on user specifications.
+
+Your task is to create a comprehensive story outline that incorporates:
+- User's free-form ideas and concepts
+- Selected genre elements and themes
+- Specified character and location requirements
+- Chosen narrative style preferences
+
+Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`,
+
+outline_generation_user: `Generate a creative project outline based on these specifications:
+
+**User Ideas:** {{ideas}}
+
+**Genre & Themes:** {{genres}}
+**Tone:** {{tones}}
+**Content Rating:** {{contentRating}}
+
+**Story Requirements:**
+- {{protagonists}} protagonist(s)
+- {{antagonists}} antagonist(s)
 - {{sideCharacters}} side characters
-- {{locations}} locations
-- {{worldbuildingDetails}} worldbuilding elements
+- {{locations}} main locations
+- {{worldbuildingDetails}} worldbuilding elements to develop
 
-Create:
-1. PROJECT TITLE: Creative, genre-appropriate title
-2. PROJECT CONTENT: Detailed outline (500-800 words)
-3. PROJECT CONTEXT: Background, setting, and premise (300-500 words)
+**Style Preferences:** {{stylePreferences}}
 
-Focus on {{selectedGenres}} elements with {{selectedTones}} tone.
-Ensure all specified characters and locations are incorporated.
-Make it engaging and internally consistent.
-`;
+Please create:
 
+1. **PROJECT TITLE:** A compelling, genre-appropriate title
+
+2. **PROJECT OUTLINE:** A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
+
+3. **BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
+
+Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements.`
+```
+
+### Style Guide Generation (Procedural)
+```typescript
+// In OutlineFactoryService.ts
 export const STYLE_GUIDE_GENERATOR = {
-  // Procedural generation of style guide from selections
   generateStyleGuide(selections: StyleSelection): string {
     // Convert selected checkboxes into coherent paragraph
     // Add "*" prefix for permanent context
@@ -246,45 +334,172 @@ export const DEFAULT_OUTLINE_FACTORY_CONFIG: OutlineFactoryConfig = {
 
 ### OutlineFactoryService.ts
 ```typescript
+import { StorageService, IStorageService } from '../../../StorageService';
+import { OpenRouterClient } from '../../../OpenRouterClient';
+import type { 
+  OutlineFactoryConfig, 
+  OutlineGenerationResult, 
+  ValidationResult,
+  StyleSelection,
+  GenreSelection
+} from '../../../types/OutlineFactoryTypes';
+import { DEFAULT_OUTLINE_FACTORY_CONFIG } from '../../../types/OutlineFactoryTypes';
+
 export class OutlineFactoryService {
-  private storageService: StorageService;
+  private storageService: Promise<IStorageService>;
   private readonly STORAGE_KEY = 'outline_factory_settings';
+  
+  constructor() {
+    this.storageService = StorageService.getInstance();
+  }
   
   async generateOutline(config: OutlineFactoryConfig): Promise<OutlineGenerationResult> {
     // 1. Validate configuration
-    // 2. Build generation prompt from config
-    // 3. Call AI service for content generation
-    // 4. Generate procedural style guide
-    // 5. Combine results
-    // 6. Return formatted result
+    const validation = this.validateConfig(config);
+    if (!validation.isValid) {
+      throw new Error(validation.message);
+    }
+    
+    // 2. Build generation prompt from config using PromptManager templates
+    const { getPrompts } = await import('../../../state');
+    const promptManager = getPrompts();
+    
+    const systemPrompt = promptManager.outline_generation_system;
+    const userPrompt = this.buildUserPrompt(promptManager.outline_generation_user, config);
+    
+    // 3. Call AI service using 'creator' model
+    const client = OpenRouterClient.getInstance();
+    let generatedContent = '';
+    
+    await client.streamingChat('creator', [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ], {
+      onChunk: (chunk) => { generatedContent += chunk; },
+      onComplete: () => {},
+      onError: (error) => { throw error; }
+    });
+    
+    // 4. Parse generated content into title, content, and context
+    const parsed = this.parseGeneratedContent(generatedContent);
+    
+    // 5. Generate procedural style guide
+    const styleGuideContext = this.generateStyleGuideText(config.styleGuide);
+    
+    return {
+      title: parsed.title,
+      content: parsed.content,
+      context: parsed.context,
+      styleGuideContext
+    };
+  }
+  
+  private buildUserPrompt(template: string, config: OutlineFactoryConfig): string {
+    const stylePreferences = this.formatStylePreferences(config.styleGuide);
+    const genres = this.formatGenreSelections(config.genres);
+    
+    return template
+      .replace('{{ideas}}', config.ideas || 'No specific ideas provided')
+      .replace('{{genres}}', genres)
+      .replace('{{tones}}', config.genres.tone.join(', ') || 'Neutral')
+      .replace('{{contentRating}}', config.genres.content.join(', ') || 'General')
+      .replace('{{protagonists}}', config.context.protagonists.toString())
+      .replace('{{antagonists}}', config.context.antagonists.toString())
+      .replace('{{sideCharacters}}', config.context.sideCharacters.toString())
+      .replace('{{locations}}', config.context.locations.toString())
+      .replace('{{worldbuildingDetails}}', config.context.worldbuildingDetails.toString())
+      .replace('{{stylePreferences}}', stylePreferences);
   }
   
   validateConfig(config: OutlineFactoryConfig): ValidationResult {
-    // Check for logical conflicts
-    // Ensure minimum requirements met
-    // Provide helpful error messages
+    // Check for logical conflicts (e.g., "children" + "erotic")
+    if (config.genres.audience.includes('children') && 
+        config.genres.content.includes('erotic')) {
+      return { isValid: false, message: 'Children\'s content cannot include erotic themes' };
+    }
+    
+    // Ensure minimum requirements
+    if (config.context.protagonists < 1) {
+      return { isValid: false, message: 'At least one protagonist is required' };
+    }
+    
+    return { isValid: true, message: '' };
   }
   
   generateStyleGuideText(selections: StyleSelection): string {
-    // Convert selected checkboxes into coherent paragraph
-    // Add "*" prefix for permanent context
+    const styles: string[] = [];
+    
+    // Flatten all style selections into readable text
+    Object.values(selections).forEach(categorySelections => {
+      styles.push(...categorySelections);
+    });
+    
+    if (styles.length === 0) {
+      return '*No specific style preferences selected.';
+    }
+    
+    const styleText = styles
+      .map(style => style.replace('-', ' '))
+      .join(', ');
+    
+    return `*Style Guide: Write using ${styleText} approach.`;
   }
   
-  // Persistence Methods
+  // Persistence Methods (using StorageService pattern)
   async saveConfiguration(config: OutlineFactoryConfig): Promise<void> {
-    // Save current configuration to storage for restoration
+    const storage = await this.storageService;
+    await storage.set(this.STORAGE_KEY, {
+      ...config,
+      timestamp: Date.now()
+    });
   }
   
   async loadConfiguration(): Promise<OutlineFactoryConfig | null> {
-    // Load previously saved configuration
+    const storage = await this.storageService;
+    const saved = await storage.get<OutlineFactoryConfig & { timestamp: number }>(this.STORAGE_KEY);
+    
+    if (saved) {
+      // Remove timestamp before returning
+      const { timestamp, ...config } = saved;
+      return config;
+    }
+    
+    return null;
   }
   
   getDefaultConfiguration(): OutlineFactoryConfig {
-    // Return sensible default values for fresh start
+    return { ...DEFAULT_OUTLINE_FACTORY_CONFIG };
   }
   
   async resetToDefaults(): Promise<void> {
-    // Clear saved configuration and return to defaults
+    const storage = await this.storageService;
+    await storage.remove(this.STORAGE_KEY);
+  }
+  
+  private parseGeneratedContent(content: string): { title: string; content: string; context: string } {
+    // Parse AI response into structured sections
+    // Implementation would extract title, outline, and context from generated text
+    return {
+      title: 'Generated Project Title',
+      content: 'Generated project outline...',
+      context: 'Generated background context...'
+    };
+  }
+  
+  private formatStylePreferences(styleGuide: StyleSelection): string {
+    // Format style selections into readable text
+    return Object.entries(styleGuide)
+      .filter(([_, selections]) => selections.length > 0)
+      .map(([category, selections]) => `${category}: ${selections.join(', ')}`)
+      .join('; ');
+  }
+  
+  private formatGenreSelections(genres: GenreSelection): string {
+    // Format genre selections into readable text
+    return Object.entries(genres)
+      .filter(([_, selections]) => selections.length > 0)
+      .map(([category, selections]) => `${category}: ${selections.join(', ')}`)
+      .join('; ');
   }
 }
 ```
@@ -302,11 +517,34 @@ private renderTabs(): void {
 
 // Handle outline factory project creation
 private async handleOutlineFactorySubmit(result: OutlineGenerationResult): Promise<void> {
-  // Create new project with generated content
-  // Set content, context, and style guide
-  // Apply "*" prefix to style guide in context
+  // Create new project using proper DocumentNode pattern
+  const { createNewProject } = await import('../../state');
+  const projectManager = await createNewProject();
+  
+  // Set content using proper setContentWithTags pattern
+  const rootNode = projectManager.rootNode;
+  rootNode.title = result.title;
+  
+  // Set content and context with generation tags
+  rootNode.setContentWithTags(result.content, ['outline_factory', 'generated'], {
+    source: 'outline_factory',
+    timestamp: Date.now()
+  });
+  
+  // Combine context with style guide (with "*" prefix)
+  const fullContext = result.context + '\n\n' + result.styleGuideContext;
+  rootNode.setContext(fullContext);
+  
   // Save current outline factory configuration for next time
-  // Close modal and navigate to new project
+  await this.outlineFactoryService.saveConfiguration(this.getCurrentConfig());
+  
+  // Save project and navigate
+  await projectManager.saveToStorage();
+  state.setActiveProject(projectManager.rootNode.id);
+  
+  // Close modal and refresh UI
+  this.close();
+  this.emit('projectCreated', projectManager.rootNode.id);
 }
 
 // Initialize outline factory with persisted settings
