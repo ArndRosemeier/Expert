@@ -1178,16 +1178,19 @@ Always create engaging, internally consistent outlines that respect the specifie
 
 **Style Preferences:** {{stylePreferences}}
 
-MANDATORY OUTPUT FORMAT - You must use these exact headers and structure:
+MANDATORY OUTPUT FORMAT - You must use these exact section delimiters:
 
-**1. PROJECT TITLE:** A compelling, genre-appropriate title
+===PROJECT TITLE===
+A compelling, genre-appropriate title
 
-**2. PROJECT OUTLINE:** A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
+===PROJECT OUTLINE===
+A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
 
-**3. BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
+===BACKGROUND CONTEXT===
+Setting, premise, and world details (300-500 words) that establish the story's foundation.
 
 CRITICAL FORMAT REQUIREMENTS:
-- Use the exact headers: "**1. PROJECT TITLE:**", "**2. PROJECT OUTLINE:**", "**3. BACKGROUND CONTEXT:**"
+- Use the exact delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT==="
 - Each section must be clearly separated
 - The context section must be formatted as one paragraph per context item
 - Items that persist throughout the entire story must start with "*"
