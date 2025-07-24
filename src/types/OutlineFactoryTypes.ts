@@ -12,6 +12,7 @@ export interface GenreSelection {
   audience: string[];               // 'children', 'ya', 'adult', 'mature'
   content: string[];                // 'erotic', 'violent', 'family-friendly'
   subgenres: string[];              // 'cyberpunk', 'steampunk', 'urban-fantasy'
+  [key: string]: string[];          // Index signature for dynamic access
 }
 
 export interface StyleSelection {
@@ -19,6 +20,7 @@ export interface StyleSelection {
   voice: string[];                  // 'warm', 'cold', 'intimate', 'distant'
   pacing: string[];                 // 'fast-paced', 'slow-burn', 'episodic'
   perspective: string[];            // 'first-person', 'third-limited', 'omniscient'
+  [key: string]: string[];          // Index signature for dynamic access
 }
 
 export interface ContextConfig {
@@ -27,6 +29,7 @@ export interface ContextConfig {
   sideCharacters: number;           // 0-10
   locations: number;                // 1-10
   worldbuildingDetails: number;     // 0-10
+  [key: string]: number;            // Index signature for dynamic access
 }
 
 export interface OutlineGenerationResult {

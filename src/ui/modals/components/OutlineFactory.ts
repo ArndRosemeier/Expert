@@ -1,7 +1,13 @@
 import { OutlineFactoryService } from '../services/OutlineFactoryService';
 import type { 
   OutlineFactoryConfig, 
-  OutlineGenerationResult 
+  OutlineGenerationResult,
+  ContextConfig
+} from '../../../types/OutlineFactoryTypes';
+import { 
+  GENRE_OPTIONS, 
+  STYLE_OPTIONS, 
+  CONTEXT_LIMITS 
 } from '../../../types/OutlineFactoryTypes';
 
 export class OutlineFactory {
@@ -204,11 +210,10 @@ export class OutlineFactory {
   }
   
   private renderGenreCheckboxes(): void {
-    const container = this.container.querySelector('#genre-checkboxes') as HTMLElement;
-    const { GENRE_OPTIONS } = require('../../../types/OutlineFactoryTypes');
+    const container = this.container.querySelector('#genre-checkboxes')!;
     
     Object.entries(GENRE_OPTIONS).forEach(([category, options]) => {
-      const typedOptions = options as Array<{ id: string; label: string }>;
+      const typedOptions = options as readonly { readonly id: string; readonly label: string }[];
       const categoryDiv = document.createElement('div');
       categoryDiv.style.cssText = `
         background: white;
@@ -282,11 +287,10 @@ export class OutlineFactory {
   }
   
   private renderStyleCheckboxes(): void {
-    const container = this.container.querySelector('#style-checkboxes') as HTMLElement;
-    const { STYLE_OPTIONS } = require('../../../types/OutlineFactoryTypes');
+    const container = this.container.querySelector('#style-checkboxes')!;
     
     Object.entries(STYLE_OPTIONS).forEach(([category, options]) => {
-      const typedOptions = options as Array<{ id: string; label: string }>;
+      const typedOptions = options as readonly { readonly id: string; readonly label: string }[];
       const categoryDiv = document.createElement('div');
       categoryDiv.style.cssText = `
         background: white;
@@ -360,8 +364,7 @@ export class OutlineFactory {
   }
   
   private renderContextControls(): void {
-    const container = this.container.querySelector('#context-controls') as HTMLElement;
-    const { CONTEXT_LIMITS } = require('../../../types/OutlineFactoryTypes');
+    const container = this.container.querySelector('#context-controls')!;
     
     const contextFields = [
       { key: 'protagonists', label: 'Protagonists' },
@@ -418,7 +421,7 @@ export class OutlineFactory {
       input.type = 'number';
       input.min = limits.min.toString();
       input.max = limits.max.toString();
-      input.value = this.config.context[key as keyof typeof this.config.context].toString();
+      input.value = this.config.context[key as keyof ContextConfig]!.toString();
       input.dataset['field'] = key;
       input.style.cssText = `
         width: 60px;
@@ -483,11 +486,9 @@ export class OutlineFactory {
   
   private setupEventListeners(): void {
     // Ideas textarea
-    if (this.ideasTextarea) {
-      this.ideasTextarea.addEventListener('input', () => {
-        this.updateConfigFromUI();
-      });
-    }
+    this.ideasTextarea!.addEventListener('input', () => {
+      this.updateConfigFromUI();
+    });
     
     // Genre checkboxes
     this.genreCheckboxes.forEach((checkboxes) => {
@@ -515,32 +516,26 @@ export class OutlineFactory {
     });
     
     // Reset button
-    if (this.resetButton) {
-      this.resetButton.addEventListener('click', async () => {
-        await this.resetToDefaults();
-      });
-    }
+    this.resetButton!.addEventListener('click', async () => {
+      await this.resetToDefaults();
+    });
     
     // Generate button
-    if (this.generateButton) {
-      this.generateButton.addEventListener('click', async () => {
-        await this.handleGenerate();
-      });
-    }
+    this.generateButton!.addEventListener('click', async () => {
+      await this.handleGenerate();
+    });
   }
   
   private updateConfigFromUI(): void {
     // Update ideas
-    if (this.ideasTextarea) {
-      this.config.ideas = this.ideasTextarea.value;
-    }
+    this.config.ideas = this.ideasTextarea!.value;
     
     // Update genres
     this.genreCheckboxes.forEach((checkboxes, category) => {
       const selected = checkboxes
         .filter(cb => cb.checked)
         .map(cb => cb.value);
-      (this.config.genres as any)[category] = selected;
+      (this.config.genres as Record<string, string[]>)[category] = selected;
     });
     
     // Update styles
@@ -548,13 +543,13 @@ export class OutlineFactory {
       const selected = checkboxes
         .filter(cb => cb.checked)
         .map(cb => cb.value);
-      (this.config.styleGuide as any)[category] = selected;
+      (this.config.styleGuide as Record<string, string[]>)[category] = selected;
     });
     
     // Update context
     this.contextInputs.forEach((input, key) => {
       const value = parseInt(input.value) || 0;
-      (this.config.context as any)[key] = value;
+      (this.config.context as Record<string, number>)[key] = value;
     });
     
     this.validateAndUpdateUI();
@@ -564,34 +559,25 @@ export class OutlineFactory {
   private validateAndUpdateUI(): void {
     const validation = this.service.validateConfig(this.config);
     
-    if (this.validationMessage) {
-      this.validationMessage.textContent = validation.isValid ? '' : validation.message;
-    }
-    
-    if (this.generateButton) {
-      this.generateButton.disabled = !validation.isValid;
-      this.generateButton.style.opacity = validation.isValid ? '1' : '0.5';
-    }
+    this.validationMessage!.textContent = validation.isValid ? '' : validation.message;
+    this.generateButton!.disabled = !validation.isValid;
+    this.generateButton!.style.opacity = validation.isValid ? '1' : '0.5';
   }
   
   private async handleGenerate(): Promise<void> {
-    if (!this.generateButton) return;
-    
-    const originalText = this.generateButton.textContent;
-    this.generateButton.disabled = true;
-    this.generateButton.textContent = '⏳ Generating...';
+    const originalText = this.generateButton!.textContent;
+    this.generateButton!.disabled = true;
+    this.generateButton!.textContent = '⏳ Generating...';
     
     try {
       const result = await this.service.generateOutline(this.config);
       this.emitGenerated(result);
     } catch (error) {
       console.error('Failed to generate outline:', error);
-      if (this.validationMessage) {
-        this.validationMessage.textContent = error instanceof Error ? error.message : 'Generation failed';
-      }
+      this.validationMessage!.textContent = error instanceof Error ? error.message : 'Generation failed';
     } finally {
-      this.generateButton.disabled = false;
-      this.generateButton.textContent = originalText;
+      this.generateButton!.disabled = false;
+      this.generateButton!.textContent = originalText;
       this.validateAndUpdateUI();
     }
   }
@@ -605,13 +591,11 @@ export class OutlineFactory {
   
   private applyConfigToUI(): void {
     // Apply ideas
-    if (this.ideasTextarea) {
-      this.ideasTextarea.value = this.config.ideas;
-    }
+    this.ideasTextarea!.value = this.config.ideas;
     
     // Apply genres
     this.genreCheckboxes.forEach((checkboxes, category) => {
-      const selected = (this.config.genres as any)[category] || [];
+      const selected = this.config.genres[category] || [];
       checkboxes.forEach(checkbox => {
         checkbox.checked = selected.includes(checkbox.value);
       });
@@ -619,7 +603,7 @@ export class OutlineFactory {
     
     // Apply styles
     this.styleCheckboxes.forEach((checkboxes, category) => {
-      const selected = (this.config.styleGuide as any)[category] || [];
+      const selected = this.config.styleGuide[category] || [];
       checkboxes.forEach(checkbox => {
         checkbox.checked = selected.includes(checkbox.value);
       });
@@ -627,8 +611,8 @@ export class OutlineFactory {
     
     // Apply context
     this.contextInputs.forEach((input, key) => {
-      const value = (this.config.context as any)[key];
-      input.value = value.toString();
+      const value = this.config.context[key];
+      input.value = value!.toString();
     });
     
     this.validateAndUpdateUI();
@@ -642,9 +626,7 @@ export class OutlineFactory {
   }
   
   private debouncedSave(): void {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout);
-    }
+    clearTimeout(this.saveTimeout!);
     this.saveTimeout = window.setTimeout(async () => {
       await this.service.saveConfiguration(this.config);
     }, this.SAVE_DEBOUNCE_MS);

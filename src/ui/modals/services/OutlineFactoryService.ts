@@ -26,10 +26,7 @@ export class OutlineFactoryService {
     }
     
     // 2. Build generation prompt from config using PromptManager templates
-    const promptManager = state.getOrchestratorPrompts();
-    if (!promptManager) {
-      throw new Error('Prompt manager not initialized');
-    }
+    const promptManager = state.getOrchestratorPrompts()!;
     
     const systemPrompt = promptManager.outline_generation_system;
     const userPrompt = this.buildUserPrompt(promptManager.outline_generation_user, config);
@@ -131,34 +128,23 @@ export class OutlineFactoryService {
   
   // Persistence Methods (using StorageService pattern)
   async saveConfiguration(config: OutlineFactoryConfig): Promise<void> {
-    try {
-      const storage = await this.storageService;
-      await storage.set(this.STORAGE_KEY, {
-        ...config,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Failed to save outline factory configuration:', error);
-      // Don't throw - persistence failure shouldn't break the UI
-    }
+    const storage = await this.storageService;
+    await storage.set(this.STORAGE_KEY, {
+      ...config,
+      timestamp: Date.now()
+    });
   }
   
   async loadConfiguration(): Promise<OutlineFactoryConfig | null> {
-    try {
-      const storage = await this.storageService;
-      const saved = await storage.get<OutlineFactoryConfig & { timestamp: number }>(this.STORAGE_KEY);
-      
-      if (saved) {
-        // Remove timestamp before returning
-        const { timestamp, ...config } = saved;
-        return config;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Failed to load outline factory configuration:', error);
-      return null;
+    const storage = await this.storageService;
+    const saved = await storage.get<OutlineFactoryConfig & { timestamp: number }>(this.STORAGE_KEY);
+    
+    if (saved) {
+      const { timestamp, ...config } = saved;
+      return config;
     }
+    
+    return null;
   }
   
   getDefaultConfiguration(): OutlineFactoryConfig {
@@ -166,13 +152,8 @@ export class OutlineFactoryService {
   }
   
   async resetToDefaults(): Promise<void> {
-    try {
-      const storage = await this.storageService;
-      await storage.delete(this.STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to reset outline factory configuration:', error);
-      // Don't throw - persistence failure shouldn't break the UI
-    }
+    const storage = await this.storageService;
+    await storage.delete(this.STORAGE_KEY);
   }
   
   private parseGeneratedContent(content: string): { title: string; content: string; context: string } {
