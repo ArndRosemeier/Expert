@@ -1,4 +1,5 @@
 import { ProjectManager } from "./ProjectManager";
+import { DocumentNode } from "./DocumentNode";
 import { ModelSelector } from "./ModelSelector";
 import { OpenRouterClient } from "./OpenRouterClient";
 import { SettingsManager } from "./SettingsManager";
@@ -118,6 +119,20 @@ export const getSettingsManager = (): SettingsManager | null => {
 export const getModelSelector = () => modelSelector;
 export const getTemplateManager = () => templateManager;
 export const getIsAppRendered = () => isAppRendered;
+
+/**
+ * Find a node by ID across all projects
+ * Returns both the node and the project manager that contains it
+ */
+export const findNodeGlobally = (nodeId: string): { node: DocumentNode; projectManager: ProjectManager } | null => {
+    for (const project of projects) {
+        const node = project.findNodeById(nodeId);
+        if (node) {
+            return { node, projectManager: project };
+        }
+    }
+    return null;
+};
 export const getOrchestratorPrompts = () => orchestratorPrompts;
 
 /**

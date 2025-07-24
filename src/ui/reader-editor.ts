@@ -139,11 +139,12 @@ export class ReaderEditor {
             // This ensures {{content}} placeholder uses the latest edited content
             if (this.currentActiveEditor) {
                 const currentContent = this.currentActiveEditor.editor.getText();
-                const node = this.projectManager.findNodeById(this.currentActiveEditor.nodeId);
-                if (node) {
+                const { findNodeGlobally } = await import('../state');
+                const result = findNodeGlobally(this.currentActiveEditor.nodeId);
+                if (result) {
                     // Use version management system to update content with Edited tag
-                    node.setContent(currentContent, 'Edited');
-                    console.log(`📝 Updated node content before AI action: ${node.title}`);
+                    result.node.setContent(currentContent, 'Edited');
+                    console.log(`📝 Updated node content before AI action: ${result.node.title}`);
                 }
             }
             
@@ -534,15 +535,16 @@ export class ReaderEditor {
         
         // Robustly copy ALL current content from ALL editors back to their nodes
         // This catches changes from any source: user typing, AI actions, etc.
+        const { findNodeGlobally } = await import('../state');
         this.nodeEditors.forEach((editor, nodeId) => {
             const currentContent = editor.editor.getText();
-            const node = this.projectManager.findNodeById(nodeId);
+            const result = findNodeGlobally(nodeId);
             
-            if (node) {
+            if (result) {
                 // Always update node content with current editor content using version management
                 // regardless of dirty state or how the content got there, mark as Edited
-                node.setContent(currentContent, 'Edited');
-                console.log(`📝 Copied content from reader to node: ${node.title}`);
+                result.node.setContent(currentContent, 'Edited');
+                console.log(`📝 Copied content from reader to node: ${result.node.title}`);
             } else {
                 console.warn(`⚠️ Node not found for editor: ${nodeId}`);
             }
