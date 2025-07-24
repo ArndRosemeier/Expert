@@ -164,61 +164,35 @@ export class OutlineFactoryService {
     let projectContent = '';
     let projectContext = '';
     
-    // Extract PROJECT TITLE (exactly as we ask for it in the prompt)
-    const titleMatch = content.match(/(?:^|\n)(?:1\.?\s*)?(?:\*\*)?PROJECT TITLE(?:\*\*)?:\s*(.+?)(?:\n|$)/i);
+    // Extract PROJECT TITLE - exact format: "1. **PROJECT TITLE:**"
+    const titleMatch = content.match(/1\.\s*\*\*PROJECT TITLE\*\*:\s*(.+?)(?:\n|$)/);
     if (titleMatch && titleMatch[1]) {
-      title = titleMatch[1].trim().replace(/^\*\*|\*\*$/g, ''); // Remove any markdown formatting
+      title = titleMatch[1].trim();
     }
     
-    // Extract PROJECT OUTLINE (exactly as we ask for it in the prompt)
-    const outlineMatch = content.match(/(?:^|\n)(?:2\.?\s*)?(?:\*\*)?PROJECT OUTLINE(?:\*\*)?:\s*([\s\S]*?)(?=\n(?:3\.?\s*)?(?:\*\*)?BACKGROUND CONTEXT(?:\*\*)?:|$)/i);
+    // Extract PROJECT OUTLINE - exact format: "2. **PROJECT OUTLINE:**"
+    const outlineMatch = content.match(/2\.\s*\*\*PROJECT OUTLINE\*\*:\s*([\s\S]*?)(?=3\.\s*\*\*BACKGROUND CONTEXT\*\*:|$)/);
     if (outlineMatch && outlineMatch[1]) {
       projectContent = outlineMatch[1].trim();
     }
     
-    // Extract BACKGROUND CONTEXT (exactly as we ask for it in the prompt)
-    const contextMatch = content.match(/(?:^|\n)(?:3\.?\s*)?(?:\*\*)?BACKGROUND CONTEXT(?:\*\*)?:\s*([\s\S]*?)$/i);
+    // Extract BACKGROUND CONTEXT - exact format: "3. **BACKGROUND CONTEXT:**"
+    const contextMatch = content.match(/3\.\s*\*\*BACKGROUND CONTEXT\*\*:\s*([\s\S]*?)$/);
     if (contextMatch && contextMatch[1]) {
       projectContext = contextMatch[1].trim();
     }
     
-    // Fallback parsing if exact format isn't found
-    if (!projectContent || !projectContext) {
-      console.warn('Exact format parsing failed, attempting fallback parsing');
-      
-      // Look for any content between title and context sections
-      if (!projectContent) {
-        const fallbackContentMatch = content.match(/(?:outline|content)[\s\S]*?\n([\s\S]*?)(?:\n(?:background|context):|$)/i);
-        if (fallbackContentMatch && fallbackContentMatch[1]) {
-          projectContent = fallbackContentMatch[1].trim();
-        }
-      }
-      
-      // Look for anything after "background" or "context"
-      if (!projectContext) {
-        const fallbackContextMatch = content.match(/(?:background|context):?\s*([\s\S]*?)$/i);
-        if (fallbackContextMatch && fallbackContextMatch[1]) {
-          projectContext = fallbackContextMatch[1].trim();
-        }
-      }
-      
-      // Final fallback: split content if all else fails
-      if (!projectContent && !projectContext) {
-        console.warn('All parsing failed, using rough content split');
-        const lines = content.split('\n').filter(line => line.trim());
-        const midpoint = Math.floor(lines.length * 0.6);
-        projectContent = lines.slice(0, midpoint).join('\n').trim();
-        projectContext = lines.slice(midpoint).join('\n').trim();
-      }
+    // Strict parsing - no fallbacks
+    if (!titleMatch) {
+      throw new Error('AI did not provide PROJECT TITLE section in the expected format');
     }
     
-    // Ensure we have content
-    if (!projectContent) {
-      projectContent = content.trim();
+    if (!outlineMatch) {
+      throw new Error('AI did not provide PROJECT OUTLINE section in the expected format');
     }
     
-    if (!projectContext) {
-      projectContext = 'Background and setting details to be developed.';
+    if (!contextMatch) {
+      throw new Error('AI did not provide BACKGROUND CONTEXT section in the expected format');
     }
     
     return {

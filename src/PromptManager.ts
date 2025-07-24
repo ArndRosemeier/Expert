@@ -1146,6 +1146,8 @@ Your task is to create a comprehensive story outline that incorporates:
 - Specified character and location requirements
 - Chosen narrative style preferences
 
+CRITICAL: You MUST follow the exact output format specified in the user prompt. Any deviation from the required format will cause a system error.
+
 IMPORTANT CONTEXT FORMAT:
 The context section you generate must follow a specific paragraph-based format:
 - Each context item is written as a complete paragraph
@@ -1155,7 +1157,7 @@ The context section you generate must follow a specific paragraph-based format:
 
 Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`.trim(),
         placeholders: [],
-        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with proper context formatting."
+        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with strict format requirements."
     },
 
     outline_generation_user: {
@@ -1176,7 +1178,7 @@ Always create engaging, internally consistent outlines that respect the specifie
 
 **Style Preferences:** {{stylePreferences}}
 
-Please create:
+MANDATORY OUTPUT FORMAT - You must use these exact headers and structure:
 
 1. **PROJECT TITLE:** A compelling, genre-appropriate title
 
@@ -1184,15 +1186,21 @@ Please create:
 
 3. **BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
 
-CRITICAL: Format the context section as one paragraph per context item. All information about one item (for example a character) needs to be in a single paragraph. Items that persist throughout the entire story must start with "*". Examples:
+CRITICAL FORMAT REQUIREMENTS:
+- Use the exact headers: "1. **PROJECT TITLE:**", "2. **PROJECT OUTLINE:**", "3. **BACKGROUND CONTEXT:**"
+- Each section must be clearly separated
+- The context section must be formatted as one paragraph per context item
+- Items that persist throughout the entire story must start with "*"
+- Non-persistent items have no prefix
 
+Context Format Examples:
 *Sarah Chen is a 32-year-old cybersecurity expert who discovers she can interface directly with digital systems through neural implants. She is driven by the mysterious death of her brother and has a tendency to take dangerous risks when pursuing the truth.
 
 *The story takes place in Neo-Singapore 2087, where towering arcologies house millions while the old city below has become a lawless digital frontier. Corporate AIs control most aspects of daily life through the OmniNet.
 
 The story begins when Sarah receives an encrypted message from her supposedly dead brother, leading her to question everything she believes about his death and the nature of reality itself.
 
-Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements. The context section should clearly distinguish between persistent story elements (marked with *) and situational details.`.trim(),
+WARNING: Any deviation from this exact format will cause a system error. Follow the format precisely.`.trim(),
         placeholders: ['ideas', 'genres', 'tones', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
         description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context formatted according to the application's paragraph-based context system."
     }
