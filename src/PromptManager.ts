@@ -67,6 +67,10 @@ export interface OrchestratorPrompts {
     
     // For overview board analysis
     overview_board_analysis: string;
+    
+    // For outline factory generation
+    outline_generation_system: string;
+    outline_generation_user: string;
 }
 
 interface PromptDefinition {
@@ -1131,6 +1135,51 @@ The connections between elements will be determined from the character/place arr
         `.trim(),
         placeholders: ['layer_name', 'content', 'language'],
         description: "System prompt for analyzing story layers to extract events, characters, and places for the Overview Board visualization. Returns structured JSON data with narrative elements and their relationships."
+    },
+
+    outline_generation_system: {
+        text: `You are a creative writing assistant that generates detailed project outlines based on user specifications.
+
+Your task is to create a comprehensive story outline that incorporates:
+- User's free-form ideas and concepts
+- Selected genre elements and themes
+- Specified character and location requirements
+- Chosen narrative style preferences
+
+Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`.trim(),
+        placeholders: [],
+        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines."
+    },
+
+    outline_generation_user: {
+        text: `Generate a creative project outline based on these specifications:
+
+**User Ideas:** {{ideas}}
+
+**Genre & Themes:** {{genres}}
+**Tone:** {{tones}}
+**Content Rating:** {{contentRating}}
+
+**Story Requirements:**
+- {{protagonists}} protagonist(s)
+- {{antagonists}} antagonist(s)
+- {{sideCharacters}} side characters
+- {{locations}} main locations
+- {{worldbuildingDetails}} worldbuilding elements to develop
+
+**Style Preferences:** {{stylePreferences}}
+
+Please create:
+
+1. **PROJECT TITLE:** A compelling, genre-appropriate title
+
+2. **PROJECT OUTLINE:** A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
+
+3. **BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
+
+Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements.`.trim(),
+        placeholders: ['ideas', 'genres', 'tones', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
+        description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context."
     }
 };
 
