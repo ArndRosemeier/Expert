@@ -1314,15 +1314,12 @@ export async function refreshGlobalProfileSelector() {
     const selector = document.getElementById('active-profile-selector') as HTMLSelectElement;
     if (!selector) return;
 
-    const settingsManager = state.getSettingsManager();
+    // Use centralized ProfileManagerService for consistent profile data
+    const { getProfileManagerService } = await import('./services/ProfileManagerService');
+    const profileManager = getProfileManagerService();
     
-    // Wait for SettingsManager initialization to complete before reading profile data
-    if (settingsManager) {
-        await settingsManager.waitForInitialization();
-    }
-    
-    const profileNames = settingsManager?.getProfileNames() || [];
-    const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
+    const profileNames = profileManager.getAvailableProfiles();
+    const activeProfileName = profileManager.getCurrentActiveProfile() || 'default';
     
     selector.innerHTML = profileNames.map(name => 
         `<option value="${name}" ${activeProfileName === name ? 'selected' : ''}>${name}</option>`
@@ -3261,22 +3258,16 @@ export function setupEventListeners() {
 
         if (e.target.id === 'active-profile-selector') {
             const select = e.target as HTMLSelectElement;
-            const settingsManager = state.getSettingsManager();
-            const modelSelector = state.getModelSelector();
-            if (settingsManager && modelSelector) {
-                await settingsManager.setLastUsedProfile(select.value);
-                
-                // Load all profile settings into the ModelSelector to ensure consistency
-                await modelSelector.loadFromCurrentProfile();
-                
-                // Update global state to track which profile is actually loaded
-                state.setCurrentlyLoadedProfileName(select.value);
-                console.log(`📋 Profile "${select.value}" loaded into ModelSelector from dropdown change`);
-                
-                // Force refresh of node details to pick up new profile settings
-                if (selectedNodeId) {
-                    renderNodeDetails();
-                }
+            
+            // Use centralized ProfileManagerService for consistent profile switching
+            const { getProfileManagerService } = await import('./services/ProfileManagerService');
+            const profileManager = getProfileManagerService();
+            
+            await profileManager.switchToProfile(select.value);
+            
+            // Force refresh of node details to pick up new profile settings
+            if (selectedNodeId) {
+                renderNodeDetails();
             }
         } else if (e.target.id === 'draft-level-selector') {
             const select = e.target as HTMLSelectElement;
@@ -3322,6 +3313,15 @@ export function setupEventListeners() {
 export async function initializeProjectUI(manager?: ProjectManager) {
     const activeProject = manager || state.getActiveProject();
     projectManager = activeProject;
+    
+    // Initialize centralized profile management
+    const { getProfileManagerService } = await import('./services/ProfileManagerService');
+    const profileManager = getProfileManagerService();
+    
+    // Set up profile change synchronization for both selectors
+    profileManager.onProfileChange(async () => {
+        await refreshGlobalProfileSelector();
+    });
     
     // Update modal factory dependencies if we have an active project
     if (activeProject) {

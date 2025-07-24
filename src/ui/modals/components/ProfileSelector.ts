@@ -36,7 +36,7 @@ export class ProfileSelector {
         this.settingsService.onChange(this.handleSettingsChange.bind(this));
         
         void this.render();
-        this.populate();
+        void this.populate();
     }
 
     /**
@@ -193,10 +193,13 @@ export class ProfileSelector {
             this.profileSelect.disabled = true;
             
             try {
-                // Switch profile synchronously and wait for completion
-            const profile = await this.settingsService.switchToProfile(profileName);
-            this.updateCurrentProfileDisplay(profileName);
-            this.emitSelection(profileName, profile);
+                // Use centralized ProfileManagerService for consistent profile switching
+                const { getProfileManagerService } = await import('../../../ui/services/ProfileManagerService');
+                const profileManager = getProfileManagerService();
+                
+                const profile = await profileManager.switchToProfile(profileName);
+                this.updateCurrentProfileDisplay(profileName);
+                this.emitSelection(profileName, profile);
             } finally {
                 // Always re-enable the dropdown
                 this.profileSelect.disabled = false;
@@ -324,15 +327,19 @@ export class ProfileSelector {
     /**
      * Populates the profile selector with available profiles
      */
-    private populate(): void {
-        const profiles = this.settingsService.getProfileNames();
-        const lastUsed = this.settingsService.getLastUsedProfileName();
+    private async populate(): Promise<void> {
+        // Use centralized ProfileManagerService for consistent profile data
+        const { getProfileManagerService } = await import('../../../ui/services/ProfileManagerService');
+        const profileManager = getProfileManagerService();
+        
+        const profiles = profileManager.getAvailableProfiles();
+        const activeProfile = profileManager.getCurrentActiveProfile();
         
         this.profileSelect.innerHTML = profiles
-            .map(name => `<option value="${name}" ${name === lastUsed ? 'selected' : ''}>${name}</option>`)
+            .map(name => `<option value="${name}" ${name === activeProfile ? 'selected' : ''}>${name}</option>`)
             .join('');
         
-        this.updateCurrentProfileDisplay(lastUsed || '');
+        this.updateCurrentProfileDisplay(activeProfile || '');
     }
 
     /**

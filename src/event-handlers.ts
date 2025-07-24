@@ -15,7 +15,7 @@ import { LoopOrchestrator } from './LoopOrchestrator';
 
 import { openTemplateEditor } from './ui/template-editor';
 import { TemplateManager } from './TemplateManager';
-import { DEFAULT_MAX_ITERATIONS, DEFAULT_CONTEXT_EXTRACTION_PROMPT, STORAGE_KEYS } from './constants';
+import { STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
@@ -241,37 +241,22 @@ async function extractTextFromPDF(file: File): Promise<string> {
 }
 
 
-function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) {
+async function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) {
     const modelSelector = state.getModelSelector();
-    const settingsManager = state.getSettingsManager();
     if (!modelSelector) {
         throw new Error('ModelSelector not available - services not properly initialized');
-    }
-    if (!settingsManager) {
-        throw new Error('SettingsManager not available - services not properly initialized');
     }
     
     // The model selector now handles its own storage internally.
     // We just need to reconfigure services and save the updated models to the active settings profile.
     recreateAndReconfigureServices();
     
-    const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
-    const activeProfile = settingsManager.getProfile(activeProfileName) || { 
-        criteria: [], 
-        maxIterations: DEFAULT_MAX_ITERATIONS, 
-        selectedModels: {},
-        webSearchEnabled: {},
-        selectedProviders: {},
-        contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT
-    };
-    activeProfile.selectedModels = models;
-    if (webSearchEnabled) {
-        activeProfile.webSearchEnabled = webSearchEnabled;
-    }
-    if (selectedProviders) {
-        activeProfile.selectedProviders = selectedProviders;
-    }
-    void settingsManager.saveProfile(activeProfileName, activeProfile);
+    // CRITICAL FIX: Use centralized ProfileManagerService instead of getLastUsedProfileName()
+    // This ensures models are saved to the profile the user is actually editing
+    const { getProfileManagerService } = await import('./ui/services/ProfileManagerService');
+    const profileManager = getProfileManagerService();
+    
+    await profileManager.saveModelsToCurrentProfile(models, webSearchEnabled, selectedProviders);
 
     // Settings modal now closes automatically after saving
     // No need to explicitly close since SettingsModal manages its own lifecycle
@@ -677,7 +662,9 @@ export async function initialize() {
     const templateManager = new TemplateManager();
     state.setTemplateManager(templateManager);
     
-    const modelSelector = new ModelSelector(onModelsSelected, () => {
+            const modelSelector = new ModelSelector(async (models, webSearch, providers) => {
+            await onModelsSelected(models, webSearch, providers);
+        }, () => {
         // Settings modal now handles its own closing
         // This callback is kept for ModelSelector compatibility
     });
