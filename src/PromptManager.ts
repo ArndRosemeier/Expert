@@ -1146,9 +1146,16 @@ Your task is to create a comprehensive story outline that incorporates:
 - Specified character and location requirements
 - Chosen narrative style preferences
 
+IMPORTANT CONTEXT FORMAT:
+The context section you generate must follow a specific paragraph-based format:
+- Each context item is written as a complete paragraph
+- Context items that remain valid throughout the entire story must start with "*" (asterisk)
+- Examples of persistent items: main protagonists, core worldbuilding details, fundamental setting elements
+- Examples of non-persistent items: specific scene details, temporary character states, plot-specific information
+
 Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`.trim(),
         placeholders: [],
-        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines."
+        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with proper context formatting."
     },
 
     outline_generation_user: {
@@ -1177,9 +1184,21 @@ Please create:
 
 3. **BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
 
-Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements.`.trim(),
+CRITICAL: Format the context section as separate paragraphs. Items that persist throughout the entire story must start with "*". Examples:
+
+*[Main protagonist description with name, key traits, background, and role]
+
+*[Core worldbuilding element that affects the entire story]
+
+*[Fundamental setting details that remain constant]
+
+[Specific plot setup or initial situation details]
+
+[Additional context that may change during the story]
+
+Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements. The context section should clearly distinguish between persistent story elements (marked with *) and situational details.`.trim(),
         placeholders: ['ideas', 'genres', 'tones', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
-        description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context."
+        description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context formatted according to the application's paragraph-based context system."
     }
 };
 
