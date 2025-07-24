@@ -732,14 +732,26 @@ export class ModelSelector {
         // Provider options
         const providers = this.getProvidersForModel(validModel.id);
         if (providers) {
-          providers.forEach(endpoint => {
+          providers.forEach((endpoint, index) => {
             const opt = document.createElement('option');
             // Use the provider display name from the endpoint data
             const providerDisplayName = endpoint.provider_name || endpoint.name;
             
-            // Convert to API slug for the value
-            const providerSlug = this.getProviderSlug(providerDisplayName);
-            opt.value = providerSlug;
+            // Create a unique value for each endpoint to handle duplicate provider names
+            // Use the base provider slug + index for uniqueness, but fall back to endpoint name if needed
+            const baseSlug = this.getProviderSlug(providerDisplayName);
+            let uniqueValue: string;
+            
+            // If this is the first occurrence of this provider, use the base slug for backwards compatibility
+            const existingValues = Array.from(providerSelect.querySelectorAll('option')).map(o => (o as HTMLOptionElement).value);
+            if (!existingValues.includes(baseSlug)) {
+              uniqueValue = baseSlug;
+            } else {
+              // For subsequent occurrences, append index or use endpoint name
+              uniqueValue = `${baseSlug}-${index}`;
+            }
+            
+            opt.value = uniqueValue;
             
             // Show provider display name with pricing if available
             let displayText = providerDisplayName;

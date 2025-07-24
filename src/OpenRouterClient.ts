@@ -230,7 +230,7 @@ export class OpenRouterClient {
       const providers = modelSelector.getSelectedProviders();
       const webSearchPrefs = modelSelector.getWebSearchEnabled();
       const model = models[purpose];
-      const provider = providers[purpose];
+      const providerSelection = providers[purpose];
       
 
       
@@ -252,14 +252,130 @@ export class OpenRouterClient {
       };
       
       // Only include provider if it's specified and not "automatic"
-      if (provider && provider !== 'automatic') {
-        result.provider = provider;
+      if (providerSelection && providerSelection !== 'automatic') {
+        // Map the provider selection back to the actual endpoint name for API calls
+        const actualProvider = await this.mapProviderSelectionToEndpointName(model, providerSelection);
+        if (actualProvider) {
+          result.provider = actualProvider;
+        }
       }
       
       return result;
     } catch (error) {
       console.error(`Failed to get model config for purpose ${purpose}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Map a provider selection value back to the actual endpoint name for API calls
+   */
+  private async mapProviderSelectionToEndpointName(modelId: string, providerSelection: string): Promise<string | null> {
+    try {
+      // For backwards compatibility, if the selection looks like a basic slug, use it directly
+      if (providerSelection && !providerSelection.includes('-') && providerSelection !== 'automatic') {
+        return providerSelection;
+      }
+
+      // For new format selections (like "deepinfra-1"), we need to fetch the model endpoints
+      // to map back to the actual endpoint name
+      const client = OpenRouterClient.getInstance();
+      const endpoints = await client.fetchModelEndpoints(modelId);
+      
+      if (!endpoints || endpoints.length === 0) {
+        return null;
+      }
+
+      // If the provider selection matches an endpoint name directly, use it
+      const directMatch = endpoints.find((endpoint: OpenRouterModelEndpoint) => endpoint.name === providerSelection);
+      if (directMatch) {
+        return directMatch.name;
+      }
+
+      // If the provider selection is a base slug (like "deepinfra"), find the first matching endpoint
+      const slugMatch = endpoints.find((endpoint: OpenRouterModelEndpoint) => {
+        const providerDisplayName = endpoint.provider_name || endpoint.name;
+        const baseSlug = this.getProviderSlug(providerDisplayName);
+        return baseSlug === providerSelection;
+      });
+      if (slugMatch) {
+        return slugMatch.name;
+      }
+
+      // If the provider selection is a numbered variant (like "deepinfra-1"), extract the base and find by index
+      const indexMatch = providerSelection.match(/^(.+)-(\d+)$/);
+      if (indexMatch && indexMatch[1] && indexMatch[2]) {
+        const [, baseSlug, indexStr] = indexMatch;
+        const index = parseInt(indexStr, 10);
+        
+        // Find all endpoints matching the base slug
+        const matchingEndpoints = endpoints.filter((endpoint: OpenRouterModelEndpoint) => {
+          const providerDisplayName = endpoint.provider_name || endpoint.name;
+          const endpointSlug = this.getProviderSlug(providerDisplayName);
+          return endpointSlug === baseSlug;
+        });
+        
+        if (matchingEndpoints[index]) {
+          return matchingEndpoints[index].name;
+        }
+      }
+
+      console.warn(`Could not map provider selection "${providerSelection}" to endpoint for model ${modelId}`);
+      return null;
+    } catch (error) {
+      console.error('Error mapping provider selection to endpoint name:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Convert provider display name to API slug (helper method)
+   */
+  private getProviderSlug(providerName: string): string {
+    // Common provider name to slug mappings (duplicate from ModelSelector for consistency)
+    const providerMap: Record<string, string> = {
+      'Groq': 'groq',
+      'Together': 'together',
+      'DeepInfra': 'deepinfra',
+      'Fireworks': 'fireworks',
+      'Anthropic': 'anthropic',
+      'OpenAI': 'openai',
+      'Google': 'google-ai-studio',
+      'Google AI Studio': 'google-ai-studio',
+      'Mistral': 'mistral',
+      'Cohere': 'cohere',
+      'Meta': 'meta',
+      'Moonshot AI': 'moonshot',
+      'Azure': 'azure',
+      'Amazon Bedrock': 'bedrock',
+      'Replicate': 'replicate',
+      'Hugging Face': 'huggingface',
+      'Cerebras': 'cerebras',
+      'Perplexity': 'perplexity',
+      'xAI': 'xai',
+      'BaseTen': 'baseten',
+      'SambaNova': 'sambanova',
+      'Lepton': 'lepton',
+      'Hyperbolic': 'hyperbolic',
+      'DeepSeek': 'deepseek',
+      'Liquid': 'liquid',
+      'AI21': 'ai21',
+      'Inflection': 'inflection',
+      '01.AI': '01ai'
+    };
+
+    if (providerMap[providerName]) {
+      return providerMap[providerName];
+    }
+
+    const words = providerName.split(/[\s\/\-_]+/);
+    const firstWord = words[0] || 'unknown';
+    const normalized = firstWord.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (normalized.length > 2 && normalized.length < 20) {
+      return normalized;
+    } else {
+      return 'unknown';
     }
   }
 
