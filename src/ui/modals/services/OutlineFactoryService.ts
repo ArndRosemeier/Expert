@@ -158,7 +158,10 @@ export class OutlineFactoryService {
   
   private parseGeneratedContent(content: string): { title: string; content: string; context: string } {
     // Parse AI response into structured sections
-    // Look for common patterns in AI responses
+    // DEBUG: Log the actual AI response to see what we're getting
+    console.log('=== AI GENERATED CONTENT ===');
+    console.log(content);
+    console.log('=== END AI CONTENT ===');
     
     let title = 'Generated Project';
     let projectContent = '';
@@ -166,32 +169,38 @@ export class OutlineFactoryService {
     
     // Extract PROJECT TITLE - exact format: "1. **PROJECT TITLE:**"
     const titleMatch = content.match(/1\.\s*\*\*PROJECT TITLE\*\*:\s*(.+?)(?:\n|$)/);
+    console.log('Title match result:', titleMatch);
     if (titleMatch && titleMatch[1]) {
       title = titleMatch[1].trim();
     }
     
     // Extract PROJECT OUTLINE - exact format: "2. **PROJECT OUTLINE:**"
     const outlineMatch = content.match(/2\.\s*\*\*PROJECT OUTLINE\*\*:\s*([\s\S]*?)(?=3\.\s*\*\*BACKGROUND CONTEXT\*\*:|$)/);
+    console.log('Outline match result:', outlineMatch ? 'Found' : 'Not found');
     if (outlineMatch && outlineMatch[1]) {
       projectContent = outlineMatch[1].trim();
     }
     
     // Extract BACKGROUND CONTEXT - exact format: "3. **BACKGROUND CONTEXT:**"
     const contextMatch = content.match(/3\.\s*\*\*BACKGROUND CONTEXT\*\*:\s*([\s\S]*?)$/);
+    console.log('Context match result:', contextMatch ? 'Found' : 'Not found');
     if (contextMatch && contextMatch[1]) {
       projectContext = contextMatch[1].trim();
     }
     
     // Strict parsing - no fallbacks
     if (!titleMatch) {
+      console.error('Expected format: "1. **PROJECT TITLE:** [title]"');
       throw new Error('AI did not provide PROJECT TITLE section in the expected format');
     }
     
     if (!outlineMatch) {
+      console.error('Expected format: "2. **PROJECT OUTLINE:** [content]"');
       throw new Error('AI did not provide PROJECT OUTLINE section in the expected format');
     }
     
     if (!contextMatch) {
+      console.error('Expected format: "3. **BACKGROUND CONTEXT:** [context]"');
       throw new Error('AI did not provide BACKGROUND CONTEXT section in the expected format');
     }
     
