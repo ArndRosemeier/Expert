@@ -118,6 +118,8 @@ export class SettingsService {
                 // Fallback: create with current component settings if no active profile
                 newProfileSettings = {
                     selectedModels: this.modelSelector.getSelectedModels(),
+                    selectedProviders: this.modelSelector.getSelectedProviders(),
+                    webSearchEnabled: this.modelSelector.getWebSearchEnabled(),
                     criteria: [], // Will be filled by the UI component
                     maxIterations: DEFAULT_MAX_ITERATIONS, // Will be filled by the UI component
                     contextExtractionPrompt: '' // Legacy field
@@ -152,6 +154,8 @@ export class SettingsService {
         
         const currentSettings: SettingsProfile = {
             selectedModels: this.modelSelector.getSelectedModels(),
+            selectedProviders: this.modelSelector.getSelectedProviders(),
+            webSearchEnabled: this.modelSelector.getWebSearchEnabled(),
             criteria,
             maxIterations,
             contextExtractionPrompt: existingProfile?.contextExtractionPrompt || '' // Preserve existing context extraction prompt
@@ -160,9 +164,6 @@ export class SettingsService {
         // Add optional properties only if they exist
         if (existingProfile?.language) {
             currentSettings.language = existingProfile.language;
-        }
-        if (existingProfile?.webSearchEnabled) {
-            currentSettings.webSearchEnabled = existingProfile.webSearchEnabled;
         }
         if (existingProfile?.taskModelConfigs) {
             currentSettings.taskModelConfigs = existingProfile.taskModelConfigs;
@@ -312,6 +313,8 @@ export class SettingsService {
     public getCurrentSettings(criteria: QualityCriterion[], maxIterations: number): SettingsProfile {
         return {
             selectedModels: this.modelSelector.getSelectedModels(),
+            selectedProviders: this.modelSelector.getSelectedProviders(),
+            webSearchEnabled: this.modelSelector.getWebSearchEnabled(),
             criteria,
             maxIterations,
             contextExtractionPrompt: '' // Legacy field
