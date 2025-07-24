@@ -164,58 +164,52 @@ export class OutlineFactoryService {
     let projectContent = '';
     let projectContext = '';
     
-    // Try to extract title from various patterns
-    const titleMatches = [
-      /(?:PROJECT TITLE|TITLE):\s*(.+?)(?:\n|$)/i,
-      /(?:^|\n)Title:\s*(.+?)(?:\n|$)/i,
-      /(?:^|\n)# (.+?)(?:\n|$)/,
-      /(?:^|\n)"(.+?)"(?:\n|$)/
-    ];
-    
-    for (const pattern of titleMatches) {
-      const match = content.match(pattern);
-      if (match && match[1]) {
-        title = match[1].trim().replace(/['"]/g, '');
-        break;
-      }
+    // Extract PROJECT TITLE (exactly as we ask for it in the prompt)
+    const titleMatch = content.match(/(?:^|\n)(?:1\.?\s*)?(?:\*\*)?PROJECT TITLE(?:\*\*)?:\s*(.+?)(?:\n|$)/i);
+    if (titleMatch && titleMatch[1]) {
+      title = titleMatch[1].trim().replace(/^\*\*|\*\*$/g, ''); // Remove any markdown formatting
     }
     
-    // Try to extract project outline/content
-    const contentPatterns = [
-      /(?:PROJECT OUTLINE|OUTLINE|PROJECT CONTENT|CONTENT):\s*([\s\S]*?)(?:\n(?:BACKGROUND|CONTEXT|$))/i,
-      /(?:^|\n)(?:2\.|##)\s*PROJECT OUTLINE[:\s]*([\s\S]*?)(?:\n(?:3\.|##|BACKGROUND|CONTEXT|$))/i,
-      /(?:^|\n)(?:2\.|##)\s*OUTLINE[:\s]*([\s\S]*?)(?:\n(?:3\.|##|BACKGROUND|CONTEXT|$))/i
-    ];
-    
-    for (const pattern of contentPatterns) {
-      const match = content.match(pattern);
-      if (match && match[1]) {
-        projectContent = match[1].trim();
-        break;
-      }
+    // Extract PROJECT OUTLINE (exactly as we ask for it in the prompt)
+    const outlineMatch = content.match(/(?:^|\n)(?:2\.?\s*)?(?:\*\*)?PROJECT OUTLINE(?:\*\*)?:\s*([\s\S]*?)(?=\n(?:3\.?\s*)?(?:\*\*)?BACKGROUND CONTEXT(?:\*\*)?:|$)/i);
+    if (outlineMatch && outlineMatch[1]) {
+      projectContent = outlineMatch[1].trim();
     }
     
-    // Try to extract background/context
-    const contextPatterns = [
-      /(?:BACKGROUND CONTEXT|CONTEXT|BACKGROUND):\s*([\s\S]*?)(?:\n(?:Style Guide|$))/i,
-      /(?:^|\n)(?:3\.|##)\s*BACKGROUND[:\s]*([\s\S]*?)$/i,
-      /(?:^|\n)(?:3\.|##)\s*CONTEXT[:\s]*([\s\S]*?)$/i
-    ];
-    
-    for (const pattern of contextPatterns) {
-      const match = content.match(pattern);
-      if (match && match[1]) {
-        projectContext = match[1].trim();
-        break;
-      }
+    // Extract BACKGROUND CONTEXT (exactly as we ask for it in the prompt)
+    const contextMatch = content.match(/(?:^|\n)(?:3\.?\s*)?(?:\*\*)?BACKGROUND CONTEXT(?:\*\*)?:\s*([\s\S]*?)$/i);
+    if (contextMatch && contextMatch[1]) {
+      projectContext = contextMatch[1].trim();
     }
     
-    // Fallback: if parsing fails, split content roughly
-    if (!projectContent && !projectContext) {
-      const lines = content.split('\n');
-      const midpoint = Math.floor(lines.length * 0.6);
-      projectContent = lines.slice(0, midpoint).join('\n').trim();
-      projectContext = lines.slice(midpoint).join('\n').trim();
+    // Fallback parsing if exact format isn't found
+    if (!projectContent || !projectContext) {
+      console.warn('Exact format parsing failed, attempting fallback parsing');
+      
+      // Look for any content between title and context sections
+      if (!projectContent) {
+        const fallbackContentMatch = content.match(/(?:outline|content)[\s\S]*?\n([\s\S]*?)(?:\n(?:background|context):|$)/i);
+        if (fallbackContentMatch && fallbackContentMatch[1]) {
+          projectContent = fallbackContentMatch[1].trim();
+        }
+      }
+      
+      // Look for anything after "background" or "context"
+      if (!projectContext) {
+        const fallbackContextMatch = content.match(/(?:background|context):?\s*([\s\S]*?)$/i);
+        if (fallbackContextMatch && fallbackContextMatch[1]) {
+          projectContext = fallbackContextMatch[1].trim();
+        }
+      }
+      
+      // Final fallback: split content if all else fails
+      if (!projectContent && !projectContext) {
+        console.warn('All parsing failed, using rough content split');
+        const lines = content.split('\n').filter(line => line.trim());
+        const midpoint = Math.floor(lines.length * 0.6);
+        projectContent = lines.slice(0, midpoint).join('\n').trim();
+        projectContext = lines.slice(midpoint).join('\n').trim();
+      }
     }
     
     // Ensure we have content

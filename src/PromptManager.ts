@@ -1184,17 +1184,13 @@ Please create:
 
 3. **BACKGROUND CONTEXT:** Setting, premise, and world details (300-500 words) that establish the story's foundation.
 
-CRITICAL: Format the context section as separate paragraphs. Items that persist throughout the entire story must start with "*". Examples:
+CRITICAL: Format the context section as one paragraph per context item. All information about one item (for example a character) needs to be in a single paragraph. Items that persist throughout the entire story must start with "*". Examples:
 
-*[Main protagonist description with name, key traits, background, and role]
+*Sarah Chen is a 32-year-old cybersecurity expert who discovers she can interface directly with digital systems through neural implants. She is driven by the mysterious death of her brother and has a tendency to take dangerous risks when pursuing the truth.
 
-*[Core worldbuilding element that affects the entire story]
+*The story takes place in Neo-Singapore 2087, where towering arcologies house millions while the old city below has become a lawless digital frontier. Corporate AIs control most aspects of daily life through the OmniNet.
 
-*[Fundamental setting details that remain constant]
-
-[Specific plot setup or initial situation details]
-
-[Additional context that may change during the story]
+The story begins when Sarah receives an encrypted message from her supposedly dead brother, leading her to question everything she believes about his death and the nature of reality itself.
 
 Ensure the outline is engaging, internally consistent, and makes good use of all specified story elements. The context section should clearly distinguish between persistent story elements (marked with *) and situational details.`.trim(),
         placeholders: ['ideas', 'genres', 'tones', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
