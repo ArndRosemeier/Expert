@@ -1146,6 +1146,10 @@ Your task is to create a comprehensive story outline that incorporates:
 - Specified character and location requirements
 - Chosen narrative style preferences
 
+QUALITY CRITERIA:
+Your outline will be evaluated based on these criteria:
+{{criteria}}
+
 CRITICAL: You MUST follow the exact output format specified in the user prompt. Any deviation from the required format will cause a system error.
 
 IMPORTANT CONTEXT FORMAT:
@@ -1156,8 +1160,8 @@ The context section you generate must follow a specific paragraph-based format:
 - Examples of non-persistent items: specific scene details, temporary character states, plot-specific information
 
 Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`.trim(),
-        placeholders: [],
-        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with strict format requirements."
+        placeholders: ['criteria'],
+        description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with strict format requirements and quality criteria."
     },
 
     outline_generation_user: {

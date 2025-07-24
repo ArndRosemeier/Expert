@@ -1,5 +1,7 @@
 import { StorageService, IStorageService } from '../../../StorageService';
 import { OpenRouterClient } from '../../../OpenRouterClient';
+import { SettingsManager } from '../../../SettingsManager';
+import { QualityCriterion } from '../../../types';
 import * as state from '../../../state';
 import type { 
   OutlineFactoryConfig, 
@@ -27,8 +29,14 @@ export class OutlineFactoryService {
     
     // 2. Build generation prompt from config using PromptManager templates
     const promptManager = state.getOrchestratorPrompts()!;
+    const settingsManager = await SettingsManager.getInstance();
     
-    const systemPrompt = promptManager.outline_generation_system;
+    // Get current profile's criteria and format them
+    const profile = settingsManager.getLastUsedProfile();
+    const criteria = profile?.criteria || [];
+    const formattedCriteria = criteria.map((c: QualityCriterion) => c.name + (c.description ? ': ' + c.description : '')).join('\n');
+    
+    const systemPrompt = promptManager.outline_generation_system.replace('{{criteria}}', formattedCriteria);
     const userPrompt = this.buildUserPrompt(promptManager.outline_generation_user, config);
     
     // 3. Call AI service using 'creator' model
