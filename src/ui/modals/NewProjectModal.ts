@@ -358,8 +358,8 @@ export class NewProjectModal extends BaseModal {
             const templateNames = templateManager.getTemplateNames();
             const template = templateManager.getTemplate(templateNames[0]!)!;
             
-            // Combine AI-generated context with procedural style guide
-            const combinedContext = result.context + '\n\n' + result.styleGuideContext;
+            // Combine AI-generated context with procedural genre/themes and style guide
+            const combinedContext = result.context + '\n\n' + result.genreThemesContext + '\n\n' + result.styleGuideContext;
             
             // Create AI data structure for the outline factory result
             const aiData = {

@@ -37,6 +37,7 @@ export interface OutlineGenerationResult {
   content: string;
   context: string;
   styleGuideContext: string;        // Generated with "*" prefix
+  genreThemesContext: string;       // Generated with "*" prefix for genre & themes
 }
 
 export interface OutlineFactoryDefaults {

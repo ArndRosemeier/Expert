@@ -47,14 +47,16 @@ export class OutlineFactoryService {
     // 4. Parse generated content into title, content, and context
     const parsed = this.parseGeneratedContent(generatedContent);
     
-    // 5. Generate procedural style guide
+    // 5. Generate procedural style guide and genre/themes context
     const styleGuideContext = this.generateStyleGuideText(config.styleGuide);
+    const genreThemesContext = this.generateGenreThemesContext(config.genres);
     
     return {
       title: parsed.title,
       content: parsed.content,
       context: parsed.context,
-      styleGuideContext
+      styleGuideContext,
+      genreThemesContext
     };
   }
   
@@ -122,6 +124,16 @@ export class OutlineFactoryService {
       .join(', ');
     
     return `*Style Guide: Write using ${styleText} approach.`;
+  }
+  
+  generateGenreThemesContext(genres: GenreSelection): string {
+    const genreInfo = this.formatGenreSelections(genres);
+    
+    if (!genreInfo || genreInfo === 'No specific genre preferences') {
+      return '*Genre & Themes: No specific genre preferences selected.';
+    }
+    
+    return `*Genre & Themes: This story follows ${genreInfo}.`;
   }
   
   // Persistence Methods (using StorageService pattern)
