@@ -1,7 +1,7 @@
 import { StorageService, IStorageService } from '../../../StorageService';
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
-import { QualityCriterion } from '../../../types';
+import { formatCriteriaAsJson } from '../../../ProjectUtils';
 import * as state from '../../../state';
 import type { 
   OutlineFactoryConfig, 
@@ -31,10 +31,10 @@ export class OutlineFactoryService {
     const promptManager = state.getOrchestratorPrompts()!;
     const settingsManager = await SettingsManager.getInstance();
     
-    // Get current profile's criteria and format them
+    // Get current profile's criteria and format them using standard JSON format
     const profile = settingsManager.getLastUsedProfile();
     const criteria = profile?.criteria || [];
-    const formattedCriteria = criteria.map((c: QualityCriterion) => c.name + (c.description ? ': ' + c.description : '')).join('\n');
+    const formattedCriteria = formatCriteriaAsJson(criteria);
     
     const systemPrompt = promptManager.outline_generation_system.replace('{{criteria}}', formattedCriteria);
     const userPrompt = this.buildUserPrompt(promptManager.outline_generation_user, config);
