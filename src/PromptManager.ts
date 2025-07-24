@@ -1166,7 +1166,6 @@ Always create engaging, internally consistent outlines that respect the specifie
 **User Ideas:** {{ideas}}
 
 **Genre & Themes:** {{genres}}
-**Tone:** {{tones}}
 **Content Rating:** {{contentRating}}
 
 **Story Requirements:**
@@ -1204,7 +1203,7 @@ Context Format Examples:
 The story begins when Sarah receives an encrypted message from her supposedly dead brother, leading her to question everything she believes about his death and the nature of reality itself.
 
 WARNING: Any deviation from this exact format will cause a system error. Follow the format precisely.`.trim(),
-        placeholders: ['ideas', 'genres', 'tones', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
+        placeholders: ['ideas', 'genres', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
         description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context formatted according to the application's paragraph-based context system."
     }
 };

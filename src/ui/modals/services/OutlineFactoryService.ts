@@ -61,13 +61,11 @@ export class OutlineFactoryService {
   private buildUserPrompt(template: string, config: OutlineFactoryConfig): string {
     const stylePreferences = this.formatStylePreferences(config.styleGuide);
     const genres = this.formatGenreSelections(config.genres);
-    const tones = config.genres.tone.join(', ') || 'Neutral';
     const contentRating = config.genres.content.join(', ') || 'General';
     
     return template
       .replace('{{ideas}}', config.ideas || 'No specific ideas provided')
       .replace('{{genres}}', genres)
-      .replace('{{tones}}', tones)
       .replace('{{contentRating}}', contentRating)
       .replace('{{protagonists}}', config.context.protagonists.toString())
       .replace('{{antagonists}}', config.context.antagonists.toString())
