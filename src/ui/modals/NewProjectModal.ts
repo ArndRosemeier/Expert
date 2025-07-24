@@ -8,23 +8,27 @@ import { BaseModal } from './core/BaseModal';
 import { ModalConfig } from './types/ModalTypes';
 import { ManualProjectCreator, ManualProjectCreatorConfig } from './components/ManualProjectCreator';
 import { AIProjectCreator, AIProjectCreatorConfig } from './components/AIProjectCreator';
+import { OutlineFactory } from './components/OutlineFactory';
+import { OutlineGenerationResult } from '../../types/OutlineFactoryTypes';
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 import { ProjectTemplate } from '../../ProjectTemplate';
 import { createElement } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
+import * as state from '../../state';
 
 interface NewProjectModalConfig extends ModalConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     settingsManager: SettingsManager;
 }
 
-type TabType = 'manual' | 'ai';
+type TabType = 'manual' | 'ai' | 'outline';
 
 export class NewProjectModal extends BaseModal {
     private onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     private activeTab: TabType = 'ai';
     private manualCreator: ManualProjectCreator;
     private aiCreator: AIProjectCreator;
+    private outlineFactory: OutlineFactory;
     private currentTabContent: HTMLElement | null = null;
     private settingsManager: SettingsManager;
 
@@ -54,6 +58,12 @@ export class NewProjectModal extends BaseModal {
 
         this.manualCreator = new ManualProjectCreator(manualConfig);
         this.aiCreator = new AIProjectCreator(aiConfig);
+        this.outlineFactory = new OutlineFactory(createElement('div'));
+        
+        // Set up outline factory event listener
+        this.outlineFactory.onChange(() => {
+            // Auto-save configuration on changes - handled internally by OutlineFactory
+        });
     }
 
     public render(): HTMLElement {
@@ -243,6 +253,10 @@ export class NewProjectModal extends BaseModal {
                                 data-tab="ai">
                             ${AI_ASSISTANT_EMOJI} AI Creation
                         </button>
+                        <button class="tab-btn ${this.activeTab === 'outline' ? 'active' : ''}" 
+                                data-tab="outline">
+                            🏭 Outline Factory
+                        </button>
                     </div>
                     <div class="tab-content" id="tab-content-container">
                         <!-- Tab content will be rendered here -->
@@ -302,30 +316,76 @@ export class NewProjectModal extends BaseModal {
         
         if (!contentContainer) return;
         
-        // Generate content based on active tab
-        const content = this.activeTab === 'manual' 
-            ? this.manualCreator.render()
-            : this.aiCreator.render();
+        // Clear existing content
+        contentContainer.innerHTML = '';
         
-        contentContainer.innerHTML = content;
-        
-        // Set up event listeners for the active component
-        const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-        activeCreator.setupEventListeners(contentContainer);
+        if (this.activeTab === 'outline') {
+            // Render OutlineFactory component directly to the container
+            this.outlineFactory = new OutlineFactory(contentContainer);
+            this.outlineFactory.render().then(() => {
+                // Listen for outline generation completion
+                contentContainer.addEventListener('outline-generated', async (event: Event) => {
+                    const customEvent = event as CustomEvent;
+                    const result = customEvent.detail as OutlineGenerationResult;
+                    await this.handleOutlineGenerationResult(result);
+                });
+            });
+        } else {
+            // Generate content for manual/ai tabs
+            const content = this.activeTab === 'manual' 
+                ? this.manualCreator.render()
+                : this.aiCreator.render();
+            
+            contentContainer.innerHTML = content;
+            
+            // Set up event listeners for the active component
+            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+            activeCreator.setupEventListeners(contentContainer);
+            
+            // Set up cancel event handlers
+            contentContainer.addEventListener('manual-cancel', async () => this.close());
+            contentContainer.addEventListener('ai-cancel', async () => this.close());
+        }
         
         // Store reference for cleanup
         this.currentTabContent = contentContainer;
-        
-        // Set up cancel event handlers
-        contentContainer.addEventListener('manual-cancel', async () => this.close());
-        contentContainer.addEventListener('ai-cancel', async () => this.close());
+    }
+
+    private async handleOutlineGenerationResult(result: OutlineGenerationResult): Promise<void> {
+        try {
+            // Get any available template for the structure (content will be overridden by AI data)
+            const templateManager = state.getTemplateManager()!;
+            const templateNames = templateManager.getTemplateNames();
+            const template = templateManager.getTemplate(templateNames[0]!)!;
+            
+            // Create AI data structure for the outline factory result
+            const aiData = {
+                isAIGenerated: true,
+                content: result.content,
+                context: result.context,
+                description: 'Generated by Outline Factory',
+                projectType: 'outline-factory',
+                options: this.outlineFactory.getCurrentConfig()
+            };
+            
+            // Create the project with outline factory data
+            await this.handleProjectCreated(result.title, template, aiData);
+            
+        } catch (error) {
+            console.error('Failed to handle outline generation result:', error);
+            alert('Failed to create project from outline. Please try again.');
+        }
     }
 
     private cleanupCurrentTab(): void {
         if (this.currentTabContent) {
-            // Cleanup the active component
-            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-            activeCreator.cleanup();
+            if (this.activeTab === 'outline') {
+                // OutlineFactory handles its own cleanup
+            } else {
+                // Cleanup the active component
+                const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+                activeCreator.cleanup();
+            }
             this.currentTabContent = null;
         }
     }
@@ -351,6 +411,7 @@ export class NewProjectModal extends BaseModal {
         // Clean up components
         this.manualCreator.cleanup();
         this.aiCreator.cleanup();
+        // OutlineFactory handles its own cleanup internally
         
         await super.close();
     }
