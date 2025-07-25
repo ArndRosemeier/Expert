@@ -99,8 +99,8 @@ export class RedundancyDetectionService {
             // Build prompt with all siblings
             const prompt = this.buildRedundancyPrompt(children);
             
-            // Get AI analysis
-            const response = await this.openRouterClient.chat(prompt, 'redundancy_detection');
+            // Get AI analysis (using rater model for analytical tasks)
+            const response = await this.openRouterClient.chat(prompt, 'rater');
             
             // Parse response
             const redundancies = this.parseAIResponse(response, children);
