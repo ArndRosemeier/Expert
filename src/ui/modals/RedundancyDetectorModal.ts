@@ -291,6 +291,8 @@ export class RedundancyDetectorModal extends BaseModal {
      * Render no redundancies found
      */
     private renderNoRedundancies(): string {
+        const actualThreshold = this.analysisResult?.thresholdUsed ?? this.currentThreshold;
+        
         return `
             <div class="no-redundancy-container" style="text-align: center; padding: 40px;">
                 <div style="font-size: 4em; margin-bottom: 20px;">✅</div>
@@ -298,13 +300,23 @@ export class RedundancyDetectorModal extends BaseModal {
                 <p style="color: #666; margin-bottom: 20px;">
                     All children appear to serve unique plot functions. No deletion recommendations at this time.
                 </p>
-                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; text-align: left;">
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; text-align: left; margin-bottom: 30px;">
                     <strong>Analysis Summary:</strong>
                     <ul style="margin: 10px 0; padding-left: 20px;">
                         <li>Children analyzed: ${this.analysisResult?.childrenAnalyzed || 0}</li>
-                        <li>Redundancy threshold: 70%</li>
+                        <li>Redundancy threshold: ${actualThreshold}%</li>
                         <li>Redundancies found: 0</li>
                     </ul>
+                </div>
+                
+                <div class="action-buttons" style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <button 
+                        id="back-to-config-btn" 
+                        class="btn btn-secondary" 
+                        style="background: #757575; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;"
+                    >
+                        ⚙️ Reconfigure Analysis
+                    </button>
                 </div>
             </div>
         `;
