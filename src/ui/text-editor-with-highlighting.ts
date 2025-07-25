@@ -42,12 +42,20 @@ export class TextEditorWithHighlighting {
         this.editableDiv.contentEditable = 'true';
         this.editableDiv.className = 'text-editor-with-highlighting';
         
+        // Ensure proper text selection and copy functionality
+        this.editableDiv.setAttribute('role', 'textbox');
+        this.editableDiv.setAttribute('aria-multiline', 'true');
+        this.editableDiv.style.userSelect = 'text';
+        this.editableDiv.style.webkitUserSelect = 'text';
+        
         // Style to look like a textarea
         this.editableDiv.style.cssText = `
             width: 100%;
             min-height: 80px;
             padding: 8px;
             border: 1px solid #ccc;
+            user-select: text;
+            -webkit-user-select: text;
             border-radius: 4px;
             font-family: inherit;
             font-size: inherit;
@@ -92,11 +100,36 @@ export class TextEditorWithHighlighting {
             }
         });
 
-        // Prevent pasting HTML - only allow plain text
+        // Handle paste to allow only plain text (preserve normal copy/paste functionality)
         this.editableDiv.addEventListener('paste', (e) => {
-            e.preventDefault();
+            // Get plain text from clipboard
             const text = e.clipboardData?.getData('text/plain') || '';
-            document.execCommand('insertText', false, text);
+            
+            if (text) {
+                // Only prevent default if we have text and can insert it
+                e.preventDefault();
+                
+                // Use modern approach: insert text at current cursor position
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    range.deleteContents();
+                    range.insertNode(document.createTextNode(text));
+                    
+                    // Move cursor to end of inserted text
+                    range.setStartAfter(range.endContainer);
+                    range.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                } else {
+                    // Fallback: append to end of content
+                    this.editableDiv.appendChild(document.createTextNode(text));
+                }
+                
+                // Trigger input event to update tracking
+                this.editableDiv.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            // If no text, let default behavior handle it (won't break anything)
         });
     }
 
