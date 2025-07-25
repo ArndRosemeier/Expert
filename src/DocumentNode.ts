@@ -3,6 +3,18 @@ import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * Generation parameters that are remembered per node
+ */
+export interface LastGenerationParameters {
+    draftLevel: number;
+    contentLevel: number;
+    contextPruneLevel: number;
+    coherenceLevel: number;
+    autofixSeverity: number;
+    contextRatingThreshold: number;
+}
+
+/**
  * Represents a single version of node content with tags and metadata.
  */
 export interface ContentVersion {
@@ -71,6 +83,9 @@ export class DocumentNode {
     // --- Overview Board Cache ---
     overviewBoardCache: Map<string, any> = new Map(); // CachedOverviewAnalysis by layer name
 
+    // --- Generation Parameters Cache ---
+    lastGenerationParameters: LastGenerationParameters | null = null;
+
     constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
@@ -86,6 +101,7 @@ export class DocumentNode {
         this.currentGenerationSession = null;
         this.collapsed = false; // Initialize as expanded
         this.overviewBoardCache = new Map(); // Initialize cache
+        this.lastGenerationParameters = null; // Initialize as null
         
         // Create initial master version
         const initialVersion = {
@@ -173,7 +189,8 @@ export class DocumentNode {
                 ...v,
                 tags: Array.from(v.tags) // Convert Set to Array for JSON
             })),
-            overviewBoardCache: Array.from(this.overviewBoardCache.entries()) // Convert Map to Array for JSON
+            overviewBoardCache: Array.from(this.overviewBoardCache.entries()), // Convert Map to Array for JSON
+            lastGenerationParameters: this.lastGenerationParameters
         };
     }
 
@@ -300,6 +317,9 @@ export class DocumentNode {
         } else {
             node.overviewBoardCache = new Map();
         }
+        
+        // Restore last generation parameters
+        node.lastGenerationParameters = data.lastGenerationParameters || null;
         
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {

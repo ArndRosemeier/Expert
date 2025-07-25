@@ -2072,8 +2072,31 @@ export function renderNodeDetails() {
     const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
     const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
+    const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
+    const contextRatingThresholdSelector = getElementById('context-rating-threshold-selector') as HTMLSelectElement;
     const validationMessage = getElementById('level-validation-message') as HTMLDivElement;
     const validationText = getElementById('validation-text') as HTMLSpanElement;
+    
+    // Restore last generation parameters for this node if available
+    if (node.lastGenerationParameters) {
+        const params = node.lastGenerationParameters;
+        if (draftLevelSelector) draftLevelSelector.value = params.draftLevel.toString();
+        if (contentLevelSelector) contentLevelSelector.value = params.contentLevel.toString();
+        if (contextPruneLevelSelector) contextPruneLevelSelector.value = params.contextPruneLevel.toString();
+        if (coherenceLevelSelector) coherenceLevelSelector.value = params.coherenceLevel.toString();
+        if (autofixSeveritySelector) autofixSeveritySelector.value = params.autofixSeverity.toString();
+        if (contextRatingThresholdSelector) contextRatingThresholdSelector.value = params.contextRatingThreshold.toString();
+        
+        // Update global state variables to match restored values
+        draftLevelState = params.draftLevel;
+        contentLevelState = params.contentLevel;
+        contextPruneLevelState = params.contextPruneLevel;
+        coherenceLevelState = params.coherenceLevel;
+        autofixSeverityState = params.autofixSeverity;
+        contextRatingThresholdState = params.contextRatingThreshold;
+        
+        console.log(`🔄 Restored generation parameters for node "${node.title}":`, params);
+    }
     
     // Validation function
     const validateLevels = (): boolean => {
@@ -4391,6 +4414,9 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             autofixSeverity,
             contextRatingThreshold
         };
+        
+        // Store generation parameters in the node for next time
+        node.lastGenerationParameters = { ...levels };
         
         // Start unified generation
         await unifiedService.generateWithLevels(node.id, levels);
