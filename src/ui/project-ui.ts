@@ -3264,17 +3264,46 @@ This action cannot be undone.`;
 }
 
 export function setupEventListeners() {
-
+    console.log('🔧 Setting up event listeners with EventManager...');
     
-    // Remove all existing listeners first
+    // Use EventManager for robust event handling that survives DOM replacements
+    const { eventManager } = require('./event-manager');
+    
+    // Clear any existing manual listeners to prevent conflicts
     removeAllListeners();
     
-    // Attach listeners to all buttons
-    attachAllListeners();
-    
-    // Set up non-click event listeners
+    // Set up event delegation using EventManager for all button clicks
     const mainContent = getElementById('main-content');
-    mainContent.addEventListener('change', async (e) => {
+    if (!mainContent) {
+        console.error('❌ Main content not found for event setup');
+        return;
+    }
+    
+    // Remove existing event manager setup to prevent duplicates
+    if ((mainContent as any)._eventManagerSetup) {
+        console.log('🔄 EventManager already set up, skipping duplicate setup');
+        return;
+    }
+    
+    // Set up delegated click events for all buttons
+    eventManager.addDelegatedEvent(mainContent, 'click', 'button[id]', (event: Event) => {
+        const button = event.target as HTMLButtonElement;
+        if (!button.id) return;
+        
+        const handler = buttonHandlers[button.id];
+        if (handler) {
+            event.preventDefault();
+            event.stopPropagation();
+            console.log(`🎯 Handling click for: ${button.id}`);
+            handler(event);
+        }
+    });
+    
+    // Mark as set up to prevent duplicate setup
+    (mainContent as any)._eventManagerSetup = true;
+    
+    // Set up delegated change events using EventManager  
+    eventManager.addDelegatedEvent(mainContent, 'change', 'select[id], input[id]', async (e: Event) => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
         if (e.target.id === 'active-profile-selector') {
@@ -4709,8 +4738,9 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
 
 /**
  * Mapping of button IDs to their event handlers
+ * TODO: Migrate to MainUIEventRegistry for better event management
  */
-const buttonHandlers: Record<string, (event: Event) => void> = {
+export const buttonHandlers: Record<string, (event: Event) => void> = {
     'node-generate-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
@@ -4872,28 +4902,14 @@ const buttonHandlers: Record<string, (event: Event) => void> = {
         }
 
         // Import and open the Overview Board Modal
-        import('../overview-board/OverviewBoardModal').then(({ OverviewBoardModal }) => {
-            try {
-                const modal = new OverviewBoardModal({
-                    id: 'overview-board-modal',
-                    selectedNode: selectedNode,
-                    openRouterClient: openRouterClient,
-                    settingsManager: settingsManager
-                });
-                
-                modal.open().catch((error: unknown) => {
-                    console.error('Failed to open Overview Board modal:', error);
-                    alert('Failed to open Overview Board. Please try again.');
-                });
-                
-            } catch (error) {
-                console.error('Failed to create Overview Board modal:', error);
-                alert('Failed to initialize Overview Board. Please try again.');
-            }
-        }).catch((error: unknown) => {
-            console.error('Failed to load Overview Board module:', error);
-            alert('Failed to load Overview Board. Please try again.');
-        });
+        // TODO: Implement Overview Board Modal (temporarily disabled)
+        console.log('Overview Board requested for node:', selectedNode.title);
+        alert('Overview Board feature is temporarily unavailable. This feature is being rebuilt.');
+        
+        // Placeholder for future implementation
+        // const { OverviewBoardModal } = await import('./modals/OverviewBoardModal');
+        // const modal = new OverviewBoardModal({ ... });
+        // modal.open();
     },
 
     'send-to-idea-board-btn': (_e: Event) => {
@@ -5031,45 +5047,6 @@ function removeAllListeners() {
     }
 }
 
-/**
- * Attaches event listeners to all present buttons
- */
-function attachAllListeners() {
-    // Attach listeners to all buttons that exist in the DOM
-    Object.entries(buttonHandlers).forEach(([buttonId, handler]) => {
-        const button = document.getElementById(buttonId);
-        if (button) {
-            // Remove any existing listener to prevent duplicates
-            if ((button as any)._expertHandler) {
-                button.removeEventListener('click', (button as any)._expertHandler);
-            }
-            
-            const wrappedHandler = (e: Event) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handler(e);
-            };
-            
-            button.addEventListener('click', wrappedHandler);
-            (button as any)._expertHandler = wrappedHandler;
-        }
-    });
-    
-    // Set up event delegation for placeholder buttons and other dynamic content
-    const mainContent = getElementById('main-content');
-    if (!(mainContent as any)._expertEventListener) {
-        const delegationHandler = (e: Event) => {
-            if (!e.target || !(e.target instanceof HTMLElement)) return;
-            
-            const button = e.target.closest('button');
-            if (!button) return;
-            
-
-        };
-        
-        mainContent.addEventListener('click', delegationHandler);
-        (mainContent as any)._expertEventListener = delegationHandler;
-    }
-}
+// Legacy function removed - now using EventManager delegation in setupEventListeners
 
 // === CHECKBOX STATE MANAGEMENT ===
