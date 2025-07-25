@@ -77,8 +77,10 @@ export class RedundancyDetectorModal extends BaseModal {
             
             console.log(`✅ Analysis complete: ${this.analysisResult.redundancies.length} redundancies found`);
             
-            // Update only the modal body to preserve BaseModal's close button
-            this.updateModalBody();
+            // Re-render the entire content but preserve the fact that we're in results mode
+            // BaseModal will handle the close button properly
+            this.isLoading = false;
+            this.updateModalContent();
             this.setupEventListeners();
             
         } catch (error) {
@@ -94,33 +96,34 @@ export class RedundancyDetectorModal extends BaseModal {
                 analysisError: error instanceof Error ? error.message : 'Analysis failed'
             };
             
-            this.updateModalBody();
+            this.updateModalContent();
             this.setupEventListeners();
         }
     }
 
     /**
-     * Update modal content
+     * Update modal content while preserving BaseModal's close button
      */
     private updateModalContent(): void {
         const modalContent = document.querySelector(`[data-modal-id="${this.id}"] .modal-content`);
         
         if (modalContent) {
+            // Preserve any existing close buttons before updating
+            const existingCloseButtons = modalContent.querySelectorAll('.close-btn');
+            
+            // Update the content
             modalContent.innerHTML = this.renderModalContent();
+            
+            // Re-add the preserved close buttons if they existed and aren't already present
+            existingCloseButtons.forEach(closeBtn => {
+                if (closeBtn && !modalContent.querySelector('.close-btn')) {
+                    modalContent.appendChild(closeBtn);
+                }
+            });
         }
     }
 
-    /**
-     * Update only the modal body content to preserve BaseModal's close button
-     */
-    private updateModalBody(): void {
-        const modalBody = document.querySelector(`[data-modal-id="${this.id}"] .modal-body`);
-        
-        if (modalBody && this.analysisResult) {
-            const { redundancies, hasRedundantNodes } = this.analysisResult;
-            modalBody.innerHTML = hasRedundantNodes ? this.renderRedundancies(redundancies) : this.renderNoRedundancies();
-        }
-    }
+
 
     /**
      * Generate modal content HTML
@@ -483,12 +486,17 @@ export class RedundancyDetectorModal extends BaseModal {
      * Update the display of a specific deleted item without re-rendering the entire modal
      */
     private updateDeletedItemDisplay(nodeId: string): void {
+        console.log(`🔄 Updating deleted item display for node: ${nodeId}`);
+        
         // Find the redundancy item that contains the deleted node
         const deleteButtons = document.querySelectorAll(`.delete-node-btn[data-node-id="${nodeId}"]`);
+        console.log(`Found ${deleteButtons.length} delete buttons for node ${nodeId}`);
         
-        deleteButtons.forEach(button => {
+        deleteButtons.forEach((button, index) => {
             const redundancyItem = button.closest('.redundancy-item') as HTMLElement;
             if (redundancyItem) {
+                console.log(`Updating redundancy item ${index + 1}`);
+                
                 // Update the item to show it's deleted
                 redundancyItem.style.opacity = '0.5';
                 
@@ -496,15 +504,23 @@ export class RedundancyDetectorModal extends BaseModal {
                 const actionsDiv = redundancyItem.querySelector('.actions');
                 if (actionsDiv) {
                     actionsDiv.innerHTML = '<span style="color: #666; font-style: italic;">Node has been deleted</span>';
+                    console.log(`Updated actions for item ${index + 1}`);
                 }
                 
                 // Update the header to show deleted status
                 const headerTitle = redundancyItem.querySelector('h4');
                 if (headerTitle && !headerTitle.textContent?.includes('🗑️ Deleted:')) {
                     headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') || '';
+                    console.log(`Updated header for item ${index + 1}`);
                 }
+            } else {
+                console.log(`No redundancy item found for button ${index + 1}`);
             }
         });
+        
+        if (deleteButtons.length === 0) {
+            console.log(`⚠️ No delete buttons found for node ${nodeId} - this might indicate a structural issue`);
+        }
     }
 
     /**
@@ -660,6 +676,9 @@ export class RedundancyDetectorModal extends BaseModal {
                 
                 // Update just the specific item's display instead of re-rendering entire modal
                 this.updateDeletedItemDisplay(nodeId);
+                
+                // Also trigger a visual update to ensure changes are reflected
+                this.setupEventListeners();
                 
                 console.log(`✅ Successfully deleted redundant node: ${nodeToDelete.title}`);
             } else {
