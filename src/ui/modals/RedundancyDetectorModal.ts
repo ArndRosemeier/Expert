@@ -29,7 +29,9 @@ export class RedundancyDetectorModal extends BaseModal {
         super({ 
             id: config.id,
             closable: true,
-            backdrop: true
+            backdrop: true,
+            maxWidth: '1200px',
+            width: '95vw'
         });
         
         this.parentNode = config.parentNode;
@@ -126,11 +128,9 @@ export class RedundancyDetectorModal extends BaseModal {
         const childCount = this.parentNode.children?.length || 0;
         
         return `
-            <div class="modal-content" style="max-width: 600px; width: 90vw;">
-                <div class="modal-header">
-                    <h2>🔍 Redundancy Detection Configuration</h2>
-                    <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
-                </div>
+            <div class="modal-header">
+                <h2>🔍 Redundancy Detection Configuration</h2>
+            </div>
                 
                 <div class="modal-body" style="padding: 20px;">
                     <div class="node-info" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
@@ -204,7 +204,6 @@ export class RedundancyDetectorModal extends BaseModal {
                         </button>
                     </div>
                 </div>
-            </div>
         `;
     }
 
@@ -224,12 +223,8 @@ export class RedundancyDetectorModal extends BaseModal {
             content = this.renderAnalysisResults();
         }
         
-        // Wrap results in wider modal for better content display
-        return `
-            <div class="modal-content" style="max-width: 1200px; width: 95vw;">
-                ${content}
-            </div>
-        `;
+        // Return content directly - BaseModal already provides modal-content wrapper
+        return content;
     }
 
     /**
@@ -282,17 +277,12 @@ export class RedundancyDetectorModal extends BaseModal {
         return `
             <div class="modal-header">
                 <h2>🔍 Redundancy Analysis Results</h2>
-                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 <p style="color: #666; margin: 5px 0 0 0;">
                     Analyzed ${childrenAnalyzed} children of <strong>${this.parentNode.title}</strong>
                 </p>
             </div>
             <div class="modal-body">
                 ${hasRedundantNodes ? this.renderRedundancies(redundancies) : this.renderNoRedundancies()}
-            </div>
-            <div class="modal-footer">
-                <button id="close-modal-btn" class="btn btn-secondary">Close</button>
-                ${hasRedundantNodes ? '<button id="refresh-after-changes-btn" class="btn btn-primary">🔄 Refresh Tree</button>' : ''}
             </div>
         `;
     }
@@ -376,16 +366,9 @@ export class RedundancyDetectorModal extends BaseModal {
                     <button 
                         id="back-to-config-btn" 
                         class="btn btn-secondary" 
-                        style="background: #757575; color: white; padding: 10px 20px; border: none; border-radius: 6px; margin-right: 10px; cursor: pointer;"
+                        style="background: #757575; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;"
                     >
                         ⚙️ Reconfigure Analysis
-                    </button>
-                    <button 
-                        id="close-modal-btn" 
-                        class="btn btn-primary" 
-                        style="background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;"
-                    >
-                        Close
                     </button>
                 </div>
             </div>
@@ -560,14 +543,6 @@ export class RedundancyDetectorModal extends BaseModal {
      * Set up event listeners for results screen
      */
     private setupResultsEventListeners(): void {
-        // Close button
-        const closeBtn = document.getElementById('close-modal-btn');
-        if (closeBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(closeBtn, 'click', () => {
-                this.close();
-            }));
-        }
-
         // Back to configuration button
         const backToConfigBtn = document.getElementById('back-to-config-btn');
         if (backToConfigBtn) {
@@ -578,22 +553,11 @@ export class RedundancyDetectorModal extends BaseModal {
             }));
         }
         
-        // Retry analysis button
+        // Retry analysis button  
         const retryBtn = document.getElementById('retry-analysis-btn');
         if (retryBtn) {
             this.cleanupHandlers.push(this.addEventListenerWithCleanup(retryBtn, 'click', () => {
                 this.performAnalysis();
-            }));
-        }
-        
-        // Refresh tree button
-        const refreshBtn = document.getElementById('refresh-after-changes-btn');
-        if (refreshBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(refreshBtn, 'click', () => {
-                this.close();
-                // Trigger tree refresh
-                const { renderProjectUI } = require('../project-ui');
-                void renderProjectUI(this.projectManager);
             }));
         }
         
