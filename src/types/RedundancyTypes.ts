@@ -73,9 +73,6 @@ export interface RedundancyDetectionConfig {
     /** Minimum redundancy score to flag (default: 70) */
     minimumRedundancyThreshold: number;
     
-    /** Maximum number of children to analyze in one batch (default: 6) */
-    maxBatchSize: number;
-    
     /** Maximum content length per node for analysis (default: 500 chars) */
     maxContentLength: number;
     
@@ -88,7 +85,6 @@ export interface RedundancyDetectionConfig {
  */
 export const DEFAULT_REDUNDANCY_CONFIG: RedundancyDetectionConfig = {
     minimumRedundancyThreshold: 70,
-    maxBatchSize: 6,
     maxContentLength: 500,
     includeEmptyNodes: false
 };

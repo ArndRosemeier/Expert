@@ -127,7 +127,7 @@ export class RedundancyDetectionService {
     }
 
     /**
-     * Prepare children for analysis (filter, truncate, organize)
+     * Prepare children for analysis (filter content)
      */
     private prepareChildrenForAnalysis(children: DocumentNode[]): DocumentNode[] {
         return children
@@ -135,8 +135,7 @@ export class RedundancyDetectionService {
                 // Include nodes with content, or empty nodes if configured
                 return this.config.includeEmptyNodes || 
                        (child.content && child.content.trim().length > 0);
-            })
-            .slice(0, this.config.maxBatchSize); // Limit batch size
+            });
     }
 
     /**
