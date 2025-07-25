@@ -1995,8 +1995,6 @@ export function renderNodeDetails() {
     
     // Re-attach event listeners after DOM content replacement
 
-    setupEventListeners();
-    
     // Check if generation is in progress and show progress container if needed
     const isGenerationActive = projectManager.isAnyNodeGenerating();
     if (isGenerationActive) {
@@ -5011,12 +5009,15 @@ function removeAllListeners() {
  * Attaches event listeners to all present buttons
  */
 function attachAllListeners() {
-
-    
     // Attach listeners to all buttons that exist in the DOM
     Object.entries(buttonHandlers).forEach(([buttonId, handler]) => {
         const button = document.getElementById(buttonId);
-        if (button && !(button as any)._expertHandler) {
+        if (button) {
+            // Remove any existing listener to prevent duplicates
+            if ((button as any)._expertHandler) {
+                button.removeEventListener('click', (button as any)._expertHandler);
+            }
+            
             const wrappedHandler = (e: Event) => {
                 e.preventDefault();
                 e.stopPropagation();
