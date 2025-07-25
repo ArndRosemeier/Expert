@@ -562,7 +562,6 @@ export class OpenRouterClient {
 
     return new Promise<string>((resolve, reject) => {
       let fullResponse = '';
-      const startTime = Date.now();
       
       const callbacks: StreamingCallbacks = {
         onStart: () => {
@@ -572,26 +571,8 @@ export class OpenRouterClient {
         },
         onComplete: async (finalResponse: string) => {
           try {
-            const duration = Date.now() - startTime;
-
-            // Log the interaction if logging is enabled
-            const settingsManager = this.getSettingsManager();
-            if (settingsManager?.isAILoggingEnabled()) {
-              try {
-                const model = await this.getModelForPurpose(purpose);
-                await this.aiLogService.addLogEntry({
-                  timestamp: new Date(),
-                  purpose,
-                  prompt: message,
-                  response: finalResponse,
-                  model,
-                  requestDuration: duration
-                });
-              } catch (logError) {
-                console.error('Failed to log AI interaction:', logError);
-              }
-            }
-
+            // NOTE: Logging is handled by streamingChat() method to avoid duplicates
+            // since chat() internally calls streamingChat()
             resolve(finalResponse);
           } catch (logError) {
             console.error('Error in completion handler:', logError);
@@ -605,23 +586,8 @@ export class OpenRouterClient {
             stack: error.stack
           });
           
-          // Log failed requests too if logging is enabled
-          const settingsManager = this.getSettingsManager();
-          if (settingsManager?.isAILoggingEnabled()) {
-            try {
-              const model = await this.getModelForPurpose(purpose).catch(() => 'unknown');
-              await this.aiLogService.addLogEntry({
-                timestamp: new Date(),
-                purpose,
-                prompt: message,
-                response: `ERROR: ${error.message}`,
-                model,
-                requestDuration: 0
-              });
-            } catch (logError) {
-              console.error('Failed to log AI interaction error:', logError);
-            }
-          }
+          // NOTE: Error logging is handled by streamingChat() method to avoid duplicates
+          // since chat() internally calls streamingChat()
           
           // Show detailed error modal
           const errorService = GenerationErrorService.getInstance();
