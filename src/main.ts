@@ -146,7 +146,7 @@ async function startApplication(): Promise<void> {
         await initialize();
         
         // Set up event listeners
-        setupEventListeners();
+        await setupEventListeners();
         
         
         // Add version info to the header

@@ -963,7 +963,7 @@ function ensureActionsDropdownStyles(): void {
 
 // --- Main Render Function ---
 
-export function renderProjectUI(proj: ProjectManager) {
+export async function renderProjectUI(proj: ProjectManager) {
     projectManager = proj;
     
     // Update modal factory dependencies to include the active project manager
@@ -992,7 +992,7 @@ export function renderProjectUI(proj: ProjectManager) {
     
     // Re-attach event listeners after DOM replacement in renderProjectUI
 
-    setupEventListeners();
+    await setupEventListeners();
 }
 
 // --- Event Listener Setup ---
@@ -3263,11 +3263,11 @@ This action cannot be undone.`;
     }
 }
 
-export function setupEventListeners() {
+export async function setupEventListeners() {
     console.log('🔧 Setting up event listeners with EventManager...');
     
     // Use EventManager for robust event handling that survives DOM replacements
-    const { eventManager } = require('./event-manager');
+    const { eventManager } = await import('./event-manager');
     
     // Clear any existing manual listeners to prevent conflicts
     removeAllListeners();
@@ -3790,7 +3790,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Re-setup event listeners after DOM replacement
 
-    setupEventListeners();
+    await setupEventListeners();
     
     // Initialize AI interactions service
     const aiInteractionsService = AIInteractionsService.getInstance();
