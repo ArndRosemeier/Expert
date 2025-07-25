@@ -456,6 +456,34 @@ export class RedundancyDetectorModal extends BaseModal {
 
 
     /**
+     * Update the display of a specific deleted item without re-rendering the entire modal
+     */
+    private updateDeletedItemDisplay(nodeId: string): void {
+        // Find the redundancy item that contains the deleted node
+        const deleteButtons = document.querySelectorAll(`.delete-node-btn[data-node-id="${nodeId}"]`);
+        
+        deleteButtons.forEach(button => {
+            const redundancyItem = button.closest('.redundancy-item') as HTMLElement;
+            if (redundancyItem) {
+                // Update the item to show it's deleted
+                redundancyItem.style.opacity = '0.5';
+                
+                // Find and update the actions section
+                const actionsDiv = redundancyItem.querySelector('.actions');
+                if (actionsDiv) {
+                    actionsDiv.innerHTML = '<span style="color: #666; font-style: italic;">Node has been deleted</span>';
+                }
+                
+                // Update the header to show deleted status
+                const headerTitle = redundancyItem.querySelector('h4');
+                if (headerTitle && !headerTitle.textContent?.includes('🗑️ Deleted:')) {
+                    headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') || '';
+                }
+            }
+        });
+    }
+
+    /**
      * Set up event listeners
      */
     private setupEventListeners(): void {
@@ -605,8 +633,9 @@ export class RedundancyDetectorModal extends BaseModal {
             
             if (success) {
                 this.deletedNodes.add(nodeId);
-                this.updateModalContent();
-                this.setupEventListeners();
+                
+                // Update just the specific item's display instead of re-rendering entire modal
+                this.updateDeletedItemDisplay(nodeId);
                 
                 console.log(`✅ Successfully deleted redundant node: ${nodeToDelete.title}`);
             } else {
