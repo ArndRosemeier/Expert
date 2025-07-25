@@ -576,6 +576,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'polish-text': 'polish-text-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
+                            'detect-redundant-children': 'detect-redundant-children-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn'
