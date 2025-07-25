@@ -19,6 +19,11 @@ export class RedundancyDetectorModal extends BaseModal {
     private isLoading: boolean = false;
     private redundancyService!: RedundancyDetectionService;
     private deletedNodes: Set<string> = new Set();
+    
+    // Configuration state
+    private currentThreshold: number = 70;
+    private showAllResults: boolean = false;
+    private modalState: 'configuration' | 'results' = 'configuration';
 
     constructor(config: RedundancyDetectorModalConfig) {
         super({ 
@@ -48,14 +53,14 @@ export class RedundancyDetectorModal extends BaseModal {
         const openRouterClient = OpenRouterClient.getInstance();
         const settingsManager = await SettingsManager.getInstance();
         this.redundancyService = new RedundancyDetectionService(openRouterClient, settingsManager);
-        this.isLoading = true;
+        
+        // Start with configuration screen
+        this.modalState = 'configuration';
+        this.isLoading = false;
         this.analysisResult = null;
         
         await super.open();
         this.setupEventListeners();
-        
-        // Start analysis immediately
-        await this.performAnalysis();
     }
 
     /**
@@ -83,6 +88,7 @@ export class RedundancyDetectorModal extends BaseModal {
                 timestamp: new Date(),
                 hasRedundantNodes: false,
                 childrenAnalyzed: 0,
+                thresholdUsed: this.currentThreshold,
                 analysisError: error instanceof Error ? error.message : 'Analysis failed'
             };
             
@@ -106,6 +112,106 @@ export class RedundancyDetectorModal extends BaseModal {
      * Generate modal content HTML
      */
     protected renderModalContent(): string {
+        if (this.modalState === 'configuration') {
+            return this.renderConfigurationScreen();
+        } else {
+            return this.renderResultsScreen();
+        }
+    }
+
+    /**
+     * Render the configuration screen
+     */
+    private renderConfigurationScreen(): string {
+        const childCount = this.parentNode.children?.length || 0;
+        
+        return `
+            <div class="modal-content" style="max-width: 600px; width: 90vw;">
+                <div class="modal-header">
+                    <h2>🔍 Redundancy Detection Configuration</h2>
+                    <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
+                </div>
+                
+                <div class="modal-body" style="padding: 20px;">
+                    <div class="node-info" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 10px 0;">📋 Analysis Target</h3>
+                        <p style="margin: 0; color: #666;">
+                            <strong>Parent Node:</strong> "${this.parentNode.title}"<br>
+                            <strong>Children to Analyze:</strong> ${childCount} nodes
+                        </p>
+                    </div>
+                    
+                    <div class="config-section" style="margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 15px 0;">⚙️ Detection Settings</h3>
+                        
+                        <div class="threshold-setting" style="margin-bottom: 15px;">
+                            <label for="threshold-slider" style="display: block; margin-bottom: 8px; font-weight: 500;">
+                                Deletion Threshold: <span id="threshold-value">${this.currentThreshold}%</span>
+                            </label>
+                            <input 
+                                type="range" 
+                                id="threshold-slider" 
+                                min="0" 
+                                max="100" 
+                                value="${this.currentThreshold}" 
+                                style="width: 100%; margin-bottom: 8px;"
+                            >
+                            <p style="margin: 0; font-size: 0.9em; color: #666;">
+                                Only nodes with <strong>${this.currentThreshold}%+</strong> redundancy will be marked for deletion.
+                                Lower values show more similarities but may be less actionable.
+                            </p>
+                        </div>
+                        
+                        <div class="show-all-setting">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input 
+                                    type="checkbox" 
+                                    id="show-all-checkbox" 
+                                    ${this.showAllResults ? 'checked' : ''}
+                                >
+                                <span>Show all similarity results (including below threshold)</span>
+                            </label>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
+                                See how the AI perceives similarities, even if they're not actionable.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-info" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0;">🤖 How It Works</h4>
+                        <ul style="margin: 0; padding-left: 20px; color: #666;">
+                            <li>AI analyzes all ${childCount} children for redundant plot content</li>
+                            <li>Identifies successive nodes where one could be safely deleted</li>
+                            <li>Focuses on plot redundancy, not just text similarity</li>
+                            <li>Recommends specific deletions with reasoning</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="action-buttons" style="text-align: center;">
+                        <button 
+                            id="start-analysis-btn" 
+                            class="btn btn-primary" 
+                            style="background: #1976d2; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-right: 10px;"
+                        >
+                            🔍 Analyze for Redundancies
+                        </button>
+                        <button 
+                            class="btn btn-secondary" 
+                            onclick="this.closest('.modal').remove()"
+                            style="background: #757575; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer;"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render the results screen (existing logic)
+     */
+    private renderResultsScreen(): string {
         if (this.isLoading) {
             return this.renderLoadingContent();
         }
@@ -209,22 +315,69 @@ export class RedundancyDetectorModal extends BaseModal {
     }
 
     /**
-     * Render redundancy findings
+     * Render redundancy findings with threshold filtering
      */
     private renderRedundancies(redundancies: RedundancyDetection[]): string {
+        // Filter results based on user settings
+        const filteredResults = this.showAllResults 
+            ? redundancies 
+            : redundancies.filter(r => r.redundancyScore >= this.currentThreshold);
+        
+        const totalFound = redundancies.length;
+        const aboveThreshold = redundancies.filter(r => r.redundancyScore >= this.currentThreshold).length;
+        const belowThreshold = totalFound - aboveThreshold;
+
         return `
             <div class="redundancy-results">
-                <div class="results-summary" style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #856404;">
-                        🗑️ ${redundancies.length} Redundant ${redundancies.length === 1 ? 'Node' : 'Nodes'} Detected
-                    </h4>
-                    <p style="margin: 0; color: #856404;">
-                        The following nodes appear to contain redundant plot content and can potentially be deleted without story loss.
-                    </p>
+                <div class="results-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #333;">📊 Similarity Analysis Results</h4>
+                    <div class="stats" style="margin-bottom: 15px;">
+                        <p style="margin: 0; color: #666;">
+                            <strong>Total Similarities Found:</strong> ${totalFound}<br>
+                            <strong>Above Threshold (${this.currentThreshold}%+):</strong> ${aboveThreshold} 
+                            ${aboveThreshold > 0 ? '<span style="color: #d32f2f;">← Actionable deletions</span>' : ''}<br>
+                            <strong>Below Threshold:</strong> ${belowThreshold}
+                            ${this.showAllResults && belowThreshold > 0 ? '<span style="color: #666;">← Shown for insight</span>' : ''}
+                        </p>
+                    </div>
+                    ${!this.showAllResults && belowThreshold > 0 ? `
+                        <div style="background: #e3f2fd; padding: 10px; border-radius: 6px; border-left: 4px solid #1976d2;">
+                            <p style="margin: 0; font-size: 0.9em; color: #1976d2;">
+                                💡 <strong>Tip:</strong> Enable "Show all results" to see ${belowThreshold} additional similarities below your threshold.
+                            </p>
+                        </div>
+                    ` : ''}
                 </div>
                 
-                <div class="redundancy-list">
-                    ${redundancies.map((redundancy, index) => this.renderRedundancyItem(redundancy, index)).join('')}
+                ${filteredResults.length === 0 
+                    ? `<div style="text-align: center; padding: 30px; color: #666; font-style: italic;">
+                        ${this.showAllResults 
+                            ? 'No similarities detected by AI analysis.' 
+                            : `No redundancies above ${this.currentThreshold}% threshold.${belowThreshold > 0 ? '<br>Try lowering the threshold or enabling "Show all results".' : ''}`
+                        }
+                       </div>`
+                    : `<div class="redundancy-list">
+                        ${filteredResults.map((redundancy, index) => 
+                            this.renderRedundancyItem(redundancy, index)
+                        ).join('')}
+                       </div>`
+                }
+                
+                <div class="action-buttons" style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <button 
+                        id="back-to-config-btn" 
+                        class="btn btn-secondary" 
+                        style="background: #757575; color: white; padding: 10px 20px; border: none; border-radius: 6px; margin-right: 10px; cursor: pointer;"
+                    >
+                        ⚙️ Reconfigure Analysis
+                    </button>
+                    <button 
+                        id="close-modal-btn" 
+                        class="btn btn-primary" 
+                        style="background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         `;
@@ -235,17 +388,26 @@ export class RedundancyDetectorModal extends BaseModal {
      */
     private renderRedundancyItem(redundancy: RedundancyDetection, index: number): string {
         const isDeleted = this.deletedNodes.has(redundancy.nodeToDelete.id);
+        const isAboveThreshold = redundancy.redundancyScore >= this.currentThreshold;
+        const borderColor = isAboveThreshold ? '#d32f2f' : '#ffa726';
+        const bgColor = isAboveThreshold ? '#fff5f5' : '#fff8e1';
         
         return `
-            <div class="redundancy-item" style="border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; ${isDeleted ? 'opacity: 0.5;' : ''}">
-                <div class="redundancy-header" style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #ddd;">
+            <div class="redundancy-item" style="border: 2px solid ${borderColor}; border-radius: 8px; margin-bottom: 15px; ${isDeleted ? 'opacity: 0.5;' : ''} background: ${bgColor};">
+                <div class="redundancy-header" style="background: ${isAboveThreshold ? '#ffebee' : '#fffde7'}; padding: 15px; border-bottom: 1px solid ${borderColor};">
                     <div style="display: flex; justify-content: between; align-items: center;">
                         <div>
-                            <h4 style="margin: 0 0 5px 0; color: #d32f2f;">
-                                ${isDeleted ? '🗑️ Deleted:' : '⚠️ Suggested Deletion:'}  "${redundancy.nodeToDelete.title}"
+                            <h4 style="margin: 0 0 5px 0; color: ${isAboveThreshold ? '#d32f2f' : '#f57c00'};">
+                                ${isDeleted 
+                                    ? '🗑️ Deleted:' 
+                                    : isAboveThreshold 
+                                        ? '⚠️ Suggested Deletion:' 
+                                        : '📊 Similarity Detected:'
+                                }  "${redundancy.nodeToDelete.title}"
                             </h4>
                             <p style="margin: 0; color: #666; font-size: 0.9em;">
-                                Redundancy Score: <strong>${redundancy.redundancyScore}%</strong> | 
+                                Redundancy Score: <strong style="color: ${isAboveThreshold ? '#d32f2f' : '#f57c00'};">${redundancy.redundancyScore}%</strong> 
+                                ${!isAboveThreshold ? `<span style="color: #666;">(Below ${this.currentThreshold}% threshold)</span>` : ''} | 
                                 Plot Loss: <strong>${redundancy.plotLoss}</strong>
                             </p>
                         </div>
@@ -274,19 +436,25 @@ export class RedundancyDetectorModal extends BaseModal {
                         <p style="margin: 5px 0 0 0; font-style: italic;">${redundancy.reasoning}</p>
                     </div>
                     
-                    <div class="actions" style="text-align: center;">
-                        ${isDeleted 
-                            ? `<span style="color: #666; font-style: italic;">Node has been deleted</span>`
-                            : `
-                                <button class="delete-node-btn btn btn-danger" data-node-id="${redundancy.nodeToDelete.id}" style="margin-right: 10px;">
-                                    🗑️ Delete This Node
-                                </button>
-                                <button class="keep-both-btn btn btn-secondary" data-index="${index}">
-                                    Keep Both Nodes
-                                </button>
-                            `
-                        }
-                    </div>
+                                                <div class="actions" style="text-align: center;">
+                                ${isDeleted 
+                                    ? `<span style="color: #666; font-style: italic;">Node has been deleted</span>`
+                                    : isAboveThreshold 
+                                        ? `
+                                            <button class="delete-node-btn btn btn-danger" data-node-id="${redundancy.nodeToDelete.id}" style="margin-right: 10px;">
+                                                🗑️ Delete This Node
+                                            </button>
+                                            <button class="keep-both-btn btn btn-secondary" data-index="${index}">
+                                                Keep Both Nodes
+                                            </button>
+                                        `
+                                        : `
+                                            <div style="background: #f0f0f0; padding: 10px; border-radius: 6px; color: #666; font-style: italic;">
+                                                📊 Below deletion threshold - shown for analysis insight only
+                                            </div>
+                                        `
+                                }
+                            </div>
                 </div>
             </div>
         `;
@@ -311,11 +479,93 @@ export class RedundancyDetectorModal extends BaseModal {
         this.cleanupHandlers.forEach(cleanup => cleanup());
         this.cleanupHandlers = [];
         
+        if (this.modalState === 'configuration') {
+            this.setupConfigurationEventListeners();
+        } else {
+            this.setupResultsEventListeners();
+        }
+    }
+
+    /**
+     * Set up event listeners for configuration screen
+     */
+    private setupConfigurationEventListeners(): void {
+        // Threshold slider
+        const thresholdSlider = document.getElementById('threshold-slider') as HTMLInputElement;
+        const thresholdValue = document.getElementById('threshold-value');
+        if (thresholdSlider && thresholdValue) {
+            this.cleanupHandlers.push(this.addEventListenerWithCleanup(thresholdSlider, 'input', (e) => {
+                const target = e.target as HTMLInputElement;
+                this.currentThreshold = parseInt(target.value);
+                thresholdValue.textContent = `${this.currentThreshold}%`;
+                
+                // Update the description text
+                const description = document.querySelector('.threshold-setting p');
+                if (description) {
+                    description.innerHTML = `Only nodes with <strong>${this.currentThreshold}%+</strong> redundancy will be marked for deletion.
+                        Lower values show more similarities but may be less actionable.`;
+                }
+            }));
+        }
+
+        // Show all checkbox
+        const showAllCheckbox = document.getElementById('show-all-checkbox') as HTMLInputElement;
+        if (showAllCheckbox) {
+            this.cleanupHandlers.push(this.addEventListenerWithCleanup(showAllCheckbox, 'change', (e) => {
+                const target = e.target as HTMLInputElement;
+                this.showAllResults = target.checked;
+            }));
+        }
+
+        // Start analysis button
+        const analyzeBtn = document.getElementById('start-analysis-btn');
+        if (analyzeBtn) {
+            this.cleanupHandlers.push(this.addEventListenerWithCleanup(analyzeBtn, 'click', async () => {
+                await this.startAnalysis();
+            }));
+        }
+    }
+
+    /**
+     * Start the analysis with current configuration
+     */
+    private async startAnalysis(): Promise<void> {
+        // Update service configuration
+        this.redundancyService = new RedundancyDetectionService(
+            OpenRouterClient.getInstance(),
+            await SettingsManager.getInstance(),
+            { minimumRedundancyThreshold: this.currentThreshold }
+        );
+
+        // Switch to results state and show loading
+        this.modalState = 'results';
+        this.isLoading = true;
+        this.updateModalContent();
+        this.setupEventListeners();
+        
+        // Perform the analysis
+        await this.performAnalysis();
+    }
+
+    /**
+     * Set up event listeners for results screen
+     */
+    private setupResultsEventListeners(): void {
         // Close button
         const closeBtn = document.getElementById('close-modal-btn');
         if (closeBtn) {
             this.cleanupHandlers.push(this.addEventListenerWithCleanup(closeBtn, 'click', () => {
                 this.close();
+            }));
+        }
+
+        // Back to configuration button
+        const backToConfigBtn = document.getElementById('back-to-config-btn');
+        if (backToConfigBtn) {
+            this.cleanupHandlers.push(this.addEventListenerWithCleanup(backToConfigBtn, 'click', () => {
+                this.modalState = 'configuration';
+                this.updateModalContent();
+                this.setupEventListeners();
             }));
         }
         

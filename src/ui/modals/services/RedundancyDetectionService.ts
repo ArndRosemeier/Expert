@@ -80,6 +80,7 @@ export class RedundancyDetectionService {
                     timestamp,
                     hasRedundantNodes: false,
                     childrenAnalyzed: 0,
+                    thresholdUsed: this.config.minimumRedundancyThreshold,
                     analysisError: this.getIneligibilityReason(parentNode)
                 };
             }
@@ -94,6 +95,7 @@ export class RedundancyDetectionService {
                     timestamp,
                     hasRedundantNodes: false,
                     childrenAnalyzed: children.length,
+                    thresholdUsed: this.config.minimumRedundancyThreshold,
                     analysisError: 'Not enough suitable children for analysis'
                 };
             }
@@ -109,12 +111,18 @@ export class RedundancyDetectionService {
             // Parse response
             const redundancies = this.parseAIResponse(response, children);
             
+            // Only count redundancies above threshold as "actionable"
+            const aboveThresholdCount = redundancies.filter(r => 
+                r.redundancyScore >= this.config.minimumRedundancyThreshold
+            ).length;
+
             return {
                 parentNode,
                 redundancies,
                 timestamp,
-                hasRedundantNodes: redundancies.length > 0,
+                hasRedundantNodes: aboveThresholdCount > 0,
                 childrenAnalyzed: children.length,
+                thresholdUsed: this.config.minimumRedundancyThreshold,
             };
 
         } catch (error) {
@@ -125,6 +133,7 @@ export class RedundancyDetectionService {
                 timestamp,
                 hasRedundantNodes: false,
                 childrenAnalyzed: 0,
+                thresholdUsed: this.config.minimumRedundancyThreshold,
                 analysisError: error instanceof Error ? error.message : 'Unknown analysis error'
             };
         }
@@ -182,12 +191,7 @@ Content: ${truncatedContent}`;
             const detections: RedundancyDetection[] = [];
 
             for (const item of parsed.redundancies) {
-                // Validate redundancy score threshold
-                if (item.redundancy < this.config.minimumRedundancyThreshold) {
-                    continue;
-                }
-
-                // Parse node identifiers (e.g., "Node2-Node3")
+                // Parse node identifiers (e.g., "Node2-Node3") - no threshold filtering here
                 const nodeResult = this.parseNodePair(item.pair, item.deleteNode, children);
                 if (!nodeResult) {
                     console.warn(`Could not parse node pair: ${item.pair}`);

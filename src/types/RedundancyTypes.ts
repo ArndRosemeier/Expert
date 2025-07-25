@@ -37,17 +37,20 @@ export interface RedundancyAnalysisResult {
     /** The parent node whose children were analyzed */
     parentNode: DocumentNode;
     
-    /** Array of detected redundancies (empty if none found) */
+    /** Array of detected redundancies (ALL results, regardless of threshold) */
     redundancies: RedundancyDetection[];
     
     /** When the analysis was performed */
     timestamp: Date;
     
-    /** Quick check: are there any nodes that can be deleted? */
+    /** Quick check: are there any nodes above threshold that can be deleted? */
     hasRedundantNodes: boolean;
     
     /** Total number of children analyzed */
     childrenAnalyzed: number;
+    
+    /** The minimum threshold used for this analysis */
+    thresholdUsed: number;
     
     /** Any errors during analysis */
     analysisError?: string;
