@@ -293,11 +293,11 @@ export class SettingsService {
 
         // Load all settings from the profile (models, web search, providers)
         void this.modelSelector.loadFromCurrentProfile();
-        
-        // Update global state to track which profile is actually loaded
-        const profileName = this.getLastUsedProfileName();
-        if (profileName) {
-            state.setCurrentlyLoadedProfileName(profileName);
+            
+            // Update global state to track which profile is actually loaded
+            const profileName = this.getLastUsedProfileName();
+            if (profileName) {
+                state.setCurrentlyLoadedProfileName(profileName);
             console.log(`📋 Profile "${profileName}" loaded into ModelSelector`);
         }
 

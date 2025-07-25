@@ -332,15 +332,15 @@ export class NewProjectModal extends BaseModal {
             });
         } else {
             // Generate content for manual/ai tabs
-            const content = this.activeTab === 'manual' 
-                ? this.manualCreator.render()
-                : this.aiCreator.render();
-            
-            contentContainer.innerHTML = content;
-            
-            // Set up event listeners for the active component
-            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-            activeCreator.setupEventListeners(contentContainer);
+        const content = this.activeTab === 'manual' 
+            ? this.manualCreator.render()
+            : this.aiCreator.render();
+        
+        contentContainer.innerHTML = content;
+        
+        // Set up event listeners for the active component
+        const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+        activeCreator.setupEventListeners(contentContainer);
             
             // Set up cancel event handlers
             contentContainer.addEventListener('manual-cancel', async () => this.close());
@@ -385,9 +385,9 @@ export class NewProjectModal extends BaseModal {
             if (this.activeTab === 'outline') {
                 // OutlineFactory handles its own cleanup
             } else {
-                // Cleanup the active component
-                const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-                activeCreator.cleanup();
+            // Cleanup the active component
+            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+            activeCreator.cleanup();
             }
             this.currentTabContent = null;
         }

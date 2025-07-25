@@ -778,22 +778,22 @@ export class ContextItemsEditorModal extends BaseModal {
                 
                 for (const version of allVersions) {
                     const childContextItems = getContextItems(version.context || '');
-                    
-                    // Check if this item is already present (case-insensitive and trimmed comparison)
-                    const alreadyPresent = childContextItems.some(existingItem => 
-                        existingItem.toLowerCase().trim() === normalizedItemText
-                    );
-                    
-                    if (!alreadyPresent) {
+                
+                // Check if this item is already present (case-insensitive and trimmed comparison)
+                const alreadyPresent = childContextItems.some(existingItem => 
+                    existingItem.toLowerCase().trim() === normalizedItemText
+                );
+                
+                if (!alreadyPresent) {
                         // Add the item to this version's context
-                        const updatedItems = [...childContextItems, itemText];
-                        const newContext = formatContextItems(updatedItems);
-                        
+                    const updatedItems = [...childContextItems, itemText];
+                    const newContext = formatContextItems(updatedItems);
+                    
                         // Update this version directly
                         version.context = newContext;
                         version.timestamp = new Date();
                         version.tags.add('context_propagated');
-                        propagatedCount++;
+                    propagatedCount++;
                     }
                 }
                 
@@ -829,21 +829,21 @@ export class ContextItemsEditorModal extends BaseModal {
                 
                 for (const version of allVersions) {
                     const childContextItems = getContextItems(version.context || '');
-                    
-                    // Filter out the item to remove (case-insensitive and trimmed comparison)
-                    const filteredItems = childContextItems.filter(existingItem => 
-                        existingItem.toLowerCase().trim() !== normalizedItemText
-                    );
-                    
+                
+                // Filter out the item to remove (case-insensitive and trimmed comparison)
+                const filteredItems = childContextItems.filter(existingItem => 
+                    existingItem.toLowerCase().trim() !== normalizedItemText
+                );
+                
                     // If items were removed, update this version
-                    if (filteredItems.length < childContextItems.length) {
-                        const newContext = formatContextItems(filteredItems);
-                        
+                if (filteredItems.length < childContextItems.length) {
+                    const newContext = formatContextItems(filteredItems);
+                    
                         // Update this version directly
                         version.context = newContext;
                         version.timestamp = new Date();
                         version.tags.add('context_removed');
-                        removedCount++;
+                    removedCount++;
                     }
                 }
                 
@@ -1017,7 +1017,7 @@ export class ContextItemsEditorModal extends BaseModal {
                 });
                 
                 if (hasContextItem) {
-                    results.push(child);
+                        results.push(child);
                 }
                 
                 // Recursively search in grandchildren
@@ -1045,26 +1045,26 @@ export class ContextItemsEditorModal extends BaseModal {
                 if (!version.context) continue;
                 
                 const contextItems = getContextItems(version.context);
-                let hasChanged = false;
-                
+            let hasChanged = false;
+            
                 // Replace matching context items in this version
-                const updatedItems = contextItems.map(item => {
-                    if (item.trim() === trimmedOriginal) {
-                        hasChanged = true;
-                        return newValue; // Use the exact new value (with original formatting)
-                    }
-                    return item;
-                });
-                
-                if (hasChanged) {
+            const updatedItems = contextItems.map(item => {
+                if (item.trim() === trimmedOriginal) {
+                    hasChanged = true;
+                    return newValue; // Use the exact new value (with original formatting)
+                }
+                return item;
+            });
+            
+            if (hasChanged) {
                     // Update this version's context directly
-                    const newContext = formatContextItems(updatedItems);
+                const newContext = formatContextItems(updatedItems);
                     version.context = newContext;
                     version.timestamp = new Date();
                     version.tags.add('edited');
                     version.tags.add('context_edited');
                     version.tags.add('context_propagated');
-                    updatedCount++;
+                updatedCount++;
                 }
             }
         }

@@ -180,7 +180,7 @@ export class IdeaBoard {
 
     // Start render loop
     this.startRenderLoop();
-
+    
     // Initialize board with existing data if available (async)
     this.initializeBoard(boardName).catch(error => {
       console.error('Failed to initialize board data:', error);
@@ -538,22 +538,22 @@ export class IdeaBoard {
         case 'c':
           // Copy requires selection
           if (hasSelection) {
-            event.preventDefault();
-            this.copySelectedElement();
+          event.preventDefault();
+          this.copySelectedElement();
           }
           break;
         case 'x':
           // Cut requires selection
           if (hasSelection) {
-            event.preventDefault();
-            this.cutSelectedElement();
+          event.preventDefault();
+          this.cutSelectedElement();
           }
           break;
         case 'v':
           // Paste works with selection (even without canvas focus) or without selection (only with canvas focus)
           if (hasSelection || canvasHasFocus) {
-            event.preventDefault();
-            this.pasteElement();
+          event.preventDefault();
+          this.pasteElement();
           }
           break;
       }
@@ -583,9 +583,9 @@ export class IdeaBoard {
       case ' ': // Spacebar for pan mode
         // Only prevent default if canvas has focus
         if (canvasHasFocus) {
-          event.preventDefault();
-          if (!this.isPanning) {
-            this.canvas.style.cursor = 'grab';
+        event.preventDefault();
+        if (!this.isPanning) {
+          this.canvas.style.cursor = 'grab';
           }
         }
         break;
@@ -653,14 +653,14 @@ export class IdeaBoard {
       
       // First try to parse as Expert post-it JSON
       try {
-        const parsedData = JSON.parse(systemClipboard);
-        
-        if (parsedData.type === 'expert-postit') {
-          clipboardData = {
-            content: parsedData.content,
-            backgroundColor: parsedData.backgroundColor,
-            size: parsedData.size
-          };
+      const parsedData = JSON.parse(systemClipboard);
+      
+      if (parsedData.type === 'expert-postit') {
+        clipboardData = {
+          content: parsedData.content,
+          backgroundColor: parsedData.backgroundColor,
+          size: parsedData.size
+        };
         }
       } catch (parseError) {
         // Not valid JSON or not Expert post-it data
@@ -779,8 +779,8 @@ export class IdeaBoard {
       const option = document.createElement('div');
       option.textContent = `${icon} ${text}`;
       option.style.cssText = `
-        padding: 8px 12px;
-        cursor: pointer;
+      padding: 8px 12px;
+      cursor: pointer;
         ${hasBorder ? 'border-bottom: 1px solid #eee;' : ''}
       `;
       option.addEventListener('mouseover', () => {
@@ -905,7 +905,7 @@ export class IdeaBoard {
         background-color: ${color.value};
         border: 2px solid #ddd;
         border-radius: 4px;
-        cursor: pointer;
+      cursor: pointer;
         transition: all 0.2s;
         ${color.value === postIt.style.backgroundColor ? 'border-color: #333; box-shadow: 0 0 0 2px rgba(51,51,51,0.3);' : ''}
       `;
@@ -915,14 +915,14 @@ export class IdeaBoard {
           colorOption.style.borderColor = '#999';
           colorOption.style.transform = 'scale(1.1)';
         }
-      });
+    });
       
       colorOption.addEventListener('mouseout', () => {
         if (color.value !== postIt.style.backgroundColor) {
           colorOption.style.borderColor = '#ddd';
           colorOption.style.transform = 'scale(1)';
         }
-      });
+    });
       
       colorOption.addEventListener('click', () => {
         // Apply color to the post-it
@@ -931,9 +931,9 @@ export class IdeaBoard {
         this.requestRedraw();
         this.autoSave();
         
-        this.removeContextMenu();
-      });
-      
+      this.removeContextMenu();
+    });
+
       colorOptionsContainer.appendChild(colorOption);
     });
 
@@ -1456,8 +1456,8 @@ export class IdeaBoard {
       textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }, 10);
     
-          // Disable zooming while editing
-      this.disableZoomingWhileEditing = true;
+    // Disable zooming while editing
+    this.disableZoomingWhileEditing = true;
     
     // Event handlers
     const handleInput = () => {

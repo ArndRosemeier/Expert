@@ -866,6 +866,11 @@ function createActionsDropdownContent(node: DocumentNode): string {
                             🔍 Check Coherence
                         </button>
                     ` : ''}
+                    ${node.children && node.children.length >= 2 ? `
+                        <button class="action-btn" data-action="detect-redundant-children">
+                            🗑️ Find Redundant Children
+                        </button>
+                    ` : ''}
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
                     </button>
@@ -3111,6 +3116,31 @@ This action cannot be undone.`;
                             void analysisModal.close();
                             alert('Coherence analysis failed: ' + error.message);
                         });
+                });
+            }
+            break;
+
+        case 'detect-redundant-children-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                if (node.children.length < 2) {
+                    alert('Node must have at least 2 children for redundancy analysis.');
+                    return;
+                }
+
+                // Create and open redundancy detector modal
+                void import('./modals/RedundancyDetectorModal').then(({ RedundancyDetectorModal }) => {
+                    const modal = new RedundancyDetectorModal({
+                        id: 'redundancy-detector',
+                        parentNode: node,
+                        projectManager: projectManager!
+                    });
+                    void modal.open();
+                }).catch((error) => {
+                    console.error('Failed to open Redundancy Detector:', error);
+                    alert('Failed to open redundancy detector. Please try again.');
                 });
             }
             break;

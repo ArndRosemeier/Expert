@@ -47,6 +47,9 @@ export interface OrchestratorPrompts {
     // For coherence analysis
     coherence_analysis: string;
     
+    // For redundancy detection
+    redundancy_detection: string;
+    
     // For context analysis
     context_analysis: string;
     
@@ -808,6 +811,58 @@ EXAMPLE:
 JSON Response:`.trim(),
         placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],
         description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions with severity ratings and returns them in structured JSON format."
+    },
+
+    redundancy_detection: {
+        text: `You are a story editor identifying redundant plot content between sibling nodes.
+
+Your task: Find consecutive sibling nodes where one is essentially a weaker version of another and can be deleted without plot loss.
+
+SIBLING NODES TO ANALYZE:
+{{sibling_nodes}}
+
+ANALYSIS CRITERIA:
+Focus on redundancy in:
+- Same plot events with different execution quality
+- Redundant character development arcs
+- Duplicate story beats or scenes
+- One node that adds nothing unique to the narrative
+
+REDUNDANCY SCALE:
+- 0-40%: Different enough to keep both nodes
+- 41-70%: Similar but both have distinct value
+- 71-90%: High redundancy, one could be safely deleted
+- 91-100%: Clear duplicate, delete the weaker version
+
+INSTRUCTIONS:
+- Only flag pairs with 70%+ redundancy
+- Always specify which specific node should be deleted
+- Explain why deletion would not harm the plot
+- Consider content quality, not just similarity
+
+RESPONSE FORMAT:
+Return a JSON object with this exact structure:
+
+{
+  "redundancies": [
+    {
+      "pair": "Node2-Node3",
+      "redundancy": 85,
+      "deleteNode": "Node3", 
+      "reasoning": "Node3 repeats the same confrontation scene as Node2 but with weaker emotional impact and less character development",
+      "plotLoss": "none"
+    }
+  ]
+}
+
+If no redundancies are found (nothing above 70%), return:
+{
+  "redundancies": []
+}
+
+JSON Response:`.trim(),
+        placeholders: ['sibling_nodes'],
+        description: "System prompt for detecting redundant plot content between sibling nodes. Identifies nodes that can be safely deleted without story loss and returns structured recommendations."
     },
 
     context_analysis: {
