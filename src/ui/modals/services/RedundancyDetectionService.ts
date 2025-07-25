@@ -104,7 +104,7 @@ export class RedundancyDetectionService {
             // Get AI analysis using proper task model configuration
             // Use context_rating task since redundancy detection is an analytical/rating task
             const modelPurpose = this.taskModelService.getModelPurposeForTask('context_rating', false);
-            const response = await this.openRouterClient.chat(prompt, modelPurpose);
+            const response = await this.openRouterClient.chat(modelPurpose, prompt);
             
             // Parse response
             const redundancies = this.parseAIResponse(response, children);
