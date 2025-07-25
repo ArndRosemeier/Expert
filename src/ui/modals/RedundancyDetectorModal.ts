@@ -470,16 +470,7 @@ export class RedundancyDetectorModal extends BaseModal {
         `;
     }
 
-    /**
-     * Truncate content for display
-     */
-    private truncateContent(content: string, maxLength: number): string {
-        if (content.length <= maxLength) {
-            return content;
-        }
-        
-        return content.substring(0, maxLength) + '...';
-    }
+
 
     /**
      * Set up event listeners
