@@ -318,13 +318,16 @@ export class RedundancyDetectorModal extends BaseModal {
      * Render redundancy findings with threshold filtering
      */
     private renderRedundancies(redundancies: RedundancyDetection[]): string {
+        // Use the actual threshold from the analysis result
+        const actualThreshold = this.analysisResult?.thresholdUsed ?? this.currentThreshold;
+        
         // Filter results based on user settings
         const filteredResults = this.showAllResults 
             ? redundancies 
-            : redundancies.filter(r => r.redundancyScore >= this.currentThreshold);
+            : redundancies.filter(r => r.redundancyScore >= actualThreshold);
         
         const totalFound = redundancies.length;
-        const aboveThreshold = redundancies.filter(r => r.redundancyScore >= this.currentThreshold).length;
+        const aboveThreshold = redundancies.filter(r => r.redundancyScore >= actualThreshold).length;
         const belowThreshold = totalFound - aboveThreshold;
 
         return `
@@ -334,7 +337,7 @@ export class RedundancyDetectorModal extends BaseModal {
                     <div class="stats" style="margin-bottom: 15px;">
                         <p style="margin: 0; color: #666;">
                             <strong>Total Similarities Found:</strong> ${totalFound}<br>
-                            <strong>Above Threshold (${this.currentThreshold}%+):</strong> ${aboveThreshold} 
+                            <strong>Above Threshold (${actualThreshold}%+):</strong> ${aboveThreshold} 
                             ${aboveThreshold > 0 ? '<span style="color: #d32f2f;">← Actionable deletions</span>' : ''}<br>
                             <strong>Below Threshold:</strong> ${belowThreshold}
                             ${this.showAllResults && belowThreshold > 0 ? '<span style="color: #666;">← Shown for insight</span>' : ''}
@@ -353,7 +356,7 @@ export class RedundancyDetectorModal extends BaseModal {
                     ? `<div style="text-align: center; padding: 30px; color: #666; font-style: italic;">
                         ${this.showAllResults 
                             ? 'No similarities detected by AI analysis.' 
-                            : `No redundancies above ${this.currentThreshold}% threshold.${belowThreshold > 0 ? '<br>Try lowering the threshold or enabling "Show all results".' : ''}`
+                            : `No redundancies above ${actualThreshold}% threshold.${belowThreshold > 0 ? '<br>Try lowering the threshold or enabling "Show all results".' : ''}`
                         }
                        </div>`
                     : `<div class="redundancy-list">
@@ -388,7 +391,8 @@ export class RedundancyDetectorModal extends BaseModal {
      */
     private renderRedundancyItem(redundancy: RedundancyDetection, index: number): string {
         const isDeleted = this.deletedNodes.has(redundancy.nodeToDelete.id);
-        const isAboveThreshold = redundancy.redundancyScore >= this.currentThreshold;
+        const actualThreshold = this.analysisResult?.thresholdUsed ?? this.currentThreshold;
+        const isAboveThreshold = redundancy.redundancyScore >= actualThreshold;
         const borderColor = isAboveThreshold ? '#d32f2f' : '#ffa726';
         const bgColor = isAboveThreshold ? '#fff5f5' : '#fff8e1';
         
@@ -407,7 +411,7 @@ export class RedundancyDetectorModal extends BaseModal {
                             </h4>
                             <p style="margin: 0; color: #666; font-size: 0.9em;">
                                 Redundancy Score: <strong style="color: ${isAboveThreshold ? '#d32f2f' : '#f57c00'};">${redundancy.redundancyScore}%</strong> 
-                                ${!isAboveThreshold ? `<span style="color: #666;">(Below ${this.currentThreshold}% threshold)</span>` : ''} | 
+                                ${!isAboveThreshold ? `<span style="color: #666;">(Below ${actualThreshold}% threshold)</span>` : ''} | 
                                 Plot Loss: <strong>${redundancy.plotLoss}</strong>
                             </p>
                         </div>
