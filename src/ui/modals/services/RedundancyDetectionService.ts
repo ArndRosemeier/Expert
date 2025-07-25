@@ -276,7 +276,10 @@ Content: ${truncatedContent}`;
             }
 
             // Perform the deletion
-            await projectManager.deleteNode(nodeId);
+            const deleteSuccess = projectManager.removeNode(nodeId);
+            if (!deleteSuccess) {
+                throw new Error('Failed to remove node from tree');
+            }
             await projectManager.saveToStorage();
             
             console.log(`🗑️ Deleted redundant node: ${nodeToDelete.title}`);
