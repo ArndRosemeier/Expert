@@ -212,19 +212,24 @@ export class RedundancyDetectorModal extends BaseModal {
      * Render the results screen (existing logic)
      */
     private renderResultsScreen(): string {
+        let content: string;
+        
         if (this.isLoading) {
-            return this.renderLoadingContent();
+            content = this.renderLoadingContent();
+        } else if (!this.analysisResult) {
+            content = this.renderErrorContent('No analysis results available');
+        } else if (this.analysisResult.analysisError) {
+            content = this.renderErrorContent(this.analysisResult.analysisError);
+        } else {
+            content = this.renderAnalysisResults();
         }
         
-        if (!this.analysisResult) {
-            return this.renderErrorContent('No analysis results available');
-        }
-        
-        if (this.analysisResult.analysisError) {
-            return this.renderErrorContent(this.analysisResult.analysisError);
-        }
-        
-        return this.renderAnalysisResults();
+        // Wrap results in wider modal for better content display
+        return `
+            <div class="modal-content" style="max-width: 1200px; width: 95vw;">
+                ${content}
+            </div>
+        `;
     }
 
     /**
@@ -277,6 +282,7 @@ export class RedundancyDetectorModal extends BaseModal {
         return `
             <div class="modal-header">
                 <h2>🔍 Redundancy Analysis Results</h2>
+                <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
                 <p style="color: #666; margin: 5px 0 0 0;">
                     Analyzed ${childrenAnalyzed} children of <strong>${this.parentNode.title}</strong>
                 </p>
@@ -420,17 +426,17 @@ export class RedundancyDetectorModal extends BaseModal {
                 
                 <div class="redundancy-content" style="padding: 15px;">
                     <div class="node-comparison" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="keep-node" style="border: 2px solid #4caf50; border-radius: 8px; padding: 10px;">
+                        <div class="keep-node" style="border: 2px solid #4caf50; border-radius: 8px; padding: 15px;">
                             <h5 style="margin: 0 0 10px 0; color: #2e7d32;">✅ Keep: "${redundancy.nodeToKeep.title}"</h5>
-                            <div style="max-height: 100px; overflow-y: auto; font-size: 0.85em; color: #666;">
-                                ${this.truncateContent(redundancy.nodeToKeep.content || '[No content]', 200)}
+                            <div style="max-height: 300px; overflow-y: auto; font-size: 0.9em; color: #333; line-height: 1.4; white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-radius: 4px;">
+                                ${redundancy.nodeToKeep.content || '[No content]'}
                             </div>
                         </div>
                         
-                        <div class="delete-node" style="border: 2px solid #f44336; border-radius: 8px; padding: 10px;">
+                        <div class="delete-node" style="border: 2px solid #f44336; border-radius: 8px; padding: 15px;">
                             <h5 style="margin: 0 0 10px 0; color: #d32f2f;">🗑️ Delete: "${redundancy.nodeToDelete.title}"</h5>
-                            <div style="max-height: 100px; overflow-y: auto; font-size: 0.85em; color: #666;">
-                                ${this.truncateContent(redundancy.nodeToDelete.content || '[No content]', 200)}
+                            <div style="max-height: 300px; overflow-y: auto; font-size: 0.9em; color: #333; line-height: 1.4; white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-radius: 4px;">
+                                ${redundancy.nodeToDelete.content || '[No content]'}
                             </div>
                         </div>
                     </div>
