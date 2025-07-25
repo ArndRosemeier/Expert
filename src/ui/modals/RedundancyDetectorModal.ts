@@ -77,8 +77,8 @@ export class RedundancyDetectorModal extends BaseModal {
             
             console.log(`✅ Analysis complete: ${this.analysisResult.redundancies.length} redundancies found`);
             
-            // Update modal content
-            this.updateModalContent();
+            // Update only the modal body to preserve BaseModal's close button
+            this.updateModalBody();
             this.setupEventListeners();
             
         } catch (error) {
@@ -94,7 +94,7 @@ export class RedundancyDetectorModal extends BaseModal {
                 analysisError: error instanceof Error ? error.message : 'Analysis failed'
             };
             
-            this.updateModalContent();
+            this.updateModalBody();
             this.setupEventListeners();
         }
     }
@@ -107,6 +107,18 @@ export class RedundancyDetectorModal extends BaseModal {
         
         if (modalContent) {
             modalContent.innerHTML = this.renderModalContent();
+        }
+    }
+
+    /**
+     * Update only the modal body content to preserve BaseModal's close button
+     */
+    private updateModalBody(): void {
+        const modalBody = document.querySelector(`[data-modal-id="${this.id}"] .modal-body`);
+        
+        if (modalBody && this.analysisResult) {
+            const { redundancies, hasRedundantNodes } = this.analysisResult;
+            modalBody.innerHTML = hasRedundantNodes ? this.renderRedundancies(redundancies) : this.renderNoRedundancies();
         }
     }
 
