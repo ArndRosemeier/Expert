@@ -129,7 +129,7 @@ export class RedundancyDetectorModal extends BaseModal {
             <div class="modal-content" style="max-width: 600px; width: 90vw;">
                 <div class="modal-header">
                     <h2>🔍 Redundancy Detection Configuration</h2>
-                    <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
+                    <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 </div>
                 
                 <div class="modal-body" style="padding: 20px;">
@@ -196,8 +196,8 @@ export class RedundancyDetectorModal extends BaseModal {
                             🔍 Analyze for Redundancies
                         </button>
                         <button 
+                            id="cancel-config-btn"
                             class="btn btn-secondary" 
-                            onclick="this.closest('.modal').remove()"
                             style="background: #757575; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer;"
                         >
                             Cancel
@@ -282,7 +282,7 @@ export class RedundancyDetectorModal extends BaseModal {
         return `
             <div class="modal-header">
                 <h2>🔍 Redundancy Analysis Results</h2>
-                <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
+                <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 <p style="color: #666; margin: 5px 0 0 0;">
                     Analyzed ${childrenAnalyzed} children of <strong>${this.parentNode.title}</strong>
                 </p>
@@ -523,6 +523,14 @@ export class RedundancyDetectorModal extends BaseModal {
         if (analyzeBtn) {
             this.cleanupHandlers.push(this.addEventListenerWithCleanup(analyzeBtn, 'click', async () => {
                 await this.startAnalysis();
+            }));
+        }
+
+        // Cancel button
+        const cancelBtn = document.getElementById('cancel-config-btn');
+        if (cancelBtn) {
+            this.cleanupHandlers.push(this.addEventListenerWithCleanup(cancelBtn, 'click', () => {
+                this.close();
             }));
         }
     }
