@@ -1,7 +1,7 @@
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode } from '../../../DocumentNode';
-
+import { TaskModelService } from '../../../services/TaskModelService';
 import { 
     RedundancyDetection, 
     RedundancyAnalysisResult, 
@@ -12,6 +12,7 @@ import {
 export class RedundancyDetectionService {
     private openRouterClient: OpenRouterClient;
     private settingsManager: SettingsManager;
+    private taskModelService: TaskModelService;
     private config: RedundancyDetectionConfig;
 
     constructor(
@@ -21,6 +22,7 @@ export class RedundancyDetectionService {
     ) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
+        this.taskModelService = new TaskModelService(settingsManager);
         this.config = { ...DEFAULT_REDUNDANCY_CONFIG, ...config };
     }
 
@@ -99,8 +101,10 @@ export class RedundancyDetectionService {
             // Build prompt with all siblings
             const prompt = this.buildRedundancyPrompt(children);
             
-            // Get AI analysis (using rater model for analytical tasks)
-            const response = await this.openRouterClient.chat(prompt, 'rater');
+            // Get AI analysis using proper task model configuration
+            // Use context_rating task since redundancy detection is an analytical/rating task
+            const modelPurpose = this.taskModelService.getModelPurposeForTask('context_rating', false);
+            const response = await this.openRouterClient.chat(prompt, modelPurpose);
             
             // Parse response
             const redundancies = this.parseAIResponse(response, children);
