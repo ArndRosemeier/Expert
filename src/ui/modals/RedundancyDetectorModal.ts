@@ -730,15 +730,4 @@ export class RedundancyDetectorModal extends BaseModal {
         }
     }
 
-    /**
-     * Helper to add event listener with cleanup tracking
-     */
-    private addEventListenerWithCleanup(
-        element: Element, 
-        event: string, 
-        handler: EventListener
-    ): () => void {
-        element.addEventListener(event, handler);
-        return () => element.removeEventListener(event, handler);
-    }
 } 
