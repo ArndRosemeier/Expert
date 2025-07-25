@@ -928,13 +928,12 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                         };
                         
                         const handlerAction = actionMap[action];
-                        if (handlerAction && buttonHandlers[handlerAction]) {
-                            // Create a synthetic event for the handler
-                            const syntheticEvent = new Event('click', { bubbles: true, cancelable: true });
-                            buttonHandlers[handlerAction](syntheticEvent);
-                            
+                        if (handlerAction) {
                             // Close the dropdown after action
                             actionsDropdownInstance?.close();
+                            
+                            // Use the same handler as the regular dropdown
+                            handleDropdownAction(handlerAction);
                         }
                     }
                 }

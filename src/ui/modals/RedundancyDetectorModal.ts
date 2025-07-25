@@ -62,7 +62,10 @@ export class RedundancyDetectorModal extends BaseModal {
         this.analysisResult = null;
         
         await super.open();
-        this.setupEventListeners();
+        // Don't call setupEventListeners() here - it clears BaseModal's close button listeners!
+        // The initial configuration screen event listeners are set up by setupConfigurationEventListeners
+        // which gets called when modalState is 'configuration' in updateModalContent()
+        this.setupConfigurationEventListeners();
     }
 
     /**
@@ -523,15 +526,60 @@ export class RedundancyDetectorModal extends BaseModal {
      * Set up event listeners
      */
     private setupEventListeners(): void {
-        // Remove existing listeners first
-        this.cleanupHandlers.forEach(cleanup => cleanup());
-        this.cleanupHandlers = [];
+        // Only clear modal-specific listeners, not BaseModal's listeners (like close button)
+        // We'll track our own listeners separately
+        this.clearModalEventListeners();
         
         if (this.modalState === 'configuration') {
             this.setupConfigurationEventListeners();
         } else {
             this.setupResultsEventListeners();
         }
+    }
+
+    /**
+     * Clear only the modal's own event listeners, preserving BaseModal's listeners
+     */
+    private clearModalEventListeners(): void {
+        // Clear only our own listeners by removing them from the current DOM elements
+        // This preserves BaseModal's cleanup handlers (like the close button)
+        
+        // Remove configuration screen listeners
+        const thresholdSlider = document.getElementById('threshold-slider');
+        if (thresholdSlider) {
+            thresholdSlider.replaceWith(thresholdSlider.cloneNode(true));
+        }
+        
+        const showAllCheckbox = document.getElementById('show-all-checkbox');
+        if (showAllCheckbox) {
+            showAllCheckbox.replaceWith(showAllCheckbox.cloneNode(true));
+        }
+        
+        const analyzeBtn = document.getElementById('start-analysis-btn');
+        if (analyzeBtn) {
+            analyzeBtn.replaceWith(analyzeBtn.cloneNode(true));
+        }
+        
+        const cancelBtn = document.getElementById('cancel-config-btn');
+        if (cancelBtn) {
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        }
+        
+        // Remove results screen listeners  
+        const backToConfigBtn = document.getElementById('back-to-config-btn');
+        if (backToConfigBtn) {
+            backToConfigBtn.replaceWith(backToConfigBtn.cloneNode(true));
+        }
+        
+        const retryBtn = document.getElementById('retry-analysis-btn');
+        if (retryBtn) {
+            retryBtn.replaceWith(retryBtn.cloneNode(true));
+        }
+        
+        // Remove delete button listeners
+        document.querySelectorAll('.delete-node-btn').forEach(btn => {
+            btn.replaceWith(btn.cloneNode(true));
+        });
     }
 
     /**
@@ -542,7 +590,7 @@ export class RedundancyDetectorModal extends BaseModal {
         const thresholdSlider = document.getElementById('threshold-slider') as HTMLInputElement;
         const thresholdValue = document.getElementById('threshold-value');
         if (thresholdSlider && thresholdValue) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(thresholdSlider, 'input', (e) => {
+            thresholdSlider.addEventListener('input', (e) => {
                 const target = e.target as HTMLInputElement;
                 this.currentThreshold = parseInt(target.value);
                 thresholdValue.textContent = `${this.currentThreshold}%`;
@@ -553,32 +601,32 @@ export class RedundancyDetectorModal extends BaseModal {
                     description.innerHTML = `Only nodes with <strong>${this.currentThreshold}%+</strong> redundancy will be marked for deletion.
                         Lower values show more similarities but may be less actionable.`;
                 }
-            }));
+            });
         }
 
         // Show all checkbox
         const showAllCheckbox = document.getElementById('show-all-checkbox') as HTMLInputElement;
         if (showAllCheckbox) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(showAllCheckbox, 'change', (e) => {
+            showAllCheckbox.addEventListener('change', (e) => {
                 const target = e.target as HTMLInputElement;
                 this.showAllResults = target.checked;
-            }));
+            });
         }
 
         // Start analysis button
         const analyzeBtn = document.getElementById('start-analysis-btn');
         if (analyzeBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(analyzeBtn, 'click', async () => {
+            analyzeBtn.addEventListener('click', async () => {
                 await this.startAnalysis();
-            }));
+            });
         }
 
         // Cancel button
         const cancelBtn = document.getElementById('cancel-config-btn');
         if (cancelBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(cancelBtn, 'click', () => {
+            cancelBtn.addEventListener('click', () => {
                 this.close();
-            }));
+            });
         }
     }
 
@@ -609,18 +657,18 @@ export class RedundancyDetectorModal extends BaseModal {
         // Back to configuration button
         const backToConfigBtn = document.getElementById('back-to-config-btn');
         if (backToConfigBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(backToConfigBtn, 'click', () => {
+            backToConfigBtn.addEventListener('click', () => {
                 this.modalState = 'configuration';
                 this.updateModalContent();
-            }));
+            });
         }
         
         // Retry analysis button  
         const retryBtn = document.getElementById('retry-analysis-btn');
         if (retryBtn) {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(retryBtn, 'click', () => {
+            retryBtn.addEventListener('click', () => {
                 this.performAnalysis();
-            }));
+            });
         }
         
         // Delete node buttons
@@ -628,21 +676,21 @@ export class RedundancyDetectorModal extends BaseModal {
         deleteButtons.forEach(button => {
             const nodeId = (button as HTMLElement).dataset['nodeId'];
             if (nodeId) {
-                this.cleanupHandlers.push(this.addEventListenerWithCleanup(button, 'click', () => {
+                button.addEventListener('click', () => {
                     this.handleDeleteNode(nodeId);
-                }));
+                });
             }
         });
         
         // Keep both buttons
         const keepButtons = document.querySelectorAll('.keep-both-btn');
         keepButtons.forEach(button => {
-            this.cleanupHandlers.push(this.addEventListenerWithCleanup(button, 'click', () => {
+            button.addEventListener('click', () => {
                 // Just mark as reviewed, no action needed
                 button.textContent = '✓ Keeping Both';
                 (button as HTMLElement).style.background = '#4caf50';
                 (button as HTMLElement).style.color = 'white';
-            }));
+            });
         });
     }
 
