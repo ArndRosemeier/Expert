@@ -21,7 +21,7 @@ export class RedundancyDetectorModal extends BaseModal {
     private deletedNodes: Set<string> = new Set();
     
     // Configuration state
-    private currentThreshold: number = 70;
+    private currentThreshold: number = 40;
     private showAllResults: boolean = false;
     private modalState: 'configuration' | 'results' = 'configuration';
 
@@ -81,7 +81,6 @@ export class RedundancyDetectorModal extends BaseModal {
             // BaseModal will handle the close button properly
             this.isLoading = false;
             this.updateModalContent();
-            this.setupEventListeners();
             
         } catch (error) {
             console.error('Redundancy analysis failed:', error);
@@ -97,29 +96,26 @@ export class RedundancyDetectorModal extends BaseModal {
             };
             
             this.updateModalContent();
-            this.setupEventListeners();
         }
     }
 
     /**
-     * Update modal content while preserving BaseModal's close button
+     * Update modal content and let BaseModal handle the close button
      */
     private updateModalContent(): void {
         const modalContent = document.querySelector(`[data-modal-id="${this.id}"] .modal-content`);
         
         if (modalContent) {
-            // Preserve any existing close buttons before updating
-            const existingCloseButtons = modalContent.querySelectorAll('.close-btn');
-            
             // Update the content
             modalContent.innerHTML = this.renderModalContent();
             
-            // Re-add the preserved close buttons if they existed and aren't already present
-            existingCloseButtons.forEach(closeBtn => {
-                if (closeBtn && !modalContent.querySelector('.close-btn')) {
-                    modalContent.appendChild(closeBtn);
-                }
-            });
+            // Set up event listeners FIRST (this clears cleanup handlers)
+            this.setupEventListeners();
+            
+            // THEN add close button (so its cleanup handlers don't get cleared)
+            if (this.config.closable) {
+                this.addCloseButton(modalContent as HTMLElement);
+            }
         }
     }
 
@@ -601,7 +597,6 @@ export class RedundancyDetectorModal extends BaseModal {
         this.modalState = 'results';
         this.isLoading = true;
         this.updateModalContent();
-        this.setupEventListeners();
         
         // Perform the analysis
         await this.performAnalysis();
@@ -617,7 +612,6 @@ export class RedundancyDetectorModal extends BaseModal {
             this.cleanupHandlers.push(this.addEventListenerWithCleanup(backToConfigBtn, 'click', () => {
                 this.modalState = 'configuration';
                 this.updateModalContent();
-                this.setupEventListeners();
             }));
         }
         
@@ -676,9 +670,6 @@ export class RedundancyDetectorModal extends BaseModal {
                 
                 // Update just the specific item's display instead of re-rendering entire modal
                 this.updateDeletedItemDisplay(nodeId);
-                
-                // Also trigger a visual update to ensure changes are reflected
-                this.setupEventListeners();
                 
                 console.log(`✅ Successfully deleted redundant node: ${nodeToDelete.title}`);
             } else {

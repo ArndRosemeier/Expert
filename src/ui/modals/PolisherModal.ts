@@ -790,6 +790,12 @@ ${content}`;
         const modalContent = document.querySelector(`[data-modal-id="${this.id}"] .modal-content`);
         if (modalContent) {
             modalContent.innerHTML = this.renderModalContent();
+            
+            // Let BaseModal recreate the close button properly if this modal is closable
+            if (this.config.closable) {
+                this.addCloseButton(modalContent as HTMLElement);
+            }
+            
             this.setupEventListeners();
         }
     }

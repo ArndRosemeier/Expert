@@ -56,6 +56,11 @@ export class CoherenceModal extends BaseModal {
             console.log('CoherenceModal: Generated new content, updating DOM');
             modalContent.innerHTML = newContent;
             
+            // Let BaseModal recreate the close button properly if this modal is closable
+            if (this.config.closable) {
+                this.addCloseButton(modalContent as HTMLElement);
+            }
+            
             // Re-setup event listeners
             this.setupEventListeners();
             console.log('CoherenceModal: Modal updated successfully');

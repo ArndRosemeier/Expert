@@ -554,6 +554,7 @@ function showActionsDropdown(node: DocumentNode): void {
 
     // Open the dropdown
     void actionsDropdownInstance.open();
+    void actionsDropdownInstance.open();
     // Add custom click handler for actions
     void setTimeout(() => {
         const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
@@ -581,6 +582,35 @@ function showActionsDropdown(node: DocumentNode): void {
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn'
                         };
+                        
+                        // Handle idea board actions directly
+                        if (action === 'send-content-to-idea-board') {
+                            // Close dropdown first
+                            if (actionsDropdownInstance) {
+                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance = null;
+                            }
+                            void handleSendToIdeaBoard('content');
+                            return;
+                        }
+                        if (action === 'send-context-to-idea-board') {
+                            // Close dropdown first
+                            if (actionsDropdownInstance) {
+                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance = null;
+                            }
+                            void handleSendToIdeaBoard('context');
+                            return;
+                        }
+                        if (action === 'send-both-to-idea-board') {
+                            // Close dropdown first
+                            if (actionsDropdownInstance) {
+                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance = null;
+                            }
+                            void handleSendToIdeaBoard('both');
+                            return;
+                        }
                         
                         const handlerAction = actionMap[action];
                         if (handlerAction) {
@@ -806,6 +836,113 @@ function generateUniqueProjectTitle(baseTitle: string): string {
     return candidateTitle;
 }
 
+function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): void {
+    // Close any existing dropdown first
+    if (actionsDropdownInstance) {
+        void actionsDropdownInstance.close();
+        actionsDropdownInstance = null;
+    }
+
+    // Create a temporary invisible trigger element at mouse position
+    const triggerElement = document.createElement('div');
+    triggerElement.style.position = 'absolute';
+    triggerElement.style.left = `${mouseEvent.clientX + window.scrollX}px`;
+    triggerElement.style.top = `${mouseEvent.clientY + window.scrollY}px`;
+    triggerElement.style.width = '1px';
+    triggerElement.style.height = '1px';
+    triggerElement.style.visibility = 'hidden';
+    triggerElement.style.pointerEvents = 'none';
+    document.body.appendChild(triggerElement);
+
+    // Create the dropdown content (reuse existing function)
+    const dropdownContent = createActionsDropdownContent(node);
+
+    // Add actions-specific styles
+    ensureActionsDropdownStyles();
+
+    // Create the dropdown instance
+    actionsDropdownInstance = new Dropdown(triggerElement, dropdownContent, {
+        minWidth: '280px',
+        maxWidth: '320px',
+        className: 'actions-dropdown context-menu',
+        closeOnInsideClick: false, // We'll handle this ourselves to allow action execution
+        position: 'bottom-left'
+    });
+
+    // Clean up trigger element when dropdown closes
+    const originalClose = actionsDropdownInstance.close.bind(actionsDropdownInstance);
+    actionsDropdownInstance.close = () => {
+        if (triggerElement.parentNode) {
+            triggerElement.parentNode.removeChild(triggerElement);
+        }
+        originalClose();
+    };
+
+    // Open the dropdown
+    void actionsDropdownInstance.open();
+    
+    // Add custom click handler for actions (reuse existing logic)
+    void setTimeout(() => {
+        const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
+        if (dropdownElement) {
+            dropdownElement.addEventListener('click', (e) => {
+                const button = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+                if (button) {
+                    const action = button.getAttribute('data-action');
+                    if (action) {
+                        // Map actions to the existing handler IDs
+                        // Handle idea board actions directly
+                        if (action === 'send-content-to-idea-board') {
+                            void handleSendToIdeaBoard('content');
+                            actionsDropdownInstance?.close();
+                            return;
+                        }
+                        if (action === 'send-context-to-idea-board') {
+                            void handleSendToIdeaBoard('context');
+                            actionsDropdownInstance?.close();
+                            return;
+                        }
+                        if (action === 'send-both-to-idea-board') {
+                            void handleSendToIdeaBoard('both');
+                            actionsDropdownInstance?.close();
+                            return;
+                        }
+                        
+                        // Map other actions to the existing handler IDs
+                        const actionMap: Record<string, string> = {
+                            'new-top-layer': 'new-top-layer-btn',
+                            'view-template': 'view-template-btn',
+                            'add-child': 'add-child-node-btn',
+                            'delete-node': 'delete-node-btn',
+                            'delete-all-children': 'delete-subnodes-btn',
+                            'export': 'export-node-btn',
+                            'import': 'import-node-btn',
+                            'chat': 'chat-node-btn',
+                            'polish-text': 'polish-text-btn',
+                            'copy-to-new-project': 'copy-to-new-project-btn',
+                            'check-coherence': 'check-coherence-btn',
+                            'detect-redundant-children': 'detect-redundant-children-btn',
+                            'context-adjuster': 'context-adjuster-btn',
+                            'batch-update': 'batch-update-btn',
+                            'tag-manager': 'tag-manager-btn'
+                        };
+                        
+                        const handlerAction = actionMap[action];
+                        if (handlerAction && buttonHandlers[handlerAction]) {
+                            // Create a synthetic event for the handler
+                            const syntheticEvent = new Event('click', { bubbles: true, cancelable: true });
+                            buttonHandlers[handlerAction](syntheticEvent);
+                            
+                            // Close the dropdown after action
+                            actionsDropdownInstance?.close();
+                        }
+                    }
+                }
+            });
+        }
+    }, 10);
+}
+
 function createActionsDropdownContent(node: DocumentNode): string {
     return `
         <div class="actions-dropdown-content">
@@ -874,6 +1011,15 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ` : ''}
                     <button class="action-btn" data-action="context-adjuster">
                         🎯 Context Adjuster
+                    </button>
+                    <button class="action-btn" data-action="send-content-to-idea-board">
+                        💡 Send Content to Idea Board
+                    </button>
+                    <button class="action-btn" data-action="send-context-to-idea-board">
+                        💭 Send Context to Idea Board
+                    </button>
+                    <button class="action-btn" data-action="send-both-to-idea-board">
+                        💡💭 Send Both to Idea Board
                     </button>
                 </div>
             </div>
@@ -3318,8 +3464,9 @@ export async function setupEventListeners() {
     
     // Set up delegated click events for all buttons
     eventManager.addDelegatedEvent(mainContent, 'click', 'button[id]', (event: Event) => {
-        const button = event.target as HTMLButtonElement;
-        if (!button.id) return;
+        // Use currentTarget (the button) instead of target (which might be a child element like an arrow span)
+        const button = event.currentTarget as HTMLButtonElement;
+        if (!button || !button.id) return;
         
         const handler = buttonHandlers[button.id];
         if (handler) {
@@ -4065,6 +4212,7 @@ export function renderMultiProjectTree() {
     
     // Attach event listeners for node selection
     treeContainer.querySelectorAll('.tree-node').forEach(el => {
+        // Left click: select node
         el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event bubbling
             const id = (e.currentTarget as HTMLElement).dataset['id'];
@@ -4088,6 +4236,39 @@ export function renderMultiProjectTree() {
                     state.setActiveProject(nodeProject.rootNode.id); // Update the active project in state
                     renderMultiProjectTree(); // Re-render tree to update selection highlight
                     renderNodeDetails();
+                }
+            }
+        });
+        
+        // Right click: show actions context menu
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // Prevent default context menu
+            e.stopPropagation();
+            
+            const id = (e.currentTarget as HTMLElement).dataset['id'];
+            if (id) {
+                // Find which project this node belongs to
+                let nodeProject: ProjectManager | null = null;
+                let node: DocumentNode | null = null;
+                
+                for (const project of projects) {
+                    node = project.findNodeById(id);
+                    if (node) {
+                        nodeProject = project;
+                        break;
+                    }
+                }
+                
+                if (node && nodeProject) {
+                    // First select the node (same as left click)
+                    selectedNodeId = id;
+                    projectManager = nodeProject;
+                    state.setActiveProject(nodeProject.rootNode.id);
+                    renderMultiProjectTree();
+                    renderNodeDetails();
+                    
+                    // Then show actions context menu at cursor position
+                    showActionsContextMenu(node, e as MouseEvent);
                 }
             }
         });
