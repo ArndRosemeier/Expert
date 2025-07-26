@@ -1,5 +1,12 @@
 import { BaseModal } from './core/BaseModal';
-import { RedundancyAnalysisResult, RedundancyDetection } from '../../types/RedundancyTypes';
+import { 
+    RedundancyAnalysisResult, 
+    RedundancyDetection,
+    RecursiveRedundancyResult,
+    RecursiveRedundancyConfig,
+    RedundancyAnalysisProgress,
+    DEFAULT_RECURSIVE_REDUNDANCY_CONFIG
+} from '../../types/RedundancyTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { RedundancyDetectionService } from './services/RedundancyDetectionService';
 import { OpenRouterClient } from '../../OpenRouterClient';
@@ -14,6 +21,8 @@ export interface RedundancyDetectorModalConfig {
 
 export class RedundancyDetectorModal extends BaseModal {
     private analysisResult: RedundancyAnalysisResult | null = null;
+    private recursiveResult: RecursiveRedundancyResult | null = null;
+    private analysisProgress: RedundancyAnalysisProgress | null = null;
     private parentNode: DocumentNode;
     private projectManager: ProjectManager;
     private isLoading: boolean = false;
@@ -23,7 +32,11 @@ export class RedundancyDetectorModal extends BaseModal {
     // Configuration state
     private currentThreshold: number = 40;
     private showAllResults: boolean = false;
-    private modalState: 'configuration' | 'results' = 'configuration';
+    private modalState: 'configuration' | 'results' | 'progress' = 'configuration';
+    
+    // Recursive configuration
+    private recursiveMode: boolean = false;
+    private recursiveConfig: RecursiveRedundancyConfig = { ...DEFAULT_RECURSIVE_REDUNDANCY_CONFIG };
 
     constructor(config: RedundancyDetectorModalConfig) {
         super({ 
@@ -69,37 +82,102 @@ export class RedundancyDetectorModal extends BaseModal {
     }
 
     /**
-     * Perform redundancy analysis
+     * Perform redundancy analysis (single or recursive)
      */
     private async performAnalysis(): Promise<void> {
         try {
-            console.log(`🔍 Starting redundancy analysis for: ${this.parentNode.title}`);
-            
-            this.analysisResult = await this.redundancyService.analyzeSiblings(this.parentNode);
-            this.isLoading = false;
-            
-            console.log(`✅ Analysis complete: ${this.analysisResult.redundancies.length} redundancies found`);
-            
-            // Re-render the entire content but preserve the fact that we're in results mode
-            // BaseModal will handle the close button properly
-            this.isLoading = false;
-            this.updateModalContent();
-            
+            if (this.recursiveMode) {
+                await this.performRecursiveAnalysis();
+            } else {
+                await this.performSingleAnalysis();
+            }
         } catch (error) {
-            console.error('Redundancy analysis failed:', error);
+            console.error('Analysis failed:', error);
             this.isLoading = false;
-            this.analysisResult = {
-                parentNode: this.parentNode,
-                redundancies: [],
-                timestamp: new Date(),
-                hasRedundantNodes: false,
-                childrenAnalyzed: 0,
-                thresholdUsed: this.currentThreshold,
-                analysisError: error instanceof Error ? error.message : 'Analysis failed'
-            };
+            this.modalState = 'results';
+            
+            // Create error result based on mode
+            if (this.recursiveMode) {
+                this.recursiveResult = {
+                    rootNode: this.parentNode,
+                    analysisResults: new Map(),
+                    allRedundancies: [],
+                    totalNodesAnalyzed: 0,
+                    totalRedundantNodes: 0,
+                    timestamp: new Date(),
+                    config: this.recursiveConfig,
+                    errors: [error instanceof Error ? error.message : 'Analysis failed']
+                };
+            } else {
+                this.analysisResult = {
+                    parentNode: this.parentNode,
+                    redundancies: [],
+                    timestamp: new Date(),
+                    hasRedundantNodes: false,
+                    childrenAnalyzed: 0,
+                    thresholdUsed: this.currentThreshold,
+                    analysisError: error instanceof Error ? error.message : 'Analysis failed'
+                };
+            }
             
             this.updateModalContent();
         }
+    }
+
+    /**
+     * Perform single node analysis
+     */
+    private async performSingleAnalysis(): Promise<void> {
+        console.log(`🔍 Starting single redundancy analysis for: ${this.parentNode.title}`);
+        
+        this.analysisResult = await this.redundancyService.analyzeSiblings(this.parentNode);
+        this.isLoading = false;
+        this.modalState = 'results';
+        
+        console.log(`✅ Single analysis complete: ${this.analysisResult.redundancies.length} redundancies found`);
+        this.updateModalContent();
+    }
+
+    /**
+     * Perform recursive analysis with progress tracking
+     */
+    private async performRecursiveAnalysis(): Promise<void> {
+        console.log(`🔄 Starting recursive redundancy analysis from: ${this.parentNode.title}`);
+        
+        // Configure the service for recursive analysis
+        this.redundancyService.updateRecursiveConfig({
+            ...this.recursiveConfig,
+            minimumRedundancyThreshold: this.currentThreshold
+        });
+
+        // Set up progress tracking
+        this.redundancyService.setProgressCallback((progress: RedundancyAnalysisProgress) => {
+            this.analysisProgress = progress;
+            this.updateModalContent();
+            
+            // Switch to results when complete
+            if (progress.phase === 'complete') {
+                setTimeout(() => {
+                    this.modalState = 'results';
+                    this.isLoading = false;
+                    this.updateModalContent();
+                }, 1000); // Small delay to show completion
+            }
+        });
+
+        // Switch to progress view
+        this.modalState = 'progress';
+        this.updateModalContent();
+
+        // Determine root node for analysis
+        const rootNode = this.recursiveConfig.analyzeEntireProject 
+            ? this.projectManager.rootNode 
+            : this.parentNode;
+
+        // Perform recursive analysis
+        this.recursiveResult = await this.redundancyService.analyzeRecursive(rootNode);
+        
+        console.log(`✅ Recursive analysis complete: ${this.recursiveResult.totalRedundantNodes} redundancies found across ${this.recursiveResult.totalNodesAnalyzed} nodes`);
     }
 
     /**
@@ -191,6 +269,69 @@ export class RedundancyDetectorModal extends BaseModal {
                         </div>
                     </div>
                     
+                    <div class="recursive-section" style="margin-bottom: 20px; border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
+                        <h3 style="margin: 0 0 15px 0; color: #1976d2;">🔄 Recursive Analysis (Beta)</h3>
+                        
+                        <div class="recursive-mode-setting" style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input 
+                                    type="checkbox" 
+                                    id="recursive-mode-checkbox" 
+                                    ${this.recursiveMode ? 'checked' : ''}
+                                >
+                                <span style="font-weight: 500;">Enable recursive analysis</span>
+                            </label>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
+                                Analyze multiple levels of the project tree in one operation
+                            </p>
+                        </div>
+                        
+                        <div id="recursive-options" style="display: ${this.recursiveMode ? 'block' : 'none'};">
+                            <div class="depth-setting" style="margin-bottom: 15px;">
+                                <label for="depth-slider" style="display: block; margin-bottom: 8px; font-weight: 500;">
+                                    Analysis Depth: <span id="depth-value">${this.recursiveConfig.maxDepth}</span> level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}
+                                    ${this.recursiveConfig.analyzeEntireProject ? '<span style="color: #666; font-weight: normal;"> (disabled - analyzing entire project)</span>' : ''}
+                                </label>
+                                <input 
+                                    type="range" 
+                                    id="depth-slider" 
+                                    min="1" 
+                                    max="10" 
+                                    value="${this.recursiveConfig.maxDepth}" 
+                                    style="width: 100%; margin-bottom: 8px; ${this.recursiveConfig.analyzeEntireProject ? 'opacity: 0.5; cursor: not-allowed;' : ''}"
+                                    ${this.recursiveConfig.analyzeEntireProject ? 'disabled' : ''}
+                                >
+                                <p style="margin: 0; font-size: 0.9em; color: #666;">
+                                    ${this.recursiveConfig.analyzeEntireProject 
+                                        ? 'Entire project mode: all levels will be analyzed regardless of depth setting'
+                                        : '1 = current node only, 2 = children + grandchildren, etc.'
+                                    }
+                                </p>
+                            </div>
+                            
+                            <div class="entire-project-setting" style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input 
+                                        type="checkbox" 
+                                        id="entire-project-checkbox" 
+                                        ${this.recursiveConfig.analyzeEntireProject ? 'checked' : ''}
+                                    >
+                                    <span>Analyze entire project from root</span>
+                                </label>
+                                <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
+                                    Start analysis from project root instead of current node
+                                </p>
+                            </div>
+                            
+                            <div class="recursive-info" style="background: #fff3e0; padding: 12px; border-radius: 6px; border-left: 4px solid #ff9800;">
+                                <p style="margin: 0; font-size: 0.9em; color: #e65100;">
+                                    <strong>⚠️ Performance Note:</strong> Recursive analysis may take significantly longer and use more API calls. 
+                                    Deep project trees will show a progress bar during analysis.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="analysis-info" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                         <h4 style="margin: 0 0 10px 0;">🤖 How It Works</h4>
                         <ul style="margin: 0; padding-left: 20px; color: #666;">
@@ -222,19 +363,73 @@ export class RedundancyDetectorModal extends BaseModal {
     }
 
     /**
+     * Render the progress screen for recursive analysis
+     */
+    private renderProgressScreen(): string {
+        if (!this.analysisProgress) {
+            return this.renderLoadingContent();
+        }
+
+        const progress = this.analysisProgress;
+        const progressBarWidth = Math.max(5, progress.percentage); // Minimum 5% for visibility
+
+        return `
+            <div class="modal-header">
+                <h2>🔄 Recursive Redundancy Analysis</h2>
+            </div>
+            
+            <div class="modal-body" style="padding: 20px;">
+                <div class="progress-container" style="margin-bottom: 20px;">
+                    <div class="progress-info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-weight: 500; color: #1976d2;">${progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1)}</span>
+                        <span style="font-weight: 500; color: #666;">${progress.percentage}%</span>
+                    </div>
+                    
+                    <div class="progress-bar-container" style="width: 100%; height: 20px; background-color: #e0e0e0; border-radius: 10px; overflow: hidden;">
+                        <div class="progress-bar" style="width: ${progressBarWidth}%; height: 100%; background: linear-gradient(90deg, #1976d2 0%, #42a5f5 100%); transition: width 0.3s ease;"></div>
+                    </div>
+                    
+                    <div class="progress-details" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        ${progress.currentNode ? `<p style="margin: 0 0 8px 0;"><strong>Current:</strong> ${progress.currentNode}</p>` : ''}
+                        <p style="margin: 0 0 8px 0;"><strong>Progress:</strong> ${progress.completedNodes} of ${progress.totalNodes} nodes</p>
+                        ${progress.currentDepth > 0 ? `<p style="margin: 0 0 8px 0;"><strong>Depth:</strong> Level ${progress.currentDepth}</p>` : ''}
+                        <p style="margin: 0 0 8px 0;"><strong>Redundancies Found:</strong> ${progress.redundanciesFound}</p>
+                        ${progress.message ? `<p style="margin: 0; color: #666; font-style: italic;">${progress.message}</p>` : ''}
+                    </div>
+                </div>
+                
+                <div class="progress-actions" style="text-align: center;">
+                    <button 
+                        id="cancel-analysis-btn"
+                        class="btn btn-secondary" 
+                        style="background: #757575; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer;"
+                        ${progress.phase === 'complete' ? 'disabled' : ''}
+                    >
+                        ${progress.phase === 'complete' ? 'Analysis Complete' : 'Cancel Analysis'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Render the results screen (existing logic)
      */
     private renderResultsScreen(): string {
         let content: string;
         
-        if (this.isLoading) {
+        if (this.modalState === 'progress') {
+            content = this.renderProgressScreen();
+        } else if (this.isLoading) {
             content = this.renderLoadingContent();
-        } else if (!this.analysisResult) {
+        } else if (!this.analysisResult && !this.recursiveResult) {
             content = this.renderErrorContent('No analysis results available');
-        } else if (this.analysisResult.analysisError) {
+        } else if (this.analysisResult?.analysisError) {
             content = this.renderErrorContent(this.analysisResult.analysisError);
+        } else if (this.recursiveResult?.errors.length) {
+            content = this.renderErrorContent(this.recursiveResult.errors.join('\n'));
         } else {
-            content = this.renderAnalysisResults();
+            content = this.recursiveResult ? this.renderRecursiveResults() : this.renderAnalysisResults();
         }
         
         // Return content directly - BaseModal already provides modal-content wrapper
@@ -276,6 +471,70 @@ export class RedundancyDetectorModal extends BaseModal {
                         🔄 Retry Analysis
                     </button>
                 </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render recursive analysis results
+     */
+    private renderRecursiveResults(): string {
+        if (!this.recursiveResult) {
+            return this.renderErrorContent('No recursive analysis results available');
+        }
+
+        const result = this.recursiveResult;
+        const redundancies = result.allRedundancies;
+        const actualThreshold = result.config.minimumRedundancyThreshold;
+
+        return `
+            <div class="modal-header">
+                <h2>🔄 Recursive Redundancy Analysis Results</h2>
+            </div>
+            
+            <div class="modal-body" style="padding: 20px;">
+                <div class="recursive-summary" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 15px 0; color: #1976d2;">📊 Analysis Summary</h3>
+                    <div class="summary-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #1976d2;">
+                            <h4 style="margin: 0; color: #1976d2;">Nodes Analyzed</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">${result.totalNodesAnalyzed}</p>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #d32f2f;">
+                            <h4 style="margin: 0; color: #d32f2f;">Redundancies Found</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">${result.totalRedundantNodes}</p>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800;">
+                            <h4 style="margin: 0; color: #ff9800;">${result.config.analyzeEntireProject ? 'Analysis Mode' : 'Max Depth'}</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
+                                ${result.config.analyzeEntireProject 
+                                    ? 'Entire Project' 
+                                    : `${result.config.maxDepth} level${result.config.maxDepth === 1 ? '' : 's'}`
+                                }
+                            </p>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #4caf50;">
+                            <h4 style="margin: 0; color: #4caf50;">Analysis Scope</h4>
+                            <p style="margin: 5px 0 0 0; font-size: 1.1em; font-weight: bold;">${result.config.analyzeEntireProject ? 'Entire Project' : 'From Selected Node'}</p>
+                        </div>
+                    </div>
+                    
+                    ${result.errors.length > 0 ? `
+                        <div style="background: #fff3e0; padding: 12px; border-radius: 6px; border-left: 4px solid #ff9800; margin-top: 15px;">
+                            <h4 style="margin: 0 0 8px 0; color: #e65100;">⚠️ Analysis Warnings</h4>
+                            <ul style="margin: 0; padding-left: 20px; color: #e65100;">
+                                ${result.errors.map(error => `<li>${error}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${redundancies.length > 0 
+                    ? this.renderRedundancies(redundancies)
+                    : `<div style="text-align: center; padding: 30px; color: #666; font-style: italic;">
+                        🎉 No redundancies found above ${actualThreshold}% threshold across the analyzed nodes.
+                       </div>`
+                }
             </div>
         `;
     }
@@ -565,6 +824,22 @@ export class RedundancyDetectorModal extends BaseModal {
             cancelBtn.replaceWith(cancelBtn.cloneNode(true));
         }
         
+        // Remove recursive mode listeners
+        const recursiveModeCheckbox = document.getElementById('recursive-mode-checkbox');
+        if (recursiveModeCheckbox) {
+            recursiveModeCheckbox.replaceWith(recursiveModeCheckbox.cloneNode(true));
+        }
+        
+        const depthSlider = document.getElementById('depth-slider');
+        if (depthSlider) {
+            depthSlider.replaceWith(depthSlider.cloneNode(true));
+        }
+        
+        const entireProjectCheckbox = document.getElementById('entire-project-checkbox');
+        if (entireProjectCheckbox) {
+            entireProjectCheckbox.replaceWith(entireProjectCheckbox.cloneNode(true));
+        }
+        
         // Remove results screen listeners  
         const backToConfigBtn = document.getElementById('back-to-config-btn');
         if (backToConfigBtn) {
@@ -626,6 +901,78 @@ export class RedundancyDetectorModal extends BaseModal {
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => {
                 this.close();
+            });
+        }
+
+        // Recursive mode checkbox
+        const recursiveModeCheckbox = document.getElementById('recursive-mode-checkbox') as HTMLInputElement;
+        if (recursiveModeCheckbox) {
+            recursiveModeCheckbox.addEventListener('change', (e) => {
+                const target = e.target as HTMLInputElement;
+                this.recursiveMode = target.checked;
+                
+                // Show/hide recursive options
+                const recursiveOptions = document.getElementById('recursive-options');
+                if (recursiveOptions) {
+                    recursiveOptions.style.display = this.recursiveMode ? 'block' : 'none';
+                }
+            });
+        }
+
+        // Depth slider
+        const depthSlider = document.getElementById('depth-slider') as HTMLInputElement;
+        const depthValue = document.getElementById('depth-value');
+        if (depthSlider && depthValue) {
+            depthSlider.addEventListener('input', (e) => {
+                const target = e.target as HTMLInputElement;
+                this.recursiveConfig.maxDepth = parseInt(target.value);
+                const levels = this.recursiveConfig.maxDepth === 1 ? 'level' : 'levels';
+                depthValue.textContent = `${this.recursiveConfig.maxDepth} ${levels}`;
+            });
+        }
+
+        // Entire project checkbox
+        const entireProjectCheckbox = document.getElementById('entire-project-checkbox') as HTMLInputElement;
+        if (entireProjectCheckbox) {
+            entireProjectCheckbox.addEventListener('change', (e) => {
+                const target = e.target as HTMLInputElement;
+                this.recursiveConfig.analyzeEntireProject = target.checked;
+                
+                // Update depth slider state and UI
+                const depthSlider = document.getElementById('depth-slider') as HTMLInputElement;
+                const depthValue = document.getElementById('depth-value');
+                const depthLabel = depthSlider?.parentElement?.querySelector('label');
+                const depthDescription = depthSlider?.parentElement?.querySelector('p');
+                
+                if (depthSlider && depthValue && depthLabel && depthDescription) {
+                    if (target.checked) {
+                        // Disable depth controls and update UI
+                        depthSlider.disabled = true;
+                        depthSlider.style.opacity = '0.5';
+                        depthSlider.style.cursor = 'not-allowed';
+                        
+                        // Update label to show it's disabled
+                        const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
+                        depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span> <span style="color: #666; font-weight: normal;"> (disabled - analyzing entire project)</span>`;
+                        
+                        // Update description
+                        depthDescription.textContent = 'Entire project mode: all levels will be analyzed regardless of depth setting';
+                        depthDescription.style.color = '#666';
+                    } else {
+                        // Enable depth controls and restore UI
+                        depthSlider.disabled = false;
+                        depthSlider.style.opacity = '1';
+                        depthSlider.style.cursor = 'pointer';
+                        
+                        // Restore normal label
+                        const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
+                        depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span>`;
+                        
+                        // Restore normal description
+                        depthDescription.textContent = '1 = current node only, 2 = children + grandchildren, etc.';
+                        depthDescription.style.color = '#666';
+                    }
+                }
             });
         }
     }

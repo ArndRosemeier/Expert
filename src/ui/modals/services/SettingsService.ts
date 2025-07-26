@@ -108,12 +108,25 @@ export class SettingsService {
     public async createProfile(name: string): Promise<{ success: boolean; message: string }> {
             // Get the current active profile to copy from
             const currentProfile = this.getLastUsedProfile();
+            const sourceProfileName = currentProfile ? (this.getLastUsedProfileName() || undefined) : undefined;
             
             let newProfileSettings: SettingsProfile;
             
             if (currentProfile && currentProfile.criteria) {
-                // Copy all settings from the current profile
-                newProfileSettings = { ...currentProfile };
+                // Deep copy all settings from the current profile to prevent contamination
+                newProfileSettings = {
+                    selectedModels: { ...(currentProfile.selectedModels || {}) },
+                    selectedProviders: { ...(currentProfile.selectedProviders || {}) },
+                    webSearchEnabled: { ...(currentProfile.webSearchEnabled || {}) },
+                    criteria: [...(currentProfile.criteria || [])],
+                    maxIterations: currentProfile.maxIterations || DEFAULT_MAX_ITERATIONS,
+                    contextExtractionPrompt: currentProfile.contextExtractionPrompt || '',
+                    version: currentProfile.version || ''
+                };
+                
+                console.log(`🔄 Profile "${name}" created by deep copying from "${sourceProfileName}"`);
+                console.log(`📋 Original selectedModels:`, currentProfile.selectedModels);
+                console.log(`📋 New profile selectedModels:`, newProfileSettings.selectedModels);
             } else {
                 // Fallback: create with current component settings if no active profile
                 newProfileSettings = {
@@ -126,8 +139,6 @@ export class SettingsService {
                 };
             }
 
-        const sourceProfileName = currentProfile ? (this.getLastUsedProfileName() || undefined) : undefined;
-        
         const result = await ProfileOperations.create(
             this.settingsManager,
             name,
@@ -568,7 +579,8 @@ export class SettingsService {
                     fix_contradiction: { outline: 'creator' as const, prose: 'prose' as const },
                     text_polishing: { outline: 'creator' as const, prose: 'prose' as const },
                     context_adjustment: { outline: 'creator' as const, prose: 'prose' as const },
-                    context_rating: { outline: 'creator' as const, prose: 'prose' as const }
+                    context_rating: { outline: 'creator' as const, prose: 'prose' as const },
+                    logic_error_analysis: { outline: 'rater' as const, prose: 'rater' as const }
                 }, // Preserve task model configurations with fallback
                 version: analysis.currentVersion
             };

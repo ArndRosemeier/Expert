@@ -27,6 +27,9 @@ export { NodeInspectorModal } from './NodeInspectorModal';
 export { TagManagerModal } from './TagManagerModal';
 export { GenerationErrorModal, type ErrorDetails } from './GenerationErrorModal';
 export { ManualModal } from './ManualModal';
+export { RedundancyDetectorModal } from './RedundancyDetectorModal';
+export { LogicErrorDetectorModal } from './LogicErrorDetectorModal';
+export { LogicOutlineFixerModal } from './LogicOutlineFixerModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';

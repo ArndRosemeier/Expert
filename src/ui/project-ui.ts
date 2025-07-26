@@ -93,51 +93,59 @@ function formatModelName(modelId: string): string {
 }
 
 /**
- * Gets the appropriate status icon for a node based on its state
+ * Gets the appropriate status icons for a node based on its state
+ * Returns an object with separate status and todo icons for proper horizontal layout
  */
-function getNodeStatusIcon(node: DocumentNode): string {
+function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon: string } {
+    let statusIcon = '';
+    let todoIcon = '';
+    
     // Root nodes have no status icon - they're distinguished by typography
     if (node.level === 0 || node.parentId === null) {
-        return '';
+        statusIcon = '';
+    } else {
+        const masterVersion = node.getMasterVersion();
+        if (!masterVersion) {
+            statusIcon = '🟣'; // Fallback to pure draft if no master version
+        } else {
+            const hasContent = node.content && node.content.trim().length > 0;
+            const isDraft = masterVersion.tags.has('draft');
+            const isContextAdjusted = node.ContextIsAdjusted();
+            const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
+            
+            // Finished: all conditions met
+            if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
+                statusIcon = '⭐';
+            }
+            // Content done, coherent with parent (but no context adjustment)
+            else if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
+                statusIcon = '✨';
+            }
+            // Content done, context adjusted (but no coherence check)
+            else if (hasContent && !isDraft && isContextAdjusted) {
+                statusIcon = '🟢';
+            }
+            // Content done, nothing much else
+            else if (hasContent && !isDraft) {
+                statusIcon = '🟡';
+            }
+            // Draft with adjusted context
+            else if (hasContent && isDraft && isContextAdjusted) {
+                statusIcon = '🟠';
+            }
+            // Pure draft
+            else {
+                statusIcon = '🟣';
+            }
+        }
     }
     
-    const masterVersion = node.getMasterVersion();
-    if (!masterVersion) {
-        return '🟣'; // Fallback to pure draft if no master version
+    // Add todo indicator if this node has todos (separate from status)
+    if (nodesWithTodoIndicators.has(node.id)) {
+        todoIcon = '⚠️';
     }
     
-    const hasContent = node.content && node.content.trim().length > 0;
-    const isDraft = masterVersion.tags.has('draft');
-    const isContextAdjusted = node.ContextIsAdjusted();
-    const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
-    
-    // Finished: all conditions met
-    if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
-        return '⭐';
-    }
-    
-    // Content done, coherent with parent (but no context adjustment)
-    if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
-        return '✨';
-    }
-    
-    // Content done, context adjusted (but no coherence check)
-    if (hasContent && !isDraft && isContextAdjusted) {
-        return '🟢';
-    }
-    
-    // Content done, nothing much else
-    if (hasContent && !isDraft) {
-        return '🟡';
-    }
-    
-    // Draft with adjusted context
-    if (hasContent && isDraft && isContextAdjusted) {
-        return '🟠';
-    }
-    
-    // Pure draft
-    return '🟣';
+    return { statusIcon, todoIcon };
 }
 
 /**
@@ -149,7 +157,8 @@ function countStatusTypes(rootNode: DocumentNode): Map<string, number> {
     function countRecursively(node: DocumentNode) {
         // Skip root nodes themselves
         if (node.level !== 0 && node.parentId !== null) {
-            const icon = getNodeStatusIcon(node);
+            const { statusIcon } = getNodeStatusIcons(node);
+            const icon = statusIcon;
             if (icon) {
                 const current = counts.get(icon) || 0;
                 counts.set(icon, current + 1);
@@ -200,6 +209,22 @@ function getProjectRootTooltip(rootNode: DocumentNode): string {
  * Gets the appropriate tooltip text for a node based on its status
  */
 function getNodeStatusTooltip(node: DocumentNode): string {
+    // Check for todo indicator first  
+    if (nodesWithTodoIndicators.has(node.id)) {
+        const incompleteTodos = node.getIncompleteTodos();
+        if (incompleteTodos.length > 0) {
+            // This node has direct todos
+            const todoText = incompleteTodos.length === 1 ? '1 todo item' : `${incompleteTodos.length} todo items`;
+            const firstTodo = incompleteTodos[0];
+            const preview = firstTodo ? firstTodo.description.substring(0, 50) : '';
+            const ellipsis = firstTodo && firstTodo.description.length > 50 ? '...' : '';
+            return `⚠️ Has ${todoText}: ${preview}${ellipsis}`;
+        } else {
+            // This node has todos in descendants
+            return '⚠️ Contains nodes with todo items';
+        }
+    }
+    
     // Root nodes get project summary tooltip
     if (node.level === 0 || node.parentId === null) {
         return getProjectRootTooltip(node);
@@ -578,6 +603,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
+                            'detect-logic-errors': 'detect-logic-errors-btn',
+                            'fix-logic-outline': 'fix-logic-outline-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn'
@@ -922,6 +949,8 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
+                            'detect-logic-errors': 'detect-logic-errors-btn',
+                            'fix-logic-outline': 'fix-logic-outline-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn'
@@ -940,6 +969,37 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
             });
         }
     }, 10);
+}
+
+/**
+ * Check if a node has leaf nodes (nodes without children or with only empty children)
+ */
+function hasLeafNodes(node: DocumentNode): boolean {
+    const countLeafNodes = (parentNode: DocumentNode): number => {
+        let count = 0;
+        const traverse = (currentNode: DocumentNode) => {
+            if (!currentNode.children || currentNode.children.length === 0) {
+                // Check if this leaf has content
+                if (currentNode.content && currentNode.content.trim().length > 0) {
+                    count++;
+                }
+            } else {
+                for (const child of currentNode.children) {
+                    traverse(child);
+                }
+            }
+        };
+        
+        if (parentNode.children) {
+            for (const child of parentNode.children) {
+                traverse(child);
+            }
+        }
+        
+        return count;
+    };
+    
+    return countLeafNodes(node) > 0;
 }
 
 function createActionsDropdownContent(node: DocumentNode): string {
@@ -1006,6 +1066,16 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ${node.children && node.children.length >= 2 ? `
                         <button class="action-btn" data-action="detect-redundant-children">
                             🗑️ Find Redundant Children
+                        </button>
+                    ` : ''}
+                    ${hasLeafNodes(node) ? `
+                        <button class="action-btn" data-action="detect-logic-errors">
+                            🧩 Check Logic Errors
+                        </button>
+                    ` : ''}
+                    ${node.getIncompleteTodos().length > 0 ? `
+                        <button class="action-btn" data-action="fix-logic-outline">
+                            🔧 Fix Logic in Outline
                         </button>
                     ` : ''}
                     <button class="action-btn" data-action="context-adjuster">
@@ -2601,9 +2671,15 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
         html += `<span class="tree-expand-spacer"></span>`;
     }
     
-    // Status icon
-    const statusIcon = getNodeStatusIcon(node);
+    // Status icons (separate elements for horizontal layout)
+    const { statusIcon, todoIcon } = getNodeStatusIcons(node);
     html += `<span class="node-status-icon">${statusIcon}</span>`;
+    if (todoIcon) {
+        // Determine if this node has direct todos or just descendant todos
+        const hasDirectTodos = nodesWithDirectTodos.has(node.id);
+        const todoClass = hasDirectTodos ? 'node-todo-icon' : 'node-todo-icon-small';
+        html += `<span class="${todoClass}">${todoIcon}</span>`;
+    }
     
     // Node title
     const nodeTypeClass = isProjectRoot ? 'project-root' : (hasChildren ? 'has-children' : 'leaf-node');
@@ -3287,6 +3363,80 @@ This action cannot be undone.`;
                 }).catch((error) => {
                     console.error('Failed to open Redundancy Detector:', error);
                     alert('Failed to open redundancy detector. Please try again.');
+                });
+            }
+            break;
+
+        case 'detect-logic-errors-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                // Count leaf nodes under this parent
+                const countLeafNodes = (parentNode: DocumentNode): number => {
+                    let count = 0;
+                    const traverse = (currentNode: DocumentNode) => {
+                        if (!currentNode.children || currentNode.children.length === 0) {
+                            count++;
+                        } else {
+                            for (const child of currentNode.children) {
+                                traverse(child);
+                            }
+                        }
+                    };
+                    
+                    if (parentNode.children) {
+                        for (const child of parentNode.children) {
+                            traverse(child);
+                        }
+                    }
+                    
+                    return count;
+                };
+
+                const leafCount = countLeafNodes(node);
+                if (leafCount === 0) {
+                    alert('Node must have leaf nodes with content for logic error analysis.');
+                    return;
+                }
+
+                // Create and open logic error detector modal
+                void import('./modals/LogicErrorDetectorModal').then(({ LogicErrorDetectorModal }) => {
+                    const modal = new LogicErrorDetectorModal({
+                        id: 'logic-error-detector',
+                        parentNode: node,
+                        projectManager: projectManager!
+                    });
+                    void modal.open();
+                }).catch((error) => {
+                    console.error('Failed to open Logic Error Detector:', error);
+                    alert('Failed to open logic error detector. Please try again.');
+                });
+            }
+            break;
+
+        case 'fix-logic-outline-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+
+                const incompleteTodos = node.getIncompleteTodos();
+                if (incompleteTodos.length === 0) {
+                    alert('Node must have incomplete todo items to fix logic in outline.');
+                    return;
+                }
+
+                // Create and open logic outline fixer modal
+                void import('./modals/LogicOutlineFixerModal').then(({ LogicOutlineFixerModal }) => {
+                    const modal = new LogicOutlineFixerModal({
+                        id: 'logic-outline-fixer',
+                        node: node,
+                        projectManager: projectManager!
+                    });
+                    void modal.open();
+                }).catch((error) => {
+                    console.error('Failed to open Logic Outline Fixer:', error);
+                    alert('Failed to open logic outline fixer. Please try again.');
                 });
             }
             break;
@@ -4199,6 +4349,9 @@ export function renderMultiProjectTree() {
         treeContainer.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;">No projects available. Create a new project to get started.</div>';
         return;
     }
+    
+    // Build todo indicator cache for all projects (efficient single scan)
+    buildTodoIndicatorCacheForAllProjects(projects);
     
     let html = '';
     projects.forEach((project, _index) => {
@@ -5261,3 +5414,70 @@ function removeAllListeners() {
 // Legacy function removed - now using EventManager delegation in setupEventListeners
 
 // === CHECKBOX STATE MANAGEMENT ===
+
+// Global cache for nodes that should show todo indicators (themselves or descendants have todos)
+let nodesWithTodoIndicators: Set<string> = new Set();
+// Cache for nodes that have direct todos (not just descendants)
+let nodesWithDirectTodos: Set<string> = new Set();
+
+/**
+ * Build todo indicator cache for all projects
+ */
+function buildTodoIndicatorCacheForAllProjects(projects: ProjectManager[]): void {
+    nodesWithTodoIndicators.clear();
+    nodesWithDirectTodos.clear();
+    
+    projects.forEach(project => {
+        buildTodoIndicatorCache(project.rootNode, false); // false = don't clear cache
+    });
+    
+    console.log(`⚠️ Todo indicator cache built for ${projects.length} projects. ${nodesWithTodoIndicators.size} nodes with todo indicators, ${nodesWithDirectTodos.size} with direct todos.`);
+}
+
+/**
+ * Efficiently scan all nodes once and identify which should show todo indicators.
+ * A node gets a todo indicator if it has todos OR any of its descendants have todos.
+ */
+function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = true): void {
+    if (clearCache) {
+        nodesWithTodoIndicators.clear();
+        nodesWithDirectTodos.clear();
+    }
+    
+    // Recursive function to check a node and all its descendants
+    function checkNodeForTodos(node: DocumentNode): boolean {
+        let hasAnyTodos = false;
+        let hasDirectTodos = false;
+        
+        // Check if this node itself has todos
+        if (node.todos && node.todos.length > 0) {
+            // Only count incomplete todos
+            const incompleteTodos = node.getIncompleteTodos();
+            if (incompleteTodos.length > 0) {
+                hasAnyTodos = true;
+                hasDirectTodos = true;
+                nodesWithDirectTodos.add(node.id);
+                console.log(`⚠️ Found ${incompleteTodos.length} incomplete todos in node: ${node.title}`);
+            }
+        }
+        
+        // Check all children recursively
+        for (const child of node.children) {
+            const childHasTodos = checkNodeForTodos(child);
+            if (childHasTodos) {
+                hasAnyTodos = true;
+            }
+        }
+        
+        // If this node or any descendant has todos, mark this node for indicator
+        if (hasAnyTodos) {
+            nodesWithTodoIndicators.add(node.id);
+            const indicatorType = hasDirectTodos ? 'direct' : 'descendant';
+            console.log(`⚠️ Added todo indicator for node: ${node.title} (ID: ${node.id}) - ${indicatorType} todos`);
+        }
+        
+        return hasAnyTodos;
+    }
+    
+    checkNodeForTodos(rootNode);
+}

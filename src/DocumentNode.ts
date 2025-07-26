@@ -3,6 +3,32 @@ import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * Reference to a related node for todo items
+ */
+export interface TodoNodeReference {
+    id: string;
+    title: string;
+}
+
+/**
+ * A single todo item that can reference related nodes
+ */
+export interface TodoItem {
+    id: string;
+    description: string;
+    relatedNodes: TodoNodeReference[];
+    timestamp: Date;
+    completed?: boolean;
+    // Logic error specific details (optional for todos not from logic errors)
+    logicError?: {
+        type: string;
+        severity: number;
+        justification: string;
+        suggestedFix?: string;
+    };
+}
+
+/**
  * Generation parameters that are remembered per node
  */
 export interface LastGenerationParameters {
@@ -85,6 +111,9 @@ export class DocumentNode {
 
     // --- Generation Parameters Cache ---
     lastGenerationParameters: LastGenerationParameters | null = null;
+
+    // --- Todo Items ---
+    todos: TodoItem[] = [];
 
     constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
@@ -190,7 +219,8 @@ export class DocumentNode {
                 tags: Array.from(v.tags) // Convert Set to Array for JSON
             })),
             overviewBoardCache: Array.from(this.overviewBoardCache.entries()), // Convert Map to Array for JSON
-            lastGenerationParameters: this.lastGenerationParameters
+            lastGenerationParameters: this.lastGenerationParameters,
+            todos: this.todos
         };
     }
 
@@ -431,6 +461,14 @@ export class DocumentNode {
                     metadata: {}
                 });
             }
+        }
+        
+        // Restore todos
+        if (data.todos && Array.isArray(data.todos)) {
+            node.todos = data.todos.map((todo: any) => ({
+                ...todo,
+                timestamp: new Date(todo.timestamp)
+            }));
         }
         
         // Restore children
@@ -991,5 +1029,74 @@ export class DocumentNode {
         );
         
         return allVersionsMatch;
+    }
+
+    /**
+     * Add a todo item to this node
+     */
+    addTodo(
+        description: string, 
+        relatedNodes: TodoNodeReference[] = [], 
+        logicError?: {
+            type: string;
+            severity: number;
+            justification: string;
+            suggestedFix?: string;
+        }
+    ): TodoItem {
+        const todo: TodoItem = {
+            id: uuidv4(),
+            description,
+            relatedNodes,
+            timestamp: new Date(),
+            completed: false
+        };
+        
+        if (logicError) {
+            todo.logicError = logicError;
+        }
+        
+        this.todos.push(todo);
+        return todo;
+    }
+
+    /**
+     * Mark a todo item as completed
+     */
+    completeTodo(todoId: string): boolean {
+        const todo = this.todos.find(t => t.id === todoId);
+        if (todo) {
+            todo.completed = true;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Remove a todo item
+     */
+    removeTodo(todoId: string): boolean {
+        const index = this.todos.findIndex(t => t.id === todoId);
+        if (index !== -1) {
+            this.todos.splice(index, 1);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get incomplete todos
+     */
+    getIncompleteTodos(): TodoItem[] {
+        return this.todos.filter(todo => !todo.completed);
+    }
+
+    /**
+     * Get all todos related to a specific node
+     */
+    getTodosForNode(nodeId: string): TodoItem[] {
+        return this.todos.filter(todo => 
+            todo.relatedNodes.some(ref => ref.id === nodeId)
+        );
     }
 }

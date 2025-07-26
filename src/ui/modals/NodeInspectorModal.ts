@@ -260,7 +260,7 @@ class ContentViewer extends UIComponent {
             // Convert ratings to expected format for RatingsRenderer
             const formattedRatings = ratings.map(rating => {
                 return {
-                    actual: rating.actual || 0,
+                    actual: rating.actual || (rating as any).score || 0, // Support both old and new formats
                     goal: rating.goal || 10,
                     criterion: rating.criterion || 'Unknown',
                     justification: rating.justification,
@@ -280,7 +280,7 @@ class ContentViewer extends UIComponent {
             console.warn('RatingsRenderer not available, using fallback', error);
             // Fallback to simple display
             const ratingsHtml = ratings.map(rating => {
-                const score = rating.actual || 0;
+                const score = rating.actual || (rating as any).score || 0; // Support both old and new formats
                 const goal = rating.goal || 10;
                 
                 const criterionName = rating.criterion || 'Unknown';
@@ -353,7 +353,38 @@ export class NodeInspectorModal extends BaseModal {
         // Inject ratings styles
         this.injectRatingsStyles();
         
+        // Listen for todo changes while modal is open
+        this.setupTodoChangeListener();
+        
         void this.open();
+    }
+
+    private setupTodoChangeListener(): void {
+        const handleTodoChange = (event: CustomEvent) => {
+            if (this.node && event.detail.nodeId === this.node.id) {
+                console.log('📝 Todo list changed for current node, refreshing modal');
+                this.rerender();
+            }
+        };
+
+        // Remove any existing listener
+        window.removeEventListener('todoListChanged', handleTodoChange as EventListener);
+        
+        // Add new listener
+        window.addEventListener('todoListChanged', handleTodoChange as EventListener);
+        
+        // Store reference for cleanup
+        (this as any)._todoChangeHandler = handleTodoChange;
+    }
+
+    public override async close(): Promise<void> {
+        // Clean up todo change listener
+        if ((this as any)._todoChangeHandler) {
+            window.removeEventListener('todoListChanged', (this as any)._todoChangeHandler as EventListener);
+            delete (this as any)._todoChangeHandler;
+        }
+        
+        await super.close();
     }
 
     protected override buildContentStyle(): string {
@@ -387,10 +418,30 @@ export class NodeInspectorModal extends BaseModal {
         const body = document.createElement('div');
         body.className = 'inspector-body';
 
-        // Left column (versions list)
+        // Left column (todo list + versions list)
         const left = document.createElement('div');
         left.className = 'inspector-column versions-list';
-        left.appendChild(this.renderVersionsList());
+        
+        // Create a single scrollable wrapper for both todo list and versions
+        const scrollableWrapper = document.createElement('div');
+        scrollableWrapper.className = 'scrollable-content';
+        
+        // Add todo list if there are incomplete todos
+        const todoList = this.renderTodoList();
+        if (todoList) {
+            // Remove the scrollable-content class from todo list since we have our own wrapper
+            todoList.classList.remove('scrollable-content');
+            scrollableWrapper.appendChild(todoList);
+        }
+        
+        // Add versions list content (extract content from existing wrapper)
+        const versionsListWithWrapper = this.renderVersionsList();
+        // Move all children from versions wrapper to our scrollable wrapper
+        while (versionsListWithWrapper.firstChild) {
+            scrollableWrapper.appendChild(versionsListWithWrapper.firstChild);
+        }
+        
+        left.appendChild(scrollableWrapper);
 
         // Right column (content view)
         const right = document.createElement('div');
@@ -502,6 +553,156 @@ export class NodeInspectorModal extends BaseModal {
             wrapper.appendChild(item);
         }
         return wrapper;
+    }
+
+
+
+    private renderTodoList(): HTMLElement | null {
+        if (!this.node) return null;
+        
+        const incompleteTodos = this.node.getIncompleteTodos();
+        if (incompleteTodos.length === 0) {
+            return null; // Don't render anything if no todos
+        }
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'todo-list-section';
+        
+        const header = document.createElement('div');
+        header.className = 'todo-list-header';
+        header.innerHTML = `
+            <h3 style="margin: 0; font-size: 1em; color: #374151;">📝 Todo Items (${incompleteTodos.length})</h3>
+        `;
+        
+        const todoContainer = document.createElement('div');
+        todoContainer.className = 'todo-list-container';
+        
+        incompleteTodos.forEach((todo) => {
+            const todoItem = document.createElement('div');
+            todoItem.className = 'todo-item';
+            
+            // Format related nodes
+            const relatedNodesHtml = todo.relatedNodes.length > 0 
+                ? `<div class="todo-related-nodes">
+                     <small>Related: ${todo.relatedNodes.map(ref => ref.title).join(', ')}</small>
+                   </div>`
+                : '';
+            
+            // Build logic error details if available
+            const logicErrorHtml = todo.logicError 
+                ? `<div class="logic-error-details">
+                     <div class="logic-error-meta">
+                         <span class="logic-error-type">${todo.logicError.type.replace(/_/g, ' ')}</span>
+                         <span class="logic-error-severity">Severity: ${todo.logicError.severity}/10</span>
+                     </div>
+                     <div class="logic-error-justification">
+                         <div class="justification-header" data-todo-id="${todo.id}">
+                             <strong>Justification:</strong>
+                             <span class="justification-toggle">▶</span>
+                         </div>
+                         <div class="justification-content collapsed">
+                             ${this.escapeHtml(todo.logicError.justification)}
+                         </div>
+                     </div>
+                     ${todo.logicError.suggestedFix 
+                         ? `<div class="logic-error-suggestion">
+                              <strong>Suggested Fix:</strong> ${this.escapeHtml(todo.logicError.suggestedFix)}
+                            </div>` 
+                         : ''}
+                   </div>`
+                : '';
+
+            todoItem.innerHTML = `
+                <div class="todo-content">
+                    <div class="todo-description">${this.escapeHtml(todo.description)}</div>
+                    ${logicErrorHtml}
+                    ${relatedNodesHtml}
+                    <div class="todo-timestamp">
+                        <small>${new Date(todo.timestamp).toLocaleString()}</small>
+                    </div>
+                </div>
+                <div class="todo-actions">
+                    <button class="todo-complete-btn" data-todo-id="${todo.id}" title="Mark as completed">
+                        ✅
+                    </button>
+                    <button class="todo-remove-btn" data-todo-id="${todo.id}" title="Remove todo">
+                        🗑️
+                    </button>
+                </div>
+            `;
+            
+            todoContainer.appendChild(todoItem);
+        });
+        
+        wrapper.appendChild(header);
+        wrapper.appendChild(todoContainer);
+        
+        // Add event listeners for todo actions
+        wrapper.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            const todoId = target.dataset['todoId'];
+            
+            if (target.classList.contains('todo-complete-btn') && todoId) {
+                void this.completeTodo(todoId);
+            } else if (target.classList.contains('todo-remove-btn') && todoId) {
+                void this.removeTodo(todoId);
+            } else if (target.classList.contains('justification-header') || target.closest('.justification-header')) {
+                // Handle justification toggle
+                const header = target.classList.contains('justification-header') 
+                    ? target 
+                    : target.closest('.justification-header') as HTMLElement;
+                this.toggleJustification(header);
+            }
+        });
+        
+        return wrapper;
+    }
+
+    private async completeTodo(todoId: string): Promise<void> {
+        if (!this.node) return;
+        
+        const success = this.node.completeTodo(todoId);
+        if (success) {
+            this.rerender(); // Refresh the modal to update the todo list
+            await this.persistNodeChanges(); // Save changes to storage
+        }
+    }
+
+    private async removeTodo(todoId: string): Promise<void> {
+        if (!this.node) return;
+        
+        const success = this.node.removeTodo(todoId);
+        if (success) {
+            this.rerender(); // Refresh the modal to update the todo list
+            await this.persistNodeChanges(); // Save changes to storage
+        }
+    }
+
+    /**
+     * Toggle the justification content visibility
+     */
+    private toggleJustification(header: HTMLElement): void {
+        const justificationDiv = header.parentElement;
+        if (!justificationDiv) return;
+        
+        const content = justificationDiv.querySelector('.justification-content') as HTMLElement;
+        const toggle = header.querySelector('.justification-toggle') as HTMLElement;
+        
+        if (!content || !toggle) return;
+        
+        const isCollapsed = content.classList.contains('collapsed');
+        
+        if (isCollapsed) {
+            // Expand
+            content.classList.remove('collapsed');
+            toggle.classList.add('expanded');
+            toggle.textContent = '▼';
+        } else {
+            // Collapse
+            content.classList.add('collapsed');
+            toggle.classList.remove('expanded');
+            toggle.textContent = '▶';
+        }
     }
 
     private renderContentView(): HTMLElement {
@@ -886,7 +1087,7 @@ export class NodeInspectorModal extends BaseModal {
     private renderVersionRatings(ratings: Rating[]): string {
         // Use 3-column layout with visual progress bars (0-10 scale)
         const ratingsHtml = ratings.map(rating => {
-            const score = rating.actual || 0;
+            const score = rating.actual || (rating as any).score || 0; // Support both old and new formats
             const goal = rating.goal || 10;
             const scorePercentage = Math.min((score / 10) * 100, 100); // Always scale to 10
             const goalPercentage = Math.min((goal / 10) * 100, 100); // Goal indicator position
@@ -1326,6 +1527,185 @@ export class NodeInspectorModal extends BaseModal {
                 white-space: pre-wrap;
                 word-break: break-word;
                 margin: 0;
+            }
+            
+            /* Todo List Styles */
+            .todo-list-section {
+                border-bottom: 1px solid #e5e7eb;
+                margin-bottom: 1rem;
+                padding-bottom: 1rem;
+            }
+            
+            .todo-list-header h3 {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-weight: 600;
+                margin-bottom: 0.75rem;
+            }
+            
+            .todo-list-container {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .todo-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.75rem;
+                padding: 0.75rem;
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 6px;
+                transition: background-color 0.15s ease;
+            }
+            
+            .todo-item:hover {
+                background: #f1f3f4;
+            }
+            
+            .todo-content {
+                flex: 1;
+                min-width: 0;
+            }
+            
+            .todo-description {
+                font-weight: 500;
+                color: #374151;
+                margin-bottom: 0.25rem;
+                word-break: break-word;
+            }
+            
+            .logic-error-details {
+                background: #fef3c7;
+                border: 1px solid #fbbf24;
+                border-radius: 4px;
+                padding: 0.5rem;
+                margin: 0.5rem 0;
+                font-size: 0.9em;
+            }
+            
+            .logic-error-meta {
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 0.5rem;
+                font-size: 0.85em;
+            }
+            
+            .logic-error-type {
+                background: #dc2626;
+                color: white;
+                padding: 0.125rem 0.5rem;
+                border-radius: 12px;
+                font-size: 0.75em;
+                font-weight: 600;
+                text-transform: uppercase;
+            }
+            
+            .logic-error-severity {
+                background: #374151;
+                color: white;
+                padding: 0.125rem 0.5rem;
+                border-radius: 12px;
+                font-size: 0.75em;
+                font-weight: 600;
+            }
+            
+            .logic-error-justification,
+            .logic-error-suggestion {
+                margin-bottom: 0.5rem;
+                line-height: 1.4;
+            }
+            
+            .justification-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                user-select: none;
+                padding: 0.25rem 0;
+            }
+            
+            .justification-header:hover {
+                background: rgba(0, 0, 0, 0.05);
+                border-radius: 4px;
+                padding: 0.25rem 0.5rem;
+                margin: 0 -0.5rem;
+            }
+            
+            .justification-toggle {
+                font-family: monospace;
+                font-size: 0.8em;
+                color: #666;
+                transition: transform 0.2s ease;
+            }
+            
+            .justification-toggle.expanded {
+                transform: rotate(90deg);
+            }
+            
+            .justification-content {
+                padding-left: 1rem;
+                margin-top: 0.25rem;
+                transition: all 0.3s ease;
+                overflow: hidden;
+            }
+            
+            .justification-content.collapsed {
+                max-height: 0;
+                margin-top: 0;
+                opacity: 0;
+                padding-left: 0;
+            }
+            
+            .logic-error-justification:last-child,
+            .logic-error-suggestion:last-child {
+                margin-bottom: 0;
+            }
+            
+            .logic-error-justification strong,
+            .logic-error-suggestion strong {
+                color: #374151;
+                font-weight: 600;
+            }
+            
+            .todo-related-nodes {
+                margin-bottom: 0.25rem;
+            }
+            
+            .todo-related-nodes small {
+                color: #6b7280;
+                font-style: italic;
+            }
+            
+            .todo-timestamp small {
+                color: #9ca3af;
+                font-size: 0.8em;
+            }
+            
+            .todo-actions {
+                display: flex;
+                gap: 0.25rem;
+                flex-shrink: 0;
+            }
+            
+            .todo-complete-btn, .todo-remove-btn {
+                background: none;
+                border: none;
+                padding: 0.25rem;
+                cursor: pointer;
+                border-radius: 4px;
+                font-size: 1em;
+                transition: background-color 0.15s ease;
+            }
+            
+            .todo-complete-btn:hover {
+                background: #d1fae5;
+            }
+            
+            .todo-remove-btn:hover {
+                background: #fee2e2;
             }
         `;
         return style;

@@ -384,9 +384,14 @@ export class ComprehensiveImportService {
                 });
                 return await fileHandle.getFile();
             } else {
-                // Only fall back to input element if File System Access API is not available
-                console.warn('⚠️ File System Access API not available, falling back to file input');
-                alert('Your browser does not support file selectors. Please use Chrome 86+ or Edge 86+ for the best experience.');
+                // Silent fallback for input - no user message needed since behavior is identical
+                console.warn('⚠️ File System Access API not available, using fallback file input');
+                
+                const isSecureContext = window.isSecureContext;
+                const protocol = window.location.protocol;
+                const userAgent = navigator.userAgent;
+                
+                console.warn(`🔍 Debug info: SecureContext=${isSecureContext}, Protocol=${protocol}, UserAgent=${userAgent}`);
                 
                 return new Promise((resolve) => {
                     const input = document.createElement('input');

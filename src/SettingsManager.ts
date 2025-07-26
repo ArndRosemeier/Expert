@@ -321,6 +321,10 @@ export class SettingsManager {
                                 context_rating: {
                                     outline: 'creator' as const,
                                     prose: 'prose' as const
+                                },
+                                logic_error_analysis: {
+                                    outline: 'rater' as const,
+                                    prose: 'rater' as const
                                 }
                             };
                         }
@@ -385,6 +389,10 @@ export class SettingsManager {
                     context_rating: {
                         outline: 'creator' as const,
                         prose: 'prose' as const
+                    },
+                    logic_error_analysis: {
+                        outline: 'rater' as const,
+                        prose: 'rater' as const
                     }
                 }
             };
@@ -570,11 +578,21 @@ export class SettingsManager {
         if (!name) throw new Error("Profile name cannot be empty.");
         
         // Store profile in memory with criteria always populated for immediate use
+        // Deep copy to prevent cross-profile contamination
         const profileToSave: SettingsProfile = {
-            ...profile,
-            criteria: profile.criteria || DEFAULT_CRITERIA,
+            selectedModels: { ...(profile.selectedModels || {}) },
+            selectedProviders: { ...(profile.selectedProviders || {}) },
+            webSearchEnabled: { ...(profile.webSearchEnabled || {}) },
+            criteria: profile.criteria ? [...profile.criteria] : [...DEFAULT_CRITERIA],
+            maxIterations: profile.maxIterations,
+            contextExtractionPrompt: profile.contextExtractionPrompt || '',
             version: VersionService.getBuildNumber()
         };
+
+        console.log(`💾 Saving profile "${name}" with deep-copied settings`);
+        console.log(`🔍 Profile references - Original models object:`, profile.selectedModels);
+        console.log(`🔍 Profile references - Deep copied models object:`, profileToSave.selectedModels);
+        console.log(`🔍 Objects are different references:`, profile.selectedModels !== profileToSave.selectedModels);
 
         this.profiles[name] = profileToSave;
         
@@ -1009,6 +1027,10 @@ export class SettingsManager {
                 context_rating: {
                     outline: 'creator' as const,
                     prose: 'prose' as const
+                },
+                logic_error_analysis: {
+                    outline: 'rater' as const,
+                    prose: 'rater' as const
                 }
             }
         };

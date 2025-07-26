@@ -42,8 +42,13 @@ function getVersionInfo() {
 }
 
 export default defineConfig(({ mode }) => {
-  // Use root path for domainfactory, GitHub Pages path for gh-pages
-  const base = mode === 'github' ? '/Expert/' : '/';
+  // Use specific base paths for different deployment targets
+  let base = '/';
+  if (mode === 'github') {
+    base = '/Expert/';
+  } else if (mode === 'domainfactory') {
+    base = '/Expert/';  // domainfactory also serves from /Expert/ subdirectory
+  }
   
   // Generate version info
   const versionInfo = getVersionInfo();

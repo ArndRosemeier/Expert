@@ -798,12 +798,56 @@ label[for] {
     text-align: center;
     display: inline-block;
     transition: transform 0.15s ease;
-    margin-right: 6px;
+    margin-right: 0; /* No margin when followed by todo icon */
     flex-shrink: 0;
+}
+
+/* Status icon gets margin only when it's the last icon */
+.node-status-icon:not(:has(+ .node-todo-icon)) {
+    margin-right: 6px;
+}
+
+/* Fallback for browsers without :has() support */
+.tree-item:not(:has(.node-todo-icon)) .node-status-icon {
+    margin-right: 6px;
 }
 
 .tree-item:hover .node-status-icon {
     transform: scale(1.1);
+}
+
+/* Todo Icon Styling - Direct todos (full size) */
+.node-todo-icon {
+    font-size: 0.9rem;
+    width: 16px;
+    text-align: center;
+    display: inline-block;
+    transition: transform 0.15s ease;
+    margin-right: 6px; /* Space before node title */
+    flex-shrink: 0;
+    vertical-align: baseline;
+}
+
+.tree-item:hover .node-todo-icon {
+    transform: scale(1.1);
+}
+
+/* Todo Icon Styling - Descendant todos only (75% size) */
+.node-todo-icon-small {
+    font-size: 0.675rem; /* 75% the size of regular todo icon (0.9rem * 0.75) */
+    width: 12px;
+    text-align: center;
+    display: inline-block;
+    transition: transform 0.15s ease;
+    margin-right: 6px; /* Space before node title */
+    flex-shrink: 0;
+    vertical-align: middle; /* Adjust alignment for smaller icon */
+    opacity: 0.8; /* Slightly faded to indicate indirect relationship */
+}
+
+.tree-item:hover .node-todo-icon-small {
+    transform: scale(1.2); /* Slightly more scale on hover for visibility */
+    opacity: 1;
 }
 
 /* Content Stats Styling */

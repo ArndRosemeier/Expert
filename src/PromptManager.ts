@@ -74,6 +74,12 @@ export interface OrchestratorPrompts {
     // For outline factory generation
     outline_generation_system: string;
     outline_generation_user: string;
+    
+    // For logic error detection
+    logic_error_analysis: string;
+    
+    // For fixing logic problems in outlines
+    logic_outline_fix: string;
 }
 
 interface PromptDefinition {
@@ -1264,6 +1270,115 @@ The story begins when Sarah receives an encrypted message from her supposedly de
 WARNING: Any deviation from this exact format will cause a system error. Follow the format precisely.`.trim(),
         placeholders: ['ideas', 'genres', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
         description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context formatted according to the application's paragraph-based context system."
+    },
+
+    logic_error_analysis: {
+        text: `
+            You are an expert story logic analyst. Your task is to analyze the following story content for logical inconsistencies, plot holes, and continuity errors.
+
+            STORY CONTENT TO ANALYZE:
+            {{formatted_leaves}}
+
+            CONTEXT FOR ANALYSIS:
+            {{parent_context}}
+
+            ANALYSIS FOCUS:
+            Look for these types of errors: {{error_types}}
+            
+            Specifically check for:
+            - Plot holes: Missing or unexplained story elements that break narrative flow
+            - Character contradictions: Inconsistencies in character behavior, knowledge, or abilities  
+            - Timeline inconsistencies: Events that occur in impossible or contradictory time sequences
+            - Logical inconsistencies: Actions or events that defy established story logic
+            - Factual errors: Contradictions in established facts within the story world
+            - Continuity errors: Inconsistencies in details between different story sections
+
+            CRITICAL INSTRUCTIONS:
+            - Use the provided context to understand the broader story and how the leaf content fits within it
+            - Check for inconsistencies between the leaf content and the parent section context
+            - Be thorough but fair in your analysis
+            - Only report genuine logical problems, not stylistic preferences
+            - Consider how events/information in one leaf might contradict or conflict with others
+            - Provide clear justifications for each error identified that reference specific context
+            - List the exact titles of story sections that contain each error
+            - Rate severity from 1-10 (10 being most severe)
+
+            RESPONSE FORMAT:
+            Your response MUST be valid JSON and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+
+            {
+                "errors": [
+                    {
+                        "type": "plot_hole|character_contradiction|timeline_inconsistency|logical_inconsistency|factual_error|continuity_error",
+                        "severity": 1-10,
+                        "description": "Brief description of the logical error",
+                        "justification": "Detailed explanation of why this is an error and what makes it inconsistent",
+                        "offendingLeaves": ["Exact Title 1", "Exact Title 2"],
+                        "suggestedFix": "Optional practical suggestion for resolving this error"
+                    }
+                ]
+            }
+                
+            Write your response in {{language}} for any explanatory fields. All JSON field names must always remain in English.
+            If no logical errors are found, return: {"errors": []}
+        `.trim(),
+        placeholders: ['formatted_leaves', 'language', 'error_types'],
+        description: "System prompt for analyzing story content for logical inconsistencies, plot holes, and continuity errors using the 🧩 puzzle piece concept."
+    },
+
+    logic_outline_fix: {
+        text: `
+            Generate improved outline content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            
+            You are an expert story editor specializing in making minimal, surgical fixes to logic problems in outlines. Your task is to preserve the original content as much as possible while making only the smallest necessary changes to fix identified logic errors.
+
+            CURRENT SITUATION:
+            The content below was used as an outline/summary for generating detailed story content. However, when that content was expanded into scenes, it led to several logic errors and inconsistencies.
+
+            NODE TITLE: "{{node_title}}"
+            NODE LEVEL: {{node_level}}
+
+            CONTEXT:
+            {{context}}
+
+            CURRENT CONTENT (that led to problems):
+            ---
+            {{current_content}}
+            ---
+
+            PROBLEMS IDENTIFIED:
+            {{formatted_problems}}
+
+            YOUR TASK:
+            Make the MINIMAL necessary edits to the content above to fix only the identified logic problems. You must:
+
+            1. **PRESERVE ORIGINAL TEXT**: Keep most of the original content unchanged
+            2. **SURGICAL FIXES ONLY**: Change only specific words, phrases, or sentences that directly cause the logic problems
+            3. **Maintain Original Structure**: Keep the same paragraph structure, sentence order, and overall organization
+            4. **Preserve Writing Style**: Maintain the exact same tone, voice, and writing style as the original
+            5. **Targeted Changes**: Address each identified problem with the smallest possible edit
+
+            CRITICAL PRESERVATION RULES:
+            - Do NOT rewrite entire sentences unless absolutely necessary
+            - Do NOT change working descriptions that don't cause logic problems
+            - Do NOT add new content unless specifically needed to fill a logic gap
+            - Do NOT rephrase content that is already logically sound
+            - Do NOT change the overall story or character direction
+            - Make edits that are as small and precise as possible
+            - Preserve the original author's word choices and phrasing wherever possible
+            - Only modify what is directly causing the identified logic errors
+
+            RESPONSE FORMAT:
+            Your response MUST be valid JSON and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+
+            {
+                "fixedContent": "The minimally edited content with only necessary changes to fix logic problems",
+                "problemsSolved": ["Brief description of problem 1 that was fixed", "Brief description of problem 2 that was fixed"],
+                "explanation": "Detailed explanation of the minimal changes made and why each was necessary to fix the logic errors"
+            }
+        `.trim(),
+        placeholders: ['node_title', 'node_level', 'context', 'current_content', 'formatted_problems', 'language'],
+        description: "System prompt for fixing logic problems in outlines by rewriting content to prevent errors when expanded into detailed scenes."
     }
 };
 

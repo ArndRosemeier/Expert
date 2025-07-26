@@ -57,6 +57,90 @@ export interface RedundancyAnalysisResult {
 }
 
 /**
+ * Result of recursive redundancy analysis across multiple levels
+ */
+export interface RecursiveRedundancyResult {
+    /** Root node where analysis started */
+    rootNode: DocumentNode;
+    
+    /** All analysis results by node ID */
+    analysisResults: Map<string, RedundancyAnalysisResult>;
+    
+    /** All detected redundancies across all levels */
+    allRedundancies: RedundancyDetection[];
+    
+    /** Total nodes that were analyzed */
+    totalNodesAnalyzed: number;
+    
+    /** Total redundancies found above threshold */
+    totalRedundantNodes: number;
+    
+    /** Analysis timestamp */
+    timestamp: Date;
+    
+    /** Configuration used for analysis */
+    config: RecursiveRedundancyConfig;
+    
+    /** Any errors during recursive analysis */
+    errors: string[];
+}
+
+/**
+ * Progress tracking for recursive analysis
+ */
+export interface RedundancyAnalysisProgress {
+    /** Current phase of analysis */
+    phase: 'discovering' | 'analyzing' | 'processing' | 'complete';
+    
+    /** Current node being analyzed */
+    currentNode: string;
+    
+    /** Total nodes discovered for analysis */
+    totalNodes: number;
+    
+    /** Nodes completed */
+    completedNodes: number;
+    
+    /** Progress percentage (0-100) */
+    percentage: number;
+    
+    /** Current depth level being processed */
+    currentDepth: number;
+    
+    /** Redundancies found so far */
+    redundanciesFound: number;
+    
+    /** Any status message */
+    message?: string;
+}
+
+/**
+ * Configuration for recursive redundancy analysis
+ */
+export interface RecursiveRedundancyConfig {
+    /** Maximum depth to analyze (1 = single level, 2 = children + grandchildren, etc.) */
+    maxDepth: number;
+    
+    /** Whether to analyze the entire project tree recursively */
+    analyzeEntireProject: boolean;
+    
+    /** Minimum redundancy score to flag (default: 70) */
+    minimumRedundancyThreshold: number;
+    
+    /** Maximum content length per node for analysis (default: 500 chars) */
+    maxContentLength: number;
+    
+    /** Whether to include nodes with no content (default: false) */
+    includeEmptyNodes: boolean;
+    
+    /** Whether to auto-delete redundancies above a certain threshold */
+    autoDeleteThreshold?: number;
+    
+    /** Whether to continue analysis after finding redundancies */
+    continueAfterRedundancies: boolean;
+}
+
+/**
  * Raw AI response structure for parsing
  */
 export interface RedundancyAIResponse {
@@ -70,7 +154,7 @@ export interface RedundancyAIResponse {
 }
 
 /**
- * Configuration for redundancy detection
+ * Configuration for redundancy detection (legacy - for backwards compatibility)
  */
 export interface RedundancyDetectionConfig {
     /** Minimum redundancy score to flag (default: 70) */
@@ -93,11 +177,26 @@ export const DEFAULT_REDUNDANCY_CONFIG: RedundancyDetectionConfig = {
 };
 
 /**
+ * Default recursive configuration values
+ */
+export const DEFAULT_RECURSIVE_REDUNDANCY_CONFIG: RecursiveRedundancyConfig = {
+    maxDepth: 1,
+    analyzeEntireProject: false,
+    minimumRedundancyThreshold: 70,
+    maxContentLength: 500,
+    includeEmptyNodes: false,
+    continueAfterRedundancies: true
+};
+
+/**
  * Modal state for tracking user interactions
  */
 export interface RedundancyModalState {
     /** Current analysis result being displayed */
     currentAnalysis: RedundancyAnalysisResult | null;
+    
+    /** Current recursive analysis result */
+    currentRecursiveAnalysis: RecursiveRedundancyResult | null;
     
     /** IDs of nodes marked for deletion */
     markedForDeletion: Set<string>;
@@ -105,6 +204,12 @@ export interface RedundancyModalState {
     /** Whether analysis is currently running */
     isAnalyzing: boolean;
     
+    /** Current progress of recursive analysis */
+    analysisProgress: RedundancyAnalysisProgress | null;
+    
     /** User's review status for each redundancy */
     reviewedRedundancies: Set<string>;
+    
+    /** Whether recursive mode is enabled */
+    recursiveModeEnabled: boolean;
 } 

@@ -19,7 +19,7 @@ try {
     }
 
     Write-Host "Building application for domainfactory..." -ForegroundColor Yellow
-    npm run build:github
+    npm run build:domainfactory
 
     Write-Host "Copying .htaccess..." -ForegroundColor Yellow
     Copy-Item "public/.htaccess" "dist/.htaccess" -Force

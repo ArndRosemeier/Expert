@@ -1,12 +1,24 @@
 # Expert Application - Apache Configuration for domainfactory deployment
 RewriteEngine On
 
+# Ensure proper MIME types for JavaScript modules
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+    AddType text/css .css
+    AddType application/json .json
+    AddType application/wasm .wasm
+</IfModule>
+
 # Redirect /keys to /keys.html for the standalone key management app
 RewriteRule ^keys/?$ keys.html [L]
 
-# Handle clean URLs for the main application
+# Don't rewrite actual files and directories (including assets)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
+# Don't rewrite asset files
+RewriteCond %{REQUEST_URI} !^/Expert/assets/
+# Handle clean URLs for the main application
 RewriteRule ^(.*)$ index.html [L]
 
 # Cache static assets
