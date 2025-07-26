@@ -1406,34 +1406,30 @@ export async function initialize() {
         
         if (UnifiedGenerationService.hasActiveInstances()) {
             const summary = UnifiedGenerationService.getGenerationSummary();
-            const confirmMessage = `Are you sure you want to abort ${summary.activeCount} active generation${summary.activeCount !== 1 ? 's' : ''}? Any partial progress will be saved.`;
+            console.log(`🛑 Aborting ${summary.activeCount} active generation${summary.activeCount !== 1 ? 's' : ''} - graceful service-level abort`);
             
-            const confirmed = confirm(confirmMessage);
-            if (confirmed) {
-                console.log('🛑 User confirmed abort - using graceful service-level abort');
-                try {
-                    // Gracefully abort all UnifiedGenerationService instances
-                    UnifiedGenerationService.abortAllInstances();
+            try {
+                // Gracefully abort all UnifiedGenerationService instances
+                UnifiedGenerationService.abortAllInstances();
+                
+                console.log('🛑 Graceful abort completed successfully');
+                
+                // Provide immediate feedback
+                const abortBtn = getElementById('globalAbortBtn') as HTMLButtonElement;
+                if (abortBtn) {
+                    const originalText = abortBtn.textContent;
+                    abortBtn.textContent = 'Aborting...';
+                    abortBtn.disabled = true;
                     
-                    console.log('🛑 Graceful abort completed successfully');
-                    
-                    // Provide immediate feedback
-                    const abortBtn = getElementById('globalAbortBtn') as HTMLButtonElement;
-                    if (abortBtn) {
-                        const originalText = abortBtn.textContent;
-                        abortBtn.textContent = 'Aborting...';
-                        abortBtn.disabled = true;
-                        
-                        // Reset button after 2 seconds
-                        void setTimeout(() => {
-                            abortBtn.textContent = originalText;
-                            abortBtn.disabled = false;
-                        }, 2000);
-                    }
-                } catch (error) {
-                    console.error('❌ Failed to abort generation:', error);
-                    alert('Failed to abort generation. Please try again.');
+                    // Reset button after 2 seconds
+                    void setTimeout(() => {
+                        abortBtn.textContent = originalText;
+                        abortBtn.disabled = false;
+                    }, 2000);
                 }
+            } catch (error) {
+                console.error('❌ Failed to abort generation:', error);
+                alert('Failed to abort generation. Please try again.');
             }
         } else {
             alert('No generation is currently in progress.');
