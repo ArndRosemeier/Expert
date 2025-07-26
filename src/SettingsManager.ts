@@ -715,6 +715,15 @@ export class SettingsManager {
         if (activeProject) {
             activeProject.setLanguage(language);
             await activeProject.saveToStorage();
+            
+            // Refresh the tree to show updated language flag
+            try {
+                const { renderMultiProjectTree } = await import('./ui/project-ui');
+                renderMultiProjectTree();
+                console.log(`🌐 Tree refreshed after language change to: ${language}`);
+            } catch (error) {
+                console.error('Failed to refresh tree after language change:', error);
+            }
         }
     }
 

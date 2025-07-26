@@ -376,9 +376,13 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             project.selectedNodeId = plainObject.selectedNodeId;
         }
         
-        // Restore language if it was saved
+        // Restore language if it was saved, default to English if not
         if (plainObject.language) {
             project.language = plainObject.language;
+        } else {
+            // Default to English for projects that don't have a language set
+            project.language = 'English';
+            console.log(`🌐 Project "${plainObject.projectTitle}" loaded without language, defaulting to English`);
         }
         
         // Ensure all nodes share the same template reference

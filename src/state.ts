@@ -31,14 +31,22 @@ let isLanguageSyncEnabled = true; // Flag to prevent infinite loops during sync
 export const initializeLanguageSync = () => {
     // Subscribe to active project changes to sync language when projects switch
     onActiveProjectChange((activeProject) => {
-        if (!isLanguageSyncEnabled || !activeProject || !settingsManager) return;
+        if (!isLanguageSyncEnabled || !settingsManager) return;
+        
+        if (!activeProject) {
+            // No active project, don't change language settings
+            return;
+        }
         
         const projectLanguage = activeProject.getLanguage();
         if (projectLanguage) {
-            // Project has a language set, sync it to the active language setting
+            // Project has a language set, sync it to the global language setting
             const currentLanguage = settingsManager.getLanguage();
+            
+            console.log(`🌐 Active project changed to "${activeProject.projectTitle}" with language "${projectLanguage}"`);
+            
             if (currentLanguage !== projectLanguage) {
-                console.log(`🌐 Syncing project language "${projectLanguage}" to active language setting`);
+                console.log(`🌐 Syncing project language "${projectLanguage}" to global language setting`);
                 isLanguageSyncEnabled = false; // Prevent recursion
                 settingsManager.setLanguage(projectLanguage).then(() => {
                     // Update language selector UI if it exists
@@ -48,6 +56,9 @@ export const initializeLanguageSync = () => {
                     console.error('Failed to sync project language to settings:', error);
                     isLanguageSyncEnabled = true;
                 });
+            } else {
+                // Language is the same but still update the UI to reflect current project
+                updateLanguageSelectorUI(projectLanguage);
             }
         }
     });
