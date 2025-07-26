@@ -25,6 +25,7 @@ interface ChildNodeModalState {
     isCreating: boolean;
     creationStep: string | null;
     manualDraft: string;
+    userDirection: string;
 }
 
 export class AddChildNodeModal extends BaseModal {
@@ -47,7 +48,8 @@ export class AddChildNodeModal extends BaseModal {
             error: null,
             isCreating: false,
             creationStep: null,
-            manualDraft: ''
+            manualDraft: '',
+            userDirection: ''
         };
 
         // Create the node creation service
@@ -353,8 +355,37 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         const description = createElement('div', {
-            content: 'Click the button below to generate AI-powered suggestions for your next child node.',
-            attributes: { style: 'font-size: 14px; color: #666; margin-bottom: 24px; line-height: 1.4;' }
+            content: 'Optionally provide direction for the AI suggestions, then click generate.',
+            attributes: { style: 'font-size: 14px; color: #666; margin-bottom: 16px; line-height: 1.4;' }
+        });
+
+        // User direction input area
+        const directionLabel = createElement('label', {
+            content: 'Direction (optional):',
+            attributes: { style: 'display: block; font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; text-align: left;' }
+        });
+
+        const directionTextarea = createElement('textarea', {
+            attributes: { 
+                placeholder: 'e.g., "Focus on character development", "Include a conflict scene", "Explore the theme of redemption"...',
+                style: 'width: 100%; height: 80px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; margin-bottom: 16px; box-sizing: border-box;'
+            }
+        }) as HTMLTextAreaElement;
+
+        // Update state when user types
+        directionTextarea.addEventListener('input', () => {
+            this.childModalState.userDirection = directionTextarea.value;
+        });
+
+        // Set initial value
+        directionTextarea.value = this.childModalState.userDirection;
+
+        // Focus styling
+        directionTextarea.addEventListener('focus', () => {
+            directionTextarea.style.borderColor = '#4CAF50';
+        });
+        directionTextarea.addEventListener('blur', () => {
+            directionTextarea.style.borderColor = '#e0e0e0';
         });
 
         const generateButton = createElement('button', {
@@ -379,6 +410,8 @@ export class AddChildNodeModal extends BaseModal {
         container.appendChild(icon);
         container.appendChild(title);
         container.appendChild(description);
+        container.appendChild(directionLabel);
+        container.appendChild(directionTextarea);
         container.appendChild(generateButton);
 
         return container;
@@ -589,7 +622,11 @@ export class AddChildNodeModal extends BaseModal {
         this.refreshContent();
 
         try {
-            const suggestions = await this.nodeCreationService.generateSuggestions(this.childModalConfig.parentNode, 5);
+            const suggestions = await this.nodeCreationService.generateSuggestions(
+                this.childModalConfig.parentNode, 
+                5, 
+                this.childModalState.userDirection
+            );
             this.childModalState.suggestions = suggestions;
             this.childModalState.isGenerating = false;
             this.refreshContent();

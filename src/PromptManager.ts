@@ -464,6 +464,8 @@ Document context:
 {{context}}
 ---
 
+{{user_direction_section}}
+
 Generate exactly 5 ALTERNATIVE suggestions for the next child section. These are 5 different approaches, themes, or directions for the single next section that logically follows the parent content.
 
 DO NOT create sequential children (like Chapter 6, Chapter 7, Chapter 8). Instead, create 5 different versions of what the next single child section focuses on.
@@ -476,8 +478,8 @@ Write the drafts using confident, definitive language. Avoid tentative phrases l
 
 Return as JSON array with "title" and "draft" properties.
         `.trim(),
-        placeholders: ['parent_title', 'parent_content', 'context', 'language'],
-        description: "Creates alternative suggestions for the next child section with different approaches or themes."
+        placeholders: ['parent_title', 'parent_content', 'context', 'language', 'user_direction_section'],
+        description: "Creates alternative suggestions for the next child section with different approaches or themes. Can be guided by optional user direction."
     },
 
     parent_content_update: {

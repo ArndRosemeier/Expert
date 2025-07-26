@@ -18,7 +18,7 @@ export interface NodeCreationConfig {
 }
 
 export interface INodeCreationService {
-    generateSuggestions(parentNode: DocumentNode, count?: number): Promise<NodeSuggestion[]>;
+    generateSuggestions(parentNode: DocumentNode, count?: number, userDirection?: string): Promise<NodeSuggestion[]>;
     updateParentContent(parentNode: DocumentNode, childTitle: string): Promise<string>;
     createNode(config: NodeCreationConfig): Promise<DocumentNode>;
 }
@@ -47,7 +47,7 @@ export class NodeCreationService implements INodeCreationService {
     /**
      * Generate AI-powered child node suggestions
      */
-    public async generateSuggestions(parentNode: DocumentNode, count: number = 5): Promise<NodeSuggestion[]> {
+    public async generateSuggestions(parentNode: DocumentNode, count: number = 5, userDirection?: string): Promise<NodeSuggestion[]> {
         const profile = this.settingsManager.getLastUsedProfile();
         if (!profile) {
             throw new Error('No active profile found for AI generation');
@@ -60,11 +60,17 @@ export class NodeCreationService implements INodeCreationService {
         const prompts = this.settingsManager.getPrompts();
         const promptTemplate = prompts.child_node_suggestions;
         
+        // Build user direction section
+        const userDirectionSection = userDirection?.trim() ? 
+            `User Direction: Please consider the following direction when generating suggestions:\n---\n${userDirection.trim()}\n---\n` : 
+            '';
+        
         // Fill the prompt template
         const filledPrompt = promptTemplate
             .replace(/\{\{parent_title\}\}/g, parentNode.title)
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
             .replace(/\{\{context\}\}/g, context || '')
+            .replace(/\{\{user_direction_section\}\}/g, userDirectionSection)
             .replace(/\{\{count\}\}/g, count.toString())
             .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
 
