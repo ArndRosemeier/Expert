@@ -97,28 +97,29 @@ function formatModelName(modelId: string): string {
  * Falls back to 🌐 globe icon if no specific flag is available
  */
 function getLanguageFlag(language: string): string {
+    // Use the same flag mappings as the language dropdown for consistency
     const languageFlags: Record<string, string> = {
-        // Major languages with clear flag mappings
-        'English': '🇺🇸',
-        'German': '🇩🇪',
+        'English': '🇬🇧',
+        'Spanish': '🇪🇸', 
         'French': '🇫🇷',
-        'Spanish': '🇪🇸',
+        'German': '🇩🇪',
         'Italian': '🇮🇹',
         'Portuguese': '🇵🇹',
-        'Dutch': '🇳🇱',
         'Russian': '🇷🇺',
-        'Japanese': '🇯🇵',
         'Chinese': '🇨🇳',
+        'Japanese': '🇯🇵',
         'Korean': '🇰🇷',
         'Arabic': '🇸🇦',
-        'Hindi': '🇮🇳',
-        'Turkish': '🇹🇷',
+        'Dutch': '🇳🇱',
         'Polish': '🇵🇱',
         'Swedish': '🇸🇪',
         'Norwegian': '🇳🇴',
         'Danish': '🇩🇰',
         'Finnish': '🇫🇮',
         'Greek': '🇬🇷',
+        'Turkish': '🇹🇷',
+        'Hindi': '🇮🇳',
+        // Additional languages not in dropdown but commonly used
         'Hebrew': '🇮🇱',
         'Czech': '🇨🇿',
         'Hungarian': '🇭🇺',
