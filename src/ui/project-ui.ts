@@ -93,6 +93,82 @@ function formatModelName(modelId: string): string {
 }
 
 /**
+ * Maps language names to their corresponding flag emojis
+ * Falls back to 🌐 globe icon if no specific flag is available
+ */
+function getLanguageFlag(language: string): string {
+    const languageFlags: Record<string, string> = {
+        // Major languages with clear flag mappings
+        'English': '🇺🇸',
+        'German': '🇩🇪',
+        'French': '🇫🇷',
+        'Spanish': '🇪🇸',
+        'Italian': '🇮🇹',
+        'Portuguese': '🇵🇹',
+        'Dutch': '🇳🇱',
+        'Russian': '🇷🇺',
+        'Japanese': '🇯🇵',
+        'Chinese': '🇨🇳',
+        'Korean': '🇰🇷',
+        'Arabic': '🇸🇦',
+        'Hindi': '🇮🇳',
+        'Turkish': '🇹🇷',
+        'Polish': '🇵🇱',
+        'Swedish': '🇸🇪',
+        'Norwegian': '🇳🇴',
+        'Danish': '🇩🇰',
+        'Finnish': '🇫🇮',
+        'Greek': '🇬🇷',
+        'Hebrew': '🇮🇱',
+        'Czech': '🇨🇿',
+        'Hungarian': '🇭🇺',
+        'Romanian': '🇷🇴',
+        'Bulgarian': '🇧🇬',
+        'Croatian': '🇭🇷',
+        'Serbian': '🇷🇸',
+        'Ukrainian': '🇺🇦',
+        'Slovak': '🇸🇰',
+        'Slovenian': '🇸🇮',
+        'Estonian': '🇪🇪',
+        'Latvian': '🇱🇻',
+        'Lithuanian': '🇱🇹',
+        'Thai': '🇹🇭',
+        'Vietnamese': '🇻🇳',
+        'Indonesian': '🇮🇩',
+        'Malay': '🇲🇾',
+        'Filipino': '🇵🇭',
+        // Alternative names
+        'Deutsch': '🇩🇪',
+        'Français': '🇫🇷',
+        'Español': '🇪🇸',
+        'Italiano': '🇮🇹',
+        'Português': '🇵🇹',
+        'Nederlands': '🇳🇱',
+        'Русский': '🇷🇺',
+        '日本語': '🇯🇵',
+        '中文': '🇨🇳',
+        '한국어': '🇰🇷',
+        'العربية': '🇸🇦'
+    };
+    
+    // Try exact match first
+    if (languageFlags[language]) {
+        return languageFlags[language];
+    }
+    
+    // Try case-insensitive match
+    const lowerLanguage = language.toLowerCase();
+    for (const [key, flag] of Object.entries(languageFlags)) {
+        if (key.toLowerCase() === lowerLanguage) {
+            return flag;
+        }
+    }
+    
+    // Fallback to globe icon
+    return '🌐';
+}
+
+/**
  * Gets the appropriate status icons for a node based on its state
  * Returns an object with separate status, todo, and language icons for proper horizontal layout
  */
@@ -153,8 +229,8 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
         if (project) {
             const projectLanguage = project.getLanguage();
             if (projectLanguage) {
-                // Project has a specific language set
-                languageIcon = '🌐';
+                // Project has a specific language set - use actual flag if available
+                languageIcon = getLanguageFlag(projectLanguage);
             }
         }
     }
