@@ -2,7 +2,7 @@ import { DocumentNode, ContentVersion } from '../DocumentNode';
 import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
-import { GenerationController } from './GenerationController';
+
 import { LoopOrchestrator, LoopInput } from '../LoopOrchestrator';
 import { SettingsManager } from '../SettingsManager';
 import { OpenRouterClient } from '../OpenRouterClient';
@@ -192,7 +192,6 @@ export interface UnifiedGenerationDependencies {
     treeService: TreeService;
     contextService: ContextService;
     promptService: PromptService;
-    generationController: GenerationController;
     generationCoordinator: GenerationCoordinator;
     loopOrchestrator: LoopOrchestrator;
     settingsManager: SettingsManager;
@@ -206,6 +205,10 @@ export interface UnifiedGenerationDependencies {
  * Unified generation service that processes all generation using a stateless target-state approach
  */
 export class UnifiedGenerationService {
+    // Static registry for managing multiple concurrent instances
+    private static activeInstances: Set<UnifiedGenerationService> = new Set();
+    
+    private instanceId: string = crypto.randomUUID();
     private deps: UnifiedGenerationDependencies;
     private abortRequested: boolean = false;
     private coherenceService: CoherenceService;
@@ -235,6 +238,54 @@ export class UnifiedGenerationService {
     }
 
     /**
+     * Static methods for managing active instances
+     */
+    public static getActiveInstances(): UnifiedGenerationService[] {
+        return Array.from(this.activeInstances);
+    }
+
+    public static hasActiveInstances(): boolean {
+        return this.activeInstances.size > 0;
+    }
+
+    public static abortAllInstances(): void {
+        console.log(`🛑 Aborting all ${this.activeInstances.size} active UnifiedGenerationService instances`);
+        for (const instance of this.activeInstances) {
+            instance.requestAbort();
+        }
+    }
+
+    public static getGenerationSummary(): {
+        activeCount: number;
+        operations: Array<{
+            instanceId: string;
+            currentOperation: string | null;
+            currentNodeId: string | null;
+        }>;
+    } {
+        return {
+            activeCount: this.activeInstances.size,
+            operations: Array.from(this.activeInstances).map(instance => ({
+                instanceId: instance.instanceId,
+                currentOperation: instance.currentOperationType,
+                currentNodeId: instance.currentNodeId
+            }))
+        };
+    }
+
+    /**
+     * Instance methods for abort management
+     */
+    public requestAbort(): void {
+        console.log(`🛑 Abort requested for UnifiedGenerationService instance ${this.instanceId}`);
+        this.abortRequested = true;
+    }
+
+    public isAbortRequested(): boolean {
+        return this.abortRequested;
+    }
+
+    /**
      * Main entry point for unified generation using stateless target-state approach
      */
     public async generateWithLevels(startNodeId: string, inputLevels: Omit<GenerationLevels, 'frozenSettings'>): Promise<void> {
@@ -259,14 +310,9 @@ export class UnifiedGenerationService {
         // Validate levels
         this.validateLevels(levels);
 
-        // Check if another generation is already running
-        if (this.deps.generationController.canAbortGeneration(this.deps.rootNode)) {
-            throw new Error('Another generation operation is already in progress. Please abort it first or wait for completion.');
-        }
-
-        // Setup generation context
+        // Register this instance in the active registry
+        UnifiedGenerationService.activeInstances.add(this);
         this.abortRequested = false;
-        this.deps.generationController.setupSingleNodeGeneration(startNodeId);
 
         // Get the starting node
         const startNode = this.deps.treeService.findNodeById(startNodeId, this.deps.rootNode);
@@ -297,8 +343,8 @@ export class UnifiedGenerationService {
             
             throw error;
         } finally {
-            // Always cleanup generation context
-            this.deps.generationController.clearGenerationContext();
+            // Always cleanup this instance from active registry
+            UnifiedGenerationService.activeInstances.delete(this);
             // Clear accumulated contradictions
             this.accumulatedContradictions = {
                 hasContradictions: false,
@@ -331,14 +377,9 @@ export class UnifiedGenerationService {
         // Calculate maximum level we might work on based on generation parameters
         const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
         
-        // Keep looping until no more work can be done
+        // Keep looping until no more work can be done or abort is requested
         let workDone = true;
-        while (workDone) {
-            // Check for abort
-            if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-                throw new Error('Generation was aborted by user');
-            }
-
+        while (workDone && !this.abortRequested) {
             workDone = false;
             
             // Collect starting node and ALL its descendants in breadth-first order
@@ -402,6 +443,11 @@ export class UnifiedGenerationService {
                 }
             }
             
+        }
+        
+        // Log graceful exit if aborted
+        if (this.abortRequested) {
+            console.log(`🛑 Generation gracefully aborted for UnifiedGenerationService instance ${this.instanceId}`);
         }
     }
 
@@ -529,8 +575,9 @@ export class UnifiedGenerationService {
      */
     private async handleContextPruning(nodeId: string, capturedLanguage?: string): Promise<void> {
         // Check for abort at start of operation
-        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            throw new Error('Generation was aborted by user');
+        if (this.abortRequested) {
+            console.log(`🛑 Context pruning aborted for node: ${nodeId}`);
+            return;
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
@@ -684,8 +731,9 @@ export class UnifiedGenerationService {
      */
     private async handleContentGeneration(nodeId: string): Promise<void> {
         // Check for abort at start of operation
-        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            throw new Error('Generation was aborted by user');
+        if (this.abortRequested) {
+            console.log(`🛑 Content generation aborted for node: ${nodeId}`);
+            return;
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
@@ -752,8 +800,9 @@ export class UnifiedGenerationService {
      */
     private async handleDraftCreation(nodeId: string): Promise<{ childIds: string[]; childrenCreated: boolean }> {
         // Check for abort at start of operation
-        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            throw new Error('Generation was aborted by user');
+        if (this.abortRequested) {
+            console.log(`🛑 Draft creation aborted for node: ${nodeId}`);
+            return { childIds: [], childrenCreated: false };
         }
 
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
@@ -893,9 +942,9 @@ export class UnifiedGenerationService {
      */
     private async handleCoherenceCheck(parentId: string, levels: GenerationLevels): Promise<void> {
         // Check for abort at start of operation
-        if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
-            console.log('🛑 UnifiedGenerationService: Abort detected in handleCoherenceCheck');
-            throw new Error('Generation was aborted by user');
+        if (this.abortRequested) {
+            console.log(`🛑 Coherence check aborted for parent: ${parentId}`);
+            return;
         }
 
         const parentNode = this.deps.treeService.findNodeById(parentId, this.deps.rootNode);
@@ -1562,15 +1611,13 @@ export class UnifiedGenerationService {
 
 
     /**
-     * Abort current generation
+     * Abort current generation (legacy method, use requestAbort() instead)
      */
     public abortCurrentGeneration(): void {
-        console.log('🛑 UnifiedGenerationService: Abort requested');
-        this.abortRequested = true;
+        this.requestAbort();
         
-        // Request stop from both the loop orchestrator and the generation controller
+        // Also request stop from loop orchestrator for any legacy content loops
         this.deps.loopOrchestrator.requestStop();
-        this.deps.generationController.abortCurrentGeneration(this.deps.rootNode);
     }
 
 

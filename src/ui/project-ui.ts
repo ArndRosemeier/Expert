@@ -2353,7 +2353,7 @@ export function renderNodeDetails() {
     const shouldDisableButtons = isAnyNodeGenerating || node.isPromptGenerating;
 
     // Update button states based on generation status  
-    const isAnyOperationInProgress = projectManager.getGenerationController().canAbortGeneration(projectManager.rootNode);
+    const isAnyOperationInProgress = projectManager.getTreeService().isAnyNodeGenerating(projectManager.rootNode);
     
     // Normal button states (no more button transformations)
     generateBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
@@ -2984,7 +2984,6 @@ This action cannot be undone.`;
                             treeService: projectManager.getTreeService(),
                             contextService: projectManager.getContextService(),
                             promptService: projectManager.getPromptService(),
-                            generationController: projectManager.getGenerationController(),
                             generationCoordinator: projectManager.getGenerationCoordinator(),
                             loopOrchestrator: (projectManager as any).loopOrchestrator,
                             settingsManager: projectManager.getSettingsManager(),
@@ -3078,7 +3077,6 @@ This action cannot be undone.`;
                             treeService: projectManager.getTreeService(),
                             contextService: projectManager.getContextService(),
                             promptService: projectManager.getPromptService(),
-                            generationController: projectManager.getGenerationController(),
                             generationCoordinator: projectManager.getGenerationCoordinator(),
                             loopOrchestrator: (projectManager as any).loopOrchestrator,
                             settingsManager: projectManager.getSettingsManager(),
@@ -5002,7 +5000,6 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             treeService: projectManager.getTreeService(),
             contextService: projectManager.getContextService(),
             promptService: projectManager.getPromptService(),
-            generationController: projectManager.getGenerationController(),
             generationCoordinator: projectManager.getGenerationCoordinator(),
             loopOrchestrator: (projectManager as any).loopOrchestrator,
             settingsManager: projectManager.getSettingsManager(),

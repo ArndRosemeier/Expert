@@ -1402,22 +1402,20 @@ export async function initialize() {
     // Global abort button handler - SIMPLIFIED VERSION
     try {
     getElementById('globalAbortBtn').addEventListener('click', async () => {
-        const activeProject = state.getActiveProject();
-        if (activeProject && activeProject.getGenerationController().canAbortGeneration(activeProject.rootNode)) {
-            const confirmed = confirm('Are you sure you want to abort the current generation? Any partial progress will be saved.');
+        const { UnifiedGenerationService } = await import('./project/UnifiedGenerationService');
+        
+        if (UnifiedGenerationService.hasActiveInstances()) {
+            const summary = UnifiedGenerationService.getGenerationSummary();
+            const confirmMessage = `Are you sure you want to abort ${summary.activeCount} active generation${summary.activeCount !== 1 ? 's' : ''}? Any partial progress will be saved.`;
+            
+            const confirmed = confirm(confirmMessage);
             if (confirmed) {
-                console.log('🛑 User confirmed abort - using simplified abort');
+                console.log('🛑 User confirmed abort - using graceful service-level abort');
                 try {
-                    // HYBRID APPROACH: Immediate abort at both levels
-                    // 1. Stop all HTTP requests immediately (single bottleneck)
-                    const { OpenRouterClient } = await import('./OpenRouterClient');
-                    const openRouterClient = OpenRouterClient.getInstance();
-                    openRouterClient.abortAllOperations();
+                    // Gracefully abort all UnifiedGenerationService instances
+                    UnifiedGenerationService.abortAllInstances();
                     
-                    // 2. Set stopRequested flag for immediate loop exit
-                    activeProject.getGenerationController().abortCurrentGeneration(activeProject.rootNode);
-                    
-                    console.log('🛑 Simplified abort completed successfully');
+                    console.log('🛑 Graceful abort completed successfully');
                     
                     // Provide immediate feedback
                     const abortBtn = getElementById('globalAbortBtn') as HTMLButtonElement;
@@ -1426,7 +1424,7 @@ export async function initialize() {
                         abortBtn.textContent = 'Aborting...';
                         abortBtn.disabled = true;
                         
-                        // Reset button after 2 seconds (faster since it's simpler)
+                        // Reset button after 2 seconds
                         void setTimeout(() => {
                             abortBtn.textContent = originalText;
                             abortBtn.disabled = false;

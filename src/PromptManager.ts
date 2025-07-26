@@ -937,8 +937,6 @@ Your JSON response:`.trim(),
 
     context_rating: {
         text: `
-            Write your response in {{language}} for any explanatory fields. All JSON field names must always remain in English.
-            
             You are analyzing inherited context items to determine which ones are needed for creating subnodes of the current node.
 
 **Your Task:**
@@ -1011,8 +1009,8 @@ Example 2 (all items needed):
 - Test your JSON mentally before responding to ensure it's valid
 
 Your JSON response:`.trim(),
-        placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
-        description: "System prompt for determining which inherited context items should be kept or removed for subnode creation. Provides binary keep/remove decisions for all context items."
+        placeholders: ['node_title', 'node_content', 'numbered_context_items'],
+        description: "System prompt for determining which inherited context items should be kept or removed for subnode creation. Provides binary keep/remove decisions in language-agnostic JSON format."
     },
 
     fix_contradiction: {
