@@ -835,7 +835,16 @@ export class OpenRouterClient {
       const modelConfig = await this.getModelConfigForPurpose(purpose);
       const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
       
-
+      // Calculate prompt length and log request start
+      const promptForLogging = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const promptLength = promptForLogging.length;
+      
+      // Log to UI Logger
+      void import('./utils/UILogger').then(({ uiLogger }) => {
+        uiLogger.info(`OpenRouter request started`, `Purpose: ${purpose} | Model: ${model} | Prompt: ${promptLength} chars`);
+      }).catch(() => {
+        // UI logger not available, that's ok
+      });
 
       const startTime = Date.now();
       const request: OpenRouterRequest = {
@@ -990,6 +999,13 @@ export class OpenRouterClient {
         
         aiInteractionsService.completeInteraction();
         
+        // Log completion to UI Logger
+        void import('./utils/UILogger').then(({ uiLogger }) => {
+          uiLogger.success(`OpenRouter request completed`, `Purpose: ${purpose} | Model: ${model} | Response: ${fullContent.length} chars`);
+        }).catch(() => {
+          // UI logger not available, that's ok
+        });
+        
         // Emit completion event with final character count
         window.dispatchEvent(new CustomEvent('ai-progress', { 
           detail: { type: 'complete', characters: fullContent.length } 
@@ -1003,6 +1019,19 @@ export class OpenRouterClient {
       
     } catch (error: unknown) {
       console.error(`❌ Streaming chat failed for purpose: ${purpose}, operation: ${opId}`, error);
+      
+      // Log error to UI Logger
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      void import('./utils/UILogger').then(({ uiLogger }) => {
+        // Get model for error logging (fallback if not available)
+        this.getModelForPurpose(purpose).then(modelName => {
+          uiLogger.error(`OpenRouter request failed`, `Purpose: ${purpose} | Model: ${modelName} | Error: ${errorMessage}`);
+        }).catch(() => {
+          uiLogger.error(`OpenRouter request failed`, `Purpose: ${purpose} | Error: ${errorMessage}`);
+        });
+      }).catch(() => {
+        // UI logger not available, that's ok
+      });
       
       if (error instanceof Error && error.name === 'AbortError') {
         const abortError = new Error('Request was aborted');
