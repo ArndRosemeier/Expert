@@ -389,7 +389,7 @@ let contentLevelState: number = -1;
 let contextPruneLevelState: number = -1;
 let coherenceLevelState: number = -1;
 let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
-let contextRatingThresholdState: number = -1; // -1 = use legacy analysis, 1-10 = rating threshold
+
 
 // Simple bulk operation tracking
 let isBulkOperationActive: boolean = false;
@@ -512,8 +512,7 @@ async function saveLevelStates() {
             contentLevel: contentLevelState,
             contextPruneLevel: contextPruneLevelState,
             coherenceLevel: coherenceLevelState,
-            autofixSeverity: autofixSeverityState,
-            contextRatingThreshold: contextRatingThresholdState
+            autofixSeverity: autofixSeverityState
         });
     } catch (error) {
         console.warn('Failed to save level states:', error);
@@ -524,14 +523,13 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, contextRatingThreshold: number}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
             contextPruneLevelState = saved.contextPruneLevel ?? -1;
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? -1;
-            contextRatingThresholdState = saved.contextRatingThreshold ?? -1;
         }
     } catch (error) {
         console.warn('Failed to load level states:', error);
@@ -546,7 +544,6 @@ function captureCurrentDropdownValues() {
         const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
         const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
-        const contextRatingThresholdSelector = document.getElementById('context-rating-threshold-selector') as HTMLSelectElement;
         
         if (draftSelector) {
             const oldValue = draftLevelState;
@@ -581,13 +578,6 @@ function captureCurrentDropdownValues() {
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
             if (oldValue !== autofixSeverityState) {
                 console.log(`🔄 Captured autofix severity: ${autofixSeverityState} (was ${oldValue})`);
-            }
-        }
-        if (contextRatingThresholdSelector) {
-            const oldValue = contextRatingThresholdState;
-            contextRatingThresholdState = parseInt(contextRatingThresholdSelector.value);
-            if (oldValue !== contextRatingThresholdState) {
-                console.log(`🔄 Captured context rating threshold: ${contextRatingThresholdState} (was ${oldValue})`);
             }
         }
     } catch (error) {
@@ -2261,26 +2251,7 @@ export function renderNodeDetails() {
                                 </select>
                             </div>
                             
-                            <!-- Context Rating Threshold -->
-                            <div class="rating-threshold-container">
-                                <label for="context-rating-threshold-selector" title="Threshold for context rating pruning (-1 = use legacy analysis, 1-10 = rating threshold)">
-                                    <span class="level-icon">🎯</span>
-                                    Rating Threshold:
-                                </label>
-                                <select id="context-rating-threshold-selector" class="level-dropdown">
-                                    <option value="-1" ${contextRatingThresholdState === -1 ? 'selected' : ''}>Legacy Analysis</option>
-                                    <option value="1" ${contextRatingThresholdState === 1 ? 'selected' : ''}>1 (Keep Almost All)</option>
-                                    <option value="2" ${contextRatingThresholdState === 2 ? 'selected' : ''}>2+</option>
-                                    <option value="3" ${contextRatingThresholdState === 3 ? 'selected' : ''}>3+</option>
-                                    <option value="4" ${contextRatingThresholdState === 4 ? 'selected' : ''}>4+</option>
-                                    <option value="5" ${contextRatingThresholdState === 5 ? 'selected' : ''}>5+ (Medium)</option>
-                                    <option value="6" ${contextRatingThresholdState === 6 ? 'selected' : ''}>6+</option>
-                                    <option value="7" ${contextRatingThresholdState === 7 ? 'selected' : ''}>7+ (High)</option>
-                                    <option value="8" ${contextRatingThresholdState === 8 ? 'selected' : ''}>8+</option>
-                                    <option value="9" ${contextRatingThresholdState === 9 ? 'selected' : ''}>9+</option>
-                                    <option value="10" ${contextRatingThresholdState === 10 ? 'selected' : ''}>10 (Keep Only Essential)</option>
-                                </select>
-                            </div>
+
                         </div>
                 
                         <!-- Validation Messages -->
@@ -2432,7 +2403,6 @@ export function renderNodeDetails() {
     const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
-    const contextRatingThresholdSelector = getElementById('context-rating-threshold-selector') as HTMLSelectElement;
     const validationMessage = getElementById('level-validation-message') as HTMLDivElement;
     const validationText = getElementById('validation-text') as HTMLSpanElement;
     
@@ -2444,7 +2414,6 @@ export function renderNodeDetails() {
         if (contextPruneLevelSelector) contextPruneLevelSelector.value = params.contextPruneLevel.toString();
         if (coherenceLevelSelector) coherenceLevelSelector.value = params.coherenceLevel.toString();
         if (autofixSeveritySelector) autofixSeveritySelector.value = params.autofixSeverity.toString();
-        if (contextRatingThresholdSelector) contextRatingThresholdSelector.value = params.contextRatingThreshold.toString();
         
         // Update global state variables to match restored values
         draftLevelState = params.draftLevel;
@@ -2452,7 +2421,6 @@ export function renderNodeDetails() {
         contextPruneLevelState = params.contextPruneLevel;
         coherenceLevelState = params.coherenceLevel;
         autofixSeverityState = params.autofixSeverity;
-        contextRatingThresholdState = params.contextRatingThreshold;
         
         console.log(`🔄 Restored generation parameters for node "${node.title}":`, params);
     }
@@ -3878,10 +3846,7 @@ export async function setupEventListeners() {
             const select = e.target as HTMLSelectElement;
             autofixSeverityState = parseInt(select.value);
             void saveLevelStates();
-        } else if (e.target.id === 'context-rating-threshold-selector') {
-            const select = e.target as HTMLSelectElement;
-            contextRatingThresholdState = parseInt(select.value);
-            void saveLevelStates();
+
         } else if ((e.target as HTMLInputElement).name === 'generation-type') {
             // Handle generation type radio button changes
             const radio = e.target as HTMLInputElement;
@@ -4995,9 +4960,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
-    const contextRatingThresholdSelector = getElementById('context-rating-threshold-selector') as HTMLSelectElement;
     
-    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector || !contextRatingThresholdSelector) {
+    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector) {
         console.error('Level selector dropdowns not found');
         return;
     }
@@ -5008,7 +4972,6 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contextPruneLevel = parseInt(contextPruneLevelSelector.value);
     const coherenceLevel = parseInt(coherenceLevelSelector.value);
     const autofixSeverity = parseInt(autofixSeveritySelector.value);
-    const contextRatingThreshold = parseInt(contextRatingThresholdSelector.value);
     
     // Validate levels
     if (contentLevel > draftLevel) {
@@ -5055,8 +5018,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             contentLevel,
             contextPruneLevel,
             coherenceLevel,
-            autofixSeverity,
-            contextRatingThreshold
+            autofixSeverity
         };
         
         // Store generation parameters in the node for next time

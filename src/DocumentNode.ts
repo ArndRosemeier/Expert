@@ -37,7 +37,6 @@ export interface LastGenerationParameters {
     contextPruneLevel: number;
     coherenceLevel: number;
     autofixSeverity: number;
-    contextRatingThreshold: number;
 }
 
 /**

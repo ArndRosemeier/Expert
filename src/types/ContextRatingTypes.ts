@@ -1,6 +1,6 @@
 export interface ContextRating {
     item_number: number;
-    relevancy_rating: number; // 1-10, where 10 is most relevant
+    should_keep: boolean; // true to keep, false to remove
 }
 
 export interface ContextRatingResult {

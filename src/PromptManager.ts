@@ -939,10 +939,10 @@ Your JSON response:`.trim(),
         text: `
             Write your response in {{language}} for any explanatory fields. All JSON field names must always remain in English.
             
-            You are analyzing inherited context items to rate their relevancy for creating subnodes of the current node.
+            You are analyzing inherited context items to determine which ones are needed for creating subnodes of the current node.
 
 **Your Task:**
-Rate each context item based on how relevant it is for creating subnodes under this specific node.
+For each context item, decide whether it should be KEPT or REMOVED when creating subnodes under this specific node.
 
 **Numbered Context Items:**
 {{numbered_context_items}}
@@ -956,59 +956,63 @@ Content: {{node_content}}
 **RESPONSE FORMAT - CRITICAL:**
 Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
 
-Each rating object MUST have these EXACT field names (no variations, abbreviations, or typos):
+Each decision object MUST have these EXACT field names (no variations, abbreviations, or typos):
 - item_number: The number of the context item (from the numbered list above)
-- relevancy_rating: A number from 1-10 (where 10 is most relevant) indicating how relevant this context item is for creating subnodes under the current node
+- should_keep: true if the item is needed for subnodes, false if it should be removed
 
-**RATING GUIDELINES:**
-- 10: Extremely relevant - essential context for any subnode
-- 8-9: Highly relevant - very useful for most subnodes
-- 6-7: Moderately relevant - useful for some subnodes
-- 4-5: Somewhat relevant - may be useful in specific cases
-- 2-3: Low relevance - rarely useful for subnodes
-- 1: Not relevant - would not help with subnode creation
+**DECISION GUIDELINES:**
+- **KEEP (true)**: Context is directly relevant and will help with subnode creation
+  * Essential background information for the story/content
+  * Character details that matter for upcoming scenes
+  * Plot elements that influence future developments
+  * World-building that affects subnode content
+- **REMOVE (false)**: Context is not needed for subnodes under this specific node
+  * Information only relevant to other parts of the story
+  * Details that don't influence content at this level
+  * Outdated or superseded information
+  * Context that would confuse or mislead subnode generation
 
 **EXAMPLES:**
 
-Example 1 (mixed relevance):
+Example 1 (mixed decisions):
 [
   {
     "item_number": 1,
-    "relevancy_rating": 9
+    "should_keep": true
   },
   {
     "item_number": 2,
-    "relevancy_rating": 4
+    "should_keep": false
   },
   {
     "item_number": 3,
-    "relevancy_rating": 7
+    "should_keep": true
   }
 ]
 
-Example 2 (all items relevant):
+Example 2 (all items needed):
 [
   {
     "item_number": 1,
-    "relevancy_rating": 8
+    "should_keep": true
   },
   {
     "item_number": 2,
-    "relevancy_rating": 10
+    "should_keep": true
   }
 ]
 
 **CRITICAL INSTRUCTIONS:**
-- Rate ALL context items from the numbered list
+- Decide for ALL context items from the numbered list
 - Use ONLY the exact field names shown above
 - Your response must be valid JSON that can be parsed by JSON.parse()
 - Do not add any text before or after the JSON array
-- Ratings must be integers between 1 and 10 inclusive
+- should_keep must be exactly true or false (boolean values)
 - Test your JSON mentally before responding to ensure it's valid
 
 Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
-        description: "System prompt for rating inherited context items by relevancy for subnode creation. Provides compact numerical ratings for all context items."
+        description: "System prompt for determining which inherited context items should be kept or removed for subnode creation. Provides binary keep/remove decisions for all context items."
     },
 
     fix_contradiction: {

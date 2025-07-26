@@ -224,20 +224,15 @@ export class ContextRatingService {
                     originalItemNumber = originalIndex !== undefined ? originalIndex + 1 : 0; // Convert to 1-based
                 }
                 
-                const relevancyRating = Number(item.relevancy_rating) || Number(item.rating) || Number(item.relevancy) || 0;
+                const shouldKeep = Boolean(item.should_keep);
                 
                 const rating: ContextRating = {
                     item_number: originalItemNumber,
-                    relevancy_rating: relevancyRating
+                    should_keep: shouldKeep
                 };
 
-                // Validate rating is between 1-10
-                if (rating.relevancy_rating < 1 || rating.relevancy_rating > 10) {
-                    rating.relevancy_rating = Math.max(1, Math.min(10, rating.relevancy_rating));
-                }
-
                 // Check if we have valid data
-                if (rating.item_number <= 0 || rating.relevancy_rating <= 0) {
+                if (rating.item_number <= 0) {
                     console.warn(`Invalid rating data at index ${index}:`, {
                         originalItem: item,
                         parsedRating: rating

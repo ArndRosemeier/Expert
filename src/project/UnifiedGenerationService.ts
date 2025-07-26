@@ -93,8 +93,6 @@ export interface GenerationLevels {
     coherenceLevel: number;
     /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
     autofixSeverity: number;
-    /** Context rating threshold (-1 = use old analysis method, 1-10 = rating threshold) */
-    contextRatingThreshold: number;
     /** Frozen settings captured at generation start */
     frozenSettings: FrozenSettings;
 }
@@ -368,7 +366,7 @@ export class UnifiedGenerationService {
                 
                 // Priority 1: Context pruning
                 if (workNeeded.contextPruning) {
-                    await this.handleContextPruning(node.id, levels.contextRatingThreshold, levels.frozenSettings.language);
+                    await this.handleContextPruning(node.id, levels.frozenSettings.language);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
@@ -529,7 +527,7 @@ export class UnifiedGenerationService {
     /**
      * Handle context pruning for a node
      */
-    private async handleContextPruning(nodeId: string, contextRatingThreshold: number = -1, capturedLanguage?: string): Promise<void> {
+    private async handleContextPruning(nodeId: string, capturedLanguage?: string): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested || this.deps.generationController.isAbortRequested()) {
             throw new Error('Generation was aborted by user');
@@ -565,37 +563,18 @@ export class UnifiedGenerationService {
             
             let contextChanged = false;
             
-            // Choose between rating-based or issue-based context pruning
-            if (contextRatingThreshold >= 1 && contextRatingThreshold <= 10) {
-                // Use new context rating service
-                console.log(`🎯 Using context rating mode with threshold ${contextRatingThreshold} for "${node.title}"`);
-                
-                // Update progress
-                this.currentOperationProgress = {
-                    current: 2,
-                    total: 3,
-                    message: `Rating context relevancy for "${node.title}"`
-                };
-                this.emitUnifiedProgress();
-                
-                contextChanged = await this.runContextRatingMode(node, contextRatingThreshold, capturedLanguage);
-            } else {
-                // Use legacy context adjustment service (issue-based)
-                console.log(`🔧 Using legacy context analysis mode for "${node.title}"`);
-                
-                // Update progress
-                this.currentOperationProgress = {
-                    current: 2,
-                    total: 3,
-                    message: `Analyzing context for "${node.title}"`
-                };
-                this.emitUnifiedProgress();
-                
-                // Import the ContextAdjusterModal and run in automatic mode
-                const { ContextAdjusterModal } = await import('../ui/modals/ContextAdjusterModal');
-                const contextAdjuster = new ContextAdjusterModal();
-                contextChanged = await contextAdjuster.runAutomaticMode(node, capturedLanguage);
-            }
+            // Use AI decision context pruning
+            console.log(`🎯 Using AI decision context rating mode for "${node.title}"`);
+            
+            // Update progress
+            this.currentOperationProgress = {
+                current: 2,
+                total: 3,
+                message: `AI analyzing context relevancy for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+            
+            contextChanged = await this.runContextRatingMode(node, capturedLanguage);
             
             // Emit completion progress
             this.currentOperationProgress = {
@@ -616,9 +595,9 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Run context rating mode - rate context items and remove those below threshold
+     * Run context rating mode - AI decides which context items to keep or remove
      */
-    private async runContextRatingMode(node: DocumentNode, threshold: number, capturedLanguage?: string): Promise<boolean> {
+    private async runContextRatingMode(node: DocumentNode, capturedLanguage?: string): Promise<boolean> {
         const { getContextItems } = await import('../ContextFormat');
         const { ContextRatingService } = await import('../ui/modals/services/ContextRatingService');
         
@@ -649,7 +628,7 @@ export class UnifiedGenerationService {
         const nodeContext = node.context || '';
         const originalContextItems = getContextItems(nodeContext);
         
-        // Filter items based on rating threshold (keep items with rating >= threshold)
+        // Filter items based on AI decisions (keep items where should_keep is true)
         const itemsToKeep: string[] = [];
         const itemsRemoved: string[] = [];
         
@@ -658,11 +637,11 @@ export class UnifiedGenerationService {
             if (itemIndex >= 0 && itemIndex < originalContextItems.length) {
                 const item = originalContextItems[itemIndex];
                 if (item) { // Guard against undefined
-                    if (rating.relevancy_rating >= threshold) {
+                    if (rating.should_keep) {
                         itemsToKeep.push(item);
                     } else {
                         itemsRemoved.push(item);
-                        console.log(`🗑️ Removing context item (rating ${rating.relevancy_rating}/${threshold}): "${item.substring(0, 50)}..."`);
+                        console.log(`🗑️ Removing context item (AI decision): "${item.substring(0, 50)}..."`);
                     }
                 }
             }
@@ -688,13 +667,13 @@ export class UnifiedGenerationService {
             node.setContextWithTags(newContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
             
-            console.log(`✅ Context rating completed for "${node.title}": kept ${itemsToKeep.length}, removed ${itemsRemoved.length} items (threshold: ${threshold})`);
+            console.log(`✅ Context rating completed for "${node.title}": kept ${itemsToKeep.length}, removed ${itemsRemoved.length} items (AI decision)`);
         } else {
             // No changes but still tag as processed
             node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
             
-            console.log(`✅ Context rating completed for "${node.title}": no items removed (threshold: ${threshold})`);
+            console.log(`✅ Context rating completed for "${node.title}": no items removed (AI decision)`);
         }
         
         return contextChanged;
