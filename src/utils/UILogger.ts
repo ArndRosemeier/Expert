@@ -14,7 +14,6 @@ export class UILogger {
     private logs: LogEntry[] = [];
     private maxLogs: number = 1000;
     private isExpanded: boolean = false;
-    private readonly STORAGE_KEY = 'expert_ui_logger_expanded';
 
     private constructor() {
         // Private constructor for singleton
@@ -40,8 +39,7 @@ export class UILogger {
             return;
         }
 
-        // Restore saved fold state
-        this.loadFoldState();
+        // Apply current fold state to new DOM elements
         this.applyFoldState();
     }
 
@@ -155,8 +153,7 @@ export class UILogger {
             this.collapse();
         }
         
-        // Save the new state
-        this.saveFoldState();
+
     }
 
     public expand(): void {
@@ -187,23 +184,7 @@ export class UILogger {
         }
     }
 
-    private loadFoldState(): void {
-        try {
-            const saved = localStorage.getItem(this.STORAGE_KEY);
-            this.isExpanded = saved === 'true';
-        } catch (error) {
-            // localStorage not available or other error, use default
-            this.isExpanded = false;
-        }
-    }
 
-    private saveFoldState(): void {
-        try {
-            localStorage.setItem(this.STORAGE_KEY, this.isExpanded.toString());
-        } catch (error) {
-            // localStorage not available, ignore silently
-        }
-    }
 
     private applyFoldState(): void {
         if (this.isExpanded) {
