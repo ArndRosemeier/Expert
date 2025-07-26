@@ -616,18 +616,68 @@ function getCurrentLevelName(node: DocumentNode): string {
     return match && match[1] ? match[1] : rawLevelName;
 }
 
+
+
 /**
- * Gets the plural form of the child level name.
- * e.g., if node's children are "Chapter", returns "Chapters"
+ * Collects all nodes at a specific relative level beneath a given node.
+ * @param rootNode The node to start from
+ * @param relativeLevel The level relative to rootNode (1 = direct children, 2 = grandchildren, etc.)
+ * @returns Array of nodes at the specified level
  */
-function getPluralChildLevelName(node: DocumentNode): string {
-    const childLevelName = node.childLevelName;
-    if (!childLevelName) {
-        return 'Subnodes'; // Fallback
+function collectNodesAtRelativeLevel(rootNode: DocumentNode, relativeLevel: number): DocumentNode[] {
+    const targetLevel = rootNode.level + relativeLevel;
+    const nodesAtLevel: DocumentNode[] = [];
+    
+    const traverse = (node: DocumentNode) => {
+        if (node.level === targetLevel) {
+            nodesAtLevel.push(node);
+            return; // Don't traverse further once we reach the target level
+        }
+        
+        for (const child of node.children) {
+            traverse(child);
+        }
+    };
+    
+    traverse(rootNode);
+    return nodesAtLevel;
+}
+
+/**
+ * Gets available template layers below a node that have actual nodes.
+ * @param node The node to check layers for
+ * @returns Array of layer info with level, name, and node count
+ */
+function getAvailableLayersForDeletion(node: DocumentNode): Array<{relativeLevel: number, levelName: string, nodes: DocumentNode[], pluralName: string}> {
+    const layers: Array<{relativeLevel: number, levelName: string, nodes: DocumentNode[], pluralName: string}> = [];
+    
+    // Check each level starting from direct children
+    for (let relativeLevel = 1; relativeLevel <= 5; relativeLevel++) { // Limit to 5 levels deep for practical reasons
+        const targetLevel = node.level + relativeLevel;
+        if (targetLevel >= node.template.length) {
+            break; // No more template levels available
+        }
+        
+        const nodesAtLevel = collectNodesAtRelativeLevel(node, relativeLevel);
+        if (nodesAtLevel.length > 0) {
+            const rawLevelName = node.template[targetLevel];
+            if (rawLevelName) {
+                // Extract base name from template (e.g., "Chapter 3" -> "Chapter")
+                const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+                const levelName = match && match[1] ? match[1] : rawLevelName;
+                const pluralName = levelName + 's'; // Simple pluralization
+                
+                layers.push({
+                    relativeLevel,
+                    levelName,
+                    nodes: nodesAtLevel,
+                    pluralName
+                });
+            }
+        }
     }
     
-    // Simple pluralization: just append 's'
-    return childLevelName + 's';
+    return layers;
 }
 
 /**
@@ -1116,11 +1166,19 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn action-btn-danger" data-action="delete-node">
                         🗑️ Delete ${getCurrentLevelName(node)}
                     </button>
-                    ${node.children.length > 0 ? `
-                        <button class="action-btn action-btn-warning" data-action="delete-all-children">
-                            🗑️ Delete All ${getPluralChildLevelName(node)}
-                        </button>
-                    ` : ''}
+                    ${(() => {
+                        if (node.children.length === 0) return '';
+                        
+                        const availableLayers = getAvailableLayersForDeletion(node);
+                        if (availableLayers.length === 0) return '';
+                        
+                        return availableLayers.map(layer => `
+                            <button class="action-btn action-btn-warning" data-action="delete-layer-${layer.relativeLevel}" 
+                                    title="Delete all ${layer.nodes.length} ${layer.pluralName.toLowerCase()} (${layer.nodes.length} node${layer.nodes.length !== 1 ? 's' : ''})">
+                                🗑️ Delete All ${layer.pluralName} (${layer.nodes.length})
+                            </button>
+                        `).join('');
+                    })()}
                 </div>
             </div>
 
@@ -2773,6 +2831,65 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
 
 
 /**
+ * Handle deletion of nodes at a specific layer relative to the selected node
+ * @param relativeLevel The level relative to selected node (1 = direct children, 2 = grandchildren, etc.)
+ */
+function handleDeleteLayer(relativeLevel: number): void {
+    if (!projectManager || !selectedNodeId) {
+        alert('No node selected. Please select a node first.');
+        return;
+    }
+
+    const node = projectManager.findNodeById(selectedNodeId);
+    if (!node) {
+        alert('Selected node not found.');
+        return;
+    }
+
+    const nodesAtLevel = collectNodesAtRelativeLevel(node, relativeLevel);
+    if (nodesAtLevel.length === 0) {
+        alert('No nodes found at the specified level.');
+        return;
+    }
+
+    // Get layer information for user-friendly messaging
+    const availableLayers = getAvailableLayersForDeletion(node);
+    const layerInfo = availableLayers.find(layer => layer.relativeLevel === relativeLevel);
+    if (!layerInfo) {
+        alert('Layer information not found.');
+        return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete all ${nodesAtLevel.length} ${layerInfo.pluralName.toLowerCase()} under "${node.title}"?\n\nThis will permanently delete:\n- All ${nodesAtLevel.length} ${layerInfo.levelName.toLowerCase()} nodes and their content\n- All nested subnodes beneath those ${layerInfo.levelName.toLowerCase()}s\n- All generated summaries and history\n\nThe parent structure above ${layerInfo.levelName.toLowerCase()} level will remain intact.\n\nThis action cannot be undone.`;
+    
+    if (confirm(confirmMessage)) {
+        let deletedCount = 0;
+        for (const nodeToDelete of nodesAtLevel) {
+            const success = projectManager.removeNode(nodeToDelete.id);
+            if (success) {
+                deletedCount++;
+            }
+        }
+        
+        if (deletedCount > 0) {
+            void projectManager.saveToStorage().catch(console.error);
+            
+            // Re-render the UI to reflect the changes
+            renderMultiProjectTree();
+            renderNodeDetails();
+            
+            if (deletedCount === nodesAtLevel.length) {
+                alert(`Successfully deleted all ${deletedCount} ${layerInfo.pluralName.toLowerCase()}.`);
+            } else {
+                alert(`Deleted ${deletedCount} out of ${nodesAtLevel.length} ${layerInfo.pluralName.toLowerCase()}. Some nodes may have failed to delete.`);
+            }
+        } else {
+            alert(`Failed to delete any ${layerInfo.pluralName.toLowerCase()}. Please try again.`);
+        }
+    }
+}
+
+/**
  * Handle dropdown action by button ID
  * This function contains all the logic for dropdown actions that were moved out of the main switch statement
  */
@@ -2782,6 +2899,14 @@ function handleDropdownAction(buttonId: string): void {
     }
     if (!selectedNodeId) {
         throw new Error('No node selected in handleDropdownAction - UI state corrupted');
+    }
+
+    // Handle layer-specific delete actions (pattern: delete-layer-{relativeLevel})
+    const deleteLayerMatch = buttonId.match(/^delete-layer-(\d+)$/);
+    if (deleteLayerMatch && deleteLayerMatch[1]) {
+        const relativeLevel = parseInt(deleteLayerMatch[1], 10);
+        handleDeleteLayer(relativeLevel);
+        return;
     }
 
     switch (buttonId) {
