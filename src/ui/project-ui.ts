@@ -780,6 +780,19 @@ function showActionsDropdown(node: DocumentNode): void {
                             return;
                         }
                         
+                        // Handle layer-specific delete actions before action map lookup
+                        const deleteLayerMatch = action.match(/^delete-layer-(\d+)$/);
+                        if (deleteLayerMatch && deleteLayerMatch[1]) {
+                            // Close dropdown first
+                            if (actionsDropdownInstance) {
+                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance = null;
+                            }
+                            const relativeLevel = parseInt(deleteLayerMatch[1], 10);
+                            handleDeleteLayer(relativeLevel);
+                            return;
+                        }
+                        
                         const handlerAction = actionMap[action];
                         if (handlerAction) {
                             // Close dropdown first
@@ -1073,6 +1086,16 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                         if (action === 'send-both-to-idea-board') {
                             void handleSendToIdeaBoard('both');
                             actionsDropdownInstance?.close();
+                            return;
+                        }
+                        
+                        // Handle layer-specific delete actions before action map lookup
+                        const deleteLayerMatch = action.match(/^delete-layer-(\d+)$/);
+                        if (deleteLayerMatch && deleteLayerMatch[1]) {
+                            // Close the dropdown after action
+                            actionsDropdownInstance?.close();
+                            const relativeLevel = parseInt(deleteLayerMatch[1], 10);
+                            handleDeleteLayer(relativeLevel);
                             return;
                         }
                         
