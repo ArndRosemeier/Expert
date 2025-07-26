@@ -58,6 +58,11 @@ export class TreeService {
         const newLevel = parent.level + 1;
         const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
         
+        // Inherit context from parent
+        if (parent.context) {
+            newNode.setContext(parent.context, 'inherited');
+        }
+        
         if (creatorModel) {
             // Set creator model in the master version's metadata
             const masterVersion = newNode.getMasterVersion();

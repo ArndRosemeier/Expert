@@ -147,7 +147,7 @@ export class NodeCreationService implements INodeCreationService {
             throw new Error(`Parent node not found: ${parentNodeId}`);
         }
 
-        // Create the child node
+        // Create the child node (context is automatically inherited in TreeService.addNode)
         const childNode = this.projectManager.addNode(title, parentNodeId);
         
         // Set initial content if provided (with Draft prefix)
