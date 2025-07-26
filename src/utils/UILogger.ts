@@ -13,6 +13,8 @@ export class UILogger {
     private logTextArea: HTMLTextAreaElement | null = null;
     private logs: LogEntry[] = [];
     private maxLogs: number = 1000;
+    private isExpanded: boolean = false;
+    private readonly STORAGE_KEY = 'expert_ui_logger_expanded';
 
     private constructor() {
         // Private constructor for singleton
@@ -37,6 +39,10 @@ export class UILogger {
             console.error('UILogger: Log textarea not found in container');
             return;
         }
+
+        // Restore saved fold state
+        this.loadFoldState();
+        this.applyFoldState();
 
         console.log('✅ UILogger initialized successfully');
     }
@@ -150,11 +156,15 @@ export class UILogger {
         } else {
             this.collapse();
         }
+        
+        // Save the new state
+        this.saveFoldState();
     }
 
     public expand(): void {
         if (!this.logContainer) return;
         
+        this.isExpanded = true;
         this.logContainer.classList.remove('collapsed');
         const header = this.logContainer.querySelector('.ui-log-header') as HTMLElement;
         if (header) {
@@ -168,6 +178,7 @@ export class UILogger {
     public collapse(): void {
         if (!this.logContainer) return;
         
+        this.isExpanded = false;
         this.logContainer.classList.add('collapsed');
         const header = this.logContainer.querySelector('.ui-log-header') as HTMLElement;
         if (header) {
@@ -175,6 +186,32 @@ export class UILogger {
             if (toggleIcon) {
                 toggleIcon.textContent = '▶';
             }
+        }
+    }
+
+    private loadFoldState(): void {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            this.isExpanded = saved === 'true';
+        } catch (error) {
+            // localStorage not available or other error, use default
+            this.isExpanded = false;
+        }
+    }
+
+    private saveFoldState(): void {
+        try {
+            localStorage.setItem(this.STORAGE_KEY, this.isExpanded.toString());
+        } catch (error) {
+            // localStorage not available, ignore silently
+        }
+    }
+
+    private applyFoldState(): void {
+        if (this.isExpanded) {
+            this.expand();
+        } else {
+            this.collapse();
         }
     }
 }
