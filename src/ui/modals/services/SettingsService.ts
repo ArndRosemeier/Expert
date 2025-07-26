@@ -124,6 +124,11 @@ export class SettingsService {
                     version: currentProfile.version || ''
                 };
                 
+                // Deep copy taskModelConfigs if present
+                if (currentProfile.taskModelConfigs) {
+                    newProfileSettings.taskModelConfigs = { ...currentProfile.taskModelConfigs };
+                }
+                
                 console.log(`🔄 Profile "${name}" created by deep copying from "${sourceProfileName}"`);
                 console.log(`📋 Original selectedModels:`, currentProfile.selectedModels);
                 console.log(`📋 New profile selectedModels:`, newProfileSettings.selectedModels);
@@ -173,9 +178,7 @@ export class SettingsService {
         };
 
         // Add optional properties only if they exist
-        if (existingProfile?.language) {
-            currentSettings.language = existingProfile.language;
-        }
+        // Language is project-level, not profile-level - skip copying
         if (existingProfile?.taskModelConfigs) {
             currentSettings.taskModelConfigs = existingProfile.taskModelConfigs;
         }
@@ -573,7 +576,6 @@ export class SettingsService {
                 selectedModels: preserveModels?.selectedModels || currentProfile.selectedModels || {},
                 webSearchEnabled: preserveModels?.webSearchEnabled || currentProfile.webSearchEnabled || {},
                 contextExtractionPrompt: currentProfile.contextExtractionPrompt || currentPrompts.context_extraction_user || '',
-                language: currentProfile.language || 'English', // Preserve user's language setting
                 taskModelConfigs: currentProfile.taskModelConfigs || {
                     coherence_analysis: { outline: 'creator' as const, prose: 'prose' as const },
                     fix_contradiction: { outline: 'creator' as const, prose: 'prose' as const },

@@ -136,7 +136,6 @@ export interface SettingsProfile {
     webSearchEnabled?: Record<string, boolean>;
     selectedProviders?: Record<string, string>;
     contextExtractionPrompt: string;
-    language?: string; // Language setting for content generation (e.g., "English", "Spanish", "French")
     version?: string; // Version of the application when this profile was saved
     taskModelConfigs?: import('./services/TaskModelService').AllTaskModelConfigs; // Task-based model configurations
 }
@@ -329,10 +328,7 @@ export class SettingsManager {
                             };
                         }
                         
-                        // Add default language to existing profiles that don't have it
-                        if (!profile.language) {
-                            profile.language = 'English';
-                        }
+
                     }
                 });
                 
@@ -368,7 +364,6 @@ export class SettingsManager {
                 selectedModels: {},
                 webSearchEnabled: {},
                 contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-                language: 'English', // Add default language
                 taskModelConfigs: {
                     coherence_analysis: {
                         outline: 'creator' as const,
@@ -588,6 +583,11 @@ export class SettingsManager {
             contextExtractionPrompt: profile.contextExtractionPrompt || '',
             version: VersionService.getBuildNumber()
         };
+        
+        // Deep copy taskModelConfigs if present
+        if (profile.taskModelConfigs) {
+            profileToSave.taskModelConfigs = { ...profile.taskModelConfigs };
+        }
 
         console.log(`💾 Saving profile "${name}" with deep-copied settings`);
         console.log(`🔍 Profile references - Original models object:`, profile.selectedModels);
@@ -662,37 +662,42 @@ export class SettingsManager {
     }
 
     /**
-     * Get the language setting from the current profile or default to English
+     * Get the language setting from the active project or default to English
      */
     public getLanguage(): string {
-        const profile = this.getLastUsedProfile();
-        if (!profile) {
-            throw new Error('No active profile found - cannot get language setting');
+        // Language is project-level, not profile-level
+        // Import state to get active project
+        const { getActiveProject } = require('./state');
+        const activeProject = getActiveProject();
+        
+        if (activeProject) {
+            const projectLanguage = activeProject.getLanguage();
+            if (projectLanguage) {
+                return projectLanguage;
+            }
         }
-        if (!profile.language) {
-            throw new Error(`Active profile "${this.getLastUsedProfileName()}" is missing language property`);
-        }
-        const language = profile.language;
-        return language;
+        
+        // Fallback to English if no active project or project has no language set
+        return 'English';
     }
 
     /**
-     * Set the language for the current profile
+     * Set the language for the active project
      */
     public async setLanguage(language: string): Promise<void> {
-        const profileName = this.getLastUsedProfileName();
+        // Language is project-level, not profile-level
+        // Import state to get active project
+        const { getActiveProject } = require('./state');
+        const activeProject = getActiveProject();
         
-        if (!profileName) {
-            throw new Error('No active profile to update language setting');
+        if (!activeProject) {
+            throw new Error('No active project to update language setting');
         }
 
-        const profile = this.getProfile(profileName);
-        if (!profile) {
-            throw new Error(`Profile '${profileName}' not found`);
-        }
-
-        const updatedProfile = { ...profile, language };
-        await this.saveProfile(profileName, updatedProfile);
+        activeProject.setLanguage(language);
+        
+        // Save the project to persist the language change
+        await activeProject.saveToStorage();
     }
 
     private async saveProfiles(isCleanupOperation: boolean = false): Promise<void> {
@@ -744,10 +749,6 @@ export class SettingsManager {
             return null;
         }
         
-        if (!profile.language) {
-            throw new Error(`Cannot export profile "${profileName}" - missing language property`);
-        }
-
         const exportData = {
             exportVersion: '1.0',
             exportDate: new Date().toISOString(),
@@ -756,8 +757,7 @@ export class SettingsManager {
                 criteria: profile.criteria,
                 maxIterations: profile.maxIterations,
                 selectedModels: profile.selectedModels,
-                contextExtractionPrompt: profile.contextExtractionPrompt,
-                language: profile.language
+                contextExtractionPrompt: profile.contextExtractionPrompt
             },
             prompts: this.prompts
         };
@@ -812,8 +812,7 @@ export class SettingsManager {
                 criteria: profileData.criteria,
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
-                contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-                language: profileData.language || 'English' // TODO: Remove fallback after fixing profiles
+                contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT
             };
 
             // Save the profile
@@ -994,10 +993,6 @@ export class SettingsManager {
         const modelsToKeep = preserveModels?.selectedModels || {};
         const webSearchToKeep = preserveModels?.webSearchEnabled || {};
         
-        // Preserve the current language setting instead of resetting to English
-        const currentProfile = this.getLastUsedProfile();
-        const languageToKeep = currentProfile?.language || 'English';
-        
         // Create a new default profile with current version
         const defaultProfile: SettingsProfile = {
             criteria: DEFAULT_CRITERIA,
@@ -1005,7 +1000,6 @@ export class SettingsManager {
             selectedModels: modelsToKeep,
             webSearchEnabled: webSearchToKeep,
             contextExtractionPrompt: DEFAULT_CONTEXT_EXTRACTION_PROMPT,
-            language: languageToKeep,
             version: VersionService.getBuildNumber(),
             taskModelConfigs: {
                 coherence_analysis: {
