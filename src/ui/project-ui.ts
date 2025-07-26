@@ -94,11 +94,12 @@ function formatModelName(modelId: string): string {
 
 /**
  * Gets the appropriate status icons for a node based on its state
- * Returns an object with separate status and todo icons for proper horizontal layout
+ * Returns an object with separate status, todo, and language icons for proper horizontal layout
  */
-function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon: string } {
+function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon: string; languageIcon: string } {
     let statusIcon = '';
     let todoIcon = '';
+    let languageIcon = '';
     
     // Root nodes have no status icon - they're distinguished by typography
     if (node.level === 0 || node.parentId === null) {
@@ -145,7 +146,20 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
         todoIcon = '⚠️';
     }
     
-    return { statusIcon, todoIcon };
+    // Add language flag for project root nodes that have a project-specific language
+    if (node.level === 0 || node.parentId === null) {
+        // This is a project root node - check if it has a project-specific language
+        const project = state.getProjects().find(p => p.rootNode.id === node.id);
+        if (project) {
+            const projectLanguage = project.getLanguage();
+            if (projectLanguage) {
+                // Project has a specific language set
+                languageIcon = '🌐';
+            }
+        }
+    }
+    
+    return { statusIcon, todoIcon, languageIcon };
 }
 
 /**
@@ -2672,13 +2686,20 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     }
     
     // Status icons (separate elements for horizontal layout)
-    const { statusIcon, todoIcon } = getNodeStatusIcons(node);
+    const { statusIcon, todoIcon, languageIcon } = getNodeStatusIcons(node);
     html += `<span class="node-status-icon">${statusIcon}</span>`;
     if (todoIcon) {
         // Determine if this node has direct todos or just descendant todos
         const hasDirectTodos = nodesWithDirectTodos.has(node.id);
         const todoClass = hasDirectTodos ? 'node-todo-icon' : 'node-todo-icon-small';
         html += `<span class="${todoClass}">${todoIcon}</span>`;
+    }
+    if (languageIcon && isProjectRoot) {
+        // Get the project to show the actual language in tooltip
+        const project = state.getProjects().find(p => p.rootNode.id === node.id);
+        const projectLanguage = project ? project.getLanguage() : null;
+        const tooltip = projectLanguage ? `Project language: ${projectLanguage}` : 'Project has language-specific setting';
+        html += `<span class="node-language-icon" title="${tooltip}">${languageIcon}</span>`;
     }
     
     // Node title
