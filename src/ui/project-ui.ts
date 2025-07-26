@@ -2072,41 +2072,7 @@ export function renderNodeDetails() {
                             style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
                         📊
                     </button>
-                    <div class="dropdown" style="position: relative;">
-                        <button id="send-to-idea-board-btn" class="button button-secondary" 
-                                title="Send to Idea Board - Transfer content and/or context" 
-                                style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
-                            ➡️🧠
-                        </button>
-                        <div id="send-to-idea-board-dropdown" class="dropdown-menu" style="
-                            display: none;
-                            position: absolute;
-                            top: 100%;
-                            left: 0;
-                            background: white;
-                            border: 1px solid #ccc;
-                            border-radius: 4px;
-                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                            z-index: 1000;
-                            min-width: 120px;
-                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 14px;
-                            margin-top: 2px;
-                        ">
-                            <div style="padding: 6px 12px; font-size: 12px; font-weight: bold; color: #666; background: #f9f9f9; border-bottom: 1px solid #eee;">
-                                Send to idea board:
-                            </div>
-                            <div id="send-content-only" class="dropdown-option" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;">
-                                📝 Content
-                            </div>
-                            <div id="send-context-only" class="dropdown-option" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;">
-                                🗂️ Context
-                            </div>
-                            <div id="send-both" class="dropdown-option" style="padding: 8px 12px; cursor: pointer;">
-                                📦 Both
-                            </div>
-                        </div>
-                    </div>
+
                     <button id="actions-dropdown-btn" class="button button-secondary" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
                         ⚡ Actions
                         <span style="font-size: 0.7em;">▼</span>
@@ -4971,11 +4937,6 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
  * Handle send to idea board with different options
  */
 async function handleSendToIdeaBoard(option: 'content' | 'context' | 'both'): Promise<void> {
-    // Hide dropdown
-    const dropdown = document.getElementById('send-to-idea-board-dropdown');
-    if (dropdown) {
-        dropdown.style.display = 'none';
-    }
 
     if (!projectManager || !selectedNodeId) {
         alert('No node selected. Please select a node to send to the idea board.');
@@ -5374,49 +5335,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         // modal.open();
     },
 
-    'send-to-idea-board-btn': (_e: Event) => {
-        // Toggle dropdown visibility
-        const dropdown = document.getElementById('send-to-idea-board-dropdown');
-        if (dropdown) {
-            const isVisible = dropdown.style.display !== 'none';
-            dropdown.style.display = isVisible ? 'none' : 'block';
-            
-            // Close dropdown when clicking elsewhere
-            if (!isVisible) {
-                const closeDropdown = (event: MouseEvent) => {
-                    const target = event.target as Element;
-                    if (!dropdown.contains(target) && !target.closest('#send-to-idea-board-btn')) {
-                        dropdown.style.display = 'none';
-                        document.removeEventListener('click', closeDropdown);
-                    }
-                };
-                setTimeout(() => document.addEventListener('click', closeDropdown), 0);
-                
-                // Add hover effects to dropdown options
-                const options = dropdown.querySelectorAll('.dropdown-option');
-                options.forEach(option => {
-                    option.addEventListener('mouseenter', () => {
-                        (option as HTMLElement).style.backgroundColor = '#f5f5f5';
-                    });
-                    option.addEventListener('mouseleave', () => {
-                        (option as HTMLElement).style.backgroundColor = 'transparent';
-                    });
-                });
-            }
-        }
-    },
 
-    'send-content-only': async (_e: Event) => {
-        await handleSendToIdeaBoard('content');
-    },
-
-    'send-context-only': async (_e: Event) => {
-        await handleSendToIdeaBoard('context');
-    },
-
-    'send-both': async (_e: Event) => {
-        await handleSendToIdeaBoard('both');
-    },
     
     'version-prev-btn': (_e: Event) => {
         if (currentVersionIndex > 0) {
