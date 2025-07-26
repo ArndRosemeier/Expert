@@ -2319,10 +2319,10 @@ export async function renderNodeDetails() {
         </div>
 
         <!-- UI Logger Section -->
-        <div id="ui-log-container" class="ui-log-container collapsed">
+        <div id="ui-log-container" class="ui-log-container">
             <div class="ui-log-header">
                 <div class="ui-log-title">
-                    <span class="toggle-icon">▶</span>
+                    <span class="toggle-icon">▼</span>
                     <span>📋 Application Log</span>
                 </div>
                 <div class="ui-log-stats">

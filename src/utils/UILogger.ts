@@ -13,7 +13,7 @@ export class UILogger {
     private logTextArea: HTMLTextAreaElement | null = null;
     private logs: LogEntry[] = [];
     private maxLogs: number = 1000;
-    private isExpanded: boolean = false;
+    private isExpanded: boolean = true;
 
     private constructor() {
         // Private constructor for singleton
