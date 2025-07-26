@@ -8,6 +8,7 @@ import {
     DEFAULT_CONTEXT_EXTRACTION_PROMPT 
 } from './constants';
 import { FileDownloadService } from './utils/FileDownloadService';
+import * as state from './state';
 
 // Legacy constants - will be removed in favor of STORAGE_KEYS from constants.ts
 export const SETTINGS_PROFILES_KEY = STORAGE_KEYS.SETTINGS_PROFILES;
@@ -687,8 +688,7 @@ export class SettingsManager {
      */
     public getLanguage(): string {
         // Check active project first
-        const { getActiveProject } = require('./state');
-        const activeProject = getActiveProject();
+        const activeProject = state.getActiveProject();
         
         if (activeProject) {
             const projectLanguage = activeProject.getLanguage();
@@ -710,8 +710,7 @@ export class SettingsManager {
         await this.saveGlobalLanguage();
         
         // Also update active project if it exists
-        const { getActiveProject } = require('./state');
-        const activeProject = getActiveProject();
+        const activeProject = state.getActiveProject();
         
         if (activeProject) {
             activeProject.setLanguage(language);
