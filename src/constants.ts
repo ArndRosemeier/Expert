@@ -27,7 +27,8 @@ export const STORAGE_KEYS = {
     READER_CONFIG: 'expert_app_reader_config',
     // COLLAPSED_NODES removed - now stored per-node in DocumentNode.collapsed property
     CHECKBOX_STATES: 'expert_app_checkbox_states',
-    LAST_CHAT_MODEL: 'expert_app_last_chat_model'
+    LAST_CHAT_MODEL: 'expert_app_last_chat_model',
+    GLOBAL_LANGUAGE: 'expert_app_global_language'
 } as const;
 
 // === Default Content ===

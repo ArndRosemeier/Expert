@@ -195,6 +195,7 @@ export class SettingsManager {
     private aiLoggingEnabled: boolean = false;
     private hasVersionMismatch: boolean = false;
     private initialized: boolean = false;
+    private globalLanguage: string = 'English'; // Global language setting
 
     private constructor() {
         this.storageService = StorageService.getInstance();
@@ -256,6 +257,7 @@ export class SettingsManager {
         await this.loadLastUsedProfile();
         await this.loadPrompts();
         await this.loadAILoggingSetting();
+        await this.loadGlobalLanguage();
     }
 
     private async loadProfiles(): Promise<void> {
@@ -444,6 +446,25 @@ export class SettingsManager {
         } catch (error) {
             console.error('Failed to load AI logging setting from storage', error);
             this.aiLoggingEnabled = false;
+        }
+    }
+
+    private async loadGlobalLanguage(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            this.globalLanguage = await storage.get<string>(STORAGE_KEYS.GLOBAL_LANGUAGE) || 'English';
+        } catch (error) {
+            console.error('Failed to load global language setting from storage', error);
+            this.globalLanguage = 'English';
+        }
+    }
+
+    private async saveGlobalLanguage(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            await storage.set(STORAGE_KEYS.GLOBAL_LANGUAGE, this.globalLanguage);
+        } catch (error) {
+            console.error('Failed to save global language setting to storage', error);
         }
     }
 
@@ -662,11 +683,10 @@ export class SettingsManager {
     }
 
     /**
-     * Get the language setting from the active project or default to English
+     * Get the language setting - project language first, then global language
      */
     public getLanguage(): string {
-        // Language is project-level, not profile-level
-        // Import state to get active project
+        // Check active project first
         const { getActiveProject } = require('./state');
         const activeProject = getActiveProject();
         
@@ -677,27 +697,33 @@ export class SettingsManager {
             }
         }
         
-        // Fallback to English if no active project or project has no language set
-        return 'English';
+        // Fallback to global language setting
+        return this.globalLanguage;
     }
 
     /**
-     * Set the language for the active project
+     * Set the language - updates both global setting and active project (if exists)
      */
     public async setLanguage(language: string): Promise<void> {
-        // Language is project-level, not profile-level
-        // Import state to get active project
+        // Always update global language setting
+        this.globalLanguage = language;
+        await this.saveGlobalLanguage();
+        
+        // Also update active project if it exists
         const { getActiveProject } = require('./state');
         const activeProject = getActiveProject();
         
-        if (!activeProject) {
-            throw new Error('No active project to update language setting');
+        if (activeProject) {
+            activeProject.setLanguage(language);
+            await activeProject.saveToStorage();
         }
+    }
 
-        activeProject.setLanguage(language);
-        
-        // Save the project to persist the language change
-        await activeProject.saveToStorage();
+    /**
+     * Get the global language setting (for UI components like language selector)
+     */
+    public getGlobalLanguage(): string {
+        return this.globalLanguage;
     }
 
     private async saveProfiles(isCleanupOperation: boolean = false): Promise<void> {
