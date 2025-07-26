@@ -5299,7 +5299,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
-    'overview-board-btn': (_e: Event) => {
+    'overview-board-btn': async (_e: Event) => {
         if (!projectManager) {
             alert('No active project found. Please select or create a project first.');
             return;
@@ -5325,14 +5325,27 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
 
         // Import and open the Overview Board Modal
-        // TODO: Implement Overview Board Modal (temporarily disabled)
-        console.log('Overview Board requested for node:', selectedNode.title);
-        alert('Overview Board feature is temporarily unavailable. This feature is being rebuilt.');
-        
-        // Placeholder for future implementation
-        // const { OverviewBoardModal } = await import('./modals/OverviewBoardModal');
-        // const modal = new OverviewBoardModal({ ... });
-        // modal.open();
+        try {
+            console.log('Overview Board requested for node:', selectedNode.title);
+            
+            const { OverviewBoardModal } = await import('../overview-board');
+            const modal = new OverviewBoardModal({
+                selectedNode: selectedNode,
+                openRouterClient: openRouterClient,
+                settingsManager: settingsManager,
+                title: `Overview Board - ${selectedNode.title}`,
+                id: 'overview-board-modal',
+                width: '95vw',
+                height: '90vh',
+                closable: true
+            });
+            
+            modal.open();
+            console.log('✅ Overview Board modal opened successfully');
+        } catch (error) {
+            console.error('❌ Failed to open Overview Board:', error);
+            alert('Failed to open Overview Board. Please try again.');
+        }
     },
 
 
