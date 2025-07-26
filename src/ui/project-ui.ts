@@ -4636,6 +4636,45 @@ export function renderMultiProjectTree() {
                 }
             }
         });
+
+        // Double click: open node inspector
+        el.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const id = (e.currentTarget as HTMLElement).dataset['id'];
+            if (id) {
+                // Find which project this node belongs to
+                let nodeProject: ProjectManager | null = null;
+                let node: DocumentNode | null = null;
+                
+                for (const project of projects) {
+                    node = project.findNodeById(id);
+                    if (node) {
+                        nodeProject = project;
+                        break;
+                    }
+                }
+                
+                if (node && nodeProject) {
+                    // Select the node first
+                    selectedNodeId = id;
+                    projectManager = nodeProject;
+                    state.setActiveProject(nodeProject.rootNode.id);
+                    renderMultiProjectTree();
+                    renderNodeDetails();
+                    
+                    // Open node inspector modal
+                    void import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
+                        const inspectorModal = new NodeInspectorModal();
+                        inspectorModal.openWithNode(node);
+                    }).catch(error => {
+                        console.error('Failed to open node inspector modal:', error);
+                        alert('Failed to open node inspector. Please try again.');
+                    });
+                }
+            }
+        });
     });
 
     // Remove any existing delegated listener to avoid duplicates
