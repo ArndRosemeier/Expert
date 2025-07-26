@@ -2698,10 +2698,6 @@ async function initializeUILogger(): Promise<void> {
         });
     }
     
-    // Add some example logs to demonstrate functionality
-    uiLogger.info('UI Logger initialized successfully');
-    uiLogger.debug('Logger ready for application events');
-    
     updateLogStats();
 }
 

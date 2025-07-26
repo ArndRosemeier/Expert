@@ -43,8 +43,6 @@ export class UILogger {
         // Restore saved fold state
         this.loadFoldState();
         this.applyFoldState();
-
-        console.log('✅ UILogger initialized successfully');
     }
 
     public debug(message: string, details?: string): void {
