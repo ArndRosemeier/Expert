@@ -250,6 +250,14 @@ export class UnifiedGenerationService {
 
     public static abortAllInstances(): void {
         console.log(`🛑 Aborting all ${this.activeInstances.size} active UnifiedGenerationService instances`);
+        
+        // Also log to UI logger if available
+        void import('../utils/UILogger').then(({ uiLogger }) => {
+            uiLogger.warn(`Aborting ${this.activeInstances.size} active generation instance${this.activeInstances.size !== 1 ? 's' : ''}`);
+        }).catch(() => {
+            // UI logger not available, that's ok
+        });
+        
         for (const instance of this.activeInstances) {
             instance.requestAbort();
         }
@@ -319,6 +327,13 @@ export class UnifiedGenerationService {
         if (!startNode) {
             throw new Error(`Node not found: ${startNodeId}`);
         }
+        
+        // Log generation start to UI logger if available
+        void import('../utils/UILogger').then(({ uiLogger }) => {
+            uiLogger.info(`Starting unified generation for node: ${startNode.title}`, `Instance: ${this.instanceId}`);
+        }).catch(() => {
+            // UI logger not available, that's ok
+        });
 
         // Register operation with coordinator for UI management
         const operationId = this.deps.generationCoordinator.startOperation('single-content', startNodeId);

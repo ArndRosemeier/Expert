@@ -1371,7 +1371,7 @@ export async function renderProjectUI(proj: ProjectManager) {
 
     void refreshGlobalProfileSelector(); // Keep the profile selector up-to-date
     renderMultiProjectTree();
-    renderNodeDetails();
+    void void renderNodeDetails();
     
     // Re-attach event listeners after DOM replacement in renderProjectUI
 
@@ -1389,7 +1389,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Only refresh node details if we're looking at the node being generated
         // This prevents unnecessary UI re-rendering that can cause button disappearance
         if (selectedNodeId === e['nodeId']) {
-            renderNodeDetails();
+            void void renderNodeDetails();
         }
     };
 
@@ -1711,7 +1711,7 @@ export async function refreshGlobalProfileSelector() {
 
 
 
-export function renderNodeDetails() {
+export async function renderNodeDetails() {
     const contentArea = getElementById('node-details');
     contentArea.innerHTML = ''; // Clear previous content
 
@@ -2318,10 +2318,44 @@ export function renderNodeDetails() {
             <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
         </div>
 
+        <!-- UI Logger Section -->
+        <div id="ui-log-container" class="ui-log-container collapsed">
+            <div class="ui-log-header">
+                <div class="ui-log-title">
+                    <span class="toggle-icon">▶</span>
+                    <span>📋 Application Log</span>
+                </div>
+                <div class="ui-log-stats">
+                    <div class="stat-item">
+                        <span>📝</span>
+                        <span id="log-count">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>❌</span>
+                        <span id="error-count">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>⚠️</span>
+                        <span id="warn-count">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ui-log-content-wrapper">
+                <textarea id="ui-log-content" class="ui-log-content" readonly placeholder="Application logs will appear here..."></textarea>
+                <div class="ui-log-actions">
+                    <button id="ui-log-clear" class="ui-log-btn">Clear</button>
+                    <button id="ui-log-export" class="ui-log-btn">Export</button>
+                </div>
+            </div>
+        </div>
+
 
     `;
 
     contentArea.appendChild(detailsContainer);
+    
+    // Initialize UI Logger
+    await initializeUILogger();
     
     // Re-attach event listeners after DOM content replacement
 
@@ -2612,6 +2646,65 @@ function initializeVersionNavigation(node: DocumentNode) {
     updateVersionNavigationUI();
 }
 
+async function initializeUILogger(): Promise<void> {
+    const { uiLogger } = await import('../utils/UILogger');
+    
+    // Initialize the logger
+    uiLogger.initialize('ui-log-container');
+    
+    // Update stats display
+    function updateLogStats(): void {
+        const counts = uiLogger.getLogCountByLevel();
+        const totalCount = uiLogger.getLogCount();
+        
+        const logCountElement = document.getElementById('log-count');
+        const errorCountElement = document.getElementById('error-count');
+        const warnCountElement = document.getElementById('warn-count');
+        
+        if (logCountElement) logCountElement.textContent = totalCount.toString();
+        if (errorCountElement) errorCountElement.textContent = counts.error.toString();
+        if (warnCountElement) warnCountElement.textContent = counts.warn.toString();
+    }
+    
+    // Add event listeners
+    const logHeader = document.querySelector('.ui-log-header');
+    if (logHeader) {
+        logHeader.addEventListener('click', () => {
+            uiLogger.toggle();
+        });
+    }
+    
+    const clearBtn = document.getElementById('ui-log-clear');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            uiLogger.clear();
+            updateLogStats();
+        });
+    }
+    
+    const exportBtn = document.getElementById('ui-log-export');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            const logs = uiLogger.exportLogs();
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `expert-app-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+    
+    // Add some example logs to demonstrate functionality
+    uiLogger.info('UI Logger initialized successfully');
+    uiLogger.debug('Logger ready for application events');
+    
+    updateLogStats();
+}
+
 function updateVersionNavigationUI() {
     const versionNav = document.getElementById('version-navigation');
     const versionIndicator = document.getElementById('version-indicator');
@@ -2867,7 +2960,7 @@ function handleDeleteLayer(relativeLevel: number): void {
             
             // Re-render the UI to reflect the changes
             renderMultiProjectTree();
-            renderNodeDetails();
+            void void renderNodeDetails();
             
             if (deletedCount === nodesAtLevel.length) {
                 alert(`Successfully deleted all ${deletedCount} ${layerInfo.pluralName.toLowerCase()}.`);
@@ -3256,7 +3349,7 @@ This action cannot be undone.`;
                             
                             // Re-render the UI
                             renderMultiProjectTree();
-                            renderNodeDetails();
+                            void void renderNodeDetails();
                         } else {
                             alert('Failed to delete the node. It may be a root node or have an invalid parent.');
                         }
@@ -3295,7 +3388,7 @@ This action cannot be undone.`;
                         
                         // Re-render the UI to reflect the changes
                         renderMultiProjectTree();
-                        renderNodeDetails();
+                        void renderNodeDetails();
                         
                         if (deletedCount === childCount) {
                             alert(`Successfully deleted all ${deletedCount} subnodes.`);
@@ -3746,7 +3839,7 @@ This action cannot be undone.`;
                             // Refresh UI after tag operations
                             if (projectManager) {
                                 renderMultiProjectTree();
-                                renderNodeDetails();
+                                void renderNodeDetails();
                             }
                         }
                     });
@@ -3822,7 +3915,7 @@ export async function setupEventListeners() {
             
             // Force refresh of node details to pick up new profile settings
             if (selectedNodeId) {
-                renderNodeDetails();
+                void renderNodeDetails();
             }
         } else if (e.target.id === 'draft-level-selector') {
             const select = e.target as HTMLSelectElement;
@@ -4284,7 +4377,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Render node details if we have a selected node
     if (selectedNodeId) {
-        renderNodeDetails();
+        void renderNodeDetails();
     } else {
         const nodeDetails = getElementById('node-details');
         nodeDetails.innerHTML = '<div style="padding: 2rem; text-align: center; color: #6c757d;">Select a node to view details.</div>';
@@ -4562,7 +4655,7 @@ export function renderMultiProjectTree() {
                     projectManager = nodeProject; // Update the active project manager
                     state.setActiveProject(nodeProject.rootNode.id); // Update the active project in state
                     renderMultiProjectTree(); // Re-render tree to update selection highlight
-                    renderNodeDetails();
+                    void renderNodeDetails();
                 }
             }
         });
@@ -4592,7 +4685,7 @@ export function renderMultiProjectTree() {
                     projectManager = nodeProject;
                     state.setActiveProject(nodeProject.rootNode.id);
                     renderMultiProjectTree();
-                    renderNodeDetails();
+                    void renderNodeDetails();
                     
                     // Then show actions context menu at cursor position
                     showActionsContextMenu(node, e as MouseEvent);
@@ -4625,7 +4718,7 @@ export function renderMultiProjectTree() {
                     projectManager = nodeProject;
                     state.setActiveProject(nodeProject.rootNode.id);
                     renderMultiProjectTree();
-                    renderNodeDetails();
+                    void renderNodeDetails();
                     
                     // Open node inspector modal
                     void import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
@@ -5438,7 +5531,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         
         openReaderView(projectManager, selectedNode, (nodeId: string) => {
             selectedNodeId = nodeId;
-            renderNodeDetails();
+            void renderNodeDetails();
         }).catch((error: unknown) => {
             console.error('Failed to open reader view:', error);
             alert('Failed to open reader view. Please try again.');
