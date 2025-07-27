@@ -1045,6 +1045,63 @@ export class LogicOutlineFixerModal extends BaseModal {
     }
 
     /**
+     * Setup review actions for single node fixes
+     */
+    private setupSingleNodeReviewActions(): void {
+        const actionsHtml = `
+            <div style="padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="retry-single-btn" class="btn btn-secondary">🔄 Retry</button>
+                <button id="apply-single-btn" class="btn btn-primary">✅ Apply Fix</button>
+            </div>
+        `;
+        
+        const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
+        modalBody.insertAdjacentHTML('beforeend', actionsHtml);
+
+        // Add event listeners for the newly added buttons
+        const retryBtn = this.element!.querySelector('#retry-single-btn') as HTMLButtonElement;
+        const applyBtn = this.element!.querySelector('#apply-single-btn') as HTMLButtonElement;
+        
+        retryBtn.addEventListener('click', async () => {
+            this.modalState = 'child-loading';
+            this.childFixResults.clear();
+            this.updateContent();
+            
+            // Re-run single node fix process
+            const nodeToFix = this.problemAffectedNodes[0]!;
+            const selectedTodoArray = [this.selectedTodo!];
+            
+            try {
+                const result = await this.logicOutlineService.generateFixedOutline(
+                    nodeToFix,
+                    selectedTodoArray
+                );
+                
+                this.childFixResults.set(nodeToFix.id, {
+                    originalContent: nodeToFix.content || '',
+                    fixedContent: result.fixedContent,
+                    problemsSolved: result.problemsSolved,
+                    explanation: result.explanation
+                });
+                
+                this.modalState = 'child-review';
+                this.updateContent();
+                this.setupSingleNodeReviewActions();
+                
+            } catch (error) {
+                console.error('❌ Failed to retry single node fix:', error);
+                this.modalState = 'problem-selection';
+                this.updateContent();
+                this.setupProblemSelectionListeners();
+            }
+        });
+        
+        applyBtn.addEventListener('click', async () => {
+            await this.applySingleNodeFix();
+        });
+    }
+
+    /**
      * Apply parent fix
      */
     private async applyParentFix(): Promise<void> {
@@ -1079,16 +1136,9 @@ export class LogicOutlineFixerModal extends BaseModal {
     }
 
     /**
-     * Apply child fixes
+     * Centralized method to remove the current todo and handle workflow continuation
      */
-    private async applyChildFixes(): Promise<void> {
-        // Apply fixes for the specific problem
-        for (const [nodeId, result] of this.childFixResults) {
-            const node = this.findNodeById(this.projectManager.rootNode, nodeId);
-            node.setContent(result.fixedContent, 'master');
-        }
-
-        // Remove only the selected todo from the parent node
+    private async removeTodoAndContinue(): Promise<void> {
         console.log(`📝 Total todos before removal: ${this.node.todos.length}`);
         console.log(`🎯 Looking to remove todo with ID: ${this.selectedTodo!.id}`);
         
@@ -1112,9 +1162,9 @@ export class LogicOutlineFixerModal extends BaseModal {
         const { renderMultiProjectTree } = await import('../project-ui');
         renderMultiProjectTree();
 
-        console.log('✅ Child fixes applied and saved for problem: ' + this.selectedTodo!.description);
+        console.log('✅ Problem fixed and todo removed: ' + this.selectedTodo!.description);
 
-        // Check if there are more problems to fix
+        // Check if there are more problems to fix - get fresh list
         const remainingTodos = this.node.getIncompleteTodos();
         console.log(`📋 Remaining todos after fix: ${remainingTodos.length}`);
         
@@ -1133,6 +1183,34 @@ export class LogicOutlineFixerModal extends BaseModal {
             console.log('🎉 All problems fixed, closing modal');
             this.close();
         }
+    }
+
+    /**
+     * Apply child fixes (for multi-node problems)
+     */
+    private async applyChildFixes(): Promise<void> {
+        // Apply fixes for the specific problem
+        for (const [nodeId, result] of this.childFixResults) {
+            const node = this.findNodeById(this.projectManager.rootNode, nodeId);
+            node.setContent(result.fixedContent, 'master');
+        }
+
+        // Use centralized todo removal and workflow continuation
+        await this.removeTodoAndContinue();
+    }
+
+    /**
+     * Apply single node fix (for single-node problems)
+     */
+    private async applySingleNodeFix(): Promise<void> {
+        // Apply the fix to the single node
+        for (const [nodeId, result] of this.childFixResults) {
+            const node = this.findNodeById(this.projectManager.rootNode, nodeId);
+            node.setContent(result.fixedContent, 'master');
+        }
+
+        // Use centralized todo removal and workflow continuation
+        await this.removeTodoAndContinue();
     }
 
     /**
@@ -1236,7 +1314,7 @@ export class LogicOutlineFixerModal extends BaseModal {
             
             this.modalState = 'child-review';
             this.updateContent();
-            this.setupChildReviewActions();
+            this.setupSingleNodeReviewActions();
             
         } catch (error) {
             console.error('❌ Failed to fix single node:', error);
