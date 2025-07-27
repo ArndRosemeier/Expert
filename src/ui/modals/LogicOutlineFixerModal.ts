@@ -861,6 +861,9 @@ export class LogicOutlineFixerModal extends BaseModal {
         // Clear all todos from the node
         this.node.todos = [];
 
+        // Notify other UI components about todo changes
+        this.dispatchTodoListChangedEvent();
+
         // Save and refresh
         await this.projectManager.saveToStorage();
         
@@ -887,6 +890,9 @@ export class LogicOutlineFixerModal extends BaseModal {
         // Clear all todos from the parent node
         this.node.todos = [];
 
+        // Notify other UI components about todo changes
+        this.dispatchTodoListChangedEvent();
+
         // Save and refresh
         await this.projectManager.saveToStorage();
         
@@ -898,5 +904,19 @@ export class LogicOutlineFixerModal extends BaseModal {
         console.log('✅ Child fixes applied and saved');
 
         this.close();
+    }
+
+    /**
+     * Dispatch todoListChanged event to notify other UI components
+     */
+    private dispatchTodoListChangedEvent(): void {
+        try {
+            const event = new CustomEvent('todoListChanged', {
+                detail: { nodeId: this.node.id }
+            });
+            window.dispatchEvent(event);
+        } catch (error) {
+            console.warn('Could not notify about todo changes:', error);
+        }
     }
 } 
