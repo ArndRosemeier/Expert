@@ -1,5 +1,5 @@
 import { BaseModal } from './core/BaseModal';
-import { DocumentNode } from '../../DocumentNode';
+import { DocumentNode, TodoItem } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
@@ -13,7 +13,7 @@ interface LogicOutlineFixerConfig {
     projectManager: ProjectManager;
 }
 
-type ModalState = 'choice' | 'truth-selection' | 'parent-loading' | 'parent-review' | 'child-loading' | 'child-review';
+type ModalState = 'choice' | 'problem-selection' | 'truth-selection' | 'parent-loading' | 'parent-review' | 'child-loading' | 'child-review';
 
 export class LogicOutlineFixerModal extends BaseModal {
     private node: DocumentNode;
@@ -24,6 +24,8 @@ export class LogicOutlineFixerModal extends BaseModal {
     private logicOutlineService!: LogicOutlineFixerService;
     private logicChildService!: LogicChildFixerService;
     private affectedNodes: DocumentNode[] = [];
+    private selectedTodo: TodoItem | null = null;
+    private problemAffectedNodes: DocumentNode[] = [];
     private truthNode: DocumentNode | null = null;
     private currentChildIndex = 0;
 
@@ -120,6 +122,8 @@ export class LogicOutlineFixerModal extends BaseModal {
         switch (this.modalState) {
             case 'choice':
                 return this.renderChoiceContent();
+            case 'problem-selection':
+                return this.renderProblemSelectionContent();
             case 'truth-selection':
                 return this.renderTruthSelectionContent();
             case 'parent-loading':
@@ -271,6 +275,147 @@ export class LogicOutlineFixerModal extends BaseModal {
     }
 
     /**
+     * Render problem selection content
+     */
+    private renderProblemSelectionContent(): string {
+        const todos = this.node.getIncompleteTodos();
+        
+        return `
+            <style>
+                .problem-selection-container {
+                    padding: 20px;
+                    height: calc(100% - 80px);
+                    overflow-y: auto;
+                }
+                
+                .problem-title {
+                    font-size: 20px;
+                    margin-bottom: 15px;
+                    color: #333;
+                }
+                
+                .problem-description {
+                    color: #666;
+                    margin-bottom: 20px;
+                    line-height: 1.5;
+                }
+                
+                .problem-option {
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                }
+                
+                .problem-option:hover {
+                    border-color: #e65100;
+                }
+                
+                .problem-option.selected {
+                    border-color: #e65100;
+                    background: #fff3e0;
+                }
+                
+                .problem-header {
+                    padding: 15px;
+                    border-bottom: 1px solid #eee;
+                    font-weight: 500;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .problem-details {
+                    padding: 15px;
+                    font-size: 14px;
+                    color: #555;
+                    line-height: 1.5;
+                }
+                
+                .affected-nodes-info {
+                    color: #757575;
+                    font-size: 12px;
+                    margin-top: 8px;
+                }
+                
+                .problem-actions {
+                    margin-top: 20px;
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                }
+                
+                .problem-btn {
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                }
+                
+                .problem-btn.proceed {
+                    background: #e65100;
+                    color: white;
+                }
+                
+                .problem-btn.proceed:hover {
+                    background: #d84315;
+                }
+                
+                .problem-btn.proceed:disabled {
+                    background: #ccc;
+                    cursor: not-allowed;
+                }
+                
+                .problem-btn.back {
+                    background: #757575;
+                    color: white;
+                }
+                
+                .problem-btn.back:hover {
+                    background: #616161;
+                }
+            </style>
+
+            <div class="problem-selection-container">
+                <h2 class="problem-title">🚨 Select Problem to Fix</h2>
+                <p class="problem-description">
+                    Multiple logic problems have been detected. Choose which specific problem you want to fix. 
+                    Each problem affects different nodes and will be fixed individually.
+                </p>
+                
+                ${todos.map((todo, index) => {
+                    const affectedCount = todo.relatedNodes ? todo.relatedNodes.length : 0;
+                    const nodeNames = todo.relatedNodes ? 
+                        todo.relatedNodes.map(ref => ref.title).join(', ') : 
+                        'Unknown nodes';
+                    
+                    return `
+                        <div class="problem-option" data-todo-index="${index}">
+                            <div class="problem-header">
+                                <input type="radio" name="selected-problem" value="${index}" style="margin-right: 10px;">
+                                <span>🚨 Problem ${index + 1}</span>
+                            </div>
+                            <div class="problem-details">
+                                <div>${todo.description}</div>
+                                <div class="affected-nodes-info">
+                                    Affects ${affectedCount} nodes: ${nodeNames}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+                
+                <div class="problem-actions">
+                    <button id="problem-back-btn" class="problem-btn back">← Back</button>
+                    <button id="problem-proceed-btn" class="problem-btn proceed" disabled>Fix Selected Problem</button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Render truth node selection content
      */
     private renderTruthSelectionContent(): string {
@@ -371,11 +516,11 @@ export class LogicOutlineFixerModal extends BaseModal {
             <div class="truth-selection-container">
                 <h2 class="truth-title">🎯 Select the Truth Node</h2>
                 <p class="truth-description">
-                    Choose which node contains the correct information that other nodes should be adjusted to match.
+                    Choose which node contains the correct information for "<strong>${this.selectedTodo?.description}</strong>".
                     This node will remain unchanged while others are fixed to be consistent with it.
                 </p>
                 
-                ${this.affectedNodes.map(node => `
+                ${this.problemAffectedNodes.map(node => `
                     <div class="node-option" data-node-id="${node.id}">
                         <div class="node-header">
                             <input type="radio" name="truth-node" value="${node.id}" style="margin-right: 10px;">
@@ -414,9 +559,9 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Render child loading content
      */
     private renderChildLoadingContent(): string {
-        const totalNodes = this.affectedNodes.filter(n => n !== this.truthNode).length;
+        const totalNodes = this.problemAffectedNodes.filter(n => n !== this.truthNode).length;
         const progress = Math.round(((this.currentChildIndex) / totalNodes) * 100);
-        const currentNode = this.affectedNodes.filter(n => n !== this.truthNode)[this.currentChildIndex];
+        const currentNode = this.problemAffectedNodes.filter(n => n !== this.truthNode)[this.currentChildIndex];
         
         return `
             <div style="padding: 40px; text-align: center; height: calc(100% - 80px); display: flex; flex-direction: column; justify-content: center;">
@@ -680,12 +825,18 @@ export class LogicOutlineFixerModal extends BaseModal {
                 this.updateContent();
                 await this.generateParentFix();
             } else if (target.id === 'fix-children-btn' && !target.hasAttribute('disabled')) {
-                this.modalState = 'truth-selection';
+                this.modalState = 'problem-selection';
                 this.updateContent();
-                this.setupTruthSelectionListeners();
-            } else if (target.id === 'truth-back-btn') {
+                this.setupProblemSelectionListeners();
+            } else if (target.id === 'problem-back-btn') {
                 this.modalState = 'choice';
                 this.updateContent();
+            } else if (target.id === 'problem-proceed-btn' && !target.hasAttribute('disabled')) {
+                await this.selectProblemAndShowTruthSelection();
+            } else if (target.id === 'truth-back-btn') {
+                this.modalState = 'problem-selection';
+                this.updateContent();
+                this.setupProblemSelectionListeners();
             } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
                 await this.startChildFix();
             }
@@ -767,15 +918,15 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Process child fixes one by one
      */
     private async processChildFixes(): Promise<void> {
-        const nodesToFix = this.affectedNodes.filter(node => node !== this.truthNode);
-        const todos = this.node.getIncompleteTodos();
+        const nodesToFix = this.problemAffectedNodes.filter(node => node !== this.truthNode);
+        const selectedTodoArray = [this.selectedTodo!];
         
         for (let i = 0; i < nodesToFix.length; i++) {
             this.currentChildIndex = i;
             this.updateContent();
             
             const nodeToFix = nodesToFix[i]!;
-            const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode!, todos);
+            const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode!, selectedTodoArray);
             this.childFixResults.set(nodeToFix.id, result);
         }
         
@@ -881,14 +1032,17 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Apply child fixes
      */
     private async applyChildFixes(): Promise<void> {
-        // Apply all child fixes
+        // Apply fixes for the specific problem
         for (const [nodeId, result] of this.childFixResults) {
             const node = this.findNodeById(this.projectManager.rootNode, nodeId);
             node.setContent(result.fixedContent, 'master');
         }
 
-        // Clear all todos from the parent node
-        this.node.todos = [];
+        // Remove only the selected todo from the parent node
+        const todoIndex = this.node.todos.indexOf(this.selectedTodo!);
+        if (todoIndex !== -1) {
+            this.node.todos.splice(todoIndex, 1);
+        }
 
         // Notify other UI components about todo changes
         this.dispatchTodoListChangedEvent();
@@ -900,10 +1054,78 @@ export class LogicOutlineFixerModal extends BaseModal {
         const { renderMultiProjectTree } = await import('../project-ui');
         renderMultiProjectTree();
 
-        // Persistence is handled by saveToStorage above
-        console.log('✅ Child fixes applied and saved');
+        console.log('✅ Child fixes applied and saved for problem: ' + this.selectedTodo!.description);
 
-        this.close();
+        // Check if there are more problems to fix
+        const remainingTodos = this.node.getIncompleteTodos();
+        if (remainingTodos.length > 0) {
+            // Return to problem selection for next problem
+            this.modalState = 'problem-selection';
+            this.selectedTodo = null;
+            this.problemAffectedNodes = [];
+            this.childFixResults.clear();
+            this.updateContent();
+            this.setupProblemSelectionListeners();
+        } else {
+            // All problems fixed, close modal
+            this.close();
+        }
+    }
+
+    /**
+     * Setup problem selection listeners
+     */
+    private setupProblemSelectionListeners(): void {
+        // Click on problem option to select radio button
+        this.element!.querySelectorAll('.problem-option').forEach((option: Element) => {
+            option.addEventListener('click', (e: Event) => {
+                if (e.target !== option) return;
+                const radio = option.querySelector('input[type="radio"]') as HTMLInputElement;
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
+            });
+        });
+
+        // Add radio button change listener for problem selection
+        this.element!.addEventListener('change', (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            if (target.name === 'selected-problem') {
+                const proceedBtn = this.element!.querySelector('#problem-proceed-btn') as HTMLButtonElement;
+                proceedBtn.disabled = false;
+                
+                // Update visual selection
+                this.element!.querySelectorAll('.problem-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                target.closest('.problem-option')!.classList.add('selected');
+            }
+        });
+    }
+
+    /**
+     * Select the chosen problem and show truth selection
+     */
+    private async selectProblemAndShowTruthSelection(): Promise<void> {
+        const selectedRadio = this.element!.querySelector('input[name="selected-problem"]:checked') as HTMLInputElement;
+        const problemIndex = parseInt(selectedRadio.value);
+        const todos = this.node.getIncompleteTodos();
+        
+        this.selectedTodo = todos[problemIndex]!;
+        
+        // Build list of nodes affected by this specific problem
+        this.problemAffectedNodes = [];
+        if (this.selectedTodo.relatedNodes) {
+            for (const nodeRef of this.selectedTodo.relatedNodes) {
+                if (nodeRef.id !== 'unknown') {
+                    const node = this.findNodeById(this.projectManager.rootNode, nodeRef.id);
+                    this.problemAffectedNodes.push(node);
+                }
+            }
+        }
+        
+        this.modalState = 'truth-selection';
+        this.updateContent();
+        this.setupTruthSelectionListeners();
     }
 
     /**
