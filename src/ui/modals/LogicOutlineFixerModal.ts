@@ -688,37 +688,10 @@ export class LogicOutlineFixerModal extends BaseModal {
                 this.updateContent();
             } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
                 await this.startChildFix();
-            } else if (target.id === 'apply-parent-btn') {
-                await this.applyParentFix();
-            } else if (target.id === 'apply-child-btn') {
-                await this.applyChildFixes();
-            } else if (target.id === 'retry-parent-btn') {
-                this.modalState = 'parent-loading';
-                this.updateContent();
-                await this.generateParentFix();
-            } else if (target.id === 'retry-child-btn') {
-                this.currentChildIndex = 0;
-                this.childFixResults.clear();
-                this.modalState = 'child-loading';
-                this.updateContent();
-                await this.processChildFixes();
             }
         });
 
-        // Add radio button change listener for truth selection
-        this.element!.addEventListener('change', (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            if (target.name === 'truth-node') {
-                const proceedBtn = this.element!.querySelector('#truth-proceed-btn') as HTMLButtonElement;
-                proceedBtn.disabled = false;
-                
-                // Update visual selection
-                this.element!.querySelectorAll('.node-option').forEach(option => {
-                    option.classList.remove('selected');
-                });
-                target.closest('.node-option')!.classList.add('selected');
-            }
-        });
+
     }
 
     /**
@@ -733,6 +706,21 @@ export class LogicOutlineFixerModal extends BaseModal {
                 radio.checked = true;
                 radio.dispatchEvent(new Event('change'));
             });
+        });
+
+        // Add radio button change listener for truth selection (re-attach after content update)
+        this.element!.addEventListener('change', (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            if (target.name === 'truth-node') {
+                const proceedBtn = this.element!.querySelector('#truth-proceed-btn') as HTMLButtonElement;
+                proceedBtn.disabled = false;
+                
+                // Update visual selection
+                this.element!.querySelectorAll('.node-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                target.closest('.node-option')!.classList.add('selected');
+            }
         });
     }
 
@@ -809,6 +797,20 @@ export class LogicOutlineFixerModal extends BaseModal {
         
         const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
         modalBody.insertAdjacentHTML('beforeend', actionsHtml);
+
+        // Add event listeners for the newly added buttons
+        const retryBtn = this.element!.querySelector('#retry-parent-btn') as HTMLButtonElement;
+        const applyBtn = this.element!.querySelector('#apply-parent-btn') as HTMLButtonElement;
+        
+        retryBtn.addEventListener('click', async () => {
+            this.modalState = 'parent-loading';
+            this.updateContent();
+            await this.generateParentFix();
+        });
+        
+        applyBtn.addEventListener('click', async () => {
+            await this.applyParentFix();
+        });
     }
 
     /**
@@ -824,6 +826,21 @@ export class LogicOutlineFixerModal extends BaseModal {
         
         const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
         modalBody.insertAdjacentHTML('beforeend', actionsHtml);
+
+        // Add event listeners for the newly added buttons
+        const retryBtn = this.element!.querySelector('#retry-child-btn') as HTMLButtonElement;
+        const applyBtn = this.element!.querySelector('#apply-child-btn') as HTMLButtonElement;
+        
+        retryBtn.addEventListener('click', async () => {
+            this.modalState = 'child-loading';
+            this.childFixResults.clear();
+            this.updateContent();
+            await this.processChildFixes();
+        });
+        
+        applyBtn.addEventListener('click', async () => {
+            await this.applyChildFixes();
+        });
     }
 
     /**
