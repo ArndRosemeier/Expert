@@ -19,7 +19,6 @@ export interface NodeCreationConfig {
 
 export interface INodeCreationService {
     generateSuggestions(parentNode: DocumentNode, count?: number, userDirection?: string): Promise<NodeSuggestion[]>;
-    updateParentContent(parentNode: DocumentNode, childTitle: string): Promise<string>;
     createNode(config: NodeCreationConfig): Promise<DocumentNode>;
 }
 
@@ -95,45 +94,7 @@ export class NodeCreationService implements INodeCreationService {
         }
     }
 
-    /**
-     * Update parent content to reference new child
-     */
-    public async updateParentContent(parentNode: DocumentNode, childTitle: string): Promise<string> {
-        const profile = this.settingsManager.getLastUsedProfile();
-        if (!profile) {
-            throw new Error('No active profile found for content update');
-        }
 
-        // Get context for the parent node
-        const context = this.contextService.compileNodeContext(parentNode.id, this.projectManager.rootNode);
-        
-        // Get the parent content update prompt
-        const prompts = this.settingsManager.getPrompts();
-        const promptTemplate = prompts.parent_content_update;
-        
-        // Fill the prompt template
-        const filledPrompt = promptTemplate
-            .replace(/\{\{child_title\}\}/g, childTitle)
-            .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
-            .replace(/\{\{context\}\}/g, context || '')
-            .replace(/\{\{language\}\}/g, this.settingsManager.getLanguage());
-
-        try {
-            // Get the creator model from the profile's selected models
-            const creatorModel = profile.selectedModels?.['creator'];
-            if (!creatorModel) {
-                throw new Error('No creator model configured in the active profile');
-            }
-
-            // Use the creator model directly via chat method
-            const response = await this.openRouterClient.chat('creator', filledPrompt);
-
-            return response.trim();
-        } catch (error) {
-            console.error('Failed to update parent content:', error);
-            throw new Error('Failed to update parent content. The child node will be created without parent updates.');
-        }
-    }
 
     /**
      * Create a new child node with optional content and parent updates
@@ -172,13 +133,18 @@ export class NodeCreationService implements INodeCreationService {
 
         // Update parent content if requested
         if (updateParent && parentNode.content) {
-            try {
-                const updatedParentContent = await this.updateParentContent(parentNode, title);
-                // Use version management system to update parent content
-                parentNode.setContent(updatedParentContent, 'master');
-            } catch (error) {
-                console.warn('Parent content update failed, but child node was created:', error);
+            let updatedParentContent = parentNode.content;
+            
+            if (draft) {
+                // Simply append the draft content as a new paragraph
+                updatedParentContent = parentNode.content.trim() + '\n\n' + draft.trim();
+            } else {
+                // If no draft, just append a simple reference to the new child
+                updatedParentContent = parentNode.content.trim() + '\n\n' + `The next section, "${title}", will be developed further.`;
             }
+            
+            // Use version management system to update parent content
+            parentNode.setContent(updatedParentContent, 'master');
         }
 
         // Save the project

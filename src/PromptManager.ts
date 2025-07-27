@@ -29,9 +29,6 @@ export interface OrchestratorPrompts {
     // For child node suggestions
     child_node_suggestions: string;
     
-    // For parent content updates
-    parent_content_update: string;
-    
     // For node chat system prompt
     node_chat_system: string;
     
@@ -480,34 +477,6 @@ Return as JSON array with "title" and "draft" properties.
         `.trim(),
         placeholders: ['parent_title', 'parent_content', 'context', 'language', 'user_direction_section'],
         description: "Creates alternative suggestions for the next child section with different approaches or themes. Can be guided by optional user direction."
-    },
-
-    parent_content_update: {
-        text: `
-            Generate updated content in {{language}}. Any structural elements (such as section headers) must always remain in English.
-            
-            A new child node titled "{{child_title}}" is being added to this parent node.
-            
-Current parent content:
----
-{{parent_content}}
----
-
-Document context:
----
-{{context}}
----
-
-IMPORTANT: Keep the existing content exactly as it is. Do NOT enhance, improve, or rewrite any of the original content. Your job is to continue the content by adding a reference to the new child section.
-
-Add about a paragraph of content to the parent content to naturally reference the new child section "{{child_title}}". Make it flow naturally from the existing content.
-
-Only modify existing content if it's absolutely essential to create a smooth connection to the new child section. Otherwise, preserve the original content verbatim and simply append the reference.
-
-Return the complete content with your addition.
-        `.trim(),
-        placeholders: ['child_title', 'parent_content', 'context', 'language'],
-        description: "Updates parent content to reference a newly added child section with minimal changes."
     },
 
     node_chat_system: {
