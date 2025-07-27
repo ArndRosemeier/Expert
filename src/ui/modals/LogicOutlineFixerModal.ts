@@ -472,6 +472,26 @@ export class LogicOutlineFixerModal extends BaseModal {
                     line-height: 1.5;
                     max-height: 150px;
                     overflow-y: auto;
+                    border-bottom: 1px solid #eee;
+                }
+                
+                .logic-error-info {
+                    padding: 15px;
+                    background: #fff3e0;
+                    border-top: 2px solid #ff9800;
+                }
+                
+                .error-justification {
+                    font-size: 14px;
+                    color: #d84315;
+                    line-height: 1.5;
+                    margin-bottom: 8px;
+                }
+                
+                .error-severity {
+                    font-size: 12px;
+                    color: #e65100;
+                    font-weight: 500;
                 }
                 
                 .truth-actions {
@@ -529,6 +549,16 @@ export class LogicOutlineFixerModal extends BaseModal {
                         <div class="node-content-preview">
                             ${node.content ? node.content.substring(0, 300) + (node.content.length > 300 ? '...' : '') : 'No content'}
                         </div>
+                        ${this.selectedTodo?.logicError ? `
+                            <div class="logic-error-info">
+                                <div class="error-justification">
+                                    <strong>🚨 Problem:</strong> ${this.selectedTodo.logicError.justification}
+                                </div>
+                                <div class="error-severity">
+                                    <strong>Severity:</strong> ${this.selectedTodo.logicError.severity}/10
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 `).join('')}
                 
