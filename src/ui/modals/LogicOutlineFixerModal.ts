@@ -392,9 +392,9 @@ export class LogicOutlineFixerModal extends BaseModal {
                         'Unknown nodes';
                     
                     return `
-                        <div class="problem-option" data-todo-index="${index}">
+                        <div class="problem-option" data-todo-id="${todo.id}">
                             <div class="problem-header">
-                                <input type="radio" name="selected-problem" value="${index}" style="margin-right: 10px;">
+                                <input type="radio" name="selected-problem" value="${todo.id}" style="margin-right: 10px;">
                                 <span>🚨 Problem ${index + 1}</span>
                             </div>
                             <div class="problem-details">
@@ -1170,10 +1170,10 @@ export class LogicOutlineFixerModal extends BaseModal {
      */
     private async selectProblemAndShowTruthSelection(): Promise<void> {
         const selectedRadio = this.element!.querySelector('input[name="selected-problem"]:checked') as HTMLInputElement;
-        const problemIndex = parseInt(selectedRadio.value);
+        const selectedTodoId = selectedRadio.value;
         const todos = this.node.getIncompleteTodos();
         
-        this.selectedTodo = todos[problemIndex]!;
+        this.selectedTodo = todos.find(todo => todo.id === selectedTodoId)!;
         
         // Build list of nodes affected by this specific problem
         this.problemAffectedNodes = [];
