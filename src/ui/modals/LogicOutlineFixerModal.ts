@@ -861,6 +861,11 @@ export class LogicOutlineFixerModal extends BaseModal {
                         </div>
                     `;
                 }).join('')}
+                
+                <div style="padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="retry-single-btn" class="btn btn-secondary">🔄 Retry</button>
+                    <button id="apply-single-btn" class="btn btn-primary">✅ Apply Fix</button>
+                </div>
             </div>
         `;
     }
@@ -891,6 +896,10 @@ export class LogicOutlineFixerModal extends BaseModal {
                 this.setupProblemSelectionListeners();
             } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
                 await this.startChildFix();
+            } else if (target.id === 'retry-single-btn') {
+                await this.retrySingleNodeFix();
+            } else if (target.id === 'apply-single-btn') {
+                await this.applySingleNodeFix();
             }
         });
 
@@ -1047,52 +1056,31 @@ export class LogicOutlineFixerModal extends BaseModal {
     }
 
     /**
-     * Setup review actions for single node fixes
+     * Retry single node fix
      */
-    private setupSingleNodeReviewActions(): void {
-        const actionsHtml = `
-            <div style="padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px;">
-                <button id="retry-single-btn" class="btn btn-secondary">🔄 Retry</button>
-                <button id="apply-single-btn" class="btn btn-primary">✅ Apply Fix</button>
-            </div>
-        `;
+    private async retrySingleNodeFix(): Promise<void> {
+        this.modalState = 'child-loading';
+        this.childFixResults.clear();
+        this.updateContent();
         
-        const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
-        modalBody.insertAdjacentHTML('beforeend', actionsHtml);
-
-        // Add event listeners for the newly added buttons
-        const retryBtn = this.element!.querySelector('#retry-single-btn') as HTMLButtonElement;
-        const applyBtn = this.element!.querySelector('#apply-single-btn') as HTMLButtonElement;
+        // Re-run single node fix process
+        const nodeToFix = this.problemAffectedNodes[0]!;
+        const selectedTodoArray = [this.selectedTodo!];
         
-        retryBtn.addEventListener('click', async () => {
-            this.modalState = 'child-loading';
-            this.childFixResults.clear();
-            this.updateContent();
-            
-            // Re-run single node fix process
-            const nodeToFix = this.problemAffectedNodes[0]!;
-            const selectedTodoArray = [this.selectedTodo!];
-            
-            const result = await this.logicOutlineService.generateFixedOutline(
-                nodeToFix,
-                selectedTodoArray
-            );
-            
-            this.childFixResults.set(nodeToFix.id, {
-                originalContent: nodeToFix.content!,
-                fixedContent: result.fixedContent,
-                problemsSolved: result.problemsSolved,
-                explanation: result.explanation
-            });
-            
-            this.modalState = 'child-review';
-            this.updateContent();
-            this.setupSingleNodeReviewActions();
+        const result = await this.logicOutlineService.generateFixedOutline(
+            nodeToFix,
+            selectedTodoArray
+        );
+        
+        this.childFixResults.set(nodeToFix.id, {
+            originalContent: nodeToFix.content!,
+            fixedContent: result.fixedContent,
+            problemsSolved: result.problemsSolved,
+            explanation: result.explanation
         });
         
-        applyBtn.addEventListener('click', async () => {
-            await this.applySingleNodeFix();
-        });
+        this.modalState = 'child-review';
+        this.updateContent();
     }
 
     /**
@@ -1311,7 +1299,6 @@ export class LogicOutlineFixerModal extends BaseModal {
         
         this.modalState = 'child-review';
         this.updateContent();
-        this.setupSingleNodeReviewActions();
     }
 
     /**
