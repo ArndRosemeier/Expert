@@ -1,5 +1,5 @@
 import { BaseModal } from './core/BaseModal';
-import { DocumentNode, TodoItem } from '../../DocumentNode';
+import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
@@ -13,14 +13,12 @@ interface LogicOutlineFixerConfig {
     projectManager: ProjectManager;
 }
 
-type FixMode = 'parent' | 'children';
 type ModalState = 'choice' | 'truth-selection' | 'parent-loading' | 'parent-review' | 'child-loading' | 'child-review';
 
 export class LogicOutlineFixerModal extends BaseModal {
     private node: DocumentNode;
     private projectManager: ProjectManager;
     private modalState: ModalState = 'choice';
-    private fixMode: FixMode | null = null;
     private fixedResult: FixedOutlineResult | null = null;
     private childFixResults: Map<string, FixedChildResult> = new Map();
     private logicOutlineService!: LogicOutlineFixerService;
@@ -672,12 +670,10 @@ export class LogicOutlineFixerModal extends BaseModal {
             const target = e.target as HTMLElement;
             
             if (target.id === 'fix-parent-btn') {
-                this.fixMode = 'parent';
                 this.modalState = 'parent-loading';
                 this.updateContent();
                 await this.generateParentFix();
             } else if (target.id === 'fix-children-btn' && !target.hasAttribute('disabled')) {
-                this.fixMode = 'children';
                 this.modalState = 'truth-selection';
                 this.updateContent();
                 this.setupTruthSelectionListeners();
@@ -761,9 +757,9 @@ export class LogicOutlineFixerModal extends BaseModal {
      */
     private async startChildFix(): Promise<void> {
         // Get selected truth node
-        const selectedRadio = this.container.querySelector('input[name="truth-node"]:checked') as HTMLInputElement;
+        const selectedRadio = this.element!.querySelector('input[name="truth-node"]:checked') as HTMLInputElement;
         const truthNodeId = selectedRadio.value;
-        this.truthNode = this.findNodeById(this.projectManager.getRoot(), truthNodeId);
+        this.truthNode = this.findNodeById(this.projectManager.rootNode, truthNodeId);
         
         this.modalState = 'child-loading';
         this.currentChildIndex = 0;
@@ -785,8 +781,10 @@ export class LogicOutlineFixerModal extends BaseModal {
             this.updateContent();
             
             const nodeToFix = nodesToFix[i];
-            const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode!, todos);
-            this.childFixResults.set(nodeToFix.id, result);
+            if (nodeToFix && this.truthNode) {
+                const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode, todos);
+                this.childFixResults.set(nodeToFix.id, result);
+            }
         }
         
         this.modalState = 'child-review';
@@ -805,7 +803,7 @@ export class LogicOutlineFixerModal extends BaseModal {
             </div>
         `;
         
-        const modalBody = this.container.querySelector('.modal-body') as HTMLElement;
+        const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
         modalBody.insertAdjacentHTML('beforeend', actionsHtml);
     }
 
@@ -820,7 +818,7 @@ export class LogicOutlineFixerModal extends BaseModal {
             </div>
         `;
         
-        const modalBody = this.container.querySelector('.modal-body') as HTMLElement;
+        const modalBody = this.element!.querySelector('.modal-body') as HTMLElement;
         modalBody.insertAdjacentHTML('beforeend', actionsHtml);
     }
 
@@ -836,23 +834,21 @@ export class LogicOutlineFixerModal extends BaseModal {
         // Delete child nodes and clear todos as before
         const directChildren = [...this.node.children];
         for (const child of directChildren) {
-            await this.projectManager.deleteNode(child.id);
+            this.projectManager.removeNode(child.id);
         }
 
         // Clear all todos from the node
         this.node.todos = [];
 
         // Save and refresh
-        await this.projectManager.saveState();
+        await this.projectManager.saveToStorage();
         
         // Import project-ui dynamically and refresh tree
-        const { refreshTree } = await import('../../project-ui');
-        await refreshTree();
+        const { renderMultiProjectTree } = await import('../project-ui');
+        renderMultiProjectTree();
 
-        // Import project-ui again for persistence and UI refresh
-        const projectUi = await import('../../project-ui');
-        await projectUi.persistNodeChanges(this.node);
-        await projectUi.refreshTree();
+        // Persistence is handled by saveToStorage above
+        console.log('✅ Parent fix applied and saved');
 
         this.close();
     }
@@ -863,7 +859,7 @@ export class LogicOutlineFixerModal extends BaseModal {
     private async applyChildFixes(): Promise<void> {
         // Apply all child fixes
         for (const [nodeId, result] of this.childFixResults) {
-            const node = this.findNodeById(this.projectManager.getRoot(), nodeId);
+            const node = this.findNodeById(this.projectManager.rootNode, nodeId);
             if (node) {
                 node.setContent(result.fixedContent, 'master');
             }
@@ -873,16 +869,14 @@ export class LogicOutlineFixerModal extends BaseModal {
         this.node.todos = [];
 
         // Save and refresh
-        await this.projectManager.saveState();
+        await this.projectManager.saveToStorage();
         
         // Import project-ui dynamically and refresh tree
-        const { refreshTree } = await import('../../project-ui');
-        await refreshTree();
+        const { renderMultiProjectTree } = await import('../project-ui');
+        renderMultiProjectTree();
 
-        // Import project-ui again for persistence and UI refresh
-        const projectUi = await import('../../project-ui');
-        await projectUi.persistNodeChanges(this.node);
-        await projectUi.refreshTree();
+        // Persistence is handled by saveToStorage above
+        console.log('✅ Child fixes applied and saved');
 
         this.close();
     }
