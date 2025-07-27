@@ -46,6 +46,7 @@ export class PromptContextBuilder {
     static forGeneration(
         node: DocumentNode, 
         settingsManager: SettingsManager,
+        path: string,
         options: {
             count?: number;
             childLevelName?: string;
@@ -56,6 +57,7 @@ export class PromptContextBuilder {
         } = {}
     ): PlaceholderContext {
         const base = this.forNode(node, settingsManager);
+        base.node!.path = path;
         base.generation = {
             ...(options.count !== undefined && { count: options.count }),
             ...(options.childLevelName !== undefined && { childLevelName: options.childLevelName }),

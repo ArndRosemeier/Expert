@@ -8,6 +8,7 @@ export interface PlaceholderContext {
         title?: string;
         content?: string;
         isLeaf?: boolean;
+        path?: string;
     };
     
     // Project context
@@ -464,7 +465,7 @@ class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('path', (context) => ({
-            value: (context.node as any)?.path || 'Node Path',
+            value: context.node!.path!,
             description: 'Hierarchical path to current node'
         }));
         
