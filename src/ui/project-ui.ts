@@ -2052,6 +2052,7 @@ export async function renderNodeDetails() {
                 line-height: 1.5;
                 background-color: #ffffff;
                 resize: vertical;
+                max-height: 400px; /* Limit height so UI Logger stays visible */
             }
             .node-actions {
                 display: flex;
