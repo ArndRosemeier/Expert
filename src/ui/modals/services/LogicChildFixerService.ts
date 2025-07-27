@@ -27,7 +27,7 @@ export class LogicChildFixerService {
         const prompt = this.buildChildFixingPrompt(nodeToFix, truthNode, originalContent, todos);
         
         // Get AI response using creator model
-        const response = await this.openRouterClient.chat('logic_child_fix', prompt);
+        const response = await this.openRouterClient.chat('creator', prompt);
         
         // Parse the AI response
         const result = this.parseChildFixResponse(response, originalContent);
