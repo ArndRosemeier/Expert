@@ -1071,9 +1071,17 @@ export class LogicOutlineFixerModal extends BaseModal {
         }
 
         // Remove only the selected todo from the parent node
-        const todoIndex = this.node.todos.indexOf(this.selectedTodo!);
+        console.log(`📝 Total todos before removal: ${this.node.todos.length}`);
+        console.log(`🎯 Looking to remove todo with ID: ${this.selectedTodo!.id}`);
+        
+        const todoIndex = this.node.todos.findIndex(todo => todo.id === this.selectedTodo!.id);
         if (todoIndex !== -1) {
             this.node.todos.splice(todoIndex, 1);
+            console.log(`🗑️ Removed todo: ${this.selectedTodo!.description}`);
+            console.log(`📝 Total todos after removal: ${this.node.todos.length}`);
+        } else {
+            console.warn(`⚠️ Could not find todo to remove: ${this.selectedTodo!.description}`);
+            console.warn('Available todo IDs:', this.node.todos.map(t => t.id));
         }
 
         // Notify other UI components about todo changes
@@ -1090,7 +1098,12 @@ export class LogicOutlineFixerModal extends BaseModal {
 
         // Check if there are more problems to fix
         const remainingTodos = this.node.getIncompleteTodos();
+        console.log(`📋 Remaining todos after fix: ${remainingTodos.length}`);
+        
         if (remainingTodos.length > 0) {
+            console.log('🔄 More problems to fix, returning to problem selection');
+            console.log('Remaining problems:', remainingTodos.map(t => t.description));
+            
             // Return to problem selection for next problem
             this.modalState = 'problem-selection';
             this.selectedTodo = null;
@@ -1099,7 +1112,7 @@ export class LogicOutlineFixerModal extends BaseModal {
             this.updateContent();
             this.setupProblemSelectionListeners();
         } else {
-            // All problems fixed, close modal
+            console.log('🎉 All problems fixed, closing modal');
             this.close();
         }
     }
