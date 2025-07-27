@@ -591,6 +591,24 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Render child loading content
      */
     private renderChildLoadingContent(): string {
+        // Handle single-node case (no truth node)
+        if (this.problemAffectedNodes.length === 1) {
+            const singleNode = this.problemAffectedNodes[0]!;
+            return `
+                <div style="padding: 40px; text-align: center; height: calc(100% - 80px); display: flex; flex-direction: column; justify-content: center;">
+                    <div style="font-size: 18px; color: #333; margin-bottom: 20px;">🔧 Fixing Logic Issue...</div>
+                    <div style="margin: 20px 0;">
+                        <div class="spinner-wrench" style="font-size: 48px; animation: spin 2s linear infinite; transform-origin: center;">🔧</div>
+                    </div>
+                    <div style="color: #666; margin-bottom: 15px;">
+                        Processing: ${singleNode.title}
+                    </div>
+                    <div style="color: #666; font-size: 14px;">Analyzing and fixing internal logic problems</div>
+                </div>
+            `;
+        }
+        
+        // Multi-node case (with truth node selection)
         const totalNodes = this.problemAffectedNodes.filter(n => n !== this.truthNode).length;
         const progress = Math.round(((this.currentChildIndex) / totalNodes) * 100);
         const currentNode = this.problemAffectedNodes.filter(n => n !== this.truthNode)[this.currentChildIndex];
@@ -1168,9 +1186,64 @@ export class LogicOutlineFixerModal extends BaseModal {
             }
         }
         
-        this.modalState = 'truth-selection';
+        // Check if this is a single-node problem
+        if (this.problemAffectedNodes.length === 1) {
+            console.log('🎯 Single-node problem detected, proceeding directly to fix');
+            await this.startSingleNodeFix();
+        } else if (this.problemAffectedNodes.length === 0) {
+            console.error('❌ No affected nodes found for selected problem');
+            this.modalState = 'problem-selection';
+            this.updateContent();
+            this.setupProblemSelectionListeners();
+        } else {
+            console.log(`🔄 Multi-node problem detected (${this.problemAffectedNodes.length} nodes), showing truth selection`);
+            this.modalState = 'truth-selection';
+            this.updateContent();
+            this.setupTruthSelectionListeners();
+        }
+    }
+
+    /**
+     * Start single node fix process (when only one node is affected)
+     */
+    private async startSingleNodeFix(): Promise<void> {
+        this.modalState = 'child-loading';
+        this.currentChildIndex = 0;
+        this.childFixResults.clear();
         this.updateContent();
-        this.setupTruthSelectionListeners();
+        
+        // For single node problems, use the outline fix approach
+        // The single node contains internal logic problems that need fixing
+        const nodeToFix = this.problemAffectedNodes[0]!;
+        const selectedTodoArray = [this.selectedTodo!];
+        
+        console.log(`🔧 Fixing single node: ${nodeToFix.title}`);
+        
+        try {
+            // Use the logic outline fix service since this is about fixing internal content
+            const result = await this.logicOutlineService.generateFixedOutline(
+                nodeToFix,
+                selectedTodoArray
+            );
+            
+            // Store as a "child fix" result for consistent processing
+            this.childFixResults.set(nodeToFix.id, {
+                originalContent: nodeToFix.content || '',
+                fixedContent: result.fixedContent,
+                problemsSolved: result.problemsSolved,
+                explanation: result.explanation
+            });
+            
+            this.modalState = 'child-review';
+            this.updateContent();
+            this.setupChildReviewActions();
+            
+        } catch (error) {
+            console.error('❌ Failed to fix single node:', error);
+            this.modalState = 'problem-selection';
+            this.updateContent();
+            this.setupProblemSelectionListeners();
+        }
     }
 
     /**
