@@ -1,9 +1,10 @@
 import { BaseModal } from './core/BaseModal';
-import { DocumentNode } from '../../DocumentNode';
+import { DocumentNode, TodoItem } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
 import { LogicOutlineFixerService, FixedOutlineResult } from './services/LogicOutlineFixerService';
+import { LogicChildFixerService, FixedChildResult } from './services/LogicChildFixerService';
 import { DiffTool } from '../../DiffTool';
 
 interface LogicOutlineFixerConfig {
@@ -12,17 +13,26 @@ interface LogicOutlineFixerConfig {
     projectManager: ProjectManager;
 }
 
+type FixMode = 'parent' | 'children';
+type ModalState = 'choice' | 'truth-selection' | 'parent-loading' | 'parent-review' | 'child-loading' | 'child-review';
+
 export class LogicOutlineFixerModal extends BaseModal {
     private node: DocumentNode;
     private projectManager: ProjectManager;
-    private modalState: 'loading' | 'review' = 'loading';
+    private modalState: ModalState = 'choice';
+    private fixMode: FixMode | null = null;
     private fixedResult: FixedOutlineResult | null = null;
+    private childFixResults: Map<string, FixedChildResult> = new Map();
     private logicOutlineService!: LogicOutlineFixerService;
+    private logicChildService!: LogicChildFixerService;
+    private affectedNodes: DocumentNode[] = [];
+    private truthNode: DocumentNode | null = null;
+    private currentChildIndex = 0;
 
     constructor(config: LogicOutlineFixerConfig) {
         super({
             id: config.id,
-            title: '🔧 Fix Logic in Outline',
+            title: '🔧 Fix Logic Issues',
             width: '1000px',
             height: '80vh'
         });
@@ -38,70 +48,396 @@ export class LogicOutlineFixerModal extends BaseModal {
     }
 
     /**
-     * Initialize service when modal opens
+     * Initialize services when modal opens
      */
     override async open(): Promise<void> {
         const openRouterClient = OpenRouterClient.getInstance();
         const settingsManager = await SettingsManager.getInstance();
         
         this.logicOutlineService = new LogicOutlineFixerService(openRouterClient, settingsManager);
+        this.logicChildService = new LogicChildFixerService(openRouterClient, settingsManager);
+
+        // Collect affected nodes from todos
+        await this.collectAffectedNodes();
 
         await super.open();
         this.setupEventListeners();
     }
 
-    private renderModalContent(): string {
-        if (this.modalState === 'loading') {
-            return this.renderLoadingContent();
-        } else {
-            return this.renderReviewContent();
+    /**
+     * Collect affected nodes from todo list
+     */
+    private async collectAffectedNodes(): Promise<void> {
+        const todos = this.node.getIncompleteTodos();
+        const nodeIds = new Set<string>();
+        
+        todos.forEach(todo => {
+            if (todo.relatedNodes) {
+                todo.relatedNodes.forEach(ref => {
+                    if (ref.id !== 'unknown') {
+                        nodeIds.add(ref.id);
+                    }
+                });
+            }
+        });
+
+        // Find actual node objects
+        this.affectedNodes = [];
+        for (const nodeId of nodeIds) {
+            const node = this.findNodeById(this.projectManager.rootNode, nodeId);
+            if (node) {
+                this.affectedNodes.push(node);
+            }
         }
     }
 
-    private renderLoadingContent(): string {
+    /**
+     * Find node by ID in the tree
+     */
+    private findNodeById(root: DocumentNode, targetId: string): DocumentNode | null {
+        if (root.id === targetId) {
+            return root;
+        }
+        
+        for (const child of root.children) {
+            const found = this.findNodeById(child, targetId);
+            if (found) {
+                return found;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Render modal content based on current state
+     */
+    private renderModalContent(): string {
+        switch (this.modalState) {
+            case 'choice':
+                return this.renderChoiceContent();
+            case 'truth-selection':
+                return this.renderTruthSelectionContent();
+            case 'parent-loading':
+                return this.renderParentLoadingContent();
+            case 'parent-review':
+                return this.renderParentReviewContent();
+            case 'child-loading':
+                return this.renderChildLoadingContent();
+            case 'child-review':
+                return this.renderChildReviewContent();
+            default:
+                return this.renderChoiceContent();
+        }
+    }
+
+    /**
+     * Render choice dialog content
+     */
+    private renderChoiceContent(): string {
+        const todos = this.node.getIncompleteTodos();
+        
         return `
-            <div style="text-align: center; padding: 40px;">
-                <div style="
-                    width: 80px; 
-                    height: 80px; 
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center; 
-                    font-size: 3em; 
-                    margin: 0 auto 20px auto; 
-                    animation: spin 2s linear infinite;
-                    overflow: hidden;
-                    transform-origin: center;
-                ">🔧</div>
-                <h3 style="color: #1976d2; margin-bottom: 15px;">Analyzing Logic Problems</h3>
-                <p style="color: #666; margin-bottom: 20px;">
-                    Generating improved outline that addresses the identified logic errors...
-                </p>
-                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 600px;">
-                    <p style="font-size: 0.9em; color: #555; margin: 0;">
-                        🧩 Analyzing ${this.node.getIncompleteTodos().length} todo items<br/>
-                        🔍 Understanding current outline structure<br/>
-                        ✏️ Generating improved version
-                    </p>
-                </div>
-            </div>
             <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+                .choice-container {
+                    padding: 30px;
+                    text-align: center;
+                    height: calc(100% - 80px);
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                }
+                
+                .choice-title {
+                    font-size: 24px;
+                    margin-bottom: 20px;
+                    color: #333;
+                }
+                
+                .choice-description {
+                    font-size: 16px;
+                    color: #666;
+                    margin-bottom: 30px;
+                    max-width: 600px;
+                    line-height: 1.5;
+                }
+                
+                .todos-summary {
+                    background: #fff3e0;
+                    border-left: 4px solid #ff9800;
+                    padding: 15px;
+                    margin-bottom: 30px;
+                    border-radius: 4px;
+                    max-width: 600px;
+                }
+                
+                .choice-buttons {
+                    display: flex;
+                    gap: 20px;
+                    margin-top: 20px;
+                }
+                
+                .choice-btn {
+                    padding: 15px 30px;
+                    font-size: 16px;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    min-width: 200px;
+                }
+                
+                .choice-btn.parent {
+                    background: #2196f3;
+                    color: white;
+                }
+                
+                .choice-btn.parent:hover {
+                    background: #1976d2;
+                }
+                
+                .choice-btn.children {
+                    background: #4caf50;
+                    color: white;
+                }
+                
+                .choice-btn.children:hover {
+                    background: #388e3c;
+                }
+                
+                .choice-btn:disabled {
+                    background: #ccc;
+                    cursor: not-allowed;
+                }
+                
+                .affected-nodes {
+                    background: #e8f5e8;
+                    border-left: 4px solid #4caf50;
+                    padding: 15px;
+                    margin-top: 20px;
+                    border-radius: 4px;
+                    max-width: 600px;
                 }
             </style>
+
+            <div class="choice-container">
+                <h2 class="choice-title">🔧 How would you like to fix the logic issues?</h2>
+                
+                <p class="choice-description">
+                    Logic errors have been detected in the content. You can choose to fix them by adjusting the parent outline 
+                    or by selecting a "truth" node and adjusting the other affected child nodes to match it.
+                </p>
+                
+                <div class="todos-summary">
+                    <h4 style="margin: 0 0 10px 0; color: #e65100;">🚨 Issues to Fix (${todos.length})</h4>
+                    ${todos.map((todo, index) => `
+                        <div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #ffcc02;">
+                            <div style="font-weight: 500;">${index + 1}. ${todo.description}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                ${this.affectedNodes.length > 0 ? `
+                    <div class="affected-nodes">
+                        <h4 style="margin: 0 0 10px 0; color: #2e7d32;">📝 Affected Nodes (${this.affectedNodes.length})</h4>
+                        ${this.affectedNodes.map(node => `
+                            <div style="margin-bottom: 4px; color: #1b5e20;">• ${node.title}</div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                <div class="choice-buttons">
+                    <button id="fix-parent-btn" class="choice-btn parent">
+                        🔧 Fix Parent Outline
+                        <div style="font-size: 12px; margin-top: 5px; opacity: 0.8;">
+                            Adjust the parent content and regenerate children
+                        </div>
+                    </button>
+                    
+                    <button id="fix-children-btn" class="choice-btn children" ${this.affectedNodes.length === 0 ? 'disabled' : ''}>
+                        🎯 Fix Child Nodes
+                        <div style="font-size: 12px; margin-top: 5px; opacity: 0.8;">
+                            Select truth node and adjust others to match
+                        </div>
+                    </button>
+                </div>
+            </div>
         `;
     }
 
-    private renderReviewContent(): string {
-        if (!this.fixedResult) {
-            return '<div>Error: No fixed outline available</div>';
-        }
+    /**
+     * Render truth node selection content
+     */
+    private renderTruthSelectionContent(): string {
+        return `
+            <style>
+                .truth-selection-container {
+                    padding: 20px;
+                    height: calc(100% - 80px);
+                    overflow-y: auto;
+                }
+                
+                .truth-title {
+                    font-size: 20px;
+                    margin-bottom: 15px;
+                    color: #333;
+                }
+                
+                .truth-description {
+                    color: #666;
+                    margin-bottom: 20px;
+                    line-height: 1.5;
+                }
+                
+                .node-option {
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                }
+                
+                .node-option:hover {
+                    border-color: #4caf50;
+                }
+                
+                .node-option.selected {
+                    border-color: #4caf50;
+                    background: #f1f8e9;
+                }
+                
+                .node-header {
+                    padding: 15px;
+                    border-bottom: 1px solid #eee;
+                    font-weight: 500;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                
+                .node-content-preview {
+                    padding: 15px;
+                    font-size: 14px;
+                    color: #555;
+                    line-height: 1.5;
+                    max-height: 150px;
+                    overflow-y: auto;
+                }
+                
+                .truth-actions {
+                    margin-top: 20px;
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                }
+                
+                .truth-btn {
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                }
+                
+                .truth-btn.proceed {
+                    background: #4caf50;
+                    color: white;
+                }
+                
+                .truth-btn.proceed:hover {
+                    background: #388e3c;
+                }
+                
+                .truth-btn.proceed:disabled {
+                    background: #ccc;
+                    cursor: not-allowed;
+                }
+                
+                .truth-btn.back {
+                    background: #757575;
+                    color: white;
+                }
+                
+                .truth-btn.back:hover {
+                    background: #616161;
+                }
+            </style>
+
+            <div class="truth-selection-container">
+                <h2 class="truth-title">🎯 Select the Truth Node</h2>
+                <p class="truth-description">
+                    Choose which node contains the correct information that other nodes should be adjusted to match.
+                    This node will remain unchanged while others are fixed to be consistent with it.
+                </p>
+                
+                ${this.affectedNodes.map(node => `
+                    <div class="node-option" data-node-id="${node.id}">
+                        <div class="node-header">
+                            <input type="radio" name="truth-node" value="${node.id}" style="margin-right: 10px;">
+                            <span>📄 ${node.title}</span>
+                        </div>
+                        <div class="node-content-preview">
+                            ${node.content ? node.content.substring(0, 300) + (node.content.length > 300 ? '...' : '') : 'No content'}
+                        </div>
+                    </div>
+                `).join('')}
+                
+                <div class="truth-actions">
+                    <button id="truth-back-btn" class="truth-btn back">← Back</button>
+                    <button id="truth-proceed-btn" class="truth-btn proceed" disabled>Proceed with Truth Node</button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render parent loading content
+     */
+    private renderParentLoadingContent(): string {
+        return `
+            <div style="padding: 40px; text-align: center; height: calc(100% - 80px); display: flex; flex-direction: column; justify-content: center;">
+                <div style="font-size: 18px; color: #333; margin-bottom: 20px;">🔧 Fixing Parent Outline...</div>
+                <div style="margin: 20px 0;">
+                    <div class="spinner-wrench" style="font-size: 48px; animation: spin 2s linear infinite; transform-origin: center;">🔧</div>
+                </div>
+                <div style="color: #666;">Analyzing logic issues and generating improved outline</div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render child loading content
+     */
+    private renderChildLoadingContent(): string {
+        const totalNodes = this.affectedNodes.filter(n => n !== this.truthNode).length;
+        const progress = Math.round(((this.currentChildIndex) / totalNodes) * 100);
+        const currentNode = this.affectedNodes.filter(n => n !== this.truthNode)[this.currentChildIndex];
+        
+        return `
+            <div style="padding: 40px; text-align: center; height: calc(100% - 80px); display: flex; flex-direction: column; justify-content: center;">
+                <div style="font-size: 18px; color: #333; margin-bottom: 20px;">🎯 Fixing Child Nodes...</div>
+                <div style="margin: 20px 0;">
+                    <div class="spinner-target" style="font-size: 48px; animation: spin 2s linear infinite; transform-origin: center;">🎯</div>
+                </div>
+                <div style="color: #666; margin-bottom: 15px;">
+                    Processing: ${currentNode ? currentNode.title : 'Finalizing...'}
+                </div>
+                <div style="background: #f5f5f5; border-radius: 10px; height: 20px; margin: 20px auto; width: 300px; overflow: hidden;">
+                    <div style="background: #4caf50; height: 100%; width: ${progress}%; transition: width 0.3s ease;"></div>
+                </div>
+                <div style="color: #666; font-size: 14px;">Progress: ${this.currentChildIndex}/${totalNodes} nodes processed</div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render parent review content
+     */
+    private renderParentReviewContent(): string {
+        if (!this.fixedResult) return '';
 
         const todos = this.node.getIncompleteTodos();
-        
-        // Generate diff comparison using DiffTool
         const diffResult = DiffTool.compare(this.fixedResult.originalContent, this.fixedResult.fixedContent);
         const diffSummary = DiffTool.getSummary(diffResult);
         
@@ -130,18 +466,10 @@ export class LogicOutlineFixerModal extends BaseModal {
                     border-radius: 3px;
                 }
                 
-                .diff-summary {
-                    background: #e3f2fd;
-                    border-left: 4px solid #2196f3;
-                    padding: 12px;
-                    margin-bottom: 20px;
-                    border-radius: 4px;
-                }
-                
-                .diff-stats {
-                    margin: 0;
-                    font-weight: 500;
-                    color: #1565c0;
+                .review-container {
+                    padding: 20px;
+                    height: calc(100% - 80px);
+                    overflow-y: auto;
                 }
                 
                 .content-comparison {
@@ -162,17 +490,9 @@ export class LogicOutlineFixerModal extends BaseModal {
                     max-height: 400px;
                     overflow-y: auto;
                 }
-                
-                .original-content {
-                    border-color: #f44336;
-                }
-                
-                .fixed-content {
-                    border-color: #4caf50;
-                }
             </style>
 
-            <div style="padding: 20px; height: calc(100% - 80px); overflow-y: auto;">
+            <div class="review-container">
                 <!-- Todo Items Section -->
                 <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
                     <h4 style="margin: 0 0 10px 0; color: #e65100;">🚨 Issues Being Addressed (${todos.length})</h4>
@@ -192,275 +512,378 @@ export class LogicOutlineFixerModal extends BaseModal {
                 </div>
 
                 <!-- Diff Summary -->
-                <div class="diff-summary">
-                    <p class="diff-stats">📊 Changes Made: ${diffSummary}</p>
+                <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
+                    <p style="margin: 0; font-weight: 500; color: #1565c0;">📊 Changes Made: ${diffSummary}</p>
                 </div>
 
                 <!-- Content Comparison -->
                 <div class="content-comparison">
                     <div class="content-section">
-                        <h4 style="color: #d32f2f; margin-bottom: 10px;">📄 Original Content</h4>
-                        <div class="content-box original-content diff-content">
-                            ${diffResult.originalHtml}
+                        <h4 style="margin: 0 0 10px 0; color: #d32f2f;">📄 Original Content</h4>
+                        <div class="content-box" style="border-color: #f44336;">
+                            ${this.fixedResult.originalContent || 'No original content'}
                         </div>
                     </div>
-                    
                     <div class="content-section">
-                        <h4 style="color: #4caf50; margin-bottom: 10px;">📝 Fixed Content</h4>
-                        <div class="content-box fixed-content diff-content">
-                            ${diffResult.modifiedHtml}
+                        <h4 style="margin: 0 0 10px 0; color: #388e3c;">✨ Fixed Content</h4>
+                        <div class="content-box" style="border-color: #4caf50;">
+                            ${this.fixedResult.fixedContent}
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Action Buttons -->
-            <div style="position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; gap: 15px; justify-content: center; background: white; padding: 15px 0; border-top: 1px solid #ddd;">
-                <button 
-                    id="retry-fix-btn" 
-                    style="background: #ff9800; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: 500;"
-                >
-                    🔄 Retry Fix
-                </button>
-                <button 
-                    id="apply-fix-btn" 
-                    style="background: #4caf50; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: 500;"
-                >
-                    ✅ Apply Fixed Outline
-                </button>
-                <button 
-                    id="cancel-fix-btn" 
-                    style="background: #757575; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 1em; cursor: pointer; font-weight: 500;"
-                >
-                    ❌ Cancel
-                </button>
+                <!-- Detailed Diff -->
+                <h4 style="margin: 20px 0 10px 0; color: #333;">🔍 Detailed Changes</h4>
+                <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; font-family: monospace;">
+                    <div class="diff-content">${diffResult.modifiedHtml}</div>
+                </div>
             </div>
         `;
     }
 
-    private setupEventListeners(): void {
-        // Start the fixing process immediately when modal opens
-        if (this.modalState === 'loading') {
-            void this.generateFixedOutlineWithErrorHandling();
-        }
-
-        this.setupActionEventListeners();
-    }
-
-    private async generateFixedOutlineWithErrorHandling(): Promise<void> {
-        try {
-            await this.generateFixedOutline();
-        } catch (error: unknown) {
-            console.error('❌ Failed to generate fixed outline:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            alert(`Failed to generate fixed outline: ${errorMessage}`);
-        }
-    }
-
-    private setupActionEventListeners(): void {
-        // Retry button
-        const retryBtn = document.getElementById('retry-fix-btn');
-        if (retryBtn) {
-            retryBtn.addEventListener('click', (): void => {
-                this.modalState = 'loading';
-                this.fixedResult = null;
-                this.updateModalContent();
-                void this.generateFixedOutlineWithErrorHandling();
-            });
-        }
-
-        // Apply button
-        const applyBtn = document.getElementById('apply-fix-btn');
-        if (applyBtn) {
-            applyBtn.addEventListener('click', async (): Promise<void> => {
-                try {
-                    await this.applyFixedOutline();
-                } catch (error: unknown) {
-                    console.error('❌ Failed to apply fixed outline:', error);
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    alert(`Failed to apply fixed outline: ${errorMessage}`);
+    /**
+     * Render child review content
+     */
+    private renderChildReviewContent(): string {
+        const todos = this.node.getIncompleteTodos();
+        const fixedNodes = Array.from(this.childFixResults.keys());
+        
+        return `
+            <style>
+                .child-review-container {
+                    padding: 20px;
+                    height: calc(100% - 80px);
+                    overflow-y: auto;
                 }
-            });
-        }
-
-        // Cancel button
-        const cancelBtn = document.getElementById('cancel-fix-btn');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', async (): Promise<void> => {
-                try {
-                    await this.close();
-                } catch (error: unknown) {
-                    console.error('❌ Failed to close modal via cancel:', error);
+                
+                .summary-section {
+                    background: #e8f5e8;
+                    border-left: 4px solid #4caf50;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 4px;
                 }
-            });
-        }
-    }
+                
+                .fixed-node {
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    background: white;
+                }
+                
+                .fixed-node-header {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-bottom: 1px solid #ddd;
+                    font-weight: 500;
+                }
+                
+                .fixed-node-content {
+                    padding: 15px;
+                }
+                
+                .truth-highlight {
+                    background: #fff3e0;
+                    border-left: 4px solid #ff9800;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 4px;
+                }
+            </style>
 
-    private async generateFixedOutline(): Promise<void> {
-        try {
-            console.log('🔧 Starting logic outline fix generation');
-            
-            this.fixedResult = await this.logicOutlineService.generateFixedOutline(
-                this.node,
-                this.node.getIncompleteTodos()
-            );
+            <div class="child-review-container">
+                <!-- Todo Items Section -->
+                <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <h4 style="margin: 0 0 10px 0; color: #e65100;">🚨 Issues Addressed (${todos.length})</h4>
+                    ${todos.map((todo, index) => `
+                        <div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #ffcc02;">
+                            <div style="font-weight: 500;">${index + 1}. ${todo.description}</div>
+                        </div>
+                    `).join('')}
+                </div>
 
-            console.log('✅ Fixed outline generated successfully');
-            
-            this.modalState = 'review';
-            this.updateModalContent();
+                <!-- Truth Node Section -->
+                ${this.truthNode ? `
+                    <div class="truth-highlight">
+                        <h4 style="margin: 0 0 10px 0; color: #e65100;">🎯 Truth Node (Unchanged)</h4>
+                        <div style="font-weight: 500; margin-bottom: 5px;">${this.truthNode.title}</div>
+                        <div style="font-size: 0.9em;">This node was used as the reference for fixing others.</div>
+                    </div>
+                ` : ''}
 
-        } catch (error) {
-            console.error('❌ Failed to generate fixed outline:', error);
-            
-            // Show error state
-            if (!this.element) {
-                throw new Error('Modal element not initialized during error handling');
-            }
-            const modalContent = this.element.querySelector('.modal-content');
-            if (!modalContent) {
-                throw new Error('Modal content container not found during error handling');
-            }
-            modalContent.innerHTML = `
-                <div style="text-align: center; padding: 40px;">
-                    <div style="font-size: 3em; margin-bottom: 20px;">⚠️</div>
-                    <h3 style="color: #d32f2f; margin-bottom: 15px;">Failed to Generate Fix</h3>
-                    <p style="color: #666; margin-bottom: 20px;">
-                        Unable to generate improved outline. Please try again.
-                    </p>
-                    <div style="display: flex; gap: 15px; justify-content: center;">
-                        <button 
-                            onclick="document.getElementById('${this.config.id}').dispatchEvent(new CustomEvent('retry'))"
-                            style="background: #ff9800; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer;"
-                        >
-                            🔄 Retry
-                        </button>
-                        <button 
-                            onclick="document.getElementById('${this.config.id}').dispatchEvent(new CustomEvent('close'))"
-                            style="background: #757575; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer;"
-                        >
-                            ❌ Close
-                        </button>
+                <!-- Summary Section -->
+                <div class="summary-section">
+                    <h4 style="margin: 0 0 10px 0; color: #2e7d32;">✅ Fix Summary</h4>
+                    <div style="color: #1b5e20;">
+                        Fixed ${fixedNodes.length} child node(s) to align with the truth node while preserving their unique content and purpose.
                     </div>
                 </div>
-            `;
 
-            // Add event listeners for error state buttons
-            if (!this.element) {
-                throw new Error('Modal element not initialized for event listeners');
-            }
-            this.element.addEventListener('retry', (): void => {
-                this.modalState = 'loading';
-                this.updateModalContent();
-                void this.generateFixedOutlineWithErrorHandling();
-            });
-
-            this.element.addEventListener('close', async (): Promise<void> => {
-                try {
-                    await this.close();
-                } catch (error: unknown) {
-                    console.error('❌ Failed to close modal:', error);
-                }
-            });
-        }
-    }
-
-    private async applyFixedOutline(): Promise<void> {
-        if (!this.fixedResult) {
-            console.error('❌ No fixed result available');
-            throw new Error('No fixed result available');
-        }
-
-        console.log('🔧 Starting to apply fixed outline...');
-        console.log('📝 Original content length:', this.node.content ? this.node.content.length : 0);
-        console.log('📝 Fixed content length:', this.fixedResult.fixedContent.length);
-
-        const hasChildren: boolean = Boolean(this.node.children && this.node.children.length > 0);
-        
-        if (hasChildren) {
-            if (!this.node.children) {
-                throw new Error('Node children is null but hasChildren is true - invalid state');
-            }
-            const deleteChildren = confirm(
-                `This node has ${this.node.children.length} child nodes.\n\n` +
-                'Do you want to delete all children so they can be rebuilt fresh from the improved outline?\n\n' +
-                '• Yes: Delete children and apply new outline (recommended for fresh start)\n' +
-                '• No: Keep children and just update the outline content'
-            );
-
-            if (deleteChildren) {
-                // Delete all children
-                const childrenCount: number = this.node.children ? this.node.children.length : 0;
-                console.log(`🗑️ Deleting ${childrenCount} child nodes...`);
-                if (this.node.children) {
-                    for (const child of [...this.node.children]) {
-                        this.projectManager.removeNode(child.id);
-                    }
-                }
-                console.log(`✅ Deleted ${childrenCount} child nodes for fresh start`);
-            }
-        }
-
-        // Apply the fixed content
-        console.log('📝 Applying fixed content...');
-        console.log('📝 Fixed content preview:', this.fixedResult.fixedContent.substring(0, 100) + '...');
-        
-        this.node.setContent(this.fixedResult.fixedContent.trim());
-        
-        const contentAfter: string = this.node.content || '';
-        console.log('📝 Content after setContent:', contentAfter.substring(0, 100) + '...');
-        console.log('📝 Content length after setContent:', contentAfter.length);
-        
-        // Clear all todos since the outline has been fixed to address the logic problems
-        console.log('📝 Clearing todos...');
-        const allTodos = this.node.getIncompleteTodos();
-        console.log(`📝 Found ${allTodos.length} todos to clear`);
-        for (const todo of allTodos) {
-            this.node.completeTodo(todo.id);
-        }
-        console.log('✅ All todos cleared');
-
-        // Save changes
-        console.log('💾 Saving to storage...');
-        await this.projectManager.saveToStorage();
-        console.log('✅ Saved to storage');
-        
-        // Refresh the project UI
-        console.log('🔄 Refreshing UI...');
-        const { renderMultiProjectTree } = await import('../project-ui');
-        renderMultiProjectTree();
-        console.log('✅ UI refreshed');
-        
-        console.log('🎉 Applied fixed outline and updated project successfully');
-        
-        // Show success message
-        if (!this.element) {
-            throw new Error('Modal element not initialized for success display');
-        }
-        const modalContent = this.element.querySelector('.modal-content');
-        if (!modalContent) {
-            throw new Error('Modal content container not found for success display');
-        }
-        modalContent.innerHTML = `
-            <div style="text-align: center; padding: 40px;">
-                <div style="font-size: 3em; margin-bottom: 20px;">✅</div>
-                <h3 style="color: #4caf50; margin-bottom: 15px;">Outline Updated Successfully!</h3>
-                <p style="color: #666; margin-bottom: 20px;">
-                    The improved outline has been applied to the node${hasChildren ? ' and children have been prepared for fresh expansion' : ''}.
-                </p>
+                <!-- Fixed Nodes -->
+                <h4 style="margin: 20px 0 15px 0; color: #333;">📝 Fixed Nodes</h4>
+                                 ${fixedNodes.map(nodeId => {
+                     const result = this.childFixResults.get(nodeId)!;
+                     const node = this.findNodeById(this.projectManager.rootNode, nodeId)!;
+                    const diffResult = DiffTool.compare(result.originalContent, result.fixedContent);
+                    const diffSummary = DiffTool.getSummary(diffResult);
+                    
+                    return `
+                        <div class="fixed-node">
+                            <div class="fixed-node-header">
+                                📄 ${node.title}
+                                <div style="font-size: 12px; color: #666; font-weight: normal; margin-top: 5px;">
+                                    Changes: ${diffSummary}
+                                </div>
+                            </div>
+                            <div class="fixed-node-content">
+                                <div style="margin-bottom: 15px;">
+                                    <strong style="color: #2e7d32;">How it was fixed:</strong>
+                                    <div style="margin-top: 5px; color: #1b5e20; font-size: 0.9em;">
+                                        ${result.explanation}
+                                    </div>
+                                </div>
+                                
+                                <details style="margin-top: 15px;">
+                                    <summary style="cursor: pointer; font-weight: 500; color: #1976d2;">View Content Changes</summary>
+                                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-family: monospace; font-size: 0.9em;">
+                                        <div style="color: #d32f2f; margin-bottom: 10px;"><strong>Before:</strong></div>
+                                        <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 4px;">
+                                            ${result.originalContent || 'No original content'}
+                                        </div>
+                                        <div style="color: #388e3c; margin-bottom: 10px;"><strong>After:</strong></div>
+                                        <div style="padding: 10px; background: white; border-radius: 4px;">
+                                            ${result.fixedContent}
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
         `;
     }
 
-    private updateModalContent(): void {
-        if (!this.element) {
-            throw new Error('Modal element not initialized');
+    /**
+     * Setup event listeners
+     */
+    private setupEventListeners(): void {
+        this.element!.addEventListener('click', async (e: Event) => {
+            const target = e.target as HTMLElement;
+            
+            if (target.id === 'fix-parent-btn') {
+                this.fixMode = 'parent';
+                this.modalState = 'parent-loading';
+                this.updateContent();
+                await this.generateParentFix();
+            } else if (target.id === 'fix-children-btn' && !target.hasAttribute('disabled')) {
+                this.fixMode = 'children';
+                this.modalState = 'truth-selection';
+                this.updateContent();
+                this.setupTruthSelectionListeners();
+            } else if (target.id === 'truth-back-btn') {
+                this.modalState = 'choice';
+                this.updateContent();
+            } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
+                await this.startChildFix();
+            } else if (target.id === 'apply-parent-btn') {
+                await this.applyParentFix();
+            } else if (target.id === 'apply-child-btn') {
+                await this.applyChildFixes();
+            } else if (target.id === 'retry-parent-btn') {
+                this.modalState = 'parent-loading';
+                this.updateContent();
+                await this.generateParentFix();
+            } else if (target.id === 'retry-child-btn') {
+                this.currentChildIndex = 0;
+                this.childFixResults.clear();
+                this.modalState = 'child-loading';
+                this.updateContent();
+                await this.processChildFixes();
+            }
+        });
+
+        // Add radio button change listener for truth selection
+        this.element!.addEventListener('change', (e: Event) => {
+            const target = e.target as HTMLInputElement;
+            if (target.name === 'truth-node') {
+                const proceedBtn = this.element!.querySelector('#truth-proceed-btn') as HTMLButtonElement;
+                proceedBtn.disabled = false;
+                
+                // Update visual selection
+                this.element!.querySelectorAll('.node-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                target.closest('.node-option')?.classList.add('selected');
+            }
+        });
+    }
+
+    /**
+     * Setup truth selection specific listeners
+     */
+    private setupTruthSelectionListeners(): void {
+        // Click on node option to select radio button
+        this.element!.querySelectorAll('.node-option').forEach((option: Element) => {
+            option.addEventListener('click', (e: Event) => {
+                if (e.target !== option) return;
+                const radio = option.querySelector('input[type="radio"]') as HTMLInputElement;
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
+            });
+        });
+    }
+
+    /**
+     * Update modal content
+     */
+    private updateContent(): void {
+        const content = this.element!.querySelector('.modal-content') as HTMLElement;
+        if (content) {
+            content.innerHTML = this.renderModalContent();
         }
-        const modalContent = this.element.querySelector('.modal-content');
-        if (!modalContent) {
-            throw new Error('Modal content container not found');
+    }
+
+    /**
+     * Generate parent fix
+     */
+    private async generateParentFix(): Promise<void> {
+        const todos = this.node.getIncompleteTodos();
+        this.fixedResult = await this.logicOutlineService.generateFixedOutline(this.node, todos);
+        
+        this.modalState = 'parent-review';
+        this.updateContent();
+        this.setupParentReviewActions();
+    }
+
+    /**
+     * Start child fix process
+     */
+    private async startChildFix(): Promise<void> {
+        // Get selected truth node
+        const selectedRadio = this.container.querySelector('input[name="truth-node"]:checked') as HTMLInputElement;
+        const truthNodeId = selectedRadio.value;
+        this.truthNode = this.findNodeById(this.projectManager.getRoot(), truthNodeId);
+        
+        this.modalState = 'child-loading';
+        this.currentChildIndex = 0;
+        this.childFixResults.clear();
+        this.updateContent();
+        
+        await this.processChildFixes();
+    }
+
+    /**
+     * Process child fixes one by one
+     */
+    private async processChildFixes(): Promise<void> {
+        const nodesToFix = this.affectedNodes.filter(node => node !== this.truthNode);
+        const todos = this.node.getIncompleteTodos();
+        
+        for (let i = 0; i < nodesToFix.length; i++) {
+            this.currentChildIndex = i;
+            this.updateContent();
+            
+            const nodeToFix = nodesToFix[i];
+            const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode!, todos);
+            this.childFixResults.set(nodeToFix.id, result);
         }
-        modalContent.innerHTML = this.renderModalContent();
-        this.setupActionEventListeners();
+        
+        this.modalState = 'child-review';
+        this.updateContent();
+        this.setupChildReviewActions();
+    }
+
+    /**
+     * Setup parent review action buttons
+     */
+    private setupParentReviewActions(): void {
+        const actionsHtml = `
+            <div style="padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="retry-parent-btn" class="btn btn-secondary">🔄 Retry</button>
+                <button id="apply-parent-btn" class="btn btn-primary">✅ Apply Fix</button>
+            </div>
+        `;
+        
+        const modalBody = this.container.querySelector('.modal-body') as HTMLElement;
+        modalBody.insertAdjacentHTML('beforeend', actionsHtml);
+    }
+
+    /**
+     * Setup child review action buttons
+     */
+    private setupChildReviewActions(): void {
+        const actionsHtml = `
+            <div style="padding: 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="retry-child-btn" class="btn btn-secondary">🔄 Retry</button>
+                <button id="apply-child-btn" class="btn btn-primary">✅ Apply Fixes</button>
+            </div>
+        `;
+        
+        const modalBody = this.container.querySelector('.modal-body') as HTMLElement;
+        modalBody.insertAdjacentHTML('beforeend', actionsHtml);
+    }
+
+    /**
+     * Apply parent fix
+     */
+    private async applyParentFix(): Promise<void> {
+        if (!this.fixedResult) return;
+
+        // Update parent content
+        this.node.setContent(this.fixedResult.fixedContent, 'master');
+
+        // Delete child nodes and clear todos as before
+        const directChildren = [...this.node.children];
+        for (const child of directChildren) {
+            await this.projectManager.deleteNode(child.id);
+        }
+
+        // Clear all todos from the node
+        this.node.todos = [];
+
+        // Save and refresh
+        await this.projectManager.saveState();
+        
+        // Import project-ui dynamically and refresh tree
+        const { refreshTree } = await import('../../project-ui');
+        await refreshTree();
+
+        // Import project-ui again for persistence and UI refresh
+        const projectUi = await import('../../project-ui');
+        await projectUi.persistNodeChanges(this.node);
+        await projectUi.refreshTree();
+
+        this.close();
+    }
+
+    /**
+     * Apply child fixes
+     */
+    private async applyChildFixes(): Promise<void> {
+        // Apply all child fixes
+        for (const [nodeId, result] of this.childFixResults) {
+            const node = this.findNodeById(this.projectManager.getRoot(), nodeId);
+            if (node) {
+                node.setContent(result.fixedContent, 'master');
+            }
+        }
+
+        // Clear all todos from the parent node
+        this.node.todos = [];
+
+        // Save and refresh
+        await this.projectManager.saveState();
+        
+        // Import project-ui dynamically and refresh tree
+        const { refreshTree } = await import('../../project-ui');
+        await refreshTree();
+
+        // Import project-ui again for persistence and UI refresh
+        const projectUi = await import('../../project-ui');
+        await projectUi.persistNodeChanges(this.node);
+        await projectUi.refreshTree();
+
+        this.close();
     }
 } 

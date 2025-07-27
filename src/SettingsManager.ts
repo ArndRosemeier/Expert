@@ -327,6 +327,10 @@ export class SettingsManager {
                                 logic_error_analysis: {
                                     outline: 'rater' as const,
                                     prose: 'rater' as const
+                                },
+                                logic_child_fix: {
+                                    outline: 'creator' as const,
+                                    prose: 'creator' as const
                                 }
                             };
                         }
@@ -391,6 +395,10 @@ export class SettingsManager {
                     logic_error_analysis: {
                         outline: 'rater' as const,
                         prose: 'rater' as const
+                    },
+                    logic_child_fix: {
+                        outline: 'creator' as const,
+                        prose: 'creator' as const
                     }
                 }
             };
@@ -1059,6 +1067,10 @@ export class SettingsManager {
                 logic_error_analysis: {
                     outline: 'rater' as const,
                     prose: 'rater' as const
+                },
+                logic_child_fix: {
+                    outline: 'creator' as const,
+                    prose: 'creator' as const
                 }
             }
         };

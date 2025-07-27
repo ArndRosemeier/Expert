@@ -187,7 +187,8 @@ export class TaskModelEditor {
             text_polishing: 'Enhances and polishes text content for better clarity, style, and quality.',
             context_adjustment: 'Analyzes inherited context to identify problematic items for procedural removal.',
             context_rating: 'Evaluates and rates context items based on their relevance and quality for content generation.',
-            logic_error_analysis: 'Analyzes story content for logical inconsistencies, plot holes, and continuity errors using specialized rater models.'
+            logic_error_analysis: 'Analyzes story content for logical inconsistencies, plot holes, and continuity errors using specialized rater models.',
+            logic_child_fix: 'Fixes child nodes by aligning them with a designated truth node while preserving their unique content and purpose.'
         };
         return descriptions[taskType] ? `<p class="task-description">${descriptions[taskType]}</p>` : '';
     }

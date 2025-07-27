@@ -582,7 +582,8 @@ export class SettingsService {
                     text_polishing: { outline: 'creator' as const, prose: 'prose' as const },
                     context_adjustment: { outline: 'creator' as const, prose: 'prose' as const },
                     context_rating: { outline: 'creator' as const, prose: 'prose' as const },
-                    logic_error_analysis: { outline: 'rater' as const, prose: 'rater' as const }
+                    logic_error_analysis: { outline: 'rater' as const, prose: 'rater' as const },
+                    logic_child_fix: { outline: 'creator' as const, prose: 'creator' as const }
                 }, // Preserve task model configurations with fallback
                 version: analysis.currentVersion
             };

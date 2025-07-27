@@ -77,6 +77,9 @@ export interface OrchestratorPrompts {
     
     // For fixing logic problems in outlines
     logic_outline_fix: string;
+    
+    // For fixing child nodes based on truth node
+    logic_child_fix: string;
 }
 
 interface PromptDefinition {
@@ -317,7 +320,10 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure content that belongs in this section.
+            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
+            Coherence is king. Logical problems must be avoided at all costs.
+            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. 
+            Just provide the pure content that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
@@ -330,7 +336,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
             This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
 
-            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points, markdown formatting, or section headers.
+            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. 
+            Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points, markdown formatting, or section headers.
 
             Here is the context of the document so far:
             ---
@@ -339,7 +346,11 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
-            IMPORTANT: Your response should contain ONLY the requested outline content, nothing more. Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. Just provide the pure outline text that belongs in this section.
+            IMPORTANT: 
+            Your response should contain ONLY the requested outline content, nothing more.
+            Coherence is king. Logical problems must be avoided at all costs.
+            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. 
+            Just provide the pure outline text that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
@@ -1352,6 +1363,65 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
         `.trim(),
         placeholders: ['node_title', 'node_level', 'context', 'current_content', 'formatted_problems', 'language'],
         description: "System prompt for fixing logic problems in outlines by rewriting content to prevent errors when expanded into detailed scenes."
+    },
+
+    logic_child_fix: {
+        text: `
+            Generate corrected content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            
+            You are an expert story editor tasked with fixing a child node that contains logic errors. Another child node has been identified as containing the "truth" that should be preserved.
+
+            CURRENT SITUATION:
+            Logic errors have been detected between sibling nodes. One node has been selected as the "truth node" that contains the correct information. Your task is to adjust this node to be consistent with the truth node while preserving its unique content and purpose.
+
+            NODE TO FIX: "{{node_title}}"
+            NODE LEVEL: {{node_level}}
+
+            CONTEXT:
+            {{context}}
+
+            TRUTH NODE TITLE: "{{truth_node_title}}"
+            TRUTH NODE CONTENT (the correct reference):
+            ---
+            {{truth_node_content}}
+            ---
+
+            CURRENT CONTENT (that needs fixing):
+            ---
+            {{current_content}}
+            ---
+
+            PROBLEMS IDENTIFIED:
+            {{formatted_problems}}
+
+            YOUR TASK:
+            Adjust the current content to be consistent with the truth node while preserving the unique aspects and purpose of this node. You must:
+
+            1. **MAINTAIN NODE PURPOSE**: Keep the original intent and focus of this node
+            2. **ALIGN WITH TRUTH**: Ensure all facts, events, and details match the truth node
+            3. **PRESERVE UNIQUE CONTENT**: Keep content that is unique to this node and doesn't conflict
+            4. **FIX INCONSISTENCIES**: Correct only the conflicting elements identified in the problems
+            5. **MAINTAIN STYLE**: Preserve the writing style and tone of the original content
+
+            CRITICAL FIXING RULES:
+            - Align factual information (names, dates, events, locations) with the truth node
+            - Preserve the unique perspective, scenes, or content specific to this node
+            - Do NOT copy the truth node content - use it as a reference for consistency
+            - Fix logical contradictions while maintaining the node's distinct purpose
+            - Keep the same narrative voice and writing style
+            - Only change what directly conflicts with the established truth
+
+            RESPONSE FORMAT:
+            Your response MUST be valid JSON and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+
+            {
+                "fixedContent": "The adjusted content that aligns with the truth node while preserving this node's unique purpose",
+                "problemsSolved": ["Brief description of problem 1 that was fixed", "Brief description of problem 2 that was fixed"],
+                "explanation": "Detailed explanation of what was changed to align with the truth node and why"
+            }
+        `.trim(),
+        placeholders: ['node_title', 'node_level', 'context', 'truth_node_title', 'truth_node_content', 'current_content', 'formatted_problems', 'language'],
+        description: "System prompt for fixing child nodes by aligning them with a designated truth node while preserving their unique content and purpose."
     }
 };
 

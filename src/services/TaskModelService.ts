@@ -32,6 +32,7 @@ export interface AllTaskModelConfigs {
     context_adjustment: TaskModelConfig;
     context_rating: TaskModelConfig;
     logic_error_analysis: TaskModelConfig;
+    logic_child_fix: TaskModelConfig;
     // Future tasks can be added here:
     // context_analysis: TaskModelConfig;
 }
@@ -63,6 +64,10 @@ const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
     context_rating: {
         outline: 'creator',  // Default to creator for context rating in outline nodes
         prose: 'prose'       // Default to prose for context rating in prose nodes
+    },
+    logic_child_fix: {
+        outline: 'creator',  // Default to creator for fixing child nodes based on truth node
+        prose: 'creator'     // Default to creator for fixing child nodes based on truth node
     }
 };
 
@@ -205,7 +210,8 @@ export class TaskModelService {
             text_polishing: 'Text Polishing',
             context_adjustment: 'Context Analysis',
             context_rating: 'Context Rating',
-            logic_error_analysis: 'Logic Error Analysis'
+            logic_error_analysis: 'Logic Error Analysis',
+            logic_child_fix: 'Logic Child Fix'
         };
 
         return {
