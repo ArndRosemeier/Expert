@@ -83,23 +83,29 @@ export class LogicOutlineFixerModal extends BaseModal {
         this.affectedNodes = [];
         for (const nodeId of nodeIds) {
             const node = this.findNodeById(this.projectManager.rootNode, nodeId);
-            if (node) {
-                this.affectedNodes.push(node);
-            }
+            this.affectedNodes.push(node);
         }
     }
 
     /**
      * Find node by ID in the tree
      */
-    private findNodeById(root: DocumentNode, targetId: string): DocumentNode | null {
+    private findNodeById(root: DocumentNode, targetId: string): DocumentNode {
+        const result = this.searchNodeById(root, targetId);
+        if (result === null) {
+            throw new Error(`Node with ID ${targetId} not found in tree`);
+        }
+        return result;
+    }
+
+    private searchNodeById(root: DocumentNode, targetId: string): DocumentNode | null {
         if (root.id === targetId) {
             return root;
         }
         
         for (const child of root.children) {
-            const found = this.findNodeById(child, targetId);
-            if (found) {
+            const found = this.searchNodeById(child, targetId);
+            if (found !== null) {
                 return found;
             }
         }
@@ -519,7 +525,7 @@ export class LogicOutlineFixerModal extends BaseModal {
                     <div class="content-section">
                         <h4 style="margin: 0 0 10px 0; color: #d32f2f;">📄 Original Content</h4>
                         <div class="content-box" style="border-color: #f44336;">
-                            ${this.fixedResult.originalContent || 'No original content'}
+                            ${this.fixedResult.originalContent}
                         </div>
                     </div>
                     <div class="content-section">
@@ -645,9 +651,9 @@ export class LogicOutlineFixerModal extends BaseModal {
                                     <summary style="cursor: pointer; font-weight: 500; color: #1976d2;">View Content Changes</summary>
                                     <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-family: monospace; font-size: 0.9em;">
                                         <div style="color: #d32f2f; margin-bottom: 10px;"><strong>Before:</strong></div>
-                                        <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 4px;">
-                                            ${result.originalContent || 'No original content'}
-                                        </div>
+                                                                                 <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 4px;">
+                                             ${result.originalContent}
+                                         </div>
                                         <div style="color: #388e3c; margin-bottom: 10px;"><strong>After:</strong></div>
                                         <div style="padding: 10px; background: white; border-radius: 4px;">
                                             ${result.fixedContent}
@@ -710,7 +716,7 @@ export class LogicOutlineFixerModal extends BaseModal {
                 this.element!.querySelectorAll('.node-option').forEach(option => {
                     option.classList.remove('selected');
                 });
-                target.closest('.node-option')?.classList.add('selected');
+                target.closest('.node-option')!.classList.add('selected');
             }
         });
     }
@@ -780,11 +786,9 @@ export class LogicOutlineFixerModal extends BaseModal {
             this.currentChildIndex = i;
             this.updateContent();
             
-            const nodeToFix = nodesToFix[i];
-            if (nodeToFix && this.truthNode) {
-                const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode, todos);
-                this.childFixResults.set(nodeToFix.id, result);
-            }
+            const nodeToFix = nodesToFix[i]!;
+            const result = await this.logicChildService.generateFixedChild(nodeToFix, this.truthNode!, todos);
+            this.childFixResults.set(nodeToFix.id, result);
         }
         
         this.modalState = 'child-review';
@@ -860,9 +864,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         // Apply all child fixes
         for (const [nodeId, result] of this.childFixResults) {
             const node = this.findNodeById(this.projectManager.rootNode, nodeId);
-            if (node) {
-                node.setContent(result.fixedContent, 'master');
-            }
+            node.setContent(result.fixedContent, 'master');
         }
 
         // Clear all todos from the parent node

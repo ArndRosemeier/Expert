@@ -21,7 +21,7 @@ export class LogicChildFixerService {
     public async generateFixedChild(nodeToFix: DocumentNode, truthNode: DocumentNode, todos: TodoItem[]): Promise<FixedChildResult> {
         console.log(`🎯 Generating fixed child for node: ${nodeToFix.title} based on truth node: ${truthNode.title}`);
 
-        const originalContent = nodeToFix.content || '';
+        const originalContent = nodeToFix.content;
         
         // Build the prompt using prompt manager
         const prompt = this.buildChildFixingPrompt(nodeToFix, truthNode, originalContent, todos);
@@ -50,75 +50,45 @@ export class LogicChildFixerService {
         
         // Get the logic_child_fix prompt from settings
         const prompts = this.settingsManager.getPrompts();
-        let promptTemplate = prompts.logic_child_fix;
+        const promptTemplate = prompts.logic_child_fix;
         
         // Replace placeholders
-        promptTemplate = promptTemplate
+        return promptTemplate
             .replace(/\{\{node_title\}\}/g, nodeToFix.title)
             .replace(/\{\{node_level\}\}/g, nodeToFix.level.toString())
             .replace(/\{\{context\}\}/g, context)
             .replace(/\{\{truth_node_title\}\}/g, truthNode.title)
-            .replace(/\{\{truth_node_content\}\}/g, truthNode.content || 'No content')
+            .replace(/\{\{truth_node_content\}\}/g, truthNode.content)
             .replace(/\{\{current_content\}\}/g, currentContent)
             .replace(/\{\{formatted_problems\}\}/g, formattedProblems)
             .replace(/\{\{language\}\}/g, language);
-
-        return promptTemplate;
     }
 
     private getNodeContext(node: DocumentNode): string {
-        // Get parent context if available
-        const parentContext = node.context || '';
-        return parentContext || 'No additional context available.';
+        return node.context;
     }
 
     private parseChildFixResponse(response: string, originalContent: string): FixedChildResult {
-        try {
-            // Try to parse as JSON
-            const cleanResponse = response.trim();
-            let jsonStart = cleanResponse.indexOf('{');
-            let jsonEnd = cleanResponse.lastIndexOf('}');
-            
-            if (jsonStart === -1 || jsonEnd === -1) {
-                console.warn('⚠️ No JSON found in response, treating as plain text');
-                return {
-                    originalContent,
-                    fixedContent: response.trim(),
-                    problemsSolved: ['Applied general improvements'],
-                    explanation: 'Content was improved based on truth node alignment.'
-                };
-            }
-            
-            const jsonString = cleanResponse.substring(jsonStart, jsonEnd + 1);
-            const parsed = JSON.parse(jsonString);
-            
-            if (!parsed.fixedContent) {
-                console.warn('⚠️ No fixedContent in parsed response');
-                return {
-                    originalContent,
-                    fixedContent: response.trim(),
-                    problemsSolved: ['Applied general improvements'],
-                    explanation: 'Content was improved based on truth node alignment.'
-                };
-            }
-            
-            return {
-                originalContent,
-                fixedContent: parsed.fixedContent.trim(),
-                problemsSolved: parsed.problemsSolved || ['Applied improvements'],
-                explanation: parsed.explanation || 'Content was adjusted to align with the truth node.'
-            };
-            
-        } catch (error) {
-            console.error('❌ Failed to parse child fix response as JSON:', error);
-            console.log('Raw response:', response);
-            
-            return {
-                originalContent,
-                fixedContent: response.trim(),
-                problemsSolved: ['Applied general improvements'],
-                explanation: 'Content was improved based on truth node alignment.'
-            };
+        const cleanResponse = response.trim();
+        const jsonStart = cleanResponse.indexOf('{');
+        const jsonEnd = cleanResponse.lastIndexOf('}');
+        
+        if (jsonStart === -1 || jsonEnd === -1) {
+            throw new Error(`Invalid response format: No JSON found in AI response. Response: ${response.substring(0, 100)}...`);
         }
+        
+        const jsonString = cleanResponse.substring(jsonStart, jsonEnd + 1);
+        const parsed = JSON.parse(jsonString);
+        
+        if (!parsed.fixedContent) {
+            throw new Error(`Invalid response format: Missing fixedContent field in AI response: ${JSON.stringify(parsed)}`);
+        }
+        
+        return {
+            originalContent,
+            fixedContent: parsed.fixedContent.trim(),
+            problemsSolved: parsed.problemsSolved,
+            explanation: parsed.explanation
+        };
     }
 } 
