@@ -2052,7 +2052,6 @@ export async function renderNodeDetails() {
                 line-height: 1.5;
                 background-color: #ffffff;
                 resize: vertical;
-                max-height: 400px; /* Limit height so UI Logger stays visible */
             }
             .node-actions {
                 display: flex;
@@ -2667,11 +2666,31 @@ async function initializeUILogger(): Promise<void> {
         if (warnCountElement) warnCountElement.textContent = counts.warn.toString();
     }
     
+    // Add intersection observer to refresh display when logger becomes visible
+    const logContainer = document.getElementById('ui-log-container');
+    if (logContainer && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    uiLogger.refreshDisplay();
+                    updateLogStats();
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        observer.observe(logContainer);
+    }
+    
     // Add event listeners
     const logHeader = document.querySelector('.ui-log-header');
     if (logHeader) {
         logHeader.addEventListener('click', () => {
             uiLogger.toggle();
+            // Refresh display after toggle
+            setTimeout(() => {
+                uiLogger.refreshDisplay();
+                updateLogStats();
+            }, 100);
         });
     }
     

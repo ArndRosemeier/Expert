@@ -41,6 +41,9 @@ export class UILogger {
 
         // Apply current fold state to new DOM elements
         this.applyFoldState();
+        
+        // Initial display update to show any existing logs
+        this.updateLogDisplay();
     }
 
     public debug(message: string, details?: string): void {
@@ -82,10 +85,18 @@ export class UILogger {
     }
 
     private updateLogDisplay(): void {
-        if (!this.logTextArea) return;
+        if (!this.logTextArea) {
+            console.warn('UILogger: logTextArea not found, cannot update display');
+            return;
+        }
 
         const logText = this.logs.map(entry => this.formatLogEntry(entry)).join('\n');
         this.logTextArea.value = logText;
+        
+        // Force a re-render by triggering a layout recalculation
+        this.logTextArea.style.display = 'none';
+        this.logTextArea.offsetHeight; // Force reflow
+        this.logTextArea.style.display = '';
         
         // Auto-scroll to bottom
         this.logTextArea.scrollTop = this.logTextArea.scrollHeight;
@@ -141,6 +152,10 @@ export class UILogger {
         });
 
         return counts;
+    }
+
+    public refreshDisplay(): void {
+        this.updateLogDisplay();
     }
 
     public toggle(): void {
