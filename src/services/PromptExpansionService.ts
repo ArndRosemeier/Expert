@@ -463,8 +463,8 @@ class PromptExpansionService {
             description: 'Current node content'
         }));
         
-        this.registerContextPlaceholder('path', () => ({
-            value: 'Node Path', // TODO: Implement path computation using TreeService
+        this.registerContextPlaceholder('path', (context) => ({
+            value: (context.node as any)?.path || 'Node Path',
             description: 'Hierarchical path to current node'
         }));
         
