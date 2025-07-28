@@ -446,6 +446,12 @@ class PromptExpansionService {
             value: this.settingsManager.getLanguage(),
             description: 'Current project language setting'
         }));
+
+        // Noise seed for creative naming inspiration
+        this.registerGlobalPlaceholder('noise_names', () => ({
+            value: this.generateNoiseNames(),
+            description: 'Random glyphs and word-like patterns for creative naming inspiration'
+        }));
         
         // Context-dependent placeholders
         this.registerContextPlaceholder('project_title', (context) => ({
@@ -721,6 +727,62 @@ class PromptExpansionService {
             }
             return { value: 'no', description: 'Invalid confirm placeholder' };
         });
+    }
+
+    /**
+     * Generate random glyphs and word-like patterns for creative naming inspiration
+     */
+    private generateNoiseNames(): string {
+        const unicodeRanges: [string, string][] = [
+            // Runic-like symbols
+            ['ᚠ', 'ᚾ'], ['ᛁ', 'ᛟ'],
+            // Geometric symbols
+            ['◊', '◈'], ['△', '▲'], ['⟡', '⟢'],
+            // Mathematical symbols
+            ['∿', '≋'], ['⊱', '⊰'], ['∆', '∇'],
+            // Ancient script inspired
+            ['ψ', 'ω'], ['Θ', 'Φ'], ['₪', '℘']
+        ];
+
+        const consonantLike = ['th', 'kr', 'zn', 'vl', 'xr', 'qm', 'fy', 'gh', 'jw', 'bp'];
+        const vowelLike = ['ae', 'ou', 'ia', 'ey', 'ai', 'uo', 'ea', 'yi'];
+
+        // Generate 6-8 glyph sequences
+        const glyphs: string[] = [];
+        const numGlyphs = 6 + Math.floor(Math.random() * 3);
+        
+        for (let i = 0; i < numGlyphs; i++) {
+            const rangeIndex = Math.floor(Math.random() * unicodeRanges.length);
+            const range = unicodeRanges[rangeIndex];
+            if (range && range.length === 2) {
+                const startCode = range[0].charCodeAt(0);
+                const endCode = range[1].charCodeAt(0);
+                const randomCode = startCode + Math.floor(Math.random() * (endCode - startCode + 1));
+                glyphs.push(String.fromCharCode(randomCode));
+            }
+        }
+
+        // Generate 4-6 word-like patterns
+        const words: string[] = [];
+        const numWords = 4 + Math.floor(Math.random() * 3);
+        
+        for (let i = 0; i < numWords; i++) {
+            const length = 3 + Math.floor(Math.random() * 4); // 3-6 characters
+            let word = '';
+            
+            for (let j = 0; j < length; j++) {
+                if (j % 2 === 0) {
+                    // Consonant-like sound
+                    word += consonantLike[Math.floor(Math.random() * consonantLike.length)];
+                } else {
+                    // Vowel-like sound
+                    word += vowelLike[Math.floor(Math.random() * vowelLike.length)];
+                }
+            }
+            words.push(word);
+        }
+
+        return `Use these lost glyphs for inspiration when creating names: ${glyphs.join(' ')}. Ancient word fragments recovered from inscriptions: ${words.join(', ')}. These are purely for creative inspiration - derive new names that echo their mysterious essence rather than using them directly.`;
     }
     
     /**

@@ -2,6 +2,7 @@ import { StorageService, IStorageService } from '../../../StorageService';
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { formatCriteriaAsJson } from '../../../ProjectUtils';
+import { createPromptExpansionService } from '../../../services/PromptExpansionService';
 import * as state from '../../../state';
 import type { 
   OutlineFactoryConfig, 
@@ -27,17 +28,27 @@ export class OutlineFactoryService {
       throw new Error(validation.message);
     }
     
-    // 2. Build generation prompt from config using PromptManager templates
+    // 2. Build generation prompt from config using PromptExpansionService
     const promptManager = state.getOrchestratorPrompts()!;
     const settingsManager = await SettingsManager.getInstance();
+    const expansionService = createPromptExpansionService(settingsManager);
     
     // Get current profile's criteria and format them using standard JSON format
     const profile = settingsManager.getLastUsedProfile();
     const criteria = profile?.criteria || [];
     const formattedCriteria = formatCriteriaAsJson(criteria);
     
-    const systemPrompt = promptManager.outline_generation_system.replace('{{criteria}}', formattedCriteria);
-    const userPrompt = this.buildUserPrompt(promptManager.outline_generation_user, config);
+    // Prepare context for outline generation
+    const outlineContext = this.buildOutlineContext(config);
+    
+    // Expand prompts with proper placeholder support (including {{language}})
+    const systemPrompt = expansionService.expandPrompt(promptManager.outline_generation_system, {
+      custom: { criteria: formattedCriteria }
+    });
+    
+    const userPrompt = expansionService.expandPrompt(promptManager.outline_generation_user, {
+      custom: outlineContext
+    });
     
     // 3. Call AI service using 'creator' model
     const client = OpenRouterClient.getInstance();
@@ -68,21 +79,22 @@ export class OutlineFactoryService {
     };
   }
   
-  private buildUserPrompt(template: string, config: OutlineFactoryConfig): string {
+  private buildOutlineContext(config: OutlineFactoryConfig): Record<string, string> {
     const stylePreferences = this.formatStylePreferences(config.styleGuide);
     const genres = this.formatGenreSelections(config.genres);
     const contentRating = config.genres.content.join(', ') || 'General';
     
-    return template
-      .replace('{{ideas}}', config.ideas || 'No specific ideas provided')
-      .replace('{{genres}}', genres)
-      .replace('{{contentRating}}', contentRating)
-      .replace('{{protagonists}}', config.context.protagonists.toString())
-      .replace('{{antagonists}}', config.context.antagonists.toString())
-      .replace('{{sideCharacters}}', config.context.sideCharacters.toString())
-      .replace('{{locations}}', config.context.locations.toString())
-      .replace('{{worldbuildingDetails}}', config.context.worldbuildingDetails.toString())
-      .replace('{{stylePreferences}}', stylePreferences);
+    return {
+      ideas: config.ideas || 'No specific ideas provided',
+      genres: genres,
+      contentRating: contentRating,
+      protagonists: config.context.protagonists.toString(),
+      antagonists: config.context.antagonists.toString(),
+      sideCharacters: config.context.sideCharacters.toString(),
+      locations: config.context.locations.toString(),
+      worldbuildingDetails: config.context.worldbuildingDetails.toString(),
+      stylePreferences: stylePreferences
+    };
   }
   
   validateConfig(config: OutlineFactoryConfig): ValidationResult {

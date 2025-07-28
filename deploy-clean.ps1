@@ -27,6 +27,25 @@ try {
     if (Test-Path "dist/index.html") {
         Write-Host "Build successful!" -ForegroundColor Green
         
+        # Verify critical files exist locally before upload
+        $criticalFiles = @(
+            "dist/index.html",
+            "dist/.htaccess", 
+            "dist/pdf.worker.min.mjs",
+            "dist/keys.html",
+            "dist/manual.html"
+        )
+        
+        foreach ($file in $criticalFiles) {
+            if (-not (Test-Path $file)) {
+                throw "Critical file missing: $file"
+            }
+        }
+        
+        # Count total files to upload
+        $totalFiles = (Get-ChildItem -Path "dist" -Recurse -File).Count
+        Write-Host "Preparing to upload $totalFiles files..." -ForegroundColor Cyan
+        
         # Try to get password from multiple sources
         $FTP_PASSWORD = $env:FTP_PASSWORD
         
@@ -126,6 +145,7 @@ try {
         
         $files = Get-ChildItem -Path "dist" -Recurse -File
         $uploaded = 0
+        $failed = @()
         
         foreach ($file in $files) {
             $relativePath = $file.FullName.Substring((Resolve-Path "dist").Path.Length + 1).Replace('\', '/')
@@ -156,6 +176,8 @@ try {
                 $ftpRequest.Credentials = New-Object System.Net.NetworkCredential($FTP_USER, $FTP_PASSWORD)
                 $ftpRequest.UseBinary = $true
                 $ftpRequest.UsePassive = $true
+                # Increase timeout for large files
+                $ftpRequest.Timeout = 300000  # 5 minutes
                 
                 $fileContent = [System.IO.File]::ReadAllBytes($file.FullName)
                 $ftpRequest.ContentLength = $fileContent.Length
@@ -167,15 +189,46 @@ try {
                 $response.Close()
                 
                 $uploaded++
-                Write-Host "Uploaded: $relativePath" -ForegroundColor Green
+                $sizeKB = [math]::Round($fileContent.Length / 1KB, 1)
+                Write-Host "Uploaded: $relativePath ($sizeKB KB)" -ForegroundColor Green
             } catch {
+                $failed += $relativePath
                 Write-Host "Failed: $relativePath - $($_.Exception.Message)" -ForegroundColor Red
-                throw
+                # Don't throw immediately, try to upload other files first
             }
         }
         
+        # Post-deployment verification
         Write-Host ""
-        Write-Host "COMPLETE CLEAN DEPLOYMENT finished! Uploaded $uploaded files." -ForegroundColor Green
+        Write-Host "=== DEPLOYMENT VERIFICATION ===" -ForegroundColor Cyan
+        
+        # Verify critical files were uploaded
+        foreach ($criticalFile in @("index.html", ".htaccess", "pdf.worker.min.mjs")) {
+            try {
+                $verifyRequest = [System.Net.FtpWebRequest]::Create("ftp://$FTP_SERVER$FTP_REMOTE_PATH$criticalFile")
+                $verifyRequest.Method = [System.Net.WebRequestMethods+Ftp]::GetFileSize
+                $verifyRequest.Credentials = New-Object System.Net.NetworkCredential($FTP_USER, $FTP_PASSWORD)
+                $verifyResponse = $verifyRequest.GetResponse()
+                $fileSize = $verifyResponse.ContentLength
+                $verifyResponse.Close()
+                Write-Host "[OK] $criticalFile verified ($fileSize bytes)" -ForegroundColor Green
+            } catch {
+                Write-Host "[FAIL] $criticalFile MISSING!" -ForegroundColor Red
+                $failed += $criticalFile
+            }
+        }
+        
+        if ($failed.Count -gt 0) {
+            Write-Host ""
+            Write-Host "=== FAILED UPLOADS ===" -ForegroundColor Red
+            foreach ($failedFile in $failed) {
+                Write-Host "[FAIL] $failedFile" -ForegroundColor Red
+            }
+            throw "Deployment completed with $($failed.Count) failed file(s). Check the errors above."
+        }
+        
+        Write-Host ""
+        Write-Host "COMPLETE CLEAN DEPLOYMENT finished! Uploaded $uploaded/$totalFiles files." -ForegroundColor Green
         Write-Host "App should now work at: https://futuremagic.de/Expert/" -ForegroundColor Cyan
         
     } else {

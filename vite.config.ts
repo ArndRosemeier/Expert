@@ -84,6 +84,8 @@ export default defineConfig(({ mode }) => {
       minify: 'esbuild',  // Enable JS minification
       cssMinify: false,  // Disable CSS minification to prevent style changes
       target: 'es2015',
+      // Increase chunk size warning limit since we're splitting chunks better
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html')
@@ -93,8 +95,42 @@ export default defineConfig(({ mode }) => {
           entryFileNames: 'assets/[name]-[hash].js',
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash].[ext]',
-          manualChunks: {
-            vendor: ['uuid']
+          // Smart chunk splitting - split out large dependencies instead of grouping them
+          manualChunks(id) {
+            // Node modules go to vendor chunk
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
+            
+            // Split out the largest problematic files individually
+            if (id.includes('src/ui/modals/services/GenerationErrorService.ts')) {
+              return 'generation-error';
+            }
+            
+            if (id.includes('src/idea-board/IdeaBoard.ts')) {
+              return 'idea-board';
+            }
+            
+            if (id.includes('src/overview-board/OverviewBoardModal.ts')) {
+              return 'overview-board';
+            }
+            
+            // Split out large modal services
+            if (id.includes('src/ui/modals/services/') && id.includes('Service.ts')) {
+              return 'modal-services';
+            }
+            
+            // Split out large modals
+            if (id.includes('src/ui/modals/') && 
+                (id.includes('LogicErrorDetectorModal.ts') || 
+                 id.includes('LogicOutlineFixerModal.ts') ||
+                 id.includes('RedundancyDetectorModal.ts') ||
+                 id.includes('NodeInspectorModal.ts'))) {
+              return 'large-modals';
+            }
+            
+            // Let project-ui.ts and event-handlers.ts split naturally
+            // Don't force them into specific chunks
           }
         }
       }

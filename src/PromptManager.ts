@@ -320,6 +320,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
+            {{noise_names}}
+
             IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
             Coherence is king. Logical problems must be avoided at all costs.
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. 
@@ -345,6 +347,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             ---
 
             {{draftorfresh}}
+
+            {{noise_names}}
 
             IMPORTANT: 
             Your response should contain ONLY the requested outline content, nothing more.
@@ -666,6 +670,8 @@ Section: Context
 
 Section: Concept
 [A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
+
+{{noise_names}}
 
 CRITICAL: Use exactly the section headers shown above. Do not add extra text before or after the sections.`.trim(),
         placeholders: ['description', 'criteria', 'language'],
@@ -1191,11 +1197,15 @@ Your task is to create a comprehensive story outline that incorporates:
 - Specified character and location requirements
 - Chosen narrative style preferences
 
+Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+
 QUALITY CRITERIA:
 Your outline will be evaluated based on these criteria:
 {{criteria}}
 
 CRITICAL: You MUST follow the exact output format specified in the user prompt. Any deviation from the required format will cause a system error.
+
+{{noise_names}}
 
 IMPORTANT CONTEXT FORMAT:
 The context section you generate must follow a specific paragraph-based format:
@@ -1205,12 +1215,14 @@ The context section you generate must follow a specific paragraph-based format:
 - Examples of non-persistent items: specific scene details, temporary character states, plot-specific information
 
 Always create engaging, internally consistent outlines that respect the specified constraints while being creative and compelling.`.trim(),
-        placeholders: ['criteria'],
+        placeholders: ['criteria', 'language'],
         description: "System prompt for the outline factory that establishes the AI's role as a creative writing assistant for generating story outlines with strict format requirements and quality criteria."
     },
 
     outline_generation_user: {
         text: `Generate a creative project outline based on these specifications:
+
+Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
 
 **User Ideas:** {{ideas}}
 
@@ -1251,8 +1263,10 @@ Context Format Examples:
 
 The story begins when Sarah receives an encrypted message from her supposedly dead brother, leading her to question everything she believes about his death and the nature of reality itself.
 
+{{noise_names}}
+
 WARNING: Any deviation from this exact format will cause a system error. Follow the format precisely.`.trim(),
-        placeholders: ['ideas', 'genres', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences'],
+        placeholders: ['ideas', 'genres', 'contentRating', 'protagonists', 'antagonists', 'sideCharacters', 'locations', 'worldbuildingDetails', 'stylePreferences', 'language'],
         description: "User prompt template for the outline factory that provides structured story requirements and asks for a complete project outline with title, content, and context formatted according to the application's paragraph-based context system."
     },
 
