@@ -1457,26 +1457,19 @@ IMPORTANT: While chatting naturally with the user about their story, you can cre
 AVAILABLE XML TAGS:
 
 For story outline and plot progression:
-- <outline description="Key plot development, event, or story progression" position="1" />
+- <outline id="unique_id" description="Key plot development, event, or story progression" position="1" />
 - Use 'position' attribute for ordering (optional)
-- For positional placement: <outline description="..." before="o_003" /> or <outline description="..." after="o_001" />
+- For positional placement: <outline id="new_scene" description="..." before="opening" /> or <outline id="climax" description="..." after="midpoint" />
 
 For story context and world-building:
-- <context name="Character/Location/Item Name" description="Detailed description" />
-- <context description="General background info or context" />
-- Use 'name' attribute for named entities (characters, locations, items)
-- Omit 'name' for general context or background information
+- <context id="unique_id" description="Full description including name/title and details" />
+- ID can be anything: character names, location names, numbers, descriptive words
+- Description contains everything: "Elara Vance: A passionate baker running her own small shop in NYC"
 
 System commands:
 - </refresh> - Request current whiteboard state when you need context
-- </edit id="element_id" name="New Name" description="New description"> - Edit an existing element
+- </edit id="element_id" description="New description"> - Edit an existing element
 - </delete id="element_id"> - Delete an existing element
-- </rename id="element_id" name="New Name"> - Rename an existing element
-
-LEGACY SUPPORT:
-The old XML tags (<character>, <location>, <item>, <plot_point>) still work for backward compatibility, but please use the new simplified format above. Old tags are automatically converted:
-- <character>, <location>, <item> → <context> with name
-- <plot_point> → <outline>
 
 USAGE GUIDELINES:
 
@@ -1484,18 +1477,17 @@ USAGE GUIDELINES:
 2. **Use Two Types**: 
    - <outline> for plot points, events, story progression
    - <context> for characters, locations, items, background info
-3. **Named vs Unnamed Context**: 
-   - For characters/locations/items: <context name="Name" description="..." />
-   - For general info: <context description="..." />
-4. **Update Existing Elements**: Use edit commands with exact element IDs from the whiteboard.
-5. **Request Context**: Use </refresh> when you need to see the current story elements.
-6. **Respond to Human Edits**: Acknowledge when users edit story elements on the whiteboard.
+3. **Choose Clear IDs**: Use descriptive IDs that make sense for referencing later
+4. **Full Descriptions**: Include name/title and details in the description field
+5. **Update Existing Elements**: Use edit commands with exact element IDs from the whiteboard.
+6. **Request Context**: Use </refresh> when you need to see the current story elements.
+7. **Respond to Human Edits**: Acknowledge when users edit story elements on the whiteboard.
 
 EXAMPLES:
-- Character: <context name="Sarah Chen" description="A brilliant forensic scientist with a photographic memory" />
-- Location: <context name="The Crimson Café" description="A dimly lit jazz club in downtown Seattle" />
-- Plot event: <outline description="Sarah discovers a cryptic message hidden in the victim's apartment" />
-- Background: <context description="The murders follow a pattern linked to an ancient cipher" />
+- Character: <context id="sarah" description="Sarah Chen: A brilliant forensic scientist with a photographic memory and obsessive attention to detail" />
+- Location: <context id="crimson_cafe" description="The Crimson Café: A dimly lit jazz club in downtown Seattle with red velvet booths and live music every night" />
+- Plot event: <outline id="discovery" description="Sarah discovers a cryptic message hidden behind the victim's apartment mirror" />
+- Background: <context id="pattern" description="Murder Pattern: The killer follows an ancient cipher system, leaving mathematical clues at each crime scene" />
 
 {{noise_names}}
 
@@ -1513,7 +1505,7 @@ CURRENT WHITEBOARD STATE:
 RECENT USER EDITS:
 {{human_edits}}
 
-IMPORTANT: When editing existing elements, use their exact IDs shown in the whiteboard state above. Element IDs are shown in the format like "o_001" (outline), "c_002" (context), etc.
+IMPORTANT: When editing existing elements, use their exact IDs shown in the whiteboard state above. Element IDs are user-defined and can be anything (character names, descriptive words, numbers, etc.).
 
 Use XML tags to create or edit story elements as we discuss the story. Chat naturally while building our story structure.`.trim(),
         placeholders: ['current_whiteboard', 'human_edits'],

@@ -15,11 +15,8 @@ export class ElementIDGenerator {
     
     // Type prefix mappings
     private readonly typePrefixes: Record<StoryElementType, string> = {
-        'character': 'c_',
-        'location': 'l_', 
-        'item': 'i_',
-        'plot_point': 'p_',
-        'context': 'x_'
+        'outline': 'o_',
+        'context': 'c_'
     };
     
     // Counters for each type
@@ -176,17 +173,11 @@ export class ElementIDGenerator {
         nextCounters: Record<StoryElementType, number>;
     } {
         const countsByType: Record<StoryElementType, number> = {
-            character: 0,
-            location: 0,
-            item: 0,
-            plot_point: 0,
+            outline: 0,
             context: 0
         };
         const nextCounters: Record<StoryElementType, number> = {
-            character: 0,
-            location: 0,
-            item: 0,
-            plot_point: 0,
+            outline: 0,
             context: 0
         };
         
@@ -238,10 +229,7 @@ export class ElementIDGenerator {
         }
         
         const typeNames: Record<StoryElementType, string> = {
-            'character': 'Character',
-            'location': 'Location',
-            'item': 'Item',
-            'plot_point': 'Plot Point',
+            'outline': 'Outline',
             'context': 'Context'
         };
         
@@ -253,10 +241,7 @@ export class ElementIDGenerator {
      */
     public generateMultipleIds(counts: Partial<Record<StoryElementType, number>>): Record<StoryElementType, ElementID[]> {
         const result: Record<StoryElementType, ElementID[]> = {
-            character: [],
-            location: [],
-            item: [],
-            plot_point: [],
+            outline: [],
             context: []
         };
         

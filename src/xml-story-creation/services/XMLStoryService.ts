@@ -55,7 +55,7 @@ export class XMLStoryService {
             },
             pendingHumanEdits: [],
             searchFilter: '',
-            typeFilters: new Set(['character', 'location', 'item', 'plot_point', 'context']),
+            typeFilters: new Set(['outline', 'context']),
             collapsedSections: new Set()
         };
         
@@ -129,7 +129,6 @@ export class XMLStoryService {
             type: 'element_deleted',
             payload: { 
                 elementId, 
-                elementName: element.name || 'unnamed',
                 elementType: element.type
             },
             timestamp: new Date()
@@ -141,7 +140,6 @@ export class XMLStoryService {
      */
     public async handleHumanEdit(
         elementId: ElementID,
-        field: 'name' | 'description',
         newValue: string
     ): Promise<void> {
         const element = this.state.elements.get(elementId);
@@ -149,7 +147,7 @@ export class XMLStoryService {
             throw new Error(`Element not found: ${elementId}`);
         }
         
-        const oldValue = field === 'name' ? (element.name ?? '') : element.description;
+        const oldValue = element.description;
         
         // Don't process if value hasn't actually changed
         if (oldValue === newValue) {
@@ -160,7 +158,7 @@ export class XMLStoryService {
         const humanEdit: HumanEdit = {
             elementId,
             elementType: element.type,
-            field,
+            field: 'description',
             oldValue,
             newValue,
             timestamp: new Date(),
@@ -169,20 +167,13 @@ export class XMLStoryService {
         
         // Update the element
         const updatedElement: StoryElement = { ...element };
-        
-        if (field === 'name') {
-            updatedElement.name = newValue;
-        } else {
-            updatedElement.description = newValue;
-        }
+        updatedElement.description = newValue;
         
         // Add to edit history
         updatedElement.editHistory.push({
             timestamp: new Date(),
             type: 'human_edit',
-            changes: field === 'name' 
-                ? { name: { from: oldValue as string | undefined, to: newValue } }
-                : { description: { from: oldValue, to: newValue } }
+            changes: { description: { from: oldValue, to: newValue } }
         });
         
         updatedElement.isHumanEdited = true;
@@ -332,7 +323,7 @@ export class XMLStoryService {
                     
                     // Apply search filter
                     if (this.state.searchFilter) {
-                        const searchText = `${element.name ?? ''} ${element.description}`.toLowerCase();
+                        const searchText = element.description.toLowerCase();
                         return searchText.includes(this.state.searchFilter);
                     }
                     
@@ -386,7 +377,7 @@ export class XMLStoryService {
      * Initialize type maps
      */
     private initializeTypeMaps(): void {
-        const types: StoryElementType[] = ['character', 'location', 'item', 'plot_point', 'context'];
+        const types: StoryElementType[] = ['outline', 'context'];
         types.forEach(type => {
             this.state.elementsByType.set(type, []);
         });
@@ -464,10 +455,6 @@ export class XMLStoryService {
                 this.handleDeleteCommand(command);
                 break;
                 
-            case 'rename':
-                this.handleRenameCommand(command);
-                break;
-                
             default:
                 console.warn('Unknown system command:', command.type);
         }
@@ -480,7 +467,6 @@ export class XMLStoryService {
         if (!command.parameters) return;
         
         const elementId = command.parameters['id'];
-        const newName = command.parameters['name'];
         const newDescription = command.parameters['description'];
         
         if (!elementId) {
@@ -495,13 +481,9 @@ export class XMLStoryService {
         }
         
         // Store original values for history
-        const oldName = element.name;
         const oldDescription = element.description;
         
         // Update element properties
-        if (newName !== undefined) {
-            element.name = newName;
-        }
         if (newDescription !== undefined) {
             element.description = newDescription;
         }
@@ -516,7 +498,6 @@ export class XMLStoryService {
             timestamp: new Date(),
             type: 'ai_edit',
             changes: {
-                ...(newName !== undefined && { name: { from: oldName, to: newName } }),
                 ...(newDescription !== undefined && { description: { from: oldDescription, to: newDescription } })
             }
         });
@@ -565,47 +546,7 @@ export class XMLStoryService {
         });
     }
     
-    /**
-     * Handle AI rename commands  
-     */
-    private handleRenameCommand(command: SystemCommand): void {
-        if (!command.parameters) return;
-        
-        const elementId = command.parameters['id'];
-        const newName = command.parameters['name'];
-        
-        if (!elementId || !newName) {
-            console.warn('Rename command missing required id or name parameter');
-            return;
-        }
-        
-        const element = this.getElement(elementId);
-        if (!element) {
-            console.warn(`Element with id ${elementId} not found for rename command`);
-            return;
-        }
-        
-        const oldName = element.name;
-        element.name = newName;
-        element.isUpdatedByAI = true;
-        element.highlightUntilNext = true;
-        element.lastModified = new Date();
-        
-        // Add to edit history
-        element.editHistory.push({
-            timestamp: new Date(),
-            type: 'ai_edit',
-            changes: {
-                name: { from: oldName, to: newName }
-            }
-        });
-        
-        this.emitEvent({
-            type: 'element_updated',
-            payload: { element, command },
-            timestamp: new Date()
-        });
-    }
+
     
     /**
      * Add human edit to pending batch
@@ -692,10 +633,7 @@ export class XMLStoryService {
      */
     public getElementCountsByType(): Record<StoryElementType, number> {
         const counts: Record<StoryElementType, number> = {
-            character: 0,
-            location: 0,
-            item: 0,
-            plot_point: 0,
+            outline: 0,
             context: 0
         };
         
@@ -779,7 +717,7 @@ export class XMLStoryService {
             },
             pendingHumanEdits: [],
             searchFilter: '',
-            typeFilters: new Set(['character', 'location', 'item', 'plot_point', 'context']),
+            typeFilters: new Set(['outline', 'context']),
             collapsedSections: new Set()
         };
         

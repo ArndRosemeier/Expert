@@ -36,13 +36,13 @@ export async function runXMLStoryDemo(): Promise<void> {
     console.log('🧪 Test 1: Parsing AI response with XML tags');
     const aiResponse = `Let me tell you about our main character. 
     
-    <character name="Elara" description="A skilled cartographer seeking her missing brother" />
+    <context id="elara" description="Elara: A skilled cartographer seeking her missing brother" />
     
-    She lives in a fascinating city. <location name="Neo-Venice" description="A cyberpunk city built on the ruins of Venice, with digital canals and AR overlays" />
+    She lives in a fascinating city. <context id="neo_venice" description="Neo-Venice: A cyberpunk city built on the ruins of Venice, with digital canals and AR overlays" />
     
-    The story begins when <plot_point description="Elara discovers her brother's journal with cryptic map references" />
+    The story begins when <outline id="discovery" description="Elara discovers her brother's journal with cryptic map references" />
     
-    This sets up our main narrative. <context description="The story has a steampunk aesthetic with magical elements" />
+    This sets up our main narrative. <context id="aesthetic" description="Story Setting: The story has a steampunk aesthetic with magical elements woven throughout" />
     
     That's the foundation of our tale.`;
     
@@ -63,14 +63,13 @@ export async function runXMLStoryDemo(): Promise<void> {
     
     const elements = Array.from(state.elements.values()) as StoryElement[];
     if (elements.length > 0) {
-        // Look for a context element with a name (likely a character)
-        const contextElement = elements.find((e: StoryElement) => e.type === 'context' && e.name);
+        // Look for a context element (any context item)
+        const contextElement = elements.find((e: StoryElement) => e.type === 'context');
         if (contextElement) {
-            console.log('✏️ Making human edit to context element:', contextElement.name);
+            console.log('✏️ Making human edit to context element:', contextElement.id);
             await storySystem.handleHumanEdit(
                 contextElement.id, 
-                'description', 
-                'A skilled but anxious cartographer with trust issues, seeking her missing brother'
+                'Elara: A skilled but anxious cartographer with trust issues, seeking her missing brother'
             );
             
             const pendingEdits = storySystem.getPendingEdits();
@@ -84,9 +83,9 @@ export async function runXMLStoryDemo(): Promise<void> {
     
     const updateResponse = `Actually, let me clarify some details about our characters.
     
-    <character name="Elara" description="A highly skilled cartographer and former naval officer, searching for her missing brother who disappeared while exploring ancient ruins" />
+    <context id="elara" description="Elara: A highly skilled cartographer and former naval officer, searching for her missing brother who disappeared while exploring ancient ruins" />
     
-    And I should mention another character: <character name="Marcus" description="A mysterious merchant with knowledge of ancient maps and hidden agendas" />
+    And I should mention another character: <context id="marcus" description="Marcus: A mysterious merchant with knowledge of ancient maps and hidden agendas" />
     
     </refresh>`;
     
@@ -222,8 +221,8 @@ export async function performanceTest(): Promise<void> {
     let largeResponse = 'Creating many story elements:\n\n';
     
     for (let i = 1; i <= 50; i++) {
-        largeResponse += `<character name="Character${i}" description="Test character number ${i}" />\n`;
-        largeResponse += `<location name="Location${i}" description="Test location number ${i}" />\n`;
+        largeResponse += `<context id="char${i}" description="Character${i}: Test character number ${i}" />\n`;
+        largeResponse += `<context id="loc${i}" description="Location${i}: Test location number ${i}" />\n`;
     }
     
     const parseResult = await storySystem.processAIResponse(largeResponse);
@@ -249,7 +248,7 @@ export const XMLStoryDemo = {
     // Quick test function
     quickTest: async () => {
         const system = createXMLStorySystem();
-        const response = `<character name="TestChar" description="A test character" />`;
+        const response = `<context id="testchar" description="TestChar: A test character" />`;
         const result = await system.processAIResponse(response);
         console.log('Quick test result:', result);
         return result;

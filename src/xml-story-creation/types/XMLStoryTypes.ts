@@ -9,16 +9,18 @@
 // CORE STORY ELEMENT TYPES
 // ============================================================================
 
-export type StoryElementType = 'character' | 'location' | 'item' | 'plot_point' | 'context';
+export type StoryElementType = 'outline' | 'context';
 
 export interface StoryElement {
-    id: string;                      // Generated unique ID (e.g., "c_001", "l_005")
+    id: string;                      // User-defined ID for referencing in chat (e.g., "elara", "opening_scene", "1")
     type: StoryElementType;          // Type of story element
-    name: string | undefined;        // For named entities (characters, locations, items)
-    description: string;             // Main content/description
+    description: string;             // Full content including name/title and details
     timestamp: Date;                 // When created
     sourceText: string;              // Original XML tag that created this element
     lastModified: Date;              // When last modified (by AI or human)
+    
+    // Positional information for outline elements
+    position?: number;               // Position index for outline elements (for ordering)
     
     // Human editing tracking
     isHumanEdited: boolean;          // Track human modifications
@@ -35,7 +37,6 @@ export interface EditRecord {
     timestamp: Date;
     type: 'ai_edit' | 'human_edit' | 'creation';
     changes: {
-        name?: { from: string | undefined, to: string | undefined };
         description?: { from: string, to: string };
     };
 }
@@ -71,7 +72,7 @@ export interface ParseError {
 export interface HumanEdit {
     elementId: string;
     elementType: StoryElementType;
-    field: 'name' | 'description';
+    field: 'description';
     oldValue: string;
     newValue: string;
     timestamp: Date;
@@ -170,44 +171,20 @@ export interface XMLTagDefinition {
 
 export const XML_TAG_DEFINITIONS: XMLTagDefinition[] = [
     {
-        tagName: 'character',
-        elementType: 'character',
-        requiredAttributes: ['name', 'description'],
-        optionalAttributes: [],
+        tagName: 'outline',
+        elementType: 'outline',
+        requiredAttributes: ['id', 'description'],
+        optionalAttributes: ['position', 'before', 'after'],
         allowsContent: false,
         isSelfClosing: true
-    },
-    {
-        tagName: 'location',
-        elementType: 'location',
-        requiredAttributes: ['name', 'description'],
-        optionalAttributes: [],
-        allowsContent: false,
-        isSelfClosing: true
-    },
-    {
-        tagName: 'item',
-        elementType: 'item',
-        requiredAttributes: ['name', 'description'],
-        optionalAttributes: [],
-        allowsContent: false,
-        isSelfClosing: true
-    },
-    {
-        tagName: 'plot_point',
-        elementType: 'plot_point',
-        requiredAttributes: ['description'],
-        optionalAttributes: [],
-        allowsContent: true,
-        isSelfClosing: false
     },
     {
         tagName: 'context',
         elementType: 'context',
-        requiredAttributes: ['description'],
+        requiredAttributes: ['id', 'description'],
         optionalAttributes: [],
-        allowsContent: true,
-        isSelfClosing: false
+        allowsContent: false,
+        isSelfClosing: true
     }
 ];
 

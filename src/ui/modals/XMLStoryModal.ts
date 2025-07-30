@@ -14,6 +14,7 @@ import type { StoryElement, XMLStoryEvent } from '../../xml-story-creation';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
+import { UniversalTextEditor } from '../components/UniversalTextEditor';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_CONVERSATION_STORAGE_KEY = 'xml-story-conversation-history';
@@ -43,6 +44,9 @@ export class XMLStoryModal extends BaseModal {
     private isGenerating = false;
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
+    
+    // Story element editors
+    private elementEditors = new Map<string, UniversalTextEditor>();
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
         console.log('🏗️ XMLStoryModal constructor called with config:', config);
@@ -108,16 +112,16 @@ export class XMLStoryModal extends BaseModal {
                     flex-direction: column;
                     background: white;
                     border-right: 1px solid #e5e5e5;
-                    min-width: 400px;
+                    min-width: 0;
                 }
                 
                 .xml-story-whiteboard {
-                    width: 400px;
+                    flex: 1;
                     background: #fafafa;
                     border-left: 1px solid #e5e5e5;
                     display: flex;
                     flex-direction: column;
-                    flex-shrink: 0;
+                    min-width: 0;
                 }
                 
                 .sidebar-header {
@@ -171,6 +175,62 @@ export class XMLStoryModal extends BaseModal {
                     flex: 1;
                     overflow-y: auto;
                     padding: 1rem;
+                }
+                
+                .story-section {
+                    margin-bottom: 1.5rem;
+                }
+                
+                .story-section-header {
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    color: #333;
+                    margin-bottom: 0.5rem;
+                    padding-bottom: 0.25rem;
+                    border-bottom: 2px solid #e5e5e5;
+                }
+                
+                .story-elements {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                }
+                
+                .story-element {
+                    border: 1px solid #e5e5e5;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+                
+                .story-element .universal-text-editor-wrapper {
+                    border: none !important;
+                    margin: 0 !important;
+                }
+                
+                .story-element .universal-text-editor-wrapper textarea,
+                .story-element .universal-text-editor-wrapper .text-editor-with-highlighting {
+                    border: none !important;
+                    border-radius: 0 !important;
+                    padding: 8px 12px !important;
+                    min-height: 60px !important;
+                    font-size: 13px !important;
+                    line-height: 1.4 !important;
+                    resize: vertical !important;
+                }
+                
+                .story-element.highlight-new {
+                    border-color: #4ade80;
+                    background-color: #f0fdf4;
+                }
+                
+                .story-element.highlight-updated {
+                    border-color: #fbbf24;
+                    background-color: #fffbeb;
+                }
+                
+                .story-element.human-edited {
+                    border-color: #06b6d4;
+                    background-color: #f0f9ff;
                 }
                 
                 .message {
@@ -718,9 +778,16 @@ export class XMLStoryModal extends BaseModal {
         const shouldRestoreFocus = this.messageInput && document.activeElement === this.messageInput;
         const cursorPosition = shouldRestoreFocus ? this.messageInput?.selectionStart : null;
 
-        const filteredElements = this.storySystem.service.getFilteredElements();
+        // Get all elements and separate by type
+        const allElements = this.storySystem.service.getElementsForContext();
+        const outlineElements = allElements
+            .filter((el: StoryElement) => el.type === 'outline')
+            .sort((a: StoryElement, b: StoryElement) => (a.position || 0) - (b.position || 0));
+        const contextElements = allElements
+            .filter((el: StoryElement) => el.type === 'context')
+            .sort((a: StoryElement, b: StoryElement) => a.timestamp.getTime() - b.timestamp.getTime());
         
-        if (filteredElements.size === 0) {
+        if (outlineElements.length === 0 && contextElements.length === 0) {
             this.whiteboardContainer.innerHTML = `
                 <div style="text-align: center; color: #999; padding: 2rem; font-style: italic;">
                     Story elements will appear here as you chat with the AI
@@ -729,32 +796,40 @@ export class XMLStoryModal extends BaseModal {
             return;
         }
 
+        // Clear existing editors
+        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.clear();
+
         let html = '';
 
-        for (const [type, elements] of filteredElements.entries()) {
-            if (elements.length === 0) continue;
-
-            const typeNames: Record<string, string> = {
-                'character': 'Characters',
-                'location': 'Locations', 
-                'item': 'Items',
-                'plot_point': 'Plot Points',
-                'context': 'Context'
-            };
-
-            const typeName = typeNames[type] || type;
-
+        // Outline section
+        if (outlineElements.length > 0) {
             html += `
-                <div class="element-section">
-                    <div class="element-section-header">
-                        <span class="element-section-title">${typeName}</span>
-                        <span class="element-count">${elements.length}</span>
-                    </div>
-                    <div class="element-list">
+                <div class="story-section">
+                    <div class="story-section-header">Outline</div>
+                    <div class="story-elements">
             `;
 
-            for (const element of elements) {
-                html += this.renderElementCard(element);
+            for (const element of outlineElements) {
+                html += this.renderElementEditor(element);
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+
+        // Context section  
+        if (contextElements.length > 0) {
+            html += `
+                <div class="story-section">
+                    <div class="story-section-header">Context</div>
+                    <div class="story-elements">
+            `;
+
+            for (const element of contextElements) {
+                html += this.renderElementEditor(element);
             }
 
             html += `
@@ -765,8 +840,8 @@ export class XMLStoryModal extends BaseModal {
 
         this.whiteboardContainer.innerHTML = html;
 
-        // Add click handlers for editing
-        this.setupElementEditHandlers();
+        // Initialize UniversalTextEditor instances
+        this.initializeElementEditors();
 
         // Always restore focus to message input after whiteboard update
         setTimeout(() => {
@@ -779,183 +854,88 @@ export class XMLStoryModal extends BaseModal {
         }, 0);
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
-    private renderElementCard(element: StoryElement): string {
-        let cardClasses = 'element-card';
-        let badge = '';
+
+    private renderElementEditor(element: StoryElement): string {
+        let elementClasses = 'story-element';
 
         if (element.isNewFromAI) {
-            cardClasses += ' highlight-new';
-            badge = '<span class="element-badge badge-new">New</span>';
+            elementClasses += ' highlight-new';
         } else if (element.isUpdatedByAI) {
-            cardClasses += ' highlight-updated';
-            badge = '<span class="element-badge badge-updated">Updated</span>';
+            elementClasses += ' highlight-updated';
         } else if (element.isHumanEdited) {
-            cardClasses += ' human-edited';
-            badge = '<span class="element-badge badge-edited">Edited</span>';
+            elementClasses += ' human-edited';
         }
 
         return `
-            <div class="${cardClasses}" data-element-id="${element.id}">
-                <button class="element-delete" data-element-id="${element.id}" title="Delete element">×</button>
-                ${badge}
-                ${element.name ? `<div class="element-name" data-field="name" title="${this.escapeHtml(element.name)}">${this.escapeHtml(element.name)}</div>` : ''}
-                <div class="element-description" data-field="description" title="${this.escapeHtml(element.description)}">${this.escapeHtml(element.description)}</div>
+            <div class="${elementClasses}" data-element-id="${element.id}">
+                <div id="editor-${element.id}"></div>
             </div>
         `;
     }
 
-    private async deleteElement(elementId: string): Promise<void> {
-        if (this.isEditing) return; // Respect semaphore
-        
-        try {
-            // Find the element to get its name for confirmation
-            const element = this.storySystem.service.getElement(elementId);
-            const elementName = element?.name || 'this element';
-            
-            if (confirm(`Delete ${elementName}?`)) {
-                await this.storySystem.service.deleteElement(elementId);
-                
-                // Add to conversation history to notify AI
-                const deleteMessage = `[HUMAN DELETE] Deleted element: ${elementName}`;
-                this.conversationHistory.push({role: 'user', content: deleteMessage});
-                await this.saveConversation();
-                
-                this.updateWhiteboard();
-            }
-        } catch (error) {
-            console.error('Error deleting element:', error);
-        }
-    }
-
-    private setupElementEditHandlers(): void {
+    private initializeElementEditors(): void {
         if (!this.whiteboardContainer) return;
 
-        // Add click handlers for editing elements
-        this.whiteboardContainer.querySelectorAll('[data-element-id]').forEach(card => {
-            const elementId = card.getAttribute('data-element-id');
+        const editorContainers = this.whiteboardContainer.querySelectorAll('[data-element-id]');
+        
+        editorContainers.forEach(container => {
+            const elementId = container.getAttribute('data-element-id');
             if (!elementId) return;
 
-            // Add delete handler
-            const deleteButton = card.querySelector('.element-delete') as HTMLElement;
-            if (deleteButton) {
-                deleteButton.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteElement(elementId);
-                });
-            }
+            const element = this.storySystem.service.getElement(elementId);
+            if (!element) return;
 
-            // Add edit handlers for fields
-            card.querySelectorAll('[data-field]').forEach(field => {
-                field.addEventListener('click', () => {
-                    const fieldName = field.getAttribute('data-field') as 'name' | 'description';
-                    this.editElementField(elementId, fieldName, field as HTMLElement);
-                });
-            });
-        });
-    }
+            const editorContainer = container.querySelector(`#editor-${elementId}`) as HTMLElement;
+            if (!editorContainer) return;
 
-    private editElementField(elementId: string, field: 'name' | 'description', fieldElement: HTMLElement): void {
-        // Simple semaphore: only one edit at a time
-        if (this.isEditing) return;
-        
-        this.isEditing = true;
-        
-        const element = this.storySystem.service.getElement(elementId);
-        if (!element) {
-            this.isEditing = false;
-            return;
-        }
+            // Use the description directly (it now contains everything including name/title)
+            const content = element.description;
 
-        const currentValue = field === 'name' ? (element.name || '') : element.description;
-
-        // Create input element
-        const input = document.createElement('textarea');
-        input.value = currentValue;
-        input.style.cssText = `
-            width: 100%;
-            min-height: 80px;
-            max-height: 300px;
-            padding: 0.5rem;
-            border: 2px solid #007bff;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: inherit;
-            resize: vertical;
-            line-height: 1.4;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        `;
-        
-        // Auto-resize textarea to fit content
-        const autoResize = () => {
-            input.style.height = 'auto';
-            input.style.height = Math.min(input.scrollHeight, 300) + 'px';
-        };
-        
-        // Initial resize
-        setTimeout(autoResize, 0);
-        
-        // Resize on input
-        input.addEventListener('input', autoResize);
-
-        // Replace field content with input
-        const originalContent = fieldElement.innerHTML;
-        fieldElement.innerHTML = '';
-        fieldElement.appendChild(input);
-
-        // Focus and select
-        input.focus();
-        input.select();
-
-        // Save function
-        const saveEdit = async () => {
-            const newValue = input.value.trim();
-            
-            if (newValue !== currentValue) {
-                try {
-                    await this.storySystem.handleHumanEdit(elementId, field, newValue);
-                    this.updateWhiteboard();
-                } catch (error) {
-                    console.error('Error saving edit:', error);
-                    // Restore original content on error
-                    fieldElement.innerHTML = originalContent;
-                    this.setupElementEditHandlers();
+            const editor = new UniversalTextEditor(
+                editorContainer,
+                {
+                    placeholder: element.type === 'outline' ? 'Outline part...' : 'Context item...',
+                    mode: 'enhanced'
                 }
-            } else {
-                // Restore original content if no change
-                fieldElement.innerHTML = originalContent;
-                this.setupElementEditHandlers();
-            }
-            
-            // Release the semaphore
-            this.isEditing = false;
-        };
+            );
 
-        // Cancel function
-        const cancelEdit = () => {
-            fieldElement.innerHTML = originalContent;
-            this.setupElementEditHandlers();
-            this.isEditing = false;
-        };
+            // Set initial content
+            editor.setText(content);
 
-        // Event handlers
-        input.addEventListener('blur', saveEdit);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                void saveEdit();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelEdit();
-            }
+            // Handle changes
+            editor.addEventListener('input', () => {
+                this.handleElementEdit(elementId, editor.getText());
+            });
+
+            this.elementEditors.set(elementId, editor);
         });
     }
+
+    private async handleElementEdit(elementId: string, newContent: string): Promise<void> {
+        const element = this.storySystem.service.getElement(elementId);
+        if (!element || this.isEditing) return;
+
+        this.isEditing = true;
+
+        try {
+            // Update description (which now contains everything)
+            if (newContent !== element.description) {
+                await this.storySystem.service.handleHumanEdit(elementId, newContent);
+            }
+
+            // Save changes
+            await this.saveWhiteboard();
+        } catch (error) {
+            console.error('Error updating element:', error);
+        } finally {
+            this.isEditing = false;
+        }
+    }
+
+
+
+
 
     private formatWhiteboardForAI(): string {
         const elements = this.storySystem.service.getElementsForContext();
@@ -974,10 +954,7 @@ export class XMLStoryModal extends BaseModal {
         let formatted = 'CURRENT STORY WHITEBOARD:\n\n';
 
         const typeNames = {
-            'character': 'CHARACTERS',
-            'location': 'LOCATIONS', 
-            'item': 'ITEMS',
-            'plot_point': 'PLOT POINTS',
+            'outline': 'OUTLINE',
             'context': 'CONTEXT'
         };
 
@@ -988,8 +965,7 @@ export class XMLStoryModal extends BaseModal {
             formatted += `${typeName}:\n`;
             typeElements.forEach((element, index) => {
                 const editFlag = element.isHumanEdited ? ' [HUMAN EDITED]' : '';
-                const name = element.name ? `${element.name} - ` : '';
-                formatted += `${index + 1}. [ID: ${element.id}] ${name}${element.description}${editFlag}\n`;
+                formatted += `${index + 1}. [ID: ${element.id}] ${element.description}${editFlag}\n`;
             });
             formatted += '\n';
         }
@@ -1072,12 +1048,7 @@ export class XMLStoryModal extends BaseModal {
         URL.revokeObjectURL(url);
     }
 
-    public override async close(): Promise<void> {
-        // Save state before closing
-        await this.saveConversation();
-        await this.saveWhiteboard();
-        await super.close();
-    }
+
 
     /**
      * Load saved model selection from StorageService
@@ -1236,5 +1207,18 @@ export class XMLStoryModal extends BaseModal {
         } catch (error) {
             console.warn('📋 Error clearing saved whiteboard state:', error);
         }
+    }
+
+    public override async close(): Promise<void> {
+        // Clean up text editors
+        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.clear();
+        
+        // Save state before closing
+        await this.saveConversation();
+        await this.saveWhiteboard();
+        
+        // Call parent close
+        await super.close();
     }
 } 

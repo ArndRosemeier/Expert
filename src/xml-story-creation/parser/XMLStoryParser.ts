@@ -14,17 +14,15 @@ import type {
     ElementID
 } from '../types/XMLStoryTypes';
 import { XML_TAG_DEFINITIONS } from '../types/XMLStoryTypes';
-import { ElementIDGenerator } from '../services/ElementIDGenerator';
+
 
 /**
  * Main XML parser for story creation system
  */
 export class XMLStoryParser {
-    private idGenerator: ElementIDGenerator;
     private existingElements: Map<ElementID, StoryElement> = new Map();
     
     constructor() {
-        this.idGenerator = ElementIDGenerator.getInstance();
     }
     
     /**
@@ -106,7 +104,7 @@ export class XMLStoryParser {
         let cleanedText = text;
 
         // Find all XML-like tags in the text
-        const xmlTagRegex = /<(outline|context|character|location|item|plot_point)(\s[^>]*?)?\s*\/?>/gi;
+        const xmlTagRegex = /<(outline|context)(\s[^>]*?)?\s*\/?>/gi;
         const matches = Array.from(text.matchAll(xmlTagRegex));
 
         console.log(`🔍 Found ${matches.length} XML tags to parse:`, matches.map(m => m[0]));
@@ -163,7 +161,7 @@ export class XMLStoryParser {
 
                 if (element) {
                     elements.push(element);
-                    console.log(`🎯 Created element:`, element.id, element.name || element.description);
+                    console.log(`🎯 Created element:`, element.id, element.description);
                 }
 
                 // Remove the tag from cleaned text
@@ -215,10 +213,8 @@ export class XMLStoryParser {
         }
         
         // Check if this is an update to existing element
-        const existingElement = this.findExistingElementByNameAndType(
-            attributes['name'], 
-            type
-        );
+        const id = attributes['id'];
+        const existingElement = id ? this.findExistingElementById(id) : null;
         
         if (existingElement) {
             // Update existing element
@@ -243,16 +239,20 @@ export class XMLStoryParser {
         attributes: Record<string, string>,
         sourceText: string
     ): StoryElement {
+        const id = attributes['id'];
         const description = attributes['description'];
+        
+        if (!id) {
+            throw new Error('ID is required for all story elements');
+        }
         if (!description) {
             throw new Error('Description is required for all story elements');
         }
 
         const now = new Date();
         const element: StoryElement = {
-            id: this.idGenerator.generateId(type),
+            id: id,
             type,
-            name: attributes['name'],
             description: description,
             timestamp: now,
             lastModified: now,
@@ -263,14 +263,18 @@ export class XMLStoryParser {
             isUpdatedByAI: false,
             highlightUntilNext: true
         };
+
+        // Add position for outline elements
+        if (type === 'outline' && attributes['position']) {
+            element.position = parseInt(attributes['position'], 10);
+        }
         
         // Add creation record to edit history
         element.editHistory.push({
             timestamp: now,
             type: 'creation',
             changes: {
-                description: { from: '', to: description },
-                ...(attributes['name'] && { name: { from: undefined, to: attributes['name'] } })
+                description: { from: '', to: description }
             }
         });
         
@@ -288,20 +292,6 @@ export class XMLStoryParser {
         const updatedElement: StoryElement = { ...existingElement };
         let hasChanges = false;
         
-        // Check for name changes
-        const newName = attributes['name'];
-        if (newName && newName !== existingElement.name) {
-            updatedElement.editHistory.push({
-                timestamp: new Date(),
-                type: 'ai_edit',
-                changes: {
-                    name: { from: existingElement.name, to: newName }
-                }
-            });
-            updatedElement.name = newName;
-            hasChanges = true;
-        }
-        
         // Check for description changes
         const newDescription = attributes['description'];
         if (newDescription && newDescription !== existingElement.description) {
@@ -314,6 +304,15 @@ export class XMLStoryParser {
             });
             updatedElement.description = newDescription;
             hasChanges = true;
+        }
+        
+        // Check for position changes (outline elements only)
+        if (existingElement.type === 'outline' && attributes['position']) {
+            const newPosition = parseInt(attributes['position'], 10);
+            if (newPosition !== existingElement.position) {
+                updatedElement.position = newPosition;
+                hasChanges = true;
+            }
         }
         
         if (hasChanges) {
@@ -330,23 +329,10 @@ export class XMLStoryParser {
     }
     
     /**
-     * Find existing element by name and type
+     * Find existing element by ID
      */
-    private findExistingElementByNameAndType(
-        name: string | undefined, 
-        type: StoryElementType
-    ): StoryElement | null {
-        if (name === undefined) {
-            throw new Error('Name is required for finding existing elements');
-        }
-        
-        for (const element of this.existingElements.values()) {
-            if (element.type === type && element.name === name) {
-                return element;
-            }
-        }
-        
-        return null;
+    private findExistingElementById(id: string): StoryElement | null {
+        return this.existingElements.get(id) || null;
     }
     
     /**
