@@ -926,6 +926,9 @@ export class UniversalTextEditor {
         originalHighlightIds: string[],
         originalFullText: string
     ): void {
+        // Hide spinner overlay first (while highlights are still visible)
+        this.hideSpinnerOverlay();
+
         // Remove original highlights
         originalHighlightIds.forEach(id => {
             this.enhancedEditor.removeHighlight(id);
@@ -992,9 +995,6 @@ export class UniversalTextEditor {
                 this.enhancedEditor.removeHighlight(id);
             });
         }, 5000);
-
-        // Hide spinner overlay
-        this.hideSpinnerOverlay();
         
         // Trigger text change handler if available
         if (this.handlers.onTextChange) {
