@@ -72,6 +72,9 @@ export class XMLStoryService {
      */
     public async processAIResponse(aiResponse: string): Promise<ParsedResponse> {
         try {
+            // Log raw AI response for debugging
+            console.log('🤖 Raw AI Response (before XML extraction):', aiResponse);
+            
             // Parse the response
             const parseResult = this.parser.parseResponse(aiResponse, this.state.elements);
             
