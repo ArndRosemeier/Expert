@@ -201,7 +201,7 @@ export class XMLStoryParser {
         attributes: Record<string, string>,
         sourceText: string,
         existingElements: Map<string, StoryElement>
-    ): StoryElement | null {
+    ): (StoryElement & { insertPosition?: number }) | null {
         // Validate required attributes
         const tagDef = XML_TAG_DEFINITIONS.find(def => def.elementType === type);
         if (tagDef === undefined) {
@@ -240,8 +240,8 @@ export class XMLStoryParser {
         type: StoryElementType,
         attributes: Record<string, string>,
         sourceText: string,
-        existingElements: Map<string, StoryElement>
-    ): StoryElement {
+        _existingElements: Map<string, StoryElement>
+    ): StoryElement & { insertPosition?: number } {
         const id = attributes['id'];
         const description = attributes['description'];
         
@@ -253,7 +253,7 @@ export class XMLStoryParser {
         }
 
         const now = new Date();
-        const element: StoryElement = {
+        const element: StoryElement & { insertPosition?: number } = {
             id: id,
             type,
             description: description,
@@ -267,31 +267,15 @@ export class XMLStoryParser {
             highlightUntilNext: true
         };
 
-        // Add position for outline elements
-        if (type === 'outline') {
-            if (attributes['position']) {
-                // Direct position specified
-                element.position = parseInt(attributes['position'], 10);
-            } else if (attributes['after']) {
-                // Position after another element
-                const afterElementId = attributes['after'];
-                const afterElement = existingElements.get(afterElementId);
-                if (afterElement && afterElement.position !== undefined) {
-                    element.position = afterElement.position + 1;
-                    console.log(`📍 Positioning element "${element.id}" after "${afterElementId}" at position ${element.position}`);
-                } else {
-                    console.warn(`⚠️ Could not find element "${afterElementId}" to position after, using default positioning`);
-                }
-            } else if (attributes['before']) {
-                // Position before another element
-                const beforeElementId = attributes['before'];
-                const beforeElement = existingElements.get(beforeElementId);
-                if (beforeElement && beforeElement.position !== undefined) {
-                    element.position = beforeElement.position;
-                    console.log(`📍 Positioning element "${element.id}" before "${beforeElementId}" at position ${element.position}`);
-                } else {
-                    console.warn(`⚠️ Could not find element "${beforeElementId}" to position before, using default positioning`);
-                }
+        // Parse position attribute if provided
+        const positionStr = attributes['position'];
+        if (positionStr) {
+            const position = parseInt(positionStr, 10);
+            if (!isNaN(position) && position > 0) {
+                element.insertPosition = position;
+                console.log(`🎯 Element ${id} will be inserted at position ${position}`);
+            } else {
+                console.warn(`⚠️ Invalid position attribute "${positionStr}" for element ${id}, ignoring`);
             }
         }
         
@@ -332,14 +316,7 @@ export class XMLStoryParser {
             hasChanges = true;
         }
         
-        // Check for position changes (outline elements only)
-        if (existingElement.type === 'outline' && attributes['position']) {
-            const newPosition = parseInt(attributes['position'], 10);
-            if (newPosition !== existingElement.position) {
-                updatedElement.position = newPosition;
-                hasChanges = true;
-            }
-        }
+        // Note: Position is now determined by order in the list
         
         if (hasChanges) {
             updatedElement.isUpdatedByAI = true;

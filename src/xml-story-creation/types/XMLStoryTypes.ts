@@ -19,9 +19,6 @@ export interface StoryElement {
     sourceText: string;              // Original XML tag that created this element
     lastModified: Date;              // When last modified (by AI or human)
     
-    // Positional information for outline elements
-    position?: number;               // Position index for outline elements (for ordering)
-    
     // Human editing tracking
     isHumanEdited: boolean;          // Track human modifications
     editHistory: EditRecord[];       // Track all changes
@@ -174,7 +171,7 @@ export const XML_TAG_DEFINITIONS: XMLTagDefinition[] = [
         tagName: 'outline',
         elementType: 'outline',
         requiredAttributes: ['id', 'description'],
-        optionalAttributes: ['position', 'before', 'after'],
+        optionalAttributes: ['before', 'after', 'position'],
         allowsContent: false,
         isSelfClosing: true
     },
@@ -182,7 +179,7 @@ export const XML_TAG_DEFINITIONS: XMLTagDefinition[] = [
         tagName: 'context',
         elementType: 'context',
         requiredAttributes: ['id', 'description'],
-        optionalAttributes: [],
+        optionalAttributes: ['position'],
         allowsContent: false,
         isSelfClosing: true
     }

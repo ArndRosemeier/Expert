@@ -10,11 +10,20 @@ import type { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { SettingsManager } from '../../SettingsManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
-import type { StoryElement, XMLStoryEvent } from '../../xml-story-creation';
+import type { StoryElement, StoryElementType, XMLStoryEvent } from '../../xml-story-creation';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
+import { ProjectManager } from '../../ProjectManager';
+import { 
+    getOrchestrator, 
+    getSettingsManager, 
+    getOpenRouterClient, 
+    getTemplateManager,
+    addProject,
+    setActiveProject
+} from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_CONVERSATION_STORAGE_KEY = 'xml-story-conversation-history';
@@ -39,6 +48,8 @@ export class XMLStoryModal extends BaseModal {
     private sendButton: HTMLButtonElement | null = null;
     private modelSelector: HTMLSelectElement | null = null;
     private messagesContainer: HTMLElement | null = null;
+    private titleInput: HTMLInputElement | null = null;
+    private templateSelector: HTMLSelectElement | null = null;
     
     // State
     private isGenerating = false;
@@ -142,6 +153,50 @@ export class XMLStoryModal extends BaseModal {
                     padding: 1rem;
                     border-bottom: 1px solid #e5e5e5;
                     background: white;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+                
+                .project-info-row {
+                    display: flex;
+                    gap: 1rem;
+                    align-items: end;
+                }
+                
+                .title-section {
+                    flex: 2;
+                }
+                
+                .template-section {
+                    flex: 1;
+                }
+                
+                .title-input {
+                    width: 100%;
+                    padding: 0.5rem;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                }
+                
+                .title-input:focus {
+                    outline: none;
+                    border-color: #007bff;
+                    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+                }
+                
+                .template-selector {
+                    width: 100%;
+                    padding: 0.5rem;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 0.9rem;
+                    background: white;
+                }
+                
+                .chat-header-info {
                     display: flex;
                     align-items: center;
                     gap: 1rem;
@@ -396,32 +451,143 @@ export class XMLStoryModal extends BaseModal {
                     overflow: hidden;
                 }
                 
-                .element-delete {
-                    position: absolute;
-                    top: 0.25rem;
-                    right: 0.25rem;
-                    width: 1.5rem;
-                    height: 1.5rem;
-                    border: none;
-                    background: rgba(220, 53, 69, 0.1);
-                    color: #dc3545;
-                    border-radius: 50%;
-                    cursor: pointer;
-                    font-size: 1rem;
-                    font-weight: bold;
+                
+
+                .element-content {
                     display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    align-items: stretch;
+                    position: relative;
+                    width: 100%;
+                }
+
+                .element-content > div:first-child {
+                    flex: 1;
+                    min-width: 0;
+                    margin-right: 4rem;
+                }
+
+                .element-actions {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1px;
+                    position: absolute;
+                    right: 2px;
+                    top: 2px;
+                    z-index: 10;
+                }
+
+                .element-actions .element-action-btn {
+                    width: 1.2rem !important;
+                    height: 1.2rem !important;
+                    border: none !important;
+                    border-radius: 3px !important;
+                    cursor: pointer;
+                    font-size: 0.8rem !important;
+                    font-weight: bold !important;
+                    font-family: system-ui, -apple-system, sans-serif !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
                     transition: all 0.2s ease;
-                    z-index: 2;
+                    opacity: 0.6;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                    line-height: 1 !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
                 }
-                
-                .element-delete:hover {
-                    background: #dc3545;
+
+                .story-element:hover .element-actions .element-action-btn {
+                    opacity: 0.8;
+                }
+
+                .element-actions .element-action-btn:hover {
+                    opacity: 1 !important;
+                    transform: scale(1.15) !important;
+                }
+
+                .element-actions .delete-btn {
+                    background: rgba(220, 53, 69, 0.9);
                     color: white;
-                    transform: scale(1.1);
+                    width: 1.2rem !important;
+                    height: 1.2rem !important;
+                    font-size: 0.8rem !important;
+                    font-weight: bold !important;
+                    border-radius: 3px !important;
+                    padding: 0 !important;
+                    border: none !important;
                 }
-                
+
+                .element-actions .delete-btn:hover {
+                    background: #dc3545 !important;
+                    transform: scale(1.15) !important;
+                }
+
+                .element-actions .move-up-btn {
+                    background: rgba(0, 123, 255, 0.9);
+                    color: white;
+                    width: 1.2rem !important;
+                    height: 1.2rem !important;
+                    font-size: 0.8rem !important;
+                    font-weight: bold !important;
+                    border-radius: 3px !important;
+                    padding: 0 !important;
+                    border: none !important;
+                }
+
+                .element-actions .move-up-btn:hover {
+                    background: #007bff !important;
+                    transform: scale(1.15) !important;
+                }
+
+                .element-actions .move-down-btn {
+                    background: rgba(0, 123, 255, 0.9);
+                    color: white;
+                    width: 1.2rem !important;
+                    height: 1.2rem !important;
+                    font-size: 0.8rem !important;
+                    font-weight: bold !important;
+                    border-radius: 3px !important;
+                    padding: 0 !important;
+                    border: none !important;
+                }
+
+                .element-actions .move-down-btn:hover {
+                    background: #007bff !important;
+                    transform: scale(1.15) !important;
+                }
+
+                .story-section-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    position: relative;
+                }
+
+                .add-element-btn {
+                    background: rgba(40, 167, 69, 0.9);
+                    color: white;
+                    width: 1.4rem !important;
+                    height: 1.4rem !important;
+                    font-size: 1rem !important;
+                    font-weight: bold !important;
+                    border-radius: 50% !important;
+                    padding: 0 !important;
+                    border: none !important;
+                    margin: 0 !important;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    opacity: 0.8;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                }
+
+                .add-element-btn:hover {
+                    background: #28a745 !important;
+                    opacity: 1 !important;
+                    transform: scale(1.15) !important;
+                }
+
                 .element-badge {
                     position: absolute;
                     top: 0.5rem;
@@ -513,6 +679,10 @@ export class XMLStoryModal extends BaseModal {
                         📤 Export Story
                     </button>
                     
+                    <button id="create-project-btn" class="sidebar-button primary">
+                        🚀 Create Project
+                    </button>
+                    
                     <div style="border-top: 1px solid #444; margin: 0.5rem 0; padding-top: 1rem;">
                         <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">
                             XML Tags Available
@@ -539,9 +709,29 @@ export class XMLStoryModal extends BaseModal {
                 <!-- Chat Area -->
                 <div class="xml-story-chat">
                     <div class="chat-header">
-                        <h4 style="margin: 0; color: #333;">Story Chat</h4>
-                        <div style="font-size: 0.9rem; color: #666;">
-                            AI will create story elements as you chat
+                        <div class="project-info-row">
+                            <div class="title-section">
+                                <label style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem; color: #666; font-weight: 500;">Project Title:</label>
+                                <input 
+                                    id="xml-story-title" 
+                                    type="text" 
+                                    value="New Project" 
+                                    class="title-input"
+                                    placeholder="Enter project title..."
+                                />
+                            </div>
+                            <div class="template-section">
+                                <label style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem; color: #666; font-weight: 500;">Template:</label>
+                                <select id="xml-story-template-selector" class="template-selector">
+                                    <option value="">Loading templates...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="chat-header-info">
+                            <h4 style="margin: 0; color: #333;">Story Development Chat</h4>
+                            <div style="font-size: 0.9rem; color: #666;">
+                                AI will create story elements as you chat
+                            </div>
                         </div>
                     </div>
                     
@@ -596,6 +786,8 @@ export class XMLStoryModal extends BaseModal {
         this.sendButton = container.querySelector('#xml-story-send-btn');
         this.modelSelector = container.querySelector('#xml-story-model-selector');
         this.messagesContainer = container.querySelector('#xml-story-messages');
+        this.titleInput = container.querySelector('#xml-story-title');
+        this.templateSelector = container.querySelector('#xml-story-template-selector');
 
         // Set up event listeners
         this.setupEventListeners(container);
@@ -628,6 +820,15 @@ export class XMLStoryModal extends BaseModal {
         exportBtn?.addEventListener('click', () => {
             this.exportStory();
         });
+
+        // Create project button
+        const createProjectBtn = container.querySelector('#create-project-btn');
+        createProjectBtn?.addEventListener('click', () => {
+            void this.createProject();
+        });
+
+        // Template selector initialization and persistence
+        void this.loadTemplates();
 
         // Model selector with persistence
         void this.loadSavedModelSelection();
@@ -785,21 +986,40 @@ export class XMLStoryModal extends BaseModal {
         const shouldRestoreFocus = this.messageInput && document.activeElement === this.messageInput;
         const cursorPosition = shouldRestoreFocus ? this.messageInput?.selectionStart : null;
 
-        // Get all elements and separate by type
+        // Get all elements and separate by type (no sorting - use natural list order)
         const allElements = this.storySystem.service.getElementsForContext();
-        const outlineElements = allElements
-            .filter((el: StoryElement) => el.type === 'outline')
-            .sort((a: StoryElement, b: StoryElement) => (a.position || 0) - (b.position || 0));
-        const contextElements = allElements
-            .filter((el: StoryElement) => el.type === 'context')
-            .sort((a: StoryElement, b: StoryElement) => a.timestamp.getTime() - b.timestamp.getTime());
+        const outlineElements = allElements.filter((el: StoryElement) => el.type === 'outline');
+        const contextElements = allElements.filter((el: StoryElement) => el.type === 'context');
         
+        // Always show headers with + buttons, even if empty
         if (outlineElements.length === 0 && contextElements.length === 0) {
             this.whiteboardContainer.innerHTML = `
-                <div style="text-align: center; color: #999; padding: 2rem; font-style: italic;">
-                    Story elements will appear here as you chat with the AI
+                <div class="story-section">
+                    <div class="story-section-header">
+                        <span>Outline</span>
+                        <button class="add-element-btn" data-add-type="outline" title="Add Outline Item">+</button>
+                    </div>
+                    <div class="story-elements">
+                        <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
+                            No outline items yet. Click + to add one or chat with AI.
+                        </div>
+                    </div>
+                </div>
+                <div class="story-section">
+                    <div class="story-section-header">
+                        <span>Context</span>
+                        <button class="add-element-btn" data-add-type="context" title="Add Context Item">+</button>
+                    </div>
+                    <div class="story-elements">
+                        <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
+                            No context items yet. Click + to add one or chat with AI.
+                        </div>
+                    </div>
                 </div>
             `;
+            
+            // Add event listeners for the + buttons
+            this.addPlusButtonListeners();
             return;
         }
 
@@ -809,46 +1029,67 @@ export class XMLStoryModal extends BaseModal {
 
         let html = '';
 
-        // Outline section
-        if (outlineElements.length > 0) {
-            html += `
-                <div class="story-section">
-                    <div class="story-section-header">Outline</div>
-                    <div class="story-elements">
-            `;
+        // Outline section (always show header)
+        html += `
+            <div class="story-section">
+                <div class="story-section-header">
+                    <span>Outline</span>
+                    <button class="add-element-btn" data-add-type="outline" title="Add Outline Item">+</button>
+                </div>
+                <div class="story-elements">
+        `;
 
+        if (outlineElements.length > 0) {
             for (const element of outlineElements) {
                 html += this.renderElementEditor(element);
             }
-
+        } else {
             html += `
-                    </div>
+                <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
+                    No outline items yet. Click + to add one or chat with AI.
                 </div>
             `;
         }
 
-        // Context section  
-        if (contextElements.length > 0) {
-            html += `
-                <div class="story-section">
-                    <div class="story-section-header">Context</div>
-                    <div class="story-elements">
-            `;
+        html += `
+                </div>
+            </div>
+        `;
 
+        // Context section (always show header)
+        html += `
+            <div class="story-section">
+                <div class="story-section-header">
+                    <span>Context</span>
+                    <button class="add-element-btn" data-add-type="context" title="Add Context Item">+</button>
+                </div>
+                <div class="story-elements">
+        `;
+
+        if (contextElements.length > 0) {
             for (const element of contextElements) {
                 html += this.renderElementEditor(element);
             }
-
+        } else {
             html += `
-                    </div>
+                <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
+                    No context items yet. Click + to add one or chat with AI.
                 </div>
             `;
         }
+
+        html += `
+                </div>
+            </div>
+        `;
 
         this.whiteboardContainer.innerHTML = html;
 
         // Initialize UniversalTextEditor instances
         this.initializeElementEditors();
+        
+        // Add event listeners for + buttons
+        this.addPlusButtonListeners();
 
         // Always restore focus to message input after whiteboard update
         setTimeout(() => {
@@ -876,7 +1117,14 @@ export class XMLStoryModal extends BaseModal {
 
         return `
             <div class="${elementClasses}" data-element-id="${element.id}">
-                <div id="editor-${element.id}"></div>
+                <div class="element-content">
+                    <div id="editor-${element.id}"></div>
+                    <div class="element-actions">
+                        <button class="element-action-btn delete-btn" data-action="delete" data-element-id="${element.id}" title="Delete">×</button>
+                        <button class="element-action-btn move-up-btn" data-action="move-up" data-element-id="${element.id}" title="Move Up">↑</button>
+                        <button class="element-action-btn move-down-btn" data-action="move-down" data-element-id="${element.id}" title="Move Down">↓</button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -918,6 +1166,22 @@ export class XMLStoryModal extends BaseModal {
             });
 
             this.elementEditors.set(elementId, editor);
+
+            // Add event listeners for action buttons
+            const actionButtons = container.querySelectorAll('.element-action-btn');
+            actionButtons.forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const action = button.getAttribute('data-action');
+                    const targetElementId = button.getAttribute('data-element-id');
+                    
+                    if (!action || !targetElementId) return;
+                    
+                    this.handleElementAction(action, targetElementId);
+                });
+            });
         });
     }
 
@@ -940,6 +1204,88 @@ export class XMLStoryModal extends BaseModal {
         } finally {
             this.isEditing = false;
         }
+    }
+
+    private async handleElementAction(action: string, elementId: string): Promise<void> {
+        try {
+            switch (action) {
+                case 'delete':
+                    await this.deleteElement(elementId);
+                    break;
+                case 'move-up':
+                    await this.moveElementUp(elementId);
+                    break;
+                case 'move-down':
+                    await this.moveElementDown(elementId);
+                    break;
+                default:
+                    console.warn('Unknown element action:', action);
+            }
+        } catch (error) {
+            console.error(`Error handling element action ${action}:`, error);
+        }
+    }
+
+    private async deleteElement(elementId: string): Promise<void> {
+        if (!confirm('Are you sure you want to delete this element?')) {
+            return;
+        }
+
+        try {
+            await this.storySystem.service.deleteElement(elementId);
+            this.updateWhiteboard();
+            await this.saveWhiteboard();
+        } catch (error) {
+            console.error('Error deleting element:', error);
+        }
+    }
+
+    private async moveElementUp(elementId: string): Promise<void> {
+        const element = this.storySystem.service.getElement(elementId);
+        if (!element) return;
+
+        // Get the element IDs array for this type
+        const elementsByType = this.storySystem.service.getWhiteboardState().elementsByType;
+        const elementIds = elementsByType.get(element.type);
+        if (!elementIds) return;
+
+        const currentIndex = elementIds.indexOf(elementId);
+        if (currentIndex <= 0) {
+            return; // Already at top or not found
+        }
+
+        // Swap with previous element in the array
+        [elementIds[currentIndex - 1]!, elementIds[currentIndex]!] = [elementIds[currentIndex]!, elementIds[currentIndex - 1]!];
+
+        // Update the service
+        elementsByType.set(element.type, elementIds);
+
+        this.updateWhiteboard();
+        await this.saveWhiteboard();
+    }
+
+    private async moveElementDown(elementId: string): Promise<void> {
+        const element = this.storySystem.service.getElement(elementId);
+        if (!element) return;
+
+        // Get the element IDs array for this type
+        const elementsByType = this.storySystem.service.getWhiteboardState().elementsByType;
+        const elementIds = elementsByType.get(element.type);
+        if (!elementIds) return;
+
+        const currentIndex = elementIds.indexOf(elementId);
+        if (currentIndex >= elementIds.length - 1 || currentIndex === -1) {
+            return; // Already at bottom or not found
+        }
+
+        // Swap with next element in the array
+        [elementIds[currentIndex]!, elementIds[currentIndex + 1]!] = [elementIds[currentIndex + 1]!, elementIds[currentIndex]!];
+
+        // Update the service
+        elementsByType.set(element.type, elementIds);
+
+        this.updateWhiteboard();
+        await this.saveWhiteboard();
     }
 
 
@@ -1003,9 +1349,14 @@ export class XMLStoryModal extends BaseModal {
             case 'element_created':
             case 'element_updated':
             case 'element_deleted':
-            case 'human_edit':
+                // These events require DOM rebuild (structural changes)
                 this.updateWhiteboard();
                 // Save whiteboard state after changes
+                void this.saveWhiteboard();
+                break;
+            case 'human_edit':
+                // Human edits only change content, not structure - no need to rebuild DOM
+                // Just save the state without destroying/recreating editors
                 void this.saveWhiteboard();
                 break;
             case 'highlight_cleared':
@@ -1057,7 +1408,190 @@ export class XMLStoryModal extends BaseModal {
         URL.revokeObjectURL(url);
     }
 
+    /**
+     * Load available templates into the template selector
+     */
+    private async loadTemplates(): Promise<void> {
+        try {
+            const templateManager = getTemplateManager();
+            if (!templateManager) {
+                console.warn('TemplateManager not available for template loading');
+                return;
+            }
 
+            if (!this.templateSelector) return;
+
+            const templateNames = templateManager.getTemplateNames();
+            this.templateSelector.innerHTML = '';
+
+            if (templateNames.length === 0) {
+                this.templateSelector.innerHTML = '<option value="">No templates available</option>';
+                return;
+            }
+
+            // Add default option
+            this.templateSelector.innerHTML = '<option value="">Select a template...</option>';
+
+            // Add template options
+            for (const templateName of templateNames.sort()) {
+                const option = document.createElement('option');
+                option.value = templateName;
+                option.textContent = templateName;
+                this.templateSelector.appendChild(option);
+            }
+
+            // Select a good default (prioritize "Short Story")
+            const defaultTemplate = templateNames.find((name: string) => 
+                name.toLowerCase().includes('short story')
+            ) || templateNames.find((name: string) => 
+                name.toLowerCase().includes('story')
+            ) || templateNames.find((name: string) => 
+                name.toLowerCase().includes('novel') || 
+                name.toLowerCase().includes('book')
+            ) || templateNames[0];
+            
+            if (defaultTemplate) {
+                this.templateSelector.value = defaultTemplate;
+            }
+
+        } catch (error) {
+            console.error('Error loading templates:', error);
+        }
+    }
+
+    /**
+     * Create a project from the current story elements
+     */
+    private async createProject(): Promise<void> {
+        try {
+            if (!this.titleInput || !this.templateSelector) {
+                alert('Could not find title or template selector');
+                return;
+            }
+
+            const title = this.titleInput.value.trim() || 'New Project';
+            const templateName = this.templateSelector.value;
+
+            if (!templateName) {
+                alert('Please select a template for the project');
+                return;
+            }
+
+            // Get template
+            const templateManager = getTemplateManager();
+            if (!templateManager) {
+                alert('Template manager not available');
+                return;
+            }
+
+            const template = templateManager.getTemplate(templateName);
+            if (!template) {
+                alert(`Template "${templateName}" not found`);
+                return;
+            }
+
+            // Get story elements
+            const storyElements = this.storySystem.service.getElementsForContext();
+            
+            // Aggregate outline items (in order)
+            const outlineElements = storyElements.filter(el => el.type === 'outline');
+            const outlineContent = outlineElements
+                .map(el => el.description)
+                .join('\n\n'); // Separate by paragraphs
+
+            // Aggregate context items (ensure single paragraphs)
+            const contextElements = storyElements.filter(el => el.type === 'context');
+            const contextContent = contextElements
+                .map(el => {
+                    // Ensure each context item is a single paragraph by joining with spaces
+                    const description = el.description.replace(/\n+/g, ' ').trim();
+                    return description;
+                })
+                .join('\n\n'); // Separate context items by paragraphs
+
+            if (!outlineContent && !contextContent) {
+                alert('No story elements found. Please create some story elements first by chatting with the AI.');
+                return;
+            }
+
+            // Create the project using the existing system
+            const orchestrator = getOrchestrator();
+            const settingsManager = getSettingsManager();
+            const client = getOpenRouterClient();
+
+            if (!orchestrator || !settingsManager || !client) {
+                alert('Core services not initialized. Cannot create project.');
+                return;
+            }
+            
+            const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
+            
+            // Set the project language to match current language setting
+            try {
+                const currentLanguage = settingsManager.getLanguage();
+                project.setLanguage(currentLanguage);
+                console.log(`🌐 New project language set to: ${currentLanguage}`);
+            } catch (error) {
+                console.warn('Could not set project language:', error);
+            }
+            
+            // Apply content and context to root node
+            const rootNode = project.rootNode;
+            
+            if (outlineContent) {
+                rootNode.setContent(outlineContent, 'master');
+                console.log('✅ Applied outline content to root node, length:', outlineContent.length);
+            }
+            
+            if (contextContent) {
+                rootNode.setContext(contextContent, 'master');
+                console.log('✅ Applied context to root node, length:', contextContent.length);
+            }
+            
+            addProject(project);
+            
+            // Set the new project as active and select its root node
+            setActiveProject(project.rootNode.id);
+            
+            await project.saveToStorage();
+
+            // Success feedback
+            alert(`Project "${title}" created successfully!`);
+
+            // Optionally close the modal
+            this.close();
+
+        } catch (error) {
+            console.error('Error creating project:', error);
+            alert('Failed to create project. Please try again.');
+        }
+    }
+
+    private addPlusButtonListeners(): void {
+        if (!this.whiteboardContainer) return;
+
+        const addButtons = this.whiteboardContainer.querySelectorAll('.add-element-btn');
+        addButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const addType = button.getAttribute('data-add-type') as StoryElementType;
+                if (addType) {
+                    this.addNewEmptyElement(addType);
+                }
+            });
+        });
+    }
+
+    private async addNewEmptyElement(type: StoryElementType): Promise<void> {
+        try {
+            await this.storySystem.service.addNewEmptyElement(type);
+            this.updateWhiteboard();
+        } catch (error) {
+            console.error(`Failed to add new ${type} element:`, error);
+        }
+    }
 
     /**
      * Load saved model selection from StorageService

@@ -165,7 +165,6 @@ export function createExampleStoryElements(): import('./types/XMLStoryTypes').St
             timestamp: now,
             sourceText: XML_TAG_EXAMPLES.outline,
             lastModified: now,
-            position: 1,
             isHumanEdited: false,
             editHistory: [],
             isNewFromAI: true,

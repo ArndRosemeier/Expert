@@ -835,6 +835,8 @@ export class OpenRouterClient {
       const modelConfig = await this.getModelConfigForPurpose(purpose);
       const { model, webSearchEnabled, hasNativeWebSearch, provider } = modelConfig;
       
+
+      
       // Calculate prompt length and log request start
       const promptForLogging = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const promptLength = promptForLogging.length;

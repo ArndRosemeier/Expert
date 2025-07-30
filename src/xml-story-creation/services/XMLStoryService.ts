@@ -236,6 +236,36 @@ export class XMLStoryService {
     }
     
     /**
+     * Add a new empty element that can be edited manually
+     */
+    public async addNewEmptyElement(type: StoryElementType): Promise<void> {
+        // Generate a unique ID for the new element
+        const id = this.idGenerator.generateId(type);
+        
+        // Create the new empty element
+        const newElement: StoryElement = {
+            id,
+            type,
+            description: '', // Empty description for manual editing
+            timestamp: new Date(),
+            sourceText: `<${type} id="${id}" description="" />`, // Generate synthetic source
+            lastModified: new Date(),
+            isHumanEdited: false,
+            editHistory: [{
+                timestamp: new Date(),
+                type: 'creation',
+                changes: {}
+            }],
+            isNewFromAI: false,
+            isUpdatedByAI: false,
+            highlightUntilNext: false
+        };
+        
+        // Add the element via the existing method (will trigger events)
+        await this.addOrUpdateElement(newElement, 'human');
+    }
+    
+    /**
      * Get current whiteboard state
      */
     public getWhiteboardState(): WhiteboardState {
@@ -246,12 +276,20 @@ export class XMLStoryService {
      * Get elements for context refresh
      */
     public getElementsForContext(): StoryElement[] {
-        const elements = Array.from(this.state.elements.values());
+        const elements: StoryElement[] = [];
         
-        // Sort by timestamp (most recent first) and limit if needed
-        return elements
-            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-            .slice(0, this.config.maxContextElements);
+        // Get elements in their natural list order (as stored in elementsByType arrays)
+        for (const [_type, elementIds] of this.state.elementsByType) {
+            for (const elementId of elementIds) {
+                const element = this.state.elements.get(elementId);
+                if (element) {
+                    elements.push(element);
+                }
+            }
+        }
+        
+        // Limit if needed but preserve order
+        return elements.slice(0, this.config.maxContextElements);
     }
     
     /**
@@ -389,7 +427,7 @@ export class XMLStoryService {
     /**
      * Add or update an element in the state
      */
-    private async addOrUpdateElement(element: StoryElement, source: 'ai' | 'human'): Promise<void> {
+    private async addOrUpdateElement(element: StoryElement & { insertPosition?: number }, source: 'ai' | 'human'): Promise<void> {
         const existingElement = this.state.elements.get(element.id);
         
         if (existingElement) {
@@ -411,12 +449,24 @@ export class XMLStoryService {
             // Add new element
             this.state.elements.set(element.id, element);
             
-            // Add to type mapping
+            // Add to type mapping with position handling
             const typeList = this.state.elementsByType.get(element.type);
         if (!typeList) {
             throw new Error(`Invalid element type: ${element.type}`);
         }
-            typeList.push(element.id);
+            
+            // Handle position-based insertion
+            if (element.insertPosition !== undefined) {
+                const position = element.insertPosition;
+                // Convert 1-indexed position to 0-indexed array index
+                const insertIndex = Math.max(0, Math.min(position - 1, typeList.length));
+                typeList.splice(insertIndex, 0, element.id);
+                console.log(`📍 Inserted element ${element.id} at position ${position} (index ${insertIndex}) in ${element.type} list`);
+            } else {
+                // Default behavior: add to end
+                typeList.push(element.id);
+                console.log(`📍 Added element ${element.id} to end of ${element.type} list`);
+            }
             this.state.elementsByType.set(element.type, typeList);
             
             this.emitEvent({
