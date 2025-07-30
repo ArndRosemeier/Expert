@@ -50,7 +50,7 @@ export class XMLStoryParser {
         result.systemCommands = this.extractSystemCommands(aiResponse);
         
         // Extract story elements
-        const { elements, errors, cleanedText } = this.extractStoryElements(aiResponse);
+        const { elements, errors, cleanedText } = this.extractStoryElements(aiResponse, existingElements || new Map());
         result.extractedElements = elements;
         result.errors = errors;
         result.cleanedText = cleanedText;
@@ -94,7 +94,7 @@ export class XMLStoryParser {
     /**
      * Extract story elements from XML tags using browser's native DOMParser
      */
-    private extractStoryElements(text: string): {
+    private extractStoryElements(text: string, existingElements: Map<string, StoryElement>): {
         elements: StoryElement[],
         errors: ParseError[],
         cleanedText: string
@@ -156,7 +156,8 @@ export class XMLStoryParser {
                 const element = this.createElementFromAttributes(
                     tagDef.elementType,
                     attributes,
-                    fullMatch
+                    fullMatch,
+                    existingElements
                 );
 
                 if (element) {
@@ -198,7 +199,8 @@ export class XMLStoryParser {
     private createElementFromAttributes(
         type: StoryElementType,
         attributes: Record<string, string>,
-        sourceText: string
+        sourceText: string,
+        existingElements: Map<string, StoryElement>
     ): StoryElement | null {
         // Validate required attributes
         const tagDef = XML_TAG_DEFINITIONS.find(def => def.elementType === type);
@@ -214,14 +216,14 @@ export class XMLStoryParser {
         
         // Check if this is an update to existing element
         const id = attributes['id'];
-        const existingElement = id ? this.findExistingElementById(id) : null;
+        const existingElement = id ? existingElements.get(id) : null;
         
         if (existingElement) {
             // Update existing element
             return this.updateExistingElement(existingElement, attributes, sourceText);
         } else {
             // Create new element
-            return this.createNewElement(type, attributes, sourceText);
+            return this.createNewElement(type, attributes, sourceText, existingElements);
         }
     }
     
@@ -237,7 +239,8 @@ export class XMLStoryParser {
     private createNewElement(
         type: StoryElementType,
         attributes: Record<string, string>,
-        sourceText: string
+        sourceText: string,
+        existingElements: Map<string, StoryElement>
     ): StoryElement {
         const id = attributes['id'];
         const description = attributes['description'];
@@ -265,8 +268,31 @@ export class XMLStoryParser {
         };
 
         // Add position for outline elements
-        if (type === 'outline' && attributes['position']) {
-            element.position = parseInt(attributes['position'], 10);
+        if (type === 'outline') {
+            if (attributes['position']) {
+                // Direct position specified
+                element.position = parseInt(attributes['position'], 10);
+            } else if (attributes['after']) {
+                // Position after another element
+                const afterElementId = attributes['after'];
+                const afterElement = existingElements.get(afterElementId);
+                if (afterElement && afterElement.position !== undefined) {
+                    element.position = afterElement.position + 1;
+                    console.log(`📍 Positioning element "${element.id}" after "${afterElementId}" at position ${element.position}`);
+                } else {
+                    console.warn(`⚠️ Could not find element "${afterElementId}" to position after, using default positioning`);
+                }
+            } else if (attributes['before']) {
+                // Position before another element
+                const beforeElementId = attributes['before'];
+                const beforeElement = existingElements.get(beforeElementId);
+                if (beforeElement && beforeElement.position !== undefined) {
+                    element.position = beforeElement.position;
+                    console.log(`📍 Positioning element "${element.id}" before "${beforeElementId}" at position ${element.position}`);
+                } else {
+                    console.warn(`⚠️ Could not find element "${beforeElementId}" to position before, using default positioning`);
+                }
+            }
         }
         
         // Add creation record to edit history
@@ -328,12 +354,7 @@ export class XMLStoryParser {
         return updatedElement;
     }
     
-    /**
-     * Find existing element by ID
-     */
-    private findExistingElementById(id: string): StoryElement | null {
-        return this.existingElements.get(id) || null;
-    }
+
     
     /**
      * Clear previous AI highlights
