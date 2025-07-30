@@ -810,6 +810,9 @@ export class UniversalTextEditor {
             .map(region => fullText.substring(region.start, region.end))
             .join('\n\n'); // Join multiple regions with double newlines
 
+        // Track whether transformation completed successfully
+        let transformationCompleted = false;
+
         // Open transform modal with highlighted text and full context
         const modal = new TextTransformModal({
             id: 'universal-text-editor-transform',
@@ -821,6 +824,7 @@ export class UniversalTextEditor {
                     this.showSpinnerOverlay(regions);
                     
                     const transformedText = await this.performAITransformation(request);
+                    transformationCompleted = true; // Mark as completed before handling result
                     this.handleTransformResult(transformedText, regions, highlightIds, fullText);
                 } catch (error) {
                     // Hide spinner on error
@@ -831,9 +835,11 @@ export class UniversalTextEditor {
             }
         }, {
             onClose: () => {
-                // Remove highlights if modal is closed without transformation
+                // Only remove highlights if transformation did NOT complete successfully
                 this.hideSpinnerOverlay();
-                this.removeHighlightsIfNotTransformed(highlightIds);
+                if (!transformationCompleted) {
+                    this.removeHighlightsIfNotTransformed(highlightIds);
+                }
             }
         });
         
