@@ -1016,7 +1016,7 @@ export class UniversalTextEditor {
             custom: {
                 transform_count: '1', // Always generate exactly 1 transformation
                 user_instruction: request.transformInstruction,
-                context: request.context && request.context.trim() ? 
+                transform_context: request.context && request.context.trim() ? 
                     `The text to change appears in a broader context, here it is: ${request.context.trim()}` : 
                     ''
             }

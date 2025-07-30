@@ -2418,7 +2418,7 @@ export class IdeaBoard {
             (type === 'transformations' && customCount) ? customCount.toString() : 
             (isConnectedMode ? count.toString() : 'some'),
           ...(type === 'transformations' && { user_instruction: userInstruction }),
-          ...(type === 'transformations' && { context: '' }) // Empty context for idea board transformations
+          ...(type === 'transformations' && { transform_context: '' }) // Empty context for idea board transformations
         }
       };
       

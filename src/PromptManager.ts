@@ -239,7 +239,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             {{content}}
             ---
 
-            {{context}}
+            {{transform_context}}
 
             CRITICAL FORMAT REQUIREMENTS:
             1. Create exactly {{transform_count}} transformations
@@ -264,8 +264,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             Generate exactly {{transform_count}} transformations following this format precisely.
             Apply the user's instruction creatively but faithfully to produce high-quality results.
         `.trim(),
-        placeholders: ['content', 'language', 'transform_count', 'user_instruction', 'context'],
-        description: "The system prompt for transforming content based on user instructions in multiple different ways with precise formatting markers for reliable parsing. Includes optional context placeholder for broader document context."
+        placeholders: ['content', 'language', 'transform_count', 'user_instruction', 'transform_context'],
+        description: "The system prompt for transforming content based on user instructions in multiple different ways with precise formatting markers for reliable parsing. Includes optional transform_context placeholder for broader document context."
     },
 
     idea_generation_system: {
