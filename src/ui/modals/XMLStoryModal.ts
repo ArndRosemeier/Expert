@@ -205,6 +205,8 @@ export class XMLStoryModal extends BaseModal {
                 .story-element .universal-text-editor-wrapper {
                     border: none !important;
                     margin: 0 !important;
+                    min-height: auto !important;
+                    height: auto !important;
                 }
                 
                 .story-element .universal-text-editor-wrapper textarea,
@@ -215,6 +217,12 @@ export class XMLStoryModal extends BaseModal {
                     font-size: 13px !important;
                     line-height: 1.4 !important;
                     resize: vertical !important;
+                    min-height: auto !important;
+                    height: auto !important;
+                    max-height: none !important;
+                    flex-shrink: 0 !important;
+                    overflow: visible !important;
+                    display: block !important;
                 }
                 
                 .story-element.highlight-new {
@@ -895,7 +903,9 @@ export class XMLStoryModal extends BaseModal {
                 editorContainer,
                 {
                     placeholder: element.type === 'outline' ? 'Outline part...' : 'Context item...',
-                    mode: 'enhanced'
+                    mode: 'enhanced',
+                    rows: 1,
+                    autoResize: false
                 }
             );
 
