@@ -212,7 +212,6 @@ export class XMLStoryModal extends BaseModal {
                     border: none !important;
                     border-radius: 0 !important;
                     padding: 8px 12px !important;
-                    min-height: 60px !important;
                     font-size: 13px !important;
                     line-height: 1.4 !important;
                     resize: vertical !important;
