@@ -599,7 +599,7 @@ export class UniversalTextEditor {
             const modalOverlay = this.container.closest('.modal-overlay') as HTMLElement;
             console.log('📦 Found modal overlay:', !!modalOverlay);
             if (modalOverlay) {
-                // Position relative to modal overlay
+                // Position relative to modal overlay (same z-index logic as selection overlay buttons)
                 const modalRect = modalOverlay.getBoundingClientRect();
                 this.spinnerOverlay.style.cssText = `
                     position: absolute;
@@ -616,17 +616,17 @@ export class UniversalTextEditor {
                     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                     backdrop-filter: blur(4px);
                     pointer-events: auto;
-                    z-index: 2;
+                    z-index: 1;
                 `;
                 modalOverlay.appendChild(this.spinnerOverlay);
                 console.log('✅ Spinner added to modal overlay');
             } else {
-                // Fallback to fixed positioning
+                // Fallback to fixed positioning (same z-index as selection overlay buttons)
                 this.spinnerOverlay.style.cssText = `
                     position: fixed;
                     left: ${rect.left - 50}px;
                     top: ${rect.top}px;
-                    z-index: 15002;
+                    z-index: 15001;
                     display: flex;
                     align-items: center;
                     justify-content: center;
