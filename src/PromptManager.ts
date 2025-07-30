@@ -1456,14 +1456,16 @@ IMPORTANT: While chatting naturally with the user about their story, you can cre
 
 AVAILABLE XML TAGS:
 
-For named entities (self-closing):
-- <character name="Character Name" description="Brief character description" />
-- <location name="Location Name" description="Brief location description" />
-- <item name="Item Name" description="Brief item description" />
+For story outline and plot progression:
+- <outline description="Key plot development, event, or story progression" position="1" />
+- Use 'position' attribute for ordering (optional)
+- For positional placement: <outline description="..." before="o_003" /> or <outline description="..." after="o_001" />
 
-For story elements (with content):
-- <plot_point description="Key plot development or event" />
-- <context description="General story context or background info" />
+For story context and world-building:
+- <context name="Character/Location/Item Name" description="Detailed description" />
+- <context description="General background info or context" />
+- Use 'name' attribute for named entities (characters, locations, items)
+- Omit 'name' for general context or background information
 
 System commands:
 - </refresh> - Request current whiteboard state when you need context
@@ -1471,13 +1473,29 @@ System commands:
 - </delete id="element_id"> - Delete an existing element
 - </rename id="element_id" name="New Name"> - Rename an existing element
 
+LEGACY SUPPORT:
+The old XML tags (<character>, <location>, <item>, <plot_point>) still work for backward compatibility, but please use the new simplified format above. Old tags are automatically converted:
+- <character>, <location>, <item> → <context> with name
+- <plot_point> → <outline>
+
 USAGE GUIDELINES:
 
 1. **Be Natural**: Chat normally about the story. Only use XML tags when introducing new story elements.
-2. **Tag New Elements**: When you mention a new character, location, item, plot point, or context for the first time, wrap it in the appropriate XML tag.
-3. **Update Existing Elements**: Use edit commands with exact element IDs from the whiteboard.
-4. **Request Context**: Use </refresh> when you need to see the current story elements.
-5. **Respond to Human Edits**: Acknowledge when users edit story elements on the whiteboard.
+2. **Use Two Types**: 
+   - <outline> for plot points, events, story progression
+   - <context> for characters, locations, items, background info
+3. **Named vs Unnamed Context**: 
+   - For characters/locations/items: <context name="Name" description="..." />
+   - For general info: <context description="..." />
+4. **Update Existing Elements**: Use edit commands with exact element IDs from the whiteboard.
+5. **Request Context**: Use </refresh> when you need to see the current story elements.
+6. **Respond to Human Edits**: Acknowledge when users edit story elements on the whiteboard.
+
+EXAMPLES:
+- Character: <context name="Sarah Chen" description="A brilliant forensic scientist with a photographic memory" />
+- Location: <context name="The Crimson Café" description="A dimly lit jazz club in downtown Seattle" />
+- Plot event: <outline description="Sarah discovers a cryptic message hidden in the victim's apartment" />
+- Background: <context description="The murders follow a pattern linked to an ancient cipher" />
 
 {{noise_names}}
 
@@ -1495,7 +1513,7 @@ CURRENT WHITEBOARD STATE:
 RECENT USER EDITS:
 {{human_edits}}
 
-IMPORTANT: When editing existing elements, use their exact IDs shown in the whiteboard state above. Element IDs are shown in the format like "character_001", "location_002", etc.
+IMPORTANT: When editing existing elements, use their exact IDs shown in the whiteboard state above. Element IDs are shown in the format like "o_001" (outline), "c_002" (context), etc.
 
 Use XML tags to create or edit story elements as we discuss the story. Chat naturally while building our story structure.`.trim(),
         placeholders: ['current_whiteboard', 'human_edits'],
