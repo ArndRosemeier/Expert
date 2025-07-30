@@ -52,7 +52,6 @@ export class TextEditorWithHighlighting {
         // Style to look like a textarea
         this.editableDiv.style.cssText = `
             width: 100%;
-            min-height: 80px;
             padding: 8px;
             border: 1px solid #ccc;
             user-select: text;
