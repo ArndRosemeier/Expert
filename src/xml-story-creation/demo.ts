@@ -63,11 +63,12 @@ export async function runXMLStoryDemo(): Promise<void> {
     
     const elements = Array.from(state.elements.values()) as StoryElement[];
     if (elements.length > 0) {
-        const characterElement = elements.find((e: StoryElement) => e.type === 'character');
-        if (characterElement) {
-            console.log('✏️ Making human edit to character...');
+        // Look for a context element with a name (likely a character)
+        const contextElement = elements.find((e: StoryElement) => e.type === 'context' && e.name);
+        if (contextElement) {
+            console.log('✏️ Making human edit to context element:', contextElement.name);
             await storySystem.handleHumanEdit(
-                characterElement.id, 
+                contextElement.id, 
                 'description', 
                 'A skilled but anxious cartographer with trust issues, seeking her missing brother'
             );
