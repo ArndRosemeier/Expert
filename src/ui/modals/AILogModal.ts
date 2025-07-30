@@ -278,7 +278,7 @@ export class AILogModal extends BaseModal {
                                     color: #374151;
                                     transition: background-color 0.2s;
                                 " onmouseover="this.style.backgroundColor='#f3f4f6'; this.style.borderRadius='4px'" onmouseout="this.style.backgroundColor='transparent'">
-                                    ${this.escapeHtml(this.truncateText(log.prompt, 200))}
+                                    ${this.formatXMLContent(this.truncateText(log.prompt, 200))}
                                 </div>
                             </td>
                             <td style="padding: 0.75rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; max-width: 300px; word-wrap: break-word; position: relative;">
@@ -294,7 +294,7 @@ export class AILogModal extends BaseModal {
                                     font-style: ${log.response.startsWith('ERROR:') ? 'italic' : 'normal'};
                                     transition: background-color 0.2s;
                                 " onmouseover="this.style.backgroundColor='#f3f4f6'; this.style.borderRadius='4px'" onmouseout="this.style.backgroundColor='transparent'">
-                                    ${this.escapeHtml(this.truncateText(log.response, 200))}
+                                    ${this.formatXMLContent(this.truncateText(log.response, 200))}
                                 </div>
                             </td>
                         </tr>
@@ -326,12 +326,12 @@ export class AILogModal extends BaseModal {
             });
 
             // Double click for overlay
-            element.addEventListener('dblclick', function(this: HTMLElement, e: Event) {
+            element.addEventListener('dblclick', (e: Event) => {
                 e.stopPropagation();
                 e.preventDefault();
-                const fullContent = this.getAttribute('data-full-content') || '';
-                const contentType = this.getAttribute('data-type') || 'content';
-                showLogOverlay(fullContent, contentType);
+                const fullContent = (e.currentTarget as HTMLElement).getAttribute('data-full-content') || '';
+                const contentType = (e.currentTarget as HTMLElement).getAttribute('data-type') || 'content';
+                this.showFormattedLogOverlay(fullContent, contentType);
             });
         });
     }
@@ -369,11 +369,183 @@ export class AILogModal extends BaseModal {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
     }
+
+    /**
+     * Format text with XML syntax highlighting while keeping it safe
+     */
+    private formatXMLContent(text: string): string {
+        // First escape for safety
+        let escaped = this.escapeHtml(text);
+        
+        // Then add XML syntax highlighting
+        // Highlight XML tags
+        escaped = escaped.replace(
+            /&lt;(\/?)(character|location|item|plot_point|context|refresh|edit|delete|rename)([^&]*?)&gt;/g,
+            (_match, slash, tagName, attributes) => {
+                const color = this.getXMLTagColor(tagName);
+                return `<span style="color: ${color}; font-weight: 600;">&lt;${slash}${tagName}${attributes}&gt;</span>`;
+            }
+        );
+        
+        // Highlight XML attributes
+        escaped = escaped.replace(
+            /(\w+)=(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)/g,
+            '<span style="color: #059669;">$1</span>=<span style="color: #dc2626;">$2</span>'
+        );
+        
+        return escaped;
+    }
+
+    /**
+     * Get color for XML tag types
+     */
+    private getXMLTagColor(tagName: string): string {
+        switch (tagName) {
+            case 'character': return '#8b5cf6'; // purple
+            case 'location': return '#06b6d4';  // cyan
+            case 'item': return '#f59e0b';      // amber
+            case 'plot_point': return '#10b981'; // emerald
+            case 'context': return '#6366f1';   // indigo
+            case 'refresh':
+            case 'edit':
+            case 'delete':
+            case 'rename': return '#ef4444';    // red
+            default: return '#6b7280';          // gray
+        }
+    }
+
+    /**
+     * Show formatted log overlay with XML syntax highlighting
+     */
+    private showFormattedLogOverlay(content: string, contentType: string): void {
+        // Close any existing overlay
+        const existingOverlay = document.querySelector('.log-overlay');
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+
+        const overlay = createElement('div', {
+            classes: ['log-overlay'],
+            attributes: {
+                style: `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    background-color: rgba(0, 0, 0, 0.75);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 30000;
+                `
+            }
+        });
+
+        const capitalizedType = contentType.charAt(0).toUpperCase() + contentType.slice(1);
+        const formattedContent = this.formatXMLContent(content);
+        
+        overlay.innerHTML = `
+            <div class="log-overlay-content" style="
+                width: 95vw;
+                max-width: 1200px;
+                height: 85vh;
+                background-color: white;
+                border-radius: 12px;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            ">
+                <div class="log-overlay-header" style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1.5rem 2rem;
+                    border-bottom: 1px solid #e5e7eb;
+                    background-color: #f9fafb;
+                    border-radius: 12px 12px 0 0;
+                ">
+                    <h3 style="
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                        color: #1f2937;
+                        margin: 0;
+                    ">AI Log - ${capitalizedType}</h3>
+                    <button class="log-overlay-close" style="
+                        background-color: #ef4444;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        width: 32px;
+                        height: 32px;
+                        cursor: pointer;
+                        font-size: 1.2rem;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: background-color 0.2s;
+                    ">&times;</button>
+                </div>
+                <div class="log-overlay-body" style="
+                    flex: 1;
+                    padding: 1.5rem 2rem;
+                    overflow-y: auto;
+                ">
+                    <div class="log-overlay-text" style="
+                        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                        font-size: 0.9rem;
+                        line-height: 1.6;
+                        color: #374151;
+                        white-space: pre-wrap;
+                        word-break: break-word;
+                        background-color: #f8fafc;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 8px;
+                        padding: 1.5rem;
+                    ">${formattedContent}</div>
+                </div>
+            </div>
+        `;
+
+        // Close on background click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+
+        // Close button handler
+        const closeButton = overlay.querySelector('.log-overlay-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => overlay.remove());
+            
+            closeButton.addEventListener('mouseenter', () => {
+                (closeButton as HTMLElement).style.backgroundColor = '#dc2626';
+            });
+            
+            closeButton.addEventListener('mouseleave', () => {
+                (closeButton as HTMLElement).style.backgroundColor = '#ef4444';
+            });
+        }
+
+        // Close on Escape key
+        const handleKeydown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                overlay.remove();
+                document.removeEventListener('keydown', handleKeydown);
+            }
+        };
+        
+        document.addEventListener('keydown', handleKeydown);
+
+        document.body.appendChild(overlay);
+    }
 }
 
 /**
  * Shows a log content overlay
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function showLogOverlay(content: string, contentType: string): void {
     // Close any existing overlay
     const existingOverlay = document.querySelector('.log-overlay');

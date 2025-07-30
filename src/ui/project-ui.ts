@@ -4335,6 +4335,9 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
                     ${AI_ASSISTANT_EMOJI}
                 </button>
+                <button id="xml-story-creation-btn" class="help-button" title="XML Story Creator - Collaborative story creation with AI" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
+                    📝
+                </button>
                 <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">
                     ⚡ Generate
                 </button>
@@ -5436,6 +5439,17 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }).catch((error: unknown) => {
             console.error('Failed to open Smart Generation modal:', error);
             alert('Failed to open Smart Generation dialog. Please try again.');
+        });
+    },
+
+    'xml-story-creation-btn': (_e: Event) => {
+        console.log('🎯 XML Story Creation button clicked!');
+        void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
+            console.log('✅ ModalFactory imported, calling openXMLStoryModal...');
+            void openXMLStoryModal();
+        }).catch((error: unknown) => {
+            console.error('❌ Failed to open XML Story Creation modal:', error);
+            alert('Failed to open XML Story Creator. Please try again.');
         });
     },
 

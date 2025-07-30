@@ -450,7 +450,7 @@ class PromptExpansionService {
         // Noise seed for creative naming inspiration
         this.registerGlobalPlaceholder('noise_names', () => ({
             value: this.generateNoiseNames(),
-            description: 'Random glyphs and word-like patterns for creative naming inspiration'
+            description: 'Random names for creative naming inspiration'
         }));
         
         // Context-dependent placeholders
@@ -730,59 +730,36 @@ class PromptExpansionService {
     }
 
     /**
-     * Generate random glyphs and word-like patterns for creative naming inspiration
+     * Generate random pronounceable names for creative naming inspiration
      */
     private generateNoiseNames(): string {
-        const unicodeRanges: [string, string][] = [
-            // Runic-like symbols
-            ['ᚠ', 'ᚾ'], ['ᛁ', 'ᛟ'],
-            // Geometric symbols
-            ['◊', '◈'], ['△', '▲'], ['⟡', '⟢'],
-            // Mathematical symbols
-            ['∿', '≋'], ['⊱', '⊰'], ['∆', '∇'],
-            // Ancient script inspired
-            ['ψ', 'ω'], ['Θ', 'Φ'], ['₪', '℘']
-        ];
+        // Pronounceable name patterns for inspiration
+        const nameStarts = ['Ael', 'Bry', 'Cael', 'Dor', 'Elyn', 'Fay', 'Gwen', 'Hale', 'Iven', 'Jor', 'Kel', 'Lyr', 'Mor', 'Nyx', 'Orin', 'Pex', 'Quin', 'Ren', 'Syl', 'Tav', 'Uma', 'Vex', 'Wyn', 'Xara', 'Ysel', 'Zeph'];
+        const nameEndings = ['aine', 'beth', 'core', 'drin', 'elle', 'finn', 'grim', 'haven', 'ith', 'jin', 'keth', 'lyn', 'moth', 'nes', 'ora', 'phen', 'quen', 'ros', 'seth', 'thorn', 'uri', 'vain', 'wick', 'xen', 'yth', 'zara'];
+        const singleNames = ['Arix', 'Belen', 'Caine', 'Dara', 'Eston', 'Fynn', 'Gareth', 'Haven', 'Iris', 'Jace', 'Kira', 'Loren', 'Maven', 'Nova', 'Orion', 'Phoenix', 'Quinn', 'Raven', 'Sage', 'Thane', 'Uma', 'Vale', 'Wren', 'Xander', 'Yara', 'Zara'];
 
-        const consonantLike = ['th', 'kr', 'zn', 'vl', 'xr', 'qm', 'fy', 'gh', 'jw', 'bp'];
-        const vowelLike = ['ae', 'ou', 'ia', 'ey', 'ai', 'uo', 'ea', 'yi'];
-
-        // Generate 6-8 glyph sequences
-        const glyphs: string[] = [];
-        const numGlyphs = 6 + Math.floor(Math.random() * 3);
+        // Generate 5-8 pronounceable names for inspiration
+        const inspirationNames: string[] = [];
+        const numNames = 5 + Math.floor(Math.random() * 4);
         
-        for (let i = 0; i < numGlyphs; i++) {
-            const rangeIndex = Math.floor(Math.random() * unicodeRanges.length);
-            const range = unicodeRanges[rangeIndex];
-            if (range && range.length === 2) {
-                const startCode = range[0].charCodeAt(0);
-                const endCode = range[1].charCodeAt(0);
-                const randomCode = startCode + Math.floor(Math.random() * (endCode - startCode + 1));
-                glyphs.push(String.fromCharCode(randomCode));
-            }
-        }
-
-        // Generate 4-6 word-like patterns
-        const words: string[] = [];
-        const numWords = 4 + Math.floor(Math.random() * 3);
-        
-        for (let i = 0; i < numWords; i++) {
-            const length = 3 + Math.floor(Math.random() * 4); // 3-6 characters
-            let word = '';
-            
-            for (let j = 0; j < length; j++) {
-                if (j % 2 === 0) {
-                    // Consonant-like sound
-                    word += consonantLike[Math.floor(Math.random() * consonantLike.length)];
-                } else {
-                    // Vowel-like sound
-                    word += vowelLike[Math.floor(Math.random() * vowelLike.length)];
+        for (let i = 0; i < numNames; i++) {
+            if (Math.random() < 0.4) {
+                // Use a single complete name
+                const selectedName = singleNames[Math.floor(Math.random() * singleNames.length)];
+                if (selectedName) {
+                    inspirationNames.push(selectedName);
+                }
+            } else {
+                // Combine start + ending
+                const start = nameStarts[Math.floor(Math.random() * nameStarts.length)];
+                const ending = nameEndings[Math.floor(Math.random() * nameEndings.length)];
+                if (start && ending) {
+                    inspirationNames.push(start + ending);
                 }
             }
-            words.push(word);
         }
 
-        return `Use these lost glyphs for inspiration when creating names: ${glyphs.join(' ')}. Ancient word fragments recovered from inscriptions: ${words.join(', ')}. These are purely for creative inspiration - derive new names that echo their mysterious essence rather than using them directly.`;
+        return `Random name inspirations: ${inspirationNames.join(', ')}. Use these as creative inspiration for character, location, or item names in your story.`;
     }
     
     /**

@@ -7,6 +7,7 @@ import { ExportModal, ExportModalConfig } from './ExportModal';
 import { ComprehensiveExportModal, ComprehensiveExportModalConfig } from './ComprehensiveExportModal';
 import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal';
 import { ConversationalGenerationModal, ConversationalGenerationModalConfig } from './ConversationalGenerationModal';
+import { XMLStoryModal, XMLStoryModalConfig } from './XMLStoryModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
@@ -288,6 +289,54 @@ export class ModalFactory {
     }
 
     /**
+     * Creates and optionally opens an XML Story Creation modal
+     */
+    public async createXMLStoryModal(options: ModalOptions = {}): Promise<XMLStoryModal> {
+        console.log('🔧 createXMLStoryModal called with options:', options);
+        const { autoOpen = true, replaceExisting = true } = options;
+
+        // Close existing XML story modal if requested
+        if (replaceExisting) {
+            const existing = this.registry.get('xml-story-modal');
+            if (existing) {
+                void existing.close();
+            }
+        }
+
+        // Get OpenRouter client
+        const { OpenRouterClient } = await import('../../OpenRouterClient');
+        const openRouterClient = OpenRouterClient.getInstance();
+        openRouterClient.setSettingsManager(this.dependencies.settingsManager);
+
+        const config: XMLStoryModalConfig = {
+            id: 'xml-story-modal',
+            settingsManager: this.dependencies.settingsManager,
+            openRouterClient: openRouterClient,
+            modelSelector: this.dependencies.modelSelector
+        };
+
+        const modal = new XMLStoryModal(config, {
+            onOpen: () => {
+                console.log('✅ XML Story Creation modal opened');
+            },
+            onClose: () => {
+                console.log('📝 XML Story Creation modal closed');
+            }
+        });
+        
+        this.registry.register(modal);
+
+        // Set up automatic cleanup
+        this.setupModalCleanup(modal);
+
+        if (autoOpen) {
+            void modal.open();
+        }
+
+        return modal;
+    }
+
+    /**
      * Creates a generic content modal
      */
     public createGenericModal(
@@ -549,4 +598,16 @@ export function openComprehensiveExportModal(): ComprehensiveExportModal {
 export async function openConversationalGenerationModal(node: DocumentNode): Promise<ConversationalGenerationModal> {
     const factory = getDefaultModalFactory();
     return factory.createConversationalGenerationModal(node, { autoOpen: true });
+}
+
+/**
+ * Convenience function to open XML story creation modal using default factory
+ */
+export async function openXMLStoryModal(): Promise<XMLStoryModal> {
+    console.log('🚀 openXMLStoryModal called');
+    const factory = getDefaultModalFactory();
+    console.log('🏭 Factory obtained:', factory);
+    const modal = await factory.createXMLStoryModal({ autoOpen: true });
+    console.log('✨ XMLStoryModal created:', modal);
+    return modal;
 } 

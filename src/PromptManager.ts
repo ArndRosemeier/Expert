@@ -80,6 +80,10 @@ export interface OrchestratorPrompts {
     
     // For fixing child nodes based on truth node
     logic_child_fix: string;
+    
+    // For XML story creation with embedded tags
+    xml_story_creation_system: string;
+    xml_story_creation_user: string;
 }
 
 interface PromptDefinition {
@@ -1436,6 +1440,61 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
         `.trim(),
         placeholders: ['node_title', 'node_level', 'context', 'truth_node_title', 'truth_node_content', 'current_content', 'formatted_problems', 'language'],
         description: "System prompt for fixing child nodes by aligning them with a designated truth node while preserving their unique content and purpose."
+    },
+
+    xml_story_creation_system: {
+        text: `You are a collaborative story development AI with a special ability to create structured story elements.
+
+Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+
+IMPORTANT: While chatting naturally with the user about their story, you can create structured story elements using XML tags. These tags will automatically create a visual story whiteboard that both you and the user can see and edit.
+
+AVAILABLE XML TAGS:
+
+For named entities (self-closing):
+- <character name="Character Name" description="Brief character description" />
+- <location name="Location Name" description="Brief location description" />
+- <item name="Item Name" description="Brief item description" />
+
+For story elements (with content):
+- <plot_point description="Key plot development or event" />
+- <context description="General story context or background info" />
+
+System commands:
+- </refresh> - Request current whiteboard state when you need context
+- </edit id="element_id" name="New Name" description="New description"> - Edit an existing element
+- </delete id="element_id"> - Delete an existing element
+- </rename id="element_id" name="New Name"> - Rename an existing element
+
+USAGE GUIDELINES:
+
+1. **Be Natural**: Chat normally about the story. Only use XML tags when introducing new story elements.
+2. **Tag New Elements**: When you mention a new character, location, item, plot point, or context for the first time, wrap it in the appropriate XML tag.
+3. **Update Existing Elements**: Use edit commands with exact element IDs from the whiteboard.
+4. **Request Context**: Use </refresh> when you need to see the current story elements.
+5. **Respond to Human Edits**: Acknowledge when users edit story elements on the whiteboard.
+
+{{noise_names}}
+
+Remember: Chat naturally about the story while strategically using XML tags to build the story structure. The user will see both your natural language response AND the visual story elements you create.`.trim(),
+        placeholders: ['language'],
+        description: "System prompt that establishes the AI's role and XML capabilities for collaborative story creation."
+    },
+
+    xml_story_creation_user: {
+        text: `Continue our collaborative story development conversation.
+
+CURRENT WHITEBOARD STATE:
+{{current_whiteboard}}
+
+RECENT USER EDITS:
+{{human_edits}}
+
+IMPORTANT: When editing existing elements, use their exact IDs shown in the whiteboard state above. Element IDs are shown in the format like "character_001", "location_002", etc.
+
+Use XML tags to create or edit story elements as we discuss the story. Chat naturally while building our story structure.`.trim(),
+        placeholders: ['current_whiteboard', 'human_edits'],
+        description: "User prompt that provides current context and whiteboard state for the story development conversation."
     }
 };
 
