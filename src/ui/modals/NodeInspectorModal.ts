@@ -752,7 +752,7 @@ export class NodeInspectorModal extends BaseModal {
                 </div>
                 
                 <div class="version-section">
-                    <h4 class="section-title">Content <span class="enhanced-badge">Enhanced</span></h4>
+                    <h4 class="section-title">Content</h4>
                     <div class="section-content">
                         <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
                     </div>
@@ -1516,16 +1516,7 @@ export class NodeInspectorModal extends BaseModal {
             
             /* UniversalTextEditor now styles itself automatically when replacing textarea */
             
-            .enhanced-badge {
-                background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-                color: white;
-                font-size: 0.7rem;
-                padding: 0.25rem 0.5rem;
-                border-radius: 12px;
-                font-weight: 500;
-                margin-left: 0.5rem;
-                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-            }
+
             .content-main {
                 background: #f9fafb;
                 border: 1px solid #e5e7eb;
