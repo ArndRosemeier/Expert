@@ -115,6 +115,14 @@ export class UniversalTextEditor {
     // AI processing spinner overlay
     private spinnerOverlay: HTMLElement | null = null;
     
+    // Search and replace functionality
+    private searchBar: HTMLElement | null = null;
+    private searchInput: HTMLInputElement | null = null;
+    private replaceInput: HTMLInputElement | null = null;
+    private searchResults: { start: number; end: number; }[] = [];
+    private currentSearchIndex: number = -1;
+    private isSearchVisible: boolean = false;
+    
     // DOM event compatibility
     private domEventListeners: Map<TextareaEventType, Set<EventListenerFunction>> = new Map();
     private mutationObserver: MutationObserver | null = null;
@@ -348,11 +356,16 @@ export class UniversalTextEditor {
             }
         });
         
-        // Add undo functionality (Ctrl+Z)
+        // Add undo functionality (Ctrl+Z) and prevent browser find (Ctrl+F)
         this.simpleEditor.addEventListener('keydown', (event) => {
             if (event.ctrlKey && event.key === 'z') {
                 event.preventDefault();
                 this.undoToInitialState();
+            } else if (event.ctrlKey && event.key === 'f') {
+                // Prevent browser's native find and open our custom search
+                event.preventDefault();
+                event.stopPropagation();
+                this.toggleSearch();
             }
         });
     }
@@ -380,13 +393,18 @@ export class UniversalTextEditor {
             }
         });
         
-        // Add undo functionality (Ctrl+Z) to the enhanced editor
+        // Add undo functionality (Ctrl+Z) and prevent browser find (Ctrl+F) in enhanced editor
         const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
         if (editorDiv) {
             editorDiv.addEventListener('keydown', (event) => {
                 if (event.ctrlKey && event.key === 'z') {
                     event.preventDefault();
                     this.undoToInitialState();
+                } else if (event.ctrlKey && event.key === 'f') {
+                    // Prevent browser's native find and open our custom search
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.toggleSearch();
                 }
             });
         }
@@ -431,6 +449,7 @@ export class UniversalTextEditor {
             this.hideSpinnerOverlay();
             this.enhancedEditor.destroy();
         }
+        this.cleanupSearch();
     }
 
     /**
@@ -1676,5 +1695,557 @@ export class UniversalTextEditor {
     private fireEvent(type: string): void {
         const event = new Event(type, { bubbles: true, cancelable: true });
         this.dispatchEvent(event);
+    }
+    
+    // ============ SEARCH AND REPLACE FUNCTIONALITY ============
+    
+    /**
+     * Toggle the search interface visibility
+     */
+    private toggleSearch(): void {
+        if (this.isSearchVisible) {
+            this.hideSearch();
+        } else {
+            this.showSearch();
+        }
+    }
+    
+    /**
+     * Show the search interface
+     */
+    private showSearch(): void {
+        if (!this.searchBar) {
+            this.createSearchBar();
+        }
+        
+        if (this.searchBar) {
+            this.searchBar.style.display = 'flex';
+            this.isSearchVisible = true;
+            
+            // Focus the search input
+            setTimeout(() => {
+                if (this.searchInput) {
+                    this.searchInput.focus();
+                    this.searchInput.select();
+                }
+            }, 10);
+        }
+    }
+    
+    /**
+     * Hide the search interface
+     */
+    private hideSearch(): void {
+        if (this.searchBar) {
+            this.searchBar.style.display = 'none';
+            this.isSearchVisible = false;
+            this.clearSearchHighlights();
+        }
+        
+        // Return focus to the editor
+        this.focus();
+    }
+    
+    /**
+     * Create the search bar UI
+     */
+    private createSearchBar(): void {
+        this.searchBar = document.createElement('div');
+        this.searchBar.className = 'universal-text-editor-search-bar';
+        this.searchBar.style.cssText = `
+            display: none;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #fff;
+            position: relative;
+            z-index: 1000;
+            margin-bottom: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        `;
+        
+        // Search input
+        this.searchInput = document.createElement('input');
+        this.searchInput.type = 'text';
+        this.searchInput.placeholder = 'Search...';
+        this.searchInput.style.cssText = `
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 12px;
+            min-width: 120px;
+        `;
+        
+        // Replace input (initially hidden)
+        this.replaceInput = document.createElement('input');
+        this.replaceInput.type = 'text';
+        this.replaceInput.placeholder = 'Replace...';
+        this.replaceInput.style.cssText = `
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 12px;
+            min-width: 120px;
+            display: none;
+        `;
+        
+        // Results count
+        const resultsCount = document.createElement('span');
+        resultsCount.className = 'search-results-count';
+        resultsCount.style.cssText = `
+            font-size: 11px;
+            color: #aaa;
+            white-space: nowrap;
+        `;
+        
+        // Previous button
+        const prevBtn = document.createElement('button');
+        prevBtn.innerHTML = '↑';
+        prevBtn.title = 'Previous match (Shift+Enter)';
+        prevBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        // Next button
+        const nextBtn = document.createElement('button');
+        nextBtn.innerHTML = '↓';
+        nextBtn.title = 'Next match (Enter)';
+        nextBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        // Replace toggle button
+        const replaceToggleBtn = document.createElement('button');
+        replaceToggleBtn.innerHTML = '⇄';
+        replaceToggleBtn.title = 'Toggle replace mode';
+        replaceToggleBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        // Replace button
+        const replaceBtn = document.createElement('button');
+        replaceBtn.innerHTML = 'Replace';
+        replaceBtn.title = 'Replace current match';
+        replaceBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #4a5c2a;
+            color: #fff;
+            cursor: pointer;
+            font-size: 11px;
+            display: none;
+        `;
+        
+        // Replace All button
+        const replaceAllBtn = document.createElement('button');
+        replaceAllBtn.innerHTML = 'All';
+        replaceAllBtn.title = 'Replace all matches';
+        replaceAllBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #5c4a2a;
+            color: #fff;
+            cursor: pointer;
+            font-size: 11px;
+            display: none;
+        `;
+        
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.title = 'Close search (Escape)';
+        closeBtn.style.cssText = `
+            padding: 4px 8px;
+            border: 1px solid #666;
+            border-radius: 3px;
+            background: #5c2a2a;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 4px;
+        `;
+        
+        // Assemble the search bar
+        this.searchBar.appendChild(this.searchInput);
+        this.searchBar.appendChild(this.replaceInput);
+        this.searchBar.appendChild(resultsCount);
+        this.searchBar.appendChild(prevBtn);
+        this.searchBar.appendChild(nextBtn);
+        this.searchBar.appendChild(replaceToggleBtn);
+        this.searchBar.appendChild(replaceBtn);
+        this.searchBar.appendChild(replaceAllBtn);
+        this.searchBar.appendChild(closeBtn);
+        
+        // Insert search bar at the top of the container
+        this.container.insertBefore(this.searchBar, this.container.firstChild);
+        
+        // Add event listeners
+        this.setupSearchEventListeners(resultsCount, prevBtn, nextBtn, replaceToggleBtn, replaceBtn, replaceAllBtn, closeBtn);
+    }
+    
+    /**
+     * Set up event listeners for search bar elements
+     */
+    private setupSearchEventListeners(
+        resultsCount: HTMLElement,
+        prevBtn: HTMLElement,
+        nextBtn: HTMLElement,
+        replaceToggleBtn: HTMLElement,
+        replaceBtn: HTMLElement,
+        replaceAllBtn: HTMLElement,
+        closeBtn: HTMLElement
+    ): void {
+        if (!this.searchInput || !this.replaceInput) return;
+        
+        // Search input events
+        this.searchInput.addEventListener('input', () => {
+            this.performSearch();
+            this.updateResultsCount(resultsCount);
+        });
+        
+        this.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this.findPrevious();
+                } else {
+                    this.findNext();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideSearch();
+            }
+        });
+        
+        // Replace input events
+        this.replaceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.replaceCurrentMatch();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideSearch();
+            }
+        });
+        
+        // Button events
+        prevBtn.addEventListener('click', () => this.findPrevious());
+        nextBtn.addEventListener('click', () => this.findNext());
+        
+        replaceToggleBtn.addEventListener('click', () => {
+            const isReplaceVisible = this.replaceInput!.style.display !== 'none';
+            if (isReplaceVisible) {
+                this.replaceInput!.style.display = 'none';
+                replaceBtn.style.display = 'none';
+                replaceAllBtn.style.display = 'none';
+            } else {
+                this.replaceInput!.style.display = 'block';
+                replaceBtn.style.display = 'inline-block';
+                replaceAllBtn.style.display = 'inline-block';
+            }
+        });
+        
+        replaceBtn.addEventListener('click', () => this.replaceCurrentMatch());
+        replaceAllBtn.addEventListener('click', () => this.replaceAllMatches());
+        closeBtn.addEventListener('click', () => this.hideSearch());
+    }
+    
+    /**
+     * Perform search and highlight results
+     */
+    private performSearch(): void {
+        this.clearSearchHighlights();
+        this.searchResults = [];
+        this.currentSearchIndex = -1;
+        
+        if (!this.searchInput || !this.searchInput.value.trim()) {
+            return;
+        }
+        
+        // For enhanced mode, ensure we're working with clean text (no existing highlights)
+        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+            // Clear all existing highlights to ensure clean text for accurate position calculation
+            this.enhancedEditor.clearAllHighlights();
+            // Update current value to reflect the clean text
+            this.currentValue = this.enhancedEditor.getText();
+        }
+        
+        const searchTerm = this.searchInput.value;
+        const text = this.currentValue;
+        
+        // Find all matches
+        let index = 0;
+        while (index < text.length) {
+            const foundIndex = text.toLowerCase().indexOf(searchTerm.toLowerCase(), index);
+            if (foundIndex === -1) break;
+            
+            this.searchResults.push({
+                start: foundIndex,
+                end: foundIndex + searchTerm.length
+            });
+            
+            index = foundIndex + 1;
+        }
+        
+        // Highlight all matches
+        this.highlightSearchResults();
+        
+        // Set first match as current without focusing editor
+        if (this.searchResults.length > 0) {
+            this.currentSearchIndex = 0;
+        }
+    }
+    
+    /**
+     * Highlight search results in the editor
+     */
+    private highlightSearchResults(): void {
+        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+            // Preserve search input focus during DOM manipulation
+            const wasSearchInputFocused = document.activeElement === this.searchInput;
+            const wasReplaceInputFocused = document.activeElement === this.replaceInput;
+            
+            // Clear existing search highlights first
+            this.enhancedEditor.clearAllHighlights();
+            
+            // For enhanced editor, use the addHighlight method
+            this.searchResults.forEach((result, index) => {
+                const className = index === this.currentSearchIndex ? 'search-highlight-current' : 'search-highlight';
+                this.enhancedEditor.addHighlight(
+                    `search-${index}`, 
+                    result.start, 
+                    result.end, 
+                    className
+                );
+            });
+            
+            // Restore focus to search inputs if they had it before DOM manipulation
+            if (wasSearchInputFocused && this.searchInput) {
+                this.searchInput.focus();
+            } else if (wasReplaceInputFocused && this.replaceInput) {
+                this.replaceInput.focus();
+            }
+            
+            // Scroll current match into view (enhanced mode) - only when explicitly navigating
+            if (this.currentSearchIndex >= 0 && !wasSearchInputFocused && !wasReplaceInputFocused) {
+                setTimeout(() => {
+                    const currentHighlight = this.container.querySelector('[data-highlight-id="search-' + this.currentSearchIndex + '"]');
+                    if (currentHighlight) {
+                        currentHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 10);
+            }
+        }
+        // For simple mode, we'll use selection to highlight the current match
+    }
+    
+    /**
+     * Clear all search highlights
+     */
+    private clearSearchHighlights(): void {
+        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+            // Preserve search input focus during DOM manipulation
+            const wasSearchInputFocused = document.activeElement === this.searchInput;
+            const wasReplaceInputFocused = document.activeElement === this.replaceInput;
+            
+            this.enhancedEditor.clearAllHighlights();
+            
+            // Restore focus to search inputs if they had it before DOM manipulation
+            if (wasSearchInputFocused && this.searchInput) {
+                this.searchInput.focus();
+            } else if (wasReplaceInputFocused && this.replaceInput) {
+                this.replaceInput.focus();
+            }
+        }
+    }
+    
+    /**
+     * Find next match
+     */
+    private findNext(): void {
+        if (this.searchResults.length === 0) return;
+        
+        this.currentSearchIndex = (this.currentSearchIndex + 1) % this.searchResults.length;
+        this.selectSearchResult(this.currentSearchIndex, true); // Focus editor when navigating
+    }
+    
+    /**
+     * Find previous match
+     */
+    private findPrevious(): void {
+        if (this.searchResults.length === 0) return;
+        
+        this.currentSearchIndex = this.currentSearchIndex <= 0 
+            ? this.searchResults.length - 1 
+            : this.currentSearchIndex - 1;
+        this.selectSearchResult(this.currentSearchIndex, true); // Focus editor when navigating
+    }
+    
+    /**
+     * Select a specific search result
+     */
+    private selectSearchResult(index: number, shouldFocusEditor: boolean = true): void {
+        if (index < 0 || index >= this.searchResults.length) return;
+        
+        const result = this.searchResults[index];
+        if (!result) return;
+        
+        // Update current index
+        this.currentSearchIndex = index;
+        
+        // For enhanced mode, use visual highlighting instead of text selection
+        // This avoids DOM position issues with contenteditable
+        if (this.currentMode === 'enhanced') {
+            this.highlightSearchResults();
+            // Only focus the editor when explicitly requested (navigation, not typing)
+            if (shouldFocusEditor) {
+                this.focus();
+            }
+        } else {
+            // For simple mode, use text selection as normal
+            try {
+                this.setSelection(result.start, result.end);
+            } catch (error) {
+                console.warn('Failed to select search result:', error);
+                if (shouldFocusEditor) {
+                    this.focus();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Replace the current match
+     */
+    private replaceCurrentMatch(): void {
+        if (!this.replaceInput || this.currentSearchIndex < 0 || this.currentSearchIndex >= this.searchResults.length) {
+            return;
+        }
+        
+        const replacement = this.replaceInput.value;
+        const result = this.searchResults[this.currentSearchIndex];
+        if (!result) return;
+        
+        try {
+            if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+                // For enhanced mode, use the editor's replace method directly
+                this.enhancedEditor.clearAllHighlights();
+                this.enhancedEditor.replaceRange(result.start, result.end, replacement);
+                // Update our internal value
+                this.currentValue = this.enhancedEditor.getText();
+            } else {
+                // For simple mode, use setRangeText
+                this.setRangeText(replacement, result.start, result.end, 'end');
+            }
+            
+            // Refresh the search to recalculate positions
+            this.performSearch();
+        } catch (error) {
+            console.warn('Failed to replace text:', error);
+            // Fallback: refresh search without replacement
+            this.performSearch();
+        }
+    }
+    
+    /**
+     * Replace all matches
+     */
+    private replaceAllMatches(): void {
+        if (!this.replaceInput || this.searchResults.length === 0) {
+            return;
+        }
+        
+        const replacement = this.replaceInput.value;
+        const searchTerm = this.searchInput?.value || '';
+        
+        try {
+            if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+                // For enhanced mode, work directly with the editor
+                this.enhancedEditor.clearAllHighlights();
+                let currentText = this.enhancedEditor.getText();
+                
+                // Replace all occurrences
+                const newText = currentText.replace(
+                    new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+                    replacement
+                );
+                
+                this.enhancedEditor.setText(newText);
+                this.currentValue = newText;
+            } else {
+                // For simple mode, use our setText method
+                const newText = this.currentValue.replace(
+                    new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+                    replacement
+                );
+                
+                this.setText(newText);
+            }
+            
+            // Refresh search
+            this.performSearch();
+        } catch (error) {
+            console.warn('Failed to replace all matches:', error);
+            // Fallback: refresh search without replacement
+            this.performSearch();
+        }
+    }
+    
+    /**
+     * Update the results count display
+     */
+    private updateResultsCount(resultsElement: HTMLElement): void {
+        if (this.searchResults.length === 0) {
+            resultsElement.textContent = 'No matches';
+        } else {
+            resultsElement.textContent = `${this.currentSearchIndex + 1} of ${this.searchResults.length}`;
+        }
+    }
+    
+    /**
+     * Clean up search functionality
+     */
+    private cleanupSearch(): void {
+        this.clearSearchHighlights();
+        if (this.searchBar && this.searchBar.parentNode) {
+            this.searchBar.parentNode.removeChild(this.searchBar);
+        }
+        this.searchBar = null;
+        this.searchInput = null;
+        this.replaceInput = null;
+        this.searchResults = [];
+        this.currentSearchIndex = -1;
+        this.isSearchVisible = false;
     }
 } 

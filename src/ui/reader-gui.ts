@@ -63,6 +63,7 @@ export class ReaderGUI {
     private searchTerm: string = '';
     private searchResults: Array<{nodeId: string, startPos: number, endPos: number}> = [];
     private currentSearchIndex: number = -1;
+    private globalKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
     private isSearchVisible: boolean = false;
     private findHighlights: Map<string, string[]> = new Map(); // nodeId -> highlight IDs
     
@@ -3239,12 +3240,13 @@ export class ReaderGUI {
     }
 
     /**
-     * Search in all text editors for the given term
+     * Search in the reader's text editors for the given term
+     * NOTE: This only searches within the reader's own editors, not globally across the application
      */
     private searchInAllEditors(searchTerm: string, caseSensitive: boolean = false): Array<{nodeId: string, startPos: number, endPos: number}> {
         const results: Array<{nodeId: string, startPos: number, endPos: number}> = [];
         
-        // Get all editors from ReaderEditor
+        // Get editors from ReaderEditor (scoped to this reader instance only)
         const nodeEditors = (this.readerEditor as any).nodeEditors;
         if (!nodeEditors) return results;
 
@@ -3631,17 +3633,30 @@ export class ReaderGUI {
             });
         }
 
-        // Add global keyboard shortcut for opening find interface
-        document.addEventListener('keydown', (e) => {
-            // Only activate if reader is visible and no input field is focused
+        // Add scoped keyboard shortcut for opening find interface (only when reader has focus)
+        this.globalKeydownHandler = (e: KeyboardEvent) => {
+            // Only activate if reader is visible, focused, and no input field is focused
             if (this.container.style.display !== 'none' && 
+                this.isReaderFocused() &&
                 (e.ctrlKey || e.metaKey) && e.key === 'f' &&
                 !(document.activeElement instanceof HTMLInputElement) &&
                 !(document.activeElement instanceof HTMLTextAreaElement)) {
                 e.preventDefault();
                 this.toggleFindInterface();
             }
-        });
+        };
+        
+        // Add the listener to document but store reference for cleanup
+        document.addEventListener('keydown', this.globalKeydownHandler);
+    }
+    
+    /**
+     * Check if the reader or any of its children currently have focus
+     */
+    private isReaderFocused(): boolean {
+        // Check if the reader container or any of its descendants have focus
+        return this.container.contains(document.activeElement) || 
+               document.activeElement === this.container;
     }
 
     /**
@@ -3650,6 +3665,12 @@ export class ReaderGUI {
     private async close(): Promise<void> {
         // Stop listening for updates
         this.stopListeningForUpdates();
+        
+        // Remove global keyboard listener to prevent interference with other components
+        if (this.globalKeydownHandler) {
+            document.removeEventListener('keydown', this.globalKeydownHandler);
+            this.globalKeydownHandler = null;
+        }
         
         // Reset settings panel state
         this.isSettingsPanelOpen = false;

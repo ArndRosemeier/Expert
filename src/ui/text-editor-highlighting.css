@@ -105,4 +105,20 @@
 .highlight-unified:hover {
     opacity: 0.8;
     cursor: pointer;
+}
+
+/* Search and Replace Highlights */
+.search-highlight {
+    background-color: #ffd23f;
+    color: #000;
+    border-radius: 2px;
+    padding: 1px 2px;
+}
+
+.search-highlight-current {
+    background-color: #ff6b35;
+    color: #fff;
+    border-radius: 2px;
+    padding: 1px 2px;
+    font-weight: bold;
 } 
