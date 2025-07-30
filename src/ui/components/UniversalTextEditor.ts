@@ -533,7 +533,11 @@ export class UniversalTextEditor {
      * Show AI processing spinner overlay
      */
     private showSpinnerOverlay(regions: Array<{start: number, end: number}>): void {
-        if (regions.length === 0 || !regions[0]) return;
+        console.log('🔄 showSpinnerOverlay called with regions:', regions);
+        if (regions.length === 0 || !regions[0]) {
+            console.log('❌ No valid regions for spinner');
+            return;
+        }
         
         // Remove existing spinner
         this.hideSpinnerOverlay();
@@ -552,7 +556,11 @@ export class UniversalTextEditor {
 
         // Calculate position based on first highlight region
         const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
-        if (!editorDiv) return;
+        console.log('📍 Found editorDiv:', !!editorDiv);
+        if (!editorDiv) {
+            console.log('❌ No editor div found for spinner positioning');
+            return;
+        }
         
         // Create a temporary range to get bounding rect of highlighted text
         const range = document.createRange();
@@ -585,9 +593,11 @@ export class UniversalTextEditor {
             range.setStart(targetNode, Math.min(targetOffset, textLength));
             range.setEnd(targetNode, Math.min(targetOffset + 1, textLength));
             const rect = range.getBoundingClientRect();
+            console.log('📐 Target text rect:', rect);
             
             // Position spinner relative to modal or viewport
             const modalOverlay = this.container.closest('.modal-overlay') as HTMLElement;
+            console.log('📦 Found modal overlay:', !!modalOverlay);
             if (modalOverlay) {
                 // Position relative to modal overlay
                 const modalRect = modalOverlay.getBoundingClientRect();
@@ -609,6 +619,7 @@ export class UniversalTextEditor {
                     z-index: 2;
                 `;
                 modalOverlay.appendChild(this.spinnerOverlay);
+                console.log('✅ Spinner added to modal overlay');
             } else {
                 // Fallback to fixed positioning
                 this.spinnerOverlay.style.cssText = `
@@ -629,6 +640,7 @@ export class UniversalTextEditor {
                     pointer-events: auto;
                 `;
                 document.body.appendChild(this.spinnerOverlay);
+                console.log('✅ Spinner added to document body');
             }
 
             // Add spinner animation
@@ -649,6 +661,8 @@ export class UniversalTextEditor {
                 `;
                 document.head.appendChild(style);
             }
+        } else {
+            console.log('❌ Could not find target text node for spinner positioning');
         }
     }
 
@@ -657,6 +671,7 @@ export class UniversalTextEditor {
      */
     private hideSpinnerOverlay(): void {
         if (this.spinnerOverlay) {
+            console.log('🚫 Hiding spinner overlay');
             this.spinnerOverlay.remove();
             this.spinnerOverlay = null;
         }
