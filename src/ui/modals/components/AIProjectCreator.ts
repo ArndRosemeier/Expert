@@ -10,6 +10,7 @@ import { ProjectGenerationService, ProjectGenerationRequest } from '../services/
 import { SettingsManager } from '../../../SettingsManager';
 import { AI_ASSISTANT_EMOJI } from '../../../constants';
 import { StorageService } from '../../../StorageService';
+import { UniversalTextEditor } from '../../components/UniversalTextEditor';
 
 export interface AIProjectCreatorConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
@@ -29,6 +30,7 @@ export class AIProjectCreator {
     private generationService: ProjectGenerationService;
     private static readonly CREATION_PROMPTS_KEY = 'ai_creation_prompts';
     private cachedPrompts: string[] = [];
+    private descriptionEditor: UniversalTextEditor | null = null;
 
     constructor(config: AIProjectCreatorConfig) {
         this.config = config;
@@ -291,15 +293,13 @@ export class AIProjectCreator {
             this.cleanupHandlers.push(() => cancelBtn.removeEventListener('click', cancelHandler));
         }
 
-        // Auto-resize textarea
-        const textarea = container.querySelector('#ai-project-description') as HTMLTextAreaElement;
-        if (textarea) {
-            const resizeHandler = () => {
-                textarea.style.height = 'auto';
-                textarea.style.height = textarea.scrollHeight + 'px';
-            };
-            textarea.addEventListener('input', resizeHandler);
-            this.cleanupHandlers.push(() => textarea.removeEventListener('input', resizeHandler));
+        // Upgrade description textarea to enhanced UniversalTextEditor
+        const originalDescriptionTextarea = container.querySelector('#ai-project-description') as HTMLTextAreaElement;
+        if (originalDescriptionTextarea) {
+            this.descriptionEditor = UniversalTextEditor.replace(originalDescriptionTextarea, {
+                mode: 'enhanced'  // Enable AI features and text transformation
+            });
+            // Auto-resize is handled automatically by UniversalTextEditor
         }
 
         // Setup prompt dropdown functionality
@@ -387,8 +387,7 @@ export class AIProjectCreator {
     }
 
     private getDescription(): string {
-        const textarea = this.container?.querySelector('#ai-project-description') as HTMLTextAreaElement;
-        return textarea?.value?.trim() || '';
+        return this.descriptionEditor?.value?.trim() || '';
     }
 
     private getGenerationOptions(): ProjectGenerationOptions {
@@ -561,9 +560,8 @@ export class AIProjectCreator {
                     e.stopPropagation();
                     return; // Don't select when deleting
                 }
-                const textarea = document.getElementById('ai-project-description') as HTMLTextAreaElement;
-                if (textarea) {
-                    textarea.value = prompt;
+                if (this.descriptionEditor) {
+                    this.descriptionEditor.value = prompt;
                     this.hidePromptDropdown();
                 }
             });

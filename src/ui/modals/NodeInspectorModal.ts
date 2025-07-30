@@ -331,7 +331,6 @@ class ContentViewer extends UIComponent {
 export class NodeInspectorModal extends BaseModal {
     private node: DocumentNode | null = null;
     private selectedVersionId: string | null = null;
-    private contentEditor: UniversalTextEditor | null = null;
 
     constructor() {
         super({
@@ -386,11 +385,7 @@ export class NodeInspectorModal extends BaseModal {
             delete (this as any)._todoChangeHandler;
         }
         
-        // Clean up UniversalTextEditor
-        if (this.contentEditor) {
-            this.contentEditor.destroy();
-            this.contentEditor = null;
-        }
+        // UniversalTextEditor now has automatic cleanup - no manual cleanup needed!
         
         await super.close();
     }
@@ -759,7 +754,7 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-section">
                     <h4 class="section-title">Content <span class="enhanced-badge">Enhanced</span></h4>
                     <div class="section-content">
-                        <div id="inspector-content-editor-container" class="content-editor-container"></div>
+                        <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
                     </div>
                 </div>
                 
@@ -943,11 +938,7 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private rerender() {
-        // Clean up existing content editor before re-rendering
-        if (this.contentEditor) {
-            this.contentEditor.destroy();
-            this.contentEditor = null;
-        }
+        // UniversalTextEditor now has automatic cleanup when DOM elements are removed!
         
         // Re-render modal content
         const modalContent = this.render();
@@ -964,42 +955,36 @@ export class NodeInspectorModal extends BaseModal {
         if (!this.node) return;
 
         const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
-        const contentEditorContainer = document.getElementById('inspector-content-editor-container') as HTMLElement;
+        const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
         const contextEditor = document.getElementById('inspector-context-editor') as HTMLTextAreaElement;
 
-        // Create UniversalTextEditor for content
-        if (contentEditorContainer) {
-            // Clean up existing editor if any
-            if (this.contentEditor) {
-                this.contentEditor.destroy();
-            }
-            
-            // Get current version content
-            const version = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
-            const currentContent = version?.content || '';
-            
-            // Create new UniversalTextEditor in enhanced mode
-            this.contentEditor = new UniversalTextEditor(contentEditorContainer, {
-                mode: 'enhanced',
-                placeholder: 'Enter content...',
-                className: 'content-editor auto-resize',
-                autoResize: true
-            }, {
-                onBlur: async () => {
-                    if (this.contentEditor) {
-                        this.saveContent(this.contentEditor.value);
-                        // Update external UI only when editing is finished
-                        await this.persistNodeChanges();
-                    }
-                }
+        // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
+        if (contentEditor) {
+            const enhancedContentEditor = UniversalTextEditor.replace(contentEditor, {
+                mode: 'enhanced'  // Enable AI features and text transformation
             });
             
-            // Set the content
-            this.contentEditor.setText(currentContent);
+            // Add blur event listener using standard DOM API
+            enhancedContentEditor.addEventListener('blur', async () => {
+                this.saveContent(enhancedContentEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
+            });
         }
 
-        // Auto-resize textareas
-        this.setupAutoResize(contextEditor);
+        // Upgrade context textarea to enhanced UniversalTextEditor - Drop-in replacement test!
+        if (contextEditor) {
+            const enhancedContextEditor = UniversalTextEditor.replace(contextEditor, {
+                mode: 'enhanced'  // Enable AI features for context editing too
+            });
+            
+            // Add blur event listener using standard DOM API - should work exactly like before
+            enhancedContextEditor.addEventListener('blur', async () => {
+                this.saveContext(enhancedContextEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
+            });
+        }
 
         // Title editor - save only on blur (when focus is lost)
         if (titleEditor) {
@@ -1010,38 +995,12 @@ export class NodeInspectorModal extends BaseModal {
             });
         }
 
-        // Context editor - save only on blur (when focus is lost)
-        if (contextEditor) {
-            contextEditor.addEventListener('blur', async () => {
-                this.saveContext(contextEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
-
         // Enhanced mode selection overlay is handled by the editor itself
     }
 
 
 
-    private setupAutoResize(textarea: HTMLTextAreaElement): void {
-        if (!textarea) return;
-
-        const resize = () => {
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.max(100, textarea.scrollHeight) + 'px';
-        };
-
-        // Initial resize
-        resize();
-
-        // Only resize on focus/blur to avoid disruption during typing
-        textarea.addEventListener('focus', resize);
-        textarea.addEventListener('blur', resize);
-
-        // Resize on window resize
-        window.addEventListener('resize', resize);
-    }
+    // Auto-resize is now handled automatically by UniversalTextEditor
 
     private saveTitle(newTitle: string): void {
         if (!this.node || !this.selectedVersionId) return;
@@ -1555,30 +1514,7 @@ export class NodeInspectorModal extends BaseModal {
                 resize: none;
             }
             
-            .content-editor-container {
-                width: 100%;
-                min-height: 100px;
-            }
-            
-            .content-editor-container .text-editor-with-highlighting {
-                width: 100%;
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 6px;
-                padding: 1rem;
-                font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-                font-size: 0.9em;
-                line-height: 1.5;
-                color: #374151;
-                min-height: 100px;
-                transition: border-color 0.2s ease;
-            }
-            
-            .content-editor-container .text-editor-with-highlighting:focus {
-                outline: none;
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            }
+            /* UniversalTextEditor now styles itself automatically when replacing textarea */
             
             .enhanced-badge {
                 background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);

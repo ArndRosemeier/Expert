@@ -13,6 +13,11 @@ import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
+import { UniversalTextEditor } from './components/UniversalTextEditor';
+
+// Global references to enhanced editors for access across functions
+let enhancedContentEditor: UniversalTextEditor | null = null;
+let enhancedContextEditor: UniversalTextEditor | null = null;
 
 import { getContextInfoText } from '../ContextFormat';
 import { ProjectTemplate } from '../ProjectTemplate';
@@ -1417,10 +1422,20 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             if (selectedNodeId) {
                 const node = manager.findNodeById(selectedNodeId);
                 if (node) {
-                    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                    if (contentTextArea) contentTextArea.value = node.content;
-                    if (contextTextArea) contextTextArea.value = node.context;
+                    // Update enhanced editors if they exist, otherwise fall back to original method
+                    if (enhancedContentEditor) {
+                        enhancedContentEditor.value = node.content;
+                    } else {
+                        const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+                        if (contentTextArea) contentTextArea.value = node.content;
+                    }
+                    
+                    if (enhancedContextEditor) {
+                        enhancedContextEditor.value = node.context;
+                    } else {
+                        const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+                        if (contextTextArea) contextTextArea.value = node.context;
+                    }
                 }
             }
         }
@@ -1511,9 +1526,14 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
     const handleSummaryGenerated = (e: { nodeId: string; summary: string }) => {
         if (e.nodeId === selectedNodeId) {
-            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-            if (contextTextArea) {
-                contextTextArea.value = e.summary;
+            // Update enhanced editor if it exists, otherwise fall back to original method
+            if (enhancedContextEditor) {
+                enhancedContextEditor.value = e.summary;
+            } else {
+                const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                if (contextTextArea) {
+                    contextTextArea.value = e.summary;
+                }
             }
         }
     };
@@ -2522,14 +2542,19 @@ export async function renderNodeDetails() {
     const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
     const nodeTitleDisplay = getElementById('node-title-display') as HTMLElement;
 
-    // Content textarea - save content changes to node only on blur (when focus is lost)
+    // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
     if (contentTextArea) {
-        contentTextArea.addEventListener('blur', () => {
+        enhancedContentEditor = UniversalTextEditor.replace(contentTextArea, {
+            mode: 'enhanced'  // Enable AI features and text transformation
+        });
+        
+        // Content textarea - save content changes to node only on blur (when focus is lost)
+        enhancedContentEditor.addEventListener('blur', () => {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     // Use version management system to update content with "edited" and "content_edited" tags
-                    node.setContentWithTags(contentTextArea.value, ['edited', 'content_edited']);
+                    node.setContentWithTags(enhancedContentEditor!.value, ['edited', 'content_edited']);
                     // Save to storage immediately since this only happens on blur
                     void projectManager.saveToStorage();
                 }
@@ -2537,13 +2562,18 @@ export async function renderNodeDetails() {
         });
     }
 
-    // Context textarea - save context changes to node only on blur (when focus is lost)
+    // Upgrade context textarea to enhanced UniversalTextEditor - Drop-in replacement!
     if (contextTextArea) {
-        contextTextArea.addEventListener('blur', () => {
+        enhancedContextEditor = UniversalTextEditor.replace(contextTextArea, {
+            mode: 'enhanced'  // Enable AI features for context editing too
+        });
+        
+        // Context textarea - save context changes to node only on blur (when focus is lost)
+        enhancedContextEditor.addEventListener('blur', () => {
             if (projectManager && selectedNodeId) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
-                    const newContext = contextTextArea.value;
+                    const newContext = enhancedContextEditor!.value;
                     // Use version management system to update context with "edited" and "context_edited" tags
                     node.setContextWithTags(newContext, ['edited', 'context_edited']);
                     
@@ -2754,9 +2784,13 @@ function updateVersionContentDisplay() {
     if (!currentVersion) return;
     
     // Update the content textarea to show the selected version's content
-    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-    if (contentTextArea) {
-        contentTextArea.value = currentVersion.content;
+    if (enhancedContentEditor) {
+        enhancedContentEditor.value = currentVersion.content;
+    } else {
+        const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+        if (contentTextArea) {
+            contentTextArea.value = currentVersion.content;
+        }
     }
     
     // Update the ratings view if it's currently showing
@@ -3560,9 +3594,13 @@ This action cannot be undone.`;
                     // Refresh the UI to show updated context if we're viewing a child node
                     const currentNode = projectManager.findNodeById(selectedNodeId);
                     if (currentNode) {
-                        const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-                        if (contextTextArea) {
-                            contextTextArea.value = currentNode.context;
+                        if (enhancedContextEditor) {
+                            enhancedContextEditor.value = currentNode.context;
+                        } else {
+                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                            if (contextTextArea) {
+                                contextTextArea.value = currentNode.context;
+                            }
                         }
                     }
                 } else {
@@ -5488,9 +5526,13 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             
             const currentNode = projectManager.findNodeById(selectedNodeId);
             if (currentNode) {
-                const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-                if (contextTextArea) {
-                    contextTextArea.value = currentNode.context;
+                if (enhancedContextEditor) {
+                    enhancedContextEditor.value = currentNode.context;
+                } else {
+                    const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                    if (contextTextArea) {
+                        contextTextArea.value = currentNode.context;
+                    }
                 }
             }
         } else {
@@ -5662,9 +5704,13 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         updateVersionNavigationUI();
         updateVersionContentDisplay();
         
-        const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
-        if (contentTextArea) {
-            contentTextArea.value = node.content;
+        if (enhancedContentEditor) {
+            enhancedContentEditor.value = node.content;
+        } else {
+            const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
+            if (contentTextArea) {
+                contentTextArea.value = node.content;
+            }
         }
         
         alert('Version restored as current content.');

@@ -9,6 +9,7 @@ import {
   STYLE_OPTIONS, 
   CONTEXT_LIMITS 
 } from '../../../types/OutlineFactoryTypes';
+import { UniversalTextEditor } from '../../components/UniversalTextEditor';
 
 export class OutlineFactory {
   private container: HTMLElement;
@@ -19,7 +20,7 @@ export class OutlineFactory {
   private readonly SAVE_DEBOUNCE_MS = 500;
   
   // UI Elements
-  private ideasTextarea?: HTMLTextAreaElement;
+  private ideasTextarea?: UniversalTextEditor;
   private genreCheckboxes: Map<string, HTMLInputElement[]> = new Map();
   private styleCheckboxes: Map<string, HTMLInputElement[]> = new Map();
   private contextInputs: Map<string, HTMLInputElement> = new Map();
@@ -199,7 +200,13 @@ export class OutlineFactory {
   }
   
   private bindElements(): void {
-    this.ideasTextarea = this.container.querySelector('#ideas-textarea') as HTMLTextAreaElement;
+    // Upgrade ideas textarea to enhanced UniversalTextEditor
+    const originalIdeasTextarea = this.container.querySelector('#ideas-textarea') as HTMLTextAreaElement;
+    if (originalIdeasTextarea) {
+      this.ideasTextarea = UniversalTextEditor.replace(originalIdeasTextarea, {
+        mode: 'enhanced'  // Enable AI features and text transformation
+      });
+    }
     this.resetButton = this.container.querySelector('#reset-button') as HTMLButtonElement;
     this.generateButton = this.container.querySelector('#generate-button') as HTMLButtonElement;
     this.validationMessage = this.container.querySelector('#validation-message') as HTMLElement;
@@ -485,10 +492,12 @@ export class OutlineFactory {
   }
   
   private setupEventListeners(): void {
-    // Ideas textarea
-    this.ideasTextarea!.addEventListener('input', () => {
-      this.updateConfigFromUI();
-    });
+    // Ideas textarea (enhanced with AI features)
+    if (this.ideasTextarea) {
+      this.ideasTextarea.addEventListener('input', () => {
+        this.updateConfigFromUI();
+      });
+    }
     
     // Genre checkboxes
     this.genreCheckboxes.forEach((checkboxes) => {
@@ -528,7 +537,7 @@ export class OutlineFactory {
   
   private updateConfigFromUI(): void {
     // Update ideas
-    this.config.ideas = this.ideasTextarea!.value;
+    this.config.ideas = this.ideasTextarea?.value || '';
     
     // Update genres
     this.genreCheckboxes.forEach((checkboxes, category) => {
@@ -591,7 +600,9 @@ export class OutlineFactory {
   
   private applyConfigToUI(): void {
     // Apply ideas
-    this.ideasTextarea!.value = this.config.ideas;
+    if (this.ideasTextarea) {
+      this.ideasTextarea.value = this.config.ideas;
+    }
     
     // Apply genres
     this.genreCheckboxes.forEach((checkboxes, category) => {

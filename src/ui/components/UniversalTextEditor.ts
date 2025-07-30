@@ -80,6 +80,10 @@ export interface TextEditorEventHandlers {
     onModeSwitch?: (mode: TextEditorMode) => void;
 }
 
+// Standard DOM event types for textarea compatibility
+type TextareaEventType = 'input' | 'change' | 'focus' | 'blur' | 'keydown' | 'keyup' | 'keypress' | 'select';
+type EventListenerFunction = (event: Event) => void;
+
 /**
  * Universal Text Editor - A swappable text editor component that can operate in simple or enhanced mode
  * 
@@ -111,6 +115,10 @@ export class UniversalTextEditor {
     // AI processing spinner overlay
     private spinnerOverlay: HTMLElement | null = null;
     
+    // DOM event compatibility
+    private domEventListeners: Map<TextareaEventType, Set<EventListenerFunction>> = new Map();
+    private mutationObserver: MutationObserver | null = null;
+    
     constructor(
         container: HTMLElement, 
         options: UniversalTextEditorOptions = {},
@@ -141,6 +149,108 @@ export class UniversalTextEditor {
                 this.focus();
             }
         }, 10);
+        
+        // Setup automatic lifecycle management
+        this.setupAutomaticCleanup();
+    }
+    
+    // ============================================================================
+    // STATIC FACTORY METHODS (TEXTAREA COMPATIBILITY)
+    // ============================================================================
+    
+    /**
+     * Replace an existing textarea with a UniversalTextEditor
+     * @param textarea The textarea element to replace
+     * @param options Editor options
+     * @returns New UniversalTextEditor instance
+     */
+    public static replace(
+        textarea: HTMLTextAreaElement, 
+        options: Partial<UniversalTextEditorOptions> = {}
+    ): UniversalTextEditor {
+        const container = textarea.parentElement;
+        if (!container) {
+            throw new Error('Textarea must have a parent element');
+        }
+        
+        // Extract properties from existing textarea
+        const extractedOptions: UniversalTextEditorOptions = {
+            mode: 'simple',
+            placeholder: textarea.placeholder || '',
+            className: textarea.className || '',
+            disabled: textarea.disabled,
+            readonly: textarea.readOnly,
+            autoResize: true,
+            ...options
+        };
+        
+        // Get initial value
+        const initialValue = textarea.value;
+        
+        // Create wrapper container
+        const wrapper = document.createElement('div');
+        wrapper.className = 'universal-text-editor-wrapper';
+        
+        // Ensure wrapper has proper positioning for modal compatibility
+        wrapper.style.position = 'relative';
+        wrapper.style.zIndex = 'auto';
+        
+        // Replace textarea with wrapper
+        container.replaceChild(wrapper, textarea);
+        
+        // Create editor
+        const editor = new UniversalTextEditor(wrapper, extractedOptions);
+        editor.setText(initialValue);
+        
+        return editor;
+    }
+    
+    /**
+     * Create a new UniversalTextEditor in a container with textarea-like API
+     * @param container Container element
+     * @param options Editor options and initial settings
+     * @returns New UniversalTextEditor instance
+     */
+    public static create(
+        container: HTMLElement,
+        options: Partial<UniversalTextEditorOptions & { value?: string }> = {}
+    ): UniversalTextEditor {
+        const { value, ...editorOptions } = options;
+        
+        const defaultOptions: UniversalTextEditorOptions = {
+            mode: 'simple',
+            placeholder: '',
+            className: '',
+            rows: 3,
+            autoResize: true,
+            disabled: false,
+            readonly: false,
+            ...editorOptions
+        };
+        
+        const editor = new UniversalTextEditor(container, defaultOptions);
+        
+        if (value !== undefined) {
+            editor.setText(value);
+        }
+        
+        return editor;
+    }
+    
+    /**
+     * Create enhanced mode editor with AI features enabled by default
+     * @param container Container element  
+     * @param options Editor options
+     * @returns New UniversalTextEditor instance in enhanced mode
+     */
+    public static createEnhanced(
+        container: HTMLElement,
+        options: Partial<UniversalTextEditorOptions & { value?: string }> = {}
+    ): UniversalTextEditor {
+        return UniversalTextEditor.create(container, {
+            mode: 'enhanced',
+            ...options
+        });
     }
     
     /**
@@ -303,6 +413,9 @@ export class UniversalTextEditor {
         // Initialize new mode
         this.initialize();
         
+        // Rebind DOM event listeners to new editor
+        this.rebindDOMEventListeners();
+        
         // Notify mode change
         if (this.handlers.onModeSwitch) {
             this.handlers.onModeSwitch(mode);
@@ -411,12 +524,12 @@ export class UniversalTextEditor {
         const sentenceBtn = document.createElement('button');
         sentenceBtn.className = 'overlay-btn sentence-btn';
         sentenceBtn.innerHTML = '¶'; // Paragraph symbol for sentences
-        sentenceBtn.title = 'Highlight sentence';
+        sentenceBtn.title = 'change sentences with AI';
         
         const paragraphBtn = document.createElement('button');
         paragraphBtn.className = 'overlay-btn paragraph-btn';
         paragraphBtn.innerHTML = '§'; // Section symbol for paragraphs
-        paragraphBtn.title = 'Highlight paragraph';
+        paragraphBtn.title = 'change paragraphs with AI';
 
         this.selectionOverlay.appendChild(sentenceBtn);
         this.selectionOverlay.appendChild(paragraphBtn);
@@ -533,9 +646,7 @@ export class UniversalTextEditor {
      * Show AI processing spinner overlay
      */
     private showSpinnerOverlay(regions: Array<{start: number, end: number}>): void {
-        console.log('🔄 showSpinnerOverlay called with regions:', regions);
         if (regions.length === 0 || !regions[0]) {
-            console.log('❌ No valid regions for spinner');
             return;
         }
         
@@ -556,9 +667,7 @@ export class UniversalTextEditor {
 
         // Calculate position based on first highlight region
         const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
-        console.log('📍 Found editorDiv:', !!editorDiv);
         if (!editorDiv) {
-            console.log('❌ No editor div found for spinner positioning');
             return;
         }
         
@@ -593,17 +702,14 @@ export class UniversalTextEditor {
             range.setStart(targetNode, Math.min(targetOffset, textLength));
             range.setEnd(targetNode, Math.min(targetOffset + 1, textLength));
             const rect = range.getBoundingClientRect();
-            console.log('📐 Target text rect:', rect);
-            
             // Position spinner relative to modal or viewport
             const modalOverlay = this.container.closest('.modal-overlay') as HTMLElement;
-            console.log('📦 Found modal overlay:', !!modalOverlay);
             if (modalOverlay) {
                 // Position relative to modal overlay with high z-index
                 const modalRect = modalOverlay.getBoundingClientRect();
                 this.spinnerOverlay.style.cssText = `
                     position: absolute;
-                    left: ${rect.left - modalRect.left - 50}px;
+                    left: ${rect.left - modalRect.left - 25}px;
                     top: ${rect.top - modalRect.top}px;
                     display: flex;
                     align-items: center;
@@ -611,42 +717,47 @@ export class UniversalTextEditor {
                     width: 40px;
                     height: 40px;
                     background: rgba(255, 255, 255, 0.95);
-                    border: 1px solid #e5e7eb;
+                    border: 1px solid #3b82f6;
                     border-radius: 8px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
                     backdrop-filter: blur(4px);
                     pointer-events: auto;
-                    z-index: 30000;
+                    z-index: 50000;
+                    font-weight: normal;
+                    color: #3b82f6;
                 `;
                 modalOverlay.appendChild(this.spinnerOverlay);
-                console.log('✅ Spinner added to modal overlay');
             } else {
                 // Fallback to fixed positioning with high z-index
                 this.spinnerOverlay.style.cssText = `
                     position: fixed;
-                    left: ${rect.left - 50}px;
+                    left: ${rect.left - 25}px;
                     top: ${rect.top}px;
-                    z-index: 30000;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     width: 40px;
                     height: 40px;
                     background: rgba(255, 255, 255, 0.95);
-                    border: 1px solid #e5e7eb;
+                    border: 1px solid #3b82f6;
                     border-radius: 8px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
                     backdrop-filter: blur(4px);
                     pointer-events: auto;
+                    z-index: 50000;
+                    font-weight: normal;
+                    color: #3b82f6;
                 `;
                 document.body.appendChild(this.spinnerOverlay);
-                console.log('✅ Spinner added to document body');
             }
 
-            // Add spinner animation
+            // Add spinner animation and styling
             spinner.style.cssText = `
                 font-size: 20px;
                 animation: spin 1s linear infinite;
+                font-weight: normal;
+                color: #3b82f6;
+                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
             `;
             
             // Add CSS animation if not already present
@@ -661,8 +772,6 @@ export class UniversalTextEditor {
                 `;
                 document.head.appendChild(style);
             }
-        } else {
-            console.log('❌ Could not find target text node for spinner positioning');
         }
     }
 
@@ -671,7 +780,6 @@ export class UniversalTextEditor {
      */
     private hideSpinnerOverlay(): void {
         if (this.spinnerOverlay) {
-            console.log('🚫 Hiding spinner overlay');
             this.spinnerOverlay.remove();
             this.spinnerOverlay = null;
         }
@@ -850,11 +958,13 @@ export class UniversalTextEditor {
             }
         }, {
             onClose: () => {
-                // Only remove highlights if transformation was NOT requested (user canceled)
-                this.hideSpinnerOverlay();
+                // Only remove highlights and hide spinner if transformation was NOT requested (user canceled)
                 if (!transformationRequested) {
+                    this.hideSpinnerOverlay();
                     this.removeHighlightsIfNotTransformed(highlightIds);
                 }
+                // If transformation was requested, keep spinner visible until completion
+                // The spinner will be hidden in handleTransformResult() or error handler
             }
         });
         
@@ -896,7 +1006,10 @@ export class UniversalTextEditor {
         // Use OpenRouterClient to get content
         const client = OpenRouterClient.getInstance();
         client.setSettingsManager(settingsManager);
-        const generatedContent = await client.chat('editor', prompt);
+        
+        // Use the specified model purpose or default to 'editor'
+        const modelPurpose = request.modelPurpose || 'editor';
+        const generatedContent = await client.chat(modelPurpose, prompt);
 
         // Parse the transformation from the response
         const transformedText = this.parseTransformationResult(generatedContent);
@@ -1328,6 +1441,240 @@ export class UniversalTextEditor {
      */
     public destroy(): void {
         this.cleanup();
+        
+        // Clean up DOM event listeners
+        this.domEventListeners.clear();
+        
+        // Clean up mutation observer
+        if (this.mutationObserver) {
+            this.mutationObserver.disconnect();
+            this.mutationObserver = null;
+        }
+        
         this.container.innerHTML = '';
+    }
+    
+    // ============================================================================
+    // DOM EVENT COMPATIBILITY (TEXTAREA API)
+    // ============================================================================
+    
+    /**
+     * Add event listener (standard DOM API)
+     * @param type Event type
+     * @param listener Event listener function
+     * @param options Event options (ignored for simplicity)
+     */
+    public addEventListener(
+        type: TextareaEventType, 
+        listener: EventListenerFunction, 
+        _options?: boolean | AddEventListenerOptions
+    ): void {
+        if (!this.domEventListeners.has(type)) {
+            this.domEventListeners.set(type, new Set());
+        }
+        this.domEventListeners.get(type)!.add(listener);
+        
+        // Forward to actual textarea/editor element
+        this.addEventListenerToActiveEditor(type, listener);
+    }
+    
+    /**
+     * Remove event listener (standard DOM API)
+     * @param type Event type
+     * @param listener Event listener function
+     * @param options Event options (ignored for simplicity)
+     */
+    public removeEventListener(
+        type: TextareaEventType, 
+        listener: EventListenerFunction, 
+        _options?: boolean | EventListenerOptions
+    ): void {
+        const listeners = this.domEventListeners.get(type);
+        if (listeners) {
+            listeners.delete(listener);
+            if (listeners.size === 0) {
+                this.domEventListeners.delete(type);
+            }
+        }
+        
+        // Remove from actual textarea/editor element
+        this.removeEventListenerFromActiveEditor(type, listener);
+    }
+    
+    /**
+     * Dispatch event (standard DOM API)
+     * @param event Event to dispatch
+     */
+    public dispatchEvent(event: Event): boolean {
+        const activeElement = this.getActiveEditorElement();
+        return activeElement.dispatchEvent(event);
+    }
+    
+    // ============================================================================
+    // PRIVATE DOM EVENT HELPERS
+    // ============================================================================
+    
+    private addEventListenerToActiveEditor(type: TextareaEventType, listener: EventListenerFunction): void {
+        const activeElement = this.getActiveEditorElement();
+        activeElement.addEventListener(type, listener);
+    }
+    
+    private removeEventListenerFromActiveEditor(type: TextareaEventType, listener: EventListenerFunction): void {
+        const activeElement = this.getActiveEditorElement();
+        activeElement.removeEventListener(type, listener);
+    }
+    
+    private getActiveEditorElement(): HTMLElement {
+        if (this.currentMode === 'simple') {
+            return this.simpleEditor;
+        } else {
+            // For enhanced mode, use the container's editable div
+            const editableDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
+            return editableDiv || this.container;
+        }
+    }
+    
+    /**
+     * Re-bind DOM event listeners when switching modes
+     */
+    private rebindDOMEventListeners(): void {
+        // Re-bind all DOM event listeners to the new active editor
+        for (const [type, listeners] of this.domEventListeners) {
+            for (const listener of listeners) {
+                this.addEventListenerToActiveEditor(type, listener);
+            }
+        }
+    }
+    
+    /**
+     * Setup automatic cleanup when editor is removed from DOM
+     */
+    private setupAutomaticCleanup(): void {
+        // Use MutationObserver to detect when container is removed from DOM
+        this.mutationObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    for (let i = 0; i < mutation.removedNodes.length; i++) {
+                        const removedNode = mutation.removedNodes[i];
+                        if (removedNode && 
+                            removedNode.nodeType === Node.ELEMENT_NODE && 
+                            (removedNode as Element).contains && 
+                            (removedNode as Element).contains(this.container)) {
+                            // Container was removed from DOM, clean up
+                            this.destroy();
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Observe changes to document body
+        this.mutationObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    // ============================================================================
+    // ENHANCED TEXTAREA API COMPATIBILITY
+    // ============================================================================
+    
+    /**
+     * Get/set selectionStart (textarea API)
+     */
+    public get selectionStart(): number {
+        const selection = this.getSelection();
+        return selection.startPos;
+    }
+    
+    public set selectionStart(value: number) {
+        const selection = this.getSelection();
+        this.setSelection(value, selection.endPos);
+    }
+    
+    /**
+     * Get/set selectionEnd (textarea API)
+     */
+    public get selectionEnd(): number {
+        const selection = this.getSelection();
+        return selection.endPos;
+    }
+    
+    public set selectionEnd(value: number) {
+        const selection = this.getSelection();
+        this.setSelection(selection.startPos, value);
+    }
+    
+    /**
+     * Get/set selectionDirection (textarea API)
+     */
+    public get selectionDirection(): string {
+        return 'none'; // Simplified implementation
+    }
+    
+    public set selectionDirection(_value: string) {
+        // Ignore for now - enhanced mode doesn't support direction
+    }
+    
+    /**
+     * Select text range (textarea API)
+     */
+    public select(): void {
+        this.setSelection(0, this.currentValue.length);
+        this.focus();
+    }
+    
+    /**
+     * Set range text (textarea API)
+     */
+    public setRangeText(
+        replacement: string,
+        start?: number,
+        end?: number,
+        selectionMode?: 'select' | 'start' | 'end' | 'preserve'
+    ): void {
+        const currentText = this.currentValue;
+        
+        if (start === undefined || end === undefined) {
+            const selection = this.getSelection();
+            start = start ?? selection.startPos;
+            end = end ?? selection.endPos;
+        }
+        
+        const before = currentText.substring(0, start);
+        const after = currentText.substring(end);
+        const newText = before + replacement + after;
+        
+        this.setText(newText);
+        
+        // Handle selection mode
+        switch (selectionMode) {
+            case 'select':
+                this.setSelection(start, start + replacement.length);
+                break;
+            case 'start':
+                this.setSelection(start, start);
+                break;
+            case 'end':
+                this.setSelection(start + replacement.length, start + replacement.length);
+                break;
+            case 'preserve':
+            default:
+                // Keep current selection
+                break;
+        }
+        
+        // Fire change event
+        this.fireEvent('input');
+        this.fireEvent('change');
+    }
+    
+    /**
+     * Fire a DOM event (helper method)
+     */
+    private fireEvent(type: string): void {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        this.dispatchEvent(event);
     }
 } 

@@ -2,12 +2,14 @@ import { BaseModal } from '../modals/core/BaseModal';
 import { ModalConfig, ModalHooks } from '../modals/types/ModalTypes';
 import { createElement } from '../modals/core/modal-utils';
 import { StorageService, type IStorageService } from '../../StorageService';
+import { MODEL_PURPOSES } from '../../services/TaskModelService';
 
 export interface TextTransformRequest {
   textToChange: string;
   context?: string;
   formatInstructions?: string;
   transformInstruction: string;
+  modelPurpose?: string;
 }
 
 export interface TextTransformModalConfig extends ModalConfig {
@@ -19,6 +21,7 @@ export interface TextTransformModalConfig extends ModalConfig {
 }
 
 const STORAGE_KEY_TEXT_TRANSFORM_HISTORY = 'text_transform_history';
+const STORAGE_KEY_TEXT_TRANSFORM_MODEL_PURPOSE = 'text_transform_model_purpose';
 const MAX_HISTORY_ITEMS = 20; // Keep last 20 transform instructions
 
 export class TextTransformModal extends BaseModal {
@@ -26,10 +29,12 @@ export class TextTransformModal extends BaseModal {
   private contextTextarea: HTMLTextAreaElement | null = null;
   private formatInstructionsTextarea: HTMLTextAreaElement | null = null;
   private instructionTextarea: HTMLTextAreaElement | null = null;
+  private modelPurposeSelect: HTMLSelectElement | null = null;
   private historyContainer: HTMLElement | null = null;
   private onTransformRequested: ((request: TextTransformRequest) => void) | undefined;
   private storageService: Promise<IStorageService>;
   private transformHistory: string[] = [];
+  private selectedModelPurpose: string = 'editor'; // Default to editor purpose
 
   constructor(config: TextTransformModalConfig, hooks: ModalHooks = {}) {
     super({
@@ -47,8 +52,9 @@ export class TextTransformModal extends BaseModal {
   }
 
   public override async open(): Promise<void> {
-    // Load transform history before opening
+    // Load transform history and model purpose before opening
     await this.loadTransformHistory();
+    await this.loadModelPurpose();
     await super.open();
     
     // Focus the text area after modal opens
@@ -155,6 +161,32 @@ export class TextTransformModal extends BaseModal {
           flex-direction: column;
           gap: 0.5rem;
           min-height: 0;
+        }
+        
+        .model-selection-area {
+          flex: 0 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        
+        .model-purpose-select {
+          width: 100%;
+          padding: 0.75rem;
+          border: 2px solid #d1d5db;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 14px;
+          background: white;
+          outline: none;
+          transition: border-color 0.2s;
+          cursor: pointer;
+        }
+        
+        .model-purpose-select:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         
         .transform-history-section {
@@ -421,6 +453,15 @@ export class TextTransformModal extends BaseModal {
             >${this.escapeHtml(config.defaultInstruction || '')}</textarea>
           </div>
           
+          <div class="model-selection-area">
+            <label class="form-label" for="model-purpose-select">
+              AI Model Purpose
+            </label>
+            <select id="model-purpose-select" class="model-purpose-select">
+              ${this.renderModelPurposeOptions()}
+            </select>
+          </div>
+          
           <div class="transform-history-section">
             <label class="form-label">Previous Instructions</label>
             <div id="history-container" class="history-list">
@@ -453,6 +494,16 @@ export class TextTransformModal extends BaseModal {
       .join('');
   }
 
+  private renderModelPurposeOptions(): string {
+    return MODEL_PURPOSES
+      .map(purpose => `
+        <option value="${purpose.key}" ${purpose.key === this.selectedModelPurpose ? 'selected' : ''}>
+          ${purpose.label}
+        </option>
+      `)
+      .join('');
+  }
+
   private escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
@@ -465,6 +516,7 @@ export class TextTransformModal extends BaseModal {
     this.contextTextarea = this.element?.querySelector('#context-textarea') as HTMLTextAreaElement;
     this.formatInstructionsTextarea = this.element?.querySelector('#format-instructions-textarea') as HTMLTextAreaElement;
     this.instructionTextarea = this.element?.querySelector('#instruction-textarea') as HTMLTextAreaElement;
+    this.modelPurposeSelect = this.element?.querySelector('#model-purpose-select') as HTMLSelectElement;
     this.historyContainer = this.element?.querySelector('#history-container') as HTMLElement;
     
     // Cancel button
@@ -480,6 +532,14 @@ export class TextTransformModal extends BaseModal {
     if (transformBtn) {
       transformBtn.addEventListener('click', () => {
         void this.handleTransform();
+      });
+    }
+    
+    // Model purpose selection
+    if (this.modelPurposeSelect) {
+      this.modelPurposeSelect.addEventListener('change', () => {
+        this.selectedModelPurpose = this.modelPurposeSelect!.value;
+        void this.saveModelPurpose();
       });
     }
     
@@ -555,7 +615,8 @@ export class TextTransformModal extends BaseModal {
     // Create the transform request
     const request: TextTransformRequest = {
       textToChange,
-      transformInstruction
+      transformInstruction,
+      modelPurpose: this.selectedModelPurpose
     };
     
     if (context) {
@@ -626,6 +687,26 @@ export class TextTransformModal extends BaseModal {
       }
     } catch (error) {
       console.warn('Failed to delete history item:', error);
+    }
+  }
+
+  private async loadModelPurpose(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      const savedPurpose = await storage.get<string>(STORAGE_KEY_TEXT_TRANSFORM_MODEL_PURPOSE);
+      this.selectedModelPurpose = savedPurpose || 'editor'; // Default to editor
+    } catch (error) {
+      console.warn('Failed to load model purpose:', error);
+      this.selectedModelPurpose = 'editor'; // Default to editor on error
+    }
+  }
+
+  private async saveModelPurpose(): Promise<void> {
+    try {
+      const storage = await this.storageService;
+      await storage.set(STORAGE_KEY_TEXT_TRANSFORM_MODEL_PURPOSE, this.selectedModelPurpose);
+    } catch (error) {
+      console.warn('Failed to save model purpose:', error);
     }
   }
 } 
