@@ -663,6 +663,18 @@ export class UniversalTextEditor {
     }
 
     /**
+     * Remove highlights if they still exist (transformation was cancelled)
+     */
+    private removeHighlightsIfNotTransformed(highlightIds: string[]): void {
+        if (this.currentMode !== 'enhanced') return;
+        
+        // Remove each highlight if it still exists
+        highlightIds.forEach(highlightId => {
+            this.enhancedEditor.removeHighlight(highlightId);
+        });
+    }
+
+    /**
      * Highlight selection with specific mode
      */
     private highlightSelectionWithMode(mode: 'sentences' | 'paragraphs'): void {
@@ -816,6 +828,12 @@ export class UniversalTextEditor {
                     console.error('Failed to transform text:', error);
                     alert('Failed to transform text. Please try again.');
                 }
+            }
+        }, {
+            onClose: () => {
+                // Remove highlights if modal is closed without transformation
+                this.hideSpinnerOverlay();
+                this.removeHighlightsIfNotTransformed(highlightIds);
             }
         });
         
