@@ -106,7 +106,7 @@ export class XMLStoryParser {
         let cleanedText = text;
 
         // Find all XML-like tags in the text
-        const xmlTagRegex = /<(character|location|item|plot_point|context)(\s[^>]*?)?\s*\/?>/gi;
+        const xmlTagRegex = /<(outline|context|character|location|item|plot_point)(\s[^>]*?)?\s*\/?>/gi;
         const matches = Array.from(text.matchAll(xmlTagRegex));
 
         console.log(`🔍 Found ${matches.length} XML tags to parse:`, matches.map(m => m[0]));
@@ -142,7 +142,7 @@ export class XMLStoryParser {
                 console.log(`✅ Parsed ${tagName} with attributes:`, attributes);
 
                 // Find tag definition
-                const tagDef = XML_TAG_DEFINITIONS.find(def => def.elementType === tagName as StoryElementType);
+                const tagDef = XML_TAG_DEFINITIONS.find(def => def.tagName === tagName);
                 if (!tagDef) {
                     throw new Error(`Unknown tag type: ${tagName}`);
                 }
@@ -156,7 +156,7 @@ export class XMLStoryParser {
 
                 // Create story element
                 const element = this.createElementFromAttributes(
-                    tagName as StoryElementType,
+                    tagDef.elementType,
                     attributes,
                     fullMatch
                 );
