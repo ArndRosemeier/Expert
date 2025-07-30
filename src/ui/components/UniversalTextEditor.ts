@@ -810,8 +810,8 @@ export class UniversalTextEditor {
             .map(region => fullText.substring(region.start, region.end))
             .join('\n\n'); // Join multiple regions with double newlines
 
-        // Track whether transformation completed successfully
-        let transformationCompleted = false;
+        // Track whether transformation was requested (not completed)
+        let transformationRequested = false;
 
         // Open transform modal with highlighted text and full context
         const modal = new TextTransformModal({
@@ -819,12 +819,12 @@ export class UniversalTextEditor {
             defaultText: highlightedText,
             defaultContext: fullText,
             onTransformRequested: async (request: TextTransformRequest) => {
+                transformationRequested = true; // Mark as requested immediately
                 try {
                     // Show spinner overlay while AI is processing
                     this.showSpinnerOverlay(regions);
                     
                     const transformedText = await this.performAITransformation(request);
-                    transformationCompleted = true; // Mark as completed before handling result
                     this.handleTransformResult(transformedText, regions, highlightIds, fullText);
                 } catch (error) {
                     // Hide spinner on error
@@ -835,9 +835,9 @@ export class UniversalTextEditor {
             }
         }, {
             onClose: () => {
-                // Only remove highlights if transformation did NOT complete successfully
+                // Only remove highlights if transformation was NOT requested (user canceled)
                 this.hideSpinnerOverlay();
-                if (!transformationCompleted) {
+                if (!transformationRequested) {
                     this.removeHighlightsIfNotTransformed(highlightIds);
                 }
             }
