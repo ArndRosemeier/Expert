@@ -239,6 +239,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             {{content}}
             ---
 
+            {{context}}
+
             CRITICAL FORMAT REQUIREMENTS:
             1. Create exactly {{transform_count}} transformations
             2. Each transformation must start with the exact marker: "=== TRANSFORMATION START ==="
@@ -257,11 +259,13 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             [Content transformed according to the user's instruction - alternative approach]
             === TRANSFORMATION END ===
 
+            {{noise_names}}
+
             Generate exactly {{transform_count}} transformations following this format precisely.
             Apply the user's instruction creatively but faithfully to produce high-quality results.
         `.trim(),
-        placeholders: ['content', 'language', 'transform_count', 'user_instruction'],
-        description: "The system prompt for transforming content based on user instructions in multiple different ways with precise formatting markers for reliable parsing."
+        placeholders: ['content', 'language', 'transform_count', 'user_instruction', 'context'],
+        description: "The system prompt for transforming content based on user instructions in multiple different ways with precise formatting markers for reliable parsing. Includes optional context placeholder for broader document context."
     },
 
     idea_generation_system: {
