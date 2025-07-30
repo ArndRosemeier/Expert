@@ -881,7 +881,7 @@ export class SettingsModal extends BaseModal {
             return prompts;
         };
         
-        console.log('🛠️ Debug utility loaded! Run window.debugPrompts() to verify prompt changes');
+
     }
 
     /**

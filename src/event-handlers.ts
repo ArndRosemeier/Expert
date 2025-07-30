@@ -690,7 +690,7 @@ export async function initialize() {
     const initialProfileName = settingsManager.getLastUsedProfileName();
     if (initialProfileName) {
         state.setCurrentlyLoadedProfileName(initialProfileName);
-        console.log(`🔄 Initial profile consistency: "${initialProfileName}" set as loaded profile`);
+
     }
 
     // Create minimal services for loading projects

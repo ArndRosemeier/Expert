@@ -30,7 +30,7 @@ export class XMLStoryModal extends BaseModal {
     private openRouterClient: OpenRouterClient;
     private storySystem: ReturnType<typeof createXMLStorySystem>;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    private globalModelSelector: ModelSelector;
+
     
     // UI elements
     private whiteboardContainer: HTMLElement | null = null;
@@ -58,7 +58,6 @@ export class XMLStoryModal extends BaseModal {
         
         this.settingsManager = config.settingsManager;
         this.openRouterClient = config.openRouterClient;
-        this.globalModelSelector = config.modelSelector;
         
         // Initialize the XML story system
         this.storySystem = createXMLStorySystem({
@@ -774,7 +773,7 @@ export class XMLStoryModal extends BaseModal {
             if (this.messageInput) {
                 this.messageInput.focus();
                 if (cursorPosition !== null) {
-                    this.messageInput.setSelectionRange(cursorPosition, cursorPosition);
+                    this.messageInput.setSelectionRange(cursorPosition ?? 0, cursorPosition ?? 0);
                 }
             }
         }, 0);

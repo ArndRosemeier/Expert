@@ -871,9 +871,7 @@ export class LogicErrorDetectorModal extends BaseModal {
             (logicErrorData as any).suggestedFix = error.suggestedFix;
         }
         
-        const todo = this.parentNode.addTodo(description, relatedNodes, logicErrorData);
-        
-        console.log(`📝 Added logic error to todo list:`, todo);
+        this.parentNode.addTodo(description, relatedNodes, logicErrorData);
         
         // Track that this error has been added to todos
         const errorId = this.createErrorIdentifier(error.type, error.severity, error.description);

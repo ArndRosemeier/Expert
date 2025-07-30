@@ -20,7 +20,7 @@ export class LogicOutlineFixerService {
 
     public async generateFixedOutline(node: DocumentNode, todos: TodoItem[]): Promise<FixedOutlineResult> {
         console.log(`🔧 Generating fixed outline for node: ${node.title}`);
-        console.log(`🧩 Addressing ${todos.length} todo items`);
+
 
         const originalContent = node.content || '';
         

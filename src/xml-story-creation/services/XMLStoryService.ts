@@ -179,10 +179,10 @@ export class XMLStoryService {
         // Add to edit history
         updatedElement.editHistory.push({
             timestamp: new Date(),
-            field,
-            oldValue,
-            newValue,
-            source: 'human'
+            type: 'human_edit',
+            changes: field === 'name' 
+                ? { name: { from: oldValue as string | undefined, to: newValue } }
+                : { description: { from: oldValue, to: newValue } }
         });
         
         updatedElement.isHumanEdited = true;

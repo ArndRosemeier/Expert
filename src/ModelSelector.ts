@@ -1441,7 +1441,7 @@ export class ModelSelector {
       const client = OpenRouterClient.getInstance();
       const endpoints = await client.fetchModelEndpoints(modelId);
       this.modelEndpoints[modelId] = endpoints;
-      console.log(`📋 Fetched ${endpoints.length} providers for model ${modelId}`);
+      
 
     } catch (error) {
       console.error(`❌ CRITICAL: Failed to fetch endpoints for model ${modelId}:`, error);

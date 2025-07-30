@@ -1123,8 +1123,7 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Centralized method to remove the current todo and handle workflow continuation
      */
     private async removeTodoAndContinue(): Promise<void> {
-        console.log(`📝 Total todos before removal: ${this.node.todos.length}`);
-        console.log(`🎯 Looking to remove todo with ID: ${this.selectedTodo!.id}`);
+
         
         const todoIndex = this.node.todos.findIndex(todo => todo.id === this.selectedTodo!.id);
         if (todoIndex === -1) {
@@ -1132,8 +1131,6 @@ export class LogicOutlineFixerModal extends BaseModal {
         }
         
         this.node.todos.splice(todoIndex, 1);
-        console.log(`🗑️ Removed todo: ${this.selectedTodo!.description}`);
-        console.log(`📝 Total todos after removal: ${this.node.todos.length}`);
 
         // Notify other UI components about todo changes
         this.dispatchTodoListChangedEvent();
@@ -1145,15 +1142,10 @@ export class LogicOutlineFixerModal extends BaseModal {
         const { renderMultiProjectTree } = await import('../project-ui');
         renderMultiProjectTree();
 
-        console.log('✅ Problem fixed and todo removed: ' + this.selectedTodo!.description);
-
         // Check if there are more problems to fix - get fresh list
         const remainingTodos = this.node.getIncompleteTodos();
-        console.log(`📋 Remaining todos after fix: ${remainingTodos.length}`);
         
         if (remainingTodos.length > 0) {
-            console.log('🔄 More problems to fix, returning to problem selection');
-            console.log('Remaining problems:', remainingTodos.map(t => t.description));
             
             // Return to problem selection for next problem
             this.modalState = 'problem-selection';

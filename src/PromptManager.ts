@@ -247,6 +247,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             5. Make each transformation explore different approaches to applying the instruction while maintaining quality
             6. Each transformation should be a complete, standalone result based on the original content
             7. Do NOT include any text outside the transformation markers
+            8. Do NOT add anything extra, no titles, nothing. Transformed texts will programmatically replace original text, so anything extra will be harmful.
 
             EXACT FORMAT EXAMPLE:
             === TRANSFORMATION START ===

@@ -3877,7 +3877,7 @@ This action cannot be undone.`;
 }
 
 export async function setupEventListeners() {
-    console.log('🔧 Setting up event listeners with EventManager...');
+
     
     // Use EventManager for robust event handling that survives DOM replacements
     const { eventManager } = await import('./event-manager');
@@ -3894,7 +3894,7 @@ export async function setupEventListeners() {
     
     // Remove existing event manager setup to prevent duplicates
     if ((mainContent as any)._eventManagerSetup) {
-        console.log('🔄 EventManager already set up, skipping duplicate setup');
+
         return;
     }
     
@@ -5730,7 +5730,7 @@ function buildTodoIndicatorCacheForAllProjects(projects: ProjectManager[]): void
         buildTodoIndicatorCache(project.rootNode, false); // false = don't clear cache
     });
     
-    console.log(`⚠️ Todo indicator cache built for ${projects.length} projects. ${nodesWithTodoIndicators.size} nodes with todo indicators, ${nodesWithDirectTodos.size} with direct todos.`);
+    
 }
 
 /**
@@ -5746,7 +5746,6 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
     // Recursive function to check a node and all its descendants
     function checkNodeForTodos(node: DocumentNode): boolean {
         let hasAnyTodos = false;
-        let hasDirectTodos = false;
         
         // Check if this node itself has todos
         if (node.todos && node.todos.length > 0) {
@@ -5754,9 +5753,7 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
             const incompleteTodos = node.getIncompleteTodos();
             if (incompleteTodos.length > 0) {
                 hasAnyTodos = true;
-                hasDirectTodos = true;
                 nodesWithDirectTodos.add(node.id);
-                console.log(`⚠️ Found ${incompleteTodos.length} incomplete todos in node: ${node.title}`);
             }
         }
         
@@ -5771,8 +5768,6 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
         // If this node or any descendant has todos, mark this node for indicator
         if (hasAnyTodos) {
             nodesWithTodoIndicators.add(node.id);
-            const indicatorType = hasDirectTodos ? 'direct' : 'descendant';
-            console.log(`⚠️ Added todo indicator for node: ${node.title} (ID: ${node.id}) - ${indicatorType} todos`);
         }
         
         return hasAnyTodos;

@@ -27,6 +27,7 @@ export class TextEditorWithHighlighting {
     private lastReplacement: UndoState | null = null;
     private highlightTimeouts: Map<string, number> = new Map();
 
+
     constructor(container: HTMLElement) {
         this.container = container;
         this.createEditor();
@@ -131,6 +132,8 @@ export class TextEditorWithHighlighting {
             }
             // If no text, let default behavior handle it (won't break anything)
         });
+
+
     }
 
     /**
@@ -222,56 +225,61 @@ export class TextEditorWithHighlighting {
     }
 
     /**
-     * Expand selection to word boundaries with smart punctuation handling
+     * Expand selection to word boundaries with smart boundary detection
      */
     private expandToWordBoundariesOnly(startPos: number, endPos: number): {startPos: number, endPos: number} {
         const text = this.getText();
         let newStartPos = startPos;
         let newEndPos = endPos;
 
-        // Expand start position to word boundary
-        while (newStartPos > 0) {
-            const char = text[newStartPos - 1];
-            if (!char) break; // Safety check
-            // Stop at whitespace or sentence-ending punctuation
-            if (/\s/.test(char) || /[.!?]/.test(char)) {
-                break;
+        // Check what's at the current boundaries
+        const startChar = startPos < text.length ? text[startPos] || '' : '';
+        const endChar = endPos > 0 ? text[endPos - 1] || '' : '';
+        const beforeStartChar = startPos > 0 ? text[startPos - 1] || '' : '';
+        
+        // Smart start position logic
+        if (/\s/.test(startChar) || /\s/.test(beforeStartChar)) {
+            // If we're on or adjacent to whitespace, shrink inward to find first word character
+            while (newStartPos < newEndPos) {
+                const char = text[newStartPos] || '';
+                if (char && /[\w'-]/.test(char)) {
+                    break; // Found start of a word
+                }
+                newStartPos++;
             }
-            // Continue through word characters, hyphens, apostrophes
-            if (/[\w'-]/.test(char)) {
+        } else if (/[\w'-]/.test(startChar) || /[\w'-]/.test(beforeStartChar)) {
+            // If we're within a word, expand backward to word start
+            while (newStartPos > 0) {
+                const char = text[newStartPos - 1] || '';
+                if (!char || !/[\w'-]/.test(char)) {
+                    break; // Found word boundary
+                }
                 newStartPos--;
-            } else {
-                break;
             }
         }
 
-        // Expand end position to word boundary
-        while (newEndPos < text.length) {
-            const char = text[newEndPos];
-            if (!char) break; // Safety check
-            // Stop at whitespace or sentence-ending punctuation
-            if (/\s/.test(char) || /[.!?]/.test(char)) {
-                break;
+        // Smart end position logic
+        if (/\s/.test(endChar) || (endPos < text.length && /\s/.test(text[endPos] || ''))) {
+            // If we're on or adjacent to whitespace, shrink inward to find last word character
+            while (newEndPos > newStartPos) {
+                const char = text[newEndPos - 1] || '';
+                if (char && /[\w'-]/.test(char)) {
+                    break; // Found end of a word
+                }
+                newEndPos--;
             }
-            // Continue through word characters, hyphens, apostrophes
-            if (/[\w'-]/.test(char)) {
+        } else if (/[\w'-]/.test(endChar)) {
+            // If we're within a word, expand forward to word end
+            while (newEndPos < text.length) {
+                const char = text[newEndPos] || '';
+                if (!char || !/[\w'-]/.test(char)) {
+                    break; // Found word boundary
+                }
                 newEndPos++;
-            } else {
-                break;
             }
         }
 
-        // Trim any leading/trailing whitespace from the final selection
-        while (newStartPos < newEndPos) {
-            const char = text[newStartPos];
-            if (!char || !/\s/.test(char)) break;
-            newStartPos++;
-        }
-        while (newEndPos > newStartPos) {
-            const char = text[newEndPos - 1];
-            if (!char || !/\s/.test(char)) break;
-            newEndPos--;
-        }
+        // If we ended up with an empty selection, that's fine - user selected only whitespace/punctuation
 
         return {startPos: newStartPos, endPos: newEndPos};
     }
@@ -383,47 +391,42 @@ export class TextEditorWithHighlighting {
         let newStartPos = startPos;
         let newEndPos = endPos;
 
-        // Expand start position to paragraph beginning
+        // Find paragraph start by looking backwards for double newline or start of text
         while (newStartPos > 0) {
-            const char = text[newStartPos - 1];
-            // Stop at double newline (paragraph break) or start of text
-            if (char === '\n') {
-                // Check if it's a double newline (paragraph break)
-                if (newStartPos > 1 && text[newStartPos - 2] === '\n') {
-                    break;
-                }
-                // Single newline - check if this starts a new paragraph (empty line before)
-                if (newStartPos === 1 || text[newStartPos - 2] === '\n') {
+            // Look for double newline pattern
+            if (newStartPos >= 2) {
+                const char1 = text[newStartPos - 1];
+                const char2 = text[newStartPos - 2];
+                if (char1 === '\n' && char2 === '\n') {
+                    // Found double newline, paragraph starts after it
                     break;
                 }
             }
             newStartPos--;
         }
 
-        // Expand end position to paragraph end
+        // Find paragraph end by looking forwards for double newline or end of text
         while (newEndPos < text.length) {
-            const char = text[newEndPos];
-            // Stop at double newline (paragraph break)
-            if (char === '\n') {
-                // Check if next character is also newline (paragraph break)
-                if (newEndPos + 1 < text.length && text[newEndPos + 1] === '\n') {
-                    break;
-                }
-                // Single newline - check if this ends the paragraph (empty line after)
-                if (newEndPos + 1 === text.length || text[newEndPos + 1] === '\n') {
-                    newEndPos++; // Include the newline
+            // Look for double newline pattern
+            if (newEndPos < text.length - 1) {
+                const char1 = text[newEndPos];
+                const char2 = text[newEndPos + 1];
+                if (char1 === '\n' && char2 === '\n') {
+                    // Found double newline, paragraph ends before it
                     break;
                 }
             }
             newEndPos++;
         }
 
-        // Trim leading and trailing whitespace within the paragraph
+        // Trim leading whitespace from paragraph start
         while (newStartPos < newEndPos) {
             const char = text[newStartPos];
             if (!char || !/\s/.test(char)) break;
             newStartPos++;
         }
+
+        // Trim trailing whitespace from paragraph end
         while (newEndPos > newStartPos) {
             const char = text[newEndPos - 1];
             if (!char || !/\s/.test(char)) break;
@@ -714,6 +717,8 @@ export class TextEditorWithHighlighting {
         div.textContent = text;
         return div.innerHTML;
     }
+
+
 
     /**
      * Destroy the editor and clean up

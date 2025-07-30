@@ -192,22 +192,7 @@ export class XMLStoryParser {
      * Parse XML attributes from attribute string
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    private parseAttributes(attributesText: string): Record<string, string> {
-        const attributes: Record<string, string> = {};
-        // Updated regex to properly handle quotes and apostrophes
-        // Matches either "value" (anything except unescaped ") or 'value' (anything except unescaped ')
-        const attributeRegex = /(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-        
-        let match;
-        while ((match = attributeRegex.exec(attributesText)) !== null) {
-            if (match[1] && (match[2] !== undefined || match[3] !== undefined)) {
-                // Use match[2] for double quotes, match[3] for single quotes
-                attributes[match[1]] = match[2] !== undefined ? match[2] : (match[3] || '');
-            }
-        }
-        
-        return attributes;
-    }
+
     
     /**
      * Create story element from attributes (for self-closing tags)
@@ -248,19 +233,7 @@ export class XMLStoryParser {
      * Create story element from content (for content tags)
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    private createElementFromContent(
-        type: StoryElementType,
-        attributes: Record<string, string>,
-        content: string,
-        sourceText: string
-    ): StoryElement | null {
-        // For content tags, use content as description if not provided in attributes
-        if (!attributes['description'] && content) {
-            attributes['description'] = content;
-        }
-        
-        return this.createElementFromAttributes(type, attributes, sourceText);
-    }
+
     
     /**
      * Create a new story element
@@ -320,10 +293,10 @@ export class XMLStoryParser {
         if (newName && newName !== existingElement.name) {
             updatedElement.editHistory.push({
                 timestamp: new Date(),
-                field: 'name',
-                oldValue: existingElement.name ?? '',
-                newValue: newName,
-                source: 'ai'
+                type: 'ai_edit',
+                changes: {
+                    name: { from: existingElement.name, to: newName }
+                }
             });
             updatedElement.name = newName;
             hasChanges = true;
@@ -334,10 +307,10 @@ export class XMLStoryParser {
         if (newDescription && newDescription !== existingElement.description) {
             updatedElement.editHistory.push({
                 timestamp: new Date(),
-                field: 'description',
-                oldValue: existingElement.description,
-                newValue: newDescription,
-                source: 'ai'
+                type: 'ai_edit',
+                changes: {
+                    description: { from: existingElement.description, to: newDescription }
+                }
             });
             updatedElement.description = newDescription;
             hasChanges = true;

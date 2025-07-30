@@ -86,6 +86,14 @@
     50% { box-shadow: 0 0 10px rgba(230, 81, 0, 0.8); }
 }
 
+/* Unified highlight for all selection overlay highlights */
+.highlight-unified {
+    background-color: rgba(59, 130, 246, 0.2);
+    border-bottom: 2px solid #3b82f6;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
 /* Hover effects for highlights */
 .highlight-ai-replacement:hover,
 .highlight-more-details:hover,
@@ -93,7 +101,8 @@
 .highlight-improve-clarity:hover,
 .highlight-add-examples:hover,
 .highlight-find-result:hover,
-.highlight-find-current:hover {
+.highlight-find-current:hover,
+.highlight-unified:hover {
     opacity: 0.8;
     cursor: pointer;
 } 

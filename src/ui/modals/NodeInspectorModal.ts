@@ -3,6 +3,7 @@ import type { DocumentNode, ContentVersion } from '../../DocumentNode';
 import { analyzeTagsInHierarchy } from '../../ProjectUtils';
 import { Rating } from '../../types/RatingTypes';
 import { getActiveProject } from '../../state';
+import { UniversalTextEditor } from '../components/UniversalTextEditor';
 
 
 // ============================================================================
@@ -330,6 +331,7 @@ class ContentViewer extends UIComponent {
 export class NodeInspectorModal extends BaseModal {
     private node: DocumentNode | null = null;
     private selectedVersionId: string | null = null;
+    private contentEditor: UniversalTextEditor | null = null;
 
     constructor() {
         super({
@@ -362,7 +364,7 @@ export class NodeInspectorModal extends BaseModal {
     private setupTodoChangeListener(): void {
         const handleTodoChange = (event: CustomEvent) => {
             if (this.node && event.detail.nodeId === this.node.id) {
-                console.log('📝 Todo list changed for current node, refreshing modal');
+        
                 this.rerender();
             }
         };
@@ -382,6 +384,12 @@ export class NodeInspectorModal extends BaseModal {
         if ((this as any)._todoChangeHandler) {
             window.removeEventListener('todoListChanged', (this as any)._todoChangeHandler as EventListener);
             delete (this as any)._todoChangeHandler;
+        }
+        
+        // Clean up UniversalTextEditor
+        if (this.contentEditor) {
+            this.contentEditor.destroy();
+            this.contentEditor = null;
         }
         
         await super.close();
@@ -749,9 +757,9 @@ export class NodeInspectorModal extends BaseModal {
                 </div>
                 
                 <div class="version-section">
-                    <h4 class="section-title">Content</h4>
+                    <h4 class="section-title">Content <span class="enhanced-badge">Enhanced</span></h4>
                     <div class="section-content">
-                        <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
+                        <div id="inspector-content-editor-container" class="content-editor-container"></div>
                     </div>
                 </div>
                 
@@ -935,6 +943,12 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private rerender() {
+        // Clean up existing content editor before re-rendering
+        if (this.contentEditor) {
+            this.contentEditor.destroy();
+            this.contentEditor = null;
+        }
+        
         // Re-render modal content
         const modalContent = this.render();
         if (this.element) {
@@ -950,26 +964,47 @@ export class NodeInspectorModal extends BaseModal {
         if (!this.node) return;
 
         const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
-        const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
+        const contentEditorContainer = document.getElementById('inspector-content-editor-container') as HTMLElement;
         const contextEditor = document.getElementById('inspector-context-editor') as HTMLTextAreaElement;
 
+        // Create UniversalTextEditor for content
+        if (contentEditorContainer) {
+            // Clean up existing editor if any
+            if (this.contentEditor) {
+                this.contentEditor.destroy();
+            }
+            
+            // Get current version content
+            const version = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
+            const currentContent = version?.content || '';
+            
+            // Create new UniversalTextEditor in enhanced mode
+            this.contentEditor = new UniversalTextEditor(contentEditorContainer, {
+                mode: 'enhanced',
+                placeholder: 'Enter content...',
+                className: 'content-editor auto-resize',
+                autoResize: true
+            }, {
+                onBlur: async () => {
+                    if (this.contentEditor) {
+                        this.saveContent(this.contentEditor.value);
+                        // Update external UI only when editing is finished
+                        await this.persistNodeChanges();
+                    }
+                }
+            });
+            
+            // Set the content
+            this.contentEditor.setText(currentContent);
+        }
+
         // Auto-resize textareas
-        this.setupAutoResize(contentEditor);
         this.setupAutoResize(contextEditor);
 
         // Title editor - save only on blur (when focus is lost)
         if (titleEditor) {
             titleEditor.addEventListener('blur', async () => {
                 this.saveTitle(titleEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
-
-        // Content editor - save only on blur (when focus is lost)
-        if (contentEditor) {
-            contentEditor.addEventListener('blur', async () => {
-                this.saveContent(contentEditor.value);
                 // Update external UI only when editing is finished
                 await this.persistNodeChanges();
             });
@@ -983,7 +1018,11 @@ export class NodeInspectorModal extends BaseModal {
                 await this.persistNodeChanges();
             });
         }
+
+        // Enhanced mode selection overlay is handled by the editor itself
     }
+
+
 
     private setupAutoResize(textarea: HTMLTextAreaElement): void {
         if (!textarea) return;
@@ -1514,6 +1553,42 @@ export class NodeInspectorModal extends BaseModal {
             .auto-resize {
                 overflow-y: hidden;
                 resize: none;
+            }
+            
+            .content-editor-container {
+                width: 100%;
+                min-height: 100px;
+            }
+            
+            .content-editor-container .text-editor-with-highlighting {
+                width: 100%;
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 1rem;
+                font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+                font-size: 0.9em;
+                line-height: 1.5;
+                color: #374151;
+                min-height: 100px;
+                transition: border-color 0.2s ease;
+            }
+            
+            .content-editor-container .text-editor-with-highlighting:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+            
+            .enhanced-badge {
+                background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+                color: white;
+                font-size: 0.7rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 12px;
+                font-weight: 500;
+                margin-left: 0.5rem;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }
             .content-main {
                 background: #f9fafb;
