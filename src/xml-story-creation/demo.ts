@@ -197,7 +197,7 @@ export async function testErrorHandling(): Promise<void> {
     
     // Test invalid element ID
     try {
-        await storySystem.handleHumanEdit('invalid_id', 'description', 'test');
+        await storySystem.handleHumanEdit('invalid_id', 'test content');
     } catch (error) {
         console.log('✅ Correctly caught invalid element ID error:', (error as Error).message);
     }
