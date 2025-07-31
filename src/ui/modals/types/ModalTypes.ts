@@ -4,7 +4,7 @@
 
 import { DocumentNode } from '../../../DocumentNode';
 import { ProjectManager } from '../../../ProjectManager';
-import { ProjectTemplate } from '../../../ProjectTemplate';
+// ProjectTemplate import removed - not used in this file
 
 /**
  * Base modal configuration interface
@@ -71,32 +71,12 @@ export interface ModalAction {
     handler: () => void | Promise<void>;
 }
 
-/**
- * Export modal specific types
- */
-export interface ExportModalConfig extends ModalConfig {
-    projectManager: ProjectManager;
-    node: DocumentNode;
-}
-
-// Export types moved to ExportTypes.ts to avoid conflicts
-
-/**
- * Settings modal specific types
- */
-export interface SettingsModalConfig extends ModalConfig {
-    activeTab?: SettingsTab;
-}
-
-export type SettingsTab = 'profiles' | 'models' | 'criteria' | 'prompts' | 'ai-logs';
-
-/**
- * New project modal specific types
- */
-export interface NewProjectModalConfig extends ModalConfig {
-    templates: ProjectTemplate[];
-    onCreate: (title: string, template: ProjectTemplate) => void;
-}
+// Modal-specific config interfaces moved to individual modal files to avoid export conflicts
+// Import them from their respective files if needed:
+// - ExportModalConfig from './ExportModal'
+// - SettingsModalConfig from './SettingsModal' 
+// - NewProjectModalConfig from './NewProjectModal'
+// - AILogModalConfig from './AILogModal'
 
 /**
  * Context extraction modal specific types
@@ -104,14 +84,6 @@ export interface NewProjectModalConfig extends ModalConfig {
 export interface ContextExtractionModalConfig extends ModalConfig {
     projectManager: ProjectManager;
     node: DocumentNode;
-}
-
-/**
- * AI Log modal specific types
- */
-export interface AILogModalConfig extends ModalConfig {
-    searchQuery?: string;
-    filterType?: 'all' | 'creator' | 'rater' | 'editor';
 }
 
 /**

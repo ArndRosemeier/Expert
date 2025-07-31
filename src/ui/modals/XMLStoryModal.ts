@@ -717,24 +717,11 @@ export class XMLStoryModal extends BaseModal {
                                                 <button id="create-project-btn" class="sidebar-button primary">
                                 🚀 Update Node
                     </button>
-                    
-                    <div style="border-top: 1px solid #444; margin: 0.5rem 0; padding-top: 1rem;">
-                        <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">
-                            XML Tags Available
-                        </div>
-                        <div style="font-size: 0.8rem; color: #ccc; line-height: 1.4;">
-                            <div>&lt;character name="..." description="..." /&gt;</div>
-                            <div>&lt;location name="..." description="..." /&gt;</div>
-                            <div>&lt;item name="..." description="..." /&gt;</div>
-                            <div>&lt;plot_point description="..." /&gt;</div>
-                            <div>&lt;context description="..." /&gt;</div>
-                            <div>&lt;/refresh&gt;</div>
-                        </div>
-                    </div>
+
                     
                     <div style="font-size: 0.8rem; color: #888; line-height: 1.4; margin-top: auto;">
                         <p><strong>How it works:</strong></p>
-                        <p>Chat naturally about your story. The AI will use XML tags to create story elements that appear on the whiteboard. You can edit any element by clicking on it.</p>
+                        <p>Chat naturally about your story. The AI can change your outline, add and edit context items. The AI also knows your outline and context and you can talk about it, ask for improvements.</p>
                     </div>
                 </div>
             </div>
@@ -1479,7 +1466,7 @@ export class XMLStoryModal extends BaseModal {
             }
 
             // Success feedback
-            alert(`${templateLevel} updated successfully with chat edits!`);
+            console.log(`✅ ${templateLevel} updated successfully with chat edits!`);
 
             // Optionally close the modal
             await this.close();

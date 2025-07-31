@@ -16,7 +16,7 @@ import { createElement } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
 import * as state from '../../state';
 
-interface NewProjectModalConfig extends ModalConfig {
+export interface NewProjectModalConfig extends ModalConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
     settingsManager: SettingsManager;
 }

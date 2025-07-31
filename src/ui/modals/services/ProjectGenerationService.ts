@@ -106,8 +106,8 @@ export class ProjectGenerationService {
         // Progress tracking
         for (let i = 0; i < 2; i++) {
             const stage = stages[i];
-            if (stage) {
-                onProgress?.(stage);
+            if (stage && onProgress) {
+                onProgress(stage);
             }
             await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -124,8 +124,8 @@ export class ProjectGenerationService {
 
             // Continue progress
             const stage2 = stages[2];
-            if (stage2) {
-                onProgress?.(stage2);
+            if (stage2 && onProgress) {
+                onProgress(stage2);
             }
             await new Promise(resolve => setTimeout(resolve, 200));
 
@@ -134,8 +134,8 @@ export class ProjectGenerationService {
 
             // Final progress
             const stage3 = stages[3];
-            if (stage3) {
-                onProgress?.(stage3);
+            if (stage3 && onProgress) {
+                onProgress(stage3);
             }
 
             return {
@@ -216,7 +216,7 @@ export class ProjectGenerationService {
      */
     public parseTemplateLayer(layer: string): TemplateLayerInfo {
         const match = layer.match(/^(.+?)\s+(\d+)$/);
-        if (match && match[1] && match[2]) {
+        if (match && match[1] !== undefined && match[2] !== undefined) {
             return { 
                 name: match[1], 
                 isFixed: true, 

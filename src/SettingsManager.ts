@@ -950,7 +950,7 @@ export class SettingsManager {
     public async importProfileFromFile(
         file: File, 
         overwriteCallback?: (profileName: string) => Promise<boolean>
-    ): Promise<{ success: boolean; message: string }> {
+    ): Promise<{ success: boolean; message: string; profileName?: string }> {
         try {
             const text = await file.text();
             const exportData = JSON.parse(text);

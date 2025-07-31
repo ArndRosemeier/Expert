@@ -319,7 +319,7 @@ export class ModalFactory {
             settingsManager: this.dependencies.settingsManager,
             openRouterClient: openRouterClient,
             modelSelector: this.dependencies.modelSelector,
-            initializationData
+            ...(initializationData && { initializationData })
         };
 
         const modal = new XMLStoryModal(config, {
@@ -572,15 +572,17 @@ export async function openExportModal(node: DocumentNode): Promise<ExportModal> 
 
 /**
  * Convenience function to show alert using default factory
+ * Note: Prefer showAlert from GenericModal for direct usage
  */
-export async function showAlert(message: string, title?: string): Promise<void> {
+export async function factoryShowAlert(message: string, title?: string): Promise<void> {
     return getDefaultModalFactory().alert(message, title);
 }
 
 /**
  * Convenience function to show confirmation using default factory
+ * Note: Prefer showConfirm from GenericModal for direct usage
  */
-export async function showConfirm(message: string, title?: string): Promise<boolean> {
+export async function factoryShowConfirm(message: string, title?: string): Promise<boolean> {
     return getDefaultModalFactory().confirm(message, title);
 }
 
@@ -614,7 +616,7 @@ export async function openXMLStoryModal(initializationData?: {title: string, con
     console.log('🚀 openXMLStoryModal called with data:', initializationData);
     const factory = getDefaultModalFactory();
     console.log('🏭 Factory obtained:', factory);
-    const modal = await factory.createXMLStoryModal({ autoOpen: true, initializationData });
+    const modal = await factory.createXMLStoryModal({ autoOpen: true, ...(initializationData && { initializationData }) });
     console.log('✨ XMLStoryModal created:', modal);
     return modal;
 } 

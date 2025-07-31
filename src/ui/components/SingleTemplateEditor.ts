@@ -21,7 +21,7 @@ export class SingleTemplateEditor {
     constructor(options: SingleTemplateEditorOptions) {
         this.containerId = options.containerId;
         this.template = options.template;
-        this.onTemplateChange = options.onTemplateChange || undefined;
+        this.onTemplateChange = options.onTemplateChange;
         this.readonly = options.readonly || false;
         this.showNameField = options.showNameField !== false; // Default to true
     }

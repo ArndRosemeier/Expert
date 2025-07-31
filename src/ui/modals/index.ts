@@ -9,15 +9,19 @@ export * from './core/modal-utils';
 
 // Modal implementations (explicit exports to avoid conflicts)
 export { SettingsModal } from './SettingsModal';
+export type { SettingsModalConfig } from './SettingsModal';
 export { ExportModal } from './ExportModal';
+export type { ExportModalConfig } from './ExportModal';
 export { showGenericModal, showAlert, showConfirm, GenericModal } from './GenericModal';
 export { AILogModal } from './AILogModal';
+export type { AILogModalConfig } from './AILogModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
 export { KeyValidationModal } from './KeyValidationModal';
 export { VersionMismatchModal } from './VersionMismatchModal';
 export { ContextInfoModal } from './ContextInfoModal';
 export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
+export type { NewProjectModalConfig } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
 export { GenerationLevelsHelpModal } from './GenerationLevelsHelpModal';
@@ -82,8 +86,7 @@ export type {
  * Opens a generic modal with content (backward compatibility)
  */
 export function openGenericModal(content: string, onOpen?: () => void): void {
-    const hooks = onOpen ? { onOpen } : {};
-    showGenericModal(content, {}, hooks);
+    showGenericModal(content, {}, onOpen ? { onOpen } : {});
 }
 
 /**

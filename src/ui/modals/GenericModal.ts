@@ -187,14 +187,14 @@ export function showGenericModal(
 
     const modalConfig: ModalConfig & { content: GenericModalContent } = {
         id: config.id || `generic-modal-${Date.now()}`,
-        ...(config.title !== undefined && { title: config.title }),
-        ...(config.width !== undefined && { width: config.width }),
-        ...(config.height !== undefined && { height: config.height }),
         maxWidth: config.maxWidth || '80vw',
         maxHeight: config.maxHeight || '90vh',
         closable: config.closable !== false,
         backdrop: config.backdrop !== false,
-        content: modalContent
+        content: modalContent,
+        ...(config.title !== undefined && { title: config.title }),
+        ...(config.width !== undefined && { width: config.width }),
+        ...(config.height !== undefined && { height: config.height })
     };
 
     const modal = new GenericModal(modalConfig, hooks);
@@ -234,9 +234,7 @@ export function showAlert(
             title: title || 'Alert',
             maxWidth: '400px'
         },
-        {
-            ...(onClose !== undefined && { onClose })
-        }
+        onClose ? { onClose } : {}
     );
 }
 
