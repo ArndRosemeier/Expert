@@ -31,6 +31,28 @@ npm run deadcode:remove  # Remove unused code automatically
 - **`src/ProjectTemplate.ts`** - Project template system
 - **`src/ProjectUtils.ts`** - Project utility functions
 
+### Version Management System
+The DocumentNode versioning system is a cornerstone of the Expert application architecture:
+
+#### Key Concepts
+- **Version Objects**: Each version is a separate `ContentVersion` object with its own content, context, tags, and timestamp
+- **Master Version**: The currently active version (marked with `master` tag)
+- **Version Tags**: Used to categorize and identify specific version types (`generated`, `chat_edited`, `polished`, etc.)
+- **Version Promotion**: Moving any version to become the new master
+
+#### Critical APIs
+- **`node.getAllVersions()`** - Get all version objects
+- **`node.getVersionsWithTag(tag)`** - Find versions by specific tag
+- **`node.addVersion(tags, fields)`** - Create new version with tags
+- **`node.promoteToMaster(versionId)`** - Make version the active master
+- **Direct version updates** - Modify version object properties directly
+
+#### Common Pitfalls
+- ❌ **DON'T** use `setContentWithTags()` thinking it creates separate versions (it only modifies master)
+- ❌ **DON'T** directly assign to `node.content` (causes TypeScript errors)
+- ✅ **DO** work with version objects directly for true version management
+- ✅ **DO** use `promoteToMaster()` to make versions active
+
 ### Content Generation & AI Services
 - **`src/LoopOrchestrator.ts`** - AI generation orchestration 
 - **`src/project/UnifiedGenerationService.ts`** - Level-based bulk generation
@@ -89,17 +111,40 @@ npm run deadcode:remove  # Remove unused code automatically
 - **`src/ui/modals/LogicOutlineFixerModal.ts`** - Outline logic fixing
 - **`src/ui/modals/RedundancyDetectorModal.ts`** - Content redundancy detection
 
-## 🎭 XML Story Creation System
+## 🎭 Node Chat Editor System (formerly XML Story Creation)
+
+The Node Chat Editor is a collaborative AI editing interface that allows real-time refinement of existing project content.
 
 ### Core Components
 - **`src/xml-story-creation/index.ts`** - XML story system entry point
 - **`src/xml-story-creation/services/XMLStoryService.ts`** - Main story state management
-- **`src/xml-story-creation/parser/XMLStoryParser.ts`** - AI response XML parsing
+- **`src/xml-story-creation/parser/XMLStoryParser.ts`** - AI response XML parsing with `</outline_replace>` commands
 - **`src/xml-story-creation/services/ElementIDGenerator.ts`** - Unique ID generation
 - **`src/xml-story-creation/types/XMLStoryTypes.ts`** - Type definitions
 
 ### UI Components
-- **`src/ui/modals/XMLStoryModal.ts`** - Main XML story creation interface
+- **`src/ui/modals/XMLStoryModal.ts`** - Node Chat Editor interface with unified outline editing
+
+### Key Features
+- **Unified Outline Editor**: Single text area for entire node content (not individual items)
+- **Individual Context Items**: Separate editable context elements with AI interaction
+- **Version Management**: Proper handling of `chat_edited` tagged versions
+- **Real-time AI Collaboration**: Chat-based content refinement with instant feedback
+- **Source Node Integration**: Initializes with active node data, updates source on save
+
+### Usage Pattern
+```typescript
+// Triggered from main UI with active node data
+openXMLStoryModal({
+  title: node.title,
+  content: node.content,
+  contextItems: node.context.split('\n\n'),
+  sourceNode: node
+});
+
+// AI interaction through unified outline and context editing
+// Results in proper version management with 'chat_edited' tags
+```
 
 ## 🎨 Idea Board System
 
@@ -192,16 +237,89 @@ npm run deadcode:remove  # Remove unused code automatically
 ## 📋 Essential APIs
 
 ### DocumentNode Content Management
-```typescript
-// Set content with automatic tagging
-node.setContentWithTags(content, ['generated'], { model: 'gpt-4' });
 
+#### Basic Content Access
+```typescript
 // Get current master content
 const content = node.content;
+const context = node.context;
+const title = node.title;
 
-// Version management
+// ⚠️ WARNING: These methods modify MASTER version only
+node.setContentWithTags(content, ['generated'], { model: 'gpt-4' });
+node.setContextWithTags(context, ['context_adjusted']);
+```
+
+#### Proper Version Management
+```typescript
+// Get all versions
 const versions = node.getAllVersions();
+const masterVersion = node.getMasterVersion();
+
+// Find versions by tag
+const chatVersions = node.getVersionsWithTag('chat_edited');
+const generatedVersions = node.getVersionsWithTag('generated');
+
+// Create new version with tags
+const newVersionId = node.addVersion(['draft', 'experimental'], {
+  content: 'New content',
+  context: 'New context',
+  title: 'New title'
+});
+
+// Update existing version (CORRECT approach)
+const existingVersion = versions.find(v => v.tags.has('chat_edited'));
+if (existingVersion) {
+  existingVersion.content = newContent;
+  existingVersion.context = newContext;
+  existingVersion.timestamp = new Date();
+  // Promote to master
+  node.promoteToMaster(existingVersion.id);
+}
+
+// Promote any version to master
 node.promoteToMaster(versionId);
+```
+
+#### Version Object Structure
+```typescript
+interface ContentVersion {
+  id: string;
+  content: string;
+  title: string;
+  context: string;
+  tags: Set<string>;
+  timestamp: Date;
+  metadata: { [key: string]: any };
+  ratings?: Rating[];
+}
+```
+
+#### Common Version Patterns
+```typescript
+// Node Chat Editor pattern - update or create tagged version
+const existingChatVersions = node.getVersionsWithTag('chat_edited');
+if (existingChatVersions.length > 0) {
+  // Update existing version object
+  const chatVersion = existingChatVersions[0];
+  chatVersion.content = newContent;
+  chatVersion.timestamp = new Date();
+  node.promoteToMaster(chatVersion.id);
+} else {
+  // Create new tagged version
+  const versionId = node.addVersion(['chat_edited'], {
+    content: newContent,
+    context: newContext
+  });
+  if (versionId) {
+    node.promoteToMaster(versionId);
+  }
+}
+
+// Generation iterations pattern
+node.addVersion(['generated', 'iteration1'], { content: attempt1 });
+node.addVersion(['generated', 'iteration2'], { content: attempt2 });
+// Best iteration gets promoted to master later
 ```
 
 ### Storage Operations
@@ -222,17 +340,27 @@ await client.streamingChat('creator', messages, {
 });
 ```
 
-### XML Story System Usage
+### Node Chat Editor Usage
 ```typescript
-import { createXMLStorySystem } from './xml-story-creation';
+import { openXMLStoryModal } from './ui/modals/ModalFactory';
 
-const storySystem = createXMLStorySystem({
-  typeFilters: new Set(['outline', 'context']),
-  enableHighlighting: true
+// Open with existing node data
+openXMLStoryModal({
+  title: activeNode.title,
+  content: activeNode.content,
+  contextItems: activeNode.context.split('\n\n'),
+  sourceNode: activeNode
 });
 
-// Process AI response with XML
-const parsed = await storySystem.processAIResponse(response);
+// System handles AI responses with special commands:
+// </outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
+// <context>New context item content</context>
+// </edit>target_id</edit> and </delete>target_id</delete>
+
+// Results in proper version management:
+const chatVersions = node.getVersionsWithTag('chat_edited');
+// Updates existing or creates new 'chat_edited' version
+// Promotes to master automatically
 ```
 
 ### Global State Access
@@ -254,7 +382,7 @@ addProject(newProject);
 
 ### Key Events
 - **`ai-progress`** - AI generation progress updates
-- **`tree-update-needed`** - UI refresh required
+- **`tree-update-needed`** - UI refresh required (includes `chat-edited` reason for Node Chat Editor updates)
 - **`unified-progress`** - Bulk generation progress
 - **`xml-story-element-created`** - XML story element creation
 - **`xml-story-element-updated`** - XML story element modification
@@ -273,12 +401,33 @@ addProject(newProject);
 ## 🚨 Critical Development Notes
 
 1. **Text Editor Data Integrity**: The `text-editor-with-highlighting.ts` component is CRITICAL for data preservation - test thoroughly before modifying
-2. **Content Assignment**: Always use `setContentWithTags()` or `setMasterContentDirect()` - direct assignment causes TypeScript errors
-3. **Storage**: Use `StorageService.getInstance()` - avoid direct localStorage
-4. **Event Management**: Use `event-manager.ts` for reliable DOM event handling
-5. **Modal Lifecycle**: Extend `BaseModal` and register with `ModalRegistry`
-6. **State Management**: Use global state accessors from `src/state.ts` instead of direct imports
-7. **XML Story Elements**: Use proper event emission for story element changes
-8. **Dead Code**: Run `npm run deadcode:check` before commits to prevent accumulation
-9. **Text Preservation**: Any HTML ↔ Text conversion must preserve all characters exactly
-10. **AI Integration**: Use streaming APIs with proper error handling and progress feedback 
+
+2. **Version Management (CRITICAL)**:
+   - ❌ **NEVER** assume `setContentWithTags()` creates separate versions - it only modifies master + adds tags
+   - ✅ **ALWAYS** use `node.addVersion()` to create true separate versions
+   - ✅ **ALWAYS** work with version objects directly: `version.content = newContent; version.timestamp = new Date()`
+   - ✅ **ALWAYS** use `node.promoteToMaster(versionId)` to make versions active
+   - 🔍 **Pattern**: Check for existing tagged versions before creating new ones
+
+3. **Content Assignment**: 
+   - ✅ Use `node.addVersion()` for new versions
+   - ✅ Direct version object modification for updates
+   - ❌ Direct assignment to `node.content` causes TypeScript errors
+
+4. **Storage**: Use `StorageService.getInstance()` - avoid direct localStorage
+
+5. **Event Management**: Use `event-manager.ts` for reliable DOM event handling
+
+6. **Modal Lifecycle**: Extend `BaseModal` and register with `ModalRegistry`
+
+7. **State Management**: Use global state accessors from `src/state.ts` instead of direct imports
+
+8. **XML Story Elements**: Use proper event emission for story element changes
+
+9. **Dead Code**: Run `npm run deadcode:check` before commits to prevent accumulation
+
+10. **Text Preservation**: Any HTML ↔ Text conversion must preserve all characters exactly
+
+11. **AI Integration**: Use streaming APIs with proper error handling and progress feedback
+
+12. **Version Tags**: Use consistent tagging patterns (`chat_edited`, `generated`, `polished`, etc.) for UI compatibility 

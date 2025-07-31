@@ -26,6 +26,12 @@ export interface ModalFactoryDependencies {
 export interface ModalOptions {
     autoOpen?: boolean;
     replaceExisting?: boolean;
+    initializationData?: {
+        title: string;
+        content: string;
+        contextItems: string[];
+        sourceNode: DocumentNode;
+    };
 }
 
 export class ModalFactory {
@@ -293,7 +299,7 @@ export class ModalFactory {
      */
     public async createXMLStoryModal(options: ModalOptions = {}): Promise<XMLStoryModal> {
         console.log('🔧 createXMLStoryModal called with options:', options);
-        const { autoOpen = true, replaceExisting = true } = options;
+        const { autoOpen = true, replaceExisting = true, initializationData } = options;
 
         // Close existing XML story modal if requested
         if (replaceExisting) {
@@ -312,7 +318,8 @@ export class ModalFactory {
             id: 'xml-story-modal',
             settingsManager: this.dependencies.settingsManager,
             openRouterClient: openRouterClient,
-            modelSelector: this.dependencies.modelSelector
+            modelSelector: this.dependencies.modelSelector,
+            initializationData
         };
 
         const modal = new XMLStoryModal(config, {
@@ -603,11 +610,11 @@ export async function openConversationalGenerationModal(node: DocumentNode): Pro
 /**
  * Convenience function to open XML story creation modal using default factory
  */
-export async function openXMLStoryModal(): Promise<XMLStoryModal> {
-    console.log('🚀 openXMLStoryModal called');
+export async function openXMLStoryModal(initializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): Promise<XMLStoryModal> {
+    console.log('🚀 openXMLStoryModal called with data:', initializationData);
     const factory = getDefaultModalFactory();
     console.log('🏭 Factory obtained:', factory);
-    const modal = await factory.createXMLStoryModal({ autoOpen: true });
+    const modal = await factory.createXMLStoryModal({ autoOpen: true, initializationData });
     console.log('✨ XMLStoryModal created:', modal);
     return modal;
 } 

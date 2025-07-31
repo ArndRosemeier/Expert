@@ -13,6 +13,7 @@ import './text-editor-highlighting.css';
  * - Paragraph line breaks were being lost (empty lines between paragraphs disappeared)
  * - The root cause was improper HTML ↔ Text round-trip conversion
  * - Text starting/ending with newlines was being stripped incorrectly
+ * - Cursor navigation (up arrow) was getting stuck mid-text due to <br> tags inside highlight spans
  * 
  * 🧪 COMPREHENSIVE TESTING COMPLETED:
  * This component has been tested against worst-case scenarios including:
@@ -31,6 +32,7 @@ import './text-editor-highlighting.css';
  * - Leading/trailing whitespace and newlines are preserved exactly
  * - HTML/XML code is safely escaped and preserved as text (not interpreted)
  * - Browser-generated HTML variations (<br>, <div>, <p>) are handled correctly
+ * - Proper cursor navigation with highlights split at line boundaries
  * 
  * ⚠️  WARNING TO FUTURE DEVELOPERS:
  * Before modifying escapeHtml() or extractTextFromHtml():
@@ -422,10 +424,72 @@ export class TextEditorWithHighlighting {
     }
 
     /**
+     * Check if the current selection already has correct paragraph boundaries
+     */
+    private isAtParagraphBoundaries(startPos: number, endPos: number): boolean {
+        const text = this.getText();
+        
+        // Check start boundary
+        const isAtStartBoundary = startPos === 0 || 
+            (startPos >= 2 && text[startPos - 1] === '\n' && text[startPos - 2] === '\n') ||
+            (startPos > 0 && this.isStartOfTrimmedParagraph(text, startPos));
+        
+        // Check end boundary  
+        const isAtEndBoundary = endPos === text.length ||
+            (endPos < text.length - 1 && text[endPos] === '\n' && text[endPos + 1] === '\n') ||
+            this.isEndOfTrimmedParagraph(text, endPos);
+        
+        return isAtStartBoundary && isAtEndBoundary;
+    }
+    
+    /**
+     * Check if position is at the start of a trimmed paragraph (after whitespace following \n\n)
+     */
+    private isStartOfTrimmedParagraph(text: string, pos: number): boolean {
+        // Look backwards to see if we're at the start of content after \n\n + whitespace
+        let checkPos = pos - 1;
+        
+        // Skip backwards through whitespace (but not newlines)
+        while (checkPos >= 0) {
+            const char = text[checkPos];
+            if (!char || char === '\n' || !/\s/.test(char)) break;
+            checkPos--;
+        }
+        
+        // Check if we found a newline and there's another newline before it
+        return checkPos >= 1 && text[checkPos] === '\n' && text[checkPos - 1] === '\n';
+    }
+    
+    /**
+     * Check if position is at the end of a trimmed paragraph (before whitespace preceding \n\n)
+     */
+    private isEndOfTrimmedParagraph(text: string, pos: number): boolean {
+        // Look forwards to see if we're at the end of content before whitespace + \n\n
+        let checkPos = pos;
+        
+        // Skip forwards through whitespace (but not newlines)
+        while (checkPos < text.length) {
+            const char = text[checkPos];
+            if (!char || char === '\n' || !/\s/.test(char)) break;
+            checkPos++;
+        }
+        
+        // Check if we found double newlines
+        return checkPos < text.length - 1 && text[checkPos] === '\n' && text[checkPos + 1] === '\n';
+    }
+
+    /**
      * Expand selection to paragraph boundaries
      */
     private expandToParagraphBoundaries(startPos: number, endPos: number): {startPos: number, endPos: number} {
         const text = this.getText();
+        
+        // CRITICAL: Check if selection already has correct boundaries before expanding
+        // This prevents unwanted expansion when user selects at paragraph start
+        if (this.isAtParagraphBoundaries(startPos, endPos)) {
+            return {startPos, endPos};
+        }
+        
         let newStartPos = startPos;
         let newEndPos = endPos;
 
@@ -692,12 +756,15 @@ export class TextEditorWithHighlighting {
         
         if (this.highlights.size === 0) {
             // No highlights - just plain text
-            this.editableDiv.textContent = text;
+            this.editableDiv.innerHTML = this.escapeHtml(text);
             return;
         }
 
+        // Split highlights at line boundaries to prevent <br> tags inside spans
+        const lineAwareHighlights = this.splitHighlightsAtLineBreaks();
+        
         // Sort highlights by start position
-        const sortedHighlights = Array.from(this.highlights.entries())
+        const sortedHighlights = Array.from(lineAwareHighlights.entries())
             .sort(([, a], [, b]) => a.startPos - b.startPos);
 
         let html = '';
@@ -709,7 +776,7 @@ export class TextEditorWithHighlighting {
                 html += this.escapeHtml(text.substring(lastPos, highlight.startPos));
             }
 
-            // Add highlighted text
+            // Add highlighted text (now guaranteed to not contain line breaks)
             const highlightedText = text.substring(highlight.startPos, highlight.endPos);
             html += `<span class="${highlight.className}" data-highlight-id="${id}">${this.escapeHtml(highlightedText)}</span>`;
             
@@ -722,6 +789,54 @@ export class TextEditorWithHighlighting {
         }
 
         this.editableDiv.innerHTML = html;
+    }
+
+    /**
+     * Split highlights at line breaks to prevent <br> tags inside spans
+     * This ensures proper cursor navigation by avoiding mixed inline/block elements
+     */
+    private splitHighlightsAtLineBreaks(): Map<string, {startPos: number, endPos: number, className: string}> {
+        const result = new Map<string, {startPos: number, endPos: number, className: string}>();
+        const text = this.plainTextContent;
+        
+        for (const [originalId, highlight] of this.highlights) {
+            const highlightedText = text.substring(highlight.startPos, highlight.endPos);
+            
+            // If the highlighted text doesn't contain newlines, keep it as-is
+            if (!highlightedText.includes('\n')) {
+                result.set(originalId, highlight);
+                continue;
+            }
+            
+            // Split the highlight at each newline
+            let currentPos = highlight.startPos;
+            let segmentIndex = 0;
+            
+            const lines = highlightedText.split('\n');
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i] || '';
+                
+                // Skip empty lines (they represent the newline character itself)
+                if (line.length > 0) {
+                    const segmentId = segmentIndex === 0 ? originalId : `${originalId}-segment-${segmentIndex}`;
+                    result.set(segmentId, {
+                        startPos: currentPos,
+                        endPos: currentPos + line.length,
+                        className: highlight.className
+                    });
+                    segmentIndex++;
+                }
+                
+                // Move past this line and the newline character (except for the last line)
+                currentPos += line.length;
+                if (i < lines.length - 1) {
+                    currentPos += 1; // Skip the \n character
+                }
+            }
+        }
+        
+        return result;
     }
 
     /**
@@ -780,6 +895,11 @@ export class TextEditorWithHighlighting {
 
     /**
      * Escape HTML characters while preserving line breaks
+     * 
+     * IMPORTANT: Line breaks are converted to <br> tags, and highlights are split
+     * at line boundaries to ensure proper cursor navigation. This prevents the
+     * creation of spans containing <br> tags, which can cause cursor movement
+     * issues (e.g., up arrow getting stuck mid-text).
      */
     private escapeHtml(text: string): string {
         const div = document.createElement('div');

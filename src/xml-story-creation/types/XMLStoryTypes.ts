@@ -50,8 +50,9 @@ export interface ParsedResponse {
 }
 
 export interface SystemCommand {
-    type: 'refresh' | 'edit' | 'delete' | 'rename';
+    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace';
     parameters?: Record<string, string>;
+    content?: string; // For commands like outline_replace that have content between tags
     timestamp: Date;
 }
 

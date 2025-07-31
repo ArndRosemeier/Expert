@@ -20,11 +20,7 @@ export class PromptContextBuilder {
      */
     static forNode(node: DocumentNode, settingsManager: SettingsManager): PlaceholderContext {
         const language = settingsManager.getLanguage();
-        console.log('🔍 PromptContextBuilder.forNode() called:', {
-            nodeTitle: node.title,
-            language,
-            settingsManagerInstance: settingsManager.constructor.name
-        });
+        // PromptContextBuilder.forNode() called (logging removed to reduce noise)
         
         return {
             node: {

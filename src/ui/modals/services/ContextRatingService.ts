@@ -91,7 +91,7 @@ export class ContextRatingService {
         
         const filteredCount = allContextItems.length - filteredContextItems.length;
         if (filteredCount > 0) {
-            console.log(`🔒 Context rating: Filtered out ${filteredCount} protected context item(s) starting with "*"`);
+            // Protected context items filtered (logging removed to reduce noise)
         }
         
         // If all items are filtered out, skip rating
@@ -122,7 +122,7 @@ export class ContextRatingService {
         const isLeaf = node.isLeaf;
         const modelPurpose = this.taskModelService.getModelPurposeForTask('context_rating', isLeaf);
         
-        console.log(`🎯 Using ${modelPurpose} model for context rating of ${isLeaf ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
+        // Using model for context rating (logging reduced to minimize noise)
         
         // Retry logic (similar to LoopOrchestrator)
         const maxRetries = 3;

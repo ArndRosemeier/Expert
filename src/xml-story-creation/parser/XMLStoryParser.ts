@@ -62,12 +62,25 @@ export class XMLStoryParser {
     }
     
     /**
-     * Extract system commands like </refresh>
+     * Extract system commands like </refresh> and </outline_replace>
      */
     private extractSystemCommands(text: string): SystemCommand[] {
         const commands: SystemCommand[] = [];
-        const systemCommandRegex = /<\/(refresh|edit|delete|rename)(?:\s+([^>]*))?\s*>/gi;
         
+        // Handle outline_replace commands (with content between tags)
+        const outlineReplaceRegex = /<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi;
+        let outlineMatch;
+        while ((outlineMatch = outlineReplaceRegex.exec(text)) !== null) {
+            const content = outlineMatch[1] || '';
+            commands.push({
+                type: 'outline_replace',
+                content: content.trim(),
+                timestamp: new Date()
+            });
+        }
+        
+        // Handle other system commands (self-closing)
+        const systemCommandRegex = /<\/(refresh|edit|delete|rename)(?:\s+([^>]*))?\s*>/gi;
         let match;
         while ((match = systemCommandRegex.exec(text)) !== null) {
             if (!match[1]) continue;
@@ -181,6 +194,9 @@ export class XMLStoryParser {
 
         // Remove any remaining system commands from cleaned text
         cleanedText = cleanedText.replace(/<\/(refresh|edit|delete|rename)(?:\s+[^>]*)?\s*>/gi, '');
+        
+        // Remove outline_replace tags and their content from cleaned text
+        cleanedText = cleanedText.replace(/<\/outline_replace>\s*[\s\S]*?\s*<\/outline_replace>/gi, '');
 
         console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
         

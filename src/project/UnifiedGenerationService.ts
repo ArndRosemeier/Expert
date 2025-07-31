@@ -626,7 +626,7 @@ export class UnifiedGenerationService {
             let contextChanged = false;
             
             // Use AI decision context pruning
-            console.log(`🎯 Using AI decision context rating mode for "${node.title}"`);
+            // Using AI decision context rating mode (logging reduced)
             
             // Update progress
             this.currentOperationProgress = {
@@ -703,7 +703,7 @@ export class UnifiedGenerationService {
                         itemsToKeep.push(item);
                     } else {
                         itemsRemoved.push(item);
-                        console.log(`🗑️ Removing context item (AI decision): "${item.substring(0, 50)}..."`);
+                        // Context item removed (logging removed to reduce noise)
                     }
                 }
             }
@@ -715,7 +715,7 @@ export class UnifiedGenerationService {
                 // Protected item - always keep
                 if (!itemsToKeep.includes(item)) {
                     itemsToKeep.push(item);
-                    console.log(`🔒 Keeping protected context item: "${item.substring(0, 50)}..."`);
+                    // Protected context item kept (logging removed to reduce noise)
                 }
             }
         });
@@ -729,13 +729,13 @@ export class UnifiedGenerationService {
             node.setContextWithTags(newContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
             
-            console.log(`✅ Context rating completed for "${node.title}": kept ${itemsToKeep.length}, removed ${itemsRemoved.length} items (AI decision)`);
+                            // Context rating completed - items modified (logging reduced)
         } else {
             // No changes but still tag as processed
             node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
             
-            console.log(`✅ Context rating completed for "${node.title}": no items removed (AI decision)`);
+            // Context rating completed - no changes (logging reduced)
         }
         
         return contextChanged;
@@ -783,7 +783,7 @@ export class UnifiedGenerationService {
             // Run the content generation loop
             await this.runContentLoop(nodeId, loopInput);
 
-            console.log(`✅ Content generation completed for "${node.title}"`);
+            // Content generation completed (logging reduced to minimize noise)
             
         } catch (error) {
             // Show error through the error service (includes console logging)
@@ -927,7 +927,7 @@ export class UnifiedGenerationService {
             };
             this.emitUnifiedProgress();
             
-            console.log(`✅ Created ${childIds.length} children for "${node.title}"`);
+            // Children created (logging reduced to minimize noise)
             
             // Update tree immediately after children are created
     
@@ -1420,7 +1420,7 @@ export class UnifiedGenerationService {
 
         // Note: Individual content generation does not emit generation events
         // Only the main unified generation process emits those events
-        console.log(`🚀 Starting content generation for: "${node.title}" (${nodeId})`);
+        // Starting content generation (logging reduced to minimize noise)
         
         // Start a new generation session
         node.startGenerationSession(loopInput.prompt);
@@ -1451,7 +1451,7 @@ export class UnifiedGenerationService {
                 if (currentIterationContent && currentIterationNumber > 0) {
                     try {
                         node.addGenerationIteration(currentIterationNumber, currentIterationContent, currentIterationRatings);
-                        console.log(`📊 Stored iteration ${currentIterationNumber} with ${currentIterationRatings.length} ratings for "${node.title}"`);
+                        // Iteration stored (logging reduced to minimize noise)
                     } catch (error) {
                         console.warn(`Failed to store iteration ${currentIterationNumber} for "${node.title}":`, error);
                     }

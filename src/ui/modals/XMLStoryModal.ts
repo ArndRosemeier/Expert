@@ -1,8 +1,8 @@
 /**
- * XML Story Creation Modal
+ * Node Chat Editor Modal
  * 
- * Provides a collaborative story creation interface with XML-enabled chat
- * and visual story whiteboard following the existing modal patterns.
+ * Provides a collaborative content editing interface with AI assistance
+ * for improving and refining existing project nodes.
  */
 
 import { BaseModal } from './core/BaseModal';
@@ -15,24 +15,23 @@ import { createPromptExpansionService } from '../../services/PromptExpansionServ
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
-import { ProjectManager } from '../../ProjectManager';
+import { DocumentNode } from '../../DocumentNode';
 import { 
-    getOrchestrator, 
-    getSettingsManager, 
-    getOpenRouterClient, 
-    getTemplateManager,
-    addProject,
-    setActiveProject
+    getActiveProject
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
-const XML_STORY_CONVERSATION_STORAGE_KEY = 'xml-story-conversation-history';
-const XML_STORY_WHITEBOARD_STORAGE_KEY = 'xml-story-whiteboard-state';
 
 export interface XMLStoryModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
     openRouterClient: OpenRouterClient;
     modelSelector: ModelSelector;
+    initializationData?: {
+        title: string;
+        content: string;
+        contextItems: string[];
+        sourceNode: DocumentNode;
+    };
 }
 
 export class XMLStoryModal extends BaseModal {
@@ -49,7 +48,7 @@ export class XMLStoryModal extends BaseModal {
     private modelSelector: HTMLSelectElement | null = null;
     private messagesContainer: HTMLElement | null = null;
     private titleInput: HTMLInputElement | null = null;
-    private templateSelector: HTMLSelectElement | null = null;
+
     
     // State
     private isGenerating = false;
@@ -58,6 +57,15 @@ export class XMLStoryModal extends BaseModal {
     
     // Story element editors
     private elementEditors = new Map<string, UniversalTextEditor>();
+    
+    // Unified outline editor and versioning
+    private outlineEditor: UniversalTextEditor | null = null;
+    private outlineHistory: Array<{content: string, timestamp: Date, source: 'user' | 'ai'}> = [];
+    private currentOutlineVersion = -1;
+    
+    // Initialization data to apply after modal opens
+    private pendingInitializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode} | undefined;
+    private sourceNode: DocumentNode | null = null;
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
         console.log('🏗️ XMLStoryModal constructor called with config:', config);
@@ -83,6 +91,12 @@ export class XMLStoryModal extends BaseModal {
         
         // Listen for story system events
         this.storySystem.addEventListener(this.handleStoryEvent.bind(this));
+        
+        // Store initialization data to apply after modal opens
+        if (config.initializationData) {
+            this.pendingInitializationData = config.initializationData;
+            this.sourceNode = config.initializationData.sourceNode;
+        }
     }
 
     public render(): HTMLElement {
@@ -164,13 +178,7 @@ export class XMLStoryModal extends BaseModal {
                     align-items: end;
                 }
                 
-                .title-section {
-                    flex: 2;
-                }
-                
-                .template-section {
-                    flex: 1;
-                }
+
                 
                 .title-input {
                     width: 100%;
@@ -185,15 +193,6 @@ export class XMLStoryModal extends BaseModal {
                     outline: none;
                     border-color: #007bff;
                     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
-                }
-                
-                .template-selector {
-                    width: 100%;
-                    padding: 0.5rem;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    font-size: 0.9rem;
-                    background: white;
                 }
                 
                 .chat-header-info {
@@ -588,6 +587,46 @@ export class XMLStoryModal extends BaseModal {
                     transform: scale(1.15) !important;
                 }
 
+                .outline-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                }
+
+                .outline-control-btn {
+                    background: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                    color: #495057;
+                    width: 2rem;
+                    height: 2rem;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    font-size: 1.1rem;
+                    transition: all 0.2s ease;
+                }
+
+                .outline-control-btn:hover:not(:disabled) {
+                    background: #e9ecef;
+                    border-color: #adb5bd;
+                }
+
+                .outline-control-btn:disabled {
+                    background: #f8f9fa;
+                    color: #ced4da;
+                    cursor: not-allowed;
+                    opacity: 0.6;
+                }
+
+                .outline-version-info {
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                    font-weight: 500;
+                    margin-left: 0.5rem;
+                }
+                
                 .element-badge {
                     position: absolute;
                     top: 0.5rem;
@@ -672,15 +711,11 @@ export class XMLStoryModal extends BaseModal {
                     </div>
                     
                     <button id="clear-story-btn" class="sidebar-button">
-                        🗑️ Clear Story
+                        🗑️ Clear Chat
                     </button>
                     
-                    <button id="export-story-btn" class="sidebar-button primary">
-                        📤 Export Story
-                    </button>
-                    
-                    <button id="create-project-btn" class="sidebar-button primary">
-                        🚀 Create Project
+                                                <button id="create-project-btn" class="sidebar-button primary">
+                                🚀 Update Node
                     </button>
                     
                     <div style="border-top: 1px solid #444; margin: 0.5rem 0; padding-top: 1rem;">
@@ -720,29 +755,20 @@ export class XMLStoryModal extends BaseModal {
                                     placeholder="Enter project title..."
                                 />
                             </div>
-                            <div class="template-section">
-                                <label style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem; color: #666; font-weight: 500;">Template:</label>
-                                <select id="xml-story-template-selector" class="template-selector">
-                                    <option value="">Loading templates...</option>
-                                </select>
-                            </div>
+
                         </div>
                         <div class="chat-header-info">
-                            <h4 style="margin: 0; color: #333;">Story Development Chat</h4>
-                            <div style="font-size: 0.9rem; color: #666;">
-                                AI will create story elements as you chat
+                            <h4 style="margin: 0; color: #333;">Content Editing Chat</h4>
+                        <div style="font-size: 0.9rem; color: #666;">
+                            AI will help improve and refine your content
                             </div>
                         </div>
                     </div>
                     
                     <div id="xml-story-messages" class="chat-messages">
                         <div class="message message-assistant">
-                            <div class="message-content">
-                                Hi! I'm ready to help you create an amazing story. Just start telling me about your story idea, and I'll help you develop characters, locations, plot points, and more. 
-                                
-                                As we chat, I'll automatically create story elements that will appear on the whiteboard on the right. You can edit any of these elements by clicking on them.
-                                
-                                What kind of story would you like to create?
+                            <div class="message-content" id="initial-chat-message">
+                                Loading...
                             </div>
                         </div>
                     </div>
@@ -752,7 +778,7 @@ export class XMLStoryModal extends BaseModal {
                             <textarea 
                                 id="xml-story-message-input" 
                                 class="message-input" 
-                                placeholder="Tell me about your story idea..."
+                                placeholder="How can I help improve this content?"
                                 rows="2"
                             ></textarea>
                             <button id="xml-story-send-btn" class="send-button">
@@ -787,7 +813,7 @@ export class XMLStoryModal extends BaseModal {
         this.modelSelector = container.querySelector('#xml-story-model-selector');
         this.messagesContainer = container.querySelector('#xml-story-messages');
         this.titleInput = container.querySelector('#xml-story-title');
-        this.templateSelector = container.querySelector('#xml-story-template-selector');
+
 
         // Set up event listeners
         this.setupEventListeners(container);
@@ -809,26 +835,19 @@ export class XMLStoryModal extends BaseModal {
             }
         });
 
-        // Clear story button
+        // Clear chat button
         const clearBtn = container.querySelector('#clear-story-btn');
         clearBtn?.addEventListener('click', () => {
-            this.clearStory();
+            this.clearChat();
         });
 
-        // Export story button
-        const exportBtn = container.querySelector('#export-story-btn');
-        exportBtn?.addEventListener('click', () => {
-            this.exportStory();
+        // Update source node button
+        const updateNodeBtn = container.querySelector('#create-project-btn');
+        updateNodeBtn?.addEventListener('click', () => {
+            void this.updateSourceNode();
         });
 
-        // Create project button
-        const createProjectBtn = container.querySelector('#create-project-btn');
-        createProjectBtn?.addEventListener('click', () => {
-            void this.createProject();
-        });
-
-        // Template selector initialization and persistence
-        void this.loadTemplates();
+        // No template selector needed
 
         // Model selector with persistence
         void this.loadSavedModelSelection();
@@ -836,9 +855,36 @@ export class XMLStoryModal extends BaseModal {
             void this.saveModelSelection();
         });
 
-        // Load saved conversation history and whiteboard state
-        void this.loadSavedConversation();
-        void this.loadSavedWhiteboard();
+        // No conversation persistence - each session starts fresh
+        
+        // Apply initialization data if provided, or set default message
+        if (this.pendingInitializationData) {
+            setTimeout(async () => {
+                if (this.pendingInitializationData) {
+                    await this.applyInitializationData(this.pendingInitializationData);
+                    this.pendingInitializationData = undefined;
+                }
+            }, 100); // Small delay to ensure UI is fully rendered
+        } else {
+            // No initialization data - show generic editing message
+            setTimeout(() => {
+                const messageElement = document.getElementById('initial-chat-message');
+                if (messageElement) {
+                    messageElement.innerHTML = `
+                        Hi! I'm here to help you edit and improve your content.
+                        
+                        I can help you:
+                        • <strong>Enhance outlines</strong> - Make them more detailed and compelling
+                        • <strong>Improve context items</strong> - Add depth and fix inconsistencies
+                        • <strong>Refine content</strong> - Polish language and improve flow
+                        
+                        <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+                        
+                        What would you like to work on?
+                    `;
+                }
+            }, 100);
+        }
     }
 
     private async sendMessage(): Promise<void> {
@@ -859,7 +905,8 @@ export class XMLStoryModal extends BaseModal {
             this.storySystem.clearHighlights();
 
             // Get context for AI
-            const currentWhiteboard = this.formatWhiteboardForAI();
+            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+            const currentContextItems = this.formatContextItemsForAI();
             const humanEdits = this.formatHumanEditsForAI();
 
             // Create system and user prompts using PromptExpansionService
@@ -874,27 +921,27 @@ export class XMLStoryModal extends BaseModal {
             
             const userPromptContext = {
                 custom: {
-                    current_whiteboard: currentWhiteboard,
+                    current_outline: currentOutline,
+                    current_context_items: currentContextItems,
                     human_edits: humanEdits
                 }
             };
             
             const systemPrompt = await expansionService.expandPromptAsync(
-                prompts.xml_story_creation_system, 
+                prompts.node_chat_editor, 
                 systemPromptContext
             );
 
             // Create user prompt with current context
             const userPrompt = await expansionService.expandPromptAsync(
-                prompts.xml_story_creation_user, 
+                prompts.node_chat_editor_user, 
                 userPromptContext
             );
 
             // Add user message to conversation history BEFORE the AI call
             this.conversationHistory.push({ role: 'user', content: `${userPrompt}\n\nUser: ${message}` });
             
-            // Save conversation after adding user message
-            void this.saveConversation();
+                            // No conversation persistence needed
 
             // Prepare conversation with persistent system prompt
             const conversation = [
@@ -918,20 +965,37 @@ export class XMLStoryModal extends BaseModal {
             });
 
             if (response) {
+                // Track context items before AI processing to detect newly added items
+                // (This is only for AI chat responses, not initialization/loading)
+                const contextCountBefore = this.storySystem.service.getElementsForContext()
+                    .filter(el => el.type === 'context').length;
+
                 // Process AI response through XML system
                 const parseResult = await this.storySystem.processAIResponse(response);
+
+                // Handle outline_replace commands
+                for (const command of parseResult.systemCommands) {
+                    if (command.type === 'outline_replace' && command.content) {
+                        this.setOutlineContentFromAI(command.content);
+                    }
+                }
 
                 // Add AI message to chat (cleaned text without XML)
                 this.addMessageToChat('assistant', parseResult.cleanedText);
 
                 // Add AI response to conversation history
                 this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
-                
-                // Save conversation after adding AI response
-                void this.saveConversation();
 
                 // Update whiteboard
                 this.updateWhiteboard();
+
+                // Check if AI actually added new context items during this chat response
+                const contextCountAfter = this.storySystem.service.getElementsForContext()
+                    .filter(el => el.type === 'context').length;
+                
+                if (contextCountAfter > contextCountBefore) {
+                    this.scrollToNewContextItems();
+                }
 
                 // Show any errors
                 if (parseResult.errors.length > 0) {
@@ -986,85 +1050,52 @@ export class XMLStoryModal extends BaseModal {
         const shouldRestoreFocus = this.messageInput && document.activeElement === this.messageInput;
         const cursorPosition = shouldRestoreFocus ? this.messageInput?.selectionStart : null;
 
-        // Get all elements and separate by type (no sorting - use natural list order)
+        // Get all elements for context items only (outline is now unified)
         const allElements = this.storySystem.service.getElementsForContext();
-        const outlineElements = allElements.filter((el: StoryElement) => el.type === 'outline');
         const contextElements = allElements.filter((el: StoryElement) => el.type === 'context');
         
-        // Always show headers with + buttons, even if empty
-        if (outlineElements.length === 0 && contextElements.length === 0) {
-            this.whiteboardContainer.innerHTML = `
-                <div class="story-section">
-                    <div class="story-section-header">
-                        <span>Outline</span>
-                        <button class="add-element-btn" data-add-type="outline" title="Add Outline Item">+</button>
-                    </div>
-                    <div class="story-elements">
-                        <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
-                            No outline items yet. Click + to add one or chat with AI.
-                        </div>
-                    </div>
-                </div>
-                <div class="story-section">
-                    <div class="story-section-header">
-                        <span>Context</span>
-                        <button class="add-element-btn" data-add-type="context" title="Add Context Item">+</button>
-                    </div>
-                    <div class="story-elements">
-                        <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
-                            No context items yet. Click + to add one or chat with AI.
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Add event listeners for the + buttons
-            this.addPlusButtonListeners();
-            return;
-        }
-
-        // Clear existing editors
+        // Clear existing context editors (outline editor is persistent)
         this.elementEditors.forEach(editor => editor.destroy());
         this.elementEditors.clear();
 
         let html = '';
 
-        // Outline section (always show header)
-        html += `
-            <div class="story-section">
+        // Unified Outline section - always show
+        const hasOutlineHistory = this.outlineHistory.length > 0;
+        const canUndo = this.currentOutlineVersion > 0;
+        const canRedo = this.currentOutlineVersion < this.outlineHistory.length - 1;
+        
+            html += `
+                <div class="story-section">
                 <div class="story-section-header">
                     <span>Outline</span>
-                    <button class="add-element-btn" data-add-type="outline" title="Add Outline Item">+</button>
+                    <div class="outline-controls">
+                        <button class="outline-control-btn" id="outline-reset-btn" ${!this.sourceNode ? 'disabled' : ''} title="Reset outline to original content">🔄</button>
+                        <button class="outline-control-btn" id="outline-undo-btn" ${!canUndo ? 'disabled' : ''} title="Undo outline change">↶</button>
+                        <button class="outline-control-btn" id="outline-redo-btn" ${!canRedo ? 'disabled' : ''} title="Redo outline change">↷</button>
+                        <span class="outline-version-info">${hasOutlineHistory ? `v${this.currentOutlineVersion + 1}/${this.outlineHistory.length}` : 'v1'}</span>
+                    </div>
                 </div>
-                <div class="story-elements">
-        `;
-
-        if (outlineElements.length > 0) {
-            for (const element of outlineElements) {
-                html += this.renderElementEditor(element);
-            }
-        } else {
-            html += `
-                <div style="color: #999; padding: 1rem; font-style: italic; text-align: center;">
-                    No outline items yet. Click + to add one or chat with AI.
+                    <div class="story-elements">
+                    <div id="unified-outline-editor" style="min-height: 200px; border: 1px solid #ddd; border-radius: 8px; padding: 12px;">
+                        ${!hasOutlineHistory ? '<div style="color: #999; font-style: italic;">Start writing your outline here or ask AI to create one...</div>' : ''}
+                    </div>
+                    </div>
                 </div>
             `;
-        }
 
-        html += `
-                </div>
-            </div>
-        `;
-
-        // Context section (always show header)
-        html += `
-            <div class="story-section">
+        // Context section (individual items as before)
+            html += `
+                <div class="story-section">
                 <div class="story-section-header">
                     <span>Context</span>
-                    <button class="add-element-btn" data-add-type="context" title="Add Context Item">+</button>
+                    <div class="outline-controls">
+                        <button class="outline-control-btn" id="context-reset-btn" ${!this.sourceNode ? 'disabled' : ''} title="Reset context to original items">🔄</button>
+                        <button class="add-element-btn" data-add-type="context" title="Add Context Item">+</button>
+                    </div>
                 </div>
-                <div class="story-elements">
-        `;
+                    <div class="story-elements">
+            `;
 
         if (contextElements.length > 0) {
             for (const element of contextElements) {
@@ -1076,20 +1107,24 @@ export class XMLStoryModal extends BaseModal {
                     No context items yet. Click + to add one or chat with AI.
                 </div>
             `;
-        }
+            }
 
-        html += `
+            html += `
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
 
         this.whiteboardContainer.innerHTML = html;
 
-        // Initialize UniversalTextEditor instances
+        // Initialize the unified outline editor
+        this.initializeUnifiedOutlineEditor();
+        
+        // Initialize context element editors
         this.initializeElementEditors();
         
-        // Add event listeners for + buttons
+        // Add event listeners for context + buttons and outline controls
         this.addPlusButtonListeners();
+        this.addOutlineControlListeners();
 
         // Always restore focus to message input after whiteboard update
         setTimeout(() => {
@@ -1118,7 +1153,7 @@ export class XMLStoryModal extends BaseModal {
         return `
             <div class="${elementClasses}" data-element-id="${element.id}">
                 <div class="element-content">
-                    <div id="editor-${element.id}"></div>
+                <div id="editor-${element.id}"></div>
                     <div class="element-actions">
                         <button class="element-action-btn delete-btn" data-action="delete" data-element-id="${element.id}" title="Delete">×</button>
                         <button class="element-action-btn move-up-btn" data-action="move-up" data-element-id="${element.id}" title="Move Up">↑</button>
@@ -1197,8 +1232,7 @@ export class XMLStoryModal extends BaseModal {
                 await this.storySystem.service.handleHumanEdit(elementId, newContent);
             }
 
-            // Save changes
-            await this.saveWhiteboard();
+            // Changes applied (no persistence needed)
         } catch (error) {
             console.error('Error updating element:', error);
         } finally {
@@ -1234,7 +1268,7 @@ export class XMLStoryModal extends BaseModal {
         try {
             await this.storySystem.service.deleteElement(elementId);
             this.updateWhiteboard();
-            await this.saveWhiteboard();
+
         } catch (error) {
             console.error('Error deleting element:', error);
         }
@@ -1261,7 +1295,7 @@ export class XMLStoryModal extends BaseModal {
         elementsByType.set(element.type, elementIds);
 
         this.updateWhiteboard();
-        await this.saveWhiteboard();
+
     }
 
     private async moveElementDown(elementId: string): Promise<void> {
@@ -1285,45 +1319,26 @@ export class XMLStoryModal extends BaseModal {
         elementsByType.set(element.type, elementIds);
 
         this.updateWhiteboard();
-        await this.saveWhiteboard();
+
     }
 
 
 
 
 
-    private formatWhiteboardForAI(): string {
+    private formatContextItemsForAI(): string {
         const elements = this.storySystem.service.getElementsForContext();
-        if (elements.length === 0) {
-            return 'No story elements created yet.';
+        const contextElements = elements.filter((el: StoryElement) => el.type === 'context');
+        
+        if (contextElements.length === 0) {
+            return 'No context items created yet.';
         }
 
-        const elementsByType = new Map<string, StoryElement[]>();
-        elements.forEach((element: StoryElement) => {
-            if (!elementsByType.has(element.type)) {
-                elementsByType.set(element.type, []);
-            }
-            elementsByType.get(element.type)!.push(element);
-        });
-
-        let formatted = 'CURRENT STORY WHITEBOARD:\n\n';
-
-        const typeNames = {
-            'outline': 'OUTLINE',
-            'context': 'CONTEXT'
-        };
-
-        for (const [type, typeName] of Object.entries(typeNames)) {
-            const typeElements = elementsByType.get(type) || [];
-            if (typeElements.length === 0) continue;
-
-            formatted += `${typeName}:\n`;
-            typeElements.forEach((element, index) => {
+        let formatted = 'CONTEXT ITEMS:\n\n';
+        contextElements.forEach((element, index) => {
                 const editFlag = element.isHumanEdited ? ' [HUMAN EDITED]' : '';
                 formatted += `${index + 1}. [ID: ${element.id}] ${element.description}${editFlag}\n`;
             });
-            formatted += '\n';
-        }
 
         return formatted;
     }
@@ -1352,12 +1367,12 @@ export class XMLStoryModal extends BaseModal {
                 // These events require DOM rebuild (structural changes)
                 this.updateWhiteboard();
                 // Save whiteboard state after changes
-                void this.saveWhiteboard();
+        
                 break;
             case 'human_edit':
                 // Human edits only change content, not structure - no need to rebuild DOM
                 // Just save the state without destroying/recreating editors
-                void this.saveWhiteboard();
+        
                 break;
             case 'highlight_cleared':
                 this.updateWhiteboard();
@@ -1365,141 +1380,41 @@ export class XMLStoryModal extends BaseModal {
         }
     }
 
-    private clearStory(): void {
-        if (confirm('Are you sure you want to clear the entire story? This cannot be undone.')) {
-            this.storySystem.reset();
+    private clearChat(): void {
+        if (confirm('Are you sure you want to clear the chat history? This will not affect your outline or context items.')) {
+            // Only clear the conversation history, keep the whiteboard unchanged
             this.conversationHistory = [];
-            
-            // Clear saved data
-            void this.clearSavedConversation();
-            void this.clearSavedWhiteboard();
             
             if (this.messagesContainer) {
                 this.messagesContainer.innerHTML = `
                     <div class="message message-assistant">
                         <div class="message-content">
-                            Story cleared! Let's start creating a new story. What would you like to write about?
+                            Chat cleared! Your outline and context items remain unchanged. How can I help improve your content?
                         </div>
                     </div>
                 `;
             }
-            this.updateWhiteboard();
+            // Note: NOT calling this.updateWhiteboard() to keep outline and context items
         }
     }
 
-    private exportStory(): void {
-        const state = this.storySystem.exportState();
-        const exportData = {
-            conversation: this.conversationHistory,
-            storyElements: state,
-            exportDate: new Date().toISOString()
-        };
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `xml-story-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        URL.revokeObjectURL(url);
-    }
 
     /**
-     * Load available templates into the template selector
+     * Update the source node with current story elements using chat_edited versioning
      */
-    private async loadTemplates(): Promise<void> {
+    private async updateSourceNode(): Promise<void> {
         try {
-            const templateManager = getTemplateManager();
-            if (!templateManager) {
-                console.warn('TemplateManager not available for template loading');
+            if (!this.sourceNode) {
+                alert('No source node available to update');
                 return;
             }
 
-            if (!this.templateSelector) return;
+            // Get unified outline content
+            const outlineContent = this.getCurrentOutlineContent();
 
-            const templateNames = templateManager.getTemplateNames();
-            this.templateSelector.innerHTML = '';
-
-            if (templateNames.length === 0) {
-                this.templateSelector.innerHTML = '<option value="">No templates available</option>';
-                return;
-            }
-
-            // Add default option
-            this.templateSelector.innerHTML = '<option value="">Select a template...</option>';
-
-            // Add template options
-            for (const templateName of templateNames.sort()) {
-                const option = document.createElement('option');
-                option.value = templateName;
-                option.textContent = templateName;
-                this.templateSelector.appendChild(option);
-            }
-
-            // Select a good default (prioritize "Short Story")
-            const defaultTemplate = templateNames.find((name: string) => 
-                name.toLowerCase().includes('short story')
-            ) || templateNames.find((name: string) => 
-                name.toLowerCase().includes('story')
-            ) || templateNames.find((name: string) => 
-                name.toLowerCase().includes('novel') || 
-                name.toLowerCase().includes('book')
-            ) || templateNames[0];
-            
-            if (defaultTemplate) {
-                this.templateSelector.value = defaultTemplate;
-            }
-
-        } catch (error) {
-            console.error('Error loading templates:', error);
-        }
-    }
-
-    /**
-     * Create a project from the current story elements
-     */
-    private async createProject(): Promise<void> {
-        try {
-            if (!this.titleInput || !this.templateSelector) {
-                alert('Could not find title or template selector');
-                return;
-            }
-
-            const title = this.titleInput.value.trim() || 'New Project';
-            const templateName = this.templateSelector.value;
-
-            if (!templateName) {
-                alert('Please select a template for the project');
-                return;
-            }
-
-            // Get template
-            const templateManager = getTemplateManager();
-            if (!templateManager) {
-                alert('Template manager not available');
-                return;
-            }
-
-            const template = templateManager.getTemplate(templateName);
-            if (!template) {
-                alert(`Template "${templateName}" not found`);
-                return;
-            }
-
-            // Get story elements
+            // Get context items (individual elements as before)
             const storyElements = this.storySystem.service.getElementsForContext();
-            
-            // Aggregate outline items (in order)
-            const outlineElements = storyElements.filter(el => el.type === 'outline');
-            const outlineContent = outlineElements
-                .map(el => el.description)
-                .join('\n\n'); // Separate by paragraphs
-
-            // Aggregate context items (ensure single paragraphs)
             const contextElements = storyElements.filter(el => el.type === 'context');
             const contextContent = contextElements
                 .map(el => {
@@ -1510,60 +1425,68 @@ export class XMLStoryModal extends BaseModal {
                 .join('\n\n'); // Separate context items by paragraphs
 
             if (!outlineContent && !contextContent) {
-                alert('No story elements found. Please create some story elements first by chatting with the AI.');
+                alert('No content changes found. Please modify the outline or context items first.');
                 return;
             }
 
-            // Create the project using the existing system
-            const orchestrator = getOrchestrator();
-            const settingsManager = getSettingsManager();
-            const client = getOpenRouterClient();
+            const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
+            
+            // Check if there's already a "chat_edited" version
+            const existingChatVersions = this.sourceNode.getVersionsWithTag('chat_edited');
+            
+            if (existingChatVersions.length > 0) {
+                // Update existing chat_edited version
+                const chatEditedVersion = existingChatVersions[0]!;
+                console.log('📝 Updating existing chat_edited version');
+                
+                // Update the version directly (not the master)
+                chatEditedVersion.content = outlineContent || chatEditedVersion.content;
+                chatEditedVersion.context = contextContent || chatEditedVersion.context;
+                chatEditedVersion.timestamp = new Date();
+                
+                // Promote this updated version to master
+                this.sourceNode.promoteToMaster(chatEditedVersion.id);
+                console.log(`✅ Updated existing chat_edited version and promoted to master for ${templateLevel}`);
+                } else {
+                // Create new version with chat_edited tag
+                console.log('🆕 Creating new chat_edited version');
+                const newVersionId = this.sourceNode.addVersion(['chat_edited'], {
+                    content: outlineContent || this.sourceNode.content,
+                    context: contextContent || this.sourceNode.context
+                });
+                
+                if (newVersionId) {
+                    this.sourceNode.promoteToMaster(newVersionId);
+                    console.log(`✅ Created new chat_edited version and promoted to master for ${templateLevel}`);
+                } else {
+                    console.warn('Failed to create new chat_edited version - may already exist');
+                }
+            }
+            
+            console.log(`✅ Updated ${templateLevel} content length:`, outlineContent?.length || 0, 'context length:', contextContent?.length || 0);
 
-            if (!orchestrator || !settingsManager || !client) {
-                alert('Core services not initialized. Cannot create project.');
-                return;
+            // Save the project
+            const activeProject = getActiveProject();
+            if (activeProject) {
+                await activeProject.saveToStorage();
+                
+                // Trigger UI update by emitting tree-update-needed event
+                activeProject.emit('tree-update-needed', { 
+                    nodeId: this.sourceNode.id, 
+                    reason: 'chat-edited' 
+                });
+                console.log('🔄 Triggered main UI refresh for node:', this.sourceNode.id);
             }
-            
-            const project = new ProjectManager(title, template, orchestrator, settingsManager, client);
-            
-            // Set the project language to match current language setting
-            try {
-                const currentLanguage = settingsManager.getLanguage();
-                project.setLanguage(currentLanguage);
-                console.log(`🌐 New project language set to: ${currentLanguage}`);
-            } catch (error) {
-                console.warn('Could not set project language:', error);
-            }
-            
-            // Apply content and context to root node
-            const rootNode = project.rootNode;
-            
-            if (outlineContent) {
-                rootNode.setContent(outlineContent, 'master');
-                console.log('✅ Applied outline content to root node, length:', outlineContent.length);
-            }
-            
-            if (contextContent) {
-                rootNode.setContext(contextContent, 'master');
-                console.log('✅ Applied context to root node, length:', contextContent.length);
-            }
-            
-            addProject(project);
-            
-            // Set the new project as active and select its root node
-            setActiveProject(project.rootNode.id);
-            
-            await project.saveToStorage();
 
             // Success feedback
-            alert(`Project "${title}" created successfully!`);
+            alert(`${templateLevel} updated successfully with chat edits!`);
 
             // Optionally close the modal
-            this.close();
+            await this.close();
 
         } catch (error) {
-            console.error('Error creating project:', error);
-            alert('Failed to create project. Please try again.');
+            console.error('Error updating source node:', error);
+            alert('Failed to update node. Please try again.');
         }
     }
 
@@ -1588,9 +1511,399 @@ export class XMLStoryModal extends BaseModal {
         try {
             await this.storySystem.service.addNewEmptyElement(type);
             this.updateWhiteboard();
+            
+            // Scroll to show newly added context items
+            if (type === 'context') {
+                this.scrollToNewContextItems();
+            }
         } catch (error) {
             console.error(`Failed to add new ${type} element:`, error);
         }
+    }
+
+    /**
+     * Initialize the unified outline editor
+     */
+    private initializeUnifiedOutlineEditor(): void {
+        const outlineContainer = document.getElementById('unified-outline-editor');
+        if (!outlineContainer) return;
+
+        // Clear placeholder if it exists
+        outlineContainer.innerHTML = '';
+
+        // Get current outline content
+        const currentContent = this.getCurrentOutlineContent();
+
+        // Create a textarea for the UniversalTextEditor
+        const textarea = document.createElement('textarea');
+        textarea.id = 'outline-textarea';
+        textarea.style.width = '100%';
+        textarea.style.minHeight = '200px';
+        textarea.style.border = 'none';
+        textarea.style.outline = 'none';
+        textarea.style.resize = 'vertical';
+        textarea.style.fontFamily = 'inherit';
+        textarea.style.fontSize = 'inherit';
+        textarea.placeholder = 'Start writing your outline here or ask AI to create one...';
+        textarea.value = currentContent;
+
+        outlineContainer.appendChild(textarea);
+
+        // Initialize UniversalTextEditor
+        this.outlineEditor = UniversalTextEditor.replace(textarea, {
+            mode: 'enhanced'
+        });
+
+        // Listen for changes to save to history
+        this.outlineEditor.addEventListener('input', () => {
+            this.saveOutlineVersion(this.outlineEditor!.value, 'user');
+        });
+    }
+
+    /**
+     * Add event listeners for outline control buttons
+     */
+    private addOutlineControlListeners(): void {
+        const resetOutlineBtn = document.getElementById('outline-reset-btn');
+        const undoBtn = document.getElementById('outline-undo-btn');
+        const redoBtn = document.getElementById('outline-redo-btn');
+        const resetContextBtn = document.getElementById('context-reset-btn');
+
+        if (resetOutlineBtn) {
+            resetOutlineBtn.addEventListener('click', () => this.resetOutlineToOriginal());
+        }
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => this.undoOutlineChange());
+        }
+
+        if (redoBtn) {
+            redoBtn.addEventListener('click', () => this.redoOutlineChange());
+        }
+
+        if (resetContextBtn) {
+            resetContextBtn.addEventListener('click', () => this.resetContextToOriginal());
+        }
+    }
+
+    /**
+     * Get current outline content from history or editor
+     */
+    private getCurrentOutlineContent(): string {
+        if (this.outlineHistory.length > 0 && this.currentOutlineVersion >= 0 && this.currentOutlineVersion < this.outlineHistory.length) {
+            const version = this.outlineHistory[this.currentOutlineVersion];
+            return version ? version.content : '';
+        }
+        return '';
+    }
+
+    /**
+     * Save a new outline version to history
+     */
+    private saveOutlineVersion(content: string, source: 'user' | 'ai'): void {
+        // Don't save if content is unchanged
+        if (this.outlineHistory.length > 0 && 
+            this.currentOutlineVersion >= 0 && 
+            this.currentOutlineVersion < this.outlineHistory.length) {
+            const currentVersion = this.outlineHistory[this.currentOutlineVersion];
+            if (currentVersion && currentVersion.content === content) {
+                return;
+            }
+        }
+
+        // Remove any versions after current (when adding new version after undo)
+        if (this.currentOutlineVersion < this.outlineHistory.length - 1) {
+            this.outlineHistory = this.outlineHistory.slice(0, this.currentOutlineVersion + 1);
+        }
+
+        // Add new version
+        this.outlineHistory.push({
+            content,
+            timestamp: new Date(),
+            source
+        });
+
+        this.currentOutlineVersion = this.outlineHistory.length - 1;
+
+        // Limit history size
+        const maxHistorySize = 50;
+        if (this.outlineHistory.length > maxHistorySize) {
+            this.outlineHistory = this.outlineHistory.slice(-maxHistorySize);
+            this.currentOutlineVersion = this.outlineHistory.length - 1;
+        }
+
+        // Update UI to reflect new state
+        this.updateOutlineControls();
+    }
+
+    /**
+     * Undo outline change
+     */
+    private undoOutlineChange(): void {
+        if (this.currentOutlineVersion > 0) {
+            this.currentOutlineVersion--;
+            this.restoreOutlineVersion();
+        }
+    }
+
+    /**
+     * Redo outline change
+     */
+    private redoOutlineChange(): void {
+        if (this.currentOutlineVersion < this.outlineHistory.length - 1) {
+            this.currentOutlineVersion++;
+            this.restoreOutlineVersion();
+        }
+    }
+
+    /**
+     * Restore outline to specific version
+     */
+    private restoreOutlineVersion(): void {
+        if (this.outlineEditor && this.currentOutlineVersion >= 0 && this.currentOutlineVersion < this.outlineHistory.length) {
+            const version = this.outlineHistory[this.currentOutlineVersion];
+            if (version) {
+                this.outlineEditor.value = version.content;
+            }
+            this.updateOutlineControls();
+        }
+    }
+
+    /**
+     * Update outline control button states
+     */
+    private updateOutlineControls(): void {
+        const undoBtn = document.getElementById('outline-undo-btn') as HTMLButtonElement;
+        const redoBtn = document.getElementById('outline-redo-btn') as HTMLButtonElement;
+        const versionInfo = document.querySelector('.outline-version-info');
+
+        if (undoBtn) {
+            undoBtn.disabled = this.currentOutlineVersion <= 0;
+        }
+
+        if (redoBtn) {
+            redoBtn.disabled = this.currentOutlineVersion >= this.outlineHistory.length - 1;
+        }
+
+        if (versionInfo) {
+            const hasHistory = this.outlineHistory.length > 0;
+            versionInfo.textContent = hasHistory ? 
+                `v${this.currentOutlineVersion + 1}/${this.outlineHistory.length}` : 
+                'v1';
+        }
+    }
+
+    /**
+     * Set outline content from AI (creates new version)
+     */
+    public setOutlineContentFromAI(content: string): void {
+        this.saveOutlineVersion(content, 'ai');
+        if (this.outlineEditor) {
+            this.outlineEditor.value = content;
+        }
+    }
+
+    /**
+     * Update the button text based on the source node's template level
+     */
+    private updateButtonText(): void {
+        const button = document.getElementById('create-project-btn');
+        if (!button || !this.sourceNode) return;
+        
+        const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
+        button.innerHTML = `🚀 Update ${templateLevel}`;
+    }
+
+    /**
+     * Update the initial chat message based on the source node's template level
+     */
+    private updateInitialChatMessage(): void {
+        const messageElement = document.getElementById('initial-chat-message');
+        if (!messageElement || !this.sourceNode) return;
+        
+        const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'content';
+        const title = this.titleInput?.value || this.sourceNode.title || 'this content';
+        
+        messageElement.innerHTML = `
+            Hi! I'm here to help you refine and improve your <strong>${templateLevel.toLowerCase()}</strong> "${title}".
+            
+            I can help you:
+            • <strong>Enhance the outline</strong> - Make it more detailed, compelling, or well-structured
+            • <strong>Improve context items</strong> - Add depth, fix inconsistencies, or expand on details
+            • <strong>Refine content</strong> - Polish language, improve flow, or add missing elements
+            
+            <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+            
+            The current content and context are loaded in the editor on the right. What would you like to work on?
+        `;
+    }
+
+    /**
+     * Scroll to show newly added context items (only call when items are actually added, not loaded)
+     */
+    private scrollToNewContextItems(): void {
+        setTimeout(() => {
+            // Find the whiteboard container and scroll to the bottom to show new context items
+            if (this.whiteboardContainer) {
+                // Smooth scroll to the bottom of the whiteboard to show context items
+                this.whiteboardContainer.scrollTo({
+                    top: this.whiteboardContainer.scrollHeight,
+                    behavior: 'smooth'
+                });
+                
+                console.log('📋 Scrolled to show newly added context items');
+            }
+        }, 150); // Small delay to ensure DOM has fully updated after whiteboard refresh
+    }
+
+    /**
+     * Reset outline to original content from source node
+     */
+    private resetOutlineToOriginal(): void {
+        if (!this.sourceNode) {
+            console.warn('No source node available for outline reset');
+            return;
+        }
+
+        if (confirm('Reset outline to original content? This will lose any changes made in the editor.')) {
+            const originalContent = this.sourceNode.content || '';
+            
+            // Clear outline history and set original content
+            this.outlineHistory = [];
+            this.currentOutlineVersion = -1;
+            this.saveOutlineVersion(originalContent, 'user');
+            
+            // Update the outline editor
+            if (this.outlineEditor) {
+                this.outlineEditor.value = originalContent;
+            }
+            
+            // Update controls
+            this.updateOutlineControls();
+            
+            // Note: Reset doesn't change the source node, just the editor state
+            console.log('🔄 Reset outline to original content');
+        }
+    }
+
+    /**
+     * Reset context items to original items from source node
+     */
+    private async resetContextToOriginal(): Promise<void> {
+        if (!this.sourceNode) {
+            console.warn('No source node available for context reset');
+            return;
+        }
+
+        if (confirm('Reset context items to original? This will remove any added or modified context items.')) {
+            try {
+                // Clear all existing context items
+                const existingContextElements = this.storySystem.service.getElementsForContext()
+                    .filter(el => el.type === 'context');
+                for (const element of existingContextElements) {
+                    await this.storySystem.service.deleteElement(element.id);
+                }
+                
+                // Reload original context items
+                const originalContext = this.sourceNode.context || '';
+                const contextItems = originalContext.split('\n\n').filter(item => item.trim());
+                
+                if (contextItems.length > 0) {
+                    for (const contextItem of contextItems) {
+                        if (contextItem.trim()) {
+                            await this.storySystem.service.addNewEmptyElement('context');
+                            
+                            // Find the newly created empty element and update it
+                            const createdElements = this.storySystem.service.getElementsForContext()
+                                .filter(el => el.type === 'context' && el.description === '');
+                            if (createdElements.length > 0) {
+                                const newElement = createdElements[createdElements.length - 1];
+                                if (newElement) {
+                                    await this.storySystem.service.handleHumanEdit(newElement.id, contextItem.trim());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Update the whiteboard
+                this.updateWhiteboard();
+                
+                console.log('🔄 Reset context items to original');
+        } catch (error) {
+                console.error('Error resetting context items:', error);
+                alert('Failed to reset context items. Please try again.');
+            }
+        }
+    }
+
+    /**
+     * Apply initialization data from an existing node
+     */
+    private async applyInitializationData(data: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): Promise<void> {
+        console.log('🏗️ Applying initialization data:', data);
+        
+        // Set title if provided and element exists
+        if (data.title) {
+            if (!this.titleInput) {
+                this.titleInput = document.getElementById('project-title-input') as HTMLInputElement;
+            }
+            if (this.titleInput) {
+                this.titleInput.value = data.title;
+            }
+        }
+
+        // Initialize outline with content if provided
+        if (data.content) {
+            // Clear any existing outline history and set new content
+            this.outlineHistory = [];
+            this.currentOutlineVersion = -1;
+            this.saveOutlineVersion(data.content, 'user');
+            
+            // Update the outline editor if it exists
+            if (this.outlineEditor) {
+                this.outlineEditor.value = data.content;
+            }
+        }
+
+        // Add context items if provided
+        if (data.contextItems && data.contextItems.length > 0) {
+            // Clear existing context items first
+            const existingContextElements = this.storySystem.service.getElementsForContext()
+                .filter(el => el.type === 'context');
+            for (const element of existingContextElements) {
+                await this.storySystem.service.deleteElement(element.id);
+            }
+            
+            // Add new context items
+            for (let index = 0; index < data.contextItems.length; index++) {
+                const contextItem = data.contextItems[index];
+                if (contextItem && contextItem.trim()) { // Only add non-empty items
+                    await this.storySystem.service.addNewEmptyElement('context');
+                    
+                    // Update the empty element with content - need to find the actual element that was created
+                    const createdElements = this.storySystem.service.getElementsForContext()
+                        .filter(el => el.type === 'context' && el.description === '');
+                    if (createdElements.length > 0) {
+                        const newElement = createdElements[createdElements.length - 1]; // Get the last created empty element
+                        if (newElement) {
+                            await this.storySystem.service.handleHumanEdit(newElement.id, contextItem.trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update the whiteboard to reflect changes
+        this.updateWhiteboard();
+        
+        // Update button text to reflect the source node's template level
+        this.updateButtonText();
+        
+        // Update initial chat message to reflect the editing context
+        this.updateInitialChatMessage();
+        
+        console.log('✅ Initialization data applied successfully');
     }
 
     /**
@@ -1626,7 +1939,7 @@ export class XMLStoryModal extends BaseModal {
     private async saveModelSelection(): Promise<void> {
         try {
             if (this.modelSelector?.value) {
-                const storage = await StorageService.getInstance();
+            const storage = await StorageService.getInstance();
                 await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
                 console.log(`📝 Saved XML Story model selection: ${this.modelSelector.value}`);
             }
@@ -1635,131 +1948,22 @@ export class XMLStoryModal extends BaseModal {
         }
     }
 
-    /**
-     * Load saved conversation history from StorageService
-     */
-    private async loadSavedConversation(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            const savedConversation = await storage.get(XML_STORY_CONVERSATION_STORAGE_KEY);
-            
-            if (savedConversation && Array.isArray(savedConversation)) {
-                this.conversationHistory = savedConversation;
-                console.log(`💬 Loaded saved conversation history: ${savedConversation.length} messages`);
-                
-                // Rebuild the chat UI with loaded messages
-                this.rebuildChatHistory();
-            }
-        } catch (error) {
-            console.warn('💬 Error loading saved conversation history:', error);
-        }
-    }
 
-    /**
-     * Save current conversation history to StorageService
-     */
-    private async saveConversation(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            await storage.set(XML_STORY_CONVERSATION_STORAGE_KEY, this.conversationHistory);
-            console.log(`💬 Saved conversation history: ${this.conversationHistory.length} messages`);
-        } catch (error) {
-            console.warn('💬 Error saving conversation history:', error);
-        }
-    }
 
-    /**
-     * Clear saved conversation history
-     */
-    private async clearSavedConversation(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            await storage.delete(XML_STORY_CONVERSATION_STORAGE_KEY);
-            console.log('💬 Cleared saved conversation history');
-        } catch (error) {
-            console.warn('💬 Error clearing saved conversation history:', error);
-        }
-    }
-
-    /**
-     * Rebuild chat history UI from conversation history
-     */
-    private rebuildChatHistory(): void {
-        if (!this.messagesContainer) return;
-
-        // Clear existing messages
-        this.messagesContainer.innerHTML = '';
-
-        // Re-add all messages from history
-        for (const message of this.conversationHistory) {
-            // Extract just the user message for display (remove the user prompt context)
-            let displayContent = message.content;
-            if (message.role === 'user' && message.content.includes('\n\nUser: ')) {
-                const userMessageStart = message.content.lastIndexOf('\n\nUser: ');
-                if (userMessageStart !== -1) {
-                    displayContent = message.content.substring(userMessageStart + 8); // 8 = length of '\n\nUser: '
-                }
-            }
-            
-            this.addMessageToChat(message.role, displayContent);
-        }
-    }
-
-    /**
-     * Load saved whiteboard state from StorageService
-     */
-    private async loadSavedWhiteboard(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            const savedWhiteboard = await storage.get(XML_STORY_WHITEBOARD_STORAGE_KEY);
-            
-            if (savedWhiteboard && typeof savedWhiteboard === 'object') {
-                this.storySystem.importState(savedWhiteboard as Record<string, unknown>);
-                console.log('📋 Loaded saved whiteboard state');
-                
-                // Update the whiteboard UI
-                this.updateWhiteboard();
-            }
-        } catch (error) {
-            console.warn('📋 Error loading saved whiteboard state:', error);
-        }
-    }
-
-    /**
-     * Save current whiteboard state to StorageService
-     */
-    private async saveWhiteboard(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            const whiteboardState = this.storySystem.exportState();
-            await storage.set(XML_STORY_WHITEBOARD_STORAGE_KEY, whiteboardState);
-            console.log('📋 Saved whiteboard state');
-        } catch (error) {
-            console.warn('📋 Error saving whiteboard state:', error);
-        }
-    }
-
-    /**
-     * Clear saved whiteboard state
-     */
-    private async clearSavedWhiteboard(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            await storage.delete(XML_STORY_WHITEBOARD_STORAGE_KEY);
-            console.log('📋 Cleared saved whiteboard state');
-        } catch (error) {
-            console.warn('📋 Error clearing saved whiteboard state:', error);
-        }
-    }
+    
 
     public override async close(): Promise<void> {
         // Clean up text editors
         this.elementEditors.forEach(editor => editor.destroy());
         this.elementEditors.clear();
         
-        // Save state before closing
-        await this.saveConversation();
-        await this.saveWhiteboard();
+        // Clean up outline editor
+        if (this.outlineEditor) {
+            this.outlineEditor.destroy();
+            this.outlineEditor = null;
+        }
+        
+        // No state persistence needed
         
         // Call parent close
         await super.close();

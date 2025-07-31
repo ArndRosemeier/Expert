@@ -2,9 +2,22 @@
 export function getElementById<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
     if (!element) {
-        throw new Error(`Could not find element with id: ${id}`);
+        // Provide more context for debugging DOM issues
+        const availableIds = Array.from(document.querySelectorAll('[id]'))
+            .map(el => el.id)
+            .filter(id => id)
+            .sort();
+        
+        console.error('Available element IDs:', availableIds);
+        throw new Error(`Could not find element with id: ${id}. Check console for available IDs.`);
     }
     return element as T;
+}
+
+// --- Safe DOM Access (returns null if not found) ---
+export function getElementByIdSafe<T extends HTMLElement>(id: string): T | null {
+    const element = document.getElementById(id);
+    return element as T | null;
 }
 
 // --- DOM Elements (Lazy Access) ---

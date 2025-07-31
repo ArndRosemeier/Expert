@@ -551,39 +551,19 @@ function captureCurrentDropdownValues() {
         const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
         
         if (draftSelector) {
-            const oldValue = draftLevelState;
             draftLevelState = parseInt(draftSelector.value);
-            if (oldValue !== draftLevelState) {
-                console.log(`🔄 Captured draft level: ${draftLevelState} (was ${oldValue})`);
-            }
         }
         if (contentSelector) {
-            const oldValue = contentLevelState;
             contentLevelState = parseInt(contentSelector.value);
-            if (oldValue !== contentLevelState) {
-                console.log(`🔄 Captured content level: ${contentLevelState} (was ${oldValue})`);
-            }
         }
         if (contextPruneSelector) {
-            const oldValue = contextPruneLevelState;
             contextPruneLevelState = parseInt(contextPruneSelector.value);
-            if (oldValue !== contextPruneLevelState) {
-                console.log(`🔄 Captured context prune level: ${contextPruneLevelState} (was ${oldValue})`);
-            }
         }
         if (coherenceSelector) {
-            const oldValue = coherenceLevelState;
             coherenceLevelState = parseInt(coherenceSelector.value);
-            if (oldValue !== coherenceLevelState) {
-                console.log(`🔄 Captured coherence level: ${coherenceLevelState} (was ${oldValue})`);
-            }
         }
         if (autofixSeveritySelector) {
-            const oldValue = autofixSeverityState;
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
-            if (oldValue !== autofixSeverityState) {
-                console.log(`🔄 Captured autofix severity: ${autofixSeverityState} (was ${oldValue})`);
-            }
         }
     } catch (error) {
         console.warn('Failed to capture dropdown values:', error);
@@ -1530,7 +1510,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             if (enhancedContextEditor) {
                 enhancedContextEditor.value = e.summary;
             } else {
-                const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
                 if (contextTextArea) {
                     contextTextArea.value = e.summary;
                 }
@@ -1608,14 +1588,66 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         renderProjectUI(manager);
     };
 
+    // PERFORMANCE FIX: Debounced rendering to prevent rapid DOM rebuilds during generation
+    // Problem: tree-update-needed events fire very rapidly during generation (draft-creation-started,
+    // children-created, context-pruning-started, etc.) causing DOM race conditions and element warnings
+    // Solution: Batch non-critical events, render immediately for critical ones, lightweight updates for status
+    let renderTimeout: NodeJS.Timeout | null = null;
+    let pendingRenderEvents: Array<{ nodeId: string; reason: string }> = [];
+    
+    const debouncedRenderProjectUI = () => {
+        if (renderTimeout) {
+            clearTimeout(renderTimeout);
+        }
+        
+        // Adaptive delay based on pending events - more events = longer delay to batch them
+        const baseDelay = 50;
+        const adaptiveDelay = Math.min(baseDelay + (pendingRenderEvents.length * 10), 200);
+        
+        renderTimeout = setTimeout(() => {
+            // Executing debounced render (logging removed to reduce noise)
+            
+            // Capture current dropdown values before re-rendering to preserve user selections
+            captureCurrentDropdownValues();
+            
+            // Execute the render
+            renderProjectUI(manager);
+            
+            // Clear pending events
+            pendingRenderEvents = [];
+            renderTimeout = null;
+        }, adaptiveDelay);
+    };
+
     const handleTreeUpdateNeeded = (e: { nodeId: string; reason: string }) => {
-        // Refresh the project UI when tree update is needed (e.g., after node generation)
-        console.log(`🌲 RECEIVED tree-update-needed event for node ${e.nodeId}: ${e.reason}`);
+        // Tree update event received (logging reduced to minimize noise)
         
-        // Capture current dropdown values before re-rendering to preserve user selections
-        captureCurrentDropdownValues();
+        // Add to pending events
+        pendingRenderEvents.push(e);
         
-        renderProjectUI(manager);
+        // For critical events that need immediate UI updates, render immediately
+        const criticalEvents = ['generation-completed', 'children-created', 'generation-failed'];
+        if (criticalEvents.includes(e.reason)) {
+            // Cancel any pending debounced render and execute immediately
+            if (renderTimeout) {
+                clearTimeout(renderTimeout);
+                renderTimeout = null;
+            }
+            // Immediate render for critical event (logging removed to reduce noise)
+            captureCurrentDropdownValues();
+            renderProjectUI(manager);
+            pendingRenderEvents = [];
+        } else {
+            // For non-critical events, just update the tree display to reduce DOM churn
+            const lightweightEvents = ['draft-creation-started', 'context-pruning-started', 'generation-started'];
+            if (lightweightEvents.includes(e.reason)) {
+                // Just refresh the tree to show status updates, don't rebuild everything
+                renderMultiProjectTree();
+            } else {
+                // Use debounced rendering for other non-critical events
+                debouncedRenderProjectUI();
+            }
+        }
     };
 
     const handleCoherenceAnalysisStarted = (e: { nodeId: string, node: DocumentNode }) => {
@@ -1731,7 +1763,7 @@ export async function refreshGlobalProfileSelector() {
 
 
 
-export async function renderNodeDetails() {
+export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     const contentArea = getElementById('node-details');
     contentArea.innerHTML = ''; // Clear previous content
 
@@ -2158,6 +2190,11 @@ export async function renderNodeDetails() {
                 
                 <!-- Actions Button Row (inside title column) -->
                 <div style="margin-top: auto; display: flex; align-items: center; gap: 0.5rem;">
+                    <button id="xml-story-creation-btn" class="button button-secondary" 
+                            title="Edit Content with AI - Refine and improve this content collaboratively" 
+                            style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
+                        📝
+                    </button>
                     <button id="overview-board-btn" class="button button-secondary" 
                             title="Overview Board - Visualize narrative elements" 
                             style="padding: 0.4rem; font-size: 0.8rem; min-width: auto; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center;">
@@ -2476,7 +2513,7 @@ export async function renderNodeDetails() {
         coherenceLevelState = params.coherenceLevel;
         autofixSeverityState = params.autofixSeverity;
         
-        console.log(`🔄 Restored generation parameters for node "${node.title}":`, params);
+        // Generation parameters restored (logging removed to reduce noise)
     }
     
     // Validation function
@@ -2538,9 +2575,34 @@ export async function renderNodeDetails() {
 
     // --- CRITICAL: Add missing event listeners for content and context textareas ---
     // This must happen AFTER the DOM elements are created and appended above
-    const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
-    const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
-    const nodeTitleDisplay = getElementById('node-title-display') as HTMLElement;
+    // Use safe element access to prevent errors during DOM updates
+    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+    const nodeTitleDisplay = document.getElementById('node-title-display') as HTMLElement;
+    
+    // RACE CONDITION FIX: Ensure elements exist before proceeding (safety check with retry mechanism)  
+    if (!contentTextArea || !contextTextArea || !nodeTitleDisplay) {
+        // During rapid UI updates, DOM might be in transition state - retry once after a short delay
+        const missingElements = {
+            contentTextArea: !!contentTextArea,
+            contextTextArea: !!contextTextArea,
+            nodeTitleDisplay: !!nodeTitleDisplay
+        };
+        
+        // Only log warning on second attempt (after retry)
+        const isRetryAttempt = retryOptions?._isRetry;
+        if (isRetryAttempt) {
+            console.warn('Failed to find required DOM elements in renderNodeDetails after retry:', missingElements);
+            return; // Exit gracefully if elements still don't exist after retry
+        }
+        
+        // First attempt - schedule a retry after a short delay
+        setTimeout(() => {
+            // Mark this as a retry attempt to prevent infinite recursion
+            renderNodeDetails({ _isRetry: true });
+        }, 25); // 25ms retry delay
+        return;
+    }
 
     // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
     if (contentTextArea) {
@@ -3152,7 +3214,7 @@ This action cannot be undone.`;
                         // Save to storage
                         await projectManager.saveToStorage();
                         
-                        console.log('✅ Content generation completed successfully');
+                        // Content generation completed
                         
                     } catch (error) {
                         console.error('Content generation failed:', error);
@@ -3245,7 +3307,7 @@ This action cannot be undone.`;
                         // Save to storage
                         await projectManager.saveToStorage();
                         
-                        console.log('✅ Bulk generation completed successfully');
+                        // Bulk generation completed
                         
                     } catch (error) {
                         console.error('Bulk generation failed:', error);
@@ -3305,7 +3367,7 @@ This action cannot be undone.`;
                 // Open the Add Child Node Modal
                 openAddChildNodeModal(node, node.id)
                     .then((_modal) => {
-                        console.log('✅ Add Child Node modal opened successfully');
+                        // Add Child Node modal opened
                         // The modal factory handles UI refresh automatically
                     })
                     .catch((error) => {
@@ -3597,7 +3659,7 @@ This action cannot be undone.`;
                         if (enhancedContextEditor) {
                             enhancedContextEditor.value = currentNode.context;
                         } else {
-                            const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                            const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
                             if (contextTextArea) {
                                 contextTextArea.value = currentNode.context;
                             }
@@ -3946,7 +4008,7 @@ export async function setupEventListeners() {
         if (handler) {
             event.preventDefault();
             event.stopPropagation();
-            console.log(`🎯 Handling click for: ${button.id}`);
+            // Button click handled (logging removed to reduce noise)
             handler(event);
         }
     });
@@ -4370,11 +4432,9 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             
             <!-- Actions Group -->
             <div class="top-bar-group actions-group">
+
                 <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
                     ${AI_ASSISTANT_EMOJI}
-                </button>
-                <button id="xml-story-creation-btn" class="help-button" title="XML Story Creator - Collaborative story creation with AI" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
-                    📝
                 </button>
                 <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">
                     ⚡ Generate
@@ -4850,7 +4910,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
     let importedNode: DocumentNode;
     
     if (importData.versions && Array.isArray(importData.versions) && importData.versions.length > 0) {
-        console.log(`🔄 Importing with enhanced version data: ${importData.versions.length} versions`);
+        // Importing with enhanced version data
         
         // FIXED: Use proper project manager method to ensure template sharing
         importedNode = projectManager.addNode(importData.title, targetNode.id);
@@ -4894,7 +4954,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         }
         
     } else {
-        console.log(`🔄 Importing with legacy format (no version data)`);
+        // Importing with legacy format
         
         // Legacy import: Create new node and set properties individually
         importedNode = importChildNodeWithRootTemplate(projectManager, targetNode.id, importData.title);
@@ -4966,7 +5026,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
     let newNode: DocumentNode;
     
     if (childData.versions && Array.isArray(childData.versions) && childData.versions.length > 0) {
-        console.log(`🔄 Importing child with enhanced version data: ${childData.versions.length} versions`);
+                    // Importing child with enhanced version data
         
         // FIXED: Use proper project manager method to ensure template sharing
         newNode = projectManager.addNode(childData.title, parentId);
@@ -5010,7 +5070,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         }
         
     } else {
-        console.log(`🔄 Importing child with legacy format (no version data)`);
+                    // Importing child with legacy format
         
         // Legacy import: Create new node and set properties individually
         newNode = importChildNodeWithRootTemplate(projectManager, parentId, childData.title);
@@ -5177,7 +5237,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         // Save to storage
         await projectManager.saveToStorage();
         
-        console.log('✅ Unified generation completed successfully');
+                        // Unified generation completed
         
     } catch (error) {
         console.error('Unified generation failed:', error);
@@ -5481,10 +5541,40 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
     },
 
     'xml-story-creation-btn': (_e: Event) => {
-        console.log('🎯 XML Story Creation button clicked!');
+        // XML Story Creation button clicked - initialize with current node data
+        if (!projectManager || !selectedNodeId) {
+            // No active project/node - open empty modal
+            void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
+                void openXMLStoryModal();
+            }).catch((error: unknown) => {
+                console.error('❌ Failed to open XML Story Creation modal:', error);
+                alert('Failed to open XML Story Creator. Please try again.');
+            });
+            return;
+        }
+
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) {
+            console.warn('Selected node not found:', selectedNodeId);
+            return;
+        }
+
+        // Gather node data for initialization
+        const initializationData = {
+            title: node.title || 'Untitled',
+            content: node.content || '',
+            contextItems: node.context ? node.context.split('\n\n').filter(item => item.trim()) : [],
+            sourceNode: node
+        };
+
+        console.log('🏗️ Initializing XML Story Creator with node data:', {
+            title: initializationData.title,
+            contentLength: initializationData.content.length,
+            contextItemsCount: initializationData.contextItems.length
+        });
+
         void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
-            console.log('✅ ModalFactory imported, calling openXMLStoryModal...');
-            void openXMLStoryModal();
+            void openXMLStoryModal(initializationData);
         }).catch((error: unknown) => {
             console.error('❌ Failed to open XML Story Creation modal:', error);
             alert('Failed to open XML Story Creator. Please try again.');
@@ -5529,7 +5619,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
                 if (enhancedContextEditor) {
                     enhancedContextEditor.value = currentNode.context;
                 } else {
-                    const contextTextArea = getElementById('node-context') as HTMLTextAreaElement;
+                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
                     if (contextTextArea) {
                         contextTextArea.value = currentNode.context;
                     }
@@ -5637,7 +5727,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
 
         // Import and open the Overview Board Modal
         try {
-            console.log('Overview Board requested for node:', selectedNode.title);
+            // Overview Board requested
             
             const { OverviewBoardModal } = await import('../overview-board');
             const modal = new OverviewBoardModal({
@@ -5652,7 +5742,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             });
             
             modal.open();
-            console.log('✅ Overview Board modal opened successfully');
+                            // Overview Board modal opened
         } catch (error) {
             console.error('❌ Failed to open Overview Board:', error);
             alert('Failed to open Overview Board. Please try again.');
@@ -5707,7 +5797,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         if (enhancedContentEditor) {
             enhancedContentEditor.value = node.content;
         } else {
-            const contentTextArea = getElementById('node-content') as HTMLTextAreaElement;
+            const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
             if (contentTextArea) {
                 contentTextArea.value = node.content;
             }
