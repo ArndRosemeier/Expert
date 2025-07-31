@@ -280,7 +280,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         language: this.language
                     }
                 );
-                initialPrompt = this.expansionService.expandPrompt(this.prompts.content_generation_initial, context);
+                initialPrompt = this.expansionService.expandPrompt(this.prompts.content_generation_initial, context, this.language);
                 
                 if (this.stopRequested) {
                     aborted = true;
@@ -590,9 +590,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     language: this.language
                 }
             );
-            // Use global override to ensure captured language is used even if project switches
-            context.globalOverrides = { language: this.language };
-            return this.expansionService.expandPrompt(this.prompts.content_generation_initial, context);
+            return this.expansionService.expandPrompt(this.prompts.content_generation_initial, context, this.language);
         }
         
         const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
@@ -611,9 +609,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        // Use global override to ensure captured language is used even if project switches
-        context.globalOverrides = { language: this.language };
-        return this.expansionService.expandPrompt(this.prompts.content_generation_iterative, context);
+        return this.expansionService.expandPrompt(this.prompts.content_generation_iterative, context, this.language);
     }
 
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
@@ -630,9 +626,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        // Use global override to ensure captured language is used even if project switches
-        context.globalOverrides = { language: this.language };
-        return this.expansionService.expandPrompt(this.prompts.rater, context);
+        return this.expansionService.expandPrompt(this.prompts.rater, context, this.language);
     }
 
     private parseAllRatings(response: string, criteria: QualityCriterion[]): Rating[] | null {
@@ -700,9 +694,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 language: this.language
             }
         );
-        // Use global override to ensure captured language is used even if project switches
-        context.globalOverrides = { language: this.language };
-        return this.expansionService.expandPrompt(this.prompts.editor, context);
+        return this.expansionService.expandPrompt(this.prompts.editor, context, this.language);
     }
 
     /**

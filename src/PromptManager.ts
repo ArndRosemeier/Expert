@@ -1462,14 +1462,18 @@ Generate content in {{language}}. Any structural elements (such as section heade
 
 **For Context Items (Individual Elements):**
 - Create specific context items for characters, locations, and world-building details
-- Use: <context id="unique_id" description="Full description including name/title and details" />
+- Use: <context id="unique_id">Full description including name/title and details</context>
 - Each context item should be focused and self-contained
 
+**Context Item Types:**
+- **Global items**: Start description with * for elements that persist throughout the entire story (main characters, core world-building, fundamental themes, style guides, genre, etc.)
+- **Situational items**: No prefix for elements that are relevant to specific scenes or chapters (temporary characters, specific locations, plot devices)
+
 🎯 EDITING GUIDELINES:
-- ✅ Suggest complete outline rewrites using </outline_replace> tags
-- ✅ Add individual context items for new characters, locations, concepts
-- ✅ Edit existing context items using: </edit id="element_id" description="New description">
-- ✅ Remove context items using: </delete id="element_id">
+- Suggest complete outline rewrites using </outline_replace> tags
+- Add individual context items for new characters, locations, concepts
+- Edit existing context items using: </edit id="element_id">Description content</edit>
+- Remove context items using: </delete id="element_id">
 
 💡 EXAMPLE RESPONSES:
 
@@ -1486,16 +1490,20 @@ Chapter 3: The Truth Unveiled
 Rosa reveals the family's supernatural heritage and Elena's role as the chosen guardian.
 </outline_replace>
 
-I also want to add a key character to your context:
+I also want to add a key character and update an existing one:
 
-<context id="dr_hassan" description="Dr. Hassan is the emergency room physician who first examines Elena after her accident. He becomes suspicious when her injuries don't match the severity of the crash, leading him to investigate further and potentially become an ally in Elena's journey." />
+<context id="dr_hassan">Dr. Hassan is the emergency room physician who first examines Elena after her accident. He becomes suspicious when her injuries do not match the severity of the crash, leading him to investigate further and potentially become an ally in her journey.</context>
 
-This structure gives you a clearer narrative flow while adding the medical professional who could serve as a bridge between Elena's normal world and her supernatural awakening."
+<context id="elena_main">*Elena Rodriguez is the 28-year-old protagonist with newly awakened supernatural abilities. She works as a librarian and is driven by curiosity and a strong sense of justice. Her powers manifest after the mysterious car accident.</context>
+
+</edit id="rosa_character">Rosa Martinez is Elena's wise but secretive grandmother who has been hiding the family's supernatural legacy for decades. She possesses ancient knowledge of protective rituals and serves as Elena's reluctant mentor, torn between keeping her granddaughter safe and preparing her for the dangers ahead.</edit>
+
+This structure gives you a clearer narrative flow while adding the medical professional and deepening Rosa's character development."
 
 System commands available:
 - </refresh> - Request current state
 - </outline_replace>COMPLETE_OUTLINE_TEXT</outline_replace> - Replace entire outline
-- </edit id="element_id" description="New description"> - Edit existing context element  
+- </edit id="element_id">Description content</edit> - Edit existing context element  
 - </delete id="element_id"> - Delete context element
 
 {{noise_names}}
@@ -1517,11 +1525,15 @@ CURRENT CONTEXT ITEMS:
 RECENT USER EDITS:
 {{human_edits}}
 
-💡 EDITING REMINDERS:
+EDITING COMMANDS:
 - For outline changes: Use </outline_replace>COMPLETE_NEW_OUTLINE</outline_replace>
-- For new context items: Use <context id="unique_id" description="..." />
-- For editing context items: Use </edit id="element_id" description="New description">
+- For new context items: Use <context id="unique_id">Description content</context>
+- For editing context items: Use </edit id="element_id">Description content</edit>
 - For removing context items: Use </delete id="element_id">
+
+CONTEXT ITEM CONVENTIONS:
+- Start with * for global elements (main characters, core world-building): *Character Name is...
+- No prefix for situational elements (temporary characters, specific locations): Location Name is...
 
 Help improve the structure and develop the content through thoughtful editing suggestions.`.trim(),
         placeholders: ['current_outline', 'current_context_items', 'human_edits'],

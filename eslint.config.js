@@ -63,6 +63,23 @@ export default [
       
       // Force explicit comparisons instead of truthy/falsy defensive checks
       'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      
+      // BROWSER COMPATIBILITY RULES
+      // Prevent require() usage in browser code - use ES6 imports instead
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'require',
+          message: 'Use ES6 imports instead of require() - require is not available in browser environment'
+        }
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.name="require"]',
+          message: 'Use ES6 imports instead of require() - require is not available in browser environment'
+        }
+      ],
     },
   },
 ]; 

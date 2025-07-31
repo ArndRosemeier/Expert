@@ -116,8 +116,19 @@ class PromptExpansionService {
     /**
      * Main expansion method - replaces all placeholders in a template (synchronous version)
      */
-    expandPrompt(template: string, context: PlaceholderContext = {}): string {
+    expandPrompt(template: string, context: PlaceholderContext = {}, overrideLanguage?: string | null): string {
         let expanded = template;
+        
+        // If overrideLanguage is provided, inject it into the context
+        if (overrideLanguage !== undefined && overrideLanguage !== null) {
+            context = {
+                ...context,
+                project: {
+                    ...context.project,
+                    language: overrideLanguage
+                }
+            };
+        }
         
         // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
@@ -152,8 +163,19 @@ class PromptExpansionService {
     /**
      * Async expansion method - handles both regular and interactive placeholders
      */
-    async expandPromptAsync(template: string, context: PlaceholderContext = {}): Promise<string> {
+    async expandPromptAsync(template: string, context: PlaceholderContext = {}, overrideLanguage?: string | null): Promise<string> {
         let expanded = template;
+        
+        // If overrideLanguage is provided, inject it into the context
+        if (overrideLanguage !== undefined && overrideLanguage !== null) {
+            context = {
+                ...context,
+                project: {
+                    ...context.project,
+                    language: overrideLanguage
+                }
+            };
+        }
         
         // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
@@ -441,9 +463,9 @@ class PromptExpansionService {
             description: 'Random UUID for unique identification'
         }));
 
-        // Language placeholder - now global for consistency across all prompts
-        this.registerGlobalPlaceholder('language', () => ({
-            value: this.settingsManager.getLanguage(),
+        // Language placeholder - use context provider to access project language
+        this.registerContextPlaceholder('language', (context) => ({
+            value: context?.project?.language || this.settingsManager.getLanguage(),
             description: 'Current project language setting'
         }));
 

@@ -79,8 +79,29 @@ export class XMLStoryParser {
             });
         }
         
-        // Handle other system commands (self-closing)
-        const systemCommandRegex = /<\/(refresh|edit|delete|rename)(?:\s+([^>]*))?\s*>/gi;
+        // Handle edit commands with content between tags (new improved syntax)
+        const editCommandRegex = /<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
+        let editMatch;
+        while ((editMatch = editCommandRegex.exec(text)) !== null) {
+            const parametersText = editMatch[1] || '';
+            const content = editMatch[2] || '';
+            
+            const command: SystemCommand = {
+                type: 'edit',
+                content: content.trim(),
+                timestamp: new Date()
+            };
+            
+            // Parse parameters (like id="element_id")
+            if (parametersText.trim()) {
+                command.parameters = this.parseCommandParameters(parametersText);
+            }
+            
+            commands.push(command);
+        }
+        
+        // Handle other system commands (self-closing) - excluding edit which is now handled above
+        const systemCommandRegex = /<\/(refresh|delete|rename)(?:\s+([^>]*))?\s*>/gi;
         let match;
         while ((match = systemCommandRegex.exec(text)) !== null) {
             if (!match[1]) continue;
@@ -116,9 +137,15 @@ export class XMLStoryParser {
         const errors: ParseError[] = [];
         let cleanedText = text;
 
-        // Find all XML-like tags in the text
+        // Find all XML-like tags in the text (both self-closing and with content)
         const xmlTagRegex = /<(outline|context)(\s[^>]*?)?\s*\/?>/gi;
-        const matches = Array.from(text.matchAll(xmlTagRegex));
+        const xmlContentTagRegex = /<(outline|context)(\s[^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi;
+        
+        const selfClosingMatches = Array.from(text.matchAll(xmlTagRegex));
+        const contentMatches = Array.from(text.matchAll(xmlContentTagRegex));
+        
+        // Process both types of matches
+        const matches = [...selfClosingMatches, ...contentMatches];
 
         console.log(`🔍 Found ${matches.length} XML tags to parse:`, matches.map(m => m[0]));
 
@@ -148,6 +175,12 @@ export class XMLStoryParser {
                 const attributes: Record<string, string> = {};
                 for (const attr of Array.from(xmlElement.attributes)) {
                     attributes[attr.name] = attr.value;
+                }
+
+                // For new closing tag syntax, get description from text content instead of attribute
+                const textContent = xmlElement.textContent?.trim();
+                if (textContent && !attributes['description']) {
+                    attributes['description'] = textContent;
                 }
 
                 console.log(`✅ Parsed ${tagName} with attributes:`, attributes);
@@ -183,20 +216,33 @@ export class XMLStoryParser {
 
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                
+                // Check for common quote mismatch errors
+                let helpfulMsg = errorMsg;
+                if (fullMatch.includes('"') && fullMatch.includes("'") && fullMatch.includes('description=')) {
+                    helpfulMsg = `${errorMsg}. HINT: Check for mismatched quotes in description attribute - use only double quotes (") for XML attributes, never mix with single quotes (').`;
+                }
+                
                 errors.push({
                     type: 'malformed_xml',
-                    message: `Invalid ${tagName} tag: ${errorMsg}`,
+                    message: `Invalid ${tagName} tag: ${helpfulMsg}`,
                     sourceText: fullMatch
                 });
-                console.error(`❌ XML parsing error for "${fullMatch}":`, errorMsg);
+                console.error(`❌ XML parsing error for "${fullMatch}":`, helpfulMsg);
             }
         }
 
         // Remove any remaining system commands from cleaned text
-        cleanedText = cleanedText.replace(/<\/(refresh|edit|delete|rename)(?:\s+[^>]*)?\s*>/gi, '');
+        cleanedText = cleanedText.replace(/<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi, '');
         
         // Remove outline_replace tags and their content from cleaned text
         cleanedText = cleanedText.replace(/<\/outline_replace>\s*[\s\S]*?\s*<\/outline_replace>/gi, '');
+        
+        // Remove edit tags and their content from cleaned text (new syntax)
+        cleanedText = cleanedText.replace(/<\/edit\s+[^>]*?>\s*[\s\S]*?\s*<\/edit>/gi, '');
+        
+        // Remove context tags with content from cleaned text (new closing tag syntax)
+        cleanedText = cleanedText.replace(/<(outline|context)\s+[^>]*?>\s*[\s\S]*?\s*<\/\1>/gi, '');
 
         console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
         

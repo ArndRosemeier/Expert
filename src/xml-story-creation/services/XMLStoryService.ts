@@ -514,16 +514,25 @@ export class XMLStoryService {
     }
     
     /**
-     * Handle AI edit commands
+     * Handle AI edit commands (supports both old attribute-based and new content-based syntax)
      */
     private handleEditCommand(command: SystemCommand): void {
         if (!command.parameters) return;
         
         const elementId = command.parameters['id'];
-        const newDescription = command.parameters['description'];
+        
+        // Support both old and new syntax:
+        // Old: </edit id="element_id" description="New description">
+        // New: </edit id="element_id">New description content</edit>
+        const newDescription = command.content || command.parameters['description'];
         
         if (!elementId) {
             console.warn('Edit command missing required id parameter');
+            return;
+        }
+        
+        if (!newDescription) {
+            console.warn('Edit command missing description content');
             return;
         }
         
@@ -536,10 +545,8 @@ export class XMLStoryService {
         // Store original values for history
         const oldDescription = element.description;
         
-        // Update element properties
-        if (newDescription !== undefined) {
-            element.description = newDescription;
-        }
+        // Update element properties with new content
+        element.description = newDescription;
         
         // Mark as updated by AI
         element.isUpdatedByAI = true;
@@ -551,7 +558,7 @@ export class XMLStoryService {
             timestamp: new Date(),
             type: 'ai_edit',
             changes: {
-                ...(newDescription !== undefined && { description: { from: oldDescription, to: newDescription } })
+                description: { from: oldDescription, to: newDescription }
             }
         });
         

@@ -16,6 +16,7 @@ import { QualityCriterion, CreatorPayload } from '../types';
 import { LoopProgress } from '../LoopOrchestrator';
 import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
+import { getProjects } from '../state';
 
 /**
  * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
@@ -860,7 +861,8 @@ export class UnifiedGenerationService {
                 outlineContent: node.content
             });
             const expansionService = createPromptExpansionService(this.deps.settingsManager);
-            const finalPrompt = expansionService.expandPrompt(prompt, promptContext);
+            const projectLanguage = this.getProjectLanguageForNode();
+            const finalPrompt = expansionService.expandPrompt(prompt, promptContext, projectLanguage);
 
             // Update progress mid-way
             this.currentOperationProgress = {
@@ -1725,8 +1727,8 @@ export class UnifiedGenerationService {
      * Build loop input for content generation
      */
     private buildLoopInput(node: DocumentNode): LoopInput {
-        // CRITICAL: Capture language BEFORE any profile switching to prevent race conditions
-        const capturedLanguage = this.deps.settingsManager.getLanguage();
+        // CRITICAL: Get project language dynamically at generation time to prevent race conditions
+        const capturedLanguage = this.getProjectLanguageForNode() || this.deps.settingsManager.getLanguage();
         
         // Check for settings override from parent node
         const settingsOverride = this.extractSettingsOverride(node);
@@ -1774,5 +1776,30 @@ export class UnifiedGenerationService {
         }
 
         return loopInput;
+    }
+
+    /**
+     * Get the language of the project that owns this generation's root node
+     */
+    private getProjectLanguageForNode(): string | null {
+        try {
+            const allProjects = getProjects();
+            
+            console.log(`🔍 Looking for project with rootNode.id = "${this.deps.rootNode.id}"`);
+            console.log(`🔍 Available projects:`, allProjects.map((p: any) => ({ id: p.rootNode.id, lang: p.getLanguage() })));
+            
+            // Find the project that owns our root node
+            const owningProject = allProjects.find((project: any) => 
+                project.rootNode.id === this.deps.rootNode.id
+            );
+            
+            const result = owningProject ? owningProject.getLanguage() : null;
+            console.log(`🔍 Found project language: "${result}"`);
+            
+            return result;
+        } catch (error) {
+            console.warn('Failed to get project language:', error);
+            return null;
+        }
     }
 } 

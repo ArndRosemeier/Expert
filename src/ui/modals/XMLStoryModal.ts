@@ -692,6 +692,40 @@ export class XMLStoryModal extends BaseModal {
                 .sidebar-button.primary:hover {
                     background: #0056b3;
                 }
+                
+                .sidebar-button.loading {
+                    background: #6c757d !important;
+                    cursor: not-allowed;
+                    opacity: 0.8;
+                }
+                
+                .sidebar-button.loading:hover {
+                    background: #6c757d !important;
+                }
+                
+                .sidebar-button.success {
+                    background: #28a745 !important;
+                    border-color: #1e7e34 !important;
+                    animation: successPulse 0.6s ease;
+                }
+                
+                .sidebar-button.error {
+                    background: #dc3545 !important;
+                    border-color: #c82333 !important;
+                    animation: errorShake 0.5s ease;
+                }
+                
+                @keyframes successPulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); background: #34ce57; }
+                    100% { transform: scale(1); }
+                }
+                
+                @keyframes errorShake {
+                    0%, 100% { transform: translateX(0); }
+                    25% { transform: translateX(-3px); }
+                    75% { transform: translateX(3px); }
+                }
             </style>
 
             <!-- Sidebar -->
@@ -716,6 +750,10 @@ export class XMLStoryModal extends BaseModal {
                     
                                                 <button id="create-project-btn" class="sidebar-button primary">
                                 🚀 Update Node
+                    </button>
+                    
+                    <button id="close-modal-btn" class="sidebar-button">
+                        ❌ Close
                     </button>
 
                     
@@ -834,6 +872,12 @@ export class XMLStoryModal extends BaseModal {
             void this.updateSourceNode();
         });
 
+        // Close modal button
+        const closeBtn = container.querySelector('#close-modal-btn');
+        closeBtn?.addEventListener('click', () => {
+            void this.closeWithUnsavedCheck();
+        });
+
         // No template selector needed
 
         // Model selector with persistence
@@ -939,14 +983,24 @@ export class XMLStoryModal extends BaseModal {
             // Get selected model
             const modelPurpose = this.modelSelector?.value || 'creator';
 
-            // Send to AI
+            // Add placeholder AI message for streaming
+            const placeholderMessage = this.addMessageToChat('assistant', '');
+            
+            // Send to AI with real-time streaming
             let response = '';
             await this.openRouterClient.streamingChat(modelPurpose, conversation, {
                 onChunk: (chunk: string) => {
                     response += chunk;
+                    // Update the message in real-time as chunks arrive
+                    this.updateStreamingMessage(placeholderMessage, response);
                 },
-                onComplete: () => {},
+                onComplete: () => {
+                    // Remove streaming cursor when complete
+                    this.finalizeStreamingMessage(placeholderMessage);
+                },
                 onError: (error: Error) => {
+                    // Remove streaming cursor on error
+                    this.finalizeStreamingMessage(placeholderMessage);
                     throw error;
                 }
             });
@@ -967,8 +1021,9 @@ export class XMLStoryModal extends BaseModal {
                     }
                 }
 
-                // Add AI message to chat (cleaned text without XML)
-                this.addMessageToChat('assistant', parseResult.cleanedText);
+                // Update the streaming message with cleaned text (XML tags removed)
+                this.updateStreamingMessage(placeholderMessage, parseResult.cleanedText);
+                this.finalizeStreamingMessage(placeholderMessage);
 
                 // Add AI response to conversation history
                 this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
@@ -998,8 +1053,11 @@ export class XMLStoryModal extends BaseModal {
         }
     }
 
-    private addMessageToChat(role: 'user' | 'assistant', content: string): void {
-        if (!this.messagesContainer) return;
+    private addMessageToChat(role: 'user' | 'assistant', content: string): HTMLElement {
+        if (!this.messagesContainer) {
+            // Return a dummy element if no container
+            return document.createElement('div');
+        }
 
         const messageDiv = document.createElement('div');
         messageDiv.className = `message message-${role}`;
@@ -1007,12 +1065,78 @@ export class XMLStoryModal extends BaseModal {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         contentDiv.textContent = content;
+        
+        // Add streaming cursor for empty assistant messages (streaming placeholder)
+        if (role === 'assistant' && content === '') {
+            const streamingCursor = document.createElement('span');
+            streamingCursor.className = 'streaming-cursor';
+            streamingCursor.textContent = '▋';
+            streamingCursor.style.cssText = `
+                animation: blink 1s infinite;
+                margin-left: 2px;
+                color: #888;
+            `;
+            contentDiv.appendChild(streamingCursor);
+            
+            // Add CSS animation if not already present
+            if (!document.querySelector('#xml-story-streaming-animation')) {
+                const style = document.createElement('style');
+                style.id = 'xml-story-streaming-animation';
+                style.textContent = `
+                    @keyframes blink {
+                        0%, 50% { opacity: 1; }
+                        51%, 100% { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
 
         messageDiv.appendChild(contentDiv);
+
+        // Add timestamp
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'message-timestamp';
+        timestampDiv.textContent = new Date().toLocaleTimeString();
+        messageDiv.appendChild(timestampDiv);
         this.messagesContainer.appendChild(messageDiv);
 
         // Scroll to bottom
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        
+        return messageDiv;
+    }
+
+    /**
+     * Update streaming message content in real-time
+     */
+    private updateStreamingMessage(messageElement: HTMLElement, content: string): void {
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (!contentDiv) return;
+        
+        // Preserve streaming cursor
+        const streamingCursor = contentDiv.querySelector('.streaming-cursor');
+        contentDiv.textContent = content;
+        
+        // Re-add streaming cursor
+        if (streamingCursor) {
+            contentDiv.appendChild(streamingCursor);
+        }
+        
+        // Auto scroll to bottom to follow the streaming content
+        if (this.messagesContainer) {
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        }
+    }
+
+    /**
+     * Finalize streaming message by removing cursor
+     */
+    private finalizeStreamingMessage(messageElement: HTMLElement): void {
+        const streamingCursor = messageElement.querySelector('.streaming-cursor');
+        if (streamingCursor) {
+            streamingCursor.remove();
+        }
     }
 
     private setGenerating(generating: boolean): void {
@@ -1392,8 +1516,12 @@ export class XMLStoryModal extends BaseModal {
      */
     private async updateSourceNode(): Promise<void> {
         try {
+            // Start loading state
+            this.setUpdateButtonState('loading');
+            
             if (!this.sourceNode) {
-                alert('No source node available to update');
+                console.warn('No source node available to update');
+                this.setUpdateButtonState('error', 'No source node available');
                 return;
             }
 
@@ -1412,7 +1540,8 @@ export class XMLStoryModal extends BaseModal {
                 .join('\n\n'); // Separate context items by paragraphs
 
             if (!outlineContent && !contextContent) {
-                alert('No content changes found. Please modify the outline or context items first.');
+                console.warn('No content changes found. Please modify the outline or context items first.');
+                this.setUpdateButtonState('error', 'No content changes found');
                 return;
             }
 
@@ -1467,14 +1596,106 @@ export class XMLStoryModal extends BaseModal {
 
             // Success feedback
             console.log(`✅ ${templateLevel} updated successfully with chat edits!`);
+            this.setUpdateButtonState('success');
 
-            // Optionally close the modal
-            await this.close();
+            // Don't auto-close - let user decide when to close
 
         } catch (error) {
             console.error('Error updating source node:', error);
-            alert('Failed to update node. Please try again.');
+            this.setUpdateButtonState('error', 'Failed to update node');
         }
+    }
+
+    /**
+     * Set visual feedback state for the update button
+     */
+    private setUpdateButtonState(state: 'loading' | 'success' | 'error' | 'normal', message?: string): void {
+        const updateButton = document.getElementById('create-project-btn') as HTMLButtonElement;
+        if (!updateButton) return;
+
+        // Reset classes
+        updateButton.classList.remove('loading', 'success', 'error');
+        updateButton.disabled = false;
+
+        switch (state) {
+            case 'loading':
+                updateButton.classList.add('loading');
+                updateButton.disabled = true;
+                updateButton.innerHTML = '⏳ Updating...';
+                break;
+                
+            case 'success':
+                updateButton.classList.add('success');
+                updateButton.innerHTML = '✅ Updated!';
+                // Reset to normal after 2 seconds
+                setTimeout(() => {
+                    this.setUpdateButtonState('normal');
+                }, 2000);
+                break;
+                
+            case 'error':
+                updateButton.classList.add('error');
+                updateButton.innerHTML = `❌ ${message || 'Error'}`;
+                // Reset to normal after 3 seconds
+                setTimeout(() => {
+                    this.setUpdateButtonState('normal');
+                }, 3000);
+                break;
+                
+            case 'normal':
+            default:
+                this.updateButtonText(); // Use existing method to set correct text
+                break;
+        }
+    }
+
+    /**
+     * Check if there are unsaved changes by comparing current content with source node
+     */
+    private hasUnsavedChanges(): boolean {
+        if (!this.sourceNode) {
+            return false;
+        }
+
+        try {
+            // Get current outline content (same logic as updateSourceNode)
+            const currentOutlineContent = this.getCurrentOutlineContent();
+
+            // Get current context items (same logic as updateSourceNode)
+            const storyElements = this.storySystem.service.getElementsForContext();
+            const contextElements = storyElements.filter(el => el.type === 'context');
+            const currentContextContent = contextElements
+                .map(el => {
+                    const description = el.description.replace(/\n+/g, ' ').trim();
+                    return description;
+                })
+                .join('\n\n');
+
+            // Compare with source node's current content
+            const sourceOutlineContent = this.sourceNode.content || '';
+            const sourceContextContent = this.sourceNode.context || '';
+
+            // Normalize whitespace for comparison
+            const normalizeContent = (content: string) => content.trim().replace(/\s+/g, ' ');
+
+            const outlineChanged = normalizeContent(currentOutlineContent || '') !== normalizeContent(sourceOutlineContent);
+            const contextChanged = normalizeContent(currentContextContent || '') !== normalizeContent(sourceContextContent);
+
+            return outlineChanged || contextChanged;
+        } catch (error) {
+            console.error('Error checking for unsaved changes:', error);
+            // If we can't determine, assume there are changes to be safe
+            return true;
+        }
+    }
+
+
+
+    /**
+     * Close the modal with unsaved changes check (now just calls close())
+     */
+    private async closeWithUnsavedCheck(): Promise<void> {
+        await this.close();
     }
 
     private addPlusButtonListeners(): void {
@@ -1940,6 +2161,16 @@ export class XMLStoryModal extends BaseModal {
     
 
     public override async close(): Promise<void> {
+        // Check for unsaved changes before closing
+        if (this.hasUnsavedChanges()) {
+            const confirmed = confirm(
+                'You have unsaved changes. Are you sure you want to close without updating the source node?'
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+
         // Clean up text editors
         this.elementEditors.forEach(editor => editor.destroy());
         this.elementEditors.clear();
