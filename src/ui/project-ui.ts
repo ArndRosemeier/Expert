@@ -5548,7 +5548,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
                 void openXMLStoryModal();
             }).catch((error: unknown) => {
                 console.error('❌ Failed to open XML Story Creation modal:', error);
-                alert('Failed to open XML Story Creator. Please try again.');
+                alert('Failed to open Node Chat Editor. Please try again.');
             });
             return;
         }
@@ -5567,11 +5567,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             sourceNode: node
         };
 
-        console.log('🏗️ Initializing XML Story Creator with node data:', {
-            title: initializationData.title,
-            contentLength: initializationData.content.length,
-            contextItemsCount: initializationData.contextItems.length
-        });
+
 
         void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
             void openXMLStoryModal(initializationData);

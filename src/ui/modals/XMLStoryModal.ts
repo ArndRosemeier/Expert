@@ -21,6 +21,7 @@ import {
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
+const XML_STORY_FULL_UPDATE_MODE_KEY = 'xml-story-full-update-mode';
 
 export interface XMLStoryModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
@@ -54,6 +55,9 @@ export class XMLStoryModal extends BaseModal {
     private isGenerating = false;
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
+    private contextRefreshPending = false;
+    private fullUpdateMode = false;
+    private fullUpdateModeCheckbox: HTMLInputElement | null = null;
     
     // Story element editors
     private elementEditors = new Map<string, UniversalTextEditor>();
@@ -68,13 +72,13 @@ export class XMLStoryModal extends BaseModal {
     private sourceNode: DocumentNode | null = null;
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
-        console.log('🏗️ XMLStoryModal constructor called with config:', config);
+
         super({
             width: '95vw',
             height: '95vh',
             maxWidth: 'none',
             maxHeight: 'none',
-            closable: true,
+            closable: false, // Disable default close handlers to properly handle unsaved changes
             backdrop: true,
             ...config
         }, hooks);
@@ -100,7 +104,7 @@ export class XMLStoryModal extends BaseModal {
     }
 
     public render(): HTMLElement {
-        console.log('🎨 XMLStoryModal render() called');
+
         const container = document.createElement('div');
         container.className = 'xml-story-modal-container';
         container.innerHTML = `
@@ -731,7 +735,7 @@ export class XMLStoryModal extends BaseModal {
             <!-- Sidebar -->
             <div class="xml-story-sidebar">
                 <div class="sidebar-header">
-                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">XML Story Creator</h3>
+                    <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Node Chat Editor</h3>
                 </div>
                 <div class="sidebar-content">
                     <div>
@@ -742,6 +746,16 @@ export class XMLStoryModal extends BaseModal {
                             <option value="rater">Rater</option>
                             <option value="prose">Prose</option>
                         </select>
+                    </div>
+                    
+                    <div style="padding: 0.75rem; background: #2a2a2a; border-radius: 6px; border: 1px solid #444;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="full-update-mode-checkbox" style="margin: 0;">
+                            <label for="full-update-mode-checkbox" style="font-size: 0.8rem; color: #ccc; cursor: pointer; line-height: 1.3;">
+                                Full context mode<br>
+                                <span style="color: #888; font-size: 0.7rem;">Uses more tokens, higher accuracy</span>
+                            </label>
+                        </div>
                     </div>
                     
                     <button id="clear-story-btn" class="sidebar-button">
@@ -782,12 +796,7 @@ export class XMLStoryModal extends BaseModal {
                             </div>
 
                         </div>
-                        <div class="chat-header-info">
-                            <h4 style="margin: 0; color: #333;">Content Editing Chat</h4>
-                        <div style="font-size: 0.9rem; color: #666;">
-                            AI will help improve and refine your content
-                            </div>
-                        </div>
+
                     </div>
                     
                     <div id="xml-story-messages" class="chat-messages">
@@ -877,6 +886,19 @@ export class XMLStoryModal extends BaseModal {
         closeBtn?.addEventListener('click', () => {
             void this.closeWithUnsavedCheck();
         });
+        
+        // Setup custom ESC key handler since we disabled default closable behavior
+        const escapeHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                void this.closeWithUnsavedCheck();
+            }
+        };
+        document.addEventListener('keydown', escapeHandler);
+        
+        // Store cleanup for ESC handler
+        this.cleanupHandlers.push(() => {
+            document.removeEventListener('keydown', escapeHandler);
+        });
 
         // No template selector needed
 
@@ -884,6 +906,14 @@ export class XMLStoryModal extends BaseModal {
         void this.loadSavedModelSelection();
         this.modelSelector?.addEventListener('change', () => {
             void this.saveModelSelection();
+        });
+
+        // Full update mode checkbox with persistence
+        this.fullUpdateModeCheckbox = container.querySelector('#full-update-mode-checkbox');
+        void this.loadSavedFullUpdateMode();
+        this.fullUpdateModeCheckbox?.addEventListener('change', () => {
+            this.fullUpdateMode = this.fullUpdateModeCheckbox?.checked || false;
+            void this.saveFullUpdateMode();
         });
 
         // No conversation persistence - each session starts fresh
@@ -935,12 +965,7 @@ export class XMLStoryModal extends BaseModal {
             // Clear AI highlights (simulates user interaction)
             this.storySystem.clearHighlights();
 
-            // Get context for AI
-            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
-            const currentContextItems = this.formatContextItemsForAI();
-            const humanEdits = this.formatHumanEditsForAI();
-
-            // Create system and user prompts using PromptExpansionService
+            // Create system prompt using PromptExpansionService
             const prompts = this.settingsManager.getPrompts();
             const expansionService = createPromptExpansionService(this.settingsManager);
             
@@ -950,27 +975,50 @@ export class XMLStoryModal extends BaseModal {
                 }
             };
             
-            const userPromptContext = {
-                custom: {
-                    current_outline: currentOutline,
-                    current_context_items: currentContextItems,
-                    human_edits: humanEdits
-                }
-            };
-            
             const systemPrompt = await expansionService.expandPromptAsync(
                 prompts.node_chat_editor, 
                 systemPromptContext
             );
 
-            // Create user prompt with current context
-            const userPrompt = await expansionService.expandPromptAsync(
-                prompts.node_chat_editor_user, 
-                userPromptContext
-            );
+            // Determine if we should include full context
+            // Always include context for first message, or if in full mode, or if refresh requested
+            const isFirstMessage = this.conversationHistory.length === 0;
+            const shouldIncludeContext = isFirstMessage || this.fullUpdateMode || this.contextRefreshPending;
+            let userMessage: string;
+
+            if (shouldIncludeContext) {
+                // Include current whiteboard state (first message, full mode, or AI requested refresh)
+                const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+                const currentContextItems = this.formatContextItemsForAI();
+                const humanEdits = this.formatHumanEditsForAI();
+                
+                const userPromptContext = {
+                    custom: {
+                        current_outline: currentOutline,
+                        current_context_items: currentContextItems,
+                        human_edits: humanEdits
+                    }
+                };
+                
+                const userPrompt = await expansionService.expandPromptAsync(
+                    prompts.node_chat_editor_user, 
+                    userPromptContext
+                );
+                
+                userMessage = `${userPrompt}\n\nUser: ${message}`;
+                
+                // Reset refresh flag after using it
+                if (this.contextRefreshPending) {
+                    this.contextRefreshPending = false;
+                    console.log('🔄 Context refresh provided to AI, flag reset');
+                }
+            } else {
+                // Token-efficient mode - just send the user message (after first message)
+                userMessage = `User: ${message}`;
+            }
 
             // Add user message to conversation history BEFORE the AI call
-            this.conversationHistory.push({ role: 'user', content: `${userPrompt}\n\nUser: ${message}` });
+            this.conversationHistory.push({ role: 'user', content: userMessage });
             
                             // No conversation persistence needed
 
@@ -1064,7 +1112,13 @@ export class XMLStoryModal extends BaseModal {
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.textContent = content;
+        
+        // Use markdown formatting for non-empty content
+        if (content && content.trim()) {
+            contentDiv.innerHTML = this.parseMarkdownForChat(content);
+        } else {
+            contentDiv.textContent = content;
+        }
         
         // Add streaming cursor for empty assistant messages (streaming placeholder)
         if (role === 'assistant' && content === '') {
@@ -1108,7 +1162,7 @@ export class XMLStoryModal extends BaseModal {
     }
 
     /**
-     * Update streaming message content in real-time
+     * Update streaming message content in real-time with markdown formatting
      */
     private updateStreamingMessage(messageElement: HTMLElement, content: string): void {
         const contentDiv = messageElement.querySelector('.message-content');
@@ -1116,7 +1170,10 @@ export class XMLStoryModal extends BaseModal {
         
         // Preserve streaming cursor
         const streamingCursor = contentDiv.querySelector('.streaming-cursor');
-        contentDiv.textContent = content;
+        
+        // Convert markdown to HTML for proper formatting
+        const formattedContent = this.parseMarkdownForChat(content);
+        contentDiv.innerHTML = formattedContent;
         
         // Re-add streaming cursor
         if (streamingCursor) {
@@ -1127,6 +1184,36 @@ export class XMLStoryModal extends BaseModal {
         if (this.messagesContainer) {
             this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
         }
+    }
+
+    /**
+     * Simple markdown parser for chat messages
+     * Handles basic formatting without being too heavy for real-time streaming
+     */
+    private parseMarkdownForChat(text: string): string {
+        if (!text) return '';
+        
+        // Escape HTML to prevent XSS
+        let html = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        
+        // Convert line breaks to <br>
+        html = html.replace(/\n/g, '<br>');
+        
+        // Bold text **text**
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Italic text *text* (but not if it's part of **bold**)
+        html = html.replace(/(?!\*\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+        
+        // Inline code `text`
+        html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
+        
+        return html;
     }
 
     /**
@@ -1488,6 +1575,11 @@ export class XMLStoryModal extends BaseModal {
             case 'highlight_cleared':
                 this.updateWhiteboard();
                 break;
+            case 'context_refresh_requested':
+                // AI has requested fresh context for the next message
+                this.contextRefreshPending = true;
+                console.log('🔄 Context refresh requested by AI for next message');
+                break;
         }
     }
 
@@ -1545,7 +1637,7 @@ export class XMLStoryModal extends BaseModal {
                 return;
             }
 
-            const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
+
             
             // Check if there's already a "chat_edited" version
             const existingChatVersions = this.sourceNode.getVersionsWithTag('chat_edited');
@@ -1553,7 +1645,7 @@ export class XMLStoryModal extends BaseModal {
             if (existingChatVersions.length > 0) {
                 // Update existing chat_edited version
                 const chatEditedVersion = existingChatVersions[0]!;
-                console.log('📝 Updating existing chat_edited version');
+
                 
                 // Update the version directly (not the master)
                 chatEditedVersion.content = outlineContent || chatEditedVersion.content;
@@ -1562,10 +1654,10 @@ export class XMLStoryModal extends BaseModal {
                 
                 // Promote this updated version to master
                 this.sourceNode.promoteToMaster(chatEditedVersion.id);
-                console.log(`✅ Updated existing chat_edited version and promoted to master for ${templateLevel}`);
+
                 } else {
                 // Create new version with chat_edited tag
-                console.log('🆕 Creating new chat_edited version');
+
                 const newVersionId = this.sourceNode.addVersion(['chat_edited'], {
                     content: outlineContent || this.sourceNode.content,
                     context: contextContent || this.sourceNode.context
@@ -1573,13 +1665,13 @@ export class XMLStoryModal extends BaseModal {
                 
                 if (newVersionId) {
                     this.sourceNode.promoteToMaster(newVersionId);
-                    console.log(`✅ Created new chat_edited version and promoted to master for ${templateLevel}`);
+    
                 } else {
                     console.warn('Failed to create new chat_edited version - may already exist');
                 }
             }
             
-            console.log(`✅ Updated ${templateLevel} content length:`, outlineContent?.length || 0, 'context length:', contextContent?.length || 0);
+
 
             // Save the project
             const activeProject = getActiveProject();
@@ -1595,7 +1687,7 @@ export class XMLStoryModal extends BaseModal {
             }
 
             // Success feedback
-            console.log(`✅ ${templateLevel} updated successfully with chat edits!`);
+
             this.setUpdateButtonState('success');
 
             // Don't auto-close - let user decide when to close
@@ -1695,7 +1787,38 @@ export class XMLStoryModal extends BaseModal {
      * Close the modal with unsaved changes check (now just calls close())
      */
     private async closeWithUnsavedCheck(): Promise<void> {
-        await this.close();
+        // Check for unsaved changes before closing
+        if (this.hasUnsavedChanges()) {
+            const confirmed = confirm(
+                'You have unsaved changes. Are you sure you want to close without updating the source node?'
+            );
+            if (!confirmed) {
+                return; // User clicked Cancel - DO NOT CLOSE
+            }
+        }
+        
+        // If we get here, it's safe to close
+        await this.forceClose();
+    }
+    
+    /**
+     * Force close without unsaved changes check (for internal use)
+     */
+    private async forceClose(): Promise<void> {
+        // Clean up text editors
+        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.clear();
+        
+        // Clean up outline editor
+        if (this.outlineEditor) {
+            this.outlineEditor.destroy();
+            this.outlineEditor = null;
+        }
+        
+        // No state persistence needed
+        
+        // Call parent close
+        await super.close();
     }
 
     private addPlusButtonListeners(): void {
@@ -1959,7 +2082,7 @@ export class XMLStoryModal extends BaseModal {
                     behavior: 'smooth'
                 });
                 
-                console.log('📋 Scrolled to show newly added context items');
+    
             }
         }, 150); // Small delay to ensure DOM has fully updated after whiteboard refresh
     }
@@ -2049,7 +2172,7 @@ export class XMLStoryModal extends BaseModal {
      * Apply initialization data from an existing node
      */
     private async applyInitializationData(data: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): Promise<void> {
-        console.log('🏗️ Applying initialization data:', data);
+
         
         // Set title if provided and element exists
         if (data.title) {
@@ -2111,7 +2234,7 @@ export class XMLStoryModal extends BaseModal {
         // Update initial chat message to reflect the editing context
         this.updateInitialChatMessage();
         
-        console.log('✅ Initialization data applied successfully');
+
     }
 
     /**
@@ -2129,9 +2252,9 @@ export class XMLStoryModal extends BaseModal {
                 
                 if (isValidOption) {
                     this.modelSelector.value = savedModel as string;
-                    console.log(`📝 Loaded saved XML Story model: ${savedModel}`);
+        
                 } else {
-                    console.log(`📝 Saved model ${savedModel} no longer available, using default`);
+        
                     // Clean up invalid saved selection
                     await storage.delete(XML_STORY_MODEL_STORAGE_KEY);
                 }
@@ -2149,10 +2272,41 @@ export class XMLStoryModal extends BaseModal {
             if (this.modelSelector?.value) {
             const storage = await StorageService.getInstance();
                 await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
-                console.log(`📝 Saved XML Story model selection: ${this.modelSelector.value}`);
+        
             }
         } catch (error) {
             console.warn('📝 Error saving model selection:', error);
+        }
+    }
+
+    /**
+     * Load saved full update mode preference from StorageService
+     */
+    private async loadSavedFullUpdateMode(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            const savedMode = await storage.get(XML_STORY_FULL_UPDATE_MODE_KEY);
+            
+            if (savedMode !== null && this.fullUpdateModeCheckbox) {
+                this.fullUpdateMode = savedMode as boolean;
+                this.fullUpdateModeCheckbox.checked = this.fullUpdateMode;
+        
+            }
+        } catch (error) {
+            console.warn('📝 Error loading saved full update mode:', error);
+        }
+    }
+
+    /**
+     * Save current full update mode preference to StorageService
+     */
+    private async saveFullUpdateMode(): Promise<void> {
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(XML_STORY_FULL_UPDATE_MODE_KEY, this.fullUpdateMode);
+    
+        } catch (error) {
+            console.warn('📝 Error saving full update mode:', error);
         }
     }
 
@@ -2161,29 +2315,7 @@ export class XMLStoryModal extends BaseModal {
     
 
     public override async close(): Promise<void> {
-        // Check for unsaved changes before closing
-        if (this.hasUnsavedChanges()) {
-            const confirmed = confirm(
-                'You have unsaved changes. Are you sure you want to close without updating the source node?'
-            );
-            if (!confirmed) {
-                return;
-            }
-        }
-
-        // Clean up text editors
-        this.elementEditors.forEach(editor => editor.destroy());
-        this.elementEditors.clear();
-        
-        // Clean up outline editor
-        if (this.outlineEditor) {
-            this.outlineEditor.destroy();
-            this.outlineEditor = null;
-        }
-        
-        // No state persistence needed
-        
-        // Call parent close
-        await super.close();
+        // Always redirect to closeWithUnsavedCheck to ensure proper handling
+        await this.closeWithUnsavedCheck();
     }
-} 
+}

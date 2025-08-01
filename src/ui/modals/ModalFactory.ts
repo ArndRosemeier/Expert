@@ -272,9 +272,9 @@ export class ModalFactory {
         };
 
         const modal = new AddChildNodeModal(config, {
-            onAction: async (action, data) => {
+            onAction: async (action) => {
                 if (action === 'created') {
-                    console.log('✅ Child node created:', data);
+        
                     // Refresh the project UI by triggering a re-render
                     const { renderProjectUI } = await import('../project-ui');
                     renderProjectUI(currentProjectManager);
@@ -298,7 +298,7 @@ export class ModalFactory {
      * Creates and optionally opens an XML Story Creation modal
      */
     public async createXMLStoryModal(options: ModalOptions = {}): Promise<XMLStoryModal> {
-        console.log('🔧 createXMLStoryModal called with options:', options);
+
         const { autoOpen = true, replaceExisting = true, initializationData } = options;
 
         // Close existing XML story modal if requested
@@ -324,10 +324,10 @@ export class ModalFactory {
 
         const modal = new XMLStoryModal(config, {
             onOpen: () => {
-                console.log('✅ XML Story Creation modal opened');
+    
             },
             onClose: () => {
-                console.log('📝 XML Story Creation modal closed');
+    
             }
         });
         
@@ -613,10 +613,10 @@ export async function openConversationalGenerationModal(node: DocumentNode): Pro
  * Convenience function to open XML story creation modal using default factory
  */
 export async function openXMLStoryModal(initializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): Promise<XMLStoryModal> {
-    console.log('🚀 openXMLStoryModal called with data:', initializationData);
+    
     const factory = getDefaultModalFactory();
-    console.log('🏭 Factory obtained:', factory);
+    
     const modal = await factory.createXMLStoryModal({ autoOpen: true, ...(initializationData && { initializationData }) });
-    console.log('✨ XMLStoryModal created:', modal);
+    
     return modal;
 } 

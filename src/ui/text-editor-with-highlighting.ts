@@ -332,93 +332,60 @@ export class TextEditorWithHighlighting {
         let newStartPos = startPos;
         let newEndPos = endPos;
 
-        // Check if the current selection already represents a complete sentence
-        const currentSelectionText = text.substring(startPos, endPos).trim();
-        
-        // More robust sentence detection
-        const startsWithCapitalOrPunctuation = /^[A-Z"'"''`]/.test(currentSelectionText);
-        
-        // Enhanced sentence ending detection: handles multiple punctuation, quotes, etc.
-        const endsWithSentencePunctuation = /[.!?]+["'"''`]?\s*$/.test(currentSelectionText);
-        
-        // Additional check: make sure it's not just punctuation (minimum reasonable sentence length)
-        const hasMinimumLength = currentSelectionText.length >= 3;
-        
-        const isCompleteSentence = startsWithCapitalOrPunctuation && endsWithSentencePunctuation && hasMinimumLength;
 
-        // If we already have a complete sentence selected, don't expand at all
-        if (isCompleteSentence) {
-            return {startPos, endPos};
-        }
 
-        // Check if we're already at a sentence boundary (don't expand backwards if we are)
-        let isAtSentenceBoundary = newStartPos === 0; // At beginning of text
-        
-        if (!isAtSentenceBoundary) {
-            // Check if current position starts what looks like a sentence
-            const currentChar = text[newStartPos] || '';
-            const startsLikeSentence = /[A-Z"']/.test(currentChar);
-            
-            if (startsLikeSentence) {
-                // Check if we're at a word/sentence boundary (not in middle of a word)
-                const prevChar = text[newStartPos - 1] || '';
-                const isAtWordBoundary = /\s/.test(prevChar) || /[.!?:;]/.test(prevChar) || newStartPos === 0;
-                
-                if (isAtWordBoundary) {
-                    isAtSentenceBoundary = true;
-                }
-            }
-        }
-
-        // Expand start position to sentence beginning only if not already at boundary
-        if (!isAtSentenceBoundary) {
-            while (newStartPos > 0) {
+        // Expand backwards to find sentence start
+        while (newStartPos > 0) {
             const char = text[newStartPos - 1];
             if (!char) break; // Safety check
             
-            // Stop at sentence-ending punctuation followed by whitespace/newline/start
-            if (/[.!?:;]/.test(char)) {
-                // Check if this punctuation is followed by whitespace or we're at the boundary
-                const nextChar = text[newStartPos];
-                if (newStartPos === text.length || !nextChar || /\s/.test(nextChar)) {
-                    // Skip any whitespace after the punctuation to find the real sentence start
-                    while (newStartPos < text.length) {
-                        const currentChar = text[newStartPos];
-                        if (!currentChar || !/\s/.test(currentChar)) break;
-                        newStartPos++;
-                    }
-                    break;
-                }
+            // Stop at newline (don't include it)
+            if (char === '\n' || char === '\r') {
+                break;
             }
+            
+            // Stop after sentence ending punctuation (don't include previous sentence)
+            if (/[.!?]/.test(char)) {
+                break;
+            }
+            
             newStartPos--;
-            }
         }
 
-        // Check if we're already at the end of a sentence before expanding
-        const charBeforeEnd = endPos > 0 ? text[endPos - 1] || '' : '';
-        const isAlreadyAtSentenceEnd = /[.!?]/.test(charBeforeEnd);
-        
-        // Only expand end position if we're not already at a sentence end
-        if (!isAlreadyAtSentenceEnd) {
-            while (newEndPos < text.length) {
-                const char = text[newEndPos];
-                if (!char) break; // Safety check
-                
-                // Stop after sentence-ending punctuation
-                if (/[.!?]/.test(char)) {
-                    newEndPos++; // Include the punctuation
-                    break;
-                }
-                newEndPos++;
+        // Expand forwards to find sentence end
+        while (newEndPos < text.length) {
+            const char = text[newEndPos];
+            if (!char) break; // Safety check
+            
+            // Stop at newline (don't include it)  
+            if (char === '\n' || char === '\r') {
+                break;
             }
+            
+            // Include sentence ending punctuation and stop
+            if (/[.!?]/.test(char)) {
+                newEndPos++; // Include the punctuation
+                break;
+            }
+            
+            newEndPos++;
         }
 
-        // Trim leading whitespace but keep trailing punctuation
+        // Trim leading whitespace
         while (newStartPos < newEndPos) {
-            const currentChar = text[newStartPos];
-            if (!currentChar || !/\s/.test(currentChar)) break;
+            const char = text[newStartPos];
+            if (!char || !/\s/.test(char)) break;
             newStartPos++;
         }
+
+        // Trim trailing whitespace (but keep punctuation)
+        while (newEndPos > newStartPos) {
+            const char = text[newEndPos - 1];
+            if (!char || (!/\s/.test(char) || /[.!?]/.test(char))) break;
+            newEndPos--;
+        }
+
+
 
         return {startPos: newStartPos, endPos: newEndPos};
     }
@@ -713,11 +680,15 @@ export class TextEditorWithHighlighting {
         const range = selection.getRangeAt(0);
         const text = this.getText();
         
-        // Calculate positions relative to the full text
-        const startPos = this.getTextOffset(range.startContainer, range.startOffset);
-        const endPos = this.getTextOffset(range.endContainer, range.endOffset);
+        // Calculate positions relative to the full text using robust mapping
+        let startPos = this.getDOMToTextPosition(range.startContainer, range.startOffset);
+        let endPos = this.getDOMToTextPosition(range.endContainer, range.endOffset);
         
         if (startPos === -1 || endPos === -1) return null;
+
+
+
+
 
         return {
             startPos,
@@ -839,27 +810,154 @@ export class TextEditorWithHighlighting {
         return result;
     }
 
+
+
     /**
-     * Get text offset from a DOM node and offset
+     * Robust DOM selection to text position mapping
+     * Handles edge cases with whitespace-only text nodes and DOM structure mismatches
      */
-    private getTextOffset(node: Node, offset: number): number {
+    private getDOMToTextPosition(node: Node, offset: number): number {
+        const textPositionMap = this.buildDOMToTextPositionMap();
+        
+        // Find the text position for this DOM node and offset
+        for (const mapping of textPositionMap) {
+            if (mapping.domNode === node) {
+                const position = mapping.textStartPos + Math.min(offset, mapping.domNode.textContent?.length || 0);
+                
+                // Apply smart adjustment for selection edge cases
+                return this.adjustPositionForSelectionEdgeCases(node, offset, position, textPositionMap);
+            }
+        }
+        
+        return -1;
+    }
+
+    /**
+     * Build a mapping by correlating DOM nodes with the actual plainTextContent
+     * This ensures perfect consistency between position mapping and getText()
+     */
+    private buildDOMToTextPositionMap(): Array<{
+        domNode: Node;
+        textStartPos: number;
+        textEndPos: number;
+        isWhitespaceOnly: boolean;
+        nodeIndex: number;
+    }> {
+        const targetText = this.plainTextContent; // Use the exact same text as getText()
         const walker = document.createTreeWalker(
             this.editableDiv,
             NodeFilter.SHOW_TEXT,
             null
         );
 
-        let totalOffset = 0;
+        const mappings: Array<{
+            domNode: Node;
+            textStartPos: number;
+            textEndPos: number;
+            isWhitespaceOnly: boolean;
+            nodeIndex: number;
+        }> = [];
+
+        let searchPos = 0;
+        let nodeIndex = 0;
         let currentNode;
 
         while (currentNode = walker.nextNode()) {
-            if (currentNode === node) {
-                return totalOffset + offset;
+            const nodeText = currentNode.textContent || '';
+            const isWhitespaceOnly = /^\s*$/.test(nodeText);
+            
+            if (nodeText.length === 0) {
+                // Empty text node - no mapping needed
+                mappings.push({
+                    domNode: currentNode,
+                    textStartPos: searchPos,
+                    textEndPos: searchPos,
+                    isWhitespaceOnly: true,
+                    nodeIndex
+                });
+            } else {
+                // Find where this node's text appears in the target text
+                const foundIndex = targetText.indexOf(nodeText, searchPos);
+                
+                if (foundIndex !== -1) {
+                    // Found exact match
+                    mappings.push({
+                        domNode: currentNode,
+                        textStartPos: foundIndex,
+                        textEndPos: foundIndex + nodeText.length,
+                        isWhitespaceOnly,
+                        nodeIndex
+                    });
+                    searchPos = foundIndex + nodeText.length;
+                } else {
+                    // Fallback: assume sequential positioning
+                    mappings.push({
+                        domNode: currentNode,
+                        textStartPos: searchPos,
+                        textEndPos: searchPos + nodeText.length,
+                        isWhitespaceOnly,
+                        nodeIndex
+                    });
+                    searchPos += nodeText.length;
+                }
             }
-            totalOffset += currentNode.textContent?.length || 0;
+            
+            nodeIndex++;
         }
 
-        return -1;
+        return mappings;
+    }
+
+    /**
+     * Apply smart adjustments for common selection edge cases
+     */
+    private adjustPositionForSelectionEdgeCases(
+        node: Node, 
+        offset: number, 
+        calculatedPosition: number, 
+        positionMap: Array<{
+            domNode: Node;
+            textStartPos: number;
+            textEndPos: number;
+            isWhitespaceOnly: boolean;
+            nodeIndex: number;
+        }>
+    ): number {
+        // If we're at the start of a content node (offset 0) and the previous node
+        // is whitespace-only, we might want to skip the whitespace for user-friendly selection
+        if (offset === 0) {
+            const currentMapping = positionMap.find(m => m.domNode === node);
+            if (currentMapping && currentMapping.nodeIndex > 0) {
+                const previousMapping = positionMap[currentMapping.nodeIndex - 1];
+                
+                // If previous node is whitespace-only and current node has content
+                if (previousMapping?.isWhitespaceOnly && 
+                    currentMapping.domNode.textContent && 
+                    /\S/.test(currentMapping.domNode.textContent)) {
+                    
+                    // Check if this creates a mismatch with browser selection
+                    const selection = window.getSelection();
+                    if (selection && selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        const domSelectionText = range.toString();
+                        const currentText = this.getText();
+                        
+                        // If including the whitespace would make our text longer than DOM selection,
+                        // and our text starts with whitespace while DOM doesn't, skip it
+                        const textWithWhitespace = currentText.substring(previousMapping.textStartPos, calculatedPosition + domSelectionText.length);
+                        
+                        if (textWithWhitespace.length > domSelectionText.length &&
+                            /^\s/.test(textWithWhitespace) &&
+                            !/^\s/.test(domSelectionText)) {
+                            
+                            return currentMapping.textStartPos; // Skip the whitespace node
+                        }
+                    }
+                }
+            }
+        }
+        
+        return calculatedPosition;
     }
 
     /**
@@ -912,6 +1010,8 @@ export class TextEditorWithHighlighting {
         
         return html;
     }
+
+
 
 
 

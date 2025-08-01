@@ -73,7 +73,7 @@ export class XMLStoryService {
     public async processAIResponse(aiResponse: string): Promise<ParsedResponse> {
         try {
             // Log raw AI response for debugging
-            console.log('🤖 Raw AI Response (before XML extraction):', aiResponse);
+
             
             // Parse the response
             const parseResult = this.parser.parseResponse(aiResponse, this.state.elements);
@@ -461,11 +461,11 @@ export class XMLStoryService {
                 // Convert 1-indexed position to 0-indexed array index
                 const insertIndex = Math.max(0, Math.min(position - 1, typeList.length));
                 typeList.splice(insertIndex, 0, element.id);
-                console.log(`📍 Inserted element ${element.id} at position ${position} (index ${insertIndex}) in ${element.type} list`);
+
             } else {
                 // Default behavior: add to end
                 typeList.push(element.id);
-                console.log(`📍 Added element ${element.id} to end of ${element.type} list`);
+
             }
             this.state.elementsByType.set(element.type, typeList);
             
