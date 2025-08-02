@@ -133,6 +133,10 @@ export class UniversalTextEditor {
         options: UniversalTextEditorOptions = {},
         handlers: TextEditorEventHandlers = {}
     ) {
+        // DEBUG: Log stack trace whenever new UniversalTextEditor instance is created
+        console.log(`🏗️ NEW UniversalTextEditor instance created!`);
+        console.log(`📍 Creation stack trace:`, new Error().stack);
+        
         this.container = container;
         this.options = {
             mode: 'simple',

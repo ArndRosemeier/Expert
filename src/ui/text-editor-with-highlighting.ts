@@ -72,6 +72,10 @@ export class TextEditorWithHighlighting {
 
 
     constructor(container: HTMLElement) {
+        // DEBUG: Log stack trace whenever new editor instance is created
+        console.log(`🏗️ NEW TextEditorWithHighlighting instance created!`);
+        console.log(`📍 Creation stack trace:`, new Error().stack);
+        
         this.container = container;
         this.createEditor();
         this.setupEventListeners();
