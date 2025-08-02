@@ -266,7 +266,7 @@ export class XMLStoryParser {
         });
         
         // Highlight outline_replace tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi, (match, content) => {
+        cleanedText = cleanedText.replace(/<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi, (_match, content) => {
             const escapedContent = this.escapeHtml(content.trim());
             return `<div class="xml-command-highlight outline-replace-command" title="Outline replacement executed">
                 <strong>&lt;/outline_replace&gt;</strong>
@@ -276,7 +276,7 @@ export class XMLStoryParser {
         });
         
         // Highlight edit tags and their content in cleaned text (new syntax)
-        cleanedText = cleanedText.replace(/<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi, (match, params, content) => {
+        cleanedText = cleanedText.replace(/<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi, (_match, params, content) => {
             const escapedParams = this.escapeHtml(params);
             const escapedContent = this.escapeHtml(content.trim());
             return `<div class="xml-command-highlight edit-command" title="Edit command executed">
@@ -287,7 +287,7 @@ export class XMLStoryParser {
         });
         
         // Highlight append tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<append>\s*([\s\S]*?)\s*<\/append>/gi, (match, content) => {
+        cleanedText = cleanedText.replace(/<append>\s*([\s\S]*?)\s*<\/append>/gi, (_match, content) => {
             const escapedContent = this.escapeHtml(content.trim());
             return `<div class="xml-command-highlight append-command" title="Append command executed">
                 <strong>&lt;append&gt;</strong>
@@ -297,7 +297,7 @@ export class XMLStoryParser {
         });
         
         // Highlight replace_command tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi, (match, searchText, replaceText) => {
+        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi, (_match, searchText, replaceText) => {
             const escapedSearch = this.escapeHtml(searchText.trim());
             const escapedReplace = this.escapeHtml(replaceText.trim());
             return `<div class="xml-command-highlight replace-command" title="Replace command executed">
@@ -311,7 +311,7 @@ export class XMLStoryParser {
         });
         
         // Highlight context tags with content in cleaned text (new closing tag syntax)
-        cleanedText = cleanedText.replace(/<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi, (match, tagName, params, content) => {
+        cleanedText = cleanedText.replace(/<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi, (_match, tagName, params, content) => {
             const escapedParams = this.escapeHtml(params);
             const escapedContent = this.escapeHtml(content.trim());
             return `<div class="xml-command-highlight context-command" title="${tagName} element created">
