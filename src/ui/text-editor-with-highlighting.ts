@@ -239,6 +239,7 @@ export class TextEditorWithHighlighting {
 
         // Schedule automatic removal for AI result highlights after configured duration (20 seconds)
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
+            console.log(`⏰ EDITOR setting timer for highlight ${id} (${DEFAULT_XML_STORY_CONFIG.highlightDuration}ms)`);
             const timeoutId = window.setTimeout(() => {
                 console.log(`⏰ Timer fired for highlight ${id} - about to save cursor and remove highlight`);
                 
@@ -265,6 +266,8 @@ export class TextEditorWithHighlighting {
      * Remove a specific highlight
      */
     public removeHighlight(id: string): void {
+        console.log(`🗑️ removeHighlight() called for id: ${id}`);
+        
         // Clear any pending timeout for this highlight
         const timeoutId = this.highlightTimeouts.get(id);
         if (timeoutId) {
@@ -273,6 +276,7 @@ export class TextEditorWithHighlighting {
         }
 
         this.highlights.delete(id);
+        console.log(`🗑️ About to call renderWithHighlights() - highlights remaining: ${this.highlights.size}`);
         // Preserve cursor when removing highlights
         this.renderWithHighlights();
     }
