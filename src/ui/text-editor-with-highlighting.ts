@@ -72,10 +72,6 @@ export class TextEditorWithHighlighting {
 
 
     constructor(container: HTMLElement) {
-        // DEBUG: Log stack trace whenever new editor instance is created
-        console.log(`🏗️ NEW TextEditorWithHighlighting instance created!`);
-        console.log(`📍 Creation stack trace:`, new Error().stack);
-        
         this.container = container;
         this.createEditor();
         this.setupEventListeners();
@@ -147,7 +143,6 @@ export class TextEditorWithHighlighting {
             const caretOffset = this.getCaretCharacterOffset();
             if (caretOffset > 0) {
                 this.savedCursorPosition = caretOffset;
-                console.log(`💾 Saved cursor position on blur: ${caretOffset}`);
             }
             
             if (this.blurCallback) {
@@ -201,10 +196,6 @@ export class TextEditorWithHighlighting {
      * Set the plain text content (removes all highlights)
      */
     public setText(text: string): void {
-        // DEBUG: Log when setText is called (this bypasses cursor preservation!)
-        console.log(`🚨 setText() called - this will clear highlights and bypass cursor preservation!`);
-        console.log(`📍 setText stack trace:`, new Error().stack);
-        
         this.plainTextContent = text;
         // Use innerHTML with proper escaping to preserve line breaks
         this.editableDiv.innerHTML = this.escapeHtml(text);
@@ -234,29 +225,17 @@ export class TextEditorWithHighlighting {
         // Apply the highlight
         this.renderWithHighlights();
 
-        // DEBUG: Log all highlight additions to see actual class names
-        console.log(`🎨 Added highlight: id="${id}", className="${className}", willSetTimer=${className.includes('highlight-ai-replacement') || className.includes('ai-result')}`);
-
         // Schedule automatic removal for AI result highlights after configured duration (20 seconds)
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
-            console.log(`⏰ EDITOR setting timer for highlight ${id} (${DEFAULT_XML_STORY_CONFIG.highlightDuration}ms)`);
             const timeoutId = window.setTimeout(() => {
-                console.log(`⏰ Timer fired for highlight ${id} - about to save cursor and remove highlight`);
-                
                 // Save cursor position BEFORE removing highlights (exact timing!)
                 const caretOffset = this.getCaretCharacterOffset();
-                console.log(`⏰ Timer: caretOffset = ${caretOffset}, activeElement = ${document.activeElement?.tagName}`);
-                
                 if (caretOffset > 0) {
                     this.savedCursorPosition = caretOffset;
-                    console.log(`💾 Saved cursor position in timer: ${caretOffset}`);
-                } else {
-                    console.log(`❌ Timer: NOT saving cursor position (offset = ${caretOffset})`);
                 }
                 
                 this.removeHighlight(id);
                 this.highlightTimeouts.delete(id);
-                console.log(`⏰ Timer: Highlight ${id} removed`);
             }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
             this.highlightTimeouts.set(id, timeoutId);
         }
@@ -266,8 +245,6 @@ export class TextEditorWithHighlighting {
      * Remove a specific highlight
      */
     public removeHighlight(id: string): void {
-        console.log(`🗑️ removeHighlight() called for id: ${id}`);
-        
         // Clear any pending timeout for this highlight
         const timeoutId = this.highlightTimeouts.get(id);
         if (timeoutId) {
@@ -276,7 +253,6 @@ export class TextEditorWithHighlighting {
         }
 
         this.highlights.delete(id);
-        console.log(`🗑️ About to call renderWithHighlights() - highlights remaining: ${this.highlights.size}`);
         // Preserve cursor when removing highlights
         this.renderWithHighlights();
     }
@@ -715,7 +691,6 @@ export class TextEditorWithHighlighting {
             caretOffset = preCaretRange.toString().length;
         }
         
-        console.log(`📍 getCaretCharacterOffset: ${caretOffset}, hasSelection: ${!!(sel && sel.rangeCount > 0)}`);
         return caretOffset;
     }
     
@@ -724,14 +699,10 @@ export class TextEditorWithHighlighting {
      * Works reliably even after innerHTML changes
      */
     private setCaretPosition(offset: number): void {
-        console.log(`📍 setCaretPosition: attempting to set position ${offset}`);
         const range = document.createRange();
         const sel = window.getSelection();
         
-        if (!sel) {
-            console.log(`❌ setCaretPosition: no selection object`);
-            return;
-        }
+        if (!sel) return;
         
         // Find the correct text node and position for the offset
         let currentNode: Node | null = null;
@@ -762,9 +733,7 @@ export class TextEditorWithHighlighting {
                 range.collapse(true);
                 sel.removeAllRanges();
                 sel.addRange(range);
-                console.log(`✅ setCaretPosition: set position to ${offset} (node offset: ${positionInNode})`);
             } catch (error) {
-                console.log(`❌ setCaretPosition: DOM range error for offset ${offset}:`, error);
                 // Fallback: try to set cursor at the end of the content
                 try {
                     const endRange = document.createRange();
@@ -772,13 +741,10 @@ export class TextEditorWithHighlighting {
                     endRange.collapse(false);
                     sel.removeAllRanges();
                     sel.addRange(endRange);
-                    console.log(`🔄 setCaretPosition: fallback to end position`);
                 } catch (fallbackError) {
-                    console.log(`❌ setCaretPosition: fallback failed:`, fallbackError);
+                    // Silent fallback failure
                 }
             }
-        } else {
-            console.log(`❌ setCaretPosition: could not find text node for offset ${offset}`);
         }
     }
 
@@ -861,13 +827,9 @@ export class TextEditorWithHighlighting {
         const text = this.plainTextContent;
         
         if (this.highlights.size === 0) {
-            console.log(`🔄 renderWithHighlights: NO highlights - early return path`);
-            
             // Save cursor before DOM manipulation (even when no highlights)
             const currentCaretOffset = this.getCaretCharacterOffset();
             const positionToRestore = this.savedCursorPosition > 0 ? this.savedCursorPosition : currentCaretOffset;
-            
-            console.log(`🔄 renderWithHighlights (no highlights): current=${currentCaretOffset}, saved=${this.savedCursorPosition}, will restore=${positionToRestore}`);
             
             // No highlights - just plain text
             this.editableDiv.innerHTML = this.escapeHtml(text);
@@ -877,17 +839,12 @@ export class TextEditorWithHighlighting {
                 const textLength = this.getText().length;
                 const safeOffset = Math.min(positionToRestore, textLength);
                 
-                console.log(`🔄 renderWithHighlights (no highlights): restoring cursor to ${safeOffset}`);
-                
                 setTimeout(() => {
                     this.setCaretPosition(safeOffset);
                     if (this.savedCursorPosition > 0) {
                         this.savedCursorPosition = -1;
-                        console.log(`🧹 Cleared saved cursor position`);
                     }
                 }, 0);
-            } else {
-                console.log(`🔄 renderWithHighlights (no highlights): NOT restoring cursor (position=${positionToRestore})`);
             }
             
             return;
@@ -925,8 +882,6 @@ export class TextEditorWithHighlighting {
         const isActivelyEditing = document.activeElement === this.editableDiv;
         const currentCaretOffset = this.getCaretCharacterOffset();
         
-        console.log(`🔄 renderWithHighlights: activelyEditing=${isActivelyEditing}, current=${currentCaretOffset}, saved=${this.savedCursorPosition}`);
-        
         // Re-render DOM (this destroys cursor position)
         this.editableDiv.innerHTML = html;
         
@@ -934,8 +889,6 @@ export class TextEditorWithHighlighting {
         if (isActivelyEditing && currentCaretOffset > 0) {
             const textLength = this.getText().length;
             const safeOffset = Math.min(currentCaretOffset, textLength);
-            
-            console.log(`🔄 renderWithHighlights: restoring ACTIVE cursor to ${safeOffset}`);
             
             // Defer to next tick to ensure DOM is ready
             setTimeout(() => {
@@ -946,14 +899,10 @@ export class TextEditorWithHighlighting {
             const textLength = this.getText().length;
             const safeOffset = Math.min(this.savedCursorPosition, textLength);
             
-            console.log(`🔄 renderWithHighlights: restoring SAVED cursor to ${safeOffset}`);
-            
             setTimeout(() => {
                 this.setCaretPosition(safeOffset);
                 this.savedCursorPosition = -1; // Clear after use
             }, 0);
-        } else {
-            console.log(`🔄 renderWithHighlights: NOT restoring cursor (editing=${isActivelyEditing}, current=${currentCaretOffset}, saved=${this.savedCursorPosition})`);
         }
     }
 
