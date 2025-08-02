@@ -77,9 +77,23 @@ The DocumentNode versioning system is a cornerstone of the Expert application ar
 - **`src/ui/chat-interface.ts`** - AI chat interface component
 
 ### Text Editor System
-- **`src/ui/text-editor-with-highlighting.ts`** - ⚠️ CRITICAL: Main text editor with highlighting support
-- **`src/ui/components/UniversalTextEditor.ts`** - Universal text editor with AI transformation
+- **`src/ui/components/UniversalTextEditor.ts`** - Dual-mode editor (simple/enhanced) with AI transformation, search, and highlighting
+- **`src/ui/text-editor-with-highlighting.ts`** - ⚠️ CRITICAL: Enhanced editor engine with persistent highlighting, search, and undo
 - **`src/ui/components/TextTransformModal.ts`** - AI text transformation interface
+
+#### UniversalTextEditor Architecture
+- **Dual Mode**: Switches between simple textarea and enhanced editor with full features
+- **AI Integration**: Select text → AI transform with automatic highlighting of changes
+- **Search System**: Ctrl+F opens in-editor search with multi-result highlighting
+- **Highlighting**: 20-second persistent highlights that survive editor recreation
+- **State Management**: Robust cleanup and mode switching without data loss
+
+#### TextEditorWithHighlighting Features  
+- **Persistent Highlights**: Expiration-based highlighting system (20s for AI replacements)
+- **Search Integration**: Real-time search with current/total result highlighting
+- **Text Preservation**: Mission-critical text integrity during all operations
+- **Event System**: Focus/blur/change events with proper cursor management
+- **Undo Support**: Global undo functionality (Ctrl+Z) for AI transformations
 
 ### Component Library
 - **`src/ui/components/SelectableNodeTree.ts`** - Interactive node tree component
@@ -400,7 +414,11 @@ addProject(newProject);
 
 ## 🚨 Critical Development Notes
 
-1. **Text Editor Data Integrity**: The `text-editor-with-highlighting.ts` component is CRITICAL for data preservation - test thoroughly before modifying
+1. **Text Editor System (CRITICAL)**:
+   - `TextEditorWithHighlighting` is mission-critical for data preservation 
+   - `setText()` always clears highlights - use persistent highlighting for robustness
+   - Editor recreation (e.g., in XMLStoryModal) destroys highlights unless managed properly
+   - Test thoroughly before modifying - handles complex cursor/selection state
 
 2. **Version Management (CRITICAL)**:
    - ❌ **NEVER** assume `setContentWithTags()` creates separate versions - it only modifies master + adds tags
