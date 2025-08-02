@@ -2795,8 +2795,12 @@ export class XMLStoryModal extends BaseModal {
             // Get character offset from the editor's internal method
             const editor = this.outlineEditor as any;
             if (editor.enhancedEditor && typeof editor.enhancedEditor.getCaretCharacterOffset === 'function') {
-                this.savedCursorPosition = editor.enhancedEditor.getCaretCharacterOffset();
+                const pos = editor.enhancedEditor.getCaretCharacterOffset();
+                console.log(`🔄 Saving cursor position: ${pos} (was: ${this.savedCursorPosition})`);
+                this.savedCursorPosition = pos;
             }
+        } else {
+            console.log(`🔄 NOT saving cursor - editor focused: ${!!this.outlineEditor}, active element:`, document.activeElement?.tagName, document.activeElement?.id);
         }
     }
     
@@ -2805,15 +2809,23 @@ export class XMLStoryModal extends BaseModal {
      */
     private restoreCursorPosition(): void {
         if (this.savedCursorPosition >= 0 && this.outlineEditor) {
+            console.log(`🔄 Restoring cursor position: ${this.savedCursorPosition}`);
             setTimeout(() => {
                 if (this.outlineEditor) {
                     const editor = this.outlineEditor as any;
                     if (editor.enhancedEditor && typeof editor.enhancedEditor.setCaretPosition === 'function') {
                         editor.enhancedEditor.setCaretPosition(this.savedCursorPosition);
+                        console.log(`✅ Cursor restored to position: ${this.savedCursorPosition}`);
                         this.savedCursorPosition = -1; // Reset after use
+                    } else {
+                        console.log(`❌ Cannot restore cursor - setCaretPosition not available`);
                     }
+                } else {
+                    console.log(`❌ Cannot restore cursor - no editor`);
                 }
             }, 0);
+        } else {
+            console.log(`🔄 NOT restoring cursor - savedPos: ${this.savedCursorPosition}, hasEditor: ${!!this.outlineEditor}`);
         }
     }
 

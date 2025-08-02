@@ -674,6 +674,7 @@ export class TextEditorWithHighlighting {
             caretOffset = preCaretRange.toString().length;
         }
         
+        console.log(`📍 getCaretCharacterOffset: ${caretOffset}, hasSelection: ${!!(sel && sel.rangeCount > 0)}`);
         return caretOffset;
     }
     
@@ -682,10 +683,14 @@ export class TextEditorWithHighlighting {
      * Works reliably even after innerHTML changes
      */
     private setCaretPosition(offset: number): void {
+        console.log(`📍 setCaretPosition: attempting to set position ${offset}`);
         const range = document.createRange();
         const sel = window.getSelection();
         
-        if (!sel) return;
+        if (!sel) {
+            console.log(`❌ setCaretPosition: no selection object`);
+            return;
+        }
         
         // Find the correct text node and position for the offset
         let currentNode: Node | null = null;
@@ -715,6 +720,9 @@ export class TextEditorWithHighlighting {
             range.collapse(true);
             sel.removeAllRanges();
             sel.addRange(range);
+            console.log(`✅ setCaretPosition: set position to ${offset} (node offset: ${positionInNode})`);
+        } else {
+            console.log(`❌ setCaretPosition: could not find text node for offset ${offset}`);
         }
     }
 
