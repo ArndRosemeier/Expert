@@ -100,6 +100,34 @@ export class XMLStoryParser {
             commands.push(command);
         }
         
+        // Handle append commands
+        const appendCommandRegex = /<append>\s*([\s\S]*?)\s*<\/append>/gi;
+        let appendMatch;
+        while ((appendMatch = appendCommandRegex.exec(text)) !== null) {
+            const content = appendMatch[1] || '';
+            
+            commands.push({
+                type: 'append',
+                content: content.trim(),
+                timestamp: new Date()
+            });
+        }
+        
+        // Handle replace_command with search/replace structure
+        const replaceCommandRegex = /<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi;
+        let replaceMatch;
+        while ((replaceMatch = replaceCommandRegex.exec(text)) !== null) {
+            const searchText = replaceMatch[1] || '';
+            const replaceText = replaceMatch[2] || '';
+            
+            commands.push({
+                type: 'replace_command',
+                searchText: searchText.trim(),
+                replaceText: replaceText.trim(),
+                timestamp: new Date()
+            });
+        }
+        
         // Handle other system commands (self-closing) - excluding edit which is now handled above
         const systemCommandRegex = /<\/(refresh|delete|rename)(?:\s+([^>]*))?\s*>/gi;
         let match;
@@ -240,6 +268,12 @@ export class XMLStoryParser {
         
         // Remove edit tags and their content from cleaned text (new syntax)
         cleanedText = cleanedText.replace(/<\/edit\s+[^>]*?>\s*[\s\S]*?\s*<\/edit>/gi, '');
+        
+        // Remove append tags and their content from cleaned text
+        cleanedText = cleanedText.replace(/<append>\s*[\s\S]*?\s*<\/append>/gi, '');
+        
+        // Remove replace_command tags and their content from cleaned text
+        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*[\s\S]*?\s*<\/search>\s*<replace>\s*[\s\S]*?\s*<\/replace>\s*<\/replace_command>/gi, '');
         
         // Remove context tags with content from cleaned text (new closing tag syntax)
         cleanedText = cleanedText.replace(/<(outline|context)\s+[^>]*?>\s*[\s\S]*?\s*<\/\1>/gi, '');

@@ -59,6 +59,11 @@ export class XMLStoryModal extends BaseModal {
     private fullUpdateMode = false;
     private fullUpdateModeCheckbox: HTMLInputElement | null = null;
     
+    // Retry mechanism for failed commands
+    private retryCount = 0;
+    private maxRetries = 3;
+    private pendingRetry: { command: any; error: string } | null = null;
+    
     // Story element editors
     private elementEditors = new Map<string, UniversalTextEditor>();
     
@@ -1076,8 +1081,14 @@ export class XMLStoryModal extends BaseModal {
                 // Add AI response to conversation history
                 this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
 
+                // Reset retry state on successful manual message
+                this.resetRetryState();
+
                 // Update whiteboard
                 this.updateWhiteboard();
+                
+                // Check for pending retries after generation completes
+                await this.processPendingRetry();
 
                 // Check if AI actually added new context items during this chat response
                 const contextCountAfter = this.storySystem.service.getElementsForContext()
@@ -1098,6 +1109,8 @@ export class XMLStoryModal extends BaseModal {
             this.addMessageToChat('assistant', 'Sorry, I encountered an error. Please try again.');
         } finally {
             this.setGenerating(false);
+            // Process any pending retries after generation completes
+            await this.processPendingRetry();
         }
     }
 
@@ -1580,6 +1593,210 @@ export class XMLStoryModal extends BaseModal {
                 this.contextRefreshPending = true;
                 console.log('🔄 Context refresh requested by AI for next message');
                 break;
+            case 'command_failed':
+                // Handle failed commands with retry logic
+                this.handleCommandFailure(event);
+                break;
+        }
+    }
+    
+    /**
+     * Handle command failures with automatic retry logic
+     */
+    private async handleCommandFailure(event: XMLStoryEvent): Promise<void> {
+        const { command, error } = event.payload as { command: any; error: string };
+        
+        console.warn(`⚠️ Command failed: ${command.type} - ${error}`);
+        
+        // If we're currently generating, queue the retry for after generation completes
+        if (this.isGenerating) {
+            this.pendingRetry = { command, error };
+            console.log('📝 Command failure detected during generation, queueing retry...');
+            return;
+        }
+        
+        // Process the retry immediately
+        await this.processCommandRetry(command, error);
+    }
+    
+    /**
+     * Process command retry logic
+     */
+    private async processCommandRetry(command: any, error: string): Promise<void> {
+        // Check if we can retry
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            
+            console.log(`🔄 Retrying failed command (attempt ${this.retryCount}/${this.maxRetries})`);
+            
+            // Send automatic feedback to AI with current state
+            const feedbackMessage = this.generateRetryFeedback(command, error);
+            
+            // Add failure message to chat for transparency
+            this.addMessageToChat('assistant', `❌ Command failed: ${error}. Retrying with updated context... (${this.retryCount}/${this.maxRetries})`);
+            
+            // Automatically retry with fresh context
+            await this.sendAutomaticRetry(feedbackMessage);
+        } else {
+            // Max retries reached
+            const finalMessage = `❌ Failed after ${this.maxRetries} attempts: ${error}. Please try a different approach.`;
+            this.addMessageToChat('assistant', finalMessage);
+            this.resetRetryState();
+        }
+    }
+    
+    /**
+     * Generate feedback message for retry attempts
+     */
+    private generateRetryFeedback(command: any, error: string): string {
+        const currentOutline = this.getCurrentOutlineContent() || 'No outline content';
+        
+        let feedback = `The ${command.type} command failed: ${error}\n\n`;
+        feedback += 'CURRENT OUTLINE STATE:\n';
+        feedback += currentOutline + '\n\n';
+        
+        if (command.type === 'replace_command') {
+            feedback += `You tried to find: "${command.searchText || 'unknown'}"\n`;
+            feedback += `To replace with: "${command.replaceText || 'unknown'}"\n\n`;
+            feedback += 'Please use different search text that exists exactly in the outline, or use <append> to add content instead.';
+        }
+        
+        return feedback;
+    }
+    
+    /**
+     * Send automatic retry with feedback
+     */
+    private async sendAutomaticRetry(feedbackMessage: string): Promise<void> {
+        if (this.isGenerating) return;
+        
+        try {
+            this.setGenerating(true);
+            
+            // Force context refresh for retry
+            this.contextRefreshPending = true;
+            
+            // Create system prompt
+            const prompts = this.settingsManager.getPrompts();
+            const expansionService = createPromptExpansionService(this.settingsManager);
+            
+            const systemPromptContext = {
+                project: {
+                    language: this.settingsManager.getLanguage()
+                }
+            };
+            
+            const systemPrompt = await expansionService.expandPromptAsync(
+                prompts.node_chat_editor, 
+                systemPromptContext
+            );
+            
+            // Include full context for retry
+            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+            const currentContextItems = this.formatContextItemsForAI();
+            const humanEdits = this.formatHumanEditsForAI();
+            
+            const userPromptContext = {
+                custom: {
+                    current_outline: currentOutline,
+                    current_context_items: currentContextItems,
+                    human_edits: humanEdits
+                }
+            };
+            
+            const userPrompt = await expansionService.expandPromptAsync(
+                prompts.node_chat_editor_user, 
+                userPromptContext
+            );
+            
+            const userMessage = `${userPrompt}\n\nSystem: ${feedbackMessage}`;
+            
+            // Add to conversation history
+            this.conversationHistory.push({ role: 'user', content: userMessage });
+            
+            // Reset refresh flag
+            this.contextRefreshPending = false;
+            
+            // Prepare conversation
+            const conversation = [
+                { role: 'system' as const, content: systemPrompt },
+                ...this.conversationHistory
+            ];
+            
+            // Get selected model
+            const modelPurpose = this.modelSelector?.value || 'creator';
+            
+            // Add placeholder for streaming
+            const placeholderMessage = this.addMessageToChat('assistant', '');
+            
+            // Send to AI
+            let response = '';
+            await this.openRouterClient.streamingChat(modelPurpose, conversation, {
+                onChunk: (chunk: string) => {
+                    response += chunk;
+                    this.updateStreamingMessage(placeholderMessage, response);
+                },
+                onComplete: () => {
+                    this.finalizeStreamingMessage(placeholderMessage);
+                },
+                onError: (error: Error) => {
+                    this.finalizeStreamingMessage(placeholderMessage);
+                    throw error;
+                }
+            });
+            
+            if (response) {
+                // Process AI response
+                const parseResult = await this.storySystem.processAIResponse(response);
+                
+                // Handle outline_replace commands
+                for (const command of parseResult.systemCommands) {
+                    if (command.type === 'outline_replace' && command.content) {
+                        this.setOutlineContentFromAI(command.content);
+                    }
+                }
+                
+                // Update message with cleaned text
+                this.updateStreamingMessage(placeholderMessage, parseResult.cleanedText);
+                this.finalizeStreamingMessage(placeholderMessage);
+                
+                // Add to conversation history
+                this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
+                
+                // Update whiteboard
+                this.updateWhiteboard();
+                
+                // If successful, reset retry state
+                this.resetRetryState();
+            }
+            
+        } catch (error) {
+            console.error('Error in automatic retry:', error);
+            this.addMessageToChat('assistant', 'Sorry, the automatic retry failed. Please try again manually.');
+            this.resetRetryState();
+        } finally {
+            this.setGenerating(false);
+        }
+    }
+    
+    /**
+     * Reset retry state
+     */
+    private resetRetryState(): void {
+        this.retryCount = 0;
+        this.pendingRetry = null;
+    }
+    
+    /**
+     * Process any pending retry after generation completes
+     */
+    private async processPendingRetry(): Promise<void> {
+        if (this.pendingRetry && !this.isGenerating) {
+            const { command, error } = this.pendingRetry;
+            this.pendingRetry = null; // Clear pending retry
+            
+            console.log('🔄 Processing queued retry after generation completed');
+            await this.processCommandRetry(command, error);
         }
     }
 

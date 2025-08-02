@@ -50,9 +50,11 @@ export interface ParsedResponse {
 }
 
 export interface SystemCommand {
-    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace';
+    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command';
     parameters?: Record<string, string>;
     content?: string; // For commands like outline_replace that have content between tags
+    searchText?: string; // For replace_command: what to search for
+    replaceText?: string; // For replace_command: what to replace with
     timestamp: Date;
 }
 
@@ -214,7 +216,7 @@ export interface RelationshipElement {
 export interface XMLStoryEvent {
     type: 'element_created' | 'element_updated' | 'element_deleted' | 
           'human_edit' | 'highlight_applied' | 'highlight_cleared' |
-          'context_refresh_requested' | 'ai_feedback_generated';
+          'context_refresh_requested' | 'ai_feedback_generated' | 'command_failed';
     payload: Record<string, unknown>;
     timestamp: Date;
 }
@@ -246,6 +248,14 @@ export interface HumanEditEvent extends XMLStoryEvent {
     };
 }
 
+export interface CommandFailedEvent extends XMLStoryEvent {
+    type: 'command_failed';
+    payload: {
+        command: SystemCommand;
+        error: string;
+    };
+}
+
 // ============================================================================
 // CONFIGURATION TYPES
 // ============================================================================
@@ -274,7 +284,7 @@ export interface XMLStoryConfig {
 export const DEFAULT_XML_STORY_CONFIG: XMLStoryConfig = {
     maxElementsPerSection: 20,
     autoSaveDelay: 2000,
-    highlightDuration: 5000,
+    highlightDuration: 20000,  // 20 seconds for updated outline parts
     allowPartialXML: true,
     strictValidation: false,
     maxElementsPerResponse: 10,
