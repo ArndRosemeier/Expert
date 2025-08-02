@@ -30,6 +30,13 @@ export type XMLStoryEventCallback = (event: XMLStoryEvent) => void;
 
 /**
  * Main service class for XML story creation system
+ * 
+ * ARCHITECTURE OVERVIEW:
+ * - This service manages CONTEXT ITEMS (characters, locations, etc.) as XML elements
+ * - OUTLINE CONTENT is stored as plain text in XMLStoryModal.outlineHistory, NOT here!
+ * - Commands like 'edit', 'delete' work on context elements (handled here)
+ * - Commands like 'append', 'replace_command', 'outline_replace' work on outline text (handled in modal)
+ * - Communication: Service emits events → Modal handles outline operations
  */
 export class XMLStoryService {
     private parser: XMLStoryParser;
@@ -511,7 +518,9 @@ export class XMLStoryService {
                 break;
                 
             case 'append':
-                // Emit event for modal to handle (outline is stored in modal, not service)
+                // IMPORTANT: Outline content is stored as TEXT in XMLStoryModal.outlineHistory,
+                // NOT as XML elements in this service! We emit an event for the modal to handle.
+                // This is different from context items which ARE stored as elements here.
                 this.emitEvent({
                     type: 'outline_append_requested',
                     payload: { command },
@@ -520,7 +529,9 @@ export class XMLStoryService {
                 break;
                 
             case 'replace_command':
-                // Emit event for modal to handle (outline is stored in modal, not service)
+                // IMPORTANT: Outline content is stored as TEXT in XMLStoryModal.outlineHistory,
+                // NOT as XML elements in this service! We emit an event for the modal to handle.
+                // This is different from context items which ARE stored as elements here.
                 this.emitEvent({
                     type: 'outline_replace_requested',
                     payload: { command },

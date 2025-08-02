@@ -64,6 +64,10 @@ export class XMLStoryModal extends BaseModal {
     private maxRetries = 3;
     private pendingRetry: { command: any; error: string } | null = null;
     
+    // ARCHITECTURE NOTE: Outline content is stored here as text (outlineHistory),
+    // while context items are stored as XML elements in XMLStoryService.
+    // This separation is why outline operations are handled here, not in the service.
+    
     // Story element editors
     private elementEditors = new Map<string, UniversalTextEditor>();
     
@@ -1598,9 +1602,11 @@ export class XMLStoryModal extends BaseModal {
                 this.handleCommandFailure(event);
                 break;
             case 'outline_append_requested':
+                // Handle outline append - outline is stored here as text, not in service as XML elements
                 this.handleOutlineAppend(event);
                 break;
             case 'outline_replace_requested':
+                // Handle outline replace - outline is stored here as text, not in service as XML elements  
                 this.handleOutlineReplace(event);
                 break;
         }
@@ -1795,6 +1801,11 @@ export class XMLStoryModal extends BaseModal {
     
     /**
      * Handle outline append requests from the service
+     * 
+     * ARCHITECTURE NOTE: Outline content is stored as plain text in this.outlineHistory,
+     * while context items are stored as XML elements in XMLStoryService.state.elements.
+     * This is why outline operations (append, replace_command, outline_replace) are 
+     * handled here in the modal, not in the service layer.
      */
     private handleOutlineAppend(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: any };
@@ -1812,6 +1823,10 @@ export class XMLStoryModal extends BaseModal {
 
     /**
      * Handle outline replace requests from the service
+     * 
+     * ARCHITECTURE NOTE: This uses fuzzy search to find and replace text within
+     * the outline content (stored as plain text), ignoring whitespace/punctuation
+     * differences between AI search text and actual outline formatting.
      */
     private handleOutlineReplace(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: any };
@@ -1852,6 +1867,11 @@ export class XMLStoryModal extends BaseModal {
 
     /**
      * Find fuzzy matches ignoring non-alphanumeric characters but preserving original positions
+     * 
+     * This is the key to making AI replace commands work reliably. The AI might search for
+     * "chapter 1 the discovery" but the actual text could be "Chapter 1:    The Discovery - "
+     * This algorithm matches based only on letters/numbers while preserving exact positions
+     * for replacement, avoiding the need to normalize text (which would lose position info).
      */
     private findFuzzyMatches(text: string, searchPattern: string): Array<{start: number, end: number}> {
         const matches: Array<{start: number, end: number}> = [];
