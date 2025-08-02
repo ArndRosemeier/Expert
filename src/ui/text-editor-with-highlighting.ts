@@ -761,7 +761,19 @@ export class TextEditorWithHighlighting {
             html += this.escapeHtml(text.substring(lastPos));
         }
 
+        // Save cursor position before DOM manipulation
+        const currentSelection = this.getSelection();
+        
+        // Re-render DOM (this destroys cursor position)
         this.editableDiv.innerHTML = html;
+        
+        // Restore cursor position if it existed and is still valid
+        if (currentSelection) {
+            const textLength = this.getText().length;
+            const safeStartPos = Math.min(currentSelection.startPos, textLength);
+            const safeEndPos = Math.min(currentSelection.endPos, textLength);
+            this.setSelection(safeStartPos, safeEndPos);
+        }
     }
 
     /**
