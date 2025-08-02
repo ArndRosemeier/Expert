@@ -650,6 +650,68 @@ export class TextEditorWithHighlighting {
     }
 
     /**
+     * Get caret position as character offset from start of text content
+     * This survives innerHTML changes unlike DOM-based selections
+     */
+    private getCaretCharacterOffset(): number {
+        let caretOffset = 0;
+        const doc = this.editableDiv.ownerDocument || document;
+        const win = doc.defaultView || window;
+        const sel = win.getSelection();
+        
+        if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(this.editableDiv);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            caretOffset = preCaretRange.toString().length;
+        }
+        
+        return caretOffset;
+    }
+    
+    /**
+     * Set caret position using character offset from start of text content
+     * Works reliably even after innerHTML changes
+     */
+    private setCaretPosition(offset: number): void {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        
+        if (!sel) return;
+        
+        // Find the correct text node and position for the offset
+        let currentNode: Node | null = null;
+        let currentOffset = 0;
+        
+        // Traverse all text nodes to find the right position
+        const walker = document.createTreeWalker(
+            this.editableDiv,
+            NodeFilter.SHOW_TEXT,
+            null
+        );
+        
+        while (walker.nextNode()) {
+            const textNode = walker.currentNode;
+            const textLength = textNode.textContent?.length || 0;
+            
+            if (currentOffset + textLength >= offset) {
+                currentNode = textNode;
+                break;
+            }
+            currentOffset += textLength;
+        }
+        
+        if (currentNode) {
+            const positionInNode = offset - currentOffset;
+            range.setStart(currentNode, positionInNode);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+
+    /**
      * Set text selection
      */
     public setSelection(startPos: number, endPos: number): void {
@@ -761,18 +823,21 @@ export class TextEditorWithHighlighting {
             html += this.escapeHtml(text.substring(lastPos));
         }
 
-        // Save cursor position before DOM manipulation
-        const currentSelection = this.getSelection();
+        // Save cursor position as character offset (survives innerHTML changes)
+        const caretOffset = this.getCaretCharacterOffset();
         
         // Re-render DOM (this destroys cursor position)
         this.editableDiv.innerHTML = html;
         
-        // Restore cursor position if it existed and is still valid
-        if (currentSelection) {
+        // Restore cursor position using character offset
+        if (caretOffset >= 0) {
             const textLength = this.getText().length;
-            const safeStartPos = Math.min(currentSelection.startPos, textLength);
-            const safeEndPos = Math.min(currentSelection.endPos, textLength);
-            this.setSelection(safeStartPos, safeEndPos);
+            const safeOffset = Math.min(caretOffset, textLength);
+            
+            // Defer to next tick to ensure DOM is ready
+            setTimeout(() => {
+                this.setCaretPosition(safeOffset);
+            }, 0);
         }
     }
 
