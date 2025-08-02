@@ -201,6 +201,10 @@ export class TextEditorWithHighlighting {
      * Set the plain text content (removes all highlights)
      */
     public setText(text: string): void {
+        // DEBUG: Log when setText is called (this bypasses cursor preservation!)
+        console.log(`🚨 setText() called - this will clear highlights and bypass cursor preservation!`);
+        console.log(`📍 setText stack trace:`, new Error().stack);
+        
         this.plainTextContent = text;
         // Use innerHTML with proper escaping to preserve line breaks
         this.editableDiv.innerHTML = this.escapeHtml(text);
