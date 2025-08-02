@@ -238,6 +238,7 @@ export class TextEditorWithHighlighting {
         }
 
         this.highlights.delete(id);
+        // Preserve cursor when removing highlights
         this.renderWithHighlights();
     }
 
@@ -250,6 +251,7 @@ export class TextEditorWithHighlighting {
         this.highlightTimeouts.clear();
 
         this.highlights.clear();
+        // Preserve cursor when clearing all highlights
         this.renderWithHighlights();
     }
 
@@ -855,19 +857,26 @@ export class TextEditorWithHighlighting {
 
         // Save cursor position as character offset (survives innerHTML changes)
         const caretOffset = this.getCaretCharacterOffset();
+        const shouldPreserveCursor = caretOffset > 0 && document.activeElement === this.editableDiv;
+        
+        console.log(`🔄 renderWithHighlights: caretOffset=${caretOffset}, shouldPreserve=${shouldPreserveCursor}, activeElement=${document.activeElement?.tagName}`);
         
         // Re-render DOM (this destroys cursor position)
         this.editableDiv.innerHTML = html;
         
-        // Restore cursor position using character offset
-        if (caretOffset >= 0) {
+        // Restore cursor position using character offset (only if we had a meaningful position)
+        if (shouldPreserveCursor) {
             const textLength = this.getText().length;
             const safeOffset = Math.min(caretOffset, textLength);
+            
+            console.log(`🔄 renderWithHighlights: restoring cursor to ${safeOffset}`);
             
             // Defer to next tick to ensure DOM is ready
             setTimeout(() => {
                 this.setCaretPosition(safeOffset);
             }, 0);
+        } else {
+            console.log(`🔄 renderWithHighlights: not preserving cursor (offset=${caretOffset}, focused=${document.activeElement === this.editableDiv})`);
         }
     }
 

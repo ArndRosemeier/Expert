@@ -64,8 +64,7 @@ export class XMLStoryModal extends BaseModal {
     } | null = null;
     private highlightTimer: number | null = null;
     
-    // Global cursor preservation (survives all editor recreations)
-    private savedCursorPosition: number = -1;
+
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
     private contextRefreshPending = false;
@@ -976,8 +975,7 @@ export class XMLStoryModal extends BaseModal {
         const message = this.messageInput.value.trim();
         if (!message) return;
 
-        // Save cursor position EARLY - before any processing that might change focus
-        this.saveCursorPosition();
+
 
         // Clear input and disable sending
         this.messageInput.value = '';
@@ -2263,8 +2261,7 @@ export class XMLStoryModal extends BaseModal {
         const outlineContainer = document.getElementById('unified-outline-editor');
         if (!outlineContainer) return;
 
-        // Save cursor position before recreating editor
-        this.saveCursorPosition();
+
 
         // Always recreate editor for now - persistent highlights will handle highlighting
 
@@ -2301,9 +2298,6 @@ export class XMLStoryModal extends BaseModal {
         
         // Apply any persistent highlights
         this.applyPersistentHighlights();
-        
-        // Restore cursor position after editor recreation
-        this.restoreCursorPosition();
     }
 
     /**
@@ -2786,53 +2780,7 @@ export class XMLStoryModal extends BaseModal {
         }
     }
     
-    /**
-     * Save current cursor position (before editor recreation)
-     * More robust - doesn't require perfect focus detection
-     */
-    private saveCursorPosition(): void {
-        if (this.outlineEditor) {
-            // Get character offset from the editor's internal method
-            const editor = this.outlineEditor as any;
-            if (editor.enhancedEditor && typeof editor.enhancedEditor.getCaretCharacterOffset === 'function') {
-                const pos = editor.enhancedEditor.getCaretCharacterOffset();
-                // Only save if position > 0 (avoid saving already-reset cursor)
-                if (pos > 0) {
-                    console.log(`🔄 Saving cursor position: ${pos} (was: ${this.savedCursorPosition})`);
-                    this.savedCursorPosition = pos;
-                } else {
-                    console.log(`🔄 NOT saving cursor - position is 0 (already reset)`);
-                }
-            }
-        } else {
-            console.log(`🔄 NOT saving cursor - no editor available`);
-        }
-    }
-    
-    /**
-     * Restore cursor position (after editor recreation)
-     */
-    private restoreCursorPosition(): void {
-        if (this.savedCursorPosition >= 0 && this.outlineEditor) {
-            console.log(`🔄 Restoring cursor position: ${this.savedCursorPosition}`);
-            setTimeout(() => {
-                if (this.outlineEditor) {
-                    const editor = this.outlineEditor as any;
-                    if (editor.enhancedEditor && typeof editor.enhancedEditor.setCaretPosition === 'function') {
-                        editor.enhancedEditor.setCaretPosition(this.savedCursorPosition);
-                        console.log(`✅ Cursor restored to position: ${this.savedCursorPosition}`);
-                        this.savedCursorPosition = -1; // Reset after use
-                    } else {
-                        console.log(`❌ Cannot restore cursor - setCaretPosition not available`);
-                    }
-                } else {
-                    console.log(`❌ Cannot restore cursor - no editor`);
-                }
-            }, 0);
-        } else {
-            console.log(`🔄 NOT restoring cursor - savedPos: ${this.savedCursorPosition}, hasEditor: ${!!this.outlineEditor}`);
-        }
-    }
+
 
     public override async close(): Promise<void> {
         // Clean up persistent highlights
