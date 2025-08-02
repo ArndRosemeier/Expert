@@ -66,6 +66,9 @@ export class TextEditorWithHighlighting {
     private blurCallback?: () => void;
     private lastReplacement: UndoState | null = null;
     private highlightTimeouts: Map<string, number> = new Map();
+    
+    // Cursor preservation across focus changes and DOM operations
+    private savedCursorPosition: number = -1;
 
 
     constructor(container: HTMLElement) {
@@ -136,6 +139,13 @@ export class TextEditorWithHighlighting {
         });
 
         this.editableDiv.addEventListener('blur', () => {
+            // Save cursor position when user leaves the editor
+            const caretOffset = this.getCaretCharacterOffset();
+            if (caretOffset > 0) {
+                this.savedCursorPosition = caretOffset;
+                console.log(`💾 Saved cursor position on blur: ${caretOffset}`);
+            }
+            
             if (this.blurCallback) {
                 this.blurCallback();
             }
@@ -855,28 +865,42 @@ export class TextEditorWithHighlighting {
             html += this.escapeHtml(text.substring(lastPos));
         }
 
-        // Save cursor position as character offset (survives innerHTML changes)
-        const caretOffset = this.getCaretCharacterOffset();
-        const shouldPreserveCursor = caretOffset > 0 && document.activeElement === this.editableDiv;
+        // Determine cursor position to preserve - use saved position if we have one, otherwise current
+        let positionToRestore = -1;
+        const currentCaretOffset = this.getCaretCharacterOffset();
+        const isCurrentlyFocused = document.activeElement === this.editableDiv;
         
-        console.log(`🔄 renderWithHighlights: caretOffset=${caretOffset}, shouldPreserve=${shouldPreserveCursor}, activeElement=${document.activeElement?.tagName}`);
+        if (isCurrentlyFocused && currentCaretOffset > 0) {
+            // Editor is focused and has a good position - use current position
+            positionToRestore = currentCaretOffset;
+            console.log(`🔄 renderWithHighlights: using current position ${currentCaretOffset} (focused)`);
+        } else if (this.savedCursorPosition > 0) {
+            // Editor not focused or position is 0, but we have a saved position - use saved
+            positionToRestore = this.savedCursorPosition;
+            console.log(`🔄 renderWithHighlights: using saved position ${this.savedCursorPosition} (not focused)`);
+        } else {
+            console.log(`🔄 renderWithHighlights: no position to restore (current=${currentCaretOffset}, saved=${this.savedCursorPosition}, focused=${isCurrentlyFocused})`);
+        }
         
         // Re-render DOM (this destroys cursor position)
         this.editableDiv.innerHTML = html;
         
-        // Restore cursor position using character offset (only if we had a meaningful position)
-        if (shouldPreserveCursor) {
+        // Restore cursor position if we have one
+        if (positionToRestore > 0) {
             const textLength = this.getText().length;
-            const safeOffset = Math.min(caretOffset, textLength);
+            const safeOffset = Math.min(positionToRestore, textLength);
             
             console.log(`🔄 renderWithHighlights: restoring cursor to ${safeOffset}`);
             
             // Defer to next tick to ensure DOM is ready
             setTimeout(() => {
                 this.setCaretPosition(safeOffset);
+                // Clear saved position after successful restoration
+                if (!isCurrentlyFocused) {
+                    this.savedCursorPosition = -1;
+                    console.log(`🧹 Cleared saved cursor position`);
+                }
             }, 0);
-        } else {
-            console.log(`🔄 renderWithHighlights: not preserving cursor (offset=${caretOffset}, focused=${document.activeElement === this.editableDiv})`);
         }
     }
 
