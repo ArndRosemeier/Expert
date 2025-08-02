@@ -1169,6 +1169,13 @@ export class UniversalTextEditor {
     }
     
     /**
+     * Get the current editor element for focus checking
+     */
+    public getElement(): HTMLElement {
+        return this.currentMode === 'enhanced' ? this.enhancedEditor.getElement() : this.simpleEditor;
+    }
+    
+    /**
      * Set text content
      */
     public setText(text: string): void {

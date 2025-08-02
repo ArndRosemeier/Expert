@@ -63,6 +63,9 @@ export class XMLStoryModal extends BaseModal {
         expiresAt: number;
     } | null = null;
     private highlightTimer: number | null = null;
+    
+    // Global cursor preservation (survives all editor recreations)
+    private savedCursorPosition: number = -1;
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
     private contextRefreshPending = false;
@@ -2257,6 +2260,9 @@ export class XMLStoryModal extends BaseModal {
         const outlineContainer = document.getElementById('unified-outline-editor');
         if (!outlineContainer) return;
 
+        // Save cursor position before recreating editor
+        this.saveCursorPosition();
+
         // Always recreate editor for now - persistent highlights will handle highlighting
 
         // Clear placeholder if it exists
@@ -2292,6 +2298,9 @@ export class XMLStoryModal extends BaseModal {
         
         // Apply any persistent highlights
         this.applyPersistentHighlights();
+        
+        // Restore cursor position after editor recreation
+        this.restoreCursorPosition();
     }
 
     /**
@@ -2735,7 +2744,11 @@ export class XMLStoryModal extends BaseModal {
         
         // Set timer to clear highlight
         this.highlightTimer = window.setTimeout(() => {
+            // Save cursor before clearing highlight (which may trigger redraw)
+            this.saveCursorPosition();
             this.clearPersistentHighlight();
+            // Restore cursor after any potential redraw
+            setTimeout(() => this.restoreCursorPosition(), 10);
         }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
     }
     
@@ -2771,6 +2784,36 @@ export class XMLStoryModal extends BaseModal {
         if (this.highlightTimer) {
             clearTimeout(this.highlightTimer);
             this.highlightTimer = null;
+        }
+    }
+    
+    /**
+     * Save current cursor position (before editor recreation)
+     */
+    private saveCursorPosition(): void {
+        if (this.outlineEditor && document.activeElement === this.outlineEditor.getElement()) {
+            // Get character offset from the editor's internal method
+            const editor = this.outlineEditor as any;
+            if (editor.enhancedEditor && typeof editor.enhancedEditor.getCaretCharacterOffset === 'function') {
+                this.savedCursorPosition = editor.enhancedEditor.getCaretCharacterOffset();
+            }
+        }
+    }
+    
+    /**
+     * Restore cursor position (after editor recreation)
+     */
+    private restoreCursorPosition(): void {
+        if (this.savedCursorPosition >= 0 && this.outlineEditor) {
+            setTimeout(() => {
+                if (this.outlineEditor) {
+                    const editor = this.outlineEditor as any;
+                    if (editor.enhancedEditor && typeof editor.enhancedEditor.setCaretPosition === 'function') {
+                        editor.enhancedEditor.setCaretPosition(this.savedCursorPosition);
+                        this.savedCursorPosition = -1; // Reset after use
+                    }
+                }
+            }, 0);
         }
     }
 

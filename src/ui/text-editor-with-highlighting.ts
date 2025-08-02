@@ -648,6 +648,13 @@ export class TextEditorWithHighlighting {
     public getUndoState(): UndoState | null {
         return this.lastReplacement;
     }
+    
+    /**
+     * Get the editor element for focus checking
+     */
+    public getElement(): HTMLElement {
+        return this.editableDiv;
+    }
 
     /**
      * Get caret position as character offset from start of text content
