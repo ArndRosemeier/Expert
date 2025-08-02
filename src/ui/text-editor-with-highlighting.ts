@@ -836,6 +836,11 @@ export class TextEditorWithHighlighting {
      * Re-render the content with highlights applied
      */
     private renderWithHighlights(): void {
+        // DEBUG: Find out what's calling this method
+        const stack = new Error().stack;
+        const caller = stack?.split('\n')[2]?.trim();
+        console.log(`🚨 renderWithHighlights called from:`, caller);
+        
         const text = this.plainTextContent;
         
         if (this.highlights.size === 0) {
