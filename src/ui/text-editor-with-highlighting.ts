@@ -226,6 +226,9 @@ export class TextEditorWithHighlighting {
         // Apply the highlight
         this.renderWithHighlights();
 
+        // DEBUG: Log all highlight additions to see actual class names
+        console.log(`🎨 Added highlight: id="${id}", className="${className}", willSetTimer=${className.includes('highlight-ai-replacement') || className.includes('ai-result')}`);
+
         // Schedule automatic removal for AI result highlights after configured duration (20 seconds)
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
             const timeoutId = window.setTimeout(() => {
