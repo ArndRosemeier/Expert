@@ -861,8 +861,35 @@ export class TextEditorWithHighlighting {
         const text = this.plainTextContent;
         
         if (this.highlights.size === 0) {
+            console.log(`🔄 renderWithHighlights: NO highlights - early return path`);
+            
+            // Save cursor before DOM manipulation (even when no highlights)
+            const currentCaretOffset = this.getCaretCharacterOffset();
+            const positionToRestore = this.savedCursorPosition > 0 ? this.savedCursorPosition : currentCaretOffset;
+            
+            console.log(`🔄 renderWithHighlights (no highlights): current=${currentCaretOffset}, saved=${this.savedCursorPosition}, will restore=${positionToRestore}`);
+            
             // No highlights - just plain text
             this.editableDiv.innerHTML = this.escapeHtml(text);
+            
+            // Restore cursor position if we have one
+            if (positionToRestore > 0) {
+                const textLength = this.getText().length;
+                const safeOffset = Math.min(positionToRestore, textLength);
+                
+                console.log(`🔄 renderWithHighlights (no highlights): restoring cursor to ${safeOffset}`);
+                
+                setTimeout(() => {
+                    this.setCaretPosition(safeOffset);
+                    if (this.savedCursorPosition > 0) {
+                        this.savedCursorPosition = -1;
+                        console.log(`🧹 Cleared saved cursor position`);
+                    }
+                }, 0);
+            } else {
+                console.log(`🔄 renderWithHighlights (no highlights): NOT restoring cursor (position=${positionToRestore})`);
+            }
+            
             return;
         }
 
