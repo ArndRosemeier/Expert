@@ -1836,6 +1836,16 @@ export class XMLStoryModal extends BaseModal {
     }
 
     /**
+     * Trim trailing non-alphanumerical characters from replacement text to avoid double punctuation
+     * 
+     * When AI searches for text ignoring punctuation but includes punctuation in replacement,
+     * this prevents double punctuation marks (e.g., "word.." instead of "word.")
+     */
+    private trimTrailingNonAlphanumeric(text: string): string {
+        return text.replace(/[^a-zA-Z0-9]+$/, '');
+    }
+
+    /**
      * Handle outline replace requests from the service
      * 
      * ARCHITECTURE NOTE: This uses fuzzy search to find and replace text within
@@ -1871,8 +1881,11 @@ export class XMLStoryModal extends BaseModal {
             return;
         }
         
+        // Trim trailing non-alphanumerical characters from replacement to avoid double punctuation
+        const trimmedReplaceText = this.trimTrailingNonAlphanumeric(command.replaceText);
+        
         const newContent = currentContent.substring(0, match.start) + 
-                          command.replaceText + 
+                          trimmedReplaceText + 
                           currentContent.substring(match.end);
         
         // Set content and setup persistent highlighting
@@ -1881,13 +1894,13 @@ export class XMLStoryModal extends BaseModal {
             this.saveOutlineVersion(newContent, 'ai');
         }
         
-        // Setup persistent highlight that survives editor recreation
+        // Setup persistent highlight that survives editor recreation (using trimmed length)
         this.setPersistentHighlight(
             match.start,
-            match.start + command.replaceText.length,
+            match.start + trimmedReplaceText.length,
             'highlight-ai-replacement'
         );
-        console.log(`✅ AI replaced "${command.searchText}" (positions ${match.start}-${match.end}) with "${command.replaceText}"`);
+        console.log(`✅ AI replaced "${command.searchText}" (positions ${match.start}-${match.end}) with "${trimmedReplaceText}" (trimmed from "${command.replaceText}")`);
     }
 
     /**
