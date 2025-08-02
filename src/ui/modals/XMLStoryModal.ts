@@ -751,6 +751,121 @@ export class XMLStoryModal extends BaseModal {
                     25% { transform: translateX(-3px); }
                     75% { transform: translateX(3px); }
                 }
+                
+                /* XML Command Highlighting in Chat */
+                .xml-command-highlight {
+                    background: rgba(0, 123, 255, 0.08);
+                    border: 1px solid rgba(0, 123, 255, 0.2);
+                    border-radius: 6px;
+                    padding: 0.5rem;
+                    margin: 0.5rem 0;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 0.85rem;
+                    color: #2c3e50;
+                    position: relative;
+                    overflow: hidden;
+                }
+                
+                .xml-command-highlight strong {
+                    color: #0056b3;
+                    font-weight: 600;
+                }
+                
+                .xml-command-highlight .command-content {
+                    margin: 0.25rem 0;
+                    padding-left: 1rem;
+                    border-left: 2px solid rgba(0, 123, 255, 0.3);
+                    background: rgba(0, 123, 255, 0.03);
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }
+                
+                /* Specific command type styling */
+                .xml-command-highlight.outline-replace-command {
+                    border-color: rgba(40, 167, 69, 0.3);
+                    background: rgba(40, 167, 69, 0.05);
+                }
+                
+                .xml-command-highlight.outline-replace-command strong {
+                    color: #28a745;
+                }
+                
+                .xml-command-highlight.outline-replace-command .command-content {
+                    border-left-color: rgba(40, 167, 69, 0.4);
+                    background: rgba(40, 167, 69, 0.03);
+                }
+                
+                .xml-command-highlight.edit-command {
+                    border-color: rgba(255, 193, 7, 0.3);
+                    background: rgba(255, 193, 7, 0.05);
+                }
+                
+                .xml-command-highlight.edit-command strong {
+                    color: #ffc107;
+                }
+                
+                .xml-command-highlight.edit-command .command-content {
+                    border-left-color: rgba(255, 193, 7, 0.4);
+                    background: rgba(255, 193, 7, 0.03);
+                }
+                
+                .xml-command-highlight.append-command {
+                    border-color: rgba(108, 117, 125, 0.3);
+                    background: rgba(108, 117, 125, 0.05);
+                }
+                
+                .xml-command-highlight.append-command strong {
+                    color: #6c757d;
+                }
+                
+                .xml-command-highlight.append-command .command-content {
+                    border-left-color: rgba(108, 117, 125, 0.4);
+                    background: rgba(108, 117, 125, 0.03);
+                }
+                
+                .xml-command-highlight.replace-command {
+                    border-color: rgba(220, 53, 69, 0.3);
+                    background: rgba(220, 53, 69, 0.05);
+                }
+                
+                .xml-command-highlight.replace-command strong {
+                    color: #dc3545;
+                }
+                
+                .xml-command-highlight.replace-command .command-content {
+                    border-left-color: rgba(220, 53, 69, 0.4);
+                    background: rgba(220, 53, 69, 0.03);
+                }
+                
+                .xml-command-highlight.context-command {
+                    border-color: rgba(102, 16, 242, 0.3);
+                    background: rgba(102, 16, 242, 0.05);
+                }
+                
+                .xml-command-highlight.context-command strong {
+                    color: #6610f2;
+                }
+                
+                .xml-command-highlight.context-command .command-content {
+                    border-left-color: rgba(102, 16, 242, 0.4);
+                    background: rgba(102, 16, 242, 0.03);
+                }
+                
+                /* Add subtle hover effect for XML commands */
+                .xml-command-highlight:hover {
+                    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+                    transform: translateY(-1px);
+                    transition: all 0.2s ease;
+                }
+                
+                /* Inline command styling for simple commands */
+                .xml-command-highlight:not(.outline-replace-command):not(.edit-command):not(.append-command):not(.replace-command):not(.context-command) {
+                    display: inline-block;
+                    padding: 0.2rem 0.4rem;
+                    margin: 0 0.2rem;
+                    font-size: 0.8rem;
+                    border-radius: 4px;
+                }
             </style>
 
             <!-- Sidebar -->
@@ -1220,12 +1335,33 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Simple markdown parser for chat messages
      * Handles basic formatting without being too heavy for real-time streaming
+     * Preserves XML command highlights that are already formatted as HTML
      */
     private parseMarkdownForChat(text: string): string {
         if (!text) return '';
         
-        // Escape HTML to prevent XSS
-        let html = text
+        // First, temporarily replace XML command highlights to protect them from HTML escaping
+        const xmlCommandPlaceholders: string[] = [];
+        let protectedText = text;
+        
+        // Find and replace XML command highlights with placeholders
+        const xmlCommandRegex = /<div class="xml-command-highlight[^>]*>[\s\S]*?<\/div>/gi;
+        protectedText = protectedText.replace(xmlCommandRegex, (match) => {
+            const placeholder = `__XML_COMMAND_${xmlCommandPlaceholders.length}__`;
+            xmlCommandPlaceholders.push(match);
+            return placeholder;
+        });
+        
+        // Also protect inline XML command highlights
+        const inlineXmlCommandRegex = /<span class="xml-command-highlight[^>]*>[\s\S]*?<\/span>/gi;
+        protectedText = protectedText.replace(inlineXmlCommandRegex, (match) => {
+            const placeholder = `__XML_COMMAND_${xmlCommandPlaceholders.length}__`;
+            xmlCommandPlaceholders.push(match);
+            return placeholder;
+        });
+        
+        // Escape HTML to prevent XSS (but XML commands are now protected)
+        let html = protectedText
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -1243,6 +1379,12 @@ export class XMLStoryModal extends BaseModal {
         
         // Inline code `text`
         html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
+        
+        // Restore XML command highlights
+        xmlCommandPlaceholders.forEach((originalCommand, index) => {
+            const placeholder = `__XML_COMMAND_${index}__`;
+            html = html.replace(placeholder, originalCommand);
+        });
         
         return html;
     }

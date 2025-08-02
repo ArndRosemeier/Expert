@@ -260,27 +260,82 @@ export class XMLStoryParser {
             }
         }
 
-        // Remove any remaining system commands from cleaned text
-        cleanedText = cleanedText.replace(/<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi, '');
+        // Highlight executed system commands instead of removing them from cleaned text
+        cleanedText = cleanedText.replace(/<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi, (match) => {
+            return `<span class="xml-command-highlight" title="Executed command">${this.escapeHtml(match)}</span>`;
+        });
         
-        // Remove outline_replace tags and their content from cleaned text
-        cleanedText = cleanedText.replace(/<\/outline_replace>\s*[\s\S]*?\s*<\/outline_replace>/gi, '');
+        // Highlight outline_replace tags and their content in cleaned text
+        cleanedText = cleanedText.replace(/<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi, (match, content) => {
+            const escapedContent = this.escapeHtml(content.trim());
+            return `<div class="xml-command-highlight outline-replace-command" title="Outline replacement executed">
+                <strong>&lt;/outline_replace&gt;</strong>
+                <div class="command-content">${escapedContent}</div>
+                <strong>&lt;/outline_replace&gt;</strong>
+            </div>`;
+        });
         
-        // Remove edit tags and their content from cleaned text (new syntax)
-        cleanedText = cleanedText.replace(/<\/edit\s+[^>]*?>\s*[\s\S]*?\s*<\/edit>/gi, '');
+        // Highlight edit tags and their content in cleaned text (new syntax)
+        cleanedText = cleanedText.replace(/<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi, (match, params, content) => {
+            const escapedParams = this.escapeHtml(params);
+            const escapedContent = this.escapeHtml(content.trim());
+            return `<div class="xml-command-highlight edit-command" title="Edit command executed">
+                <strong>&lt;/edit ${escapedParams}&gt;</strong>
+                <div class="command-content">${escapedContent}</div>
+                <strong>&lt;/edit&gt;</strong>
+            </div>`;
+        });
         
-        // Remove append tags and their content from cleaned text
-        cleanedText = cleanedText.replace(/<append>\s*[\s\S]*?\s*<\/append>/gi, '');
+        // Highlight append tags and their content in cleaned text
+        cleanedText = cleanedText.replace(/<append>\s*([\s\S]*?)\s*<\/append>/gi, (match, content) => {
+            const escapedContent = this.escapeHtml(content.trim());
+            return `<div class="xml-command-highlight append-command" title="Append command executed">
+                <strong>&lt;append&gt;</strong>
+                <div class="command-content">${escapedContent}</div>
+                <strong>&lt;/append&gt;</strong>
+            </div>`;
+        });
         
-        // Remove replace_command tags and their content from cleaned text
-        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*[\s\S]*?\s*<\/search>\s*<replace>\s*[\s\S]*?\s*<\/replace>\s*<\/replace_command>/gi, '');
+        // Highlight replace_command tags and their content in cleaned text
+        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi, (match, searchText, replaceText) => {
+            const escapedSearch = this.escapeHtml(searchText.trim());
+            const escapedReplace = this.escapeHtml(replaceText.trim());
+            return `<div class="xml-command-highlight replace-command" title="Replace command executed">
+                <strong>&lt;replace_command&gt;</strong>
+                <div class="command-content">
+                    <div><strong>&lt;search&gt;</strong> ${escapedSearch} <strong>&lt;/search&gt;</strong></div>
+                    <div><strong>&lt;replace&gt;</strong> ${escapedReplace} <strong>&lt;/replace&gt;</strong></div>
+                </div>
+                <strong>&lt;/replace_command&gt;</strong>
+            </div>`;
+        });
         
-        // Remove context tags with content from cleaned text (new closing tag syntax)
-        cleanedText = cleanedText.replace(/<(outline|context)\s+[^>]*?>\s*[\s\S]*?\s*<\/\1>/gi, '');
+        // Highlight context tags with content in cleaned text (new closing tag syntax)
+        cleanedText = cleanedText.replace(/<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi, (match, tagName, params, content) => {
+            const escapedParams = this.escapeHtml(params);
+            const escapedContent = this.escapeHtml(content.trim());
+            return `<div class="xml-command-highlight context-command" title="${tagName} element created">
+                <strong>&lt;${tagName} ${escapedParams}&gt;</strong>
+                <div class="command-content">${escapedContent}</div>
+                <strong>&lt;/${tagName}&gt;</strong>
+            </div>`;
+        });
 
         console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
         
         return { elements, errors, cleanedText: cleanedText.trim() };
+    }
+    
+    /**
+     * Escape HTML characters to prevent XSS and display issues
+     */
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
     
     /**
