@@ -715,12 +715,27 @@ export class TextEditorWithHighlighting {
         }
         
         if (currentNode) {
-            const positionInNode = offset - currentOffset;
-            range.setStart(currentNode, positionInNode);
-            range.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(range);
-            console.log(`✅ setCaretPosition: set position to ${offset} (node offset: ${positionInNode})`);
+            try {
+                const positionInNode = offset - currentOffset;
+                range.setStart(currentNode, positionInNode);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+                console.log(`✅ setCaretPosition: set position to ${offset} (node offset: ${positionInNode})`);
+            } catch (error) {
+                console.log(`❌ setCaretPosition: DOM range error for offset ${offset}:`, error);
+                // Fallback: try to set cursor at the end of the content
+                try {
+                    const endRange = document.createRange();
+                    endRange.selectNodeContents(this.editableDiv);
+                    endRange.collapse(false);
+                    sel.removeAllRanges();
+                    sel.addRange(endRange);
+                    console.log(`🔄 setCaretPosition: fallback to end position`);
+                } catch (fallbackError) {
+                    console.log(`❌ setCaretPosition: fallback failed:`, fallbackError);
+                }
+            }
         } else {
             console.log(`❌ setCaretPosition: could not find text node for offset ${offset}`);
         }

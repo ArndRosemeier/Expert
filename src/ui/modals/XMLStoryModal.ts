@@ -976,6 +976,9 @@ export class XMLStoryModal extends BaseModal {
         const message = this.messageInput.value.trim();
         if (!message) return;
 
+        // Save cursor position EARLY - before any processing that might change focus
+        this.saveCursorPosition();
+
         // Clear input and disable sending
         this.messageInput.value = '';
         this.setGenerating(true);
@@ -2744,11 +2747,7 @@ export class XMLStoryModal extends BaseModal {
         
         // Set timer to clear highlight
         this.highlightTimer = window.setTimeout(() => {
-            // Save cursor before clearing highlight (which may trigger redraw)
-            this.saveCursorPosition();
             this.clearPersistentHighlight();
-            // Restore cursor after any potential redraw
-            setTimeout(() => this.restoreCursorPosition(), 10);
         }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
     }
     
@@ -2789,18 +2788,24 @@ export class XMLStoryModal extends BaseModal {
     
     /**
      * Save current cursor position (before editor recreation)
+     * More robust - doesn't require perfect focus detection
      */
     private saveCursorPosition(): void {
-        if (this.outlineEditor && document.activeElement === this.outlineEditor.getElement()) {
+        if (this.outlineEditor) {
             // Get character offset from the editor's internal method
             const editor = this.outlineEditor as any;
             if (editor.enhancedEditor && typeof editor.enhancedEditor.getCaretCharacterOffset === 'function') {
                 const pos = editor.enhancedEditor.getCaretCharacterOffset();
-                console.log(`🔄 Saving cursor position: ${pos} (was: ${this.savedCursorPosition})`);
-                this.savedCursorPosition = pos;
+                // Only save if position > 0 (avoid saving already-reset cursor)
+                if (pos > 0) {
+                    console.log(`🔄 Saving cursor position: ${pos} (was: ${this.savedCursorPosition})`);
+                    this.savedCursorPosition = pos;
+                } else {
+                    console.log(`🔄 NOT saving cursor - position is 0 (already reset)`);
+                }
             }
         } else {
-            console.log(`🔄 NOT saving cursor - editor focused: ${!!this.outlineEditor}, active element:`, document.activeElement?.tagName, document.activeElement?.id);
+            console.log(`🔄 NOT saving cursor - no editor available`);
         }
     }
     
