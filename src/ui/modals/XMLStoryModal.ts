@@ -1597,6 +1597,12 @@ export class XMLStoryModal extends BaseModal {
                 // Handle failed commands with retry logic
                 this.handleCommandFailure(event);
                 break;
+            case 'outline_append_requested':
+                this.handleOutlineAppend(event);
+                break;
+            case 'outline_replace_requested':
+                this.handleOutlineReplace(event);
+                break;
         }
     }
     
@@ -1787,6 +1793,140 @@ export class XMLStoryModal extends BaseModal {
         this.pendingRetry = null;
     }
     
+    /**
+     * Handle outline append requests from the service
+     */
+    private handleOutlineAppend(event: XMLStoryEvent): void {
+        const { command } = event.payload as { command: any };
+        if (!command.content) {
+            console.warn('Append command missing content');
+            return;
+        }
+
+        const currentContent = this.getCurrentOutlineContent();
+        const newContent = currentContent + '\n\n' + command.content;
+        
+        this.setOutlineContentFromAI(newContent);
+        console.log('✅ AI appended content to outline');
+    }
+
+    /**
+     * Handle outline replace requests from the service
+     */
+    private handleOutlineReplace(event: XMLStoryEvent): void {
+        const { command } = event.payload as { command: any };
+        if (!command.searchText || !command.replaceText) {
+            this.emitCommandFailure(command, 'Replace command missing search text or replace text');
+            return;
+        }
+
+        const currentContent = this.getCurrentOutlineContent();
+        
+        // Use fuzzy search that ignores non-alphanumeric characters
+        const fuzzyMatches = this.findFuzzyMatches(currentContent, command.searchText);
+        
+        if (fuzzyMatches.length === 0) {
+            this.emitCommandFailure(command, `Search text "${command.searchText}" not found in outline (ignoring punctuation/whitespace)`);
+            return;
+        }
+        
+        if (fuzzyMatches.length > 1) {
+            this.emitCommandFailure(command, `Search text "${command.searchText}" appears ${fuzzyMatches.length} times. Must be unique for replacement.`);
+            return;
+        }
+        
+        // Perform the replacement using exact positions
+        const match = fuzzyMatches[0];
+        if (!match) {
+            this.emitCommandFailure(command, 'Match not found despite array check');
+            return;
+        }
+        
+        const newContent = currentContent.substring(0, match.start) + 
+                          command.replaceText + 
+                          currentContent.substring(match.end);
+        
+        this.setOutlineContentFromAI(newContent);
+        console.log(`✅ AI replaced "${command.searchText}" (positions ${match.start}-${match.end}) with "${command.replaceText}"`);
+    }
+
+    /**
+     * Find fuzzy matches ignoring non-alphanumeric characters but preserving original positions
+     */
+    private findFuzzyMatches(text: string, searchPattern: string): Array<{start: number, end: number}> {
+        const matches: Array<{start: number, end: number}> = [];
+        
+        // Helper function to check if character is alphanumeric
+        const isAlphaNumeric = (char: string): boolean => {
+            return /[a-zA-Z0-9]/.test(char);
+        };
+        
+        // Convert search pattern to lowercase alphanumeric only for comparison
+        const normalizedPattern = searchPattern.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+        if (normalizedPattern.length === 0) {
+            return matches; // Empty pattern
+        }
+        
+        let textIndex = 0;
+        
+        while (textIndex < text.length) {
+            let matchStart = -1;
+            let matchEnd = -1;
+            let patternIndex = 0;
+            let currentTextIndex = textIndex;
+            
+            // Try to match pattern starting from currentTextIndex
+            while (currentTextIndex < text.length && patternIndex < normalizedPattern.length) {
+                const textChar = text[currentTextIndex]?.toLowerCase();
+                
+                if (textChar && isAlphaNumeric(textChar)) {
+                    if (textChar === normalizedPattern[patternIndex]) {
+                        if (matchStart === -1) {
+                            matchStart = currentTextIndex; // First alphanumeric match
+                        }
+                        patternIndex++;
+                        matchEnd = currentTextIndex + 1; // End is exclusive
+                    } else {
+                        // Mismatch in alphanumeric characters, break
+                        break;
+                    }
+                } else {
+                    // Non-alphanumeric character in text
+                    if (matchStart !== -1) {
+                        // We're in the middle of a potential match, include this character
+                        matchEnd = currentTextIndex + 1;
+                    }
+                }
+                
+                currentTextIndex++;
+            }
+            
+            // Check if we found a complete match
+            if (patternIndex === normalizedPattern.length && matchStart !== -1) {
+                matches.push({start: matchStart, end: matchEnd});
+                
+                // Continue searching from after this match
+                textIndex = matchEnd;
+            } else {
+                // No match starting at textIndex, move to next character
+                textIndex++;
+            }
+        }
+        
+        return matches;
+    }
+
+    /**
+     * Emit a command failure event for retry logic
+     */
+    private emitCommandFailure(command: any, error: string): void {
+        this.storySystem.service.emitEvent({
+            type: 'command_failed',
+            payload: { command, error },
+            timestamp: new Date()
+        });
+    }
+
     /**
      * Process any pending retry after generation completes
      */

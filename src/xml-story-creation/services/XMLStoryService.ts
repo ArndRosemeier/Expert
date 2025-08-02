@@ -401,76 +401,12 @@ export class XMLStoryService {
         }
     }
     
-    /**
-     * Find fuzzy matches ignoring non-alphanumeric characters but preserving original positions
-     */
-    private findFuzzyMatches(text: string, searchPattern: string): Array<{start: number, end: number}> {
-        const matches: Array<{start: number, end: number}> = [];
-        
-        // Helper function to check if character is alphanumeric
-        const isAlphaNumeric = (char: string): boolean => {
-            return /[a-zA-Z0-9]/.test(char);
-        };
-        
-        // Convert search pattern to lowercase alphanumeric only for comparison
-        const normalizedPattern = searchPattern.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
-        if (normalizedPattern.length === 0) {
-            return matches; // Empty pattern
-        }
-        
-        let textIndex = 0;
-        
-        while (textIndex < text.length) {
-            let matchStart = -1;
-            let matchEnd = -1;
-            let patternIndex = 0;
-            let currentTextIndex = textIndex;
-            
-            // Try to match pattern starting from currentTextIndex
-            while (currentTextIndex < text.length && patternIndex < normalizedPattern.length) {
-                const textChar = text[currentTextIndex]?.toLowerCase();
-                
-                if (textChar && isAlphaNumeric(textChar)) {
-                    if (textChar === normalizedPattern[patternIndex]) {
-                        if (matchStart === -1) {
-                            matchStart = currentTextIndex; // First alphanumeric match
-                        }
-                        patternIndex++;
-                        matchEnd = currentTextIndex + 1; // End is exclusive
-                    } else {
-                        // Mismatch in alphanumeric characters, break
-                        break;
-                    }
-                } else {
-                    // Non-alphanumeric character in text
-                    if (matchStart !== -1) {
-                        // We're in the middle of a potential match, include this character
-                        matchEnd = currentTextIndex + 1;
-                    }
-                }
-                
-                currentTextIndex++;
-            }
-            
-            // Check if we found a complete match
-            if (patternIndex === normalizedPattern.length && matchStart !== -1) {
-                matches.push({start: matchStart, end: matchEnd});
-                
-                // Continue searching from after this match
-                textIndex = matchEnd;
-            } else {
-                // No match starting at textIndex, move to next character
-                textIndex++;
-            }
-        }
-        
-        return matches;
-    }
+
 
     /**
      * Emit event to all listeners
      */
-    private emitEvent(event: XMLStoryEvent): void {
+    public emitEvent(event: XMLStoryEvent): void {
         this.eventListeners.forEach(callback => {
             callback(event);
         });
@@ -575,19 +511,21 @@ export class XMLStoryService {
                 break;
                 
             case 'append':
-                this.handleAppendCommand(command);
+                // Emit event for modal to handle (outline is stored in modal, not service)
+                this.emitEvent({
+                    type: 'outline_append_requested',
+                    payload: { command },
+                    timestamp: new Date()
+                });
                 break;
                 
             case 'replace_command':
-                const result = this.handleReplaceCommand(command);
-                if (!result.success && result.error) {
-                    // Emit an error event that the modal can listen to for retry logic
-                    this.emitEvent({
-                        type: 'command_failed',
-                        payload: { command, error: result.error },
-                        timestamp: new Date()
-                    });
-                }
+                // Emit event for modal to handle (outline is stored in modal, not service)
+                this.emitEvent({
+                    type: 'outline_replace_requested',
+                    payload: { command },
+                    timestamp: new Date()
+                });
                 break;
                 
             default:
@@ -688,153 +626,7 @@ export class XMLStoryService {
         });
     }
     
-    /**
-     * Handle AI append commands - adds content to the end of the outline
-     */
-    private handleAppendCommand(command: SystemCommand): void {
-        if (!command.content) {
-            console.warn('Append command missing content');
-            return;
-        }
-        
-        // Find the outline element (we assume there's always one with id 'outline' or similar)
-        // For now, let's look for the first outline element
-        const outlineElements = this.state.elementsByType.get('outline') || [];
-        if (outlineElements.length === 0) {
-            console.warn('No outline element found for append command');
-            return;
-        }
-        
-        // Use the first outline element
-        const outlineId = outlineElements[0];
-        if (!outlineId) {
-            console.warn('No outline element ID found');
-            return;
-        }
-        const element = this.getElement(outlineId);
-        if (!element) {
-            console.warn('Outline element not found in state');
-            return;
-        }
-        
-        // Store original description for history
-        const oldDescription = element.description;
-        
-        // Append the content to the existing outline
-        element.description = element.description + '\n\n' + command.content;
-        
-        // Mark as updated by AI
-        element.isUpdatedByAI = true;
-        element.highlightUntilNext = true;
-        element.lastModified = new Date();
-        
-        // Add to edit history
-        element.editHistory.push({
-            timestamp: new Date(),
-            type: 'ai_edit',
-            changes: {
-                description: { from: oldDescription, to: element.description }
-            }
-        });
-        
-        console.log(`📝 AI appended content to outline element ${outlineId}`);
-        
-        this.emitEvent({
-            type: 'element_updated',
-            payload: { element, command },
-            timestamp: new Date()
-        });
-    }
-    
-    /**
-     * Handle AI replace commands - replaces a specific part of the outline
-     * Returns true if replacement was successful, false if search term not found or not unique
-     */
-    private handleReplaceCommand(command: SystemCommand): { success: boolean; error?: string } {
-        if (!command.searchText || !command.replaceText) {
-            const error = 'Replace command missing search text or replace text';
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        // Find the outline element
-        const outlineElements = this.state.elementsByType.get('outline') || [];
-        if (outlineElements.length === 0) {
-            const error = 'No outline element found for replace command';
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        // Use the first outline element
-        const outlineId = outlineElements[0];
-        if (!outlineId) {
-            const error = 'No outline element ID found';
-            console.warn(error);
-            return { success: false, error };
-        }
-        const element = this.getElement(outlineId);
-        if (!element) {
-            const error = 'Outline element not found in state';
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        const currentContent = element.description;
-        const searchText = command.searchText;
-        
-        // Use fuzzy search that ignores non-alphanumeric characters
-        const fuzzyMatches = this.findFuzzyMatches(currentContent, searchText);
-        
-        if (fuzzyMatches.length === 0) {
-            const error = `Search text "${searchText}" not found in outline (ignoring punctuation/whitespace)`;
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        // Check if search text is unique (appears only once)
-        if (fuzzyMatches.length > 1) {
-            const error = `Search text "${searchText}" appears ${fuzzyMatches.length} times. Must be unique for replacement.`;
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        // Perform the replacement using exact positions
-        const match = fuzzyMatches[0];
-        if (!match) {
-            const error = 'Match not found despite array check';
-            console.warn(error);
-            return { success: false, error };
-        }
-        
-        const oldDescription = element.description;
-        element.description = currentContent.substring(0, match.start) + 
-                            command.replaceText + 
-                            currentContent.substring(match.end);
-        
-        // Mark as updated by AI
-        element.isUpdatedByAI = true;
-        element.highlightUntilNext = true;
-        element.lastModified = new Date();
-        
-        // Add to edit history
-        element.editHistory.push({
-            timestamp: new Date(),
-            type: 'ai_edit',
-            changes: {
-                description: { from: oldDescription, to: element.description }
-            }
-        });
-        
-        console.log(`🔄 AI replaced "${searchText}" (positions ${match.start}-${match.end}) with "${command.replaceText}" in outline element ${outlineId}`);
-        
-        this.emitEvent({
-            type: 'element_updated',
-            payload: { element, command },
-            timestamp: new Date()
-        });
-        
-        return { success: true };
-    }
+
 
     
     /**

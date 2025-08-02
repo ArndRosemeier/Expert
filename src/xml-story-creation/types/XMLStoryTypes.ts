@@ -216,7 +216,8 @@ export interface RelationshipElement {
 export interface XMLStoryEvent {
     type: 'element_created' | 'element_updated' | 'element_deleted' | 
           'human_edit' | 'highlight_applied' | 'highlight_cleared' |
-          'context_refresh_requested' | 'ai_feedback_generated' | 'command_failed';
+          'context_refresh_requested' | 'ai_feedback_generated' | 'command_failed' |
+          'outline_append_requested' | 'outline_replace_requested';
     payload: Record<string, unknown>;
     timestamp: Date;
 }
