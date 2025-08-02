@@ -229,15 +229,22 @@ export class TextEditorWithHighlighting {
         // Schedule automatic removal for AI result highlights after configured duration (20 seconds)
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
             const timeoutId = window.setTimeout(() => {
+                console.log(`⏰ Timer fired for highlight ${id} - about to save cursor and remove highlight`);
+                
                 // Save cursor position BEFORE removing highlights (exact timing!)
                 const caretOffset = this.getCaretCharacterOffset();
+                console.log(`⏰ Timer: caretOffset = ${caretOffset}, activeElement = ${document.activeElement?.tagName}`);
+                
                 if (caretOffset > 0) {
                     this.savedCursorPosition = caretOffset;
                     console.log(`💾 Saved cursor position in timer: ${caretOffset}`);
+                } else {
+                    console.log(`❌ Timer: NOT saving cursor position (offset = ${caretOffset})`);
                 }
                 
                 this.removeHighlight(id);
                 this.highlightTimeouts.delete(id);
+                console.log(`⏰ Timer: Highlight ${id} removed`);
             }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
             this.highlightTimeouts.set(id, timeoutId);
         }
@@ -836,11 +843,6 @@ export class TextEditorWithHighlighting {
      * Re-render the content with highlights applied
      */
     private renderWithHighlights(): void {
-        // DEBUG: Find out what's calling this method
-        const stack = new Error().stack;
-        const caller = stack?.split('\n')[2]?.trim();
-        console.log(`🚨 renderWithHighlights called from:`, caller);
-        
         const text = this.plainTextContent;
         
         if (this.highlights.size === 0) {
