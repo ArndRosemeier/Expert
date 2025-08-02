@@ -11,6 +11,7 @@ import { SettingsManager } from '../../SettingsManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { StoryElement, StoryElementType, XMLStoryEvent } from '../../xml-story-creation';
+import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
@@ -53,6 +54,15 @@ export class XMLStoryModal extends BaseModal {
     
     // State
     private isGenerating = false;
+    
+    // Persistent highlight state
+    private persistentHighlight: {
+        startPos: number;
+        endPos: number;
+        className: string;
+        expiresAt: number;
+    } | null = null;
+    private highlightTimer: number | null = null;
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
     private contextRefreshPending = false;
@@ -1861,7 +1871,18 @@ export class XMLStoryModal extends BaseModal {
                           command.replaceText + 
                           currentContent.substring(match.end);
         
-        this.setOutlineContentFromAI(newContent);
+        // Set content and setup persistent highlighting
+        if (this.outlineEditor) {
+            this.outlineEditor.setText(newContent);
+            this.saveOutlineVersion(newContent, 'ai');
+        }
+        
+        // Setup persistent highlight that survives editor recreation
+        this.setPersistentHighlight(
+            match.start,
+            match.start + command.replaceText.length,
+            'highlight-ai-replacement'
+        );
         console.log(`✅ AI replaced "${command.searchText}" (positions ${match.start}-${match.end}) with "${command.replaceText}"`);
     }
 
@@ -2236,6 +2257,8 @@ export class XMLStoryModal extends BaseModal {
         const outlineContainer = document.getElementById('unified-outline-editor');
         if (!outlineContainer) return;
 
+        // Always recreate editor for now - persistent highlights will handle highlighting
+
         // Clear placeholder if it exists
         outlineContainer.innerHTML = '';
 
@@ -2266,6 +2289,9 @@ export class XMLStoryModal extends BaseModal {
         this.outlineEditor.addEventListener('input', () => {
             this.saveOutlineVersion(this.outlineEditor!.value, 'user');
         });
+        
+        // Apply any persistent highlights
+        this.applyPersistentHighlights();
     }
 
     /**
@@ -2687,11 +2713,71 @@ export class XMLStoryModal extends BaseModal {
         }
     }
 
-
-
+    /**
+     * Set up persistent highlight that survives editor recreation
+     */
+    private setPersistentHighlight(startPos: number, endPos: number, className: string): void {
+        // Clear any existing timer
+        if (this.highlightTimer) {
+            clearTimeout(this.highlightTimer);
+        }
+        
+        // Set up new persistent highlight
+        this.persistentHighlight = {
+            startPos,
+            endPos,
+            className,
+            expiresAt: Date.now() + DEFAULT_XML_STORY_CONFIG.highlightDuration
+        };
+        
+        // Apply highlight immediately if editor exists
+        this.applyPersistentHighlights();
+        
+        // Set timer to clear highlight
+        this.highlightTimer = window.setTimeout(() => {
+            this.clearPersistentHighlight();
+        }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
+    }
     
+    /**
+     * Apply persistent highlights to the current editor (if any and not expired)
+     */
+    private applyPersistentHighlights(): void {
+        if (!this.persistentHighlight || !this.outlineEditor) {
+            return;
+        }
+        
+        // Check if highlight has expired
+        if (Date.now() > this.persistentHighlight.expiresAt) {
+            this.clearPersistentHighlight();
+            return;
+        }
+        
+        // Apply the highlight
+        const highlightId = `persistent-highlight-${Date.now()}`;
+        this.outlineEditor.addHighlight(
+            highlightId,
+            this.persistentHighlight.startPos,
+            this.persistentHighlight.endPos,
+            this.persistentHighlight.className
+        );
+    }
+    
+    /**
+     * Clear persistent highlight
+     */
+    private clearPersistentHighlight(): void {
+        this.persistentHighlight = null;
+        if (this.highlightTimer) {
+            clearTimeout(this.highlightTimer);
+            this.highlightTimer = null;
+        }
+    }
 
     public override async close(): Promise<void> {
+        // Clean up persistent highlights
+        this.clearPersistentHighlight();
+        
         // Always redirect to closeWithUnsavedCheck to ensure proper handling
         await this.closeWithUnsavedCheck();
     }

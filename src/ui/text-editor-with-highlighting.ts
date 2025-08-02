@@ -1,5 +1,6 @@
 // Import CSS for highlighting styles
 import './text-editor-highlighting.css';
+import { DEFAULT_XML_STORY_CONFIG } from '../xml-story-creation/types/XMLStoryTypes';
 
 /**
  * ⚠️  CRITICAL TEXT PRESERVATION COMPONENT ⚠️
@@ -197,6 +198,7 @@ export class TextEditorWithHighlighting {
      */
     public addHighlight(id: string, startPos: number, endPos: number, className: string = 'highlight-ai-replacement'): void {
         const text = this.getText();
+        
         if (startPos < 0 || endPos > text.length || startPos >= endPos) {
             console.warn('Invalid highlight range:', {startPos, endPos, textLength: text.length});
             return;
@@ -214,12 +216,12 @@ export class TextEditorWithHighlighting {
         // Apply the highlight
         this.renderWithHighlights();
 
-        // Schedule automatic removal for AI result highlights after 5 seconds
+        // Schedule automatic removal for AI result highlights after configured duration (20 seconds)
         if (className.includes('highlight-ai-replacement') || className.includes('ai-result')) {
             const timeoutId = window.setTimeout(() => {
                 this.removeHighlight(id);
                 this.highlightTimeouts.delete(id);
-            }, 5000);
+            }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
             this.highlightTimeouts.set(id, timeoutId);
         }
     }

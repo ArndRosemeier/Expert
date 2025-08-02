@@ -1,4 +1,5 @@
 import { TextEditorWithHighlighting } from '../text-editor-with-highlighting';
+import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
 import { autoResizeTextarea } from '../modals/core/modal-utils';
 import { TextTransformModal, TextTransformRequest } from './TextTransformModal';
 import { OpenRouterClient } from '../../OpenRouterClient';
@@ -1131,7 +1132,7 @@ export class UniversalTextEditor {
             cumulativeOffset += lengthChange;
         });
 
-        // Add temporary highlights for 5 seconds
+        // Add temporary highlights for AI replacement
         const tempHighlightIds: string[] = [];
         newRegions.forEach((region, index) => {
             const tempId = `temp-transform-highlight-${Date.now()}-${index}`;
@@ -1139,12 +1140,12 @@ export class UniversalTextEditor {
             tempHighlightIds.push(tempId);
         });
 
-        // Remove temporary highlights after 5 seconds
+        // Remove temporary highlights after configured duration (20 seconds)
         setTimeout(() => {
             tempHighlightIds.forEach(id => {
                 this.enhancedEditor.removeHighlight(id);
             });
-        }, 5000);
+        }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
         
         // Trigger text change handler if available
         if (this.handlers.onTextChange) {
@@ -1331,11 +1332,11 @@ export class UniversalTextEditor {
     /**
      * Add highlight (enhanced mode only)
      */
-    public addHighlight(id: string, startPos: number, endPos: number, className?: string): void {
+        public addHighlight(id: string, startPos: number, endPos: number, className?: string): void {
         if (this.currentMode !== 'enhanced') {
             throw new Error('Highlights are only available in enhanced mode');
         }
-            this.enhancedEditor.addHighlight(id, startPos, endPos, className);
+        this.enhancedEditor.addHighlight(id, startPos, endPos, className);
     }
     
     /**
