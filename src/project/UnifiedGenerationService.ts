@@ -606,10 +606,15 @@ export class UnifiedGenerationService {
     private getWorkNeeded(node: DocumentNode, targetState: TargetState): WorkNeeded {
         const currentState = this.getNodeCurrentState(node);
         
+        // Only the last child of a parent can trigger coherence checks for all siblings
+        // Non-last children should not show coherenceCheck=true even if they need it
+        const needsCoherenceCheck = targetState.needsCoherenceCheck && !currentState.hasCoherenceCheck;
+        const canTriggerCoherence = needsCoherenceCheck && this.isLastChild(node);
+        
         const workNeeded = {
             contextPruning: targetState.needsContextPruning && !currentState.hasContextPruning,
             contentGeneration: targetState.needsContent && !currentState.hasContent,
-            coherenceCheck: targetState.needsCoherenceCheck && !currentState.hasCoherenceCheck,
+            coherenceCheck: canTriggerCoherence, // Only last child can trigger coherence
             expansion: targetState.canExpand && !currentState.hasChildren
         };
         
@@ -618,6 +623,12 @@ export class UnifiedGenerationService {
             console.log(`   Target state: contextPruning=${targetState.needsContextPruning}, content=${targetState.needsContent}, coherence=${targetState.needsCoherenceCheck}, canExpand=${targetState.canExpand}`);
             console.log(`   Current state: contextPruning=${currentState.hasContextPruning}, content=${currentState.hasContent}, coherence=${currentState.hasCoherenceCheck}, children=${currentState.hasChildren}`);
             console.log(`   Work needed: contextPruning=${workNeeded.contextPruning}, contentGeneration=${workNeeded.contentGeneration}, coherenceCheck=${workNeeded.coherenceCheck}, expansion=${workNeeded.expansion}`);
+            
+            // Extra details for coherence check logic
+            if (needsCoherenceCheck) {
+                const isLast = this.isLastChild(node);
+                console.log(`   Coherence analysis: needsCoherence=${needsCoherenceCheck}, isLastChild=${isLast}, canTriggerCoherence=${canTriggerCoherence}`);
+            }
             
             // Extra details for content generation since that's the user's issue
             if (targetState.needsContent) {
