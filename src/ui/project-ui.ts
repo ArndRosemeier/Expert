@@ -3603,27 +3603,6 @@ This action cannot be undone.`;
             }
             break;
 
-        case 'xml-story-creation-btn':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
-                
-                // Import and open node edit chat modal (XMLStoryModal)
-                void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
-                    const initializationData = {
-                        title: node.title || 'Untitled',
-                        content: node.content || '',
-                        contextItems: [],
-                        sourceNode: node
-                    };
-                    void openXMLStoryModal(initializationData);
-                }).catch(error => {
-                    console.error('Failed to open Node Edit Chat modal:', error);
-                    alert('Failed to open Node Edit Chat. Please try again.');
-                });
-            }
-            break;
-
         case 'polish-text-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
