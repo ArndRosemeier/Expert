@@ -359,7 +359,6 @@ export class ManualModal extends BaseModal {
                         <input type="text" class="manual-search-input" placeholder="Search manual..." id="manualSearchInput">
                     </div>
                     <div class="manual-controls">
-                        <button class="manual-btn" onclick="window.manualModal.toggleSidebar()">📑 TOC</button>
                         <button class="manual-btn" onclick="window.manualModal.openManualChat()">💬 Chat Support</button>
                         <button class="manual-btn" onclick="window.manualModal.printManual()">🖨️ Print</button>
                         <button class="manual-btn" onclick="window.manualModal.openInNewWindow()">🔗 Open in Window</button>
@@ -643,13 +642,6 @@ export class ManualModal extends BaseModal {
         if (e.key === 'Escape' && e.target !== document.querySelector('.manual-search-input')) {
             // Only close on escape if not typing in search
             this.close();
-        }
-    }
-
-    public toggleSidebar(): void {
-        const sidebar = document.getElementById('manualSidebar');
-        if (sidebar) {
-            sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
         }
     }
 
