@@ -484,6 +484,26 @@ export class UnifiedGenerationService {
                     }
                 }
                 
+                // Priority 3.5: Last child sibling coherence check (regardless of own coherence status)
+                // This ensures that last children always verify ALL sibling coherence before expansion
+                if (!workNeeded.coherenceCheck && targetState.needsCoherenceCheck) {
+                    const isLastChild = this.isLastChild(node);
+                    if (isLastChild && node.parentId) {
+                        // Even if this last child doesn't need coherence, check if ANY sibling does
+                        const shouldTriggerCoherence = this.shouldTriggerCoherenceCheck(node, targetState);
+                        if (shouldTriggerCoherence) {
+                            if (DEBUG_STATELESS_GENERATION) {
+                                console.log(`✅ STATELESS DEBUG: Last child "${node.title}" triggering coherence check for siblings (even though self is coherent)`);
+                            }
+                            await this.handleCoherenceCheck(node.parentId, levels);
+                            workDone = true;
+                            break; // Exit immediately - fresh assessment next iteration
+                        } else if (DEBUG_STATELESS_GENERATION) {
+                            console.log(`✅ STATELESS DEBUG: Last child "${node.title}" verified all siblings are coherent`);
+                        }
+                    }
+                }
+                
                 // Priority 4: Expansion
                 if (workNeeded.expansion) {
                     if (DEBUG_STATELESS_GENERATION) {
