@@ -1,18 +1,5 @@
 # Expert Application - User Manual
 
-## Table of Contents
-1. [Getting Started](#getting-started)
-2. [Authentication & Key Management](#authentication--key-management)
-3. [Main Interface Overview](#main-interface-overview)
-4. [Project Management](#project-management)
-5. [Document Import](#document-import)
-6. [Document Editing](#document-editing)
-7. [AI-Powered Features](#ai-powered-features)
-8. [Settings & Configuration](#settings--configuration)
-9. [Templates](#templates)
-10. [Export Functionality](#export-functionality)
-11. [Troubleshooting](#troubleshooting)
-
 ---
 
 ## Getting Started

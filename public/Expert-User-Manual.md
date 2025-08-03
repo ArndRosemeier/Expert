@@ -1,21 +1,5 @@
 # Expert Application - Complete User Manual
 
-## Table of Contents
-1. [Overview & Getting Started](#overview--getting-started)
-2. [Authentication & Setup](#authentication--setup)
-3. [Main Interface](#main-interface)
-4. [Project Management](#project-management)
-5. [Hierarchical Document Generation](#hierarchical-document-generation)
-6. [AI-Powered Content Creation](#ai-powered-content-creation)
-7. [Templates & Structure](#templates--structure)
-8. [Quality Control System](#quality-control-system)
-9. [Profile & Model Management](#profile--model-management)
-10. [Idea Board](#idea-board)
-11. [Reader View & Export](#reader-view--export)
-12. [Advanced Features](#advanced-features)
-13. [Troubleshooting](#troubleshooting)
-14. [Best Practices](#best-practices)
-
 ---
 
 ## Overview & Getting Started
