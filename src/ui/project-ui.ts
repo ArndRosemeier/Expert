@@ -716,7 +716,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'polish-text': 'polish-text-btn',
-                            'edit-context-with-ai': 'edit-context-with-ai-btn',
+                            'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
@@ -1086,7 +1086,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'polish-text': 'polish-text-btn',
-                            'edit-context-with-ai': 'edit-context-with-ai-btn',
+                            'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
@@ -1204,8 +1204,8 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="polish-text">
                         🎨 Polish Text
                     </button>
-                    <button class="action-btn" data-action="edit-context-with-ai">
-                        🧠 Edit Context with AI
+                    <button class="action-btn" data-action="edit-context">
+                        📝 Edit Context
                     </button>
                     <button class="action-btn" data-action="copy-to-new-project">
                         📋 Copy to New Project
@@ -3624,7 +3624,7 @@ This action cannot be undone.`;
             }
             break;
 
-        case 'edit-context-with-ai-btn':
+        case 'edit-context-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (!node) return;
@@ -5688,7 +5688,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
-    'edit-context-with-ai-btn': (_e: Event) => {
+    'edit-context-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
