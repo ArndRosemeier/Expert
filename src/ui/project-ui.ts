@@ -3603,6 +3603,16 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'xml-story-creation-btn':
+            {
+                // Use the centralized handler from buttonHandlers
+                const handler = buttonHandlers['xml-story-creation-btn'];
+                if (handler) {
+                    handler(new Event('click'));
+                }
+            }
+            break;
+
         case 'polish-text-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
