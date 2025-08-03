@@ -411,7 +411,6 @@
                 <input type="text" class="search-input" placeholder="Search manual..." id="searchInput">
             </div>
             <div class="controls">
-                <button class="btn" onclick="toggleSidebar()">📑 TOC</button>
                 <button class="btn" onclick="printManual()">🖨️ Print</button>
                 <button class="btn" onclick="window.close()">✕ Close</button>
             </div>
@@ -592,11 +591,6 @@
         }
 
         // Utility functions
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
-        }
-
         function printManual() {
             window.print();
         }
