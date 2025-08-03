@@ -541,6 +541,14 @@ export class DocumentNode {
     }
 
     /**
+     * Checks if any version of this node has the consistent_to_parent tag.
+     * @returns true if any version has the consistent_to_parent tag, false otherwise
+     */
+    isConsistentToParent(): boolean {
+        return this.versions.some(v => v.tags.has('consistent_to_parent'));
+    }
+
+    /**
      * Adds a new version with the given tags if that exact combination doesn't exist.
      * @param tags Array of tag strings
      * @param fields Optional initial field values

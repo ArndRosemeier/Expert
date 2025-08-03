@@ -194,7 +194,7 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
             const hasContent = node.content && node.content.trim().length > 0;
             const isDraft = masterVersion.tags.has('draft');
             const isContextAdjusted = node.ContextIsAdjusted();
-            const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
+            const isConsistentWithParent = node.isConsistentToParent();
             
             // Finished: all conditions met
             if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
@@ -334,7 +334,7 @@ function getNodeStatusTooltip(node: DocumentNode): string {
     const hasContent = node.content && node.content.trim().length > 0;
     const isDraft = masterVersion.tags.has('draft');
     const isContextAdjusted = node.ContextIsAdjusted();
-    const isConsistentWithParent = masterVersion.tags.has('consistent_to_parent');
+    const isConsistentWithParent = node.isConsistentToParent();
     
     // Finished: all conditions met
     if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {

@@ -30,8 +30,7 @@ export class CoherenceService {
             const hasValidContent = child.getState() === 'Final';
             
             // Exclude children that are already tagged as consistent to parent
-            const masterVersion = child.getMasterVersion();
-            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            const isAlreadyConsistent = child.isConsistentToParent();
             
             return hasValidContent && !isAlreadyConsistent;
         });
@@ -59,8 +58,7 @@ export class CoherenceService {
 
         // Check if all valid children are already tagged as consistent
         const alreadyConsistentChildren = validChildren.filter(child => {
-            const masterVersion = child.getMasterVersion();
-            return masterVersion && masterVersion.tags.has('consistent_to_parent');
+            return child.isConsistentToParent();
         });
 
         if (alreadyConsistentChildren.length === validChildren.length) {
@@ -69,8 +67,7 @@ export class CoherenceService {
 
         // Check if there are any children left to analyze after filtering
         const analyzeableChildren = validChildren.filter(child => {
-            const masterVersion = child.getMasterVersion();
-            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            const isAlreadyConsistent = child.isConsistentToParent();
             return !isAlreadyConsistent;
         });
 
@@ -91,8 +88,7 @@ export class CoherenceService {
             const hasValidContent = child.getState() === 'Final';
             
             // Exclude children that are already tagged as consistent to parent
-            const masterVersion = child.getMasterVersion();
-            const isAlreadyConsistent = masterVersion && masterVersion.tags.has('consistent_to_parent');
+            const isAlreadyConsistent = child.isConsistentToParent();
             
             return hasValidContent && !isAlreadyConsistent;
         });

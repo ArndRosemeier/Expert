@@ -607,7 +607,7 @@ export class UnifiedGenerationService {
         const state = {
             hasContextPruning: node.ContextIsAdjusted(),
             hasContent: this.nodeHasContent(node),
-            hasCoherenceCheck: masterVersion?.tags.has('consistent_to_parent') || false,
+            hasCoherenceCheck: node.isConsistentToParent(),
             hasChildren: node.children.length > 0
         };
         
@@ -786,8 +786,7 @@ export class UnifiedGenerationService {
             // Check if this child should have coherence according to target state
             const childTargetState = targetState; // All siblings have same target state
             if (childTargetState.needsCoherenceCheck) {
-                const masterVersion = child.getMasterVersion();
-                const hasCoherenceTag = masterVersion?.tags.has('consistent_to_parent') || false;
+                const hasCoherenceTag = child.isConsistentToParent();
                 
                 if (DEBUG_STATELESS_GENERATION) {
                     console.log(`   Child "${child.title}": needsCoherence=${childTargetState.needsCoherenceCheck}, hasTag=${hasCoherenceTag}`);
