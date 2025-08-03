@@ -383,6 +383,92 @@ Automatic cleanup to prevent context overflow:
 - Prioritize relevant context
 - Maintain context size within AI model limits
 
+### Node Chat - Interactive AI Conversations
+
+**Node Chat** is one of Expert's most powerful features, allowing interactive conversations with AI about any part of your project. Unlike automatic generation, Node Chat provides a flexible dialogue interface for brainstorming, problem-solving, and getting specific help with your content.
+
+**Accessing Node Chat:**
+1. **Right-click** any node in the project tree
+2. **Select "💬 Chat"** from the context menu
+3. **Configure scope depth** for the conversation context
+4. **Start your conversation** with natural language
+
+**Scope Depth Configuration:**
+- **This node only (Depth 0)**: Chat focuses solely on the selected node
+- **Include direct children (Depth 1)**: Adds immediate child nodes to context
+- **Include grandchildren (Depth 2)**: Extends context two levels deep
+- **Multiple levels (3-5)**: Comprehensive context for complex discussions
+
+**What You Can Do with Node Chat:**
+
+**Creative Assistance:**
+- "How can I make this chapter more exciting?"
+- "What plot twists would work well here?"
+- "Help me develop this character's backstory"
+- "Suggest ways to improve this dialogue"
+
+**Planning and Development:**
+- "What should happen in the next scene?"
+- "How can I connect these plot points?"
+- "What obstacles should my character face?"
+- "Help me outline the remaining chapters"
+
+**Quality and Consistency:**
+- "Does this scene match my character's personality?"
+- "Is this consistent with what happened earlier?"
+- "How can I improve the pacing here?"
+- "What themes should I emphasize?"
+
+**Technical and Structural:**
+- "How should I organize this manual section?"
+- "What information am I missing here?"
+- "How can I make this more professional?"
+- "Help me structure this business plan section"
+
+**Node Chat Features:**
+- **Context Awareness**: AI knows your project's characters, plot, style, and previous content
+- **Persistent Memory**: Conversations remember earlier discussion points
+- **Model Selection**: Choose which AI model to chat with based on your needs
+- **Export Conversations**: Save important discussions for future reference
+- **Real-time Responses**: Get immediate feedback and suggestions
+
+**Example Node Chat Session:**
+
+**User**: "I'm stuck on Chapter 3. The hero needs to discover something important about the villain, but I'm not sure how to make it happen naturally."
+
+**AI**: "Looking at your project, I see the hero is currently in the market district. Here are some natural discovery methods:
+
+1. **Overheard Conversation**: The hero could overhear merchants discussing the villain's past dealings
+2. **Mysterious Item**: Finding an object that belonged to the villain's previous victim
+3. **Witness Account**: Meeting someone who survived an encounter with the villain
+4. **Hidden Message**: Discovering a coded message or warning left by another character
+
+Given your character's curious nature from Chapter 1, the overheard conversation might work best. Want me to help you write that scene?"
+
+**User**: "I like the overheard conversation idea. How should I structure it?"
+
+**AI**: "For your character's personality, here's a structure that would work:
+- Start with normal market activity to establish setting
+- Have your hero notice something unusual in the merchants' behavior
+- Build tension as the conversation reveals disturbing details
+- End with your hero having to decide whether to act on this information
+
+This fits your story's theme of moral choices and gives the hero agency in the discovery."
+
+**Best Practices for Node Chat:**
+- **Be specific** about what kind of help you need
+- **Provide context** if discussing events not in the current node
+- **Ask follow-up questions** to dive deeper into ideas
+- **Use it iteratively** - have multiple short conversations rather than one long one
+- **Reference your project elements** (characters, themes, previous events)
+- **Save important insights** by exporting conversations
+
+**Performance Tips:**
+- **Limit scope depth** for faster responses (use 1-2 levels for most conversations)
+- **Preview content size** before starting to understand context volume
+- **Use specific models** - creative models for brainstorming, analytical models for critique
+- **Break complex topics** into multiple focused conversations
+
 ---
 
 ## Templates & Structure
@@ -1005,6 +1091,116 @@ Interactive chat with AI models using project context.
 - **Improvement Suggestions**: Get specific enhancement ideas
 - **Roleplay Adventure**: Interactive storytelling with characters
 - **Custom Queries**: Ask anything about your project
+
+### Text Improvement Tools
+
+**Polish Text Feature**
+
+The Polish Text feature provides AI-powered text improvement for any content in your project. This tool is ideal for refining drafts, improving clarity, and adjusting tone or style.
+
+**How to Use Polish Text:**
+1. **Right-click** any node with content in the project tree
+2. **Select "🎨 Polish Text"** from the context menu
+3. **Specify improvement type** in natural language:
+   - "Make this more formal and professional"
+   - "Improve clarity and fix grammar"
+   - "Make this more engaging and exciting"
+   - "Simplify the language for general readers"
+   - "Add more descriptive detail"
+4. **Review suggestions** and apply desired changes
+5. **Iterate** with additional polish requests if needed
+
+**Polish Text Use Cases:**
+- **Style Adjustment**: Convert between formal/casual, technical/accessible
+- **Grammar and Clarity**: Fix errors and improve readability
+- **Tone Modification**: Adjust emotional tone or voice
+- **Content Enhancement**: Add detail, examples, or improved descriptions
+- **Consistency**: Ensure text matches project style guidelines
+
+**Reader View Text Editing**
+
+When in Reader View, Expert provides inline text improvement tools for rapid editing:
+
+**Accessing Reader View Tools:**
+1. **Click 📖 Reader View** in the top navigation
+2. **Select any text** you want to improve
+3. **Choose from AI improvement options** that appear:
+   - **Rewrite**: Improve the selected text while maintaining meaning
+   - **Expand**: Add more detail and depth to the content
+   - **Simplify**: Make complex text clearer and more accessible
+   - **Tone Shift**: Change the style (formal, casual, technical, etc.)
+   - **Fix Grammar**: Correct errors and improve structure
+
+**Reader View Features:**
+- **Instant Editing**: See changes immediately in context
+- **Undo Function**: Revert changes if you don't like the results
+- **Selection Modes**: Choose words, sentences, or paragraphs for editing
+- **Context Awareness**: AI considers surrounding text for consistency
+- **Export Ready**: Polish text and export directly from reader view
+
+### Content Analysis Tools
+
+**Logic Error Detection**
+
+Automatically identify logical inconsistencies and plot holes in your content.
+
+**How to Use:**
+1. **Right-click** a node with child content
+2. **Select "🧩 Check Logic Errors"**
+3. **Review identified issues** with severity ratings
+4. **Apply suggested fixes** or use them as guidance for manual edits
+
+**Coherence Checking**
+
+Analyze consistency between outline content and expanded child nodes.
+
+**Process:**
+1. **Select parent node** with children that have been expanded
+2. **Click "🔍 Check Coherence"** from the actions menu
+3. **Review contradiction analysis** with severity scores
+4. **Apply automatic fixes** or edit manually based on suggestions
+
+**Redundancy Detection**
+
+Find duplicate or overly similar content between sibling nodes.
+
+**Usage:**
+1. **Right-click** parent node with multiple children
+2. **Select "🗑️ Find Redundant Children"**
+3. **Review similarity analysis** and merge suggestions
+4. **Consolidate or differentiate** content as needed
+
+### Content Organization Tools
+
+**Tag Manager**
+
+Organize and categorize your content with custom tags for better project management.
+
+**Features:**
+- **Custom Tags**: Create project-specific categorization
+- **Bulk Tagging**: Apply tags to multiple nodes simultaneously
+- **Tag Filtering**: Find content by tag categories
+- **Tag Hierarchy**: Organize tags in parent-child relationships
+
+**Context Adjuster**
+
+Fine-tune how context flows through your project hierarchy.
+
+**Capabilities:**
+- **Context Scope**: Adjust what context each node receives
+- **Context Priorities**: Weight different context sources
+- **Context Exclusions**: Remove irrelevant context from specific nodes
+- **Context Preview**: See effective context before generation
+
+**Batch Update Tools**
+
+Perform operations across multiple nodes efficiently.
+
+**Operations:**
+- **Batch Generation**: Generate content for multiple nodes
+- **Batch Context Updates**: Propagate context changes throughout hierarchy
+- **Batch Tag Application**: Apply tags to node groups
+- **Batch Export**: Export multiple nodes in various formats
 
 ### Advanced Generation Options
 
