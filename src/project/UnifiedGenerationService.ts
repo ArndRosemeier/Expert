@@ -697,12 +697,17 @@ export class UnifiedGenerationService {
         }
         
         // Check if all siblings have reached their target state
+        // IMPORTANT: Check actual state vs target, not work capability
         const siblingStates: Array<{name: string, isReady: boolean, workNeeded: any}> = [];
         const allSiblingsReady = siblings.every(sibling => {
+            const siblingCurrentState = this.getNodeCurrentState(sibling);
             const siblingWorkNeeded = this.getWorkNeeded(sibling, targetState);
-            const isReady = !siblingWorkNeeded.contextPruning && 
-                           !siblingWorkNeeded.contentGeneration && 
-                           !siblingWorkNeeded.coherenceCheck;
+            
+            // A sibling is ready if it has ACTUALLY achieved the target state
+            // Not just if it can trigger work (coherenceCheck=false for non-last children)
+            const isReady = (!targetState.needsContextPruning || siblingCurrentState.hasContextPruning) && 
+                           (!targetState.needsContent || siblingCurrentState.hasContent) && 
+                           (!targetState.needsCoherenceCheck || siblingCurrentState.hasCoherenceCheck);
             
             siblingStates.push({
                 name: sibling.title,
