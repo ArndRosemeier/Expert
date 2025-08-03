@@ -343,6 +343,8 @@ export class UniversalTextEditor {
             if (this.handlers.onTextChange) {
                 this.handlers.onTextChange(this.currentValue);
             }
+            // Refresh search if active to prevent stale position data
+            this.refreshSearchIfActive();
         });
         
         this.simpleEditor.addEventListener('focus', () => {
@@ -359,14 +361,22 @@ export class UniversalTextEditor {
         
         // Add undo functionality (Ctrl+Z) and prevent browser find (Ctrl+F)
         this.simpleEditor.addEventListener('keydown', (event) => {
-            if (event.ctrlKey && event.key === 'z') {
-                event.preventDefault();
-                this.undoToInitialState();
-            } else if (event.ctrlKey && event.key === 'f') {
-                // Prevent browser's native find and open our custom search
-                event.preventDefault();
-                event.stopPropagation();
-                this.toggleSearch();
+            // Explicitly allow common browser shortcuts to work normally
+            if (event.ctrlKey || event.metaKey) {
+                if (['c', 'v', 'x', 'a', 's', 'y'].includes(event.key.toLowerCase())) {
+                    // Allow copy, paste, cut, select all, save, redo - let browser handle these
+                    return;
+                }
+                
+                if (event.key === 'z') {
+                    event.preventDefault();
+                    this.undoToInitialState();
+                } else if (event.key === 'f') {
+                    // Prevent browser's native find and open our custom search
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.toggleSearch();
+                }
             }
         });
     }
@@ -380,6 +390,8 @@ export class UniversalTextEditor {
             if (this.handlers.onTextChange) {
                 this.handlers.onTextChange(text);
             }
+            // Refresh search if active to prevent stale position data
+            this.refreshSearchIfActive();
         });
         
         this.enhancedEditor.onFocus(() => {
@@ -398,14 +410,22 @@ export class UniversalTextEditor {
         const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
         if (editorDiv) {
             editorDiv.addEventListener('keydown', (event) => {
-                if (event.ctrlKey && event.key === 'z') {
-                    event.preventDefault();
-                    this.undoToInitialState();
-                } else if (event.ctrlKey && event.key === 'f') {
-                    // Prevent browser's native find and open our custom search
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.toggleSearch();
+                // Explicitly allow common browser shortcuts to work normally
+                if (event.ctrlKey || event.metaKey) {
+                    if (['c', 'v', 'x', 'a', 's', 'y'].includes(event.key.toLowerCase())) {
+                        // Allow copy, paste, cut, select all, save, redo - let browser handle these
+                        return;
+                    }
+                    
+                    if (event.key === 'z') {
+                        event.preventDefault();
+                        this.undoToInitialState();
+                    } else if (event.key === 'f') {
+                        // Prevent browser's native find and open our custom search
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.toggleSearch();
+                    }
                 }
             });
         }
@@ -1148,9 +1168,11 @@ export class UniversalTextEditor {
         }, DEFAULT_XML_STORY_CONFIG.highlightDuration);
         
         // Trigger text change handler if available
-        if (this.handlers.onTextChange) {
-            this.handlers.onTextChange(newText);
-        }
+                    if (this.handlers.onTextChange) {
+                this.handlers.onTextChange(newText);
+            }
+            // Refresh search if active to prevent stale position data
+            this.refreshSearchIfActive();
     }
     
     // ============================================================================
@@ -2181,7 +2203,7 @@ export class UniversalTextEditor {
             }
             
             // Refresh the search to recalculate positions
-            this.performSearch();
+            this.refreshSearchIfActive();
         } catch (error) {
             console.warn('Failed to replace text:', error);
             // Fallback: refresh search without replacement
@@ -2225,7 +2247,7 @@ export class UniversalTextEditor {
             }
             
             // Refresh search
-            this.performSearch();
+            this.refreshSearchIfActive();
         } catch (error) {
             console.warn('Failed to replace all matches:', error);
             // Fallback: refresh search without replacement
@@ -2241,6 +2263,42 @@ export class UniversalTextEditor {
             resultsElement.textContent = 'No matches';
         } else {
             resultsElement.textContent = `${this.currentSearchIndex + 1} of ${this.searchResults.length}`;
+        }
+    }
+
+    /**
+     * Refresh search results if search is currently active
+     * This prevents stale position data when text changes
+     */
+    private refreshSearchIfActive(): void {
+        // Only refresh if we have an active search
+        if (this.searchInput && this.searchInput.value.trim() && this.searchResults.length > 0) {
+            // Store current index position for restoration
+            const wasAtEnd = this.currentSearchIndex >= this.searchResults.length - 1;
+            
+            // Re-run the search with fresh text
+            this.performSearch();
+            
+            // Try to maintain position context:
+            // If we were at the end of results, go to new end
+            // Otherwise stay at current index (clamped to new results length)
+            if (this.searchResults.length > 0) {
+                if (wasAtEnd) {
+                    this.currentSearchIndex = this.searchResults.length - 1;
+                } else {
+                    this.currentSearchIndex = Math.min(this.currentSearchIndex, this.searchResults.length - 1);
+                    this.currentSearchIndex = Math.max(0, this.currentSearchIndex);
+                }
+                
+                // Update highlighting without focus change
+                this.selectSearchResult(this.currentSearchIndex, false);
+                
+                // Update results count if search bar is visible
+                const resultsCount = this.container.querySelector('.search-results-count') as HTMLElement;
+                if (resultsCount) {
+                    this.updateResultsCount(resultsCount);
+                }
+            }
         }
     }
     

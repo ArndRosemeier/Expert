@@ -18,7 +18,7 @@ interface ProfileOperationContext {
 }
 
 interface SettingsChangeEvent {
-    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging';
+    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging' | 'debugGeneration';
     data: unknown;
 }
 

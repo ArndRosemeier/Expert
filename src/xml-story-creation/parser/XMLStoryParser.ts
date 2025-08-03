@@ -46,11 +46,13 @@ export class XMLStoryParser {
         // First, clear previous AI highlights
         this.clearPreviousAIHighlights();
         
-        // Extract system commands first
-        result.systemCommands = this.extractSystemCommands(aiResponse);
+        // Extract system commands first (this also creates markers in the text)
+        const { commands, textWithMarkers } = this.extractSystemCommands(aiResponse);
+        result.systemCommands = commands;
+
         
-        // Extract story elements
-        const { elements, errors, cleanedText } = this.extractStoryElements(aiResponse, existingElements || new Map());
+        // Extract story elements (use the text with markers to preserve command positions)
+        const { elements, errors, cleanedText } = this.extractStoryElements(textWithMarkers, existingElements || new Map());
         result.extractedElements = elements;
         result.errors = errors;
         result.cleanedText = cleanedText;
@@ -63,33 +65,41 @@ export class XMLStoryParser {
     
     /**
      * Extract system commands like </refresh> and </outline_replace>
+     * Also replaces them with markers for in-place highlighting
      */
-    private extractSystemCommands(text: string): SystemCommand[] {
+    private extractSystemCommands(text: string): { commands: SystemCommand[], textWithMarkers: string } {
         const commands: SystemCommand[] = [];
+        let textWithMarkers = text;
+        let markerIndex = 0;
         
         // Handle outline_replace commands (with content between tags)
         const outlineReplaceRegex = /<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi;
         let outlineMatch;
-        while ((outlineMatch = outlineReplaceRegex.exec(text)) !== null) {
+        while ((outlineMatch = outlineReplaceRegex.exec(textWithMarkers)) !== null) {
             const content = outlineMatch[1] || '';
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
             commands.push({
                 type: 'outline_replace',
                 content: content.trim(),
-                timestamp: new Date()
+                timestamp: new Date(),
+                markerId
             });
+            
+            // Replace the command with a marker
+            textWithMarkers = textWithMarkers.replace(outlineMatch[0], markerId);
         }
         
-        // Handle edit commands with content between tags (new improved syntax)
+        // Handle edit commands with content between tags (new improved syntax)  
         const editCommandRegex = /<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
-        let editMatch;
-        while ((editMatch = editCommandRegex.exec(text)) !== null) {
-            const parametersText = editMatch[1] || '';
-            const content = editMatch[2] || '';
+        textWithMarkers = textWithMarkers.replace(editCommandRegex, (_match, parametersText, content) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
             
             const command: SystemCommand = {
                 type: 'edit',
                 content: content.trim(),
-                timestamp: new Date()
+                timestamp: new Date(),
+                markerId
             };
             
             // Parse parameters (like id="element_id")
@@ -98,35 +108,25 @@ export class XMLStoryParser {
             }
             
             commands.push(command);
-        }
+            return markerId;
+        });
         
         // Handle append commands
         const appendCommandRegex = /<append>\s*([\s\S]*?)\s*<\/append>/gi;
-        let appendMatch;
-        while ((appendMatch = appendCommandRegex.exec(text)) !== null) {
-            const content = appendMatch[1] || '';
+        textWithMarkers = textWithMarkers.replace(appendCommandRegex, (_match, content) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
             
             commands.push({
                 type: 'append',
                 content: content.trim(),
-                timestamp: new Date()
+                timestamp: new Date(),
+                markerId
             });
-        }
-        
-        // Handle replace_command with search/replace structure
-        const replaceCommandRegex = /<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi;
-        let replaceMatch;
-        while ((replaceMatch = replaceCommandRegex.exec(text)) !== null) {
-            const searchText = replaceMatch[1] || '';
-            const replaceText = replaceMatch[2] || '';
             
-            commands.push({
-                type: 'replace_command',
-                searchText: searchText.trim(),
-                replaceText: replaceText.trim(),
-                timestamp: new Date()
-            });
-        }
+            return markerId;
+        });
+        
+
         
         // Handle other system commands (self-closing) - excluding edit which is now handled above
         const systemCommandRegex = /<\/(refresh|delete|rename)(?:\s+([^>]*))?\s*>/gi;
@@ -150,7 +150,37 @@ export class XMLStoryParser {
             commands.push(command);
         }
         
-        return commands;
+        // Handle remaining simple commands (refresh, delete, rename)
+        const simpleCommandRegex = /<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi;
+        textWithMarkers = textWithMarkers.replace(simpleCommandRegex, (_match, commandType) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
+            commands.push({
+                type: commandType as 'refresh' | 'delete' | 'rename',
+                timestamp: new Date(),
+                markerId
+            });
+            
+            return markerId;
+        });
+
+        // Handle replace_command 
+        const replaceCommandRegex = /<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi;
+        textWithMarkers = textWithMarkers.replace(replaceCommandRegex, (_match, searchText, replaceText) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
+            commands.push({
+                type: 'replace_command',
+                searchText: searchText.trim(),
+                replaceText: replaceText.trim(),
+                timestamp: new Date(),
+                markerId
+            });
+            
+            return markerId;
+        });
+
+        return { commands, textWithMarkers };
     }
     
     /**
@@ -260,83 +290,37 @@ export class XMLStoryParser {
             }
         }
 
-        // Highlight executed system commands instead of removing them from cleaned text
-        cleanedText = cleanedText.replace(/<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi, (match) => {
-            return `<span class="xml-command-highlight" title="Executed command">${this.escapeHtml(match)}</span>`;
-        });
-        
-        // Highlight outline_replace tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi, (_match, content) => {
-            const escapedContent = this.escapeHtml(content.trim());
-            return `<div class="xml-command-highlight outline-replace-command" title="Outline replacement executed">
-                <strong>&lt;/outline_replace&gt;</strong>
-                <div class="command-content">${escapedContent}</div>
-                <strong>&lt;/outline_replace&gt;</strong>
-            </div>`;
-        });
-        
-        // Highlight edit tags and their content in cleaned text (new syntax)
-        cleanedText = cleanedText.replace(/<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi, (_match, params, content) => {
-            const escapedParams = this.escapeHtml(params);
-            const escapedContent = this.escapeHtml(content.trim());
-            return `<div class="xml-command-highlight edit-command" title="Edit command executed">
-                <strong>&lt;/edit ${escapedParams}&gt;</strong>
-                <div class="command-content">${escapedContent}</div>
-                <strong>&lt;/edit&gt;</strong>
-            </div>`;
-        });
-        
-        // Highlight append tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<append>\s*([\s\S]*?)\s*<\/append>/gi, (_match, content) => {
-            const escapedContent = this.escapeHtml(content.trim());
-            return `<div class="xml-command-highlight append-command" title="Append command executed">
-                <strong>&lt;append&gt;</strong>
-                <div class="command-content">${escapedContent}</div>
-                <strong>&lt;/append&gt;</strong>
-            </div>`;
-        });
-        
-        // Highlight replace_command tags and their content in cleaned text
-        cleanedText = cleanedText.replace(/<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi, (_match, searchText, replaceText) => {
-            const escapedSearch = this.escapeHtml(searchText.trim());
-            const escapedReplace = this.escapeHtml(replaceText.trim());
-            return `<div class="xml-command-highlight replace-command" title="Replace command executed">
-                <strong>&lt;replace_command&gt;</strong>
-                <div class="command-content">
-                    <div><strong>&lt;search&gt;</strong> ${escapedSearch} <strong>&lt;/search&gt;</strong></div>
-                    <div><strong>&lt;replace&gt;</strong> ${escapedReplace} <strong>&lt;/replace&gt;</strong></div>
-                </div>
-                <strong>&lt;/replace_command&gt;</strong>
-            </div>`;
-        });
-        
-        // Highlight context tags with content in cleaned text (new closing tag syntax)
-        cleanedText = cleanedText.replace(/<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi, (_match, tagName, params, content) => {
-            const escapedParams = this.escapeHtml(params);
-            const escapedContent = this.escapeHtml(content.trim());
-            return `<div class="xml-command-highlight context-command" title="${tagName} element created">
-                <strong>&lt;${tagName} ${escapedParams}&gt;</strong>
-                <div class="command-content">${escapedContent}</div>
-                <strong>&lt;/${tagName}&gt;</strong>
-            </div>`;
-        });
+        // Remove remaining XML commands from text but keep our markers
+        cleanedText = this.removeNonSystemXMLCommands(cleanedText);
 
         console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
         
-        return { elements, errors, cleanedText: cleanedText.trim() };
+        return { 
+            elements, 
+            errors, 
+            cleanedText: cleanedText.trim()
+        };
     }
     
+
+
     /**
-     * Escape HTML characters to prevent XSS and display issues
+     * Remove non-system XML commands (like context/outline tags) but keep system command markers
      */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+    private removeNonSystemXMLCommands(text: string): string {
+        const patterns = [
+            /<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi  // Only remove story element tags
+        ];
+
+        let cleanText = text;
+        for (const pattern of patterns) {
+            cleanText = cleanText.replace(pattern, '');
+        }
+
+        return cleanText.trim();
     }
+
+
     
     /**
      * Parse XML attributes from attribute string

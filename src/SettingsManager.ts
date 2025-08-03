@@ -14,6 +14,7 @@ import * as state from './state';
 export const SETTINGS_PROFILES_KEY = STORAGE_KEYS.SETTINGS_PROFILES;
 export const LAST_USED_PROFILE_KEY = STORAGE_KEYS.LAST_USED_PROFILE;
 export const AI_LOGGING_ENABLED_KEY = STORAGE_KEYS.AI_LOGGING_ENABLED;
+export const DEBUG_GENERATION_ENABLED_KEY = STORAGE_KEYS.DEBUG_GENERATION_ENABLED;
 
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
@@ -194,6 +195,7 @@ export class SettingsManager {
     private prompts: OrchestratorPrompts;
     private storageService: Promise<IStorageService>;
     private aiLoggingEnabled: boolean = false;
+    private debugGenerationEnabled: boolean = false;
     private hasVersionMismatch: boolean = false;
     private initialized: boolean = false;
     private globalLanguage: string = 'English'; // Global language setting
@@ -258,6 +260,7 @@ export class SettingsManager {
         await this.loadLastUsedProfile();
         await this.loadPrompts();
         await this.loadAILoggingSetting();
+        await this.loadDebugGenerationSetting();
         await this.loadGlobalLanguage();
     }
 
@@ -455,6 +458,24 @@ export class SettingsManager {
         } catch (error) {
             console.error('Failed to load AI logging setting from storage', error);
             this.aiLoggingEnabled = false;
+        }
+    }
+
+    private async loadDebugGenerationSetting(): Promise<void> {
+        try {
+            const storage = await this.storageService;
+            this.debugGenerationEnabled = await storage.get<boolean>(DEBUG_GENERATION_ENABLED_KEY) || false;
+            
+            // Update the global debug flag
+            const { setDebugStatelessGeneration } = await import('./constants');
+            setDebugStatelessGeneration(this.debugGenerationEnabled);
+        } catch (error) {
+            console.error('Failed to load debug generation setting from storage', error);
+            this.debugGenerationEnabled = false;
+            
+            // Ensure global flag is false on error
+            const { setDebugStatelessGeneration } = await import('./constants');
+            setDebugStatelessGeneration(false);
         }
     }
 
@@ -988,6 +1009,25 @@ export class SettingsManager {
             await storage.set(AI_LOGGING_ENABLED_KEY, enabled);
         } catch (error) {
             console.error('Failed to save AI logging setting to storage', error);
+        }
+    }
+
+    public isDebugGenerationEnabled(): boolean {
+        return this.debugGenerationEnabled;
+    }
+
+    public async setDebugGenerationEnabled(enabled: boolean): Promise<void> {
+        this.debugGenerationEnabled = enabled;
+        
+        // Update the global debug flag immediately
+        const { setDebugStatelessGeneration } = await import('./constants');
+        setDebugStatelessGeneration(enabled);
+        
+        try {
+            const storage = await this.storageService;
+            await storage.set(DEBUG_GENERATION_ENABLED_KEY, enabled);
+        } catch (error) {
+            console.error('Failed to save debug generation setting to storage', error);
         }
     }
 

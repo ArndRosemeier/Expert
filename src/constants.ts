@@ -8,6 +8,17 @@ export const DEFAULT_MAX_ITERATIONS = 3;
 export const MIN_MAX_ITERATIONS = 1;
 export const MAX_MAX_ITERATIONS = 10;
 
+// === Debug Settings ===
+// This will be dynamically set based on user settings
+export let DEBUG_STATELESS_GENERATION = false;
+
+/**
+ * Function to set the debug generation flag from settings
+ */
+export function setDebugStatelessGeneration(enabled: boolean): void {
+    DEBUG_STATELESS_GENERATION = enabled;
+}
+
 // === UI Configuration ===
 
 // === UI Icons ===
@@ -19,6 +30,7 @@ export const STORAGE_KEYS = {
     LAST_USED_PROFILE: 'expert_app_last_used_profile',
     PROMPTS: 'expert_app_prompts',
     AI_LOGGING_ENABLED: 'expert_app_ai_logging_enabled',
+    DEBUG_GENERATION_ENABLED: 'expert_app_debug_generation_enabled',
     CURRENT_PROJECT: 'expert_app_current_project',
     PROJECTS: 'expert_app_projects',
     ACTIVE_PROJECT: 'expert_app_active_project',

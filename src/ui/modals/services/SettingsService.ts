@@ -53,7 +53,7 @@ export interface MigrationAnalysis {
 }
 
 export interface SettingsChangeEvent {
-    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging';
+    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging' | 'debugGeneration';
     data: unknown;
 }
 
@@ -295,6 +295,25 @@ export class SettingsService {
         
         this.emitChange({
             type: 'aiLogging',
+            data: { enabled }
+        });
+    }
+
+    /**
+     * Gets debug generation status
+     */
+    public isDebugGenerationEnabled(): boolean {
+        return this.settingsManager.isDebugGenerationEnabled();
+    }
+
+    /**
+     * Sets debug generation status
+     */
+    public async setDebugGenerationEnabled(enabled: boolean): Promise<void> {
+        await this.settingsManager.setDebugGenerationEnabled(enabled);
+        
+        this.emitChange({
+            type: 'debugGeneration',
             data: { enabled }
         });
     }

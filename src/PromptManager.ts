@@ -234,12 +234,14 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             {{user_instruction}}
             ---
 
+            ---
+            {{transform_context}}
+            ---
+
             Original content to transform:
             ---
             {{content}}
             ---
-
-            {{transform_context}}
 
             CRITICAL FORMAT REQUIREMENTS:
             1. Create exactly {{transform_count}} transformations
@@ -250,6 +252,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             6. Each transformation should be a complete, standalone result based on the original content
             7. Do NOT include any text outside the transformation markers
             8. Do NOT add anything extra, no titles, nothing. Transformed texts will programmatically replace original text, so anything extra will be harmful.
+            9. Only transform the original content, the context is just for reference.
 
             EXACT FORMAT EXAMPLE:
             === TRANSFORMATION START ===
@@ -761,8 +764,6 @@ CRITICAL: Use exactly the section headers shown above. Base everything on the ac
 
     coherence_analysis: {
         text: `
-            Write your "justification" field in {{language}}. All JSON field names must always remain in English.
-            
             You are analyzing the coherence between an outline and its expanded content.
 
 Your goal is to be very critical. If in doubt, report the contradiction. Better too many contradictions than too few.
@@ -810,6 +811,7 @@ EXAMPLE:
     "severity": 7
   }
 ]
+Write your text in {{language}}. All JSON field names must always remain in English.
 
 JSON Response:`.trim(),
         placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],

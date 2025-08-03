@@ -762,8 +762,8 @@ export class XMLStoryModal extends BaseModal {
                     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
                     font-size: 0.85rem;
                     color: #2c3e50;
-                    position: relative;
-                    overflow: hidden;
+                    display: block;
+                    isolation: isolate;
                 }
                 
                 .xml-command-highlight strong {
@@ -865,6 +865,43 @@ export class XMLStoryModal extends BaseModal {
                     margin: 0 0.2rem;
                     font-size: 0.8rem;
                     border-radius: 4px;
+                }
+                
+                /* Ensure content after XML highlights returns to normal styling */
+                .xml-command-highlight + * {
+                    background: initial !important;
+                    color: initial !important;
+                    border: initial !important;
+                    font-family: initial !important;
+                    font-size: initial !important;
+                    padding: initial !important;
+                    margin: initial !important;
+                }
+                
+                /* Reset any potential bleeding from XML highlights */
+                .message-content {
+                    position: relative;
+                    isolation: isolate;
+                }
+                
+                .message-content > * {
+                    isolation: isolate;
+                }
+                
+                /* Clean XML command styling with proper separation */
+                .xml-commands-container {
+                    margin-bottom: 1rem;
+                    border-bottom: 1px solid rgba(0, 123, 255, 0.1);
+                    padding-bottom: 0.5rem;
+                }
+                
+                .clean-content {
+                    /* Ensure clean content has normal styling */
+                    background: transparent;
+                    color: inherit;
+                    font-family: inherit;
+                    font-size: inherit;
+                    line-height: inherit;
                 }
             </style>
 
@@ -1207,8 +1244,12 @@ export class XMLStoryModal extends BaseModal {
                     }
                 }
 
-                // Update the streaming message with cleaned text (XML tags removed)
-                this.updateStreamingMessage(placeholderMessage, parseResult.cleanedText);
+                // Update the streaming message with cleaned text and XML highlighting
+                const formattedContent = this.applyXMLHighlighting(
+                    this.parseMarkdownForChat(parseResult.cleanedText), 
+                    parseResult.systemCommands
+                );
+                this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
                 this.finalizeStreamingMessage(placeholderMessage);
 
                 // Add AI response to conversation history
@@ -1333,35 +1374,38 @@ export class XMLStoryModal extends BaseModal {
     }
 
     /**
+     * Update streaming message with pre-formatted HTML content
+     */
+    private updateStreamingMessageWithHTML(messageElement: HTMLElement, htmlContent: string): void {
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (!contentDiv) return;
+        
+        // Preserve streaming cursor
+        const streamingCursor = contentDiv.querySelector('.streaming-cursor');
+        
+        // Set HTML content directly
+        contentDiv.innerHTML = htmlContent;
+        
+        // Re-add streaming cursor
+        if (streamingCursor) {
+            contentDiv.appendChild(streamingCursor);
+        }
+        
+        // Auto scroll to bottom to follow the streaming content
+        if (this.messagesContainer) {
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        }
+    }
+
+    /**
      * Simple markdown parser for chat messages
-     * Handles basic formatting without being too heavy for real-time streaming
-     * Preserves XML command highlights that are already formatted as HTML
+     * Handles basic formatting and applies XML highlighting cleanly
      */
     private parseMarkdownForChat(text: string): string {
         if (!text) return '';
         
-        // First, temporarily replace XML command highlights to protect them from HTML escaping
-        const xmlCommandPlaceholders: string[] = [];
-        let protectedText = text;
-        
-        // Find and replace XML command highlights with placeholders
-        const xmlCommandRegex = /<div class="xml-command-highlight[^>]*>[\s\S]*?<\/div>/gi;
-        protectedText = protectedText.replace(xmlCommandRegex, (match) => {
-            const placeholder = `__XML_COMMAND_${xmlCommandPlaceholders.length}__`;
-            xmlCommandPlaceholders.push(match);
-            return placeholder;
-        });
-        
-        // Also protect inline XML command highlights
-        const inlineXmlCommandRegex = /<span class="xml-command-highlight[^>]*>[\s\S]*?<\/span>/gi;
-        protectedText = protectedText.replace(inlineXmlCommandRegex, (match) => {
-            const placeholder = `__XML_COMMAND_${xmlCommandPlaceholders.length}__`;
-            xmlCommandPlaceholders.push(match);
-            return placeholder;
-        });
-        
-        // Escape HTML to prevent XSS (but XML commands are now protected)
-        let html = protectedText
+        // Escape HTML to prevent XSS
+        let html = text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -1380,13 +1424,103 @@ export class XMLStoryModal extends BaseModal {
         // Inline code `text`
         html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');
         
-        // Restore XML command highlights
-        xmlCommandPlaceholders.forEach((originalCommand, index) => {
-            const placeholder = `__XML_COMMAND_${index}__`;
-            html = html.replace(placeholder, originalCommand);
-        });
-        
         return html;
+    }
+
+    /**
+     * Apply XML command highlighting by replacing markers with highlighted commands
+     */
+    private applyXMLHighlighting(cleanContent: string, systemCommands?: any[]): string {
+        if (!systemCommands || systemCommands.length === 0) {
+            return cleanContent;
+        }
+
+        let result = cleanContent;
+
+        // Replace each marker with its corresponding highlighted command
+        systemCommands.forEach((cmd) => {
+            if (cmd.markerId) {
+                const highlightHtml = this.createSystemCommandHighlight(cmd);
+                result = result.replace(cmd.markerId, highlightHtml);
+            }
+        });
+
+        // If there are any commands without markers (shouldn't happen), add them at the end as fallback
+        const unmarkedCommands = systemCommands.filter(cmd => !cmd.markerId || result.includes(cmd.markerId));
+        if (unmarkedCommands.length > 0) {
+            const fallbackSection = `
+                <div class="xml-commands-container" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 0.9em; color: #888; margin-bottom: 0.5rem; font-style: italic;">Additional executed XML-commands:</div>
+                    ${unmarkedCommands.map(cmd => this.createSystemCommandHighlight(cmd)).join('')}
+                </div>
+            `;
+            result += fallbackSection;
+        }
+
+        return `<div class="clean-content">${result}</div>`;
+    }
+
+    /**
+     * Create HTML for a single system command highlight
+     */
+    private createSystemCommandHighlight(command: any): string {
+        const escapeHtml = (text: string) => text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        switch (command.type) {
+            case 'refresh':
+            case 'delete':
+            case 'rename':
+                return `<div class="xml-command-highlight" title="Executed command">
+                    &lt;/${command.type}&gt;
+                </div>`;
+                
+            case 'outline_replace':
+                const content = command.content || '';
+                return `<div class="xml-command-highlight outline-replace-command" title="Outline replacement executed">
+                    <strong>&lt;/outline_replace&gt;</strong>
+                    <div class="command-content">${escapeHtml(content.trim())}</div>
+                    <strong>&lt;/outline_replace&gt;</strong>
+                </div>`;
+                
+            case 'edit':
+                const params = command.parameters ? Object.entries(command.parameters).map(([k,v]) => `${k}="${v}"`).join(' ') : '';
+                const editContent = command.content || '';
+                return `<div class="xml-command-highlight edit-command" title="Edit command executed">
+                    <strong>&lt;/edit ${escapeHtml(params)}&gt;</strong>
+                    <div class="command-content">${escapeHtml(editContent.trim())}</div>
+                    <strong>&lt;/edit&gt;</strong>
+                </div>`;
+                
+            case 'append':
+                const appendContent = command.content || '';
+                return `<div class="xml-command-highlight append-command" title="Append command executed">
+                    <strong>&lt;append&gt;</strong>
+                    <div class="command-content">${escapeHtml(appendContent.trim())}</div>
+                    <strong>&lt;/append&gt;</strong>
+                </div>`;
+                
+            case 'replace_command':
+                const searchText = command.searchText || '';
+                const replaceText = command.replaceText || '';
+                return `<div class="xml-command-highlight replace-command" title="Replace command executed">
+                    <strong>&lt;replace_command&gt;</strong>
+                    <div class="command-content">
+                        <div><strong>&lt;search&gt;</strong> ${escapeHtml(searchText.trim())} <strong>&lt;/search&gt;</strong></div>
+                        <div><strong>&lt;replace&gt;</strong> ${escapeHtml(replaceText.trim())} <strong>&lt;/replace&gt;</strong></div>
+                    </div>
+                    <strong>&lt;/replace_command&gt;</strong>
+                </div>`;
+                
+            default:
+                return `<div class="xml-command-highlight" title="Unknown command: ${command.type}">
+                    &lt;/${command.type}&gt;
+                </div>`;
+        }
     }
 
     /**
@@ -1924,8 +2058,12 @@ export class XMLStoryModal extends BaseModal {
                     }
                 }
                 
-                // Update message with cleaned text
-                this.updateStreamingMessage(placeholderMessage, parseResult.cleanedText);
+                // Update message with cleaned text and XML highlighting
+                const formattedContent = this.applyXMLHighlighting(
+                    this.parseMarkdownForChat(parseResult.cleanedText), 
+                    parseResult.systemCommands
+                );
+                this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
                 this.finalizeStreamingMessage(placeholderMessage);
                 
                 // Add to conversation history

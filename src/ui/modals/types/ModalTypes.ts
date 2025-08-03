@@ -167,7 +167,7 @@ export interface ProfileActionEvent {
  * Settings change events
  */
 export interface SettingsChangeEvent {
-    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging';
+    type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging' | 'debugGeneration';
     data: any;
 }
 

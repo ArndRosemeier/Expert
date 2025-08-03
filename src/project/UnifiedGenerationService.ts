@@ -17,6 +17,7 @@ import { LoopProgress } from '../LoopOrchestrator';
 import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
 import { getProjects } from '../state';
+import { DEBUG_STATELESS_GENERATION } from '../constants';
 
 /**
  * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
@@ -395,11 +396,24 @@ export class UnifiedGenerationService {
         
         // Keep looping until no more work can be done or abort is requested
         let workDone = true;
+        let iterationCount = 0;
         while (workDone && !this.abortRequested) {
             workDone = false;
+            iterationCount++;
+            
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`\n🔄 STATELESS DEBUG: === ITERATION ${iterationCount} ===`);
+            }
             
             // Collect starting node and ALL its descendants in breadth-first order
             const allNodes = this.collectAllDescendants(startNodeId);
+            
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`📊 STATELESS DEBUG: Found ${allNodes.length} nodes in tree:`);
+                allNodes.forEach(node => {
+                    console.log(`   - "${node.title}" (level ${node.level}, children: ${node.children.length})`);
+                });
+            }
             
             // Find the actual maximum level that exists in the tree
             const actualMaxLevel = Math.max(maxGenerationLevel, ...allNodes.map(node => node.level));
@@ -409,6 +423,10 @@ export class UnifiedGenerationService {
             
             // Find the first node that needs work and do exactly one operation
             // This ensures completely stateless behavior - no temporal coupling
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`🔍 STATELESS DEBUG: Scanning nodes for work...`);
+            }
+            
             for (const node of allNodes) {
                 const targetState = targetStates[node.level];
                 if (!targetState) {
@@ -423,6 +441,9 @@ export class UnifiedGenerationService {
                 
                 // Priority 1: Context pruning
                 if (workNeeded.contextPruning) {
+                    if (DEBUG_STATELESS_GENERATION) {
+                        console.log(`✅ STATELESS DEBUG: Performing context pruning on "${node.title}"`);
+                    }
                     await this.handleContextPruning(node.id, levels.frozenSettings.language);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
@@ -430,35 +451,69 @@ export class UnifiedGenerationService {
                 
                 // Priority 2: Content generation
                 if (workNeeded.contentGeneration) {
+                    if (DEBUG_STATELESS_GENERATION) {
+                        console.log(`✅ STATELESS DEBUG: Performing content generation on "${node.title}"`);
+                    }
                     await this.handleContentGeneration(node.id);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
                 
-                // Priority 3: Coherence check (only for last sibling)
+                // Priority 3: Coherence check (only for last child of parent)
                 if (workNeeded.coherenceCheck) {
-                    if (this.isLastSibling(node)) {
-                        if (node.parentId) {
+                    const isLastChild = this.isLastChild(node);
+                    if (isLastChild && node.parentId) {
+                        // Check if ALL siblings need coherence check and are ready for it
+                        const shouldTriggerCoherence = this.shouldTriggerCoherenceCheck(node, targetState);
+                        if (shouldTriggerCoherence) {
+                            if (DEBUG_STATELESS_GENERATION) {
+                                console.log(`✅ STATELESS DEBUG: Performing coherence check on "${node.title}" (last child, all siblings ready)`);
+                            }
                             await this.handleCoherenceCheck(node.parentId, levels);
                             workDone = true;
                             break; // Exit immediately - fresh assessment next iteration
+                        } else if (DEBUG_STATELESS_GENERATION) {
+                            console.log(`⏳ STATELESS DEBUG: "${node.title}" is last child but not all siblings ready for coherence check`);
+                        }
+                    } else if (DEBUG_STATELESS_GENERATION) {
+                        if (!isLastChild) {
+                            console.log(`⏳ STATELESS DEBUG: "${node.title}" needs coherence check but is not last child of parent`);
+                        } else {
+                            console.log(`⏳ STATELESS DEBUG: "${node.title}" needs coherence check but has no parent`);
                         }
                     }
                 }
                 
                 // Priority 4: Expansion
                 if (workNeeded.expansion) {
+                    if (DEBUG_STATELESS_GENERATION) {
+                        console.log(`🔍 STATELESS DEBUG: Checking if "${node.title}" can expand...`);
+                    }
                     const canExpand = this.canNodeExpand(node, targetState, startNodeId);
                     if (canExpand) {
+                        if (DEBUG_STATELESS_GENERATION) {
+                            console.log(`✅ STATELESS DEBUG: Performing expansion on "${node.title}"`);
+                        }
                         const expansionResult = await this.handleDraftCreation(node.id);
                         if (expansionResult.childrenCreated) {
                             workDone = true;
                             break; // Exit immediately - fresh assessment next iteration
                         }
+                    } else if (DEBUG_STATELESS_GENERATION) {
+                        console.log(`❌ STATELESS DEBUG: "${node.title}" cannot expand (siblings not ready)`);
                     }
                 }
             }
             
+            if (DEBUG_STATELESS_GENERATION) {
+                if (!workDone) {
+                    console.log(`🏁 STATELESS DEBUG: No work found in iteration ${iterationCount}. Generation complete.`);
+                }
+            }
+        }
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🎉 STATELESS DEBUG: Generation finished after ${iterationCount} iterations.`);
         }
         
         // Log graceful exit if aborted
@@ -477,6 +532,12 @@ export class UnifiedGenerationService {
         // Calculate the maximum level that should receive any work based on generation parameters
         const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
         
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🎯 STATELESS DEBUG: calculateTargetStates called`);
+            console.log(`   Generation levels: draft=${levels.draftLevel}, content=${levels.contentLevel}, contextPrune=${levels.contextPruneLevel}, coherence=${levels.coherenceLevel}`);
+            console.log(`   Processing levels: ${minLevel} to ${maxLevel} (maxGenerationLevel=${maxGenerationLevel})`);
+        }
+        
         for (let level = minLevel; level <= maxLevel; level++) {
             if (level <= maxGenerationLevel) {
                 // Within generation parameters - apply normal rules
@@ -491,6 +552,11 @@ export class UnifiedGenerationService {
                     canExpand: level < levels.draftLevel
                 };
                 
+                if (DEBUG_STATELESS_GENERATION) {
+                    const state = targetStates[level];
+                    console.log(`   Level ${level}: contextPruning=${state!.needsContextPruning}, content=${state!.needsContent}, coherence=${state!.needsCoherenceCheck}, canExpand=${state!.canExpand}`);
+                }
+                
 
             } else {
                 // Beyond generation parameters - create "do nothing" target state
@@ -502,6 +568,10 @@ export class UnifiedGenerationService {
                     needsCoherenceCheck: false,
                     canExpand: false // Don't expand beyond what user requested
                 };
+                
+                if (DEBUG_STATELESS_GENERATION) {
+                    console.log(`   Level ${level}: (beyond generation params) all=false`);
+                }
             }
         }
         
@@ -514,12 +584,20 @@ export class UnifiedGenerationService {
     private getNodeCurrentState(node: DocumentNode): CurrentState {
         const masterVersion = node.getMasterVersion();
         
-        return {
+        const state = {
             hasContextPruning: node.ContextIsAdjusted(),
             hasContent: this.nodeHasContent(node),
             hasCoherenceCheck: masterVersion?.tags.has('consistent_to_parent') || false,
             hasChildren: node.children.length > 0
         };
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🔍 STATELESS DEBUG: Current state of "${node.title}" (level ${node.level}):`);
+            console.log(`   contextPruning=${state.hasContextPruning}, content=${state.hasContent}, coherence=${state.hasCoherenceCheck}, children=${state.hasChildren} (count: ${node.children.length})`);
+            console.log(`   nodeState=${node.getState()}, tags=${Array.from(masterVersion?.tags || []).join(',')}`);
+        }
+        
+        return state;
     }
 
     /**
@@ -528,12 +606,27 @@ export class UnifiedGenerationService {
     private getWorkNeeded(node: DocumentNode, targetState: TargetState): WorkNeeded {
         const currentState = this.getNodeCurrentState(node);
         
-        return {
+        const workNeeded = {
             contextPruning: targetState.needsContextPruning && !currentState.hasContextPruning,
             contentGeneration: targetState.needsContent && !currentState.hasContent,
             coherenceCheck: targetState.needsCoherenceCheck && !currentState.hasCoherenceCheck,
             expansion: targetState.canExpand && !currentState.hasChildren
         };
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`⚡ STATELESS DEBUG: Work needed for "${node.title}" (level ${node.level}):`);
+            console.log(`   Target state: contextPruning=${targetState.needsContextPruning}, content=${targetState.needsContent}, coherence=${targetState.needsCoherenceCheck}, canExpand=${targetState.canExpand}`);
+            console.log(`   Current state: contextPruning=${currentState.hasContextPruning}, content=${currentState.hasContent}, coherence=${currentState.hasCoherenceCheck}, children=${currentState.hasChildren}`);
+            console.log(`   Work needed: contextPruning=${workNeeded.contextPruning}, contentGeneration=${workNeeded.contentGeneration}, coherenceCheck=${workNeeded.coherenceCheck}, expansion=${workNeeded.expansion}`);
+            
+            // Extra details for content generation since that's the user's issue
+            if (targetState.needsContent) {
+                const reason = currentState.hasContent ? "already has content" : "needs content generation";
+                console.log(`   Content analysis: ${reason} (nodeHasContent=${currentState.hasContent})`);
+            }
+        }
+        
+        return workNeeded;
     }
 
     /**
@@ -541,10 +634,20 @@ export class UnifiedGenerationService {
      * Recalculates current descendants to avoid race conditions from stale data
      */
     private canNodeExpand(node: DocumentNode, targetState: TargetState, startNodeId: string): boolean {
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🎛️  STATELESS DEBUG: canNodeExpand check for "${node.title}" (level ${node.level})`);
+        }
+        
         if (!targetState.canExpand) {
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`   ❌ Target state does not allow expansion (canExpand=false)`);
+            }
             return false;
         }
         if (node.children.length > 0) {
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`   ❌ Node already has ${node.children.length} children`);
+            }
             return false;
         }
         
@@ -555,35 +658,131 @@ export class UnifiedGenerationService {
         // Get all siblings at the same level from the CURRENT tree state
         const siblings = currentAllNodes.filter(n => n.level === node.level);
         
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`   📋 Found ${siblings.length} siblings at level ${node.level}:`);
+            siblings.forEach(sibling => {
+                console.log(`      - "${sibling.title}"`);
+            });
+        }
+        
         // Check if all siblings have reached their target state
+        const siblingStates: Array<{name: string, isReady: boolean, workNeeded: any}> = [];
         const allSiblingsReady = siblings.every(sibling => {
             const siblingWorkNeeded = this.getWorkNeeded(sibling, targetState);
             const isReady = !siblingWorkNeeded.contextPruning && 
                            !siblingWorkNeeded.contentGeneration && 
                            !siblingWorkNeeded.coherenceCheck;
+            
+            siblingStates.push({
+                name: sibling.title,
+                isReady,
+                workNeeded: siblingWorkNeeded
+            });
+            
             return isReady;
         });
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`   🔍 Sibling readiness check:`);
+            siblingStates.forEach(state => {
+                const workTypes = [];
+                if (state.workNeeded.contextPruning) workTypes.push('contextPruning');
+                if (state.workNeeded.contentGeneration) workTypes.push('contentGeneration');
+                if (state.workNeeded.coherenceCheck) workTypes.push('coherenceCheck');
+                const workStr = workTypes.length > 0 ? `needs: [${workTypes.join(', ')}]` : 'ready';
+                
+                console.log(`      "${state.name}": ${state.isReady ? '✅' : '❌'} ${workStr}`);
+            });
+            console.log(`   Result: ${allSiblingsReady ? '✅ All siblings ready - can expand' : '❌ Some siblings not ready - cannot expand'}`);
+        }
+        
         return allSiblingsReady;
     }
 
     /**
-     * Check if a node is the last sibling (for coherence check trigger)
+     * Check if a node is the last child of its parent (for coherence check trigger)
+     * This checks the actual tree structure, not the generation scope
      */
-    private isLastSibling(node: DocumentNode): boolean {
+    private isLastChild(node: DocumentNode): boolean {
         if (!node.parentId) return false;
         
         const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-        if (!parentNode) throw new Error(`Parent node not found for isLastSibling check: ${node.parentId}`);
+        if (!parentNode) {
+            if (DEBUG_STATELESS_GENERATION) {
+                console.log(`❌ STATELESS DEBUG: Parent node not found for isLastChild check: ${node.parentId}`);
+            }
+            return false;
+        }
         
-        const siblings = parentNode.children;
-        return siblings.length > 0 && siblings[siblings.length - 1]?.id === node.id;
+        const allChildren = parentNode.children;
+        const isLast = allChildren.length > 0 && allChildren[allChildren.length - 1]?.id === node.id;
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🔍 STATELESS DEBUG: isLastChild check for "${node.title}"`);
+            console.log(`   Parent: "${parentNode.title}", All children: ${allChildren.map(c => c.title).join(', ')}`);
+            console.log(`   Result: ${isLast ? '✅ Is last child' : '❌ Not last child'}`);
+        }
+        
+        return isLast;
     }
+
+    /**
+     * Check if coherence check should be triggered for a parent
+     * This checks if all siblings need coherence and if any are missing the consistent_to_parent tag
+     */
+    private shouldTriggerCoherenceCheck(lastChild: DocumentNode, targetState: TargetState): boolean {
+        if (!lastChild.parentId) return false;
+        
+        const parentNode = this.deps.treeService.findNodeById(lastChild.parentId, this.deps.rootNode);
+        if (!parentNode) return false;
+        
+        const allChildren = parentNode.children;
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`🔍 STATELESS DEBUG: shouldTriggerCoherenceCheck for parent "${parentNode.title}"`);
+            console.log(`   All children: ${allChildren.map(c => c.title).join(', ')}`);
+        }
+        
+        // Check each child: does it need coherence check and is it missing the tag?
+        let needsCoherenceCheck = false;
+        
+        for (const child of allChildren) {
+            // Check if this child should have coherence according to target state
+            const childTargetState = targetState; // All siblings have same target state
+            if (childTargetState.needsCoherenceCheck) {
+                const masterVersion = child.getMasterVersion();
+                const hasCoherenceTag = masterVersion?.tags.has('consistent_to_parent') || false;
+                
+                if (DEBUG_STATELESS_GENERATION) {
+                    console.log(`   Child "${child.title}": needsCoherence=${childTargetState.needsCoherenceCheck}, hasTag=${hasCoherenceTag}`);
+                }
+                
+                if (!hasCoherenceTag) {
+                    needsCoherenceCheck = true;
+                }
+            }
+        }
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`   Result: ${needsCoherenceCheck ? '✅ Coherence check needed' : '❌ All children already have coherence tag'}`);
+        }
+        
+        return needsCoherenceCheck;
+    }
+
+
 
     /**
      * Check if node has meaningful content
      */
     private nodeHasContent(node: DocumentNode): boolean {
-        return node.getState() === 'Final';
+        const hasContent = node.getState() === 'Final';
+        
+        if (DEBUG_STATELESS_GENERATION) {
+            console.log(`📝 STATELESS DEBUG: nodeHasContent check for "${node.title}": ${hasContent} (state="${node.getState()}")`);
+        }
+        
+        return hasContent;
     }
 
     /**

@@ -12,7 +12,7 @@ import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 // TODO: Migrate to new modal system
 // These functions are maintained for backward compatibility during migration
 
-import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal, showGenericModal } from './modals/index';
+import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal } from './modals/index';
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
 export function openGenericModal(content: string, onOpen?: () => void) {
@@ -1166,35 +1166,126 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
         ]
     };
     
-    modalInstance = showGenericModal(content, {}, { 
-        onOpen: () => {
-            // Set focus to the depth selector
-            const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
-            if (chatDepth) {
-                chatDepth.focus();
-            }
-            
-            // Setup content preview functionality
-            const previewContentBtn = document.getElementById('preview-content-btn') as HTMLButtonElement;
-            const contentPreviewContainer = document.getElementById('content-preview-container');
-            const contentPreviewContent = document.getElementById('content-preview-content');
-            
-            if (previewContentBtn && contentPreviewContainer && contentPreviewContent) {
-                previewContentBtn.addEventListener('click', () => {
-                    try {
-                        const depth = parseInt(chatDepth.value);
-                        const contextService = projectManager.getContextExtractionService();
-                        const preview = contextService.getChatContentPreview(node, depth);
-                        
-                        contentPreviewContent.textContent = preview.summary;
-                        contentPreviewContainer.style.display = 'block';
-                    } catch (error: any) {
-                        console.error('Error in content preview:', error);
-                        alert('Error generating content preview: ' + error.message);
-                    }
-                });
-            }
+    // DON'T use showGenericModal to avoid triggering modal system's closeAll()
+    // which would close XMLStoryModal and trigger unsaved changes warning
+    
+    // Create custom overlay instead
+    const modalOverlay = document.createElement('div');
+    modalOverlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.5); z-index: 1000;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    
+    const modalDiv = document.createElement('div');
+    modalDiv.style.cssText = `
+        background: white; border-radius: 12px; max-width: 600px; width: 90%;
+        max-height: 80vh; overflow-y: auto; padding: 2rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    `;
+    modalDiv.innerHTML = content.content;
+    modalOverlay.appendChild(modalDiv);
+    document.body.appendChild(modalOverlay);
+    
+    const closeModal = () => {
+        if (document.body.contains(modalOverlay)) {
+            document.body.removeChild(modalOverlay);
         }
+    };
+    
+    // Set focus to the depth selector
+    const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
+    if (chatDepth) {
+        chatDepth.focus();
+    }
+    
+    // Setup content preview functionality
+    const previewContentBtn = document.getElementById('preview-content-btn') as HTMLButtonElement;
+    const contentPreviewContainer = document.getElementById('content-preview-container');
+    const contentPreviewContent = document.getElementById('content-preview-content');
+    
+    if (previewContentBtn && contentPreviewContainer && contentPreviewContent) {
+        previewContentBtn.addEventListener('click', () => {
+            try {
+                const depth = parseInt(chatDepth.value);
+                const contextService = projectManager.getContextExtractionService();
+                const preview = contextService.getChatContentPreview(node, depth);
+                
+                contentPreviewContent.textContent = preview.summary;
+                contentPreviewContainer.style.display = 'block';
+            } catch (error: any) {
+                console.error('Error in content preview:', error);
+                alert('Error generating content preview: ' + error.message);
+            }
+        });
+    }
+    
+    // Setup action buttons
+    const cancelBtn = modalDiv.querySelector('#cancel-btn') || modalDiv.querySelector('button[id*="cancel"]');
+    const startChatBtn = modalDiv.querySelector('#start-chat-btn') || modalDiv.querySelector('button[id*="start"]');
+    
+    cancelBtn?.addEventListener('click', closeModal);
+    
+    startChatBtn?.addEventListener('click', async () => {
+        const depth = parseInt(chatDepth.value);
+        try {
+            const contextService = projectManager.getContextExtractionService();
+            
+            // Validate chat context parameters and show warnings if needed
+            const validation = contextService.validateChatContextParameters(node, depth);
+            
+            if (validation.errors.length > 0) {
+                alert('Validation errors:\n\n' + validation.errors.join('\n'));
+                return;
+            }
+            
+            // Show warnings and ask for confirmation
+            if (validation.warnings.length > 0) {
+                const warningMessage = 'Content Size Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?\n\nNote: Large contexts may result in higher costs and slower responses.';
+                if (!confirm(warningMessage)) {
+                    return;
+                }
+            }
+            
+            // Create the tree data structure (string representation for prompt)
+            const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
+            
+            // Create depth-limited node structure for roleplay functionality
+            const depthLimitedNode = contextService.createDepthLimitedNodeStructure(node, depth);
+            
+            // Get the node chat system prompt
+            const prompts = projectManager.getSettingsManager().getPrompts();
+            const promptContext = PromptContextBuilder.forUI(projectManager.getSettingsManager(), {
+                nodeData: treeData
+            });
+            // Create chat system prompt
+            const activeProject = state.getActiveProject();
+            if (!activeProject) {
+                throw new Error('No active project for chat');
+            }
+            const settingsManager = activeProject.getSettingsManager();
+            const expansionService = createPromptExpansionService(settingsManager);
+            const systemPrompt = expansionService.expandPrompt(prompts.node_chat_system, promptContext);
+            
+            closeModal();
+            void openNodeChatInterface(projectManager, systemPrompt, node.title, depthLimitedNode);
+            
+        } catch (error: any) {
+            alert('Error preparing chat:\n\n' + error.message);
+        }
+    });
+    
+    // ESC key and click outside to close
+    const escapeHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) closeModal();
     });
 }
 

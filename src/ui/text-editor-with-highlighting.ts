@@ -704,6 +704,11 @@ export class TextEditorWithHighlighting {
         
         if (!sel) return;
         
+        // Check if the element is still in the DOM to avoid "range isn't in document" warnings
+        if (!this.editableDiv.isConnected) {
+            return;
+        }
+        
         // Find the correct text node and position for the offset
         let currentNode: Node | null = null;
         let currentOffset = 0;
@@ -840,9 +845,12 @@ export class TextEditorWithHighlighting {
                 const safeOffset = Math.min(positionToRestore, textLength);
                 
                 setTimeout(() => {
-                    this.setCaretPosition(safeOffset);
-                    if (this.savedCursorPosition > 0) {
-                        this.savedCursorPosition = -1;
+                    // Additional safety check before setTimeout callback
+                    if (this.editableDiv.isConnected) {
+                        this.setCaretPosition(safeOffset);
+                        if (this.savedCursorPosition > 0) {
+                            this.savedCursorPosition = -1;
+                        }
                     }
                 }, 0);
             }

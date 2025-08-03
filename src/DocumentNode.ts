@@ -114,6 +114,9 @@ export class DocumentNode {
     // --- Todo Items ---
     todos: TodoItem[] = [];
 
+    // --- User Notes ---
+    notes: string = '';
+
     constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
@@ -130,6 +133,7 @@ export class DocumentNode {
         this.collapsed = false; // Initialize as expanded
         this.overviewBoardCache = new Map(); // Initialize cache
         this.lastGenerationParameters = null; // Initialize as null
+        this.notes = ''; // Initialize notes as empty string
         
         // Create initial master version
         const initialVersion = {
@@ -219,7 +223,8 @@ export class DocumentNode {
             })),
             overviewBoardCache: Array.from(this.overviewBoardCache.entries()), // Convert Map to Array for JSON
             lastGenerationParameters: this.lastGenerationParameters,
-            todos: this.todos
+            todos: this.todos,
+            notes: this.notes
         };
     }
 
@@ -349,6 +354,9 @@ export class DocumentNode {
         
         // Restore last generation parameters
         node.lastGenerationParameters = data.lastGenerationParameters || null;
+        
+        // Restore notes
+        node.notes = data.notes || '';
         
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {

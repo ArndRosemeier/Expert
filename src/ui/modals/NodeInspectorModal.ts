@@ -764,6 +764,13 @@ export class NodeInspectorModal extends BaseModal {
                         <textarea class="context-editor auto-resize" id="inspector-context-editor" placeholder="Enter context...">${this.escapeHtml(version.context || '')}</textarea>
                     </div>
                 </div>
+                
+                <div class="version-section">
+                    <h4 class="section-title">Notes</h4>
+                    <div class="section-content">
+                        <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${this.escapeHtml(this.node?.notes || '')}</textarea>
+                    </div>
+                </div>
                 </div>
 
             `;
@@ -957,6 +964,7 @@ export class NodeInspectorModal extends BaseModal {
         const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
         const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
         const contextEditor = document.getElementById('inspector-context-editor') as HTMLTextAreaElement;
+        const notesEditor = document.getElementById('inspector-notes-editor') as HTMLTextAreaElement;
 
         // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
         if (contentEditor) {
@@ -981,6 +989,20 @@ export class NodeInspectorModal extends BaseModal {
             // Add blur event listener using standard DOM API - should work exactly like before
             enhancedContextEditor.addEventListener('blur', async () => {
                 this.saveContext(enhancedContextEditor.value);
+                // Update external UI only when editing is finished
+                await this.persistNodeChanges();
+            });
+        }
+
+        // Upgrade notes textarea to enhanced UniversalTextEditor - Drop-in replacement!
+        if (notesEditor) {
+            const enhancedNotesEditor = UniversalTextEditor.replace(notesEditor, {
+                mode: 'enhanced'  // Enable AI features for notes editing too
+            });
+            
+            // Add blur event listener using standard DOM API - should work exactly like before
+            enhancedNotesEditor.addEventListener('blur', async () => {
+                this.saveNotes(enhancedNotesEditor.value);
                 // Update external UI only when editing is finished
                 await this.persistNodeChanges();
             });
@@ -1079,6 +1101,18 @@ export class NodeInspectorModal extends BaseModal {
             }
         } catch (error) {
             console.error('Failed to save context:', error);
+        }
+    }
+
+    private saveNotes(newNotes: string): void {
+        if (!this.node) return;
+
+        try {
+            // Notes are stored directly on the node, not in versions
+            // since they are user notes about the node itself
+            this.node.notes = newNotes;
+        } catch (error) {
+            console.error('Failed to save notes:', error);
         }
     }
 

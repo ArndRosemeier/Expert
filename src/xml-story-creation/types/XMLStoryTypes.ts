@@ -56,6 +56,7 @@ export interface SystemCommand {
     searchText?: string; // For replace_command: what to search for
     replaceText?: string; // For replace_command: what to replace with
     timestamp: Date;
+    markerId?: string; // Unique marker ID for positioning in text
 }
 
 export interface ParseError {

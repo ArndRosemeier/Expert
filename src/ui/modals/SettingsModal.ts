@@ -50,6 +50,7 @@ export class SettingsModal extends BaseModal {
     private unsavedIndicator?: HTMLElement;
     private currentProfileDisplay?: HTMLElement;
     private aiLoggingCheckbox?: HTMLInputElement;
+    private debugGenerationCheckbox?: HTMLInputElement;
 
     constructor(config: SettingsModalConfig) {
         super({
@@ -198,6 +199,10 @@ export class SettingsModal extends BaseModal {
         // AI Logging Section
         const loggingSection = this.createLoggingSection();
         body.appendChild(loggingSection);
+
+        // Debug Generation Section  
+        const debugSection = this.createDebugSection();
+        body.appendChild(debugSection);
 
         return body;
     }
@@ -465,6 +470,56 @@ export class SettingsModal extends BaseModal {
     }
 
     /**
+     * Creates the debug generation section
+     */
+    private createDebugSection(): HTMLElement {
+        const section = createElement('div', {
+            classes: ['settings-section']
+        });
+
+        const title = createElement('h3', {
+            content: 'Debug Settings'
+        });
+
+        const checkboxContainer = createElement('div', {
+            classes: ['checkbox-container']
+        });
+
+        this.debugGenerationCheckbox = createElement('input', {
+            attributes: {
+                type: 'checkbox',
+                id: 'debug-generation-checkbox'
+            }
+        }) as HTMLInputElement;
+
+        const label = createElement('label', {
+            content: 'Enable debug logging for stateless generation',
+            attributes: { for: 'debug-generation-checkbox' }
+        });
+
+        const description = createElement('div', {
+            content: 'Shows detailed console logs during generation to help diagnose issues',
+            attributes: { 
+                style: 'font-size: 0.9em; color: #666; margin-top: 5px;'
+            }
+        });
+
+        this.debugGenerationCheckbox.addEventListener('change', async () => {
+            await this.settingsService.setDebugGenerationEnabled(this.debugGenerationCheckbox!.checked);
+            this.autoSave();
+        });
+
+        checkboxContainer.appendChild(this.debugGenerationCheckbox);
+        checkboxContainer.appendChild(label);
+        checkboxContainer.appendChild(description);
+
+        section.appendChild(title);
+        section.appendChild(checkboxContainer);
+
+        return section;
+    }
+
+    /**
      * Creates the modal footer
      */
     private createFooter(): HTMLElement {
@@ -638,6 +693,10 @@ export class SettingsModal extends BaseModal {
 
         if (this.aiLoggingCheckbox) {
             this.aiLoggingCheckbox.checked = this.settingsService.isAILoggingEnabled();
+        }
+
+        if (this.debugGenerationCheckbox) {
+            this.debugGenerationCheckbox.checked = this.settingsService.isDebugGenerationEnabled();
         }
 
         this.updateCurrentProfileDisplay(this.settingsService.getLastUsedProfileName() || '');
