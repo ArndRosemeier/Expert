@@ -716,6 +716,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'polish-text': 'polish-text-btn',
+                            'edit-context-with-ai': 'edit-context-with-ai-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
@@ -1085,6 +1086,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'polish-text': 'polish-text-btn',
+                            'edit-context-with-ai': 'edit-context-with-ai-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
                             'check-coherence': 'check-coherence-btn',
                             'detect-redundant-children': 'detect-redundant-children-btn',
@@ -1201,6 +1203,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="polish-text">
                         🎨 Polish Text
+                    </button>
+                    <button class="action-btn" data-action="edit-context-with-ai">
+                        🧠 Edit Context with AI
                     </button>
                     <button class="action-btn" data-action="copy-to-new-project">
                         📋 Copy to New Project
@@ -3619,6 +3624,22 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'edit-context-with-ai-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                // Import and open context editor modal
+                void import('./modals/ContextInfoModal').then(async ({ ContextInfoModal }) => {
+                    const contextModal = new ContextInfoModal(node);
+                    await contextModal.open();
+                }).catch(error => {
+                    console.error('Failed to open context editor modal:', error);
+                    alert('Failed to open context editor. Please try again.');
+                });
+            }
+            break;
+
         case 'node-propagate-context-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
@@ -5664,6 +5685,20 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }).catch((error: unknown) => {
             console.error('Failed to open context items editor modal:', error);
             alert('Failed to open context items editor. Please try again.');
+        });
+    },
+    
+    'edit-context-with-ai-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        void import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
+            const contextModal = new ContextItemsEditorModal(node);
+            void contextModal.open();
+        }).catch((error: unknown) => {
+            console.error('Failed to open context editor modal:', error);
+            alert('Failed to open context editor. Please try again.');
         });
     },
     
