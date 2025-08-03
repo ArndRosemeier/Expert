@@ -715,6 +715,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
+                            'node-edit-chat': 'xml-story-creation-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1085,6 +1086,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
+                            'node-edit-chat': 'xml-story-creation-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1200,6 +1202,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="chat">
                         💬 Chat
+                    </button>
+                    <button class="action-btn" data-action="node-edit-chat">
+                        🗨️ Edit Chat
                     </button>
                     <button class="action-btn" data-action="polish-text">
                         🎨 Polish Text
@@ -3594,6 +3599,27 @@ This action cannot be undone.`;
                 }).catch(error => {
                     console.error('Failed to open chat modal:', error);
                     alert('Failed to open chat dialog. Please try again.');
+                });
+            }
+            break;
+
+        case 'xml-story-creation-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                // Import and open node edit chat modal (XMLStoryModal)
+                void import('./modals/ModalFactory').then(({ openXMLStoryModal }) => {
+                    const initializationData = {
+                        title: node.title || 'Untitled',
+                        content: node.content || '',
+                        contextItems: [],
+                        sourceNode: node
+                    };
+                    void openXMLStoryModal(initializationData);
+                }).catch(error => {
+                    console.error('Failed to open Node Edit Chat modal:', error);
+                    alert('Failed to open Node Edit Chat. Please try again.');
                 });
             }
             break;
