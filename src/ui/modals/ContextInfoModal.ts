@@ -1189,8 +1189,10 @@ export class ContextItemsEditorModal extends BaseModal {
                 addEventListenerWithCleanup(
                     saveButton,
                     'click',
-                    () => {
+                    async () => {
                         if (this.validateAndSave()) {
+                            // Trigger UI refresh if changes were made
+                            await this.triggerUIRefresh();
                             void this.close();
                         }
                     },
@@ -1221,6 +1223,26 @@ export class ContextItemsEditorModal extends BaseModal {
                     this.autoResizeTextarea(textarea as HTMLTextAreaElement);
                 });
             }, 10);
+        }
+    }
+
+    /**
+     * Trigger UI refresh after context changes to update tree status and other UI elements
+     */
+    private async triggerUIRefresh(): Promise<void> {
+        try {
+            const { getActiveProject } = await import('../../state');
+            const activeProject = getActiveProject();
+            if (activeProject && this.isDirty) {
+                // Emit tree-update-needed event to trigger UI refresh
+                activeProject.emit('tree-update-needed', { 
+                    nodeId: this.node.id, 
+                    reason: 'context-edited' 
+                });
+                console.log('🔄 Triggered UI refresh after context edit for node:', this.node.id);
+            }
+        } catch (error) {
+            console.warn('Failed to trigger UI refresh:', error);
         }
     }
 }
