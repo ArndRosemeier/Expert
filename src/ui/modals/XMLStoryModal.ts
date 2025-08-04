@@ -3328,7 +3328,14 @@ export class XMLStoryModal extends BaseModal {
         // Clean up persistent highlights
         this.clearPersistentHighlight();
         
-        // Always redirect to closeWithUnsavedCheck to ensure proper handling
-        await this.closeWithUnsavedCheck();
+        // Only check for unsaved changes if modal has been fully initialized
+        // This prevents false positives during modal opening/initialization
+        if (this.pendingInitializationData === undefined) {
+            // Modal is fully initialized - check for unsaved changes
+            await this.closeWithUnsavedCheck();
+        } else {
+            // Modal is still initializing - close directly without unsaved check
+            await this.forceClose();
+        }
     }
 }
