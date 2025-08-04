@@ -1958,10 +1958,21 @@ export class UniversalTextEditor {
     ): void {
         if (!this.searchInput || !this.replaceInput) return;
         
-        // Search input events - only input event to avoid focus/typing issues
-        this.searchInput.addEventListener('input', () => {
-            this.performSearch();
-            this.updateResultsCount(resultsCount);
+        // Search input events - only Enter key to trigger search manually
+        this.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.performSearch();
+                this.updateResultsCount(resultsCount);
+                if (e.shiftKey) {
+                    this.findPrevious();
+                } else {
+                    this.findNext();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.hideSearch();
+            }
         });
         
         // Replace input events - only Escape key for consistency
