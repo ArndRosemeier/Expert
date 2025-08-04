@@ -91,6 +91,11 @@ export class XMLStoryModal extends BaseModal {
     // Initialization data to apply after modal opens
     private pendingInitializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode} | undefined;
     private sourceNode: DocumentNode | null = null;
+    
+    // Custom prompt buttons
+    private customButtons: Array<{id: string, caption: string, prompt: string}> = [];
+    private customButtonsContainer: HTMLElement | null = null;
+    private createButtonBtn: HTMLButtonElement | null = null;
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
 
@@ -384,6 +389,78 @@ export class XMLStoryModal extends BaseModal {
                 .send-button:disabled {
                     background: #ccc;
                     cursor: not-allowed;
+                }
+                
+                .create-button-btn {
+                    padding: 0.5rem 1rem;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    margin-bottom: 0.5rem;
+                    width: 100%;
+                }
+                
+                .create-button-btn:hover {
+                    background: #218838;
+                }
+                
+                .custom-buttons-section {
+                    margin-bottom: 1rem;
+                }
+                
+                .custom-buttons-section h4 {
+                    margin: 0 0 0.5rem 0;
+                    font-size: 0.9rem;
+                    color: #ccc;
+                }
+                
+                .custom-button {
+                    position: relative;
+                    display: block;
+                    width: 100%;
+                    padding: 0.5rem 2rem 0.5rem 0.75rem;
+                    background: #333;
+                    color: white;
+                    border: 1px solid #555;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.8rem;
+                    margin-bottom: 0.25rem;
+                    text-align: left;
+                    text-overflow: ellipsis;
+                    overflow: hidden;
+                    white-space: nowrap;
+                }
+                
+                .custom-button:hover {
+                    background: #444;
+                }
+                
+                .custom-button-remove {
+                    position: absolute;
+                    right: 0.25rem;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 2px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: pointer;
+                    font-size: 10px;
+                    line-height: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                
+                .custom-button-remove:hover {
+                    background: #c82333;
                 }
                 
                 .model-selector {
@@ -931,6 +1008,13 @@ export class XMLStoryModal extends BaseModal {
                         </div>
                     </div>
                     
+                    <div class="custom-buttons-section">
+                        <h4>Custom Buttons</h4>
+                        <div id="xml-story-custom-buttons-container">
+                            <!-- Custom buttons will be rendered here -->
+                        </div>
+                    </div>
+                    
                     <button id="clear-story-btn" class="sidebar-button">
                         🗑️ Clear Chat
                     </button>
@@ -981,6 +1065,9 @@ export class XMLStoryModal extends BaseModal {
                     </div>
                     
                     <div class="chat-input-area">
+                        <button id="xml-story-create-button-btn" class="create-button-btn">
+                            ⇒ Create Button
+                        </button>
                         <div class="input-wrapper">
                             <textarea 
                                 id="xml-story-message-input" 
@@ -1018,6 +1105,8 @@ export class XMLStoryModal extends BaseModal {
         this.messageInput = container.querySelector('#xml-story-message-input');
         this.sendButton = container.querySelector('#xml-story-send-btn');
         this.modelSelector = container.querySelector('#xml-story-model-selector');
+        this.customButtonsContainer = container.querySelector('#xml-story-custom-buttons-container');
+        this.createButtonBtn = container.querySelector('#xml-story-create-button-btn');
         this.messagesContainer = container.querySelector('#xml-story-messages');
         this.titleInput = container.querySelector('#xml-story-title');
 
@@ -1032,6 +1121,11 @@ export class XMLStoryModal extends BaseModal {
         // Send message button
         this.sendButton?.addEventListener('click', () => {
             void this.sendMessage();
+        });
+        
+        // Create custom button
+        this.createButtonBtn?.addEventListener('click', () => {
+            this.createCustomButton();
         });
 
         // Enter key to send (Shift+Enter for new line)
@@ -1098,8 +1192,12 @@ export class XMLStoryModal extends BaseModal {
                     await this.applyInitializationData(this.pendingInitializationData);
                     this.pendingInitializationData = undefined;
                 }
+                // Load custom buttons after initialization
+                this.loadCustomButtons();
             }, 100); // Small delay to ensure UI is fully rendered
         } else {
+            // Load custom buttons even when no initialization data
+            this.loadCustomButtons();
             // No initialization data - show generic editing message
             setTimeout(() => {
                 const messageElement = document.getElementById('initial-chat-message');
@@ -3009,6 +3107,124 @@ export class XMLStoryModal extends BaseModal {
     
         } catch (error) {
             console.warn('📝 Error saving full update mode:', error);
+        }
+    }
+    
+    /**
+     * Load custom buttons from storage
+     */
+    private loadCustomButtons(): void {
+        const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+            try {
+                this.customButtons = JSON.parse(stored);
+                this.renderCustomButtons();
+            } catch (error) {
+                console.warn('Failed to load custom buttons:', error);
+                this.customButtons = [];
+            }
+        }
+    }
+    
+    /**
+     * Save custom buttons to storage
+     */
+    private saveCustomButtons(): void {
+        const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
+        localStorage.setItem(storageKey, JSON.stringify(this.customButtons));
+    }
+    
+    /**
+     * Create a new custom button from current prompt
+     */
+    private createCustomButton(): void {
+        if (!this.messageInput) return;
+        
+        const currentPrompt = this.messageInput.value.trim();
+        if (!currentPrompt) {
+            alert('Please enter a prompt in the message input first.');
+            return;
+        }
+        
+        const caption = prompt('Enter a caption for this button:');
+        if (!caption) return;
+        
+        const buttonId = `custom-btn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const newButton = {
+            id: buttonId,
+            caption: caption.trim(),
+            prompt: currentPrompt
+        };
+        
+        this.customButtons.push(newButton);
+        this.saveCustomButtons();
+        this.renderCustomButtons();
+    }
+    
+    /**
+     * Render custom buttons in the sidebar
+     */
+    private renderCustomButtons(): void {
+        if (!this.customButtonsContainer) return;
+        
+        if (this.customButtons.length === 0) {
+            this.customButtonsContainer.innerHTML = '<div style="color: #888; font-size: 0.8rem; font-style: italic;">No custom buttons yet</div>';
+            return;
+        }
+        
+        this.customButtonsContainer.innerHTML = this.customButtons.map(button => `
+            <button class="custom-button" data-button-id="${button.id}" title="${button.prompt}">
+                ${button.caption}
+                <button class="custom-button-remove" data-remove-id="${button.id}" title="Remove button">×</button>
+            </button>
+        `).join('');
+        
+        // Add event listeners for custom buttons
+        this.customButtonsContainer.querySelectorAll('.custom-button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                if (target.classList.contains('custom-button-remove')) return; // Don't trigger on remove button
+                
+                const buttonId = (btn as HTMLElement).dataset['buttonId'];
+                if (buttonId) {
+                    this.useCustomButton(buttonId);
+                }
+            });
+        });
+        
+        // Add event listeners for remove buttons
+        this.customButtonsContainer.querySelectorAll('.custom-button-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the parent button
+                const removeId = (btn as HTMLElement).dataset['removeId'];
+                if (removeId) {
+                    this.removeCustomButton(removeId);
+                }
+            });
+        });
+    }
+    
+    /**
+     * Use a custom button (populate message input with its prompt)
+     */
+    private useCustomButton(buttonId: string): void {
+        const button = this.customButtons.find(b => b.id === buttonId);
+        if (button && this.messageInput) {
+            this.messageInput.value = button.prompt;
+            this.messageInput.focus();
+        }
+    }
+    
+    /**
+     * Remove a custom button
+     */
+    private removeCustomButton(buttonId: string): void {
+        const buttonIndex = this.customButtons.findIndex(b => b.id === buttonId);
+        if (buttonIndex !== -1) {
+            this.customButtons.splice(buttonIndex, 1);
+            this.saveCustomButtons();
+            this.renderCustomButtons();
         }
     }
 
