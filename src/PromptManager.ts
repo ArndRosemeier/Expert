@@ -378,25 +378,27 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             
             You are an expert at structuring documents. The following text is a free-form outline for a section of a document. Your task is to read this outline and create '{{child_level_name}}' nodes that should be created from it.
 
-            Create {{generate_count}} - analyze the outline content and break it down into logical subsections. Each subsection should:
+            Create {{generate_count}} subsections - analyze the outline content and break it down into logical subsections. Each subsection should:
             - Have a clear, descriptive title
             - Cover a distinct aspect or topic from the outline
+            - Be completely unique. No two subsections should cover the same topic.
             - Flow naturally from the overall structure
             - Be substantial enough to warrant its own section
+            - If it is not feasible to create {{generate_count}} subsections, that is ok. Create less.
 
             IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
             - "title": the title of the subnode
-            - "description": Complete description of what should be covered in this subnode
+            - "description": Complete description of what should be covered in this subnode. This should be exhaustive. Content will be generated from this description alone with no access to this outline. The sum of all descriptions should be exhaustive of the outline without any summarization or overlap.
 
             Example format:
             [
               {
                 "title": "Introduction to the Topic",
-                "description": "Provides an overview and sets the foundation for understanding the main concepts."
+                "description": "<exhaustive description of the subsection>"
               },
               {
                 "title": "Core Principles", 
-                "description": "Explains the fundamental principles and key concepts that underpin the topic."
+                "description": "<exhaustive description of the subsection>"
               }
             ]
 
@@ -877,7 +879,7 @@ JSON Response:`.trim(),
             You are analyzing inherited context for potential issues when creating subnodes.
 
 **Your Task:**
-Make a list of context items that are clearly beyond the scope of the content of this node and its possible subnodes.
+Make a list of context items that are beyond the scope of the content of this node and its possible subnodes.
 
 **Numbered Context Items:**
 {{numbered_context_items}}
@@ -941,14 +943,13 @@ Your JSON response:`.trim(),
 **Your Task:**
 For each context item, decide whether it should be KEPT or REMOVED when creating subnodes under this specific node.
 
-**Numbered Context Items:**
-{{numbered_context_items}}
-
-**Current Node:**
 Title: {{node_title}}
 *****
 Content: {{node_content}}
 *****
+
+**Numbered Context Items:****Current Node:**
+{{numbered_context_items}}
 
 **RESPONSE FORMAT - CRITICAL:**
 Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
@@ -971,7 +972,7 @@ Each decision object MUST have these EXACT field names (no variations, abbreviat
 
 **EXAMPLES:**
 
-Example 1 (mixed decisions):
+Example
 [
   {
     "item_number": 1,
@@ -983,18 +984,6 @@ Example 1 (mixed decisions):
   },
   {
     "item_number": 3,
-    "should_keep": true
-  }
-]
-
-Example 2 (all items needed):
-[
-  {
-    "item_number": 1,
-    "should_keep": true
-  },
-  {
-    "item_number": 2,
     "should_keep": true
   }
 ]

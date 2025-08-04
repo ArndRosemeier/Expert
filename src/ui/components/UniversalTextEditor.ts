@@ -1817,7 +1817,7 @@ export class UniversalTextEditor {
             min-width: 120px;
         `;
         
-        // Replace input (initially hidden)
+        // Replace input (always visible)
         this.replaceInput = document.createElement('input');
         this.replaceInput.type = 'text';
         this.replaceInput.placeholder = 'Replace...';
@@ -1830,7 +1830,6 @@ export class UniversalTextEditor {
             color: #fff;
             font-size: 12px;
             min-width: 120px;
-            display: none;
         `;
         
         // Results count
@@ -1870,18 +1869,18 @@ export class UniversalTextEditor {
             font-size: 12px;
         `;
         
-        // Replace toggle button
-        const replaceToggleBtn = document.createElement('button');
-        replaceToggleBtn.innerHTML = '⇄';
-        replaceToggleBtn.title = 'Toggle replace mode';
-        replaceToggleBtn.style.cssText = `
+        // Find button
+        const findBtn = document.createElement('button');
+        findBtn.innerHTML = 'Find';
+        findBtn.title = 'Find matches';
+        findBtn.style.cssText = `
             padding: 4px 8px;
             border: 1px solid #666;
             border-radius: 3px;
-            background: #333;
+            background: #2a4a5c;
             color: #fff;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
         `;
         
         // Replace button
@@ -1896,7 +1895,6 @@ export class UniversalTextEditor {
             color: #fff;
             cursor: pointer;
             font-size: 11px;
-            display: none;
         `;
         
         // Replace All button
@@ -1911,7 +1909,6 @@ export class UniversalTextEditor {
             color: #fff;
             cursor: pointer;
             font-size: 11px;
-            display: none;
         `;
         
         // Close button
@@ -1935,7 +1932,7 @@ export class UniversalTextEditor {
         this.searchBar.appendChild(resultsCount);
         this.searchBar.appendChild(prevBtn);
         this.searchBar.appendChild(nextBtn);
-        this.searchBar.appendChild(replaceToggleBtn);
+        this.searchBar.appendChild(findBtn);
         this.searchBar.appendChild(replaceBtn);
         this.searchBar.appendChild(replaceAllBtn);
         this.searchBar.appendChild(closeBtn);
@@ -1944,7 +1941,7 @@ export class UniversalTextEditor {
         this.container.insertBefore(this.searchBar, this.container.firstChild);
         
         // Add event listeners
-        this.setupSearchEventListeners(resultsCount, prevBtn, nextBtn, replaceToggleBtn, replaceBtn, replaceAllBtn, closeBtn);
+        this.setupSearchEventListeners(resultsCount, prevBtn, nextBtn, findBtn, replaceBtn, replaceAllBtn, closeBtn);
     }
     
     /**
@@ -1954,39 +1951,22 @@ export class UniversalTextEditor {
         resultsCount: HTMLElement,
         prevBtn: HTMLElement,
         nextBtn: HTMLElement,
-        replaceToggleBtn: HTMLElement,
+        findBtn: HTMLElement,
         replaceBtn: HTMLElement,
         replaceAllBtn: HTMLElement,
         closeBtn: HTMLElement
     ): void {
         if (!this.searchInput || !this.replaceInput) return;
         
-        // Search input events
+        // Search input events - only input event to avoid focus/typing issues
         this.searchInput.addEventListener('input', () => {
             this.performSearch();
             this.updateResultsCount(resultsCount);
         });
         
-        this.searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                if (e.shiftKey) {
-                    this.findPrevious();
-                } else {
-                    this.findNext();
-                }
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                this.hideSearch();
-            }
-        });
-        
-        // Replace input events
+        // Replace input events - only Escape key for consistency
         this.replaceInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.replaceCurrentMatch();
-            } else if (e.key === 'Escape') {
+            if (e.key === 'Escape') {
                 e.preventDefault();
                 this.hideSearch();
             }
@@ -1996,17 +1976,10 @@ export class UniversalTextEditor {
         prevBtn.addEventListener('click', () => this.findPrevious());
         nextBtn.addEventListener('click', () => this.findNext());
         
-        replaceToggleBtn.addEventListener('click', () => {
-            const isReplaceVisible = this.replaceInput!.style.display !== 'none';
-            if (isReplaceVisible) {
-                this.replaceInput!.style.display = 'none';
-                replaceBtn.style.display = 'none';
-                replaceAllBtn.style.display = 'none';
-            } else {
-                this.replaceInput!.style.display = 'block';
-                replaceBtn.style.display = 'inline-block';
-                replaceAllBtn.style.display = 'inline-block';
-            }
+        findBtn.addEventListener('click', () => {
+            this.performSearch();
+            this.updateResultsCount(resultsCount);
+            this.findNext();
         });
         
         replaceBtn.addEventListener('click', () => this.replaceCurrentMatch());

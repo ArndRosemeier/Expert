@@ -1,5 +1,6 @@
 import { DocumentNode } from '../../DocumentNode';
 import { getAllDescendants } from '../../ProjectUtils';
+import { findProjectByNode } from '../../state';
 
 /**
  * Reusable UI element for selecting nodes in a tree structure.
@@ -87,7 +88,11 @@ export class SelectableNodeTree {
             chevron.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
                 // Determine if we want to collapse or expand: if any at this level are expanded, collapse all; else expand all
-                const nodesAtLevel = Array.from(this.nodeMap.values()).filter(n => n.level === node.level && n.children.length > 0);
+                // Get project root to use centralized level collection
+        const projectManager = findProjectByNode(node);
+        if (!projectManager) return;
+        const allNodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(projectManager.rootNode, node.level);
+        const nodesAtLevel = allNodesAtLevel.filter(n => n.children.length > 0);
                 const anyExpanded = nodesAtLevel.some(n => !this.collapsedNodeIds.has(n.id));
                 this.toggleCollapseAtLevel(node.level, anyExpanded); // collapse if any expanded, else expand all
                 this.render();

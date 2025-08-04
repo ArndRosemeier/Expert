@@ -2,6 +2,7 @@ import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { getElementById } from './dom-elements';
 import * as state from '../state';
+import { findProjectByNode } from '../state';
 
 import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
@@ -476,7 +477,7 @@ const handleExpandButtonClick = async (e: Event) => {
         targetNode.collapsed = !targetNode.collapsed;
         const targetState = targetNode.collapsed;
         
-        const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtLevel(targetNode.level, nodeProject.rootNode);
+        const nodesAtSameLevel = nodeProject.getTreeService().getNodesAtTemplateLevel(nodeProject.rootNode, targetNode.level);
         const nodesWithChildren = nodesAtSameLevel.filter(n => n.children.length > 0);
         
         nodesWithChildren.forEach(levelNode => {
@@ -593,30 +594,7 @@ function getCurrentLevelName(node: DocumentNode): string {
 
 
 
-/**
- * Collects all nodes at a specific relative level beneath a given node.
- * @param rootNode The node to start from
- * @param relativeLevel The level relative to rootNode (1 = direct children, 2 = grandchildren, etc.)
- * @returns Array of nodes at the specified level
- */
-function collectNodesAtRelativeLevel(rootNode: DocumentNode, relativeLevel: number): DocumentNode[] {
-    const targetLevel = rootNode.level + relativeLevel;
-    const nodesAtLevel: DocumentNode[] = [];
-    
-    const traverse = (node: DocumentNode) => {
-        if (node.level === targetLevel) {
-            nodesAtLevel.push(node);
-            return; // Don't traverse further once we reach the target level
-        }
-        
-        for (const child of node.children) {
-            traverse(child);
-        }
-    };
-    
-    traverse(rootNode);
-    return nodesAtLevel;
-}
+// REMOVED: collectNodesAtRelativeLevel - replaced with centralized TreeService.getNodesAtTemplateLevel()
 
 /**
  * Gets available template layers below a node that have actual nodes.
@@ -633,7 +611,11 @@ function getAvailableLayersForDeletion(node: DocumentNode): Array<{relativeLevel
             break; // No more template levels available
         }
         
-        const nodesAtLevel = collectNodesAtRelativeLevel(node, relativeLevel);
+        // Use centralized level collection: convert relative to absolute level
+        const absoluteLevel = node.level + relativeLevel;
+        const project = findProjectByNode(node);
+        if (!project) continue;
+        const nodesAtLevel = project.getTreeService().getNodesAtTemplateLevel(project.rootNode, absoluteLevel);
         if (nodesAtLevel.length > 0) {
             const rawLevelName = node.template[targetLevel];
             if (rawLevelName) {
@@ -3052,7 +3034,9 @@ function handleDeleteLayer(relativeLevel: number): void {
         return;
     }
 
-    const nodesAtLevel = collectNodesAtRelativeLevel(node, relativeLevel);
+    // Use centralized level collection: convert relative to absolute level
+    const absoluteLevel = node.level + relativeLevel;
+    const nodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(projectManager.rootNode, absoluteLevel);
     if (nodesAtLevel.length === 0) {
         alert('No nodes found at the specified level.');
         return;

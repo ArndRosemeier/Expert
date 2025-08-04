@@ -1,4 +1,5 @@
 import { DocumentNode } from '../DocumentNode';
+import { findProjectByNode } from '../state';
 
 /**
  * TreeService handles all document tree operations and navigation.
@@ -215,22 +216,84 @@ export class TreeService {
     }
 
     /**
-     * Gets all nodes at a specific level in the tree.
-     * @param level The level to get nodes from.
-     * @param rootNode The root node of the tree.
-     * @returns Array of DocumentNodes at the specified level.
+     * CENTRALIZED LEVEL-BASED NODE COLLECTION
+     * Gets all nodes at a specific template level within a given scope.
+     * This is the single function that handles all level-based node collection needs:
+     * - Absolute level: getNodesAtTemplateLevel(projectRoot, 2) → all level 2 nodes
+     * - Relative level: getNodesAtTemplateLevel(node, node.level + 2) → nodes 2 levels below
+     * - Siblings: getNodesAtTemplateLevel(projectRoot, node.level) → all nodes at same level
+     * 
+     * @param scopeRoot The root node defining the search scope (project root or any subtree)
+     * @param absoluteLevel The absolute template level to find (0 = project root, 1 = first level, etc.)
+     * @returns Array of DocumentNodes at the specified absolute level within the scope
      */
-    public getNodesAtLevel(level: number, rootNode: DocumentNode): DocumentNode[] {
+    public getNodesAtTemplateLevel(scopeRoot: DocumentNode, absoluteLevel: number): DocumentNode[] {
         const nodesAtLevel: DocumentNode[] = [];
         
-        this.traverseNodes(rootNode, (node) => {
-            if (node.level === level) {
+        this.traverseNodes(scopeRoot, (node) => {
+            if (node.level === absoluteLevel) {
                 nodesAtLevel.push(node);
             }
         });
         
         return nodesAtLevel;
     }
+
+    /**
+     * Gets the previous node at the same template level as the given node.
+     * Uses the established getNodesAtTemplateLevel function to find all siblings.
+     * @param node The reference node
+     * @returns The previous node at the same level, or null if node is first or not found
+     */
+    public getPreviousNode(node: DocumentNode): DocumentNode | null {
+        // Find the project that contains this node
+        const projectManager = findProjectByNode(node);
+        if (!projectManager) {
+            return null;
+        }
+
+        // Get all nodes at the same level using the centralized function
+        const siblingsAtLevel = this.getNodesAtTemplateLevel(projectManager.rootNode, node.level);
+        
+        // Find the index of the current node
+        const currentIndex = siblingsAtLevel.findIndex(sibling => sibling.id === node.id);
+        
+        // Return previous node, or null if at beginning or not found
+        if (currentIndex <= 0) {
+            return null;
+        }
+        
+        return siblingsAtLevel[currentIndex - 1] || null;
+    }
+
+    /**
+     * Gets the next node at the same template level as the given node.
+     * Uses the established getNodesAtTemplateLevel function to find all siblings.
+     * @param node The reference node
+     * @returns The next node at the same level, or null if node is last or not found
+     */
+    public getNextNode(node: DocumentNode): DocumentNode | null {
+        // Find the project that contains this node
+        const projectManager = findProjectByNode(node);
+        if (!projectManager) {
+            return null;
+        }
+
+        // Get all nodes at the same level using the centralized function
+        const siblingsAtLevel = this.getNodesAtTemplateLevel(projectManager.rootNode, node.level);
+        
+        // Find the index of the current node
+        const currentIndex = siblingsAtLevel.findIndex(sibling => sibling.id === node.id);
+        
+        // Return next node, or null if at end or not found
+        if (currentIndex === -1 || currentIndex >= siblingsAtLevel.length - 1) {
+            return null;
+        }
+        
+        return siblingsAtLevel[currentIndex + 1] || null;
+    }
+
+// REMOVED: getNodesAtLevel - replaced with getNodesAtTemplateLevel
 
     /**
      * Gets all leaf nodes (nodes with no children) in the tree.

@@ -2,6 +2,7 @@ import { DocumentNode } from '../DocumentNode';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
 import { createPromptExpansionService } from '../services/PromptExpansionService';
+import { findProjectByNode } from '../state';
 import { 
   OverviewData, 
   EventData, 
@@ -361,18 +362,11 @@ export class OverviewAnalysisService {
   getAvailableLayers(rootNode: DocumentNode): Array<{name: string, nodes: DocumentNode[]}> {
     const layers: Array<{name: string, nodes: DocumentNode[]}> = [];
     
-    // Helper function to collect nodes at a specific level
-    const collectNodesAtLevel = (node: DocumentNode, targetLevel: number, currentLevel: number = 0): DocumentNode[] => {
-      if (currentLevel === targetLevel) {
-        return [node];
-      }
-      
-      const nodes: DocumentNode[] = [];
-      for (const child of node.children) {
-        nodes.push(...collectNodesAtLevel(child, targetLevel, currentLevel + 1));
-      }
-      return nodes;
-    };
+    // Get project manager to use centralized level collection
+    const projectManager = findProjectByNode(rootNode);
+    if (!projectManager) {
+      return layers;
+    }
 
     // Find the maximum depth of the tree
     const getMaxDepth = (node: DocumentNode, currentDepth: number = 0): number => {
@@ -385,14 +379,16 @@ export class OverviewAnalysisService {
     const maxDepth = getMaxDepth(rootNode);
     
     // Create layers for each level that has multiple nodes
-    for (let level = 1; level <= maxDepth; level++) {
-      const nodesAtLevel = collectNodesAtLevel(rootNode, level);
+    for (let relativeLevel = 1; relativeLevel <= maxDepth; relativeLevel++) {
+      // Convert relative level to absolute template level
+      const absoluteLevel = rootNode.level + relativeLevel;
+      const nodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(rootNode, absoluteLevel);
       
       if (nodesAtLevel.length > 1) { // Only include levels with multiple nodes
-        const levelName = nodesAtLevel[0]?.template[level] || `Level ${level}`;
+        const levelName = nodesAtLevel[0]?.template[absoluteLevel] || `Level ${absoluteLevel}`;
         layers.push({
           name: levelName,
-          nodes: nodesAtLevel.filter(node => node.content && node.content.trim()) // Only nodes with content
+          nodes: nodesAtLevel.filter((node: DocumentNode) => node.content && node.content.trim()) // Only nodes with content
         });
       }
     }

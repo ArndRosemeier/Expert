@@ -1081,11 +1081,16 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
             </div>
             
             <div class="chat-section">
-                                    <button id="preview-content-btn" class="button button-secondary">📊 Preview Content Size</button>
+                <button id="preview-content-btn" class="button button-secondary">📊 Preview Content Size</button>
                 <div id="content-preview-container" class="preview-section" style="display: none;">
                     <h4 style="margin: 0 0 0.5rem 0;">Content Size Analysis:</h4>
                     <div id="content-preview-content" style="font-size: 0.9rem; color: #495057; white-space: pre-line;"></div>
                 </div>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button id="cancel-btn" class="button button-secondary">Cancel</button>
+                <button id="start-chat-btn" class="button button-primary">Start Chat</button>
             </div>
         `,
         actions: [

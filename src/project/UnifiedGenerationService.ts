@@ -16,8 +16,8 @@ import { QualityCriterion, CreatorPayload } from '../types';
 import { LoopProgress } from '../LoopOrchestrator';
 import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
-import { getProjects } from '../state';
 import { DEBUG_STATELESS_GENERATION } from '../constants';
+import { findProjectByRootNode } from '../state';
 
 /**
  * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
@@ -509,7 +509,7 @@ export class UnifiedGenerationService {
                     if (DEBUG_STATELESS_GENERATION) {
                         console.log(`🔍 STATELESS DEBUG: Checking if "${node.title}" can expand...`);
                     }
-                    const canExpand = this.canNodeExpand(node, targetState, startNodeId);
+                    const canExpand = this.canNodeExpand(node, targetState);
                     if (canExpand) {
                         if (DEBUG_STATELESS_GENERATION) {
                             console.log(`✅ STATELESS DEBUG: Performing expansion on "${node.title}"`);
@@ -664,7 +664,7 @@ export class UnifiedGenerationService {
      * Check if a node can expand (all siblings at target state)
      * Recalculates current descendants to avoid race conditions from stale data
      */
-    private canNodeExpand(node: DocumentNode, targetState: TargetState, startNodeId: string): boolean {
+    private canNodeExpand(node: DocumentNode, targetState: TargetState): boolean {
         if (DEBUG_STATELESS_GENERATION) {
             console.log(`🎛️  STATELESS DEBUG: canNodeExpand check for "${node.title}" (level ${node.level})`);
         }
@@ -682,12 +682,8 @@ export class UnifiedGenerationService {
             return false;
         }
         
-        // CRITICAL: Recalculate current descendants to get fresh node collection
-        // This prevents race conditions when nodes create children during the same iteration
-        const currentAllNodes = this.collectAllDescendants(startNodeId);
-        
-        // Get all siblings at the same level from the CURRENT tree state
-        const siblings = currentAllNodes.filter(n => n.level === node.level);
+        // Get all siblings at the same level using centralized level collection
+        const siblings = this.deps.treeService.getNodesAtTemplateLevel(this.deps.rootNode, node.level);
         
         if (DEBUG_STATELESS_GENERATION) {
             console.log(`   📋 Found ${siblings.length} siblings at level ${node.level}:`);
@@ -2016,24 +2012,7 @@ export class UnifiedGenerationService {
      * Get the language of the project that owns this generation's root node
      */
     private getProjectLanguageForNode(): string | null {
-        try {
-            const allProjects = getProjects();
-            
-            console.log(`🔍 Looking for project with rootNode.id = "${this.deps.rootNode.id}"`);
-            console.log(`🔍 Available projects:`, allProjects.map((p: any) => ({ id: p.rootNode.id, lang: p.getLanguage() })));
-            
-            // Find the project that owns our root node
-            const owningProject = allProjects.find((project: any) => 
-                project.rootNode.id === this.deps.rootNode.id
-            );
-            
-            const result = owningProject ? owningProject.getLanguage() : null;
-            console.log(`🔍 Found project language: "${result}"`);
-            
-            return result;
-        } catch (error) {
-            console.warn('Failed to get project language:', error);
-            return null;
-        }
+        const project = findProjectByRootNode(this.deps.rootNode);
+        return project ? project.getLanguage() : null;
     }
 } 

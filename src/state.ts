@@ -144,6 +144,29 @@ export const findNodeGlobally = (nodeId: string): { node: DocumentNode; projectM
     }
     return null;
 };
+
+/**
+ * Find the project that contains a specific node
+ * Returns the project manager that contains the node, or null if not found
+ */
+export const findProjectByNode = (node: DocumentNode): ProjectManager | null => {
+    const result = findNodeGlobally(node.id);
+    return result ? result.projectManager : null;
+};
+
+/**
+ * Find the project that has the specified root node
+ * Returns the project manager with the matching root node, or null if not found
+ */
+export const findProjectByRootNode = (rootNode: DocumentNode): ProjectManager | null => {
+    for (const project of projects) {
+        if (project.rootNode.id === rootNode.id) {
+            return project;
+        }
+    }
+    return null;
+};
+
 export const getOrchestratorPrompts = () => orchestratorPrompts;
 
 /**

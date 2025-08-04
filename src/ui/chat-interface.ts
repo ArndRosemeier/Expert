@@ -1361,7 +1361,10 @@ For each suggestion, provide clear justification for why the change would improv
         }
         
         // Extract nodes at the deepest level (leaf nodes)
-        const leafNodes = allNodes.filter(node => node.level === deepestLevel);
+                    // Use centralized level collection to get leaf nodes at the deepest level
+            const project = state.getActiveProject();
+            if (!project) return [];
+            const leafNodes = project.getTreeService().getNodesAtTemplateLevel(project.rootNode, deepestLevel);
         
         // If we have leaf nodes, return their titles
         if (leafNodes.length > 0) {
