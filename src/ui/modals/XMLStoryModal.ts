@@ -1125,7 +1125,7 @@ export class XMLStoryModal extends BaseModal {
         
         // Create custom button
         this.createButtonBtn?.addEventListener('click', () => {
-            this.createCustomButton();
+            void this.createCustomButton();
         });
 
         // Enter key to send (Shift+Enter for new line)
@@ -1193,11 +1193,11 @@ export class XMLStoryModal extends BaseModal {
                     this.pendingInitializationData = undefined;
                 }
                 // Load custom buttons after initialization
-                this.loadCustomButtons();
+                void this.loadCustomButtons();
             }, 100); // Small delay to ensure UI is fully rendered
         } else {
             // Load custom buttons even when no initialization data
-            this.loadCustomButtons();
+            void this.loadCustomButtons();
             // No initialization data - show generic editing message
             setTimeout(() => {
                 const messageElement = document.getElementById('initial-chat-message');
@@ -3113,39 +3113,50 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Load custom buttons from storage
      */
-    private loadCustomButtons(): void {
+    private async loadCustomButtons(): Promise<void> {
         console.log('loadCustomButtons called');
         console.log('sourceNode:', this.sourceNode);
         const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
         console.log('Storage key:', storageKey);
-        const stored = localStorage.getItem(storageKey);
-        console.log('Stored data:', stored);
-        if (stored) {
-            try {
-                this.customButtons = JSON.parse(stored);
+        
+        try {
+            const storage = await StorageService.getInstance();
+            const stored = await storage.get(storageKey);
+            console.log('Stored data:', stored);
+            if (stored) {
+                this.customButtons = stored as Array<{id: string, caption: string, prompt: string}>;
                 console.log('Loaded custom buttons:', this.customButtons);
                 this.renderCustomButtons();
-            } catch (error) {
-                console.warn('Failed to load custom buttons:', error);
+            } else {
+                console.log('No stored custom buttons found');
                 this.customButtons = [];
+                this.renderCustomButtons();
             }
-        } else {
-            console.log('No stored custom buttons found');
+        } catch (error) {
+            console.warn('Failed to load custom buttons:', error);
+            this.customButtons = [];
+            this.renderCustomButtons();
         }
     }
     
     /**
      * Save custom buttons to storage
      */
-    private saveCustomButtons(): void {
+    private async saveCustomButtons(): Promise<void> {
         const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
-        localStorage.setItem(storageKey, JSON.stringify(this.customButtons));
+        try {
+            const storage = await StorageService.getInstance();
+            await storage.set(storageKey, this.customButtons);
+            console.log('Custom buttons saved successfully');
+        } catch (error) {
+            console.warn('Failed to save custom buttons:', error);
+        }
     }
     
     /**
      * Create a new custom button from current prompt
      */
-    private createCustomButton(): void {
+    private async createCustomButton(): Promise<void> {
         console.log('createCustomButton called');
         if (!this.messageInput) {
             console.log('No messageInput found');
@@ -3173,7 +3184,7 @@ export class XMLStoryModal extends BaseModal {
         console.log('Adding new button:', newButton);
         this.customButtons.push(newButton);
         console.log('Custom buttons array:', this.customButtons);
-        this.saveCustomButtons();
+        await this.saveCustomButtons();
         this.renderCustomButtons();
     }
     
@@ -3219,7 +3230,7 @@ export class XMLStoryModal extends BaseModal {
                 e.stopPropagation(); // Prevent triggering the parent button
                 const removeId = (btn as HTMLElement).dataset['removeId'];
                 if (removeId) {
-                    this.removeCustomButton(removeId);
+                    void this.removeCustomButton(removeId);
                 }
             });
         });
@@ -3239,11 +3250,11 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Remove a custom button
      */
-    private removeCustomButton(buttonId: string): void {
+    private async removeCustomButton(buttonId: string): Promise<void> {
         const buttonIndex = this.customButtons.findIndex(b => b.id === buttonId);
         if (buttonIndex !== -1) {
             this.customButtons.splice(buttonIndex, 1);
-            this.saveCustomButtons();
+            await this.saveCustomButtons();
             this.renderCustomButtons();
         }
     }
