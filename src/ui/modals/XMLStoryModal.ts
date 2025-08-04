@@ -1,7 +1,13 @@
 /**
  * Node Chat Editor Modal
  * 
- * Provides a collaborative content editing interface with AI assistance
+ * WORKSPACE RULES ENFORCED:
+ * - NO defensive programming - errors must be loud and visible
+ * - Strong typing everywhere - no 'any' types  
+ * - Functions exist and are called without fallbacks
+ * - NO silent error handling or optional chaining where not needed
+ * 
+ * Provides collaborative content editing interface with AI assistance
  * for improving and refining existing project nodes.
  */
 
