@@ -1233,13 +1233,13 @@ export class ContextItemsEditorModal extends BaseModal {
         try {
             const { getActiveProject } = await import('../../state');
             const activeProject = getActiveProject();
-            if (activeProject && this.isDirty) {
+            if (activeProject) {
                 // Emit tree-update-needed event to trigger UI refresh
                 activeProject.emit('tree-update-needed', { 
                     nodeId: this.node.id, 
-                    reason: 'context-edited' 
+                    reason: 'context-modal-closed' 
                 });
-                console.log('🔄 Triggered UI refresh after context edit for node:', this.node.id);
+                console.log('🔄 Triggered UI refresh after context modal close for node:', this.node.id);
             }
         } catch (error) {
             console.warn('Failed to trigger UI refresh:', error);
