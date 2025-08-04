@@ -1111,13 +1111,13 @@ export class XMLStoryModal extends BaseModal {
         this.titleInput = container.querySelector('#xml-story-title');
 
 
-        // Set up event listeners
-        this.setupEventListeners(container);
+        // Set up event listeners and initialize
+        void this.setupEventListeners(container);
 
         return container;
     }
 
-    private setupEventListeners(container: HTMLElement): void {
+    private async setupEventListeners(container: HTMLElement): Promise<void> {
         // Send message button
         this.sendButton?.addEventListener('click', () => {
             void this.sendMessage();
@@ -1151,15 +1151,13 @@ export class XMLStoryModal extends BaseModal {
         // Close modal button
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
-            // Use the same initialization check as the close() override
-            void this.close();
+            void this.closeWithUnsavedCheck();
         });
         
         // Setup custom ESC key handler since we disabled default closable behavior
         const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                // Use the same initialization check as the close() override
-                void this.close();
+                void this.closeWithUnsavedCheck();
             }
         };
         document.addEventListener('keydown', escapeHandler);
@@ -1189,35 +1187,30 @@ export class XMLStoryModal extends BaseModal {
         
         // Apply initialization data if provided, or set default message
         if (this.pendingInitializationData) {
-            setTimeout(async () => {
-                if (this.pendingInitializationData) {
-                    await this.applyInitializationData(this.pendingInitializationData);
-                    this.pendingInitializationData = undefined;
-                }
-                // Load custom buttons after initialization
-                void this.loadCustomButtons();
-            }, 100); // Small delay to ensure UI is fully rendered
-        } else {
-            // Load custom buttons even when no initialization data
-            void this.loadCustomButtons();
-            // No initialization data - show generic editing message
-            setTimeout(() => {
-                const messageElement = document.getElementById('initial-chat-message');
-                if (messageElement) {
-                    messageElement.innerHTML = `
-                        Hi! I'm here to help you edit and improve your content.
-                        
-                        I can help you:
-                        • <strong>Enhance outlines</strong> - Make them more detailed and compelling
-                        • <strong>Improve context items</strong> - Add depth and fix inconsistencies
-                        • <strong>Refine content</strong> - Polish language and improve flow
-                        
-                        <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
-                        
-                        What would you like to work on?
-                    `;
-                }
-            }, 100);
+            await this.applyInitializationData(this.pendingInitializationData);
+            this.pendingInitializationData = undefined;
+        }
+        
+        // Load custom buttons after initialization
+        await this.loadCustomButtons();
+        
+        // Show initial message if no initialization data
+        if (!this.pendingInitializationData) {
+            const messageElement = document.getElementById('initial-chat-message');
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    Hi! I'm here to help you edit and improve your content.
+                    
+                    I can help you:
+                    • <strong>Enhance outlines</strong> - Make them more detailed and compelling
+                    • <strong>Improve context items</strong> - Add depth and fix inconsistencies
+                    • <strong>Refine content</strong> - Polish language and improve flow
+                    
+                    <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+                    
+                    What would you like to work on?
+                `;
+            }
         }
     }
 
@@ -2571,8 +2564,8 @@ export class XMLStoryModal extends BaseModal {
             return outlineChanged || contextChanged;
         } catch (error) {
             console.error('Error checking for unsaved changes:', error);
-            // If we can't determine, assume there are changes to be safe
-            return true;
+            // If we can't determine during initialization, there are no changes yet
+            throw error;
         }
     }
 
@@ -3330,14 +3323,7 @@ export class XMLStoryModal extends BaseModal {
         // Clean up persistent highlights
         this.clearPersistentHighlight();
         
-        // Only check for unsaved changes if modal has been fully initialized
-        // This prevents false positives during modal opening/initialization
-        if (this.pendingInitializationData === undefined) {
-            // Modal is fully initialized - check for unsaved changes
-            await this.closeWithUnsavedCheck();
-        } else {
-            // Modal is still initializing - close directly without unsaved check
-            await this.forceClose();
-        }
+        // Always redirect to closeWithUnsavedCheck to ensure proper handling
+        await this.closeWithUnsavedCheck();
     }
 }
