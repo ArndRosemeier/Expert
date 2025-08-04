@@ -1926,15 +1926,15 @@ export class UniversalTextEditor {
             margin-left: 4px;
         `;
         
-        // Assemble the search bar
+        // Assemble the search bar with new layout
+        this.searchBar.appendChild(findBtn);
         this.searchBar.appendChild(this.searchInput);
-        this.searchBar.appendChild(this.replaceInput);
-        this.searchBar.appendChild(resultsCount);
         this.searchBar.appendChild(prevBtn);
         this.searchBar.appendChild(nextBtn);
-        this.searchBar.appendChild(findBtn);
         this.searchBar.appendChild(replaceBtn);
         this.searchBar.appendChild(replaceAllBtn);
+        this.searchBar.appendChild(this.replaceInput);
+        this.searchBar.appendChild(resultsCount);
         this.searchBar.appendChild(closeBtn);
         
         // Insert search bar at the top of the container
