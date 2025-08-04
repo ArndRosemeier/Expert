@@ -378,6 +378,15 @@ export class UniversalTextEditor {
                     this.toggleSearch();
                 }
             }
+            
+            // Handle F3 for find next, but only if our search is active
+            if (event.key === 'F3') {
+                if (this.isSearchVisible && this.searchInput && this.searchInput.value.trim()) {
+                    event.preventDefault();
+                    this.findNext();
+                }
+                // If search not active or no search term, let browser handle F3 normally
+            }
         });
     }
     
@@ -426,6 +435,15 @@ export class UniversalTextEditor {
                         event.stopPropagation();
                         this.toggleSearch();
                     }
+                }
+                
+                // Handle F3 for find next, but only if our search is active
+                if (event.key === 'F3') {
+                    if (this.isSearchVisible && this.searchInput && this.searchInput.value.trim()) {
+                        event.preventDefault();
+                        this.findNext();
+                    }
+                    // If search not active or no search term, let browser handle F3 normally
                 }
             });
         }
