@@ -615,7 +615,7 @@ function getAvailableLayersForDeletion(node: DocumentNode): Array<{relativeLevel
         const absoluteLevel = node.level + relativeLevel;
         const project = findProjectByNode(node);
         if (!project) continue;
-        const nodesAtLevel = project.getTreeService().getNodesAtTemplateLevel(project.rootNode, absoluteLevel);
+        const nodesAtLevel = project.getTreeService().getNodesAtTemplateLevel(node, absoluteLevel);
         if (nodesAtLevel.length > 0) {
             const rawLevelName = node.template[targetLevel];
             if (rawLevelName) {
@@ -3036,7 +3036,7 @@ function handleDeleteLayer(relativeLevel: number): void {
 
     // Use centralized level collection: convert relative to absolute level
     const absoluteLevel = node.level + relativeLevel;
-    const nodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(projectManager.rootNode, absoluteLevel);
+    const nodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(node, absoluteLevel);
     if (nodesAtLevel.length === 0) {
         alert('No nodes found at the specified level.');
         return;
