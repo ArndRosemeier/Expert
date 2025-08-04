@@ -24,6 +24,16 @@ import {
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_FULL_UPDATE_MODE_KEY = 'xml-story-full-update-mode';
 
+interface XMLStoryCommand {
+    type: string;
+    content?: string;
+    markerId?: string;
+    parameters?: unknown;
+    searchText?: string;
+    replaceText?: string;
+    [key: string]: unknown;
+}
+
 export interface XMLStoryModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
     openRouterClient: OpenRouterClient;
@@ -74,7 +84,7 @@ export class XMLStoryModal extends BaseModal {
     // Retry mechanism for failed commands
     private retryCount = 0;
     private maxRetries = 3;
-    private pendingRetry: { command: any; error: string } | null = null;
+    private pendingRetry: { command: XMLStoryCommand; error: string } | null = null;
     
     // ARCHITECTURE NOTE: Outline content is stored here as text (outlineHistory),
     // while context items are stored as XML elements in XMLStoryService.
@@ -1178,8 +1188,8 @@ export class XMLStoryModal extends BaseModal {
         // Full update mode checkbox with persistence
         this.fullUpdateModeCheckbox = container.querySelector('#full-update-mode-checkbox');
         void this.loadSavedFullUpdateMode();
-        this.fullUpdateModeCheckbox?.addEventListener('change', () => {
-            this.fullUpdateMode = this.fullUpdateModeCheckbox?.checked || false;
+        this.fullUpdateModeCheckbox!.addEventListener('change', () => {
+            this.fullUpdateMode = this.fullUpdateModeCheckbox!.checked;
             void this.saveFullUpdateMode();
         });
 
@@ -1297,7 +1307,7 @@ export class XMLStoryModal extends BaseModal {
             ];
 
             // Get selected model
-            const modelPurpose = this.modelSelector?.value || 'creator';
+            const modelPurpose = this.modelSelector!.value;
 
             // Add placeholder AI message for streaming
             const placeholderMessage = this.addMessageToChat('assistant', '');
@@ -1340,7 +1350,7 @@ export class XMLStoryModal extends BaseModal {
                 // Update the streaming message with cleaned text and XML highlighting
                 const formattedContent = this.applyXMLHighlighting(
                     this.parseMarkdownForChat(parseResult.cleanedText), 
-                    parseResult.systemCommands
+                    parseResult.systemCommands as unknown as XMLStoryCommand[]
                 );
                 this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
                 this.finalizeStreamingMessage(placeholderMessage);
@@ -1371,9 +1381,6 @@ export class XMLStoryModal extends BaseModal {
                 }
             }
 
-        } catch (error) {
-            console.error('Error sending message:', error);
-            this.addMessageToChat('assistant', 'Sorry, I encountered an error. Please try again.');
         } finally {
             this.setGenerating(false);
             // Process any pending retries after generation completes
@@ -1523,7 +1530,7 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Apply XML command highlighting by replacing markers with highlighted commands
      */
-    private applyXMLHighlighting(cleanContent: string, systemCommands?: any[]): string {
+    private applyXMLHighlighting(cleanContent: string, systemCommands?: XMLStoryCommand[]): string {
         if (!systemCommands || systemCommands.length === 0) {
             return cleanContent;
         }
@@ -1556,7 +1563,7 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Create HTML for a single system command highlight
      */
-    private createSystemCommandHighlight(command: any): string {
+    private createSystemCommandHighlight(command: XMLStoryCommand): string {
         const escapeHtml = (text: string) => text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -1999,7 +2006,7 @@ export class XMLStoryModal extends BaseModal {
      * Handle command failures with automatic retry logic
      */
     private async handleCommandFailure(event: XMLStoryEvent): Promise<void> {
-        const { command, error } = event.payload as { command: any; error: string };
+        const { command, error } = event.payload as { command: XMLStoryCommand; error: string };
         
         console.warn(`⚠️ Command failed: ${command.type} - ${error}`);
         
@@ -2017,7 +2024,7 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Process command retry logic
      */
-    private async processCommandRetry(command: any, error: string): Promise<void> {
+    private async processCommandRetry(command: XMLStoryCommand, error: string): Promise<void> {
         // Check if we can retry
         if (this.retryCount < this.maxRetries) {
             this.retryCount++;
@@ -2043,7 +2050,7 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Generate feedback message for retry attempts
      */
-    private generateRetryFeedback(command: any, error: string): string {
+    private generateRetryFeedback(command: XMLStoryCommand, error: string): string {
         const currentOutline = this.getCurrentOutlineContent() || 'No outline content';
         
         let feedback = `The ${command.type} command failed: ${error}\n\n`;
@@ -2119,7 +2126,7 @@ export class XMLStoryModal extends BaseModal {
             ];
             
             // Get selected model
-            const modelPurpose = this.modelSelector?.value || 'creator';
+            const modelPurpose = this.modelSelector!.value;
             
             // Add placeholder for streaming
             const placeholderMessage = this.addMessageToChat('assistant', '');
@@ -2154,7 +2161,7 @@ export class XMLStoryModal extends BaseModal {
                 // Update message with cleaned text and XML highlighting
                 const formattedContent = this.applyXMLHighlighting(
                     this.parseMarkdownForChat(parseResult.cleanedText), 
-                    parseResult.systemCommands
+                    parseResult.systemCommands as unknown as XMLStoryCommand[]
                 );
                 this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
                 this.finalizeStreamingMessage(placeholderMessage);
@@ -2195,7 +2202,7 @@ export class XMLStoryModal extends BaseModal {
      * handled here in the modal, not in the service layer.
      */
     private handleOutlineAppend(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: any };
+        const { command } = event.payload as { command: XMLStoryCommand };
         if (!command.content) {
             console.warn('Append command missing content');
             return;
@@ -2226,7 +2233,7 @@ export class XMLStoryModal extends BaseModal {
      * differences between AI search text and actual outline formatting.
      */
     private handleOutlineReplace(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: any };
+        const { command } = event.payload as { command: XMLStoryCommand };
         if (!command.searchText || !command.replaceText) {
             this.emitCommandFailure(command, 'Replace command missing search text or replace text');
             return;
@@ -2350,7 +2357,7 @@ export class XMLStoryModal extends BaseModal {
     /**
      * Emit a command failure event for retry logic
      */
-    private emitCommandFailure(command: any, error: string): void {
+    private emitCommandFailure(command: XMLStoryCommand, error: string): void {
         this.storySystem.service.emitEvent({
             type: 'command_failed',
             payload: { command, error },
@@ -3063,14 +3070,9 @@ export class XMLStoryModal extends BaseModal {
      * Save current model selection to StorageService
      */
     private async saveModelSelection(): Promise<void> {
-        try {
-            if (this.modelSelector?.value) {
+        if (this.modelSelector?.value) {
             const storage = await StorageService.getInstance();
-                await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
-        
-            }
-        } catch (error) {
-            console.warn('📝 Error saving model selection:', error);
+            await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
         }
     }
 
@@ -3078,17 +3080,12 @@ export class XMLStoryModal extends BaseModal {
      * Load saved full update mode preference from StorageService
      */
     private async loadSavedFullUpdateMode(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            const savedMode = await storage.get(XML_STORY_FULL_UPDATE_MODE_KEY);
-            
-            if (savedMode !== null && this.fullUpdateModeCheckbox) {
-                this.fullUpdateMode = savedMode as boolean;
-                this.fullUpdateModeCheckbox.checked = this.fullUpdateMode;
+        const storage = await StorageService.getInstance();
+        const savedMode = await storage.get(XML_STORY_FULL_UPDATE_MODE_KEY);
         
-            }
-        } catch (error) {
-            console.warn('📝 Error loading saved full update mode:', error);
+        if (savedMode !== null && this.fullUpdateModeCheckbox) {
+            this.fullUpdateMode = savedMode as boolean;
+            this.fullUpdateModeCheckbox.checked = this.fullUpdateMode;
         }
     }
 
@@ -3096,13 +3093,8 @@ export class XMLStoryModal extends BaseModal {
      * Save current full update mode preference to StorageService
      */
     private async saveFullUpdateMode(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            await storage.set(XML_STORY_FULL_UPDATE_MODE_KEY, this.fullUpdateMode);
-    
-        } catch (error) {
-            console.warn('📝 Error saving full update mode:', error);
-        }
+        const storage = await StorageService.getInstance();
+        await storage.set(XML_STORY_FULL_UPDATE_MODE_KEY, this.fullUpdateMode);
     }
     
     /**
@@ -3111,24 +3103,18 @@ export class XMLStoryModal extends BaseModal {
     private async loadCustomButtons(): Promise<void> {
         console.log('loadCustomButtons called');
         console.log('sourceNode:', this.sourceNode);
-        const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
+        const storageKey = `xml-story-custom-buttons-${this.sourceNode!.id}`;
         console.log('Storage key:', storageKey);
         
-        try {
-            const storage = await StorageService.getInstance();
-            const stored = await storage.get(storageKey);
-            console.log('Stored data:', stored);
-            if (stored) {
-                this.customButtons = stored as Array<{id: string, caption: string, prompt: string}>;
-                console.log('Loaded custom buttons:', this.customButtons);
-                this.renderCustomButtons();
-            } else {
-                console.log('No stored custom buttons found');
-                this.customButtons = [];
-                this.renderCustomButtons();
-            }
-        } catch (error) {
-            console.warn('Failed to load custom buttons:', error);
+        const storage = await StorageService.getInstance();
+        const stored = await storage.get(storageKey);
+        console.log('Stored data:', stored);
+        if (stored) {
+            this.customButtons = stored as Array<{id: string, caption: string, prompt: string}>;
+            console.log('Loaded custom buttons:', this.customButtons);
+            this.renderCustomButtons();
+        } else {
+            console.log('No stored custom buttons found');
             this.customButtons = [];
             this.renderCustomButtons();
         }
@@ -3138,14 +3124,10 @@ export class XMLStoryModal extends BaseModal {
      * Save custom buttons to storage
      */
     private async saveCustomButtons(): Promise<void> {
-        const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
-        try {
-            const storage = await StorageService.getInstance();
-            await storage.set(storageKey, this.customButtons);
-            console.log('Custom buttons saved successfully');
-        } catch (error) {
-            console.warn('Failed to save custom buttons:', error);
-        }
+        const storageKey = `xml-story-custom-buttons-${this.sourceNode!.id}`;
+        const storage = await StorageService.getInstance();
+        await storage.set(storageKey, this.customButtons);
+        console.log('Custom buttons saved successfully');
     }
     
     /**
