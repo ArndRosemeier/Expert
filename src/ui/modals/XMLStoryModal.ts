@@ -3237,13 +3237,15 @@ export class XMLStoryModal extends BaseModal {
     }
     
     /**
-     * Use a custom button (populate message input with its prompt)
+     * Use a custom button (populate message input with its prompt and send)
      */
     private useCustomButton(buttonId: string): void {
         const button = this.customButtons.find(b => b.id === buttonId);
         if (button && this.messageInput) {
             this.messageInput.value = button.prompt;
             this.messageInput.focus();
+            // Automatically send the message
+            void this.sendMessage();
         }
     }
     
