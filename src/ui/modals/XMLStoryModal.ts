@@ -3114,16 +3114,23 @@ export class XMLStoryModal extends BaseModal {
      * Load custom buttons from storage
      */
     private loadCustomButtons(): void {
+        console.log('loadCustomButtons called');
+        console.log('sourceNode:', this.sourceNode);
         const storageKey = `xml-story-custom-buttons-${this.sourceNode?.id || 'default'}`;
+        console.log('Storage key:', storageKey);
         const stored = localStorage.getItem(storageKey);
+        console.log('Stored data:', stored);
         if (stored) {
             try {
                 this.customButtons = JSON.parse(stored);
+                console.log('Loaded custom buttons:', this.customButtons);
                 this.renderCustomButtons();
             } catch (error) {
                 console.warn('Failed to load custom buttons:', error);
                 this.customButtons = [];
             }
+        } else {
+            console.log('No stored custom buttons found');
         }
     }
     
@@ -3139,15 +3146,21 @@ export class XMLStoryModal extends BaseModal {
      * Create a new custom button from current prompt
      */
     private createCustomButton(): void {
-        if (!this.messageInput) return;
+        console.log('createCustomButton called');
+        if (!this.messageInput) {
+            console.log('No messageInput found');
+            return;
+        }
         
         const currentPrompt = this.messageInput.value.trim();
+        console.log('Current prompt:', currentPrompt);
         if (!currentPrompt) {
             alert('Please enter a prompt in the message input first.');
             return;
         }
         
         const caption = prompt('Enter a caption for this button:');
+        console.log('Caption entered:', caption);
         if (!caption) return;
         
         const buttonId = `custom-btn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -3157,7 +3170,9 @@ export class XMLStoryModal extends BaseModal {
             prompt: currentPrompt
         };
         
+        console.log('Adding new button:', newButton);
         this.customButtons.push(newButton);
+        console.log('Custom buttons array:', this.customButtons);
         this.saveCustomButtons();
         this.renderCustomButtons();
     }
@@ -3166,7 +3181,12 @@ export class XMLStoryModal extends BaseModal {
      * Render custom buttons in the sidebar
      */
     private renderCustomButtons(): void {
-        if (!this.customButtonsContainer) return;
+        console.log('renderCustomButtons called');
+        console.log('customButtonsContainer:', this.customButtonsContainer);
+        if (!this.customButtonsContainer) {
+            console.log('customButtonsContainer not found!');
+            return;
+        }
         
         if (this.customButtons.length === 0) {
             this.customButtonsContainer.innerHTML = '<div style="color: #888; font-size: 0.8rem; font-style: italic;">No custom buttons yet</div>';
