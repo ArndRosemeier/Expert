@@ -1151,13 +1151,15 @@ export class XMLStoryModal extends BaseModal {
         // Close modal button
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
-            void this.closeWithUnsavedCheck();
+            // Use the same initialization check as the close() override
+            void this.close();
         });
         
         // Setup custom ESC key handler since we disabled default closable behavior
         const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                void this.closeWithUnsavedCheck();
+                // Use the same initialization check as the close() override
+                void this.close();
             }
         };
         document.addEventListener('keydown', escapeHandler);
