@@ -196,7 +196,8 @@ export class XMLStoryParser {
         let cleanedText = text;
 
         // Find all XML-like tags in the text (both self-closing and with content)
-        const xmlTagRegex = /<(outline|context)(\s[^>]*?)?\s*\/?>/gi;
+        // FIXED: Self-closing regex now requires "/" before ">" to avoid matching opening tags of content tags
+        const xmlTagRegex = /<(outline|context)(\s[^>]*?)?\s*\/>/gi;
         const xmlContentTagRegex = /<(outline|context)(\s[^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi;
         
         const selfClosingMatches = Array.from(text.matchAll(xmlTagRegex));
