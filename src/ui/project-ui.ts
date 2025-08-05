@@ -2146,6 +2146,33 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                     <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
                     <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
+                    ${(() => {
+                        const masterVersion = node.getMasterVersion();
+                        if (masterVersion && masterVersion.timestamp) {
+                            const timestamp = new Date(masterVersion.timestamp);
+                            const now = new Date();
+                            const diffMs = now.getTime() - timestamp.getTime();
+                            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                            const diffHours = Math.floor(diffMinutes / 60);
+                            const diffDays = Math.floor(diffHours / 24);
+                            
+                            let timeAgo;
+                            if (diffMinutes < 1) {
+                                timeAgo = 'just now';
+                            } else if (diffMinutes < 60) {
+                                timeAgo = `${diffMinutes}m ago`;
+                            } else if (diffHours < 24) {
+                                timeAgo = `${diffHours}h ago`;
+                            } else if (diffDays < 7) {
+                                timeAgo = `${diffDays}d ago`;
+                            } else {
+                                timeAgo = timestamp.toLocaleDateString();
+                            }
+                            
+                            return `<span style="font-size: 0.65em; color: #9ca3af; font-weight: normal; margin-left: 0.5rem;" title="Last modified: ${timestamp.toLocaleString()}">${timeAgo}</span>`;
+                        }
+                        return '';
+                    })()}
                 </div>
                 
                 <!-- Template Info Row -->
