@@ -305,7 +305,12 @@ export class ModalFactory {
         if (replaceExisting) {
             const existing = this.registry.get('xml-story-modal');
             if (existing) {
-                void existing.close();
+                // Use forceCloseImmediate for XMLStoryModal to avoid unsaved changes check when replacing
+                if ('forceCloseImmediate' in existing && typeof existing.forceCloseImmediate === 'function') {
+                    void (existing as any).forceCloseImmediate();
+                } else {
+                    void existing.close();
+                }
             }
         }
 

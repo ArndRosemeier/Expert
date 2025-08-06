@@ -28,7 +28,6 @@ import {
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
-const XML_STORY_FULL_UPDATE_MODE_KEY = 'xml-story-full-update-mode';
 
 interface XMLStoryCommand {
     type: string;
@@ -83,14 +82,9 @@ export class XMLStoryModal extends BaseModal {
 
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
     private isEditing = false;
-    private contextRefreshPending = false;
-    private fullUpdateMode = false;
-    private fullUpdateModeCheckbox: HTMLInputElement | null = null;
     
-    // Retry mechanism for failed commands
-    private retryCount = 0;
-    private maxRetries = 3;
-    private pendingRetry: { command: XMLStoryCommand; error: string } | null = null;
+    // Failed commands collection for user-prompted correction
+    private failedCommands: Array<{ command: XMLStoryCommand; error: string; rawXml: string }> = [];
     
     // ARCHITECTURE NOTE: Outline content is stored here as text (outlineHistory),
     // while context items are stored as XML elements in XMLStoryService.
@@ -1014,16 +1008,6 @@ export class XMLStoryModal extends BaseModal {
                         </select>
                     </div>
                     
-                    <div style="padding: 0.75rem; background: #2a2a2a; border-radius: 6px; border: 1px solid #444;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="full-update-mode-checkbox" style="margin: 0;">
-                            <label for="full-update-mode-checkbox" style="font-size: 0.8rem; color: #ccc; cursor: pointer; line-height: 1.3;">
-                                Full context mode<br>
-                                <span style="color: #888; font-size: 0.7rem;">Uses more tokens, higher accuracy</span>
-                            </label>
-                        </div>
-                    </div>
-                    
                     <div class="custom-buttons-section">
                         <h4>Custom Buttons</h4>
                         <div id="xml-story-custom-buttons-container">
@@ -1191,14 +1175,6 @@ export class XMLStoryModal extends BaseModal {
             void this.saveModelSelection();
         });
 
-        // Full update mode checkbox with persistence
-        this.fullUpdateModeCheckbox = container.querySelector('#full-update-mode-checkbox');
-        void this.loadSavedFullUpdateMode();
-        this.fullUpdateModeCheckbox!.addEventListener('change', () => {
-            this.fullUpdateMode = this.fullUpdateModeCheckbox!.checked;
-            void this.saveFullUpdateMode();
-        });
-
         // No conversation persistence - each session starts fresh
         
         // Apply initialization data if provided, or set default message
@@ -1264,51 +1240,29 @@ export class XMLStoryModal extends BaseModal {
                 systemPromptContext
             );
 
-            // Determine if we should include full context
-            // Always include context for first message, or if in full mode, or if refresh requested
-            const isFirstMessage = this.conversationHistory.length === 0;
-            const shouldIncludeContext = isFirstMessage || this.fullUpdateMode || this.contextRefreshPending;
-            let userMessage: string;
-
-            if (shouldIncludeContext) {
-                // Include current whiteboard state (first message, full mode, or AI requested refresh)
-                const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
-                const currentContextItems = this.formatContextItemsForAI();
-                const humanEdits = this.formatHumanEditsForAI();
-                
-                const userPromptContext = {
-                    custom: {
-                        current_outline: currentOutline,
-                        current_context_items: currentContextItems,
-                        human_edits: humanEdits
-                    }
-                };
-                
-                const userPrompt = await expansionService.expandPromptAsync(
-                    prompts.node_chat_editor_user, 
-                    userPromptContext
-                );
-                
-                userMessage = `${userPrompt}\n\nUser: ${message}`;
-                
-                // Reset refresh flag after using it
-                if (this.contextRefreshPending) {
-                    this.contextRefreshPending = false;
-                    console.log('🔄 Context refresh provided to AI, flag reset');
+            // Always include dynamic context as a separate system-level prompt
+            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+            const currentContextItems = this.formatContextItemsForAI();
+            const humanEdits = this.formatHumanEditsForAI();
+            const userPromptContext = {
+                custom: {
+                    current_outline: currentOutline,
+                    current_context_items: currentContextItems,
+                    human_edits: humanEdits
                 }
-            } else {
-                // Token-efficient mode - just send the user message (after first message)
-                userMessage = `User: ${message}`;
-            }
+            };
+            const dynamicContextPrompt = await expansionService.expandPromptAsync(
+                prompts.node_chat_editor_user,
+                userPromptContext
+            );
 
-            // Add user message to conversation history BEFORE the AI call
-            this.conversationHistory.push({ role: 'user', content: userMessage });
-            
-                            // No conversation persistence needed
+            // Store only raw user message
+            this.conversationHistory.push({ role: 'user', content: message });
 
-            // Prepare conversation with persistent system prompt
+            // Prepare conversation: system prompts followed by chat history
             const conversation = [
                 { role: 'system' as const, content: systemPrompt },
+                { role: 'system' as const, content: dynamicContextPrompt },
                 ...this.conversationHistory
             ];
 
@@ -1353,6 +1307,11 @@ export class XMLStoryModal extends BaseModal {
                     }
                 }
 
+                // Check for failed commands and offer AI correction
+                if (this.failedCommands.length > 0) {
+                    await this.offerAICorrection();
+                }
+
                 // Update the streaming message with cleaned text and XML highlighting
                 const formattedContent = this.applyXMLHighlighting(
                     this.parseMarkdownForChat(parseResult.cleanedText), 
@@ -1364,14 +1323,12 @@ export class XMLStoryModal extends BaseModal {
                 // Add AI response to conversation history
                 this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
 
-                // Reset retry state on successful manual message
-                this.resetRetryState();
+                // No more retry state to reset
 
                 // Update whiteboard
                 this.updateWhiteboard();
                 
-                // Check for pending retries after generation completes
-                await this.processPendingRetry();
+                // No more automatic retries
 
                 // Check if AI actually added new context items during this chat response
                 const contextCountAfter = this.storySystem.service.getElementsForContext()
@@ -1389,8 +1346,7 @@ export class XMLStoryModal extends BaseModal {
 
         } finally {
             this.setGenerating(false);
-            // Process any pending retries after generation completes
-            await this.processPendingRetry();
+            // No more automatic retries
         }
     }
 
@@ -1988,11 +1944,6 @@ export class XMLStoryModal extends BaseModal {
             case 'highlight_cleared':
                 this.updateWhiteboard();
                 break;
-            case 'context_refresh_requested':
-                // AI has requested fresh context for the next message
-                this.contextRefreshPending = true;
-                console.log('🔄 Context refresh requested by AI for next message');
-                break;
             case 'command_failed':
                 // Handle failed commands with retry logic
                 this.handleCommandFailure(event);
@@ -2009,194 +1960,99 @@ export class XMLStoryModal extends BaseModal {
     }
     
     /**
-     * Handle command failures with automatic retry logic
+     * Handle command failures by collecting them for user-prompted correction
      */
     private async handleCommandFailure(event: XMLStoryEvent): Promise<void> {
         const { command, error } = event.payload as { command: XMLStoryCommand; error: string };
         
         console.warn(`⚠️ Command failed: ${command.type} - ${error}`);
         
-        // If we're currently generating, queue the retry for after generation completes
-        if (this.isGenerating) {
-            this.pendingRetry = { command, error };
-            console.log('📝 Command failure detected during generation, queueing retry...');
-            return;
-        }
+        // Generate raw XML representation of the failed command
+        const rawXml = this.reconstructCommandXML(command);
         
-        // Process the retry immediately
-        await this.processCommandRetry(command, error);
+        // Collect failed command for later correction
+        this.failedCommands.push({ command, error, rawXml });
+        
+        console.log(`📝 Command failure collected: ${rawXml} (${error})`);
     }
     
     /**
-     * Process command retry logic
+     * Reconstruct XML command from command object for user display
      */
-    private async processCommandRetry(command: XMLStoryCommand, error: string): Promise<void> {
-        // Check if we can retry
-        if (this.retryCount < this.maxRetries) {
-            this.retryCount++;
+    private reconstructCommandXML(command: XMLStoryCommand): string {
+        switch (command.type) {
+            case 'replace_command':
+                return `<replace_command><search>${command.searchText || ''}</search><replace>${command.replaceText || ''}</replace></replace_command>`;
+            case 'outline_replace':
+                return `</outline_replace>${command.content || ''}</outline_replace>`;
+            case 'append':
+                return `<append>${command.content || ''}</append>`;
+            case 'edit':
+                return `</edit id="${(command.parameters as any)?.id || 'unknown'}">${command.content || ''}</edit>`;
+            case 'delete':
+                return `</delete id="${(command.parameters as any)?.id || 'unknown'}">`;
+            case 'context':
+                return `<context id="${(command.parameters as any)?.id || 'unknown'}">${command.content || ''}</context>`;
+            default:
+                return `<${command.type}>${command.content || ''}</${command.type}>`;
+        }
+    }
+    
+    /**
+     * Offer AI correction for failed commands
+     */
+    private async offerAICorrection(): Promise<void> {
+        if (this.failedCommands.length === 0) return;
+
+        // Create user-friendly description of failures
+        const failureDescription = this.failedCommands.map(failure => 
+            `${failure.rawXml} (${failure.error})`
+        ).join('\n');
+
+        // Show user alert with option to let AI correct
+        const userWantsCorrection = confirm(
+            `${this.failedCommands.length} command(s) failed to execute.\n\n` +
+            `Would you like the AI to correct these mistakes automatically?\n\n` +
+            `Failed commands:\n${failureDescription}`
+        );
+
+        if (userWantsCorrection) {
+            // Generate correction message
+            const correctionMessage = this.generateCorrectionMessage();
             
-            console.log(`🔄 Retrying failed command (attempt ${this.retryCount}/${this.maxRetries})`);
+            // Clear failed commands since we're handling them
+            this.failedCommands = [];
             
-            // Send automatic feedback to AI with current state
-            const feedbackMessage = this.generateRetryFeedback(command, error);
-            
-            // Add failure message to chat for transparency
-            this.addMessageToChat('assistant', `❌ Command failed: ${error}. Retrying with updated context... (${this.retryCount}/${this.maxRetries})`);
-            
-            // Automatically retry with fresh context
-            await this.sendAutomaticRetry(feedbackMessage);
+            // Simulate user sending the correction message
+            await this.sendCorrectionMessage(correctionMessage);
         } else {
-            // Max retries reached
-            const finalMessage = `❌ Failed after ${this.maxRetries} attempts: ${error}. Please try a different approach.`;
-            this.addMessageToChat('assistant', finalMessage);
-            this.resetRetryState();
+            // User declined, just clear the failed commands
+            this.failedCommands = [];
         }
     }
     
     /**
-     * Generate feedback message for retry attempts
+     * Generate correction message for failed commands
      */
-    private generateRetryFeedback(command: XMLStoryCommand, error: string): string {
-        const currentOutline = this.getCurrentOutlineContent() || 'No outline content';
-        
-        let feedback = `The ${command.type} command failed: ${error}\n\n`;
-        feedback += 'CURRENT OUTLINE STATE:\n';
-        feedback += currentOutline + '\n\n';
-        
-        if (command.type === 'replace_command') {
-            feedback += `You tried to find: "${command.searchText || 'unknown'}"\n`;
-            feedback += `To replace with: "${command.replaceText || 'unknown'}"\n\n`;
-            feedback += 'Please use different search text that exists exactly in the outline, or use <append> to add content instead.';
-        }
-        
-        return feedback;
+    private generateCorrectionMessage(): string {
+        const failureList = this.failedCommands.map(failure => 
+            `${failure.rawXml} (${failure.error})`
+        ).join('\n');
+
+        return `These commands did not work:\n${failureList}\n\nPlease try again.`;
     }
-    
+
     /**
-     * Send automatic retry with feedback
+     * Send correction message as if user typed it
      */
-    private async sendAutomaticRetry(feedbackMessage: string): Promise<void> {
-        if (this.isGenerating) return;
-        
-        try {
-            this.setGenerating(true);
-            
-            // Force context refresh for retry
-            this.contextRefreshPending = true;
-            
-            // Create system prompt
-            const prompts = this.settingsManager.getPrompts();
-            const expansionService = createPromptExpansionService(this.settingsManager);
-            
-            const systemPromptContext = {
-                project: {
-                    language: this.settingsManager.getLanguage()
-                }
-            };
-            
-            const systemPrompt = await expansionService.expandPromptAsync(
-                prompts.node_chat_editor, 
-                systemPromptContext
-            );
-            
-            // Include full context for retry
-            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
-            const currentContextItems = this.formatContextItemsForAI();
-            const humanEdits = this.formatHumanEditsForAI();
-            
-            const userPromptContext = {
-                custom: {
-                    current_outline: currentOutline,
-                    current_context_items: currentContextItems,
-                    human_edits: humanEdits
-                }
-            };
-            
-            const userPrompt = await expansionService.expandPromptAsync(
-                prompts.node_chat_editor_user, 
-                userPromptContext
-            );
-            
-            const userMessage = `${userPrompt}\n\nSystem: ${feedbackMessage}`;
-            
-            // Add to conversation history
-            this.conversationHistory.push({ role: 'user', content: userMessage });
-            
-            // Reset refresh flag
-            this.contextRefreshPending = false;
-            
-            // Prepare conversation
-            const conversation = [
-                { role: 'system' as const, content: systemPrompt },
-                ...this.conversationHistory
-            ];
-            
-            // Get selected model
-            const modelPurpose = this.modelSelector!.value;
-            
-            // Add placeholder for streaming
-            const placeholderMessage = this.addMessageToChat('assistant', '');
-            
-            // Send to AI
-            let response = '';
-            await this.openRouterClient.streamingChat(modelPurpose, conversation, {
-                onChunk: (chunk: string) => {
-                    response += chunk;
-                    this.updateStreamingMessage(placeholderMessage, response);
-                },
-                onComplete: () => {
-                    this.finalizeStreamingMessage(placeholderMessage);
-                },
-                onError: (error: Error) => {
-                    this.finalizeStreamingMessage(placeholderMessage);
-                    throw error;
-                }
-            });
-            
-            if (response) {
-                // Process AI response
-                const parseResult = await this.storySystem.processAIResponse(response);
-                
-                // Handle outline_replace commands
-                for (const command of parseResult.systemCommands) {
-                    if (command.type === 'outline_replace' && command.content) {
-                        this.setOutlineContentFromAI(command.content);
-                    }
-                }
-                
-                // Update message with cleaned text and XML highlighting
-                const formattedContent = this.applyXMLHighlighting(
-                    this.parseMarkdownForChat(parseResult.cleanedText), 
-                    parseResult.systemCommands as unknown as XMLStoryCommand[]
-                );
-                this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
-                this.finalizeStreamingMessage(placeholderMessage);
-                
-                // Add to conversation history
-                this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
-                
-                // Update whiteboard
-                this.updateWhiteboard();
-                
-                // If successful, reset retry state
-                this.resetRetryState();
-            }
-            
-        } catch (error) {
-            console.error('Error in automatic retry:', error);
-            this.addMessageToChat('assistant', 'Sorry, the automatic retry failed. Please try again manually.');
-            this.resetRetryState();
-        } finally {
-            this.setGenerating(false);
-        }
-    }
-    
-    /**
-     * Reset retry state
-     */
-    private resetRetryState(): void {
-        this.retryCount = 0;
-        this.pendingRetry = null;
+    private async sendCorrectionMessage(message: string): Promise<void> {
+        if (!this.messageInput) return;
+
+        // Set the message in the input field
+        this.messageInput.value = message;
+
+        // Send the message through normal flow
+        await this.sendMessage();
     }
     
     /**
@@ -2371,18 +2227,7 @@ export class XMLStoryModal extends BaseModal {
         });
     }
 
-    /**
-     * Process any pending retry after generation completes
-     */
-    private async processPendingRetry(): Promise<void> {
-        if (this.pendingRetry && !this.isGenerating) {
-            const { command, error } = this.pendingRetry;
-            this.pendingRetry = null; // Clear pending retry
-            
-            console.log('🔄 Processing queued retry after generation completed');
-            await this.processCommandRetry(command, error);
-        }
-    }
+
 
     private clearChat(): void {
         if (confirm('Are you sure you want to clear the chat history? This will not affect your outline or context items.')) {
@@ -2547,6 +2392,7 @@ export class XMLStoryModal extends BaseModal {
      */
     private hasUnsavedChanges(): boolean {
         if (!this.sourceNode) {
+            console.log('🔍 hasUnsavedChanges: No sourceNode, returning false');
             return false;
         }
 
@@ -2571,8 +2417,23 @@ export class XMLStoryModal extends BaseModal {
             // Normalize whitespace for comparison
             const normalizeContent = (content: string) => content.trim().replace(/\s+/g, ' ');
 
-            const outlineChanged = normalizeContent(currentOutlineContent || '') !== normalizeContent(sourceOutlineContent);
-            const contextChanged = normalizeContent(currentContextContent || '') !== normalizeContent(sourceContextContent);
+            const normalizedCurrent = normalizeContent(currentOutlineContent || '');
+            const normalizedSource = normalizeContent(sourceOutlineContent);
+            const normalizedCurrentContext = normalizeContent(currentContextContent || '');
+            const normalizedSourceContext = normalizeContent(sourceContextContent);
+
+            const outlineChanged = normalizedCurrent !== normalizedSource;
+            const contextChanged = normalizedCurrentContext !== normalizedSourceContext;
+
+            console.log('🔍 hasUnsavedChanges check:', {
+                currentOutline: currentOutlineContent?.substring(0, 100) + '...',
+                sourceOutline: sourceOutlineContent?.substring(0, 100) + '...',
+                normalizedCurrent: normalizedCurrent?.substring(0, 50) + '...',
+                normalizedSource: normalizedSource?.substring(0, 50) + '...',
+                outlineChanged,
+                contextChanged,
+                result: outlineChanged || contextChanged
+            });
 
             return outlineChanged || contextChanged;
         } catch (error) {
@@ -2588,14 +2449,21 @@ export class XMLStoryModal extends BaseModal {
      * Close the modal with unsaved changes check (now just calls close())
      */
     private async closeWithUnsavedCheck(): Promise<void> {
+        console.log('🚪 closeWithUnsavedCheck called, checking for unsaved changes...');
+        
         // Check for unsaved changes before closing
         if (this.hasUnsavedChanges()) {
+            console.log('⚠️ Unsaved changes detected, showing confirmation dialog');
             const confirmed = confirm(
                 'You have unsaved changes. Are you sure you want to close without updating the source node?'
             );
             if (!confirmed) {
+                console.log('❌ User cancelled close, keeping modal open');
                 return; // User clicked Cancel - DO NOT CLOSE
             }
+            console.log('✅ User confirmed close despite unsaved changes');
+        } else {
+            console.log('✅ No unsaved changes, proceeding with close');
         }
         
         // If we get here, it's safe to close
@@ -3083,27 +2951,6 @@ export class XMLStoryModal extends BaseModal {
     }
 
     /**
-     * Load saved full update mode preference from StorageService
-     */
-    private async loadSavedFullUpdateMode(): Promise<void> {
-        const storage = await StorageService.getInstance();
-        const savedMode = await storage.get(XML_STORY_FULL_UPDATE_MODE_KEY);
-        
-        if (savedMode !== null && this.fullUpdateModeCheckbox) {
-            this.fullUpdateMode = savedMode as boolean;
-            this.fullUpdateModeCheckbox.checked = this.fullUpdateMode;
-        }
-    }
-
-    /**
-     * Save current full update mode preference to StorageService
-     */
-    private async saveFullUpdateMode(): Promise<void> {
-        const storage = await StorageService.getInstance();
-        await storage.set(XML_STORY_FULL_UPDATE_MODE_KEY, this.fullUpdateMode);
-    }
-    
-    /**
      * Load custom buttons from storage
      */
     private async loadCustomButtons(): Promise<void> {
@@ -3313,5 +3160,16 @@ export class XMLStoryModal extends BaseModal {
         
         // Always redirect to closeWithUnsavedCheck to ensure proper handling
         await this.closeWithUnsavedCheck();
+    }
+
+    /**
+     * Force close without unsaved changes check - used by ModalFactory when replacing modals
+     */
+    public async forceCloseImmediate(): Promise<void> {
+        // Clean up persistent highlights
+        this.clearPersistentHighlight();
+        
+        // Skip unsaved changes check and force close immediately
+        await this.forceClose();
     }
 }

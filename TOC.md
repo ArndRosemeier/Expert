@@ -131,34 +131,36 @@ The Node Chat Editor is a collaborative AI editing interface that allows real-ti
 
 ### Core Components
 - **`src/xml-story-creation/index.ts`** - XML story system entry point
-- **`src/xml-story-creation/services/XMLStoryService.ts`** - Main story state management
+- **`src/xml-story-creation/services/XMLStoryService.ts`** - Context item management, XML command processing
 - **`src/xml-story-creation/parser/XMLStoryParser.ts`** - AI response XML parsing with `</outline_replace>` commands
-- **`src/xml-story-creation/services/ElementIDGenerator.ts`** - Unique ID generation
-- **`src/xml-story-creation/types/XMLStoryTypes.ts`** - Type definitions
+- **`src/ui/modals/XMLStoryModal.ts`** - Main chat interface with outline + context editing
 
-### UI Components
-- **`src/ui/modals/XMLStoryModal.ts`** - Node Chat Editor interface with unified outline editing
+### Message Flow Architecture
+1. **System Prompt**: AI editing instructions (always sent)
+2. **Dynamic Context Prompt**: Current outline + context items + human edits (always sent)
+3. **User Message**: Raw user input only (stored in chat history)
+4. **AI Response**: Processed for XML commands, cleaned text stored in history
 
 ### Key Features
-- **Unified Outline Editor**: Single text area for entire node content (not individual items)
-- **Individual Context Items**: Separate editable context elements with AI interaction
-- **Version Management**: Proper handling of `chat_edited` tagged versions
-- **Real-time AI Collaboration**: Chat-based content refinement with instant feedback
-- **Source Node Integration**: Initializes with active node data, updates source on save
+- **Smart Context**: Always sends fresh node state, chat history contains only user/AI conversation
+- **Unified Outline**: Single text editor for complete node content
+- **Individual Context Items**: Separate AI-managed context elements with global (*) vs situational flags
+- **Failed Command Recovery**: User-prompted AI correction with detailed error feedback
+- **Custom Buttons**: Persistent prompt shortcuts per node
 
-### Usage Pattern
-```typescript
-// Triggered from main UI with active node data
-openXMLStoryModal({
-  title: node.title,
-  content: node.content,
-  contextItems: node.context.split('\n\n'),
-  sourceNode: node
-});
+### XML Commands Supported
+- `</outline_replace>CONTENT</outline_replace>` - Replace entire outline
+- `<append>CONTENT</append>` - Add to outline end
+- `<replace_command><search>TEXT</search><replace>NEW</replace></replace_command>` - Replace specific text
+- `<context id="new_id">DESCRIPTION</context>` - Create context item
+- `</edit id="item_id">NEW_DESCRIPTION</edit>` - Edit existing context item
+- `</delete id="item_id">` - Remove context item
 
-// AI interaction through unified outline and context editing
-// Results in proper version management with 'chat_edited' tags
-```
+### Error Handling Pattern
+1. Failed commands are collected during AI response processing
+2. User alert shows all failures with raw XML + reasons
+3. If user accepts, generates correction message: "These commands did not work: [list]. Please try again."
+4. Message sent as normal user input, AI gets full context to fix mistakes
 
 ## 🎨 Idea Board System
 
@@ -366,15 +368,10 @@ openXMLStoryModal({
   sourceNode: activeNode
 });
 
-// System handles AI responses with special commands:
-// </outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
-// <context>New context item content</context>
-// </edit>target_id</edit> and </delete>target_id</delete>
-
-// Results in proper version management:
-const chatVersions = node.getVersionsWithTag('chat_edited');
-// Updates existing or creates new 'chat_edited' version
-// Promotes to master automatically
+// Message flow: System + Context prompts + raw user message
+// AI responds with XML commands + conversational text
+// Failed commands trigger user-prompted correction flow
+// Results in proper version management with 'chat_edited' tags
 ```
 
 ### Global State Access
