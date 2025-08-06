@@ -1151,8 +1151,12 @@ export class XMLStoryModal extends SimpleModal {
         // Close modal button with unsaved changes check
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
+            // Debug: Always check what hasUnsavedChanges returns
+            const hasChanges = this.hasUnsavedChanges();
+            console.log('🔴 Close button clicked, hasUnsavedChanges:', hasChanges);
+            
             // Check for unsaved changes before closing
-            if (this.hasUnsavedChanges()) {
+            if (hasChanges) {
                 const confirmed = confirm(
                     'You have unsaved changes. Are you sure you want to close without updating the source node?'
                 );
@@ -2432,8 +2436,13 @@ export class XMLStoryModal extends SimpleModal {
             const sourceOutlineContent = this.sourceNode.content || '';
             const sourceContextContent = this.sourceNode.context || '';
 
-            // Normalize whitespace for comparison
-            const normalizeContent = (content: string) => content.trim().replace(/\s+/g, ' ');
+            // Normalize whitespace for comparison but preserve line structure
+            const normalizeContent = (content: string) => {
+                return content
+                    .replace(/[ \t]+/g, ' ')  // Replace spaces/tabs with single space
+                    .replace(/\n[ \t]*/g, '\n')  // Remove spaces after newlines
+                    .trim();
+            };
 
             const normalizedCurrent = normalizeContent(currentOutlineContent || '');
             const normalizedSource = normalizeContent(sourceOutlineContent);
