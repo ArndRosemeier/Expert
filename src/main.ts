@@ -2,8 +2,13 @@ import { AppKeyService } from './keys/AppKeyService.js';
 import { VersionService } from './VersionService.js';
 import './ui/enhanced-layout.css';
 
-// Log version info on startup (only in development)
-if (process.env['NODE_ENV'] === 'development') {
+// Log version info on startup (only in development or when explicitly requested)
+// Check for development mode via URL parameter or localhost
+const isDevelopment = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1' ||
+                     new URLSearchParams(window.location.search).get('debug') === 'true';
+
+if (isDevelopment) {
     VersionService.logVersionInfo();
 }
 
