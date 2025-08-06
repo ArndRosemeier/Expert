@@ -68,7 +68,7 @@ export class SimpleGenericModal extends SimpleModal {
                 }
             });
 
-            this.content.actions.forEach(action => {
+            this.content.actions.forEach((action: ModalAction) => {
                 const button = createElement('button', {
                     content: action.label,
                     attributes: {
