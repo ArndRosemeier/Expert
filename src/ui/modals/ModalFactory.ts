@@ -82,9 +82,11 @@ export class ModalFactory {
         
         // Override close method to include cleanup
         modal.close = async () => {
+            console.log(`🧹 ModalFactory cleanup: About to close and unregister modal ${modal.id}`);
             await originalClose();
-            // Unregister from registry after closing
+            console.log(`🧹 ModalFactory cleanup: Unregistering modal ${modal.id}`);
             this.registry.unregister(modal.id);
+            console.log(`🧹 ModalFactory cleanup: Modal ${modal.id} unregistered`);
         };
         
         return modal;
@@ -296,23 +298,10 @@ export class ModalFactory {
 
     /**
      * Creates and optionally opens an XML Story Creation modal
+     * Now uses simplified modal system - no registry needed!
      */
     public async createXMLStoryModal(options: ModalOptions = {}): Promise<XMLStoryModal> {
-
-        const { autoOpen = true, replaceExisting = true, initializationData } = options;
-
-        // Close existing XML story modal if requested
-        if (replaceExisting) {
-            const existing = this.registry.get('xml-story-modal');
-            if (existing) {
-                // Use forceCloseImmediate for XMLStoryModal to avoid unsaved changes check when replacing
-                if ('forceCloseImmediate' in existing && typeof existing.forceCloseImmediate === 'function') {
-                    void (existing as any).forceCloseImmediate();
-                } else {
-                    void existing.close();
-                }
-            }
-        }
+        const { autoOpen = true, initializationData } = options;
 
         // Get OpenRouter client
         const { OpenRouterClient } = await import('../../OpenRouterClient');
@@ -327,19 +316,18 @@ export class ModalFactory {
             ...(initializationData && { initializationData })
         };
 
+        // Create modal with simplified system - no registry or cleanup needed!
         const modal = new XMLStoryModal(config, {
             onOpen: () => {
-    
+                // Optional: Add any open logic here
             },
             onClose: () => {
-    
+                // Optional: Add any close logic here
             }
         });
         
-        this.registry.register(modal);
-
-        // Set up automatic cleanup
-        this.setupModalCleanup(modal);
+        // No registry.register() - modal manages its own lifecycle!
+        // No setupModalCleanup() - modal cleans up itself!
 
         if (autoOpen) {
             void modal.open();

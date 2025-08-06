@@ -11,7 +11,7 @@
  * for improving and refining existing project nodes.
  */
 
-import { BaseModal } from './core/BaseModal';
+import { SimpleModal } from './core/SimpleModal';
 import type { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { SettingsManager } from '../../SettingsManager';
 import { OpenRouterClient } from '../../OpenRouterClient';
@@ -51,7 +51,7 @@ export interface XMLStoryModalConfig extends ModalConfig {
     };
 }
 
-export class XMLStoryModal extends BaseModal {
+export class XMLStoryModal extends SimpleModal {
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
     private storySystem: ReturnType<typeof createXMLStorySystem>;
@@ -1151,13 +1151,13 @@ export class XMLStoryModal extends BaseModal {
         // Close modal button
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
-            void this.closeWithUnsavedCheck();
+            void this.close();
         });
         
         // Setup custom ESC key handler since we disabled default closable behavior
         const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                void this.closeWithUnsavedCheck();
+                void this.close();
             }
         };
         document.addEventListener('keydown', escapeHandler);
@@ -2445,50 +2445,9 @@ export class XMLStoryModal extends BaseModal {
 
 
 
-    /**
-     * Close the modal with unsaved changes check (now just calls close())
-     */
-    private async closeWithUnsavedCheck(): Promise<void> {
-        console.log('🚪 closeWithUnsavedCheck called, checking for unsaved changes...');
-        
-        // Check for unsaved changes before closing
-        if (this.hasUnsavedChanges()) {
-            console.log('⚠️ Unsaved changes detected, showing confirmation dialog');
-            const confirmed = confirm(
-                'You have unsaved changes. Are you sure you want to close without updating the source node?'
-            );
-            if (!confirmed) {
-                console.log('❌ User cancelled close, keeping modal open');
-                return; // User clicked Cancel - DO NOT CLOSE
-            }
-            console.log('✅ User confirmed close despite unsaved changes');
-        } else {
-            console.log('✅ No unsaved changes, proceeding with close');
-        }
-        
-        // If we get here, it's safe to close
-        await this.forceClose();
-    }
+
     
-    /**
-     * Force close without unsaved changes check (for internal use)
-     */
-    private async forceClose(): Promise<void> {
-        // Clean up text editors
-        this.elementEditors.forEach(editor => editor.destroy());
-        this.elementEditors.clear();
-        
-        // Clean up outline editor
-        if (this.outlineEditor) {
-            this.outlineEditor.destroy();
-            this.outlineEditor = null;
-        }
-        
-        // No state persistence needed
-        
-        // Call parent close
-        await super.close();
-    }
+
 
     private addPlusButtonListeners(): void {
         if (!this.whiteboardContainer) return;
@@ -3155,21 +3114,59 @@ export class XMLStoryModal extends BaseModal {
 
 
     public override async close(): Promise<void> {
+        console.log('🚪 XMLStoryModal.close() called - checking for unsaved changes...');
+        
+        // Check for unsaved changes before closing
+        if (this.hasUnsavedChanges()) {
+            console.log('⚠️ Unsaved changes detected, showing confirmation dialog');
+            const confirmed = confirm(
+                'You have unsaved changes. Are you sure you want to close without updating the source node?'
+            );
+            
+            if (!confirmed) {
+                console.log('🛑 User cancelled close due to unsaved changes');
+                return; // Don't close the modal
+            }
+            console.log('✅ User confirmed close despite unsaved changes');
+        } else {
+            console.log('✅ No unsaved changes, proceeding with close');
+        }
+        
+        // Clean up text editors
+        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.clear();
+        
+        // Clean up outline editor
+        if (this.outlineEditor) {
+            this.outlineEditor.destroy();
+            this.outlineEditor = null;
+        }
+        
         // Clean up persistent highlights
         this.clearPersistentHighlight();
         
-        // Always redirect to closeWithUnsavedCheck to ensure proper handling
-        await this.closeWithUnsavedCheck();
+        // Call parent close() - SimpleModal will handle destruction automatically
+        await super.close();
     }
 
     /**
      * Force close without unsaved changes check - used by ModalFactory when replacing modals
      */
     public async forceCloseImmediate(): Promise<void> {
+        // Clean up text editors
+        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.clear();
+        
+        // Clean up outline editor
+        if (this.outlineEditor) {
+            this.outlineEditor.destroy();
+            this.outlineEditor = null;
+        }
+        
         // Clean up persistent highlights
         this.clearPersistentHighlight();
         
-        // Skip unsaved changes check and force close immediately
-        await this.forceClose();
+        // Call parent close() directly to skip unsaved changes check
+        await super.close();
     }
 }
