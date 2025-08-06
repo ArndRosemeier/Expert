@@ -1151,9 +1151,8 @@ export class XMLStoryModal extends SimpleModal {
         // Close modal button with unsaved changes check
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
-            // Debug: Always check what hasUnsavedChanges returns
+            // Check for unsaved changes before closing
             const hasChanges = this.hasUnsavedChanges();
-            console.log('🔴 Close button clicked, hasUnsavedChanges:', hasChanges);
             
             // Check for unsaved changes before closing
             if (hasChanges) {
@@ -1995,7 +1994,7 @@ export class XMLStoryModal extends SimpleModal {
         // Collect failed command for later correction
         this.failedCommands.push({ command, error, rawXml });
         
-        console.log(`📝 Command failure collected: ${rawXml} (${error})`);
+        // Command failure collected for later review
     }
     
     /**
@@ -2096,7 +2095,7 @@ export class XMLStoryModal extends SimpleModal {
         const newContent = currentContent + '\n\n' + command.content;
         
         this.setOutlineContentFromAI(newContent);
-        console.log('✅ AI appended content to outline');
+        // AI content appended successfully
     }
 
     /**
@@ -2164,7 +2163,7 @@ export class XMLStoryModal extends SimpleModal {
             match.start + trimmedReplaceText.length,
             'highlight-ai-replacement'
         );
-        console.log(`✅ AI replaced "${command.searchText}" (positions ${match.start}-${match.end}) with "${trimmedReplaceText}" (trimmed from "${command.replaceText}")`);
+        // AI content replacement completed successfully
     }
 
     /**
@@ -2436,27 +2435,15 @@ export class XMLStoryModal extends SimpleModal {
             const sourceOutlineContent = this.sourceNode.content || '';
             const sourceContextContent = this.sourceNode.context || '';
 
-            // Normalize whitespace for comparison but preserve line structure
-            const normalizeContent = (content: string) => {
-                return content
-                    .replace(/[ \t]+/g, ' ')  // Replace spaces/tabs with single space
-                    .replace(/\n[ \t]*/g, '\n')  // Remove spaces after newlines
-                    .trim();
-            };
-
-            const normalizedCurrent = normalizeContent(currentOutlineContent || '');
-            const normalizedSource = normalizeContent(sourceOutlineContent);
-            const normalizedCurrentContext = normalizeContent(currentContextContent || '');
-            const normalizedSourceContext = normalizeContent(sourceContextContent);
-
-            const outlineChanged = normalizedCurrent !== normalizedSource;
-            const contextChanged = normalizedCurrentContext !== normalizedSourceContext;
+            // Direct comparison without normalization - let's see if this causes issues
+            const outlineChanged = (currentOutlineContent || '') !== sourceOutlineContent;
+            const contextChanged = (currentContextContent || '') !== sourceContextContent;
 
             console.log('🔍 hasUnsavedChanges check:', {
                 currentOutline: currentOutlineContent?.substring(0, 100) + '...',
                 sourceOutline: sourceOutlineContent?.substring(0, 100) + '...',
-                normalizedCurrent: normalizedCurrent?.substring(0, 50) + '...',
-                normalizedSource: normalizedSource?.substring(0, 50) + '...',
+                currentContext: currentContextContent?.substring(0, 50) + '...',
+                sourceContext: sourceContextContent?.substring(0, 50) + '...',
                 outlineChanged,
                 contextChanged,
                 result: outlineChanged || contextChanged
@@ -2521,8 +2508,8 @@ export class XMLStoryModal extends SimpleModal {
         // Clear placeholder if it exists
         outlineContainer.innerHTML = '';
 
-        // Get current outline content
-        const currentContent = this.getCurrentOutlineContent();
+        // Get current outline content from history or use empty string if no history exists
+        const currentContent = this.getCurrentOutlineFromHistory();
 
         // Create a textarea for the UniversalTextEditor
         const textarea = document.createElement('textarea');
@@ -2580,14 +2567,36 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
-     * Get current outline content from history or editor
+     * Get current outline content from editor (live content)
+     * NO FALLBACKS - errors must be loud and visible
      */
     private getCurrentOutlineContent(): string {
-        if (this.outlineHistory.length > 0 && this.currentOutlineVersion >= 0 && this.currentOutlineVersion < this.outlineHistory.length) {
+        if (!this.outlineEditor) {
+            throw new Error('CRITICAL: outlineEditor is null when getting current outline content');
+        }
+        
+        return this.outlineEditor.getText();
+    }
+
+    /**
+     * Get current outline content from history (safe for initialization)
+     * Used during editor initialization when outlineEditor doesn't exist yet
+     */
+    private getCurrentOutlineFromHistory(): string {
+        if (this.outlineHistory.length === 0) {
+            return ''; // No history yet, return empty string
+        }
+        
+        // Return the latest version from history
+        if (this.currentOutlineVersion >= 0 && this.currentOutlineVersion < this.outlineHistory.length) {
             const version = this.outlineHistory[this.currentOutlineVersion];
             return version ? version.content : '';
         }
-        return '';
+        
+        // If no current version is set, return the latest entry
+        const lastIndex = this.outlineHistory.length - 1;
+        const lastEntry = this.outlineHistory[lastIndex];
+        return lastEntry ? lastEntry.content : '';
     }
 
     /**

@@ -954,6 +954,11 @@ export class NodeInspectorModal extends BaseModal {
             if (modalRoot) {
                 modalRoot.innerHTML = '';
                 modalRoot.appendChild(modalContent);
+                
+                // Re-add close button after content replacement (fixes missing close button bug)
+                if (this.config.closable) {
+                    this.addCloseButton(modalRoot as HTMLElement);
+                }
             }
         }
     }

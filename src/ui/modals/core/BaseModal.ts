@@ -1,26 +1,18 @@
 /**
- * Abstract base class for all modals
+ * BaseModal reimplemented using SimpleModal under the hood
+ * This maintains 100% backward compatibility while getting the benefits of the simplified system
  */
 
+import { SimpleModal } from './SimpleModal';
 import { IModal, ModalConfig, ModalHooks, ModalState } from '../types/ModalTypes';
-import { createElement, addEventListenerWithCleanup, MODAL_STYLES } from './modal-utils';
 
-export abstract class BaseModal implements IModal {
-    public readonly id: string;
-    public readonly config: ModalConfig;
-    protected hooks: ModalHooks;
+export abstract class BaseModal extends SimpleModal implements IModal {
     protected state: ModalState;
-    protected element: HTMLElement | null = null;
-    protected cleanupHandlers: (() => void)[] = [];
 
     constructor(config: ModalConfig, hooks: ModalHooks = {}) {
-        this.id = config.id;
-        this.config = { 
-            closable: true, 
-            backdrop: true, 
-            ...config 
-        };
-        this.hooks = hooks;
+        super(config, hooks);
+        
+        // Initialize state for backward compatibility
         this.state = {
             isOpen: false,
             isOpening: false,
@@ -29,9 +21,9 @@ export abstract class BaseModal implements IModal {
     }
 
     /**
-     * Opens the modal
+     * Override open to update state for backward compatibility
      */
-    public async open(): Promise<void> {
+    public override async open(): Promise<void> {
         if (this.state.isOpen || this.state.isOpening) {
             return;
         }
@@ -39,15 +31,9 @@ export abstract class BaseModal implements IModal {
         this.state.isOpening = true;
         
         try {
-            // Create and show modal first
-            await this.createModal();
-            
-            // Call lifecycle hook AFTER DOM is ready
-            await this.hooks.onOpen?.();
-            
+            await super.open();
             this.state.isOpen = true;
             this.state.isOpening = false;
-            
         } catch (error) {
             this.state.isOpening = false;
             throw error;
@@ -55,9 +41,9 @@ export abstract class BaseModal implements IModal {
     }
 
     /**
-     * Closes the modal
+     * Override close to update state for backward compatibility
      */
-    public async close(): Promise<void> {
+    public override async close(): Promise<void> {
         if (!this.state.isOpen || this.state.isClosing) {
             return;
         }
@@ -65,14 +51,9 @@ export abstract class BaseModal implements IModal {
         this.state.isClosing = true;
 
         try {
-            // Call lifecycle hook
-            await this.hooks.onClose?.();
-            
-            // Remove modal from DOM
-            this.destroyModal();
+            await super.close();
             this.state.isOpen = false;
             this.state.isClosing = false;
-            
         } catch (error) {
             this.state.isClosing = false;
             throw error;
@@ -80,223 +61,43 @@ export abstract class BaseModal implements IModal {
     }
 
     /**
-     * Renders the modal content - must be implemented by subclasses
+     * Gets the current state of the modal (backward compatibility)
      */
-    public abstract render(): HTMLElement;
-
-    /**
-     * Destroys the modal and cleans up resources
-     */
-    public destroy(): void {
-        this.cleanup();
-        if (this.element && this.element.parentNode) {
-            this.element.parentNode.removeChild(this.element);
-        }
-        this.element = null;
-    }
-
-    /**
-     * Handles modal actions
-     */
-    protected async handleAction(action: string, data?: any): Promise<void> {
-        await this.hooks.onAction?.(action, data);
-    }
-
-    /**
-     * Creates the modal overlay and content
-     */
-    protected async createModal(): Promise<void> {
-        if (this.element) {
-            return; // Already created
-        }
-
-        // Create overlay
-        this.element = createElement('div', {
-            classes: ['modal-overlay'],
-            attributes: { 
-                'data-modal-id': this.id,
-                'style': MODAL_STYLES.overlay
-            }
-        });
-
-        // Create content container
-        const contentContainer = createElement('div', {
-            classes: ['modal-content'],
-            attributes: { 
-                'style': this.buildContentStyle()
-            }
-        });
-
-        // Render content
-        const content = this.render();
-        contentContainer.appendChild(content);
-
-        // Add close button if closable
-        if (this.config.closable) {
-            this.addCloseButton(contentContainer);
-        }
-
-        this.element.appendChild(contentContainer);
-
-        // Set up event handlers
-        this.setupEventHandlers();
-
-        // Add to DOM
-        document.body.appendChild(this.element);
-
-        // Animate in
-        requestAnimationFrame(() => {
-            if (this.element) {
-                this.element.style.opacity = '1';
-            }
-        });
-    }
-
-    /**
-     * Removes the modal from DOM
-     */
-    protected destroyModal(): void {
-        if (!this.element) {
-            return;
-        }
-
-        // Animate out
-        this.element.style.opacity = '0';
-        
-        setTimeout(() => {
-            this.cleanup();
-            if (this.element && this.element.parentNode) {
-                this.element.parentNode.removeChild(this.element);
-            }
-            this.element = null;
-        }, 200); // Match CSS transition time
-    }
-
-    /**
-     * Sets up event handlers for the modal
-     */
-    protected setupEventHandlers(): void {
-        if (!this.element) return;
-
-        // Backdrop click to close
-        if (this.config.backdrop && this.config.closable) {
-            addEventListenerWithCleanup(
-                this.element,
-                'click',
-                (e) => {
-                    if (e.target === this.element) {
-                        void this.close();
-                    }
-                },
-                this.cleanupHandlers
-            );
-        }
-
-        // Escape key to close
-        if (this.config.closable) {
-            const escapeHandler = (e: KeyboardEvent) => {
-                if (e.key === 'Escape') {
-                    void this.close();
-                }
-            };
-            
-            document.addEventListener('keydown', escapeHandler);
-            this.cleanupHandlers.push(() => {
-                document.removeEventListener('keydown', escapeHandler);
-            });
-        }
-    }
-
-    /**
-     * Adds a close button to the modal
-     */
-    protected addCloseButton(container: HTMLElement): void {
-        const closeButton = createElement('button', {
-            classes: ['modal-close'],
-            attributes: {
-                'type': 'button',
-                'aria-label': 'Close modal',
-                'style': `
-                    position: absolute;
-                    top: 1rem;
-                    right: 1rem;
-                    background: none;
-                    border: none;
-                    font-size: 1.5rem;
-                    cursor: pointer;
-                    color: #6b7280;
-                    width: 2rem;
-                    height: 2rem;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 0.375rem;
-                    transition: background-color 0.2s;
-                `
-            },
-            content: '×'
-        });
-
-        closeButton.addEventListener('mouseenter', () => {
-            closeButton.style.backgroundColor = '#f3f4f6';
-        });
-
-        closeButton.addEventListener('mouseleave', () => {
-            closeButton.style.backgroundColor = 'transparent';
-        });
-
-        addEventListenerWithCleanup(
-            closeButton,
-            'click',
-            () => void this.close(),
-            this.cleanupHandlers
-        );
-
-        container.style.position = 'relative';
-        container.appendChild(closeButton);
-    }
-
-    /**
-     * Builds the CSS style for modal content
-     */
-    protected buildContentStyle(): string {
-        let style = MODAL_STYLES.content;
-        
-        if (this.config.width) {
-            style += `width: ${this.config.width};`;
-        }
-        if (this.config.height) {
-            style += `height: ${this.config.height};`;
-        }
-        if (this.config.maxWidth) {
-            style += `max-width: ${this.config.maxWidth};`;
-        }
-        if (this.config.maxHeight) {
-            style += `max-height: ${this.config.maxHeight};`;
-        }
-
-        return style;
-    }
-
-    /**
-     * Cleans up event handlers and resources
-     */
-    protected cleanup(): void {
-        this.cleanupHandlers.forEach(cleanup => cleanup());
-        this.cleanupHandlers = [];
-    }
-
-    /**
-     * Gets the current state of the modal
-     */
-    public getState(): ModalState {
+    public override getState(): ModalState {
         return { ...this.state };
     }
 
     /**
-     * Checks if the modal is currently open
+     * Checks if the modal is currently open (backward compatibility)
      */
-    public isOpen(): boolean {
+    public override isOpen(): boolean {
         return this.state.isOpen;
     }
-} 
+
+    /**
+     * Destroy method for backward compatibility
+     */
+    public override destroy(): void {
+        // Call cleanup if implemented
+        this.cleanup();
+        
+        // SimpleModal handles destruction automatically on close
+        // But we need to update state for compatibility
+        this.state = {
+            isOpen: false,
+            isOpening: false,
+            isClosing: false
+        };
+        
+        // Call parent destroy
+        super.destroy();
+    }
+
+    /**
+     * Cleanup method for subclasses to override (backward compatibility)
+     */
+    protected cleanup(): void {
+        // Default implementation - does nothing
+        // Subclasses can override this for custom cleanup
+    }
+}

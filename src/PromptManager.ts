@@ -388,7 +388,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             IMPORTANT: Your response must be a valid JSON array where each entry is an object with exactly two properties:
             - "title": the title of the subnode
-            - "description": Complete description of what should be covered in this subnode. This should be exhaustive. Content will be generated from this description alone with no access to this outline. The sum of all descriptions should be exhaustive of the outline without any summarization or overlap.
+            - "description": Complete description of what should be covered in this subnode. This should be exhaustive. Content will be generated from this description alone with no access to this outline. The sum of all descriptions should be exhaustive of the outline without any summarization or overlap. This is critical, no information should get lost, expansions are allowed, summaries are not.
 
             Example format:
             [

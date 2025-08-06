@@ -2,8 +2,10 @@ import { AppKeyService } from './keys/AppKeyService.js';
 import { VersionService } from './VersionService.js';
 import './ui/enhanced-layout.css';
 
-// Log version info on startup
-VersionService.logVersionInfo();
+// Log version info on startup (only in development)
+if (process.env['NODE_ENV'] === 'development') {
+    VersionService.logVersionInfo();
+}
 
 // --- Fresh Start Debug Logic ---
 const urlParams = new URLSearchParams(window.location.search);

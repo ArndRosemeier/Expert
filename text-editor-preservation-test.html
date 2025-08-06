@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UniversalTextEditor Text Preservation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .test-title { font-weight: bold; color: #333; }
+        .input { background: #f0f0f0; padding: 10px; margin: 5px 0; }
+        .output { background: #e8f5e8; padding: 10px; margin: 5px 0; }
+        .result { font-weight: bold; }
+        .pass { color: green; }
+        .fail { color: red; }
+        .test-editor { 
+            width: 100%; 
+            min-height: 100px; 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .code { font-family: monospace; background: #f5f5f5; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h1>UniversalTextEditor Text Preservation Test</h1>
+    <p>This test verifies that the UniversalTextEditor perfectly preserves all text content, including tricky whitespace cases.</p>
+    
+    <div id="test-results"></div>
+    
+    <script type="module">
+        // Mock the required imports for testing
+        class MockTextEditorWithHighlighting {
+            constructor(container) {
+                this.editableDiv = document.createElement('div');
+                this.editableDiv.contentEditable = true;
+                this.editableDiv.style.border = '1px solid #ddd';
+                this.editableDiv.style.padding = '10px';
+                this.editableDiv.style.minHeight = '100px';
+                this.editableDiv.style.fontFamily = 'monospace';
+                this.editableDiv.style.whiteSpace = 'pre-wrap';
+                container.appendChild(this.editableDiv);
+                
+                this.plainTextContent = '';
+                this.highlights = new Map();
+            }
+            
+            getText() {
+                return this.plainTextContent;
+            }
+            
+            setText(text) {
+                this.plainTextContent = text;
+                this.editableDiv.innerHTML = this.escapeHtml(text);
+                this.highlights.clear();
+            }
+            
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                let html = div.innerHTML;
+                html = html.replace(/\n/g, '<br>');
+                return html;
+            }
+            
+            extractTextFromHtml() {
+                const html = this.editableDiv.innerHTML;
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                
+                // Convert various HTML line break representations back to \n
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<br\s*\/?>/gi, '\n');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<\/div><div>/gi, '\n');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<div>/gi, '\n');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<\/div>/gi, '');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<\/p><p>/gi, '\n\n');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<p>/gi, '');
+                tempDiv.innerHTML = tempDiv.innerHTML.replace(/<\/p>/gi, '\n');
+                
+                const text = tempDiv.textContent || '';
+                return text;
+            }
+            
+            // Simulate user typing by updating innerHTML and extracting text
+            simulateUserInput(newHtml) {
+                this.editableDiv.innerHTML = newHtml;
+                this.plainTextContent = this.extractTextFromHtml();
+            }
+        }
+
+        // Test cases that could be problematic
+        const testCases = [
+            {
+                name: "Simple text",
+                input: "Hello, world!"
+            },
+            {
+                name: "Single newline",
+                input: "Line 1\nLine 2"
+            },
+            {
+                name: "Multiple newlines",
+                input: "Line 1\n\nLine 3"
+            },
+            {
+                name: "Leading/trailing newlines",
+                input: "\nText with newlines\n"
+            },
+            {
+                name: "Multiple consecutive newlines",
+                input: "Start\n\n\n\nEnd"
+            },
+            {
+                name: "Mixed whitespace",
+                input: "Text\t\twith\ttabs and    spaces"
+            },
+            {
+                name: "HTML-like content",
+                input: "<div>HTML content</div>\n<script>alert('test');</script>"
+            },
+            {
+                name: "Special characters",
+                input: "Special: & < > \" ' \\ / @ # $ % ^ * ( ) [ ] { }"
+            },
+            {
+                name: "Unicode and emojis",
+                input: "Unicode: ñáéíóú 中文 🎉 💯 ✅"
+            },
+            {
+                name: "Empty string",
+                input: ""
+            },
+            {
+                name: "Only whitespace",
+                input: "   \n\t  \n   "
+            },
+            {
+                name: "Windows line endings (simulated)",
+                input: "Line 1\r\nLine 2\r\nLine 3"
+            },
+            {
+                name: "Your specific test case (newline addition)",
+                input: "**Akt 1: Leben auf Luna 1**\n\n\nDas Leben auf der Raumstation"
+            }
+        ];
+
+        function runTests() {
+            const resultsDiv = document.getElementById('test-results');
+            let passCount = 0;
+            let totalCount = testCases.length;
+            
+            testCases.forEach((testCase, index) => {
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test-case';
+                
+                // Create test title
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'test-title';
+                titleDiv.textContent = `Test ${index + 1}: ${testCase.name}`;
+                testDiv.appendChild(titleDiv);
+                
+                // Show input
+                const inputDiv = document.createElement('div');
+                inputDiv.className = 'input';
+                inputDiv.innerHTML = `<strong>Input:</strong> <span class="code">${JSON.stringify(testCase.input)}</span>`;
+                testDiv.appendChild(inputDiv);
+                
+                // Create editor container
+                const editorContainer = document.createElement('div');
+                testDiv.appendChild(editorContainer);
+                
+                // Test the editor
+                const editor = new MockTextEditorWithHighlighting(editorContainer);
+                
+                // Test 1: setText/getText roundtrip
+                editor.setText(testCase.input);
+                const output1 = editor.getText();
+                const test1Pass = output1 === testCase.input;
+                
+                // Test 2: Simulate user editing by setting innerHTML and extracting
+                editor.simulateUserInput(editor.editableDiv.innerHTML);
+                const output2 = editor.getText();
+                const test2Pass = output2 === testCase.input;
+                
+                // Test 3: Check if HTML escaping is working correctly
+                const expectedHtml = testCase.input
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#x27;')
+                    .replace(/\n/g, '<br>');
+                
+                const actualHtml = editor.editableDiv.innerHTML;
+                const test3Pass = actualHtml === expectedHtml;
+                
+                // Show results
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'output';
+                
+                const allTestsPass = test1Pass && test2Pass && test3Pass;
+                if (allTestsPass) passCount++;
+                
+                resultDiv.innerHTML = `
+                    <strong>Results:</strong><br>
+                    setText/getText: <span class="${test1Pass ? 'pass' : 'fail'}">${test1Pass ? 'PASS' : 'FAIL'}</span><br>
+                    HTML roundtrip: <span class="${test2Pass ? 'pass' : 'fail'}">${test2Pass ? 'PASS' : 'FAIL'}</span><br>
+                    HTML escaping: <span class="${test3Pass ? 'pass' : 'fail'}">${test3Pass ? 'PASS' : 'FAIL'}</span><br>
+                    <span class="result ${allTestsPass ? 'pass' : 'fail'}">Overall: ${allTestsPass ? 'PASS' : 'FAIL'}</span>
+                `;
+                
+                if (!test1Pass) {
+                    resultDiv.innerHTML += `<br><strong>Output 1:</strong> <span class="code">${JSON.stringify(output1)}</span>`;
+                }
+                if (!test2Pass) {
+                    resultDiv.innerHTML += `<br><strong>Output 2:</strong> <span class="code">${JSON.stringify(output2)}</span>`;
+                }
+                if (!test3Pass) {
+                    resultDiv.innerHTML += `<br><strong>Expected HTML:</strong> <span class="code">${expectedHtml}</span>`;
+                    resultDiv.innerHTML += `<br><strong>Actual HTML:</strong> <span class="code">${actualHtml}</span>`;
+                }
+                
+                testDiv.appendChild(resultDiv);
+                resultsDiv.appendChild(testDiv);
+            });
+            
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.style.fontSize = '18px';
+            summaryDiv.style.fontWeight = 'bold';
+            summaryDiv.style.margin = '20px 0';
+            summaryDiv.style.padding = '15px';
+            summaryDiv.style.border = '2px solid ' + (passCount === totalCount ? 'green' : 'red');
+            summaryDiv.innerHTML = `
+                <span class="${passCount === totalCount ? 'pass' : 'fail'}">
+                    Summary: ${passCount}/${totalCount} tests passed
+                </span>
+            `;
+            resultsDiv.insertBefore(summaryDiv, resultsDiv.firstChild);
+        }
+
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>
+

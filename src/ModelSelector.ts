@@ -1010,7 +1010,7 @@ export class ModelSelector {
       const client = OpenRouterClient.getInstance();
       this.models = await client.fetchModels();
       
-      console.log(`🔄 Fetched ${this.models.length} models from OpenRouter`);
+      // Models fetched successfully from OpenRouter
       
       // BUGFIX: Don't clear models if fetch returned zero models (likely an API/network issue)
       if (this.models.length === 0) {
@@ -1024,7 +1024,7 @@ export class ModelSelector {
       let modelsCleared = false;
       
       // Log current selections before validation
-      console.log('🔍 Current model selections before validation:', this.selectedModels);
+      // Validating current model selections
       
       // Ensure selectedModels only contains ids present in models
       const modelIds = new Set(this.models.map(m => m.id));
@@ -1039,12 +1039,12 @@ export class ModelSelector {
       
       // Log selections after validation
       if (modelsCleared) {
-        console.log('🔍 Model selections after validation:', this.selectedModels);
+        // Model selections validated successfully
       }
       
       // BUGFIX: Only save to storage if we actually cleared models (to prevent unnecessary saves)
       if (modelsCleared) {
-        console.log('💾 Saving updated model selections after clearing invalid models');
+        // Saving updated model selections
         await this.saveToStorage();
       }
       
@@ -1064,7 +1064,7 @@ export class ModelSelector {
       if (fetchPromises.length > 0) {
         try {
           await Promise.all(fetchPromises);
-          console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} selected models`);
+          // Pre-fetched endpoint information for selected models
           this.update(); // Re-render to show provider options if available
         } catch (error) {
           console.warn('⚠️ Some endpoint fetches failed during initialization:', error);
