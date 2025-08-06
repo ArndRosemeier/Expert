@@ -1148,15 +1148,33 @@ export class XMLStoryModal extends SimpleModal {
             void this.updateSourceNode();
         });
 
-        // Close modal button
+        // Close modal button with unsaved changes check
         const closeBtn = container.querySelector('#close-modal-btn');
         closeBtn?.addEventListener('click', () => {
+            // Check for unsaved changes before closing
+            if (this.hasUnsavedChanges()) {
+                const confirmed = confirm(
+                    'You have unsaved changes. Are you sure you want to close without updating the source node?'
+                );
+                if (!confirmed) {
+                    return; // Don't close the modal
+                }
+            }
             void this.close();
         });
         
-        // Setup custom ESC key handler since we disabled default closable behavior
+        // Setup custom ESC key handler with unsaved changes check
         const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
+                // Check for unsaved changes before closing
+                if (this.hasUnsavedChanges()) {
+                    const confirmed = confirm(
+                        'You have unsaved changes. Are you sure you want to close without updating the source node?'
+                    );
+                    if (!confirmed) {
+                        return; // Don't close the modal
+                    }
+                }
                 void this.close();
             }
         };
@@ -1178,31 +1196,31 @@ export class XMLStoryModal extends SimpleModal {
         // No conversation persistence - each session starts fresh
         
         // Apply initialization data if provided, or set default message
-        if (this.pendingInitializationData) {
-            await this.applyInitializationData(this.pendingInitializationData);
-            this.pendingInitializationData = undefined;
-        }
+                if (this.pendingInitializationData) {
+                    await this.applyInitializationData(this.pendingInitializationData);
+                    this.pendingInitializationData = undefined;
+                }
         
         // Load custom buttons after initialization
         await this.loadCustomButtons();
         
         // Show initial message if no initialization data
         if (!this.pendingInitializationData) {
-            const messageElement = document.getElementById('initial-chat-message');
-            if (messageElement) {
-                messageElement.innerHTML = `
-                    Hi! I'm here to help you edit and improve your content.
-                    
-                    I can help you:
-                    • <strong>Enhance outlines</strong> - Make them more detailed and compelling
-                    • <strong>Improve context items</strong> - Add depth and fix inconsistencies
-                    • <strong>Refine content</strong> - Polish language and improve flow
-                    
-                    <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
-                    
-                    What would you like to work on?
-                `;
-            }
+                const messageElement = document.getElementById('initial-chat-message');
+                if (messageElement) {
+                    messageElement.innerHTML = `
+                        Hi! I'm here to help you edit and improve your content.
+                        
+                        I can help you:
+                        • <strong>Enhance outlines</strong> - Make them more detailed and compelling
+                        • <strong>Improve context items</strong> - Add depth and fix inconsistencies
+                        • <strong>Refine content</strong> - Polish language and improve flow
+                        
+                        <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+                        
+                        What would you like to work on?
+                    `;
+                }
         }
     }
 
@@ -1241,21 +1259,21 @@ export class XMLStoryModal extends SimpleModal {
             );
 
             // Always include dynamic context as a separate system-level prompt
-            const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
-            const currentContextItems = this.formatContextItemsForAI();
-            const humanEdits = this.formatHumanEditsForAI();
-            const userPromptContext = {
-                custom: {
-                    current_outline: currentOutline,
-                    current_context_items: currentContextItems,
-                    human_edits: humanEdits
-                }
-            };
+                const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+                const currentContextItems = this.formatContextItemsForAI();
+                const humanEdits = this.formatHumanEditsForAI();
+                const userPromptContext = {
+                    custom: {
+                        current_outline: currentOutline,
+                        current_context_items: currentContextItems,
+                        human_edits: humanEdits
+                    }
+                };
             const dynamicContextPrompt = await expansionService.expandPromptAsync(
-                prompts.node_chat_editor_user,
-                userPromptContext
-            );
-
+                    prompts.node_chat_editor_user, 
+                    userPromptContext
+                );
+                
             // Store only raw user message
             this.conversationHistory.push({ role: 'user', content: message });
 
@@ -2903,9 +2921,9 @@ export class XMLStoryModal extends SimpleModal {
      * Save current model selection to StorageService
      */
     private async saveModelSelection(): Promise<void> {
-        if (this.modelSelector?.value) {
+            if (this.modelSelector?.value) {
             const storage = await StorageService.getInstance();
-            await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
+                await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
         }
     }
 
@@ -2931,13 +2949,13 @@ export class XMLStoryModal extends SimpleModal {
             this.renderCustomButtons();
         }
     }
-    
+
     /**
      * Save custom buttons to storage
      */
     private async saveCustomButtons(): Promise<void> {
         const storageKey = `xml-story-custom-buttons-${this.sourceNode!.id}`;
-        const storage = await StorageService.getInstance();
+            const storage = await StorageService.getInstance();
         await storage.set(storageKey, this.customButtons);
         console.log('Custom buttons saved successfully');
     }
@@ -3114,23 +3132,7 @@ export class XMLStoryModal extends SimpleModal {
 
 
     public override async close(): Promise<void> {
-        console.log('🚪 XMLStoryModal.close() called - checking for unsaved changes...');
-        
-        // Check for unsaved changes before closing
-        if (this.hasUnsavedChanges()) {
-            console.log('⚠️ Unsaved changes detected, showing confirmation dialog');
-            const confirmed = confirm(
-                'You have unsaved changes. Are you sure you want to close without updating the source node?'
-            );
-            
-            if (!confirmed) {
-                console.log('🛑 User cancelled close due to unsaved changes');
-                return; // Don't close the modal
-            }
-            console.log('✅ User confirmed close despite unsaved changes');
-        } else {
-            console.log('✅ No unsaved changes, proceeding with close');
-        }
+        console.log('🚪 XMLStoryModal.close() called - proceeding with cleanup and close');
         
         // Clean up text editors
         this.elementEditors.forEach(editor => editor.destroy());
