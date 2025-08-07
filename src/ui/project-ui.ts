@@ -4091,7 +4091,17 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'set-project-language-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node || node.level !== 0) {
+                    alert('Please select a project root to set the project language.');
+                    return;
+                }
 
+                void handleSetProjectLanguage();
+            }
+            break;
 
         default:
             console.warn('Unknown dropdown action:', buttonId);
