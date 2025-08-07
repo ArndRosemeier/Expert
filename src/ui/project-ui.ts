@@ -2380,7 +2380,10 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="10" ${autofixSeverityState === 10 ? 'selected' : ''}>10 (Critical)</option>
                                 </select>
                             </div>
-                            
+                </div>
+                
+                        <!-- Prune Level and Rating Threshold Row -->
+                        <div class="prune-and-threshold-row">
                             <!-- Prune Scope -->
                             <div class="level-selector">
                                 <label for="prune-scope-selector" title="How aggressively to prune context during auto-pruning">
@@ -2394,10 +2397,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
                                 </select>
                             </div>
-                </div>
-                
-                        <!-- Prune Level and Rating Threshold Row -->
-                        <div class="prune-and-threshold-row">
+                            
                             <!-- Context Prune Level -->
                             <div class="prune-level-container">
                                 <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
