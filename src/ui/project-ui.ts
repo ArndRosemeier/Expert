@@ -707,7 +707,8 @@ function showActionsDropdown(node: DocumentNode): void {
                             'fix-logic-outline': 'fix-logic-outline-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
-                            'tag-manager': 'tag-manager-btn'
+                            'tag-manager': 'tag-manager-btn',
+                            'set-project-language': 'set-project-language-btn'
                         };
                         
                         // Handle idea board actions directly
@@ -1139,7 +1140,8 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'fix-logic-outline': 'fix-logic-outline-btn',
                             'context-adjuster': 'context-adjuster-btn',
                             'batch-update': 'batch-update-btn',
-                            'tag-manager': 'tag-manager-btn'
+                            'tag-manager': 'tag-manager-btn',
+                            'set-project-language': 'set-project-language-btn'
                         };
                         
                         const handlerAction = actionMap[action];
