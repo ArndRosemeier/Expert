@@ -844,6 +844,67 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
     }
 }
 
+/**
+ * Handles setting the project language to match the global default
+ */
+async function handleSetProjectLanguage(): Promise<void> {
+    if (!selectedNodeId || !projectManager) {
+        alert('Please select a project root to set the project language.');
+        return;
+    }
+    
+    const selectedNode = projectManager.findNodeById(selectedNodeId);
+    if (!selectedNode || selectedNode.level !== 0) {
+        alert('Please select a project root to set the project language.');
+        return;
+    }
+
+    const settingsManager = state.getSettingsManager();
+    if (!settingsManager) {
+        alert('Settings manager not available.');
+        return;
+    }
+
+    try {
+        // Get the current global default language
+        const globalLanguage = settingsManager.getGlobalLanguage();
+        
+        // Get the current project language for comparison
+        const activeProject = state.getActiveProject();
+        const currentProjectLanguage = activeProject?.getLanguage();
+        
+        // Check if project already has this language
+        if (currentProjectLanguage === globalLanguage) {
+            alert(`Project language is already set to "${globalLanguage}".`);
+            return;
+        }
+        
+        // Confirm the action
+        const message = currentProjectLanguage 
+            ? `Change project language from "${currentProjectLanguage}" to "${globalLanguage}"?`
+            : `Set project language to "${globalLanguage}"?`;
+            
+        const confirmed = confirm(message);
+        if (!confirmed) {
+            return;
+        }
+        
+        // Set the project language
+        await settingsManager.setProjectLanguage(globalLanguage);
+        
+        // Refresh the UI to show the updated language
+        renderMultiProjectTree();
+        await renderNodeDetails();
+        
+        // Show success message
+        alert(`Project language set to "${globalLanguage}".`);
+        
+    } catch (error) {
+        console.error('Failed to set project language:', error);
+        alert('Failed to set project language. Please try again.');
+    }
+}
+
 async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
     try {
         // Get the current template and slice it to start from the source node's level
@@ -1231,6 +1292,18 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                 </div>
             </div>
+            
+            ${node.level === 0 ? `
+                <!-- Project Settings Section -->
+                <div class="action-section">
+                    <div class="section-title">Project Settings</div>
+                    <div class="action-buttons">
+                        <button class="action-btn" data-action="set-project-language">
+                            🌐 Set Project Language
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -4515,21 +4588,17 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         </div>
     `;
     
-    // Initialize language selector
+    // Initialize language selector - DECOUPLED: only changes global default
     const languageContainer = getElementById('language-selector-container');
     if (languageContainer && settingsManager) {
         new LanguageSelector(languageContainer, {
-            currentLanguage: settingsManager.getLanguage(),
+            currentLanguage: settingsManager.getGlobalLanguage(),
             onLanguageChange: async (language: string) => {
+                // Only update global default language
                 await settingsManager.setLanguage(language);
                 
-                // Also sync to active project
-                try {
-                    const { handleLanguageChange } = await import('../state');
-                    handleLanguageChange(language);
-                } catch (error) {
-                    console.error('Failed to sync language to project:', error);
-                }
+                // DECOUPLED: No longer automatically syncs to active project
+                // Users must use "Set Project Language" button to explicitly copy global to project
             }
         });
     }
@@ -5872,6 +5941,26 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             if (selectedNode) {
                 showActionsDropdown(selectedNode);
             }
+        }
+    },
+
+    'set-project-language-btn': async (_e: Event) => {
+        if (!selectedNodeId || !projectManager) {
+            alert('Please select a project root to set the project language.');
+            return;
+        }
+        
+        const selectedNode = projectManager.findNodeById(selectedNodeId);
+        if (!selectedNode || selectedNode.level !== 0) {
+            alert('Please select a project root to set the project language.');
+            return;
+        }
+
+        try {
+            await handleSetProjectLanguage();
+        } catch (error) {
+            console.error('Failed to set project language:', error);
+            alert('Failed to set project language. Please try again.');
         }
     }
 };

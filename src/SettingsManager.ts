@@ -739,28 +739,38 @@ export class SettingsManager {
     }
 
     /**
-     * Set the language - updates both global setting and active project (if exists)
+     * Set the global default language - DECOUPLED: only affects global setting
      */
     public async setLanguage(language: string): Promise<void> {
-        // Always update global language setting
+        // Only update global language setting
         this.globalLanguage = language;
         await this.saveGlobalLanguage();
         
-        // Also update active project if it exists
+        // DECOUPLED: No longer automatically syncs to active project
+        // Use explicit "Set Project Language" action instead
+    }
+
+    /**
+     * Set project language for the active project (explicit action)
+     */
+    public async setProjectLanguage(language: string): Promise<void> {
         const activeProject = state.getActiveProject();
+        if (!activeProject) {
+            throw new Error('No active project to set language for');
+        }
         
-        if (activeProject) {
-            activeProject.setLanguage(language);
+        activeProject.setLanguage(language);
+        
+        // Save the project to persist the language change
+        try {
             await activeProject.saveToStorage();
             
             // Refresh the tree to show updated language flag
-            try {
-                const { renderMultiProjectTree } = await import('./ui/project-ui');
-                renderMultiProjectTree();
-                console.log(`🌐 Tree refreshed after language change to: ${language}`);
-            } catch (error) {
-                console.error('Failed to refresh tree after language change:', error);
-            }
+            const { renderMultiProjectTree } = await import('./ui/project-ui');
+            renderMultiProjectTree();
+        } catch (error) {
+            console.error('Failed to save project language:', error);
+            throw error;
         }
     }
 
