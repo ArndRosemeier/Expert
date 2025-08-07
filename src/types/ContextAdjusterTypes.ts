@@ -8,7 +8,9 @@ export interface ContextIssue {
 
 export interface ContextSortingResult {
     sorted_items: number[];
-    recommended_cutoff: number;
+    sparse_cutoff: number;
+    medium_cutoff: number;
+    elaborate_cutoff: number;
     cutoff_reasoning: string;
 }
 

@@ -900,21 +900,32 @@ Your response MUST be a valid JSON object with ONLY these fields:
 
 {
   "sorted_items": [3, 7, 1, 12, 5, 8, 2, 4, 6, 9, 10, 11],
-  "recommended_cutoff": 8,
-  "cutoff_reasoning": "Items beyond position 8 become tangential to subnode creation - they provide background but don't directly influence content development."
+  "sparse_cutoff": 5,
+  "medium_cutoff": 8, 
+  "elaborate_cutoff": 10,
+  "cutoff_reasoning": "Sparse (5): Only the most critical items. Medium (8): Good balance for most use cases. Elaborate (10): Comprehensive context with some background details."
 }
 
 **FIELD EXPLANATIONS:**
 - **sorted_items**: ALL item numbers in order from most to least relevant
-- **recommended_cutoff**: Position in sorted_items where relevance drops significantly (recommended number of items to keep)
-- **cutoff_reasoning**: Explanation for why items after the cutoff are less important ({{language}})
+- **sparse_cutoff**: Minimal essential items only (usually 3-6 items)
+- **medium_cutoff**: Balanced selection for typical use (usually 6-12 items)  
+- **elaborate_cutoff**: Comprehensive with background context (usually 10-20 items)
+- **cutoff_reasoning**: Brief explanation of each cutoff level ({{language}})
+
+**CUTOFF GUIDELINES:**
+- **Sparse**: Only the absolutely essential items that directly impact subnode content
+- **Medium**: Essential items plus important background context (recommended for most cases)
+- **Elaborate**: Include additional context that provides useful background but isn't strictly necessary
+- All three cutoffs can be the same number if the context is small
+- Cutoffs should be in ascending order: sparse ≤ medium ≤ elaborate
 
 **CRITICAL INSTRUCTIONS:**
 - Include ALL item numbers in sorted_items (no omissions)
+- Ensure sparse_cutoff ≤ medium_cutoff ≤ elaborate_cutoff
 - Use ONLY the exact field names shown above
 - Your response must be valid JSON that can be parsed by JSON.parse()
 - Do not add any text before or after the JSON object
-- Focus on finding the natural cutoff point where relevance drops significantly
 
 Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],

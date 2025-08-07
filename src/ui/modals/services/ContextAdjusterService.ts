@@ -376,8 +376,24 @@ export class ContextAdjusterService {
 
 
 
-            if (typeof parsed.recommended_cutoff !== 'number' || parsed.recommended_cutoff < 1) {
-                console.warn('Response missing or invalid recommended_cutoff');
+            if (typeof parsed.sparse_cutoff !== 'number' || parsed.sparse_cutoff < 1) {
+                console.warn('Response missing or invalid sparse_cutoff');
+                return null;
+            }
+
+            if (typeof parsed.medium_cutoff !== 'number' || parsed.medium_cutoff < 1) {
+                console.warn('Response missing or invalid medium_cutoff');
+                return null;
+            }
+
+            if (typeof parsed.elaborate_cutoff !== 'number' || parsed.elaborate_cutoff < 1) {
+                console.warn('Response missing or invalid elaborate_cutoff');
+                return null;
+            }
+
+            // Validate cutoff order
+            if (parsed.sparse_cutoff > parsed.medium_cutoff || parsed.medium_cutoff > parsed.elaborate_cutoff) {
+                console.warn('Cutoffs not in ascending order: sparse ≤ medium ≤ elaborate');
                 return null;
             }
 
@@ -400,7 +416,9 @@ export class ContextAdjusterService {
 
             return {
                 sorted_items: originalSortedItems,
-                recommended_cutoff: parsed.recommended_cutoff,
+                sparse_cutoff: parsed.sparse_cutoff,
+                medium_cutoff: parsed.medium_cutoff,
+                elaborate_cutoff: parsed.elaborate_cutoff,
                 cutoff_reasoning: parsed.cutoff_reasoning
             };
             

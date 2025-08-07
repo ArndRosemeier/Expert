@@ -972,11 +972,27 @@ export class ContextAdjusterModal extends BaseModal {
             });
         }
 
-        // Select recommended button
-        const selectRecommendedBtn = document.querySelector('#select-recommended-btn');
-        if (selectRecommendedBtn) {
-            selectRecommendedBtn.addEventListener('click', () => {
-                this.selectRecommendedItems();
+        // Select sparse button
+        const selectSparseBtn = document.querySelector('#select-sparse-btn');
+        if (selectSparseBtn) {
+            selectSparseBtn.addEventListener('click', () => {
+                this.selectSparseItems();
+            });
+        }
+
+        // Select medium button
+        const selectMediumBtn = document.querySelector('#select-medium-btn');
+        if (selectMediumBtn) {
+            selectMediumBtn.addEventListener('click', () => {
+                this.selectMediumItems();
+            });
+        }
+
+        // Select elaborate button
+        const selectElaborateBtn = document.querySelector('#select-elaborate-btn');
+        if (selectElaborateBtn) {
+            selectElaborateBtn.addEventListener('click', () => {
+                this.selectElaborateItems();
             });
         }
 
@@ -1012,12 +1028,12 @@ export class ContextAdjusterModal extends BaseModal {
         }
 
         const allContextItems = getContextItems(this.targetNode.context || '');
-        const { sorted_items, recommended_cutoff, cutoff_reasoning } = this.analysisResult.sortingResult;
+        const { sorted_items, sparse_cutoff, medium_cutoff, elaborate_cutoff, cutoff_reasoning } = this.analysisResult.sortingResult;
         
-        // Initialize keep selections based on cutoff if not already set
+        // Initialize keep selections based on medium cutoff if not already set
         if (this.keepSelections.size === 0) {
             sorted_items.forEach((itemNum, index) => {
-                const shouldKeep = (index + 1) <= recommended_cutoff;
+                const shouldKeep = (index + 1) <= medium_cutoff;
                 this.keepSelections.set(itemNum, shouldKeep);
             });
         }
@@ -1026,26 +1042,56 @@ export class ContextAdjusterModal extends BaseModal {
         const sortedItemsHtml = sorted_items.map((itemNum, index) => {
             const itemIndex = itemNum - 1; // Convert to 0-based
             const contextItem = allContextItems[itemIndex] || '';
-            const isWithinCutoff = (index + 1) <= recommended_cutoff;
-            const isAtCutoff = (index + 1) === recommended_cutoff;
+            const position = index + 1;
             const isKept = this.keepSelections.get(itemNum) ?? false;
 
             const rankColor = index < 5 ? '#28a745' : index < 10 ? '#ffc107' : '#6c757d';
             
             let badges = '';
-            if (isAtCutoff) {
+            
+            // Add cutoff badges based on position
+            if (position === sparse_cutoff) {
                 badges += `
                     <span style="
-                        background: #ff6b35;
+                        background: #dc3545;
                         color: white;
                         padding: 0.2rem 0.4rem;
                         border-radius: 3px;
                         font-size: 0.7rem;
                         font-weight: 600;
                         margin-left: 0.5rem;
-                    ">AI CUTOFF</span>
+                    ">SPARSE</span>
                 `;
-            } else if (!isWithinCutoff) {
+            }
+            if (position === medium_cutoff) {
+                badges += `
+                    <span style="
+                        background: #ffc107;
+                        color: black;
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 3px;
+                        font-size: 0.7rem;
+                        font-weight: 600;
+                        margin-left: 0.5rem;
+                    ">MEDIUM</span>
+                `;
+            }
+            if (position === elaborate_cutoff) {
+                badges += `
+                    <span style="
+                        background: #17a2b8;
+                        color: white;
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 3px;
+                        font-size: 0.7rem;
+                        font-weight: 600;
+                        margin-left: 0.5rem;
+                    ">ELABORATE</span>
+                `;
+            }
+            
+            // Add below elaborate badge
+            if (position > elaborate_cutoff) {
                 badges += `
                     <span style="
                         background: #6c757d;
@@ -1055,7 +1101,7 @@ export class ContextAdjusterModal extends BaseModal {
                         font-size: 0.7rem;
                         font-weight: 600;
                         margin-left: 0.5rem;
-                    ">BELOW CUTOFF</span>
+                    ">EXTRA</span>
                 `;
             }
 
@@ -1157,8 +1203,14 @@ export class ContextAdjusterModal extends BaseModal {
                         <div style="color: #424242;">
                             <strong>Total Items:</strong> ${sorted_items.length}
                         </div>
-                        <div style="color: #ff6b35;">
-                            <strong>AI Recommends:</strong> ${recommended_cutoff}
+                        <div style="color: #dc3545;">
+                            <strong>Sparse:</strong> ${sparse_cutoff}
+                        </div>
+                        <div style="color: #ffc107;">
+                            <strong>Medium:</strong> ${medium_cutoff}
+                        </div>
+                        <div style="color: #17a2b8;">
+                            <strong>Elaborate:</strong> ${elaborate_cutoff}
                         </div>
                         <div style="color: #28a745;">
                             <strong>Currently Selected:</strong> ${Array.from(this.keepSelections.values()).filter(keep => keep).length}
@@ -1178,7 +1230,7 @@ export class ContextAdjusterModal extends BaseModal {
                         color: #856404;
                         font-size: 1rem;
                         margin: 0 0 0.5rem 0;
-                    ">🎯 AI Recommendation: Keep First ${recommended_cutoff} Items</h4>
+                    ">🎯 AI Recommendations: Sparse (${sparse_cutoff}) • Medium (${medium_cutoff}) • Elaborate (${elaborate_cutoff})</h4>
                     <p style="
                         color: #856404;
                         margin: 0;
@@ -1213,24 +1265,52 @@ export class ContextAdjusterModal extends BaseModal {
                     <div style="
                         display: flex;
                         justify-content: center;
-                        gap: 1rem;
+                        gap: 0.75rem;
                         flex-wrap: wrap;
+                        margin-bottom: 1rem;
                     ">
+                        <button id="select-sparse-btn" class="button button-secondary" style="
+                            padding: 0.4rem 0.8rem;
+                            font-size: 0.85rem;
+                            background: #dc3545;
+                            color: white;
+                            border-color: #dc3545;
+                        ">
+                            🔥 Sparse (${sparse_cutoff})
+                        </button>
+                        <button id="select-medium-btn" class="button button-secondary" style="
+                            padding: 0.4rem 0.8rem;
+                            font-size: 0.85rem;
+                            background: #ffc107;
+                            color: black;
+                            border-color: #ffc107;
+                        ">
+                            ⚖️ Medium (${medium_cutoff})
+                        </button>
+                        <button id="select-elaborate-btn" class="button button-secondary" style="
+                            padding: 0.4rem 0.8rem;
+                            font-size: 0.85rem;
+                            background: #17a2b8;
+                            color: white;
+                            border-color: #17a2b8;
+                        ">
+                            📚 Elaborate (${elaborate_cutoff})
+                        </button>
                         <button id="select-all-btn" class="button button-secondary" style="
-                            padding: 0.5rem 1rem;
-                            font-size: 0.9rem;
+                            padding: 0.4rem 0.8rem;
+                            font-size: 0.85rem;
                         ">
-                            ✅ Select All
+                            ✅ All
                         </button>
-                        <button id="select-recommended-btn" class="button button-secondary" style="
-                            padding: 0.5rem 1rem;
-                            font-size: 0.9rem;
-                        ">
-                            🎯 Select AI Recommended
-                        </button>
+                    </div>
+                    
+                    <div style="
+                        display: flex;
+                        justify-content: center;
+                    ">
                         <button id="execute-prune-btn" class="button button-primary" style="
-                            padding: 0.5rem 1.5rem;
-                            font-size: 0.9rem;
+                            padding: 0.6rem 1.5rem;
+                            font-size: 0.95rem;
                             font-weight: 600;
                         ">
                             🗑️ Execute Pruning
@@ -1248,8 +1328,11 @@ export class ContextAdjusterModal extends BaseModal {
                     color: #6c757d;
                     font-size: 0.9rem;
                 ">
-                    💡 <strong>Tip:</strong> 
-                    Use checkboxes to select which context items to keep. Items are sorted by relevance (most important first).
+                    💡 <strong>Legend:</strong> 
+                    <span style="color: #dc3545;">🔥 Sparse</span> = Essential only | 
+                    <span style="color: #ffc107;">⚖️ Medium</span> = Balanced (recommended) | 
+                    <span style="color: #17a2b8;">📚 Elaborate</span> = Comprehensive | 
+                    <span style="color: #6c757d;">📦 Extra</span> = Additional background
                 </div>
             </div>
         `;
@@ -1268,14 +1351,42 @@ export class ContextAdjusterModal extends BaseModal {
     }
 
     /**
-     * Select only AI recommended items for keeping
+     * Select sparse cutoff items for keeping
      */
-    private selectRecommendedItems(): void {
+    private selectSparseItems(): void {
         if (!this.analysisResult?.sortingResult) return;
         
-        const { sorted_items, recommended_cutoff } = this.analysisResult.sortingResult;
+        const { sorted_items, sparse_cutoff } = this.analysisResult.sortingResult;
         sorted_items.forEach((itemNum, index) => {
-            const shouldKeep = (index + 1) <= recommended_cutoff;
+            const shouldKeep = (index + 1) <= sparse_cutoff;
+            this.keepSelections.set(itemNum, shouldKeep);
+        });
+        this.refreshContent();
+    }
+
+    /**
+     * Select medium cutoff items for keeping
+     */
+    private selectMediumItems(): void {
+        if (!this.analysisResult?.sortingResult) return;
+        
+        const { sorted_items, medium_cutoff } = this.analysisResult.sortingResult;
+        sorted_items.forEach((itemNum, index) => {
+            const shouldKeep = (index + 1) <= medium_cutoff;
+            this.keepSelections.set(itemNum, shouldKeep);
+        });
+        this.refreshContent();
+    }
+
+    /**
+     * Select elaborate cutoff items for keeping
+     */
+    private selectElaborateItems(): void {
+        if (!this.analysisResult?.sortingResult) return;
+        
+        const { sorted_items, elaborate_cutoff } = this.analysisResult.sortingResult;
+        sorted_items.forEach((itemNum, index) => {
+            const shouldKeep = (index + 1) <= elaborate_cutoff;
             this.keepSelections.set(itemNum, shouldKeep);
         });
         this.refreshContent();
