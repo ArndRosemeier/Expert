@@ -33,7 +33,7 @@ export class SearchModal extends BaseModal {
     private totalPages: number = 1;
     
     // Options
-    private includeAllVersions: boolean = false;
+    private includeAllVersions: boolean = true;
     private caseSensitive: boolean = false;
     private searchInContent: boolean = true;
     private searchInContext: boolean = true;
@@ -95,7 +95,7 @@ export class SearchModal extends BaseModal {
                 <!-- Options -->
                 <div class="search-options">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="include-all-versions"> Include all versions
+                        <input type="checkbox" id="include-all-versions" checked> Include all versions
                     </label>
                     <label class="checkbox-label">
                         <input type="checkbox" id="case-sensitive"> Case sensitive
