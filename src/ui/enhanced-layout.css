@@ -2282,3 +2282,72 @@ label[for] {
 .log-warn { color: #f59e0b; }
 .log-error { color: #ef4444; }
 .log-success { color: #10b981; }
+
+/* === GENERATION CONTROLS GRID LAYOUT === */
+/* Proper CSS Grid layout for generation control dropdowns */
+
+.level-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: var(--space-4); /* 16px gap between columns */
+    margin-bottom: var(--space-3); /* 12px bottom margin */
+}
+
+.level-selector {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2); /* 8px gap between label and dropdown */
+}
+
+.level-selector label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2); /* 8px gap between icon and text */
+    font-weight: 500;
+    color: var(--secondary-700);
+    font-size: 0.875rem; /* 14px */
+    line-height: 1.25;
+}
+
+.level-icon {
+    font-size: 1rem; /* 16px - consistent icon size */
+    flex-shrink: 0;
+}
+
+.level-dropdown {
+    width: 100%;
+    padding: var(--space-2) var(--space-3); /* 8px 12px */
+    border: 1px solid var(--secondary-300);
+    border-radius: var(--radius-md);
+    background-color: white;
+    font-size: 0.875rem; /* 14px */
+    line-height: 1.25;
+    transition: all 0.15s ease;
+}
+
+.level-dropdown:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1);
+}
+
+.level-dropdown:hover {
+    border-color: var(--secondary-500);
+}
+
+/* Row containers for organized grouping */
+.prune-and-threshold-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: var(--space-4); /* 16px gap between columns */
+    margin-top: var(--space-3); /* 12px top margin */
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    .level-controls-grid,
+    .prune-and-threshold-row {
+        grid-template-columns: 1fr; /* Single column on mobile */
+        gap: var(--space-3); /* Smaller gap on mobile */
+    }
+}
