@@ -764,12 +764,7 @@ export class SettingsManager {
         }
     }
 
-    /**
-     * Get the global language setting (for UI components like language selector)
-     */
-    public getGlobalLanguage(): string {
-        return this.globalLanguage;
-    }
+
 
     private async saveProfiles(isCleanupOperation: boolean = false): Promise<void> {
         try {

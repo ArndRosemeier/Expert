@@ -22,8 +22,7 @@ let currentlyLoadedProfileName: string | null = null;
 type ActiveProjectChangeListener = (activeProject: ProjectManager | null) => void;
 const activeProjectChangeListeners: ActiveProjectChangeListener[] = [];
 
-// Language synchronization functionality
-let isLanguageSyncEnabled = true; // Flag to prevent infinite loops during sync
+// Language synchronization functionality (decoupled - no longer used)
 
 /**
  * Initialize language synchronization between projects and settings
@@ -52,7 +51,7 @@ export const initializeLanguageSync = () => {
  * Handle language change from settings - DECOUPLED: only changes global default
  * No longer automatically syncs to active project
  */
-export const handleLanguageChange = (newLanguage: string) => {
+export const handleLanguageChange = (_newLanguage: string) => {
     // Language change now only affects the global default setting
     // Projects maintain their own language settings independently
     // Use "Set Project Language" button to explicitly copy global to project
