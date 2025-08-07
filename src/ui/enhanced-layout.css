@@ -2289,7 +2289,8 @@ label[for] {
 .level-controls-grid {
     display: grid;
     grid-template-columns: 1fr 1fr; /* Two equal columns */
-    gap: var(--space-4); /* 16px gap between columns */
+    grid-template-rows: repeat(3, auto); /* Three rows, auto-sized */
+    gap: var(--space-4); /* 16px gap between columns and rows */
     margin-bottom: var(--space-3); /* 12px bottom margin */
 }
 
@@ -2335,21 +2336,11 @@ label[for] {
     border-color: var(--secondary-500);
 }
 
-/* Row containers for organized grouping */
-.prune-and-threshold-row {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important; /* Two equal columns */
-    gap: var(--space-4) !important; /* 16px gap between columns */
-    margin-top: var(--space-3); /* 12px top margin */
-    /* Debug styling to verify CSS is loading */
-    border: 2px solid red !important;
-}
-
 /* Responsive design for smaller screens */
 @media (max-width: 768px) {
-    .level-controls-grid,
-    .prune-and-threshold-row {
+    .level-controls-grid {
         grid-template-columns: 1fr; /* Single column on mobile */
+        grid-template-rows: repeat(6, auto); /* Six rows on mobile (all controls stacked) */
         gap: var(--space-3); /* Smaller gap on mobile */
     }
 }

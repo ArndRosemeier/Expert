@@ -2380,10 +2380,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="10" ${autofixSeverityState === 10 ? 'selected' : ''}>10 (Critical)</option>
                                 </select>
                             </div>
-                </div>
-                
-                        <!-- Prune Level and Rating Threshold Row -->
-                        <div class="prune-and-threshold-row">
+                            
                             <!-- Context Prune Level -->
                             <div class="level-selector">
                                 <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
@@ -2413,9 +2410,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
                                 </select>
                             </div>
-                            
-
-                        </div>
+                </div>
                 
                         <!-- Validation Messages -->
                         <div id="level-validation-message" class="level-validation-message" style="display: none;">
