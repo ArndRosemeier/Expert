@@ -1,7 +1,7 @@
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode } from '../../../DocumentNode';
-import { ContextAnalysisRequest, ContextAnalysisResult, ContextIssue } from '../../../types/ContextAdjusterTypes';
+import { ContextAnalysisRequest, ContextAnalysisResult, ContextIssue, ContextSortingResult } from '../../../types/ContextAdjusterTypes';
 import { ProjectManager } from '../../../ProjectManager';
 import { getContextItems } from '../../../ContextFormat';
 import { TaskModelService } from '../../../services/TaskModelService';
@@ -67,7 +67,7 @@ export class ContextAdjusterService {
     /**
      * Perform context analysis using AI with retry logic
      */
-    async analyzeContext(node: DocumentNode, projectManager: ProjectManager, capturedLanguage?: string): Promise<ContextAnalysisResult> {
+    async analyzeContext(node: DocumentNode, projectManager: ProjectManager, capturedLanguage?: string, useSortingMode: boolean = true): Promise<ContextAnalysisResult> {
         if (!this.isNodeEligible(node)) {
             throw new Error(this.getIneligibilityReason(node));
         }
@@ -123,66 +123,15 @@ export class ContextAdjusterService {
         const isLeaf = node.isLeaf;
         const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeaf);
         
-        console.log(`🔍 Using ${modelPurpose} model for context analysis of ${isLeaf ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
+        console.log(`🔍 Using ${modelPurpose} model for context ${useSortingMode ? 'sorting' : 'analysis'} of ${isLeaf ? 'template-leaf' : 'template-branch'} node "${node.title}"`);
         
-        // Retry logic (similar to LoopOrchestrator)
-        const maxRetries = 3;
-        let lastResponse = '';
-        let issues: ContextIssue[] | null = null;
-        
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-                lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
-            
-            // Parse JSON response with mapping from filtered to original indices
-                issues = this.parseAnalysisResponse(lastResponse, filteredToOriginalMapping);
-                
-                if (issues !== null) {
-                    break; // Success
-                }
-                
-                console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`);
-                
-            } catch (error) {
-                // Check for abort conditions first (like LoopOrchestrator)
-                if (error instanceof Error && (
-                    error.message === 'Request was aborted' || 
-                    error.message.includes('aborted') ||
-                    error.name === 'AbortError'
-                )) {
-                    console.log(`🛑 ContextAdjusterService: Context analysis aborted during attempt ${attempt + 1} for node "${node.title}"`);
-                    throw new Error('Context analysis was aborted by user');
-                }
-                
-                // Check if this is a parsing error (our parseAnalysisResponse method throws)
-                if (error instanceof Error && error.message.includes('parse')) {
-                    console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
-                    continue; // Try again
-                }
-                
-                // If it's not a parsing error or abort, it's likely a network/API error
-                console.warn(`Context analysis API call failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
-                
-                // Don't retry on the last attempt
-                if (attempt === maxRetries - 1) {
-                    throw error;
-                }
-            }
+        if (useSortingMode) {
+            // New sorting mode
+            return await this.performSortingAnalysis(analysisPrompt, modelPurpose, node, contextCheck, filteredToOriginalMapping);
+        } else {
+            // Legacy issue-detection mode
+            return await this.performIssueAnalysis(analysisPrompt, modelPurpose, node, contextCheck, filteredToOriginalMapping);
         }
-        
-        // If we still don't have issues after all retries, throw an error
-        if (issues === null) {
-            throw new Error(`Context analysis failed after ${maxRetries} retries. The AI response may be malformed.\n\nLast AI Response:\n"${lastResponse}"`);
-        }
-            
-            return {
-                issues,
-                hasIssues: issues.length > 0,
-                analysisTimestamp: new Date(),
-                nodeId: node.id,
-                originalContext: node.context || '',
-                contextMismatch: contextCheck.hasMismatch
-            };
     }
 
     /**
@@ -272,6 +221,206 @@ export class ContextAdjusterService {
             
         } catch (error) {
             console.warn('Failed to parse context analysis response:', error);
+            console.warn('Response content:', response);
+            return null;
+        }
+    }
+
+    /**
+     * Perform legacy issue-based analysis
+     */
+    private async performIssueAnalysis(
+        analysisPrompt: string,
+        modelPurpose: string,
+        node: DocumentNode,
+        contextCheck: any,
+        filteredToOriginalMapping: number[]
+    ): Promise<ContextAnalysisResult> {
+        const maxRetries = 3;
+        let lastResponse = '';
+        let issues: ContextIssue[] | null = null;
+        
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
+                issues = this.parseAnalysisResponse(lastResponse, filteredToOriginalMapping);
+                
+                if (issues !== null) {
+                    break; // Success
+                }
+                
+                console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`);
+                
+            } catch (error) {
+                // Handle errors (abort, parsing, network)
+                if (error instanceof Error && (
+                    error.message === 'Request was aborted' || 
+                    error.message.includes('aborted') ||
+                    error.name === 'AbortError'
+                )) {
+                    console.log(`🛑 ContextAdjusterService: Context analysis aborted during attempt ${attempt + 1} for node "${node.title}"`);
+                    throw new Error('Context analysis was aborted by user');
+                }
+                
+                if (error instanceof Error && error.message.includes('parse')) {
+                    console.warn(`Context analysis response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                    continue;
+                }
+                
+                console.warn(`Context analysis API call failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                
+                if (attempt === maxRetries - 1) {
+                    throw error;
+                }
+            }
+        }
+        
+        if (issues === null) {
+            throw new Error(`Context analysis failed after ${maxRetries} retries. The AI response may be malformed.\n\nLast AI Response:\n"${lastResponse}"`);
+        }
+            
+        return {
+            issues,
+            hasIssues: issues.length > 0,
+            analysisTimestamp: new Date(),
+            nodeId: node.id,
+            originalContext: node.context || '',
+            contextMismatch: contextCheck.hasMismatch,
+            isSortingMode: false
+        };
+    }
+
+    /**
+     * Perform new sorting-based analysis
+     */
+    private async performSortingAnalysis(
+        analysisPrompt: string,
+        modelPurpose: string,
+        node: DocumentNode,
+        contextCheck: any,
+        filteredToOriginalMapping: number[]
+    ): Promise<ContextAnalysisResult> {
+        const maxRetries = 3;
+        let lastResponse = '';
+        let sortingResult: ContextSortingResult | null = null;
+        
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                lastResponse = await this.openRouterClient.chat(modelPurpose, analysisPrompt);
+                sortingResult = this.parseSortingResponse(lastResponse, filteredToOriginalMapping);
+                
+                if (sortingResult !== null) {
+                    break; // Success
+                }
+                
+                console.warn(`Context sorting response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`);
+                
+            } catch (error) {
+                // Handle errors (abort, parsing, network)
+                if (error instanceof Error && (
+                    error.message === 'Request was aborted' || 
+                    error.message.includes('aborted') ||
+                    error.name === 'AbortError'
+                )) {
+                    console.log(`🛑 ContextAdjusterService: Context sorting aborted during attempt ${attempt + 1} for node "${node.title}"`);
+                    throw new Error('Context sorting was aborted by user');
+                }
+                
+                if (error instanceof Error && error.message.includes('parse')) {
+                    console.warn(`Context sorting response parsing failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                    continue;
+                }
+                
+                console.warn(`Context sorting API call failed on attempt ${attempt + 1} for node "${node.title}". Retrying...`, error);
+                
+                if (attempt === maxRetries - 1) {
+                    throw error;
+                }
+            }
+        }
+        
+        if (sortingResult === null) {
+            throw new Error(`Context sorting failed after ${maxRetries} retries. The AI response may be malformed.\n\nLast AI Response:\n"${lastResponse}"`);
+        }
+            
+        return {
+            issues: [], // Empty for sorting mode
+            hasIssues: false,
+            analysisTimestamp: new Date(),
+            nodeId: node.id,
+            originalContext: node.context || '',
+            contextMismatch: contextCheck.hasMismatch,
+            sortingResult,
+            isSortingMode: true
+        };
+    }
+
+    /**
+     * Parse AI response for sorting results
+     */
+    private parseSortingResponse(response: string, filteredToOriginalMapping: number[]): ContextSortingResult | null {
+        try {
+            // Extract JSON object from response
+            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                console.warn('No JSON object found in response');
+                return null;
+            }
+
+            const parsed = JSON.parse(jsonMatch[0]);
+            
+            if (!parsed.sorted_items || !Array.isArray(parsed.sorted_items)) {
+                console.warn('Response missing sorted_items array');
+                return null;
+            }
+
+            if (!parsed.top_tier || !Array.isArray(parsed.top_tier)) {
+                console.warn('Response missing top_tier array');
+                return null;
+            }
+
+            if (!parsed.explanations || typeof parsed.explanations !== 'object') {
+                console.warn('Response missing explanations object');
+                return null;
+            }
+
+            // Map filtered item numbers back to original item numbers
+            const originalSortedItems: number[] = [];
+            for (const filteredNum of parsed.sorted_items) {
+                const filteredIndex = Number(filteredNum) - 1; // Convert to 0-based
+                if (filteredIndex >= 0 && filteredIndex < filteredToOriginalMapping.length) {
+                    const originalIndex = filteredToOriginalMapping[filteredIndex]!;
+                    originalSortedItems.push(originalIndex + 1); // Convert back to 1-based
+                }
+            }
+
+            const originalTopTier: number[] = [];
+            for (const filteredNum of parsed.top_tier) {
+                const filteredIndex = Number(filteredNum) - 1; // Convert to 0-based
+                if (filteredIndex >= 0 && filteredIndex < filteredToOriginalMapping.length) {
+                    const originalIndex = filteredToOriginalMapping[filteredIndex]!;
+                    originalTopTier.push(originalIndex + 1); // Convert back to 1-based
+                }
+            }
+
+            // Map explanations to original item numbers
+            const originalExplanations: Record<string, string> = {};
+            for (const [filteredNumStr, explanation] of Object.entries(parsed.explanations)) {
+                const filteredIndex = Number(filteredNumStr) - 1; // Convert to 0-based
+                if (filteredIndex >= 0 && filteredIndex < filteredToOriginalMapping.length) {
+                    const originalIndex = filteredToOriginalMapping[filteredIndex]!;
+                    originalExplanations[(originalIndex + 1).toString()] = String(explanation);
+                }
+            }
+
+            return {
+                sorted_items: originalSortedItems,
+                top_tier: originalTopTier,
+                explanations: originalExplanations
+            };
+            
+        } catch (error) {
+            console.warn('Failed to parse context sorting response:', error);
             console.warn('Response content:', response);
             return null;
         }

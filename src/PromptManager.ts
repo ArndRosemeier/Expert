@@ -874,15 +874,10 @@ JSON Response:`.trim(),
 
     context_analysis: {
         text: `
-            Write your "justification" field in {{language}}. All JSON field names must always remain in English.
-            
-            You are analyzing inherited context for potential issues when creating subnodes.
+            You are analyzing inherited context items to determine their relevance for creating subnodes under the current node.
 
 **Your Task:**
-Make a list of context items that are beyond the scope of the content of this node and its possible subnodes.
-
-**Numbered Context Items:**
-{{numbered_context_items}}
+Sort all context items by their relevance for creating subnodes under "{{node_title}}". Consider both direct applicability and background importance.
 
 **Current Node:**
 Title: {{node_title}}
@@ -890,50 +885,45 @@ Title: {{node_title}}
 Content: {{node_content}}
 *****
 
+**Context Items to Sort:**
+{{numbered_context_items}}
+
+**SORTING CRITERIA:**
+Rank from MOST relevant (1st position) to LEAST relevant (last position) based on:
+- **Direct Relevance**: How directly applicable is this context for subnodes under this specific node?
+- **Background Importance**: Essential background information that subnodes would need to understand?
+- **Future Plot Impact**: Will this context influence content development in subnodes?
+- **Character/World Continuity**: Does this maintain important character or world consistency?
 
 **RESPONSE FORMAT - CRITICAL:**
-Your response MUST be a valid JSON array and NOTHING ELSE. Do not include any explanatory text before or after the JSON.
+Your response MUST be a valid JSON object with ONLY these fields:
 
-Each issue object MUST have these EXACT field names (no variations, abbreviations, or typos):
-- item_number: The number of the problematic context item (from the numbered list above)
-- problematic_context_item: The specific text from the context item that's problematic
-- reason_for_problem: Why this context item would be bad for subnode creation
-- justification: Detailed explanation of the problem and why it needs fixing
-- severity: A number from 1-10 (where 10 is most severe) based on how much this would confuse subnode creation
-
-**EXAMPLES:**
-
-Example 1 (issues found):
-[
-  {
-    "item_number": 3,
-    "problematic_context_item": "This document is in the early planning phase",
-    "reason_for_problem": "Temporal reference that may not apply to current section",
-    "justification": "This temporal reference assumes the document is still in planning, but the current section is about implementation details, making this context misleading for subnode creation",
-    "severity": 7
-  },
-  {
-    "item_number": 5,
-    "problematic_context_item": "Sarah will handle the marketing campaign next month",
-    "reason_for_problem": "Overly specific detail that doesn't apply to current content",
-    "justification": "This specific task assignment is unrelated to the current node's focus on technical architecture, making it confusing context for technical subnodes",
-    "severity": 4
+{
+  "sorted_items": [3, 7, 1, 12, 5, 8, 2, 4, 6, 9, 10, 11],
+  "top_tier": [3, 7, 1],
+  "explanations": {
+    "3": "Critical character motivation that drives all upcoming scenes",
+    "7": "Essential world-building rule that affects all magic use",
+    "1": "Key plot setup that subnodes will directly reference"
   }
-]
+}
 
-Example 2 (no issues found):
-[]
+**FIELD EXPLANATIONS:**
+- **sorted_items**: ALL item numbers in order from most to least relevant
+- **top_tier**: The 3-5 most critical items (subset of sorted_items, in same order)
+- **explanations**: Brief explanation for why each top-tier item is essential ({{language}})
 
 **CRITICAL INSTRUCTIONS:**
+- Include ALL item numbers in sorted_items (no omissions)
+- top_tier must be a subset of the first items in sorted_items
 - Use ONLY the exact field names shown above
 - Your response must be valid JSON that can be parsed by JSON.parse()
-- Do not add any text before or after the JSON array
-- If no issues are found, return exactly: []
-- Test your JSON mentally before responding to ensure it's valid
+- Do not add any text before or after the JSON object
+- Explanations should be concise (1-2 sentences max)
 
 Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],
-        description: "System prompt for analyzing inherited context for potential issues when creating subnodes. Identifies problematic context items and suggests improvements."
+        description: "System prompt for sorting inherited context items by relevance for subnode creation. Provides ranked list with explanations for top items."
     },
 
     context_rating: {

@@ -65,7 +65,7 @@ export class ContextAdjusterModal extends BaseModal {
                 getSettingsManager()!
             );
             const projectManager = getActiveProject()!;
-            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager);
+            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager, undefined, true);
             this.updateWithResults(result);
         } catch (error) {
             console.error('Context analysis failed:', error);
@@ -112,8 +112,8 @@ export class ContextAdjusterModal extends BaseModal {
             );
             const projectManager = getActiveProject()!;
             
-            // Analyze context
-            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager, capturedLanguage);
+            // Analyze context using legacy mode for automatic operations
+            const result = await contextAdjusterService.analyzeContext(targetNode, projectManager, capturedLanguage, false);
             this.analysisResult = result;
             this.isLoading = false;
             
@@ -199,7 +199,7 @@ export class ContextAdjusterModal extends BaseModal {
     private renderModalContent(): string {
         return `
             <div class="modal-header">
-                <h2>🎯 Context Adjuster</h2>
+                <h2>📊 Context Relevance Analyzer</h2>
             </div>
             <div class="modal-body">
                 <div id="context-adjuster-content">
@@ -216,21 +216,21 @@ export class ContextAdjusterModal extends BaseModal {
         return `
             <div class="loading-container">
                 <div class="loading-spinner"></div>
-                <h3>🔍 Analyzing Context...</h3>
-                <p>Examining inherited context items to identify potential issues for subnode creation.</p>
+                <h3>📊 Sorting Context by Relevance...</h3>
+                <p>AI is analyzing and ranking inherited context items by their relevance for creating subnodes.</p>
                 
                 <div class="analysis-steps">
                     <div class="step">
                         <span class="step-icon">📋</span>
-                        <span class="step-text">Breaking context into numbered items</span>
+                        <span class="step-text">Processing context items and filtering protected items</span>
                     </div>
                     <div class="step">
-                        <span class="step-icon">🔍</span>
-                        <span class="step-text">Analyzing each context item for potential issues</span>
+                        <span class="step-icon">🤖</span>
+                        <span class="step-text">AI ranking items by relevance for subnode creation</span>
                     </div>
                     <div class="step">
                         <span class="step-icon">📊</span>
-                        <span class="step-text">Identifying problematic items with severity ratings</span>
+                        <span class="step-text">Identifying top-tier items and generating explanations</span>
                     </div>
                 </div>
             </div>
@@ -248,6 +248,15 @@ export class ContextAdjusterModal extends BaseModal {
         // Render parent comparison checkbox if parent exists
         const parentComparisonSection = this.renderParentComparisonSection();
 
+        // Handle sorting mode
+        if (this.analysisResult.isSortingMode && this.analysisResult.sortingResult) {
+            return `
+                ${contextMismatchWarning}
+                ${this.renderSortingResults()}
+            `;
+        }
+
+        // Handle legacy issue mode
         if (!this.analysisResult.hasIssues && !this.compareWithParent) {
             return `
                 ${contextMismatchWarning}
@@ -956,5 +965,161 @@ export class ContextAdjusterModal extends BaseModal {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Render the new sorting results UI
+     */
+    private renderSortingResults(): string {
+        if (!this.analysisResult?.sortingResult || !this.targetNode) {
+            return '<div class="error-message">No sorting results available.</div>';
+        }
+
+        const { getContextItems } = require('../../ContextFormat');
+        const allContextItems = getContextItems(this.targetNode.context || '');
+        const { sorted_items, top_tier, explanations } = this.analysisResult.sortingResult;
+
+        // Build sorted context display
+        const sortedItemsHtml = sorted_items.map((itemNum, index) => {
+            const itemIndex = itemNum - 1; // Convert to 0-based
+            const contextItem = allContextItems[itemIndex] || '';
+            const isTopTier = top_tier.includes(itemNum);
+            const explanation = explanations[itemNum.toString()] || '';
+
+            const rankColor = index < 5 ? '#28a745' : index < 10 ? '#ffc107' : '#6c757d';
+            const tierBadge = isTopTier ? `
+                <span style="
+                    background: #007bff;
+                    color: white;
+                    padding: 0.2rem 0.4rem;
+                    border-radius: 3px;
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                    margin-left: 0.5rem;
+                ">TOP TIER</span>
+            ` : '';
+
+            return `
+                <div class="sorted-item" style="
+                    border: 1px solid ${isTopTier ? '#007bff' : '#e9ecef'};
+                    border-radius: 6px;
+                    padding: 1rem;
+                    margin-bottom: 1rem;
+                    background: ${isTopTier ? '#f8f9ff' : '#ffffff'};
+                ">
+                    <div class="item-header" style="
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 0.75rem;
+                    ">
+                        <span style="
+                            background: ${rankColor};
+                            color: white;
+                            padding: 0.3rem 0.6rem;
+                            border-radius: 50%;
+                            font-weight: bold;
+                            font-size: 0.9rem;
+                            min-width: 1.8rem;
+                            text-align: center;
+                        ">#${index + 1}</span>
+                        <span style="
+                            color: #6c757d;
+                            font-size: 0.9rem;
+                            margin-left: 0.75rem;
+                        ">Item ${itemNum}</span>
+                        ${tierBadge}
+                    </div>
+                    
+                    <div class="item-content" style="
+                        background: rgba(255,255,255,0.7);
+                        border: 1px solid #e9ecef;
+                        border-radius: 4px;
+                        padding: 0.75rem;
+                        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                        font-size: 0.85rem;
+                        line-height: 1.4;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                        max-height: 120px;
+                        overflow-y: auto;
+                        margin-bottom: ${explanation ? '0.75rem' : '0'};
+                    ">${this.escapeHtml(contextItem)}</div>
+                    
+                    ${explanation ? `
+                        <div class="explanation" style="
+                            background: #f8f9fa;
+                            border-left: 3px solid #007bff;
+                            padding: 0.5rem 0.75rem;
+                            font-style: italic;
+                            color: #495057;
+                            font-size: 0.9rem;
+                            line-height: 1.4;
+                        ">
+                            <strong>AI Explanation:</strong> ${this.escapeHtml(explanation)}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="sorting-results">
+                <div style="
+                    background: #e3f2fd;
+                    border: 1px solid #90caf9;
+                    border-radius: 8px;
+                    padding: 1.5rem;
+                    margin-bottom: 1.5rem;
+                    text-align: center;
+                ">
+                    <h3 style="
+                        color: #1976d2;
+                        font-size: 1.3rem;
+                        margin: 0 0 1rem 0;
+                    ">📊 Context Relevance Ranking</h3>
+                    <p style="
+                        color: #424242;
+                        margin: 0 0 1rem 0;
+                        line-height: 1.5;
+                    ">Context items sorted by relevance for creating subnodes under "<strong>${this.escapeHtml(this.targetNode.title)}</strong>"</p>
+                    
+                    <div style="
+                        display: flex;
+                        justify-content: center;
+                        gap: 2rem;
+                        margin-top: 1rem;
+                        flex-wrap: wrap;
+                    ">
+                        <div style="color: #424242;">
+                            <strong>Total Items:</strong> ${sorted_items.length}
+                        </div>
+                        <div style="color: #1976d2;">
+                            <strong>Top Tier:</strong> ${top_tier.length}
+                        </div>
+                        <div style="color: #424242;">
+                            <strong>With Explanations:</strong> ${Object.keys(explanations).length}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="items-container">
+                    ${sortedItemsHtml}
+                </div>
+
+                <div style="
+                    background: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 6px;
+                    padding: 1rem;
+                    margin-top: 1.5rem;
+                    text-align: center;
+                    color: #6c757d;
+                    font-size: 0.9rem;
+                ">
+                    💡 <strong>Tip:</strong> Top-tier items are considered most critical for subnode creation. 
+                    Items are ordered from most relevant (top) to least relevant (bottom).
+                </div>
+            </div>
+        `;
     }
 } 

@@ -6,13 +6,24 @@ export interface ContextIssue {
     severity: number; // 1-10, where 10 is most severe
 }
 
+export interface ContextSortingResult {
+    sorted_items: number[];
+    top_tier: number[];
+    explanations: Record<string, string>;
+}
+
 export interface ContextAnalysisResult {
+    // Legacy format for backward compatibility
     issues: ContextIssue[];
     hasIssues: boolean;
     analysisTimestamp: Date;
     nodeId: string;
     originalContext: string;
     contextMismatch?: boolean;
+    
+    // New sorting format
+    sortingResult?: ContextSortingResult;
+    isSortingMode?: boolean;
 }
 
 export interface ContextAnalysisRequest {
