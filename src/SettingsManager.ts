@@ -713,7 +713,8 @@ export class SettingsManager {
     }
 
     /**
-     * Get the language setting - project language first, then global language
+     * Get the effective language setting - project language first, then global language
+     * This is used by generation services to determine what language to use
      */
     public getLanguage(): string {
         // Check active project first
@@ -727,6 +728,13 @@ export class SettingsManager {
         }
         
         // Fallback to global language setting
+        return this.globalLanguage;
+    }
+
+    /**
+     * Get the global default language setting (regardless of active project)
+     */
+    public getGlobalLanguage(): string {
         return this.globalLanguage;
     }
 

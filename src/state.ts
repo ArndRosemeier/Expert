@@ -27,63 +27,35 @@ let isLanguageSyncEnabled = true; // Flag to prevent infinite loops during sync
 
 /**
  * Initialize language synchronization between projects and settings
+ * DECOUPLED: No longer automatically syncs project language changes to global settings
  */
 export const initializeLanguageSync = () => {
-    // Subscribe to active project changes to sync language when projects switch
+    // Subscribe to active project changes to update UI display only
     onActiveProjectChange((activeProject) => {
-        if (!isLanguageSyncEnabled || !settingsManager) return;
+        if (!settingsManager) return;
         
         if (!activeProject) {
-            // No active project, don't change language settings
+            // No active project, show global language in UI
+            const globalLanguage = settingsManager.getGlobalLanguage();
+            updateLanguageSelectorUI(globalLanguage);
             return;
         }
         
-        const projectLanguage = activeProject.getLanguage();
-        if (projectLanguage) {
-            // Project has a language set, sync it to the global language setting
-            const currentLanguage = settingsManager.getLanguage();
-            
-            console.log(`🌐 Active project changed to "${activeProject.projectTitle}" with language "${projectLanguage}"`);
-            
-            if (currentLanguage !== projectLanguage) {
-                console.log(`🌐 Syncing project language "${projectLanguage}" to global language setting`);
-                isLanguageSyncEnabled = false; // Prevent recursion
-                settingsManager.setLanguage(projectLanguage).then(() => {
-                    // Update language selector UI if it exists
-                    updateLanguageSelectorUI(projectLanguage);
-                    isLanguageSyncEnabled = true;
-                }).catch((error) => {
-                    console.error('Failed to sync project language to settings:', error);
-                    isLanguageSyncEnabled = true;
-                });
-            } else {
-                // Language is the same but still update the UI to reflect current project
-                updateLanguageSelectorUI(projectLanguage);
-            }
-        }
+        // Just update the UI to show current global language setting
+        // No longer automatically sync project language to global setting
+        const globalLanguage = settingsManager.getGlobalLanguage();
+        updateLanguageSelectorUI(globalLanguage);
     });
 };
 
 /**
- * Handle language change from settings - sync to active project
+ * Handle language change from settings - DECOUPLED: only changes global default
+ * No longer automatically syncs to active project
  */
 export const handleLanguageChange = (newLanguage: string) => {
-    if (!isLanguageSyncEnabled) return;
-    
-    const activeProject = getActiveProject();
-    if (activeProject) {
-        console.log(`🌐 Syncing language setting "${newLanguage}" to active project`);
-        isLanguageSyncEnabled = false; // Prevent recursion
-        activeProject.setLanguage(newLanguage);
-        
-        // Save the project to persist the language change
-        activeProject.saveToStorage().then(() => {
-            isLanguageSyncEnabled = true;
-        }).catch((error) => {
-            console.error('Failed to save project language:', error);
-            isLanguageSyncEnabled = true;
-        });
-    }
+    // Language change now only affects the global default setting
+    // Projects maintain their own language settings independently
+    // Use "Set Project Language" button to explicitly copy global to project
 };
 
 /**
