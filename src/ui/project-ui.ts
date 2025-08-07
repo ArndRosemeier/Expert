@@ -2384,22 +2384,8 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 
                         <!-- Prune Level and Rating Threshold Row -->
                         <div class="prune-and-threshold-row">
-                            <!-- Prune Scope -->
-                            <div class="level-selector">
-                                <label for="prune-scope-selector" title="How aggressively to prune context during auto-pruning">
-                                    <span class="level-icon">🎯</span>
-                                    Prune Scope:
-                                </label>
-                                <select id="prune-scope-selector" class="level-dropdown">
-                                    <option value="0" ${pruneScopeState === 0 ? 'selected' : ''}>No pruning</option>
-                                    <option value="1" ${pruneScopeState === 1 ? 'selected' : ''}>🔥 Severe</option>
-                                    <option value="2" ${pruneScopeState === 2 ? 'selected' : ''}>⚖️ Medium</option>
-                                    <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
-                                </select>
-                            </div>
-                            
                             <!-- Context Prune Level -->
-                            <div class="prune-level-container">
+                            <div class="level-selector">
                                 <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
                                     <span class="level-icon">🔧</span>
                                     Prune Level:
@@ -2411,6 +2397,20 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                         const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
                                         return `<option value="${actualLevel}" ${contextPruneLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
+                                </select>
+                            </div>
+                            
+                            <!-- Prune Scope -->
+                            <div class="level-selector">
+                                <label for="prune-scope-selector" title="How aggressively to prune context during auto-pruning">
+                                    <span class="level-icon">🎯</span>
+                                    Prune Scope:
+                                </label>
+                                <select id="prune-scope-selector" class="level-dropdown">
+                                    <option value="0" ${pruneScopeState === 0 ? 'selected' : ''}>No pruning</option>
+                                    <option value="1" ${pruneScopeState === 1 ? 'selected' : ''}>🔥 Severe</option>
+                                    <option value="2" ${pruneScopeState === 2 ? 'selected' : ''}>⚖️ Medium</option>
+                                    <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
                                 </select>
                             </div>
                             
