@@ -95,6 +95,8 @@ export interface GenerationLevels {
     coherenceLevel: number;
     /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
     autofixSeverity: number;
+    /** Context pruning scope (none: 0, severe: 1, medium: 2, relaxed: 3) */
+    pruneScope: number;
     /** Frozen settings captured at generation start */
     frozenSettings: FrozenSettings;
 }
@@ -444,7 +446,7 @@ export class UnifiedGenerationService {
                     if (DEBUG_STATELESS_GENERATION) {
                         console.log(`✅ STATELESS DEBUG: Performing context pruning on "${node.title}"`);
                     }
-                    await this.handleContextPruning(node.id, levels.frozenSettings.language);
+                    await this.handleContextPruning(node.id, levels);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
@@ -819,7 +821,7 @@ export class UnifiedGenerationService {
     /**
      * Handle context pruning for a node
      */
-    private async handleContextPruning(nodeId: string, capturedLanguage?: string): Promise<void> {
+    private async handleContextPruning(nodeId: string, levels: GenerationLevels): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested) {
             console.log(`🛑 Context pruning aborted for node: ${nodeId}`);
@@ -867,7 +869,7 @@ export class UnifiedGenerationService {
             };
             this.emitUnifiedProgress();
             
-            contextChanged = await this.runContextRatingMode(node, capturedLanguage);
+            contextChanged = await this.runContextSortingMode(node, levels.frozenSettings.language, levels.pruneScope);
             
             // Emit completion progress
             this.currentOperationProgress = {
@@ -888,32 +890,32 @@ export class UnifiedGenerationService {
     }
 
     /**
-     * Run context rating mode - AI decides which context items to keep or remove
+     * Run context sorting mode - AI sorts items by relevance and applies scope-based cutoff for automatic pruning
      */
-    private async runContextRatingMode(node: DocumentNode, capturedLanguage?: string): Promise<boolean> {
-        const { getContextItems } = await import('../ContextFormat');
-        const { ContextRatingService } = await import('../ui/modals/services/ContextRatingService');
+    private async runContextSortingMode(node: DocumentNode, capturedLanguage?: string, pruneScope?: number): Promise<boolean> {
+        const { getContextItems, formatContextItems } = await import('../ContextFormat');
+        const { ContextAdjusterService } = await import('../ui/modals/services/ContextAdjusterService');
         
-        // Create context rating service
-        const contextRatingService = new ContextRatingService(
+        // Create context adjuster service (new sorting-based system)
+        const contextAdjusterService = new ContextAdjusterService(
             this.deps.openRouterClient,
             this.deps.settingsManager
         );
         
-        // Create a minimal ProjectManager interface for the rating service
+        // Create a minimal ProjectManager interface for the service
         const projectManagerInterface = {
             findNodeById: (id: string) => this.deps.treeService.findNodeById(id, this.deps.rootNode)
         };
         
-        // Analyze context using rating service
-        const ratingResult = await contextRatingService.rateContext(node, projectManagerInterface as any, capturedLanguage);
+        // Analyze context using new sorting service (with sorting mode enabled)
+        const analysisResult = await contextAdjusterService.analyzeContext(node, projectManagerInterface as any, capturedLanguage, true);
         
-        if (ratingResult.ratings.length === 0) {
-            // No ratings (probably all protected items), mark as adjusted and return
+        if (!analysisResult.sortingResult) {
+            // No sorting results (probably all protected items), mark as adjusted and return
             const nodeContext = node.context || '';
             node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
-            console.log(`✅ No context items to rate for "${node.title}" - tagged as context_ai_adjusted`);
+            console.log(`✅ No context items to sort for "${node.title}" - tagged as context_ai_adjusted`);
             return false;
         }
         
@@ -921,52 +923,82 @@ export class UnifiedGenerationService {
         const nodeContext = node.context || '';
         const originalContextItems = getContextItems(nodeContext);
         
-        // Filter items based on AI decisions (keep items where should_keep is true)
+        // Determine which cutoff to use based on pruneScope
+        const { sorted_items, sparse_cutoff, medium_cutoff, elaborate_cutoff } = analysisResult.sortingResult;
+        
+        let selectedCutoff: number;
+        let scopeName: string;
+        
+        if (pruneScope === undefined || pruneScope === 0) {
+            // No pruning - use all items
+            selectedCutoff = sorted_items.length;
+            scopeName = "none";
+        } else if (pruneScope === 1) {
+            // Severe pruning - use sparse cutoff
+            selectedCutoff = sparse_cutoff;
+            scopeName = "severe";
+        } else if (pruneScope === 2) {
+            // Medium pruning - use medium cutoff (default)
+            selectedCutoff = medium_cutoff;
+            scopeName = "medium";
+        } else if (pruneScope === 3) {
+            // Relaxed pruning - use elaborate cutoff
+            selectedCutoff = elaborate_cutoff;
+            scopeName = "relaxed";
+        } else {
+            // Fallback to medium for invalid values
+            selectedCutoff = medium_cutoff;
+            scopeName = "medium (fallback)";
+        }
+        
+        // Build items to keep based on selected cutoff
         const itemsToKeep: string[] = [];
         const itemsRemoved: string[] = [];
         
-        ratingResult.ratings.forEach(rating => {
-            const itemIndex = rating.item_number - 1; // Convert to 0-based index
+        sorted_items.forEach((itemNum, index) => {
+            const itemIndex = itemNum - 1; // Convert to 0-based index
+            const position = index + 1; // 1-based position in sorted list
+            
             if (itemIndex >= 0 && itemIndex < originalContextItems.length) {
                 const item = originalContextItems[itemIndex];
                 if (item) { // Guard against undefined
-                    if (rating.should_keep) {
+                    if (position <= selectedCutoff) {
                         itemsToKeep.push(item);
                     } else {
                         itemsRemoved.push(item);
-                        // Context item removed (logging removed to reduce noise)
+                        // Context item removed based on selected cutoff (logging reduced)
                     }
                 }
             }
         });
         
-        // Add back any protected items (starting with "*") that weren't rated
+        // Add back any protected items (starting with "*") that weren't included in sorting
         originalContextItems.forEach((item) => {
             if (item && item.trim().startsWith('*')) {
                 // Protected item - always keep
                 if (!itemsToKeep.includes(item)) {
                     itemsToKeep.push(item);
-                    // Protected context item kept (logging removed to reduce noise)
+                    // Protected context item kept (logging reduced to reduce noise)
                 }
             }
         });
         
         // Build new context from kept items
-        const newContext = itemsToKeep.join('\n\n');
+        const newContext = formatContextItems(itemsToKeep);
         const contextChanged = newContext !== nodeContext;
         
         if (contextChanged) {
-            // Update context with AI adjustment tag
-            node.setContextWithTags(newContext, ['context_ai_adjusted']);
+            // Update context with AI adjustment tag (add ai_pruned tag for new system)
+            node.setContextWithTags(newContext, ['context_ai_adjusted', 'context_ai_pruned']);
             await this.deps.saveToStorage();
             
-                            // Context rating completed - items modified (logging reduced)
+            console.log(`✅ Auto-pruned context for "${node.title}": kept ${itemsToKeep.length}/${originalContextItems.length} items (${scopeName} cutoff: ${selectedCutoff})`);
         } else {
             // No changes but still tag as processed
             node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
             await this.deps.saveToStorage();
             
-            // Context rating completed - no changes (logging reduced)
+            console.log(`✅ Context analysis completed for "${node.title}": no changes needed (${scopeName} cutoff: ${selectedCutoff})`);
         }
         
         return contextChanged;

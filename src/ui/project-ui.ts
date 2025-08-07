@@ -395,6 +395,7 @@ let contentLevelState: number = -1;
 let contextPruneLevelState: number = -1;
 let coherenceLevelState: number = -1;
 let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
+let pruneScopeState: number = 2; // Default to medium (2)
 
 
 // Simple bulk operation tracking
@@ -518,7 +519,8 @@ async function saveLevelStates() {
             contentLevel: contentLevelState,
             contextPruneLevel: contextPruneLevelState,
             coherenceLevel: coherenceLevelState,
-            autofixSeverity: autofixSeverityState
+            autofixSeverity: autofixSeverityState,
+            pruneScope: pruneScopeState
         });
     } catch (error) {
         console.warn('Failed to save level states:', error);
@@ -529,13 +531,14 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, pruneScope: number}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
             contextPruneLevelState = saved.contextPruneLevel ?? -1;
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? -1;
+            pruneScopeState = saved.pruneScope ?? 2; // Default to medium
         }
     } catch (error) {
         console.warn('Failed to load level states:', error);
@@ -550,6 +553,7 @@ function captureCurrentDropdownValues() {
         const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
         const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
+        const pruneScopeSelector = document.getElementById('prune-scope-selector') as HTMLSelectElement;
         
         if (draftSelector) {
             draftLevelState = parseInt(draftSelector.value);
@@ -565,6 +569,9 @@ function captureCurrentDropdownValues() {
         }
         if (autofixSeveritySelector) {
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
+        }
+        if (pruneScopeSelector) {
+            pruneScopeState = parseInt(pruneScopeSelector.value);
         }
     } catch (error) {
         console.warn('Failed to capture dropdown values:', error);
@@ -2373,6 +2380,20 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="10" ${autofixSeverityState === 10 ? 'selected' : ''}>10 (Critical)</option>
                                 </select>
                             </div>
+                            
+                            <!-- Prune Scope -->
+                            <div class="level-selector">
+                                <label for="prune-scope-selector" title="How aggressively to prune context during auto-pruning">
+                                    <span class="level-icon">🎯</span>
+                                    Prune Scope:
+                                </label>
+                                <select id="prune-scope-selector" class="level-dropdown">
+                                    <option value="0" ${pruneScopeState === 0 ? 'selected' : ''}>No pruning</option>
+                                    <option value="1" ${pruneScopeState === 1 ? 'selected' : ''}>🔥 Severe</option>
+                                    <option value="2" ${pruneScopeState === 2 ? 'selected' : ''}>⚖️ Medium</option>
+                                    <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
+                                </select>
+                            </div>
                 </div>
                 
                         <!-- Prune Level and Rating Threshold Row -->
@@ -3292,7 +3313,7 @@ This action cannot be undone.`;
                             contextPruneLevel: -1, // No context pruning
                             coherenceLevel: -1, // No coherence checking
                             autofixSeverity: -1, // No autofix
-                            contextRatingThreshold: -1 // Use legacy context analysis
+                            pruneScope: 0 // No pruning for content-only generation
                         };
                         
                         // Start unified generation
@@ -3385,7 +3406,7 @@ This action cannot be undone.`;
                             contextPruneLevel: node.level + 1, // Prune context for children
                             coherenceLevel: node.level, // Check coherence at parent level
                             autofixSeverity: -1, // No autofix
-                            contextRatingThreshold: -1 // Use legacy context analysis
+                            pruneScope: 2 // Use medium pruning for bulk generation
                         };
                         
                         // Start unified generation
@@ -4193,6 +4214,10 @@ export async function setupEventListeners() {
         } else if (e.target.id === 'autofix-severity-selector') {
             const select = e.target as HTMLSelectElement;
             autofixSeverityState = parseInt(select.value);
+            void saveLevelStates();
+        } else if (e.target.id === 'prune-scope-selector') {
+            const select = e.target as HTMLSelectElement;
+            pruneScopeState = parseInt(select.value);
             void saveLevelStates();
 
         } else if ((e.target as HTMLInputElement).name === 'generation-type') {
@@ -5305,8 +5330,9 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
+    const pruneScopeSelector = getElementById('prune-scope-selector') as HTMLSelectElement;
     
-    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector) {
+    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector || !pruneScopeSelector) {
         console.error('Level selector dropdowns not found');
         return;
     }
@@ -5317,6 +5343,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     const contextPruneLevel = parseInt(contextPruneLevelSelector.value);
     const coherenceLevel = parseInt(coherenceLevelSelector.value);
     const autofixSeverity = parseInt(autofixSeveritySelector.value);
+    const pruneScope = parseInt(pruneScopeSelector.value);
     
     // Validate levels
     if (contentLevel > draftLevel) {
@@ -5362,7 +5389,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             contentLevel,
             contextPruneLevel,
             coherenceLevel,
-            autofixSeverity
+            autofixSeverity,
+            pruneScope
         };
         
         // Store generation parameters in the node for next time
