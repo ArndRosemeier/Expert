@@ -885,9 +885,6 @@ Title: {{node_title}}
 Content: {{node_content}}
 *****
 
-**Context Items to Sort:**
-{{numbered_context_items}}
-
 **SORTING CRITERIA:**
 Rank from MOST relevant (1st position) to LEAST relevant (last position) based on:
 - **Direct Relevance**: How directly applicable is this context for subnodes under this specific node?
@@ -895,35 +892,29 @@ Rank from MOST relevant (1st position) to LEAST relevant (last position) based o
 - **Future Plot Impact**: Will this context influence content development in subnodes?
 - **Character/World Continuity**: Does this maintain important character or world consistency?
 
+**Context Items to Sort:**
+{{numbered_context_items}}
+
 **RESPONSE FORMAT - CRITICAL:**
 Your response MUST be a valid JSON object with ONLY these fields:
 
 {
   "sorted_items": [3, 7, 1, 12, 5, 8, 2, 4, 6, 9, 10, 11],
-  "top_tier": [3, 7, 1],
   "recommended_cutoff": 8,
-  "explanations": {
-    "3": "Critical character motivation that drives all upcoming scenes",
-    "7": "Essential world-building rule that affects all magic use",
-    "1": "Key plot setup that subnodes will directly reference"
-  },
   "cutoff_reasoning": "Items beyond position 8 become tangential to subnode creation - they provide background but don't directly influence content development."
 }
 
 **FIELD EXPLANATIONS:**
 - **sorted_items**: ALL item numbers in order from most to least relevant
-- **top_tier**: The 3-5 most critical items (subset of sorted_items, in same order)
 - **recommended_cutoff**: Position in sorted_items where relevance drops significantly (recommended number of items to keep)
-- **explanations**: Brief explanation for why each top-tier item is essential ({{language}})
 - **cutoff_reasoning**: Explanation for why items after the cutoff are less important ({{language}})
 
 **CRITICAL INSTRUCTIONS:**
 - Include ALL item numbers in sorted_items (no omissions)
-- top_tier must be a subset of the first items in sorted_items
 - Use ONLY the exact field names shown above
 - Your response must be valid JSON that can be parsed by JSON.parse()
 - Do not add any text before or after the JSON object
-- Explanations should be concise (1-2 sentences max)
+- Focus on finding the natural cutoff point where relevance drops significantly
 
 Your JSON response:`.trim(),
         placeholders: ['node_title', 'node_content', 'numbered_context_items', 'language'],

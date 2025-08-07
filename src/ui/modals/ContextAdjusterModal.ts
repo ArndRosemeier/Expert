@@ -19,6 +19,7 @@ export class ContextAdjusterModal extends BaseModal {
     private removedItems: Set<number> = new Set();
     private compareWithParent: boolean = false;
     private parentNode: DocumentNode | null = null;
+    private keepSelections: Map<number, boolean> = new Map();
 
     constructor() {
         super({ 
@@ -952,6 +953,41 @@ export class ContextAdjusterModal extends BaseModal {
             });
         }
 
+        // Keep checkboxes for sorting mode
+        const keepCheckboxes = document.querySelectorAll('.keep-checkbox');
+        keepCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const itemNum = parseInt((e.target as HTMLElement).getAttribute('data-item-num') || '0');
+                const isChecked = (e.target as HTMLInputElement).checked;
+                this.keepSelections.set(itemNum, isChecked);
+                this.refreshContent(); // Refresh to update visual state and stats
+            });
+        });
+
+        // Select all button
+        const selectAllBtn = document.querySelector('#select-all-btn');
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', () => {
+                this.selectAllItems();
+            });
+        }
+
+        // Select recommended button
+        const selectRecommendedBtn = document.querySelector('#select-recommended-btn');
+        if (selectRecommendedBtn) {
+            selectRecommendedBtn.addEventListener('click', () => {
+                this.selectRecommendedItems();
+            });
+        }
+
+        // Execute prune button
+        const executePruneBtn = document.querySelector('#execute-prune-btn');
+        if (executePruneBtn) {
+            executePruneBtn.addEventListener('click', async () => {
+                await this.executePruning();
+            });
+        }
+
         // FIXED: Close button event listener
         const closeButton = document.querySelector('#context-adjuster-close-btn');
         if (closeButton) {
@@ -976,33 +1012,27 @@ export class ContextAdjusterModal extends BaseModal {
         }
 
         const allContextItems = getContextItems(this.targetNode.context || '');
-        const { sorted_items, top_tier, explanations, recommended_cutoff, cutoff_reasoning } = this.analysisResult.sortingResult;
+        const { sorted_items, recommended_cutoff, cutoff_reasoning } = this.analysisResult.sortingResult;
+        
+        // Initialize keep selections based on cutoff if not already set
+        if (this.keepSelections.size === 0) {
+            sorted_items.forEach((itemNum, index) => {
+                const shouldKeep = (index + 1) <= recommended_cutoff;
+                this.keepSelections.set(itemNum, shouldKeep);
+            });
+        }
 
         // Build sorted context display
         const sortedItemsHtml = sorted_items.map((itemNum, index) => {
             const itemIndex = itemNum - 1; // Convert to 0-based
             const contextItem = allContextItems[itemIndex] || '';
-            const isTopTier = top_tier.includes(itemNum);
-            const explanation = explanations[itemNum.toString()] || '';
             const isWithinCutoff = (index + 1) <= recommended_cutoff;
             const isAtCutoff = (index + 1) === recommended_cutoff;
+            const isKept = this.keepSelections.get(itemNum) ?? false;
 
             const rankColor = index < 5 ? '#28a745' : index < 10 ? '#ffc107' : '#6c757d';
             
             let badges = '';
-            if (isTopTier) {
-                badges += `
-                    <span style="
-                        background: #007bff;
-                        color: white;
-                        padding: 0.2rem 0.4rem;
-                        border-radius: 3px;
-                        font-size: 0.7rem;
-                        font-weight: 600;
-                        margin-left: 0.5rem;
-                    ">TOP TIER</span>
-                `;
-            }
             if (isAtCutoff) {
                 badges += `
                     <span style="
@@ -1013,7 +1043,7 @@ export class ContextAdjusterModal extends BaseModal {
                         font-size: 0.7rem;
                         font-weight: 600;
                         margin-left: 0.5rem;
-                    ">CUTOFF</span>
+                    ">AI CUTOFF</span>
                 `;
             } else if (!isWithinCutoff) {
                 badges += `
@@ -1031,18 +1061,36 @@ export class ContextAdjusterModal extends BaseModal {
 
             return `
                 <div class="sorted-item" style="
-                    border: 1px solid ${isTopTier ? '#007bff' : isWithinCutoff ? '#e9ecef' : '#dee2e6'};
+                    border: 1px solid ${isKept ? '#28a745' : '#dee2e6'};
                     border-radius: 6px;
                     padding: 1rem;
                     margin-bottom: 1rem;
-                    background: ${isTopTier ? '#f8f9ff' : isWithinCutoff ? '#ffffff' : '#f8f9fa'};
-                    opacity: ${isWithinCutoff ? '1' : '0.7'};
+                    background: ${isKept ? '#f8fff8' : '#f8f9fa'};
+                    opacity: ${isKept ? '1' : '0.7'};
                 ">
                     <div class="item-header" style="
                         display: flex;
                         align-items: center;
                         margin-bottom: 0.75rem;
                     ">
+                        <label style="
+                            display: flex;
+                            align-items: center;
+                            cursor: pointer;
+                            margin-right: 1rem;
+                        ">
+                            <input type="checkbox" ${isKept ? 'checked' : ''} 
+                                   data-item-num="${itemNum}"
+                                   class="keep-checkbox"
+                                   style="
+                                       margin-right: 0.5rem;
+                                       transform: scale(1.3);
+                                   ">
+                            <span style="
+                                font-weight: 600;
+                                color: ${isKept ? '#28a745' : '#6c757d'};
+                            ">Keep</span>
+                        </label>
                         <span style="
                             background: ${rankColor};
                             color: white;
@@ -1073,22 +1121,7 @@ export class ContextAdjusterModal extends BaseModal {
                         word-wrap: break-word;
                         max-height: 120px;
                         overflow-y: auto;
-                        margin-bottom: ${explanation ? '0.75rem' : '0'};
                     ">${this.escapeHtml(contextItem)}</div>
-                    
-                    ${explanation ? `
-                        <div class="explanation" style="
-                            background: #f8f9fa;
-                            border-left: 3px solid #007bff;
-                            padding: 0.5rem 0.75rem;
-                            font-style: italic;
-                            color: #495057;
-                            font-size: 0.9rem;
-                            line-height: 1.4;
-                        ">
-                            <strong>AI Explanation:</strong> ${this.escapeHtml(explanation)}
-                        </div>
-                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -1124,14 +1157,11 @@ export class ContextAdjusterModal extends BaseModal {
                         <div style="color: #424242;">
                             <strong>Total Items:</strong> ${sorted_items.length}
                         </div>
-                        <div style="color: #1976d2;">
-                            <strong>Top Tier:</strong> ${top_tier.length}
-                        </div>
                         <div style="color: #ff6b35;">
-                            <strong>Recommended Keep:</strong> ${recommended_cutoff}
+                            <strong>AI Recommends:</strong> ${recommended_cutoff}
                         </div>
-                        <div style="color: #424242;">
-                            <strong>With Explanations:</strong> ${Object.keys(explanations).length}
+                        <div style="color: #28a745;">
+                            <strong>Currently Selected:</strong> ${Array.from(this.keepSelections.values()).filter(keep => keep).length}
                         </div>
                     </div>
                 </div>
@@ -1161,6 +1191,53 @@ export class ContextAdjusterModal extends BaseModal {
                     ${sortedItemsHtml}
                 </div>
 
+                <div class="prune-actions" style="
+                    background: #e8f5e8;
+                    border: 1px solid #c3e6c3;
+                    border-radius: 6px;
+                    padding: 1.5rem;
+                    margin-top: 1.5rem;
+                    text-align: center;
+                ">
+                    <h4 style="
+                        color: #155724;
+                        font-size: 1.1rem;
+                        margin: 0 0 1rem 0;
+                    ">📝 Apply Context Pruning</h4>
+                    <p style="
+                        color: #155724;
+                        margin: 0 0 1.5rem 0;
+                        font-size: 0.9rem;
+                    ">Remove unchecked items from the context. This action cannot be undone.</p>
+                    
+                    <div style="
+                        display: flex;
+                        justify-content: center;
+                        gap: 1rem;
+                        flex-wrap: wrap;
+                    ">
+                        <button id="select-all-btn" class="button button-secondary" style="
+                            padding: 0.5rem 1rem;
+                            font-size: 0.9rem;
+                        ">
+                            ✅ Select All
+                        </button>
+                        <button id="select-recommended-btn" class="button button-secondary" style="
+                            padding: 0.5rem 1rem;
+                            font-size: 0.9rem;
+                        ">
+                            🎯 Select AI Recommended
+                        </button>
+                        <button id="execute-prune-btn" class="button button-primary" style="
+                            padding: 0.5rem 1.5rem;
+                            font-size: 0.9rem;
+                            font-weight: 600;
+                        ">
+                            🗑️ Execute Pruning
+                        </button>
+                    </div>
+                </div>
+
                 <div style="
                     background: #f8f9fa;
                     border: 1px solid #e9ecef;
@@ -1171,12 +1248,137 @@ export class ContextAdjusterModal extends BaseModal {
                     color: #6c757d;
                     font-size: 0.9rem;
                 ">
-                    💡 <strong>Legend:</strong> 
-                    <span style="color: #007bff;">■ Top Tier</span> = Most critical items | 
-                    <span style="color: #ff6b35;">■ Cutoff</span> = AI's recommended limit | 
-                    <span style="color: #6c757d;">■ Below Cutoff</span> = Less important items
+                    💡 <strong>Tip:</strong> 
+                    Use checkboxes to select which context items to keep. Items are sorted by relevance (most important first).
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Select all items for keeping
+     */
+    private selectAllItems(): void {
+        if (!this.analysisResult?.sortingResult) return;
+        
+        this.analysisResult.sortingResult.sorted_items.forEach(itemNum => {
+            this.keepSelections.set(itemNum, true);
+        });
+        this.refreshContent();
+    }
+
+    /**
+     * Select only AI recommended items for keeping
+     */
+    private selectRecommendedItems(): void {
+        if (!this.analysisResult?.sortingResult) return;
+        
+        const { sorted_items, recommended_cutoff } = this.analysisResult.sortingResult;
+        sorted_items.forEach((itemNum, index) => {
+            const shouldKeep = (index + 1) <= recommended_cutoff;
+            this.keepSelections.set(itemNum, shouldKeep);
+        });
+        this.refreshContent();
+    }
+
+    /**
+     * Execute the context pruning based on selected items
+     */
+    private async executePruning(): Promise<void> {
+        if (!this.targetNode || !this.analysisResult?.sortingResult) return;
+
+        // Get current context items
+        const allContextItems = getContextItems(this.targetNode.context || '');
+        
+        // Filter to keep only selected items
+        const selectedItems: string[] = [];
+        this.analysisResult.sortingResult.sorted_items.forEach(itemNum => {
+            const isKept = this.keepSelections.get(itemNum) ?? false;
+            if (isKept) {
+                const itemIndex = itemNum - 1; // Convert to 0-based
+                const contextItem = allContextItems[itemIndex];
+                if (contextItem) {
+                    selectedItems.push(contextItem);
+                }
+            }
+        });
+
+        if (selectedItems.length === 0) {
+            alert('No items selected for keeping. Please select at least one item.');
+            return;
+        }
+
+        // Confirm the action
+        const removedCount = allContextItems.length - selectedItems.length;
+        if (removedCount > 0) {
+            const confirmed = confirm(
+                `This will remove ${removedCount} context item(s) and keep ${selectedItems.length} item(s).\n\nThis action cannot be undone. Continue?`
+            );
+            if (!confirmed) return;
+        }
+
+        try {
+            // Create the new context from selected items
+            const newContext = formatContextItems(selectedItems);
+            
+            // Update the node's context with pruning tags
+            this.targetNode.setContextWithTags(newContext, ['edited', 'context_edited', 'context_ai_pruned']);
+            
+            // Propagate context to all descendants and their versions
+            const propagateRecursively = (parentNode: DocumentNode) => {
+                for (const child of parentNode.children) {
+                    const allVersions = child.getAllVersions();
+                    for (const version of allVersions) {
+                        version.context = parentNode.context;
+                        version.timestamp = new Date();
+                        version.tags.add('context_propagated');
+                    }
+                    propagateRecursively(child);
+                }
+            };
+            propagateRecursively(this.targetNode);
+            
+            // Update the context textarea in the main UI
+            const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+            if (contextTextArea) {
+                contextTextArea.value = newContext;
+            }
+            
+            // Update the context items count display in main UI
+            const contextLabel = document.querySelector('label[for="node-context"]');
+            if (contextLabel) {
+                const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
+                if (contextInfoSpan) {
+                    contextInfoSpan.textContent = getContextInfoText(newContext);
+                }
+            }
+            
+            // Save the project
+            const { getActiveProject } = await import('../../state');
+            const projectManager = getActiveProject()!;
+            await projectManager.saveToStorage();
+            
+            // Trigger UI refresh
+            try {
+                const { renderNodeDetails } = await import('../project-ui');
+                renderNodeDetails();
+            } catch (uiError) {
+                console.warn('⚠️ ContextAdjuster: Failed to refresh main UI:', uiError);
+            }
+            
+            // Show success message and close modal
+            alert(
+                `✅ Context pruning completed!\n\n` +
+                `• Removed: ${removedCount} items\n` +
+                `• Kept: ${selectedItems.length} items\n` +
+                `• Changes have been saved and propagated to subnodes.`
+            );
+            
+            await this.close();
+            
+        } catch (error) {
+            console.error('Context pruning failed:', error);
+            alert(`❌ Failed to prune context: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     }
 } 

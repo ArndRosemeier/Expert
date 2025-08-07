@@ -374,15 +374,7 @@ export class ContextAdjusterService {
                 return null;
             }
 
-            if (!parsed.top_tier || !Array.isArray(parsed.top_tier)) {
-                console.warn('Response missing top_tier array');
-                return null;
-            }
 
-            if (!parsed.explanations || typeof parsed.explanations !== 'object') {
-                console.warn('Response missing explanations object');
-                return null;
-            }
 
             if (typeof parsed.recommended_cutoff !== 'number' || parsed.recommended_cutoff < 1) {
                 console.warn('Response missing or invalid recommended_cutoff');
@@ -404,30 +396,11 @@ export class ContextAdjusterService {
                 }
             }
 
-            const originalTopTier: number[] = [];
-            for (const filteredNum of parsed.top_tier) {
-                const filteredIndex = Number(filteredNum) - 1; // Convert to 0-based
-                if (filteredIndex >= 0 && filteredIndex < filteredToOriginalMapping.length) {
-                    const originalIndex = filteredToOriginalMapping[filteredIndex]!;
-                    originalTopTier.push(originalIndex + 1); // Convert back to 1-based
-                }
-            }
 
-            // Map explanations to original item numbers
-            const originalExplanations: Record<string, string> = {};
-            for (const [filteredNumStr, explanation] of Object.entries(parsed.explanations)) {
-                const filteredIndex = Number(filteredNumStr) - 1; // Convert to 0-based
-                if (filteredIndex >= 0 && filteredIndex < filteredToOriginalMapping.length) {
-                    const originalIndex = filteredToOriginalMapping[filteredIndex]!;
-                    originalExplanations[(originalIndex + 1).toString()] = String(explanation);
-                }
-            }
 
             return {
                 sorted_items: originalSortedItems,
-                top_tier: originalTopTier,
                 recommended_cutoff: parsed.recommended_cutoff,
-                explanations: originalExplanations,
                 cutoff_reasoning: parsed.cutoff_reasoning
             };
             
