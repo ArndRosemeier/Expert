@@ -694,6 +694,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'add-child': 'add-child-node-btn',
                             'delete-node': 'delete-node-btn',
                             'delete-all-children': 'delete-subnodes-btn',
+                            'search': 'search-btn',
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
@@ -1113,6 +1114,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'add-child': 'add-child-node-btn',
                             'delete-node': 'delete-node-btn',
                             'delete-all-children': 'delete-subnodes-btn',
+                            'search': 'search-btn',
                             'export': 'export-node-btn',
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
@@ -1219,6 +1221,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
             <div class="action-section">
                 <div class="section-title">Data</div>
                 <div class="action-buttons">
+                    <button class="action-btn" data-action="search">
+                        🔍 Search & Replace
+                    </button>
                     <button class="action-btn" data-action="export">
                         📤 Export
                     </button>
@@ -4077,6 +4082,21 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'search-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                
+                void import('./modals/SearchModal').then(({ SearchModal }) => {
+                    const searchModal = new SearchModal();
+                    searchModal.openForNode(node);
+                }).catch((error: unknown) => {
+                    console.error('Failed to open search modal:', error);
+                    alert('Failed to open search. Please try again.');
+                });
+            }
+            break;
+
         case 'set-project-language-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
@@ -4133,6 +4153,9 @@ export async function setupEventListeners() {
     
     // Mark as set up to prevent duplicate setup
     (mainContent as any)._eventManagerSetup = true;
+    
+    // Set up global Ctrl+F search handler
+    setupGlobalSearchHandler();
     
     // Set up delegated change events using EventManager  
     eventManager.addDelegatedEvent(mainContent, 'change', 'select[id], input[id]', async (e: Event) => {
@@ -5942,6 +5965,20 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
     },
 
+    'search-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) return;
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) return;
+        
+        void import('./modals/SearchModal').then(({ SearchModal }) => {
+            const searchModal = new SearchModal();
+            searchModal.openForNode(node);
+        }).catch((error: unknown) => {
+            console.error('Failed to open search modal:', error);
+            alert('Failed to open search. Please try again.');
+        });
+    },
+
     'set-project-language-btn': async (_e: Event) => {
         if (!selectedNodeId || !projectManager) {
             alert('Please select a project root to set the project language.');
@@ -6054,4 +6091,64 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
     }
     
     checkNodeForTodos(rootNode);
+}
+
+/**
+ * Set up global Ctrl+F search handler
+ */
+function setupGlobalSearchHandler(): void {
+    // Remove existing handler if any
+    if ((document as any)._globalSearchHandler) {
+        document.removeEventListener('keydown', (document as any)._globalSearchHandler);
+    }
+
+    const globalSearchHandler = (event: KeyboardEvent): void => {
+        // Check if Ctrl+F or Cmd+F is pressed
+        if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+            // Check if we're currently in a UniversalTextEditor enhanced mode
+            const activeElement = document.activeElement;
+            
+            // If the active element is within a text-editor-with-highlighting, let it handle Ctrl+F
+            if (activeElement && activeElement.closest('.text-editor-with-highlighting')) {
+                return; // Let UniversalTextEditor handle this
+            }
+            
+            // If we're in any other input/textarea, let browser handle it
+            if (activeElement && (
+                activeElement.tagName === 'INPUT' || 
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.getAttribute('contenteditable') === 'true'
+            )) {
+                return; // Let browser handle normal input fields
+            }
+            
+            // If no project/node is selected, ignore
+            if (!projectManager || !selectedNodeId) {
+                return;
+            }
+            
+            const node = projectManager.findNodeById(selectedNodeId);
+            if (!node) {
+                return;
+            }
+            
+            // Prevent browser's native find dialog
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Open our search modal
+            void import('./modals/SearchModal').then(({ SearchModal }) => {
+                const searchModal = new SearchModal();
+                searchModal.openForNode(node);
+            }).catch((error: unknown) => {
+                console.error('Failed to open search modal:', error);
+            });
+        }
+    };
+
+    // Add the event listener
+    document.addEventListener('keydown', globalSearchHandler);
+    
+    // Store reference for cleanup
+    (document as any)._globalSearchHandler = globalSearchHandler;
 }

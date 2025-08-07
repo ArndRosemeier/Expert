@@ -274,7 +274,6 @@ export interface XMLStoryConfig {
     maxElementsPerResponse: number;  // Limit elements from single AI response
     
     // Context Management
-    maxContextElements: number;      // Max elements to include in context refresh
     prioritizeRecentEdits: boolean;  // Whether to prioritize recent human edits
     includeEditHistory: boolean;     // Whether to include edit history in context
     
@@ -290,7 +289,6 @@ export const DEFAULT_XML_STORY_CONFIG: XMLStoryConfig = {
     allowPartialXML: true,
     strictValidation: false,
     maxElementsPerResponse: 10,
-    maxContextElements: 50,
     prioritizeRecentEdits: true,
     includeEditHistory: false,
     batchEditNotifications: true,

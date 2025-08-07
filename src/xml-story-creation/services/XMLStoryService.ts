@@ -295,8 +295,8 @@ export class XMLStoryService {
             }
         }
         
-        // Limit if needed but preserve order
-        return elements.slice(0, this.config.maxContextElements);
+        // No artificial limit - let LLM capabilities determine the real limit
+        return elements;
     }
     
     /**
