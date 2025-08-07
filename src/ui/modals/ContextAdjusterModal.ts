@@ -1218,37 +1218,12 @@ export class ContextAdjusterModal extends BaseModal {
                     </div>
                 </div>
 
-                <div style="
-                    background: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    border-radius: 6px;
-                    padding: 1rem;
-                    margin-bottom: 1.5rem;
-                    text-align: center;
-                ">
-                    <h4 style="
-                        color: #856404;
-                        font-size: 1rem;
-                        margin: 0 0 0.5rem 0;
-                    ">🎯 AI Recommendations: Sparse (${sparse_cutoff}) • Medium (${medium_cutoff}) • Elaborate (${elaborate_cutoff})</h4>
-                    <p style="
-                        color: #856404;
-                        margin: 0;
-                        font-size: 0.9rem;
-                        line-height: 1.4;
-                    ">${this.escapeHtml(cutoff_reasoning)}</p>
-                </div>
-
-                <div class="items-container">
-                    ${sortedItemsHtml}
-                </div>
-
                 <div class="prune-actions" style="
                     background: #e8f5e8;
                     border: 1px solid #c3e6c3;
                     border-radius: 6px;
                     padding: 1.5rem;
-                    margin-top: 1.5rem;
+                    margin-bottom: 1.5rem;
                     text-align: center;
                 ">
                     <h4 style="
@@ -1260,7 +1235,7 @@ export class ContextAdjusterModal extends BaseModal {
                         color: #155724;
                         margin: 0 0 1.5rem 0;
                         font-size: 0.9rem;
-                    ">Remove unchecked items from the context. This action cannot be undone.</p>
+                    ">Select a cutoff level or customize selections, then execute to remove unchecked items.</p>
                     
                     <div style="
                         display: flex;
@@ -1316,6 +1291,31 @@ export class ContextAdjusterModal extends BaseModal {
                             🗑️ Execute Pruning
                         </button>
                     </div>
+                </div>
+
+                <div style="
+                    background: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    border-radius: 6px;
+                    padding: 1rem;
+                    margin-bottom: 1.5rem;
+                    text-align: center;
+                ">
+                    <h4 style="
+                        color: #856404;
+                        font-size: 1rem;
+                        margin: 0 0 0.5rem 0;
+                    ">🎯 AI Recommendations: Sparse (${sparse_cutoff}) • Medium (${medium_cutoff}) • Elaborate (${elaborate_cutoff})</h4>
+                    <p style="
+                        color: #856404;
+                        margin: 0;
+                        font-size: 0.9rem;
+                        line-height: 1.4;
+                    ">${this.escapeHtml(cutoff_reasoning)}</p>
+                </div>
+
+                <div class="items-container">
+                    ${sortedItemsHtml}
                 </div>
 
                 <div style="
