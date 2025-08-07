@@ -2337,10 +2337,12 @@ label[for] {
 
 /* Row containers for organized grouping */
 .prune-and-threshold-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
-    gap: var(--space-4); /* 16px gap between columns */
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important; /* Two equal columns */
+    gap: var(--space-4) !important; /* 16px gap between columns */
     margin-top: var(--space-3); /* 12px top margin */
+    /* Debug styling to verify CSS is loading */
+    border: 2px solid red !important;
 }
 
 /* Responsive design for smaller screens */
