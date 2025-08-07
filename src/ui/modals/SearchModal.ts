@@ -138,6 +138,8 @@ export class SearchModal extends BaseModal {
         // Setup event listeners after render
         setTimeout(() => {
             this.setupEventListeners(container);
+            // Focus the search input for immediate typing
+            this.focusSearchInput();
         }, 0);
         
         return container;
@@ -450,6 +452,17 @@ export class SearchModal extends BaseModal {
         const hasSearchPattern: string = this.searchInput!.value.trim();
         const hasTargetContent: boolean = this.searchInContent || this.searchInContext;
         replaceBtn.disabled = !hasSearchPattern || !hasTargetContent;
+    }
+
+    /**
+     * Focus the search input for immediate typing
+     */
+    private focusSearchInput(): void {
+        if (this.searchInput) {
+            this.searchInput.focus();
+            // Select all text if there's any (useful for quick replacement)
+            this.searchInput.select();
+        }
     }
 
     /**
