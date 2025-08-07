@@ -975,7 +975,6 @@ export class ContextAdjusterModal extends BaseModal {
             return '<div class="error-message">No sorting results available.</div>';
         }
 
-        const { getContextItems } = require('../../ContextFormat');
         const allContextItems = getContextItems(this.targetNode.context || '');
         const { sorted_items, top_tier, explanations } = this.analysisResult.sortingResult;
 
