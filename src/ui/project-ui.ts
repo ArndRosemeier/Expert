@@ -876,33 +876,19 @@ async function handleSetProjectLanguage(): Promise<void> {
         
         // Check if project already has this language
         if (currentProjectLanguage === globalLanguage) {
-            alert(`Project language is already set to "${globalLanguage}".`);
-            return;
+            return; // Silently skip if already set
         }
         
-        // Confirm the action
-        const message = currentProjectLanguage 
-            ? `Change project language from "${currentProjectLanguage}" to "${globalLanguage}"?`
-            : `Set project language to "${globalLanguage}"?`;
-            
-        const confirmed = confirm(message);
-        if (!confirmed) {
-            return;
-        }
-        
-        // Set the project language
+        // Set the project language directly without confirmation
         await settingsManager.setProjectLanguage(globalLanguage);
         
         // Refresh the UI to show the updated language
         renderMultiProjectTree();
         await renderNodeDetails();
         
-        // Show success message
-        alert(`Project language set to "${globalLanguage}".`);
-        
     } catch (error) {
         console.error('Failed to set project language:', error);
-        alert('Failed to set project language. Please try again.');
+        // Silently fail - error is logged to console
     }
 }
 
