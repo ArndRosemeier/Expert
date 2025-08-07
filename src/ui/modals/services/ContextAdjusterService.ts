@@ -384,6 +384,16 @@ export class ContextAdjusterService {
                 return null;
             }
 
+            if (typeof parsed.recommended_cutoff !== 'number' || parsed.recommended_cutoff < 1) {
+                console.warn('Response missing or invalid recommended_cutoff');
+                return null;
+            }
+
+            if (!parsed.cutoff_reasoning || typeof parsed.cutoff_reasoning !== 'string') {
+                console.warn('Response missing cutoff_reasoning');
+                return null;
+            }
+
             // Map filtered item numbers back to original item numbers
             const originalSortedItems: number[] = [];
             for (const filteredNum of parsed.sorted_items) {
@@ -416,7 +426,9 @@ export class ContextAdjusterService {
             return {
                 sorted_items: originalSortedItems,
                 top_tier: originalTopTier,
-                explanations: originalExplanations
+                recommended_cutoff: parsed.recommended_cutoff,
+                explanations: originalExplanations,
+                cutoff_reasoning: parsed.cutoff_reasoning
             };
             
         } catch (error) {

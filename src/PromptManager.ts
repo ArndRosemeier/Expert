@@ -901,17 +901,21 @@ Your response MUST be a valid JSON object with ONLY these fields:
 {
   "sorted_items": [3, 7, 1, 12, 5, 8, 2, 4, 6, 9, 10, 11],
   "top_tier": [3, 7, 1],
+  "recommended_cutoff": 8,
   "explanations": {
     "3": "Critical character motivation that drives all upcoming scenes",
     "7": "Essential world-building rule that affects all magic use",
     "1": "Key plot setup that subnodes will directly reference"
-  }
+  },
+  "cutoff_reasoning": "Items beyond position 8 become tangential to subnode creation - they provide background but don't directly influence content development."
 }
 
 **FIELD EXPLANATIONS:**
 - **sorted_items**: ALL item numbers in order from most to least relevant
 - **top_tier**: The 3-5 most critical items (subset of sorted_items, in same order)
+- **recommended_cutoff**: Position in sorted_items where relevance drops significantly (recommended number of items to keep)
 - **explanations**: Brief explanation for why each top-tier item is essential ({{language}})
+- **cutoff_reasoning**: Explanation for why items after the cutoff are less important ({{language}})
 
 **CRITICAL INSTRUCTIONS:**
 - Include ALL item numbers in sorted_items (no omissions)

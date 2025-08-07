@@ -976,7 +976,7 @@ export class ContextAdjusterModal extends BaseModal {
         }
 
         const allContextItems = getContextItems(this.targetNode.context || '');
-        const { sorted_items, top_tier, explanations } = this.analysisResult.sortingResult;
+        const { sorted_items, top_tier, explanations, recommended_cutoff, cutoff_reasoning } = this.analysisResult.sortingResult;
 
         // Build sorted context display
         const sortedItemsHtml = sorted_items.map((itemNum, index) => {
@@ -984,27 +984,59 @@ export class ContextAdjusterModal extends BaseModal {
             const contextItem = allContextItems[itemIndex] || '';
             const isTopTier = top_tier.includes(itemNum);
             const explanation = explanations[itemNum.toString()] || '';
+            const isWithinCutoff = (index + 1) <= recommended_cutoff;
+            const isAtCutoff = (index + 1) === recommended_cutoff;
 
             const rankColor = index < 5 ? '#28a745' : index < 10 ? '#ffc107' : '#6c757d';
-            const tierBadge = isTopTier ? `
-                <span style="
-                    background: #007bff;
-                    color: white;
-                    padding: 0.2rem 0.4rem;
-                    border-radius: 3px;
-                    font-size: 0.7rem;
-                    font-weight: 600;
-                    margin-left: 0.5rem;
-                ">TOP TIER</span>
-            ` : '';
+            
+            let badges = '';
+            if (isTopTier) {
+                badges += `
+                    <span style="
+                        background: #007bff;
+                        color: white;
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 3px;
+                        font-size: 0.7rem;
+                        font-weight: 600;
+                        margin-left: 0.5rem;
+                    ">TOP TIER</span>
+                `;
+            }
+            if (isAtCutoff) {
+                badges += `
+                    <span style="
+                        background: #ff6b35;
+                        color: white;
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 3px;
+                        font-size: 0.7rem;
+                        font-weight: 600;
+                        margin-left: 0.5rem;
+                    ">CUTOFF</span>
+                `;
+            } else if (!isWithinCutoff) {
+                badges += `
+                    <span style="
+                        background: #6c757d;
+                        color: white;
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 3px;
+                        font-size: 0.7rem;
+                        font-weight: 600;
+                        margin-left: 0.5rem;
+                    ">BELOW CUTOFF</span>
+                `;
+            }
 
             return `
                 <div class="sorted-item" style="
-                    border: 1px solid ${isTopTier ? '#007bff' : '#e9ecef'};
+                    border: 1px solid ${isTopTier ? '#007bff' : isWithinCutoff ? '#e9ecef' : '#dee2e6'};
                     border-radius: 6px;
                     padding: 1rem;
                     margin-bottom: 1rem;
-                    background: ${isTopTier ? '#f8f9ff' : '#ffffff'};
+                    background: ${isTopTier ? '#f8f9ff' : isWithinCutoff ? '#ffffff' : '#f8f9fa'};
+                    opacity: ${isWithinCutoff ? '1' : '0.7'};
                 ">
                     <div class="item-header" style="
                         display: flex;
@@ -1026,7 +1058,7 @@ export class ContextAdjusterModal extends BaseModal {
                             font-size: 0.9rem;
                             margin-left: 0.75rem;
                         ">Item ${itemNum}</span>
-                        ${tierBadge}
+                        ${badges}
                     </div>
                     
                     <div class="item-content" style="
@@ -1095,10 +1127,34 @@ export class ContextAdjusterModal extends BaseModal {
                         <div style="color: #1976d2;">
                             <strong>Top Tier:</strong> ${top_tier.length}
                         </div>
+                        <div style="color: #ff6b35;">
+                            <strong>Recommended Keep:</strong> ${recommended_cutoff}
+                        </div>
                         <div style="color: #424242;">
                             <strong>With Explanations:</strong> ${Object.keys(explanations).length}
                         </div>
                     </div>
+                </div>
+
+                <div style="
+                    background: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    border-radius: 6px;
+                    padding: 1rem;
+                    margin-bottom: 1.5rem;
+                    text-align: center;
+                ">
+                    <h4 style="
+                        color: #856404;
+                        font-size: 1rem;
+                        margin: 0 0 0.5rem 0;
+                    ">🎯 AI Recommendation: Keep First ${recommended_cutoff} Items</h4>
+                    <p style="
+                        color: #856404;
+                        margin: 0;
+                        font-size: 0.9rem;
+                        line-height: 1.4;
+                    ">${this.escapeHtml(cutoff_reasoning)}</p>
                 </div>
 
                 <div class="items-container">
@@ -1115,8 +1171,10 @@ export class ContextAdjusterModal extends BaseModal {
                     color: #6c757d;
                     font-size: 0.9rem;
                 ">
-                    💡 <strong>Tip:</strong> Top-tier items are considered most critical for subnode creation. 
-                    Items are ordered from most relevant (top) to least relevant (bottom).
+                    💡 <strong>Legend:</strong> 
+                    <span style="color: #007bff;">■ Top Tier</span> = Most critical items | 
+                    <span style="color: #ff6b35;">■ Cutoff</span> = AI's recommended limit | 
+                    <span style="color: #6c757d;">■ Below Cutoff</span> = Less important items
                 </div>
             </div>
         `;

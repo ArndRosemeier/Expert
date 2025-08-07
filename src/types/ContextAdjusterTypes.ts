@@ -9,7 +9,9 @@ export interface ContextIssue {
 export interface ContextSortingResult {
     sorted_items: number[];
     top_tier: number[];
+    recommended_cutoff: number;
     explanations: Record<string, string>;
+    cutoff_reasoning: string;
 }
 
 export interface ContextAnalysisResult {
