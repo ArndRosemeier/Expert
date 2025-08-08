@@ -101,10 +101,10 @@ import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
 
 export interface StreamingCallbacks {
-  onStart?: () => void;
-  onChunk?: (chunk: string) => void;
-  onComplete?: (fullContent: string) => void;
-  onError?: (error: Error) => void;
+  onStart: () => void;
+  onChunk: (chunk: string) => void;
+  onComplete: (fullContent: string) => void;
+  onError: (error: Error) => void;
 }
 
 /**
@@ -828,7 +828,7 @@ export class OpenRouterClient {
       const apiKey = await this.getApiKeyFromStorage();
       if (!apiKey) {
         const error = new Error('OpenRouter API key not configured. Please set it in the settings.');
-        callbacks.onError?.(error);
+        callbacks.onError(error);
         throw error;
       }
 
@@ -914,7 +914,7 @@ export class OpenRouterClient {
       let wasContentFiltered = false;
       let contentFilterReason = '';
 
-      callbacks.onStart?.();
+      callbacks.onStart();
 
       try {
         while (true) {
@@ -948,7 +948,7 @@ export class OpenRouterClient {
                 
                 if (content) {
                   fullContent += content;
-                  callbacks.onChunk?.(content);
+                  callbacks.onChunk(content);
                   aiInteractionsService.updateResponse(content);
                   
                   // Emit progress update with current character count
@@ -968,7 +968,7 @@ export class OpenRouterClient {
         if (wasContentFiltered) {
           const error = new Error(`Content filtering detected: ${contentFilterReason}. The AI model refused to generate content due to safety restrictions. Try using a different model or rephrasing your content.`);
           error.name = 'ContentFilterError';
-          callbacks.onError?.(error);
+          callbacks.onError(error);
           throw error;
         }
         
@@ -976,7 +976,7 @@ export class OpenRouterClient {
         if (fullContent.length === 0) {
           const error = new Error(`Empty response received from ${model}. This often indicates content filtering by the AI safety system. The model may have detected content that violates its usage policies. Try using a different model (like Mistral Large for best unrestricted quality) or rephrasing your content to be less explicit.`);
           error.name = 'EmptyResponseError';
-          callbacks.onError?.(error);
+          callbacks.onError(error);
           throw error;
         }
         
@@ -1013,7 +1013,7 @@ export class OpenRouterClient {
           detail: { type: 'complete', characters: fullContent.length } 
         }));
         
-        callbacks.onComplete?.(fullContent);
+        callbacks.onComplete(fullContent);
         
       } finally {
         reader.releaseLock();
@@ -1037,10 +1037,10 @@ export class OpenRouterClient {
       
       if (error instanceof Error && error.name === 'AbortError') {
         const abortError = new Error('Request was aborted');
-        callbacks.onError?.(abortError);
+        callbacks.onError(abortError);
       } else {
         const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
-        callbacks.onError?.(actualError);
+        callbacks.onError(actualError);
       }
       
       // Log failed requests too if logging is enabled
@@ -1069,7 +1069,7 @@ export class OpenRouterClient {
       }
       
       const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
-      callbacks.onError?.(actualError);
+      callbacks.onError(actualError);
       throw actualError;
     } finally {
       this.activeOperations.delete(opId);
@@ -1081,7 +1081,7 @@ export class OpenRouterClient {
    * This is the method expected by the chat interface.
    */
   async chatStreamConversation(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal): Promise<void> {
-    callbacks.onStart?.();
+    callbacks.onStart();
     return this.streamingChat(purpose, messages, callbacks, operationId, externalAbortSignal);
   }
 

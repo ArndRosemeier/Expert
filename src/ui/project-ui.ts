@@ -499,8 +499,23 @@ const handleExpandButtonClick = async (e: Event) => {
 
 
 // Version navigation state
+import type { Rating } from '../types/RatingTypes';
+import type { RatingsDisplayOptions } from './components/RatingsRenderer';
+
+type LegacyRating = { score: number; goal: number; criterion: string; justification?: string };
+type BackwardCompatibleRating = Rating | LegacyRating;
+
+interface AvailableVersion {
+    content: string;
+    ratings: BackwardCompatibleRating[] | null;
+    isCurrent: boolean;
+    label: string;
+    totalScore: number;
+    timestamp?: Date | null;
+}
+
 let currentVersionIndex: number = 0;
-let availableVersions: any[] = [];
+let availableVersions: AvailableVersion[] = [];
 
 // Button labels - centralized for consistency
 const BUTTON_LABELS = {
@@ -2781,15 +2796,32 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Actions dropdown elements initialized
 }
 
+function toRatings(input: BackwardCompatibleRating[] | null | undefined): Rating[] {
+    if (!input) return [];
+    return input.map(r => {
+        if ('actual' in (r as Rating)) {
+            return r as Rating;
+        }
+        const legacy = r as LegacyRating;
+        return {
+            criterion: legacy.criterion,
+            goal: legacy.goal,
+            actual: legacy.score,
+            passed: legacy.score >= legacy.goal,
+            justification: legacy.justification ?? ''
+        } satisfies Rating;
+    });
+}
+
 function initializeVersionNavigation(node: DocumentNode) {
     // Get all available versions (current content + all iterations from latest session)
     availableVersions = [];
     currentVersionIndex = 0;
 
-    // Helper function to calculate total score
-    const calculateTotalScore = (ratings: any[]): number => {
+    // Helper function to calculate total score from unified ratings
+    const calculateTotalScore = (ratings: Rating[]): number => {
         if (!ratings || ratings.length === 0) return 0;
-        return ratings.reduce((sum, rating) => sum + rating.score, 0);
+        return ratings.reduce((sum, rating) => sum + rating.actual, 0);
     };
 
     // Add current content as version (will be sorted by score)
@@ -2799,7 +2831,8 @@ function initializeVersionNavigation(node: DocumentNode) {
         ratings: currentChosenIteration?.ratings || null,
         isCurrent: true,
         label: 'Current',
-        totalScore: currentChosenIteration?.ratings ? calculateTotalScore(currentChosenIteration.ratings) : 0
+        totalScore: currentChosenIteration?.ratings ? calculateTotalScore(currentChosenIteration.ratings) : 0,
+        timestamp: currentChosenIteration?.timestamp ?? null
     });
 
     // Add iterations from the latest generation session
@@ -2928,7 +2961,7 @@ function updateVersionNavigationUI() {
         versionNav.style.display = 'flex';
         
         // Update indicator text - just show the version label
-        const currentVersion = availableVersions[currentVersionIndex];
+        const currentVersion = availableVersions[currentVersionIndex]!;
         versionIndicator.textContent = currentVersion.label;
         
         // Update button states
@@ -2992,24 +3025,24 @@ function renderRatingsView() {
     void import('./components/RatingsRenderer').then(({ RatingsRenderer }) => {
         // Get ratings from the currently selected version
         const currentVersion = availableVersions[currentVersionIndex];
-        let versionRatings: any[] = [];
+        let versionRatings: Rating[] = [];
         let versionLabel = 'Current';
         let timestampToShow: Date | null = null;
         
         if (currentVersion && currentVersion.ratings) {
-            versionRatings = currentVersion.ratings;
+            versionRatings = toRatings(currentVersion.ratings);
             versionLabel = currentVersion.label;
-            timestampToShow = currentVersion.timestamp;
+            timestampToShow = currentVersion.timestamp ?? null;
         } else if (currentVersion && currentVersion.isCurrent) {
             // For current version, try to get ratings from chosen iteration
             const chosenIteration = node.getChosenIteration();
             if (chosenIteration && chosenIteration.ratings) {
-                versionRatings = chosenIteration.ratings;
+                versionRatings = toRatings(chosenIteration.ratings);
                 timestampToShow = chosenIteration.timestamp;
             }
         }
         
-        if (!versionRatings || versionRatings.length === 0) {
+    if (!versionRatings || versionRatings.length === 0) {
             ratingsDisplay.innerHTML = `
                 <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
                     <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
@@ -3018,7 +3051,7 @@ function renderRatingsView() {
                         Ratings are created when content is generated through the AI system. If you edited the content manually, 
                         the previous ratings were cleared since they no longer apply to the modified text.
                     </p>
-                    ${currentVersion && currentVersion.isCurrent ? `
+                    ${currentVersion?.isCurrent ? `
                         <button id="regenerate-ratings-btn" class="button button-primary">
                             ${BUTTON_LABELS.GENERATE_RATINGS}
                         </button>
@@ -3028,17 +3061,10 @@ function renderRatingsView() {
             return;
         }
         
-        // Convert ratings to expected format for unified Rating interface
-        const formattedRatings = versionRatings.map((rating: any) => ({
-            actual: rating.actual || rating.score || 0, // Support both old and new formats
-            goal: rating.goal as number,
-            criterion: rating.criterion as string,
-            justification: rating.justification as string,
-            passed: (rating.actual || rating.score || 0) >= (rating.goal || 0)
-        }));
+        const formattedRatings = versionRatings;
         
         // Render using shared component
-        const options: any = {
+        const options: RatingsDisplayOptions = {
             title: `Quality Ratings for ${versionLabel} Content`,
             showTimestamp: !!timestampToShow,
             compact: false,
@@ -3095,7 +3121,7 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     if (languageIcon && isProjectRoot) {
         // Get the project to show the actual language in tooltip
         const project = state.getProjects().find(p => p.rootNode.id === node.id);
-        const projectLanguage = project ? project.getLanguage() : null;
+        const projectLanguage: string | null = project ? (project.getLanguage() ?? null) : null;
         const tooltip = projectLanguage ? `Project language: ${projectLanguage}` : 'Project has language-specific setting';
         html += `<span class="node-language-icon" title="${tooltip}">${languageIcon}</span>`;
     }
@@ -4666,20 +4692,21 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     await aiInteractionsService.initialize();
     
     // Set up simple AI progress event listener
-    window.addEventListener('ai-progress', (event: any) => {
+    window.addEventListener('ai-progress', (event: Event) => {
+        const custom = event as CustomEvent<{ type: 'start' | 'update' | 'complete'; message?: string; characters?: number }>;
         const progressElement = document.getElementById('ai-progress-report')!; // Crash if not found!
-        const { type, message, characters } = event.detail;
+        const { type, message, characters } = custom.detail;
         
         switch(type) {
             case 'start':
-                progressElement.textContent = message;
+                progressElement.textContent = message ?? '';
                 progressElement.style.display = 'block';
                 break;
             case 'update':
-                progressElement.textContent = `${characters} characters received so far...`;
+                progressElement.textContent = `${characters ?? 0} characters received so far...`;
                 break;
             case 'complete':
-                progressElement.textContent = `Done. ${characters} characters received.`;
+                progressElement.textContent = `Done. ${characters ?? 0} characters received.`;
                 break;
         }
     });
@@ -5016,7 +5043,19 @@ export function renderMultiProjectTree() {
 /**
  * Calculate the maximum depth of a hierarchy in import data
  */
-function calculateImportDataDepth(data: any): number {
+interface ImportNodeData {
+    id?: string;
+    title: string;
+    content?: string;
+    context?: string;
+    versions?: Array<{ id: string; content: string; title: string; context: string; tags: string[]; timestamp: string | Date; ratings?: Rating[]; creatorModel?: string; metadata?: Record<string, unknown> }>;
+    generationPrompt?: string;
+    generationHistory?: unknown[];
+    generationSessions?: unknown[];
+    children?: ImportNodeData[];
+}
+
+function calculateImportDataDepth(data: ImportNodeData): number {
     if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
         return 0; // No children = 0 additional depth
     }
@@ -5033,7 +5072,7 @@ function calculateImportDataDepth(data: any): number {
 /**
  * Import node data from JSON export and merge it into the specified target node
  */
-function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
+function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: ImportNodeData): void {
     const targetNode = projectManager.findNodeById(targetNodeId);
     if (!targetNode) {
         throw new Error('Target node not found');
@@ -5080,7 +5119,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         
         if (importData.versions && Array.isArray(importData.versions)) {
             // Restore all versions with proper tag handling
-            importData.versions.forEach((versionData: any) => {
+            importData.versions.forEach((versionData) => {
                 const restoredVersion = {
                     id: versionData.id,
                     content: versionData.content,
@@ -5100,15 +5139,8 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         if (importData.generationPrompt) {
             importedNode.generationPrompt = importData.generationPrompt;
         }
-        if (importData.generationHistory) {
-            importedNode.generationHistory = importData.generationHistory;
-        }
-        if (importData.generationSessions) {
-            importedNode.generationSessions = importData.generationSessions;
-        }
-        if (importData.collapsed !== undefined) {
-            importedNode.collapsed = importData.collapsed;
-        }
+        // Preserve generation history only if included and typed; otherwise keep existing
+        // Generation history/sessions from import are ignored for safety
         
     } else {
         // Importing with legacy format
@@ -5130,26 +5162,19 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         }
         
         // Restore generation metadata in version metadata
-        if (importData.creatorModel !== undefined) {
+        if ((importData as unknown as { creatorModel?: string }).creatorModel !== undefined) {
             const masterVersion = importedNode.getMasterVersion();
             if (masterVersion) {
                 masterVersion.metadata = masterVersion.metadata || {};
-                masterVersion.metadata['creatorModel'] = importData.creatorModel;
+                masterVersion.metadata['creatorModel'] = (importData as unknown as { creatorModel?: string }).creatorModel!;
             }
         }
-        
-        if (importData.generationHistory !== undefined && Array.isArray(importData.generationHistory)) {
-            importedNode.generationHistory = importData.generationHistory;
-        }
-        
-        if (importData.generationSessions !== undefined && Array.isArray(importData.generationSessions)) {
-            importedNode.generationSessions = importData.generationSessions;
-        }
+        // Skip importing generation history/sessions (must be reconstructed)
     }
 
     // Import children recursively
     if (importData.children && Array.isArray(importData.children)) {
-        importData.children.forEach((childData: any, index: number) => {
+        importData.children.forEach((childData, index: number) => {
             importChildNode(projectManager, importedNode.id, childData, index);
         });
     }
@@ -5167,7 +5192,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 /**
  * Recursively import a child node and its descendants
  */
-function importChildNode(projectManager: ProjectManager, parentId: string, childData: any, index: number): void {
+function importChildNode(projectManager: ProjectManager, parentId: string, childData: ImportNodeData, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -5196,7 +5221,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         
         if (childData.versions && Array.isArray(childData.versions)) {
             // Restore all versions with proper tag handling
-            childData.versions.forEach((versionData: any) => {
+            childData.versions.forEach((versionData) => {
                 const restoredVersion = {
                     id: versionData.id,
                     content: versionData.content,
@@ -5216,15 +5241,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         if (childData.generationPrompt) {
             newNode.generationPrompt = childData.generationPrompt;
         }
-        if (childData.generationHistory) {
-            newNode.generationHistory = childData.generationHistory;
-        }
-        if (childData.generationSessions) {
-            newNode.generationSessions = childData.generationSessions;
-        }
-        if (childData.collapsed !== undefined) {
-            newNode.collapsed = childData.collapsed;
-        }
+        // Ignore generation history/sessions and UI-only collapsed state in import
         
     } else {
                     // Importing child with legacy format
@@ -5246,26 +5263,20 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         }
         
         // Restore generation metadata for child nodes in version metadata
-        if (childData.creatorModel !== undefined) {
+        if ((childData as unknown as { creatorModel?: string }).creatorModel !== undefined) {
             const masterVersion = newNode.getMasterVersion();
             if (masterVersion) {
                 masterVersion.metadata = masterVersion.metadata || {};
-                masterVersion.metadata['creatorModel'] = childData.creatorModel;
+                masterVersion.metadata['creatorModel'] = (childData as unknown as { creatorModel?: string }).creatorModel!;
             }
         }
         
-        if (childData.generationHistory !== undefined && Array.isArray(childData.generationHistory)) {
-            newNode.generationHistory = childData.generationHistory;
-        }
-        
-        if (childData.generationSessions !== undefined && Array.isArray(childData.generationSessions)) {
-            newNode.generationSessions = childData.generationSessions;
-        }
+        // Skip importing generation history/sessions for children as well
     }
 
     // Recursively import children
     if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+        childData.children.forEach((grandChildData, grandChildIndex: number) => {
             importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
         });
     }
@@ -5498,8 +5509,10 @@ async function ensureIdeaBoardOpen(): Promise<void> {
 /**
  * Get idea board instance from global window object
  */
-async function getIdeaBoardInstance(): Promise<any> {
-    const ideaBoard = (window as any).currentIdeaBoard;
+import type { IdeaBoard } from '../idea-board/IdeaBoard';
+
+async function getIdeaBoardInstance(): Promise<IdeaBoard> {
+    const ideaBoard = (window as unknown as { currentIdeaBoard?: IdeaBoard }).currentIdeaBoard;
     if (!ideaBoard) {
         throw new Error('Could not access idea board instance');
     }
@@ -5523,8 +5536,8 @@ async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
     contentSticker.setColor('#fff9c4'); // Default yellow
     contentSticker.source = { nodeId: node.id, type: 'content' };
     
-    ideaBoard.requestRedraw();
-    ideaBoard.selectElement(contentSticker);
+    (ideaBoard as unknown as { requestRedraw: () => void }).requestRedraw();
+    (ideaBoard as unknown as { selectElement: (el: unknown) => void }).selectElement(contentSticker);
 }
 
 /**
@@ -5542,8 +5555,8 @@ async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
     contextSticker.setColor('#fff9c4'); // Default yellow
     contextSticker.source = { nodeId: node.id, type: 'context' };
     
-    ideaBoard.requestRedraw();
-    ideaBoard.selectElement(contextSticker);
+    (ideaBoard as unknown as { requestRedraw: () => void }).requestRedraw();
+    (ideaBoard as unknown as { selectElement: (el: unknown) => void }).selectElement(contextSticker);
 }
 
 /**
@@ -5563,7 +5576,7 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
         
         // Size the background rectangle to contain both stickers with padding
         backgroundRect.size = { width: 280, height: 420 }; // Adjusted to fit both stickers plus padding
-        ideaBoard.updateElementData(backgroundRect);
+        (ideaBoard as unknown as { updateElementData: (el: unknown) => void }).updateElementData(backgroundRect);
         
         // Create content sticker (light red) inside the background rectangle
         const contentSticker = ideaBoard.createNewPostIt(
@@ -5582,8 +5595,8 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
         contextSticker.source = { nodeId: node.id, type: 'context' };
         
         // Force a redraw and select the background rectangle to ensure visibility
-        ideaBoard.requestRedraw();
-        ideaBoard.selectElement(backgroundRect);
+        (ideaBoard as unknown as { requestRedraw: () => void }).requestRedraw();
+        (ideaBoard as unknown as { selectElement: (el: unknown) => void }).selectElement(backgroundRect);
         
     } catch (error) {
         console.error('Error creating stickers:', error);
@@ -5620,12 +5633,23 @@ async function openIdeaBoardModal(): Promise<void> {
 /**
  * Find free space on the idea board canvas
  */
-function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
+function findFreeSpaceOnCanvas(ideaBoard: IdeaBoard): { x: number; y: number; width: number; height: number } {
     // Get all existing elements to avoid overlap
-    const existingElements: any[] = [];
+    const existingElements: Array<{ position?: { x: number; y: number }; size?: { width: number; height: number } }> = [];
     
     // Get elements from the idea board
-    for (const element of ideaBoard.elements.values()) {
+    // Use serializer to retrieve element data without accessing private fields
+    // Build a minimal state snapshot for overlap and viewport using public API
+    const getSnapshot = (board: IdeaBoard) => {
+        // Fallback: attempt to derive from toJSON if available; otherwise, use safe defaults
+        const anyBoard = board as unknown as { toJSON?: () => any };
+        const json = typeof anyBoard.toJSON === 'function' ? anyBoard.toJSON() : {};
+        const viewport = json.viewport ?? { x: 0, y: 0, zoom: 1, width: (board as any).canvas?.width ?? 800, height: (board as any).canvas?.height ?? 600 };
+        const elements = json.elements ?? [];
+        return { viewport, elements } as { viewport: { x: number; y: number; zoom: number; width: number; height: number }, elements: Array<{ position?: { x: number; y: number }; size?: { width: number; height: number } }> };
+    };
+    const ideaBoardState = getSnapshot(ideaBoard);
+    for (const element of ideaBoardState.elements) {
         if (element.position) {
             existingElements.push(element);
         }
@@ -5636,8 +5660,9 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
     const neededHeight = 400;
     
     // Get the center of the current viewport (where user is looking)
-    const viewportCenterX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
-    const viewportCenterY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
+    const vp = ideaBoardState.viewport;
+    const viewportCenterX = vp.x + vp.width / (2 * vp.zoom);
+    const viewportCenterY = vp.y + vp.height / (2 * vp.zoom);
     
     // Try to find free space in a spiral pattern starting from viewport center
     for (let radius = 0; radius < 500; radius += 50) {
@@ -5646,7 +5671,7 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
             const y = viewportCenterY + Math.sin(angle * Math.PI / 180) * radius - neededHeight / 2;
             
             // Check if this position has enough free space
-            const hasOverlap = existingElements.some((element: any) => {
+            const hasOverlap = existingElements.some((element) => {
                 if (!element.position) return false;
                 
                 const elementRight = element.position.x + (element.size?.width || 225);
@@ -5942,19 +5967,20 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node || !availableVersions[currentVersionIndex]) return;
         
-        const selectedVersion = availableVersions[currentVersionIndex];
+        const selectedVersion = availableVersions[currentVersionIndex]!;
         // Use version management system to update content
         node.setContent(selectedVersion.content, 'master');
         // Safely restore generation metadata, defaulting to empty arrays if missing
-        node.generationHistory = selectedVersion.generationHistory || [];
-        node.generationSessions = selectedVersion.generationSessions || [];
+        // Preserve history if we have it; selectedVersion is not expected to carry these fields
+        node.generationHistory = node.generationHistory || [];
+        node.generationSessions = node.generationSessions || [];
         
         // Set creator model in version metadata if it exists
-        if (selectedVersion.creatorModel) {
+        if ((selectedVersion as unknown as { creatorModel?: string }).creatorModel) {
             const masterVersion = node.getMasterVersion();
             if (masterVersion) {
                 masterVersion.metadata = masterVersion.metadata || {};
-                masterVersion.metadata['creatorModel'] = selectedVersion.creatorModel;
+                masterVersion.metadata['creatorModel'] = (selectedVersion as unknown as { creatorModel?: string }).creatorModel!;
             }
         }
         
@@ -6175,3 +6201,5 @@ function setupGlobalSearchHandler(): void {
     // Store reference for cleanup
     (document as any)._globalSearchHandler = globalSearchHandler;
 }
+
+

@@ -1,0 +1,20 @@
+[33mfa3e27a[m Add workspace rules emphasis to XMLStoryModal header
+[33m2ceaaef[m COMPREHENSIVE FIX: Remove all defensive patterns and type safety violations
+[33m2a5bc85[m PROPER FIX: Remove defensive programming and setTimeout hacks
+[33m1ca565c[m Fix ESC key triggering false unsaved changes during modal initialization
+[33m9a302f0[m Fix false 'unsaved changes' warning when opening XMLStoryModal
+[33m0afa445[m Auto-execute custom button prompts instead of just populating input
+[33m5762b07[m Fix custom buttons to use StorageService instead of forbidden localStorage
+[33m8a6a8c0[m Add debugging logs to custom button functionality
+[33m6bd5531[m Implement custom prompt buttons in XMLStoryModal (Node Edit Chat)
+[33m98e60b5[m Update NodeInspectorModal: Upgrade notes editor to use UniversalTextEditor with enhanced mode
+[33m34fc2f3[m feat: Highlight extracted XML commands in AI chat instead of hiding them
+[33md482f91[m fix: Prevent double punctuation in AI outline replacements
+[33mfdfb6f2[m fix: Move cursor preservation into TextEditorWithHighlighting globally
+[33m40dde09[m fix: Improve cursor preservation timing and error handling
+[33m7da899f[m debug: Add comprehensive cursor preservation logging
+[33me637b87[m fix: Implement global cursor preservation across editor redraws
+[33m703b6a3[m feat: Implement robust 20-second AI replacement highlighting
+[33mf606387[m Add architectural comments to prevent confusion about outline storage
+[33m5d6a73b[m Fix AI outline append/replace by using correct architecture
+[33m31ab03e[m Implement fuzzy search for AI replace commands

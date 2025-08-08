@@ -1547,16 +1547,28 @@ Object.keys(defaultPromptDefinitions).forEach(key => {
 });
 
 // Helper functions for accessing metadata
+/**
+ * Returns the required placeholder keys for a given prompt.
+ * Assumes prompt definitions are complete and present.
+ */
 export function getPromptPlaceholders(promptKey: keyof OrchestratorPrompts): string[] {
-    return defaultPromptDefinitions[promptKey]?.placeholders || [];
+    return defaultPromptDefinitions[promptKey].placeholders;
 }
 
+/**
+ * Returns the human-readable description for a given prompt.
+ * Assumes prompt definitions are complete and present.
+ */
 export function getPromptDescription(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey]?.description || '';
+    return defaultPromptDefinitions[promptKey].description;
 }
 
+/**
+ * Returns the raw template text for a given prompt.
+ * Assumes prompt definitions are complete and present.
+ */
 export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey]?.text || '';
+    return defaultPromptDefinitions[promptKey].text;
 }
 
 // Simple prompt manager class for specific use cases (like context transformation)

@@ -1109,7 +1109,7 @@ export class UnifiedGenerationService {
 
             // Get the outline prompt template
             const prompts = this.deps.settingsManager.getPrompts();
-            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode, true);
 
             const prompt = this.deps.promptService.fillGenerationPrompt(
                 prompts.create_children_from_outline_user,
