@@ -58,8 +58,9 @@ export class OutlineFactoryService {
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ], {
+      onStart: () => { /* no-op */ },
       onChunk: (chunk) => { generatedContent += chunk; },
-      onComplete: () => {},
+      onComplete: () => { /* no-op */ },
       onError: (error) => { throw error; }
     });
     

@@ -26,16 +26,16 @@ export interface Rating {
 /**
  * Type guard to check if an object is a valid Rating
  */
-export function isRating(obj: any): obj is Rating {
+export function isRating(obj: unknown): obj is Rating {
+    if (typeof obj !== 'object' || obj === null) return false;
+    const o = obj as Partial<Record<keyof Rating, unknown>>;
     return (
-        typeof obj === 'object' &&
-        obj !== null &&
-        typeof obj.criterion === 'string' &&
-        typeof obj.goal === 'number' &&
-        typeof obj.actual === 'number' &&
-        typeof obj.passed === 'boolean' &&
-        (obj.justification === undefined || typeof obj.justification === 'string') &&
-        (obj.description === undefined || typeof obj.description === 'string')
+        typeof o.criterion === 'string' &&
+        typeof o.goal === 'number' &&
+        typeof o.actual === 'number' &&
+        typeof o.passed === 'boolean' &&
+        (o.justification === undefined || typeof o.justification === 'string') &&
+        (o.description === undefined || typeof o.description === 'string')
     );
 }
 
@@ -70,7 +70,7 @@ export function createRating(
 /**
  * Helper function to validate an array of ratings
  */
-export function validateRatings(ratings: any[]): Rating[] {
+export function validateRatings(ratings: unknown[]): Rating[] {
     const validRatings: Rating[] = [];
     
     for (const rating of ratings) {

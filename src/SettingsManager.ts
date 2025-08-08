@@ -142,47 +142,44 @@ export interface SettingsProfile {
     taskModelConfigs?: import('./services/TaskModelService').AllTaskModelConfigs; // Task-based model configurations
 }
 
-function areValidSettingsProfiles(data: any): data is Record<string, SettingsProfile> {
+function areValidSettingsProfiles(data: unknown): data is Record<string, SettingsProfile> {
     if (typeof data !== 'object' || data === null) return false;
 
-    return Object.values(data).every((profile: any) => {
-        return (
-            typeof profile === 'object' &&
-            profile !== null &&
-            // criteria is now optional - if present, must be valid array
-            (profile.criteria === undefined || (
-                Array.isArray(profile.criteria) && 
-                profile.criteria.every((criterion: any) => 
-                    typeof criterion === 'object' &&
-                    criterion !== null &&
-                    'name' in criterion &&
-                    'goal' in criterion &&
-                    typeof criterion.name === 'string' &&
-                    typeof criterion.goal === 'number' &&
-                    // Optional properties - if present, must be boolean
-                    (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
-                    (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
-                    (criterion.description === undefined || typeof criterion.description === 'string')
-                )
-            )) &&
-            'maxIterations' in profile &&
-            typeof profile.maxIterations === 'number' &&
-            'selectedModels' in profile &&
-            typeof profile.selectedModels === 'object' &&
-            profile.selectedModels !== null &&
-            // webSearchEnabled is optional for backward compatibility
-            (profile.webSearchEnabled === undefined || (typeof profile.webSearchEnabled === 'object' && profile.webSearchEnabled !== null)) &&
-            // selectedProviders is optional for backward compatibility
-            (profile.selectedProviders === undefined || (typeof profile.selectedProviders === 'object' && profile.selectedProviders !== null)) &&
-            // contextExtractionPrompt is optional for backward compatibility
-            (profile.contextExtractionPrompt === undefined || typeof profile.contextExtractionPrompt === 'string') &&
-            // language is optional for backward compatibility
-            (profile.language === undefined || typeof profile.language === 'string') &&
-            // version is optional for backward compatibility
-            (profile.version === undefined || typeof profile.version === 'string') &&
-            // taskModelConfigs is optional for backward compatibility
-            (profile.taskModelConfigs === undefined || (typeof profile.taskModelConfigs === 'object' && profile.taskModelConfigs !== null))
-        );
+    const maybeRecord = data as Record<string, unknown>;
+    return Object.values(maybeRecord).every((profile: unknown) => {
+        if (typeof profile !== 'object' || profile === null) return false;
+        const p = profile as Partial<SettingsProfile> & { [k: string]: unknown };
+
+        // criteria (optional)
+        if (p.criteria !== undefined) {
+            if (!Array.isArray(p.criteria)) return false;
+            const allCriteriaValid = p.criteria.every((criterion: unknown) => {
+                if (typeof criterion !== 'object' || criterion === null) return false;
+                const c = criterion as { name?: unknown; goal?: unknown; outline?: unknown; leaf?: unknown; description?: unknown };
+                return (
+                    typeof c.name === 'string' &&
+                    typeof c.goal === 'number' &&
+                    (c.outline === undefined || typeof c.outline === 'boolean') &&
+                    (c.leaf === undefined || typeof c.leaf === 'boolean') &&
+                    (c.description === undefined || typeof c.description === 'string')
+                );
+            });
+            if (!allCriteriaValid) return false;
+        }
+
+        // required fields
+        if (typeof p.maxIterations !== 'number') return false;
+        if (typeof p.selectedModels !== 'object' || p.selectedModels === null) return false;
+
+        // optional objects
+        if (p.webSearchEnabled !== undefined && (typeof p.webSearchEnabled !== 'object' || p.webSearchEnabled === null)) return false;
+        if (p.selectedProviders !== undefined && (typeof p.selectedProviders !== 'object' || p.selectedProviders === null)) return false;
+        if (p.contextExtractionPrompt !== undefined && typeof p.contextExtractionPrompt !== 'string') return false;
+        if ((p as any).language !== undefined && typeof (p as any).language !== 'string') return false;
+        if (p.version !== undefined && typeof p.version !== 'string') return false;
+        if (p.taskModelConfigs !== undefined && (typeof p.taskModelConfigs !== 'object' || p.taskModelConfigs === null)) return false;
+
+        return true;
     });
 }
 
@@ -819,18 +816,30 @@ export class SettingsManager {
      * @param profileName The name of the profile to export
      * @returns JSON object containing the profile and prompts, or null if profile doesn't exist
      */
-    public exportProfile(profileName: string): any | null {
+    public exportProfile(profileName: string): {
+        exportVersion: '1.0';
+        exportDate: string;
+        profileName: string;
+        profile: Pick<SettingsProfile, 'criteria' | 'maxIterations' | 'selectedModels' | 'contextExtractionPrompt'>;
+        prompts: OrchestratorPrompts;
+    } | null {
         const profile = this.getProfile(profileName);
         if (!profile) {
             return null;
         }
         
-        const exportData = {
+        const exportData: {
+            exportVersion: '1.0';
+            exportDate: string;
+            profileName: string;
+            profile: Pick<SettingsProfile, 'criteria' | 'maxIterations' | 'selectedModels' | 'contextExtractionPrompt'>;
+            prompts: OrchestratorPrompts;
+        } = {
             exportVersion: '1.0',
             exportDate: new Date().toISOString(),
             profileName: profileName,
             profile: {
-                criteria: profile.criteria,
+                criteria: profile.criteria!,
                 maxIterations: profile.maxIterations,
                 selectedModels: profile.selectedModels,
                 contextExtractionPrompt: profile.contextExtractionPrompt
@@ -848,19 +857,21 @@ export class SettingsManager {
      * @param overwriteExisting Whether to overwrite if profile name already exists
      * @returns Promise resolving to success status and any error message
      */
-    public async importProfile(exportData: any, overwriteExisting: boolean = false): Promise<{ success: boolean; message: string; profileName?: string }> {
+    public async importProfile(exportData: unknown, overwriteExisting: boolean = false): Promise<{ success: boolean; message: string; profileName?: string }> {
         try {
             // Validate export data structure
             if (!exportData || typeof exportData !== 'object') {
                 return { success: false, message: 'Invalid export data format' };
             }
 
-            if (!exportData.profileName || !exportData.profile || !exportData.prompts) {
+            const data = exportData as { profileName?: unknown; profile?: unknown; prompts?: unknown };
+
+            if (typeof data.profileName !== 'string' || typeof data.profile !== 'object' || data.profile === null || typeof data.prompts !== 'object' || data.prompts === null) {
                 return { success: false, message: 'Export data is missing required fields (profileName, profile, or prompts)' };
     }
 
-            const profileName = exportData.profileName;
-            const profileData = exportData.profile;
+            const profileName = data.profileName;
+            const profileData = data.profile as unknown;
 
             // Validate profile structure
             if (!SettingsManager.validateProfileStructure(profileData)) {
@@ -885,7 +896,7 @@ export class SettingsManager {
 
             // Create the imported profile
             const importedProfile: SettingsProfile = {
-                criteria: profileData.criteria,
+                criteria: profileData.criteria || DEFAULT_CRITERIA,
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
                 contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT
@@ -895,8 +906,8 @@ export class SettingsManager {
             await this.saveProfile(profileName, importedProfile);
 
             // Import prompts (merge with existing ones)
-            if (exportData.prompts && typeof exportData.prompts === 'object') {
-                const mergedPrompts = { ...this.prompts, ...exportData.prompts };
+            if (data.prompts && typeof data.prompts === 'object') {
+                const mergedPrompts = { ...this.prompts, ...(data.prompts as Partial<OrchestratorPrompts>) };
                 await this.savePrompts(mergedPrompts);
             }
 
@@ -918,35 +929,30 @@ export class SettingsManager {
     /**
      * Validates the structure of a single profile object
      */
-    private static validateProfileStructure(profile: any): boolean {
-        return (
-            typeof profile === 'object' &&
-            profile !== null &&
-            // criteria is now optional - if present, must be valid array
-            (profile.criteria === undefined || (
-                Array.isArray(profile.criteria) &&
-                profile.criteria.every((criterion: any) => 
-                    typeof criterion === 'object' &&
-                    criterion !== null &&
-                    'name' in criterion &&
-                    'goal' in criterion &&
-                    typeof criterion.name === 'string' &&
-                    typeof criterion.goal === 'number' &&
-                    // Optional properties - if present, must be boolean
-                    (criterion.outline === undefined || typeof criterion.outline === 'boolean') &&
-                    (criterion.leaf === undefined || typeof criterion.leaf === 'boolean') &&
-                    (criterion.description === undefined || typeof criterion.description === 'string')
-                )
-            )) &&
-            'maxIterations' in profile &&
-            typeof profile.maxIterations === 'number' &&
-            'selectedModels' in profile &&
-            typeof profile.selectedModels === 'object' &&
-            profile.selectedModels !== null &&
-            // Optional properties for backward compatibility
-            (profile.selectedProviders === undefined || typeof profile.selectedProviders === 'object') &&
-            (profile.webSearchEnabled === undefined || typeof profile.webSearchEnabled === 'boolean')
-        );
+    private static validateProfileStructure(profile: unknown): profile is SettingsProfile {
+        if (typeof profile !== 'object' || profile === null) return false;
+        const p = profile as Partial<SettingsProfile> & { [k: string]: unknown };
+        if (typeof p.maxIterations !== 'number') return false;
+        if (typeof p.selectedModels !== 'object' || p.selectedModels === null) return false;
+        if (p.criteria !== undefined) {
+            if (!Array.isArray(p.criteria)) return false;
+            const ok = p.criteria.every((c: unknown) => {
+                if (typeof c !== 'object' || c === null) return false;
+                const cc = c as { name?: unknown; goal?: unknown; outline?: unknown; leaf?: unknown; description?: unknown };
+                return (
+                    typeof cc.name === 'string' &&
+                    typeof cc.goal === 'number' &&
+                    (cc.outline === undefined || typeof cc.outline === 'boolean') &&
+                    (cc.leaf === undefined || typeof cc.leaf === 'boolean') &&
+                    (cc.description === undefined || typeof cc.description === 'string')
+                );
+            });
+            if (!ok) return false;
+        }
+        if (p.selectedProviders !== undefined && (typeof p.selectedProviders !== 'object' || p.selectedProviders === null)) return false;
+        if (p.webSearchEnabled !== undefined && (typeof p.webSearchEnabled !== 'object' || p.webSearchEnabled === null)) return false;
+        if (p.contextExtractionPrompt !== undefined && typeof p.contextExtractionPrompt !== 'string') return false;
+        return true;
     }
 
 
