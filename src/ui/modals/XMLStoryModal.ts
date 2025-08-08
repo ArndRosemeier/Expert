@@ -450,6 +450,15 @@ export class XMLStoryModal extends SimpleModal {
                     background: #444;
                 }
                 
+                .default-button {
+                    background: #1e4d3a !important;
+                    border: 1px solid #28a745;
+                }
+                
+                .default-button:hover {
+                    background: #28a745 !important;
+                }
+                
                 .custom-button-remove {
                     position: absolute;
                     right: 0.25rem;
@@ -924,6 +933,29 @@ export class XMLStoryModal extends SimpleModal {
                     background: rgba(220, 53, 69, 0.03);
                 }
                 
+                .xml-command-highlight.replace-section-command {
+                    border-color: rgba(138, 43, 226, 0.3);
+                    background: rgba(138, 43, 226, 0.05);
+                }
+                
+                .xml-command-highlight.replace-section-command strong {
+                    color: #8a2be2;
+                }
+                
+                .xml-command-highlight.replace-section-command .command-content {
+                    border-left-color: rgba(138, 43, 226, 0.4);
+                    background: rgba(138, 43, 226, 0.03);
+                }
+                
+                .xml-command-highlight.remove-section-command {
+                    border-color: rgba(220, 53, 69, 0.3);
+                    background: rgba(220, 53, 69, 0.05);
+                }
+                
+                .xml-command-highlight.remove-section-command strong {
+                    color: #dc3545;
+                }
+                
                 .xml-command-highlight.context-command {
                     border-color: rgba(102, 16, 242, 0.3);
                     background: rgba(102, 16, 242, 0.05);
@@ -946,7 +978,7 @@ export class XMLStoryModal extends SimpleModal {
                 }
                 
                 /* Inline command styling for simple commands */
-                .xml-command-highlight:not(.outline-replace-command):not(.edit-command):not(.append-command):not(.replace-command):not(.context-command) {
+                .xml-command-highlight:not(.outline-replace-command):not(.edit-command):not(.append-command):not(.replace-command):not(.replace-section-command):not(.remove-section-command):not(.context-command) {
                     display: inline-block;
                     padding: 0.2rem 0.4rem;
                     margin: 0 0.2rem;
@@ -1296,7 +1328,6 @@ export class XMLStoryModal extends SimpleModal {
             // Send to AI with real-time streaming
             let response = '';
             await this.openRouterClient.streamingChat(modelPurpose, conversation, {
-                onStart: () => { /* no-op */ },
                 onChunk: (chunk: string) => {
                     response += chunk;
                     // Update the message in real-time as chunks arrive
@@ -1557,11 +1588,17 @@ export class XMLStoryModal extends SimpleModal {
 
         switch (command.type) {
             case 'refresh':
-            case 'delete':
             case 'rename':
                 return `<div class="xml-command-highlight" title="Executed command">
                     &lt;/${command.type}&gt;
                 </div>`;
+            case 'delete':
+                {
+                    const params = command.parameters ? Object.entries(command.parameters).map(([k,v]) => `${k}="${v}"`).join(' ') : '';
+                    return `<div class="xml-command-highlight" title="Delete command executed">
+                        <strong>&lt;/delete ${escapeHtml(params)}&gt;</strong>
+                    </div>`;
+                }
                 
             case 'outline_replace':
                 const content = command.content || '';
@@ -1599,6 +1636,29 @@ export class XMLStoryModal extends SimpleModal {
                     </div>
                     <strong>&lt;/replace_command&gt;</strong>
                 </div>`;
+                
+            case 'replace_section':
+                const sectionTitle = (command['sectionTitle'] as string) || '';
+                const sectionContent = command.content || '';
+                return `<div class="xml-command-highlight replace-section-command" title="Section replace command executed">
+                    <strong>&lt;replace_section section="${escapeHtml(sectionTitle)}"&gt;</strong>
+                    <div class="command-content">${escapeHtml(sectionContent.trim())}</div>
+                    <strong>&lt;/replace_section&gt;</strong>
+                </div>`;
+                
+            case 'remove_section':
+                const removeSectionTitle = (command['sectionTitle'] as string) || '';
+                return `<div class="xml-command-highlight remove-section-command" title="Section remove command executed">
+                    <strong>&lt;remove_section section="${escapeHtml(removeSectionTitle)}"&gt;</strong>
+                </div>`;
+            
+            case 'change_context_scope':
+                {
+                    const params = command.parameters ? Object.entries(command.parameters).map(([k,v]) => `${k}="${v}"`).join(' ') : '';
+                    return `<div class="xml-command-highlight context-command" title="Change context scope executed">
+                        <strong>&lt;/change_context_scope ${escapeHtml(params)}&gt;</strong>
+                    </div>`;
+                }
                 
             default:
                 return `<div class="xml-command-highlight" title="Unknown command: ${command.type}">
@@ -1978,6 +2038,14 @@ export class XMLStoryModal extends SimpleModal {
                 // Handle outline replace - outline is stored here as text, not in service as XML elements  
                 this.handleOutlineReplace(event);
                 break;
+            case 'section_replace_requested':
+                // Handle section replace - outline is stored here as text, not in service as XML elements
+                this.handleSectionReplace(event);
+                break;
+            case 'section_remove_requested':
+                // Handle section remove - outline is stored here as text, not in service as XML elements
+                this.handleSectionRemove(event);
+                break;
         }
     }
     
@@ -2009,6 +2077,10 @@ export class XMLStoryModal extends SimpleModal {
                 return `</outline_replace>${command.content || ''}</outline_replace>`;
             case 'append':
                 return `<append>${command.content || ''}</append>`;
+            case 'replace_section':
+                return `<replace_section section="${command['sectionTitle'] || ''}">${command.content || ''}</replace_section>`;
+            case 'remove_section':
+                return `<remove_section section="${command['sectionTitle'] || ''}">`;
             case 'edit':
                 return `</edit id="${(command.parameters as any)?.id || 'unknown'}">${command.content || ''}</edit>`;
             case 'delete':
@@ -2165,6 +2237,132 @@ export class XMLStoryModal extends SimpleModal {
             'highlight-ai-replacement'
         );
         // AI content replacement completed successfully
+    }
+
+    /**
+     * Handle section replace requests from the service
+     * Replaces a specific ===<title>=== section with new content
+     */
+    private handleSectionReplace(event: XMLStoryEvent): void {
+        const { command } = event.payload as { command: XMLStoryCommand };
+        if (!command['sectionTitle'] || !command.content) {
+            this.emitCommandFailure(command, 'Section replace command missing section title or content');
+            return;
+        }
+
+        const currentContent = this.getCurrentOutlineContent();
+        
+        // Find the section using the section parsing logic from UnifiedGenerationService
+        const sections = this.parseContentSections(currentContent);
+        const targetSectionIndex = sections.findIndex(section => section.title === command['sectionTitle']);
+        
+        if (targetSectionIndex === -1) {
+            this.emitCommandFailure(command, `Section "${command['sectionTitle']}" not found in outline`);
+            return;
+        }
+        
+        // Rebuild content with the replaced section
+        const newSections = [...sections];
+        newSections[targetSectionIndex] = {
+            title: command['sectionTitle'] as string,
+            content: command.content
+        };
+        
+        // Reconstruct the outline with all sections
+        const newContent = newSections.map(section => 
+            `===${section.title}===\n${section.content}`
+        ).join('\n\n');
+        
+        this.setOutlineContentFromAI(newContent);
+        // AI section replacement completed successfully
+    }
+
+    /**
+     * Handle section remove requests from the service
+     * Removes a specific ===<title>=== section entirely
+     */
+    private handleSectionRemove(event: XMLStoryEvent): void {
+        const { command } = event.payload as { command: XMLStoryCommand };
+        if (!command['sectionTitle']) {
+            this.emitCommandFailure(command, 'Section remove command missing section title');
+            return;
+        }
+
+        const currentContent = this.getCurrentOutlineContent();
+        
+        // Find the section using the section parsing logic from UnifiedGenerationService
+        const sections = this.parseContentSections(currentContent);
+        const targetSectionIndex = sections.findIndex(section => section.title === command['sectionTitle']);
+        
+        if (targetSectionIndex === -1) {
+            this.emitCommandFailure(command, `Section "${command['sectionTitle']}" not found in outline`);
+            return;
+        }
+        
+        // Remove the target section
+        const newSections = sections.filter((_, index) => index !== targetSectionIndex);
+        
+        // Reconstruct the outline without the removed section
+        const newContent = newSections.length > 0 
+            ? newSections.map(section => 
+                `===${section.title}===\n${section.content}`
+            ).join('\n\n')
+            : '';
+        
+        this.setOutlineContentFromAI(newContent);
+        // AI section removal completed successfully
+    }
+
+    /**
+     * Parse content sections that follow ===<title>=== format
+     * Returns array of sections with title and content (copied from UnifiedGenerationService)
+     */
+    private parseContentSections(content: string): Array<{title: string, content: string}> {
+        if (!content || !content.trim()) {
+            return [];
+        }
+
+        const lines = content.split('\n');
+        const sections: Array<{title: string, content: string}> = [];
+        let currentSection: {title: string, content: string[]} | null = null;
+
+        for (const line of lines) {
+            // Check if line matches ===<title>=== pattern
+            const sectionMatch = line.match(/^===(.+?)===\s*$/);
+            
+            if (sectionMatch) {
+                // Save previous section if it exists
+                if (currentSection) {
+                    sections.push({
+                        title: currentSection.title,
+                        content: currentSection.content.join('\n').trim()
+                    });
+                }
+                
+                // Start new section
+                const title = sectionMatch[1];
+                if (title) {
+                    currentSection = {
+                        title: title.trim(),
+                        content: []
+                    };
+                }
+            } else if (currentSection) {
+                // Add line to current section content
+                currentSection.content.push(line);
+            }
+            // Ignore lines before the first section
+        }
+
+        // Save the last section if it exists
+        if (currentSection) {
+            sections.push({
+                title: currentSection.title,
+                content: currentSection.content.join('\n').trim()
+            });
+        }
+
+        return sections.filter(section => section.title.length > 0);
     }
 
     /**
@@ -2947,7 +3145,7 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
-     * Load custom buttons from storage
+     * Load custom buttons from storage and add default buttons
      */
     private async loadCustomButtons(): Promise<void> {
         console.log('loadCustomButtons called');
@@ -2961,22 +3159,47 @@ export class XMLStoryModal extends SimpleModal {
         if (stored) {
             this.customButtons = stored as Array<{id: string, caption: string, prompt: string}>;
             console.log('Loaded custom buttons:', this.customButtons);
-            this.renderCustomButtons();
         } else {
             console.log('No stored custom buttons found');
             this.customButtons = [];
-            this.renderCustomButtons();
+        }
+        
+        // Add default section splitting button if not already present
+        this.ensureDefaultButtons();
+        this.renderCustomButtons();
+    }
+
+    /**
+     * Ensure default buttons exist
+     */
+    private ensureDefaultButtons(): void {
+        const sectionSplitterButtonExists = this.customButtons.some(button => button.id === 'default-section-splitter');
+        
+        if (!sectionSplitterButtonExists) {
+            const prompts = this.settingsManager.getPrompts();
+            const defaultSectionButton = {
+                id: 'default-section-splitter',
+                caption: '📄 Split into Sections',
+                prompt: prompts.split_into_sections_user
+            };
+            
+            // Add at the beginning of the array so it appears first
+            this.customButtons.unshift(defaultSectionButton);
+            console.log('Added default section splitter button');
         }
     }
 
     /**
-     * Save custom buttons to storage
+     * Save custom buttons to storage (excluding default buttons)
      */
     private async saveCustomButtons(): Promise<void> {
         const storageKey = `xml-story-custom-buttons-${this.sourceNode!.id}`;
-            const storage = await StorageService.getInstance();
-        await storage.set(storageKey, this.customButtons);
-        console.log('Custom buttons saved successfully');
+        const storage = await StorageService.getInstance();
+        
+        // Filter out default buttons when saving
+        const userCustomButtons = this.customButtons.filter(button => !button.id.startsWith('default-'));
+        await storage.set(storageKey, userCustomButtons);
+        console.log('Custom buttons saved successfully (excluding defaults)');
     }
     
     /**
@@ -3030,12 +3253,15 @@ export class XMLStoryModal extends SimpleModal {
             return;
         }
         
-        this.customButtonsContainer.innerHTML = this.customButtons.map(button => `
-            <button class="custom-button" data-button-id="${button.id}" title="${button.prompt}">
-                ${button.caption}
-                <button class="custom-button-remove" data-remove-id="${button.id}" title="Remove button">×</button>
-            </button>
-        `).join('');
+        this.customButtonsContainer.innerHTML = this.customButtons.map(button => {
+            const isDefaultButton = button.id.startsWith('default-');
+            return `
+                <button class="custom-button ${isDefaultButton ? 'default-button' : ''}" data-button-id="${button.id}" title="${button.prompt}">
+                    ${button.caption}
+                    ${!isDefaultButton ? `<button class="custom-button-remove" data-remove-id="${button.id}" title="Remove button">×</button>` : ''}
+                </button>
+            `;
+        }).join('');
         
         // Add event listeners for custom buttons
         this.customButtonsContainer.querySelectorAll('.custom-button').forEach(btn => {

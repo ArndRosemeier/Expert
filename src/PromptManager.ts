@@ -84,6 +84,9 @@ export interface OrchestratorPrompts {
     // For XML story creation with embedded tags
     node_chat_editor: string;
     node_chat_editor_user: string;
+
+    // For converting outlines to section format
+    split_into_sections_user: string;
 }
 
 interface PromptDefinition {
@@ -336,7 +339,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
             Coherence is king. Logical problems must be avoided at all costs.
-            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. 
+            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, section headers or lists.
+            The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure content that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'content', 'draftorfresh', 'language'],
@@ -365,7 +369,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             IMPORTANT: 
             Your response should contain ONLY the requested outline content, nothing more.
             Coherence is king. Logical problems must be avoided at all costs.
-            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, or section headers. 
+            Do not include any introductory remarks, explanations, meta-commentary, additional formatting, lists or section headers. 
+            The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure outline text that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
@@ -891,6 +896,7 @@ Rank from MOST relevant (1st position) to LEAST relevant (last position) based o
 - **Background Importance**: Essential background information that subnodes would need to understand?
 - **Future Plot Impact**: Will this context influence content development in subnodes?
 - **Character/World Continuity**: Does this maintain important character or world consistency?
+- **Not a Spoiler**: Is this context dangerous as it might be spoiling future content?
 
 **Context Items to Sort:**
 {{numbered_context_items}}
@@ -1442,28 +1448,54 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 
 **For Outline Editing:**
 - The outline is a unified text document (not individual items)
+- **OPTIONAL SECTIONS**: Outlines may contain sections using the format ===<title>=== which enable automatic child node generation
 - For complete rewrites: </outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
 - For adding content to the end: <append>CONTENT_TO_ADD</append>
 - For replacing specific parts: <replace_command><search>EXACT_TEXT_TO_FIND</search><replace>NEW_TEXT</replace></replace_command>
+- For replacing specific sections: <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
+- For removing sections: <remove_section section="SECTION_TITLE">
 - Work with the existing outline structure and improve/expand it holistically
 
 **For Context Items (Individual Elements):**
 - Create specific context items for characters, locations, and world-building details
 - Use: <context id="unique_id">Full description including name/title and details</context>
 - Each context item should be focused and self-contained
+            - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs solely inside XML commands/tags; never mention IDs in natural language responses.
 
-**Context Item Types:**
-- **Global items**: Start description with * for elements that persist throughout the entire story (main characters, core world-building, fundamental themes, style guides, genre, etc.)
-- **Situational items**: No prefix for elements that are relevant to specific scenes or chapters (temporary characters, specific locations, plot devices)
+            ⚠️ CRITICAL EXECUTION NOTE:
+            - Any XML command you include in your response WILL BE EXECUTED IMMEDIATELY by the system.
+            - These commands are NOT suggestions. Do not include them as examples or hypotheticals.
+            - Only output XML commands when you are certain you want the change to be applied right now.
+            - If you want to discuss a possible change without executing it, use plain natural language, not XML commands.
+
+            **Selective Context Inheritance (Optional):**
+- Context items can optionally target specific child indices during child generation by starting with a star followed by a number range, then a space, then the content.
+- Supported formats (child indices are 1-based):
+  - Single index: *3 This applies only to the 3rd child
+  - Range: *2-5 This applies to children 2 through 5
+              - Open-ended: *2+ This applies to children 2 and all following
+              - List: *1, 3, 6 This applies to children 1, 3, and 6
+- When children are created, only matching children inherit the item. The numeric part will be removed automatically and replaced with a single * in the child context.
+- Items without such a numeric prefix are inherited by all children.
+
+            **Token-efficient scope change command:**
+            - To change ONLY the scope/prefix of an existing context item without editing its content, use the compact command:
+              - </change_context_scope id="CONTEXT_ID" scope="*|*2-5|*2+|*1,3,5">
+            - This updates just the leading scope prefix (e.g., *, *2-5, *2+) on the targeted context item.
+
+- **Global items**: Start description with just * for elements that persist throughout the entire story (main characters, core world-building, fundamental themes, style guides, genre, etc.)
 
 🎯 EDITING GUIDELINES:
 - Complete outline rewrites: </outline_replace> tags
 - Append to outline: <append> tags for adding content at the end
 - Replace parts of outline: <replace_command> with <search> and <replace> for precise edits
+- Replace specific sections: <replace_section section="SECTION_TITLE"> for targeting ===title=== sections
+- Remove sections: <remove_section section="SECTION_TITLE"> to delete ===title=== sections entirely
 - Add individual context items for new characters, locations, concepts
 - Edit existing context items using: </edit id="element_id">Description content</edit>
 - Remove context items using: </delete id="element_id">
 - IMPORTANT: For replace_command, search text must be unique and exact
+- IMPORTANT: Section commands work with the exact title between === markers (without the === symbols)
 
 💡 EXAMPLE RESPONSES:
 
@@ -1495,8 +1527,17 @@ System commands available:
 - </outline_replace>COMPLETE_OUTLINE_TEXT</outline_replace> - Replace entire outline
 - <append>CONTENT_TO_ADD</append> - Append content to end of outline
 - <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command> - Replace specific outline text
-- </edit id="element_id">Description content</edit> - Edit existing context element  
-- </delete id="element_id"> - Delete context element
+- <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section> - Replace a specific ===title=== section
+- <remove_section section="SECTION_TITLE"> - Remove a specific ===title=== section entirely
+            - Edit context item (paired tag REQUIRED, one of):
+              • <edit id="element_id">Description content</edit>
+              • </edit id="element_id">Description content</edit>
+            - Delete context item (allowed XML variants):
+              • <delete id="element_id"/>
+              • <delete id="element_id"></delete>
+              • </delete id="element_id"> (closing-form)
+            
+            IMPORTANT: Any system command you output will be applied immediately. Do not include commands as examples or suggestions. Use natural language if you do not intend to execute a change.
 
 {{noise_names}}
 
@@ -1523,19 +1564,54 @@ EDITING COMMANDS:
 - For complete outline rewrites: Use </outline_replace>COMPLETE_NEW_OUTLINE</outline_replace>
 - For appending to outline: Use <append>CONTENT_TO_ADD</append>
 - For replacing outline parts: Use <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command>
-- For new context items: Use <context id="unique_id">Description content</context>
-- For editing context items: Use </edit id="element_id">Description content</edit>
-- For removing context items: Use </delete id="element_id">
+- For replacing sections: Use <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
+- For removing sections: Use <remove_section section="SECTION_TITLE">
+        - For new context items: Use <context id="unique_id">Description content</context>
+        - For editing context items (paired tag REQUIRED, one of):
+          • <edit id="element_id">Description content</edit>
+          • </edit id="element_id">Description content</edit>
+        - For removing context items (allowed XML variants):
+          • <delete id="element_id"/>
+          • <delete id="element_id"></delete>
+          • </delete id="element_id">
+        - For changing ONLY the scope/prefix of a context item (token-efficient): Use </change_context_scope id="element_id" scope="*|*2-5|*2+|*1,3,5">
+
+        CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
 
 CONTEXT ITEM CONVENTIONS:
 - Start with * for global elements (main characters, core world-building): *Character Name is...
 - No prefix for situational elements (temporary characters, specific locations): Location Name is...
+        - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs only within XML commands/tags; do not surface IDs in prose.
+
+        OPTIONAL SELECTIVE INHERITANCE PREFIX:
+- You may target context items to specific future child indices by starting the item with a star and a number range, then a space, then the content.
+- Formats (indices are 1-based):
+  - *3 Content... → only 3rd child inherits
+  - *2-5 Content... → children 2 through 5 inherit
+          - *2+ Content... → children 2 and all following inherit
+          - *1, 3, 6 Content... → children 1, 3, and 6 inherit
+        - Use </change_context_scope id="element_id" scope="..."> to update only the scope without changing the content
+- During child creation, matching children will inherit this item with the numeric part stripped to a single *. Items without the numeric prefix are inherited by all children.
 
 Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
 
 Help improve the structure and develop the content through thoughtful editing suggestions.`.trim(),
         placeholders: ['current_outline', 'current_context_items', 'human_edits'],
         description: "User prompt for collaborative editing with unified outline and individual context items."
+    }
+    ,
+    split_into_sections_user: {
+        text: `Please restructure the outline to use section headers in the format ===<title>=== for each major part.
+
+CRITICAL REQUIREMENTS:
+- Do NOT summarize, condense, or omit anything. Preserve ALL information and details from the input.
+- Do NOT rephrase or paraphrase content. Only reorganize the existing text under appropriate section headers.
+- You may split the content into sections and insert the ===<title>=== headers, but the body text under each section must retain the full original content (no shortening).
+- Do NOT add new content beyond the section headers.
+
+Each section should have a clear, descriptive title, and the existing content should be organized under these headers without loss of detail. This enables automatic generation of child nodes from the sections.`.trim(),
+        placeholders: [],
+        description: "User prompt to convert an outline into the ===<title>=== section format used for algorithmic child generation."
     }
 };
 
@@ -1547,28 +1623,16 @@ Object.keys(defaultPromptDefinitions).forEach(key => {
 });
 
 // Helper functions for accessing metadata
-/**
- * Returns the required placeholder keys for a given prompt.
- * Assumes prompt definitions are complete and present.
- */
 export function getPromptPlaceholders(promptKey: keyof OrchestratorPrompts): string[] {
-    return defaultPromptDefinitions[promptKey].placeholders;
+    return defaultPromptDefinitions[promptKey]?.placeholders || [];
 }
 
-/**
- * Returns the human-readable description for a given prompt.
- * Assumes prompt definitions are complete and present.
- */
 export function getPromptDescription(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey].description;
+    return defaultPromptDefinitions[promptKey]?.description || '';
 }
 
-/**
- * Returns the raw template text for a given prompt.
- * Assumes prompt definitions are complete and present.
- */
 export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey].text;
+    return defaultPromptDefinitions[promptKey]?.text || '';
 }
 
 // Simple prompt manager class for specific use cases (like context transformation)

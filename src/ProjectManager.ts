@@ -179,11 +179,12 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @param title The title of the new node.
      * @param parentId The ID of the parent node.
      * @param creatorModel Optional model name that created this node.
+     * @param childIndex Optional child index for selective context copying (1-based, used when creating multiple children)
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null = null, creatorModel?: string): DocumentNode {
+    public addNode(title: string, parentId: string | null = null, creatorModel?: string, childIndex?: number): DocumentNode {
         // Delegate to TreeService
-        return this.treeService.addNode(title, parentId, this.rootNode, creatorModel);
+        return this.treeService.addNode(title, parentId, this.rootNode, creatorModel, childIndex);
     }
 
     /**

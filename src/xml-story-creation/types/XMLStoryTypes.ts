@@ -50,11 +50,12 @@ export interface ParsedResponse {
 }
 
 export interface SystemCommand {
-    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command';
+    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command' | 'replace_section' | 'remove_section' | 'change_context_scope';
     parameters?: Record<string, string>;
     content?: string; // For commands like outline_replace that have content between tags
     searchText?: string; // For replace_command: what to search for
     replaceText?: string; // For replace_command: what to replace with
+    sectionTitle?: string; // For section commands: the section title to target
     timestamp: Date;
     markerId?: string; // Unique marker ID for positioning in text
 }
@@ -218,7 +219,8 @@ export interface XMLStoryEvent {
     type: 'element_created' | 'element_updated' | 'element_deleted' | 
           'human_edit' | 'highlight_applied' | 'highlight_cleared' |
           'context_refresh_requested' | 'ai_feedback_generated' | 'command_failed' |
-          'outline_append_requested' | 'outline_replace_requested';
+          'outline_append_requested' | 'outline_replace_requested' |
+          'section_replace_requested' | 'section_remove_requested';
     payload: Record<string, unknown>;
     timestamp: Date;
 }

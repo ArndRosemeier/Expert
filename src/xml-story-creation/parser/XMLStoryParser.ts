@@ -57,6 +57,35 @@ export class XMLStoryParser {
         result.errors = errors;
         result.cleanedText = cleanedText;
         
+        // Convert newly created/updated elements into synthetic system commands for chat echo
+        // so ALL executed actions are visible in the chat as XML.
+        elements.forEach(el => {
+            if (el.type === 'context') {
+                // Determine if element is new or updated relative to existingElements
+                const previous = existingElements?.get(el.id);
+                if (!previous) {
+                    // New context element → echo as a context XML command
+                    const syntheticEdit: SystemCommand = {
+                        type: 'edit',
+                        parameters: { id: el.id },
+                        content: el.description,
+                        timestamp: new Date()
+                    };
+                    // Leave no marker so it displays in insertion order near where the model placed it (subsequent display layer will render in-stream)
+                    commands.push(syntheticEdit);
+                } else if (previous && previous.description !== el.description) {
+                    // Updated context element → echo as edit
+                    const syntheticEdit: SystemCommand = {
+                        type: 'edit',
+                        parameters: { id: el.id },
+                        content: el.description,
+                        timestamp: new Date()
+                    };
+                    commands.push(syntheticEdit);
+                }
+            }
+        });
+        
         // Mark new elements and updates for highlighting
         this.markElementsForHighlighting(result.extractedElements);
         
@@ -90,9 +119,9 @@ export class XMLStoryParser {
             textWithMarkers = textWithMarkers.replace(outlineMatch[0], markerId);
         }
         
-        // Handle edit commands with content between tags (new improved syntax)  
-        const editCommandRegex = /<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
-        textWithMarkers = textWithMarkers.replace(editCommandRegex, (_match, parametersText, content) => {
+        // Handle edit commands with content between tags (support both </edit ...> and <edit ...>)
+        const editOpenTagRegex = /<edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
+        textWithMarkers = textWithMarkers.replace(editOpenTagRegex, (_match, parametersText, content) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             
             const command: SystemCommand = {
@@ -110,6 +139,27 @@ export class XMLStoryParser {
             commands.push(command);
             return markerId;
         });
+        // Handle closing-form edits: </edit ...>CONTENT</edit>
+        const editCommandRegex = /<\/edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
+        textWithMarkers = textWithMarkers.replace(editCommandRegex, (_match, parametersText, content) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
+            const command: SystemCommand = {
+                type: 'edit',
+                content: content.trim(),
+                timestamp: new Date(),
+                markerId
+            };
+            
+            if (parametersText.trim()) {
+                command.parameters = this.parseCommandParameters(parametersText);
+            }
+            
+            commands.push(command);
+            return markerId;
+        });
+
+        // Enforce correct edit syntax only: require paired closing tag in either form above
         
         // Handle append commands
         const appendCommandRegex = /<append>\s*([\s\S]*?)\s*<\/append>/gi;
@@ -128,29 +178,7 @@ export class XMLStoryParser {
         
 
         
-        // Handle other system commands (self-closing) - excluding edit which is now handled above
-        const systemCommandRegex = /<\/(refresh|delete|rename)(?:\s+([^>]*))?\s*>/gi;
-        let match;
-        while ((match = systemCommandRegex.exec(text)) !== null) {
-            if (!match[1]) continue;
-            
-            const commandType = match[1].toLowerCase() as SystemCommand['type'];
-            const parametersText = match[2] ?? '';
-            
-            const command: SystemCommand = {
-                type: commandType,
-                timestamp: new Date()
-            };
-            
-            // Parse parameters if present
-            if (parametersText.trim()) {
-                command.parameters = this.parseCommandParameters(parametersText);
-            }
-            
-            commands.push(command);
-        }
-        
-        // Handle remaining simple commands (refresh, delete, rename)
+        // Handle simple closing-form commands (refresh, delete, rename)
         const simpleCommandRegex = /<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi;
         textWithMarkers = textWithMarkers.replace(simpleCommandRegex, (_match, commandType) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
@@ -161,6 +189,40 @@ export class XMLStoryParser {
                 markerId
             });
             
+            return markerId;
+        });
+
+        // Enforce correct simple command syntax only
+        // Self-closing variants allowed: <refresh/> <delete id="..."/> <rename id="..."/>
+        const selfClosingCmdRegex = /<(refresh|delete|rename)(\s+[^>]*?)?\s*\/>/gi;
+        textWithMarkers = textWithMarkers.replace(selfClosingCmdRegex, (_match, commandType, parametersText) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            const command: SystemCommand = {
+                type: (commandType as string).toLowerCase() as SystemCommand['type'],
+                timestamp: new Date(),
+                markerId
+            };
+            const paramsText = (parametersText || '').toString();
+            if (paramsText.trim()) {
+                command.parameters = this.parseCommandParameters(paramsText);
+            }
+            commands.push(command);
+            return markerId;
+        });
+
+        // Paired form for delete only: <delete id="..."></delete>
+        const deletePairedRegex = /<delete\s+([^>]*?)>\s*<\/delete>/gi;
+        textWithMarkers = textWithMarkers.replace(deletePairedRegex, (_match, parametersText) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            const command: SystemCommand = {
+                type: 'delete',
+                timestamp: new Date(),
+                markerId
+            };
+            if ((parametersText || '').trim()) {
+                command.parameters = this.parseCommandParameters(parametersText);
+            }
+            commands.push(command);
             return markerId;
         });
 
@@ -177,6 +239,54 @@ export class XMLStoryParser {
                 markerId
             });
             
+            return markerId;
+        });
+
+        // Handle replace_section command
+        const replaceSectionRegex = /<replace_section\s+section="([^"]+)"\s*>\s*([\s\S]*?)\s*<\/replace_section>/gi;
+        textWithMarkers = textWithMarkers.replace(replaceSectionRegex, (_match, sectionTitle, content) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
+            commands.push({
+                type: 'replace_section',
+                sectionTitle: sectionTitle.trim(),
+                content: content.trim(),
+                timestamp: new Date(),
+                markerId
+            });
+            
+            return markerId;
+        });
+
+        // Handle remove_section command
+        const removeSectionRegex = /<remove_section\s+section="([^"]+)"\s*\/?>/gi;
+        textWithMarkers = textWithMarkers.replace(removeSectionRegex, (_match, sectionTitle) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            
+            commands.push({
+                type: 'remove_section',
+                sectionTitle: sectionTitle.trim(),
+                timestamp: new Date(),
+                markerId
+            });
+            
+            return markerId;
+        });
+
+        // Handle change_context_scope command: </change_context_scope id="ID" scope="*2-5"/>
+        const changeScopeRegex = /<\/change_context_scope\s+([^>]*?)\s*>/gi;
+        textWithMarkers = textWithMarkers.replace(changeScopeRegex, (_match, parametersText) => {
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            const command: SystemCommand = {
+                type: 'change_context_scope',
+                timestamp: new Date(),
+                markerId
+            };
+            const paramsText = (parametersText || '').toString();
+            if (paramsText.trim()) {
+                command.parameters = this.parseCommandParameters(paramsText);
+            }
+            commands.push(command);
             return markerId;
         });
 
@@ -292,7 +402,9 @@ export class XMLStoryParser {
         }
 
         // Remove remaining XML commands from text but keep our markers
-        cleanedText = this.removeNonSystemXMLCommands(cleanedText);
+        // Preserve context/outline tags exactly at their positions by replacing with markers for chat echo
+        const elementTagRegex = /<(outline|context)(\s[^>]*?)?\s*(?:\/>|>\s*[\s\S]*?<\/\1>)/gi;
+        cleanedText = cleanedText.replace(elementTagRegex, _m => '');
 
         console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
         
@@ -308,18 +420,7 @@ export class XMLStoryParser {
     /**
      * Remove non-system XML commands (like context/outline tags) but keep system command markers
      */
-    private removeNonSystemXMLCommands(text: string): string {
-        const patterns = [
-            /<(outline|context)\s+([^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi  // Only remove story element tags
-        ];
-
-        let cleanText = text;
-        for (const pattern of patterns) {
-            cleanText = cleanText.replace(pattern, '');
-        }
-
-        return cleanText.trim();
-    }
+    // Removed legacy cleanup; element tags are now handled inline for marker positioning
 
 
     
