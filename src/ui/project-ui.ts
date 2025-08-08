@@ -933,6 +933,16 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
             state.getOpenRouterClient()!
         );
 
+        // Copy language from source project (fallback to global language if project-specific not set)
+        try {
+            const sourceLanguage = projectManager!.getLanguage() || projectManager!.getSettingsManager().getLanguage();
+            if (sourceLanguage) {
+                newProjectManager.setLanguage(sourceLanguage);
+            }
+        } catch (e) {
+            console.warn('Failed to copy project language to new project:', e);
+        }
+
         // Ensure all nodes share the same template reference
         AssertFlatTemplateCopy(newProjectManager);
 

@@ -48,9 +48,10 @@ export class TreeService {
      * @param parentId The ID of the parent node (null for root operations).
      * @param rootNode The root node of the tree.
      * @param creatorModel Optional model name that created this node.
+     * @param childIndex Optional child index for selective context copying (1-based, used when creating multiple children)
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null, rootNode: DocumentNode, creatorModel?: string): DocumentNode {
+    public addNode(title: string, parentId: string | null, rootNode: DocumentNode, creatorModel?: string, childIndex?: number): DocumentNode {
         const parent = parentId ? this.findNodeById(parentId, rootNode) : rootNode;
         if (!parent) {
             throw new Error(`Parent node with ID "${parentId}" not found.`);
@@ -59,9 +60,10 @@ export class TreeService {
         const newLevel = parent.level + 1;
         const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
         
-        // Inherit context from parent
+        // Inherit context from parent with selective copying
         if (parent.context) {
-            newNode.setContext(parent.context, 'inherited');
+            const processedContext = this.processSelectiveContext(parent.context, childIndex);
+            newNode.setContext(processedContext, 'inherited');
         }
         
         if (creatorModel) {
@@ -76,6 +78,129 @@ export class TreeService {
         parent.children.push(newNode);
         
         return newNode;
+    }
+
+    /**
+     * Process context with selective copying based on number ranges
+     * @param context The parent context to process
+     * @param childIndex The 1-based index of the child being created (optional)
+     * @returns Processed context with selective items based on child index
+     */
+    private processSelectiveContext(context: string, childIndex?: number): string {
+        if (!context || !childIndex) {
+            // If no child index provided, return original context (backwards compatibility)
+            return context;
+        }
+
+        // Split context into paragraphs (context items)
+        const contextItems = context.split('\n\n').filter(item => item.trim());
+        const processedItems: string[] = [];
+
+        for (const item of contextItems) {
+            const processedItem = this.processContextItem(item.trim(), childIndex);
+            if (processedItem !== null) {
+                processedItems.push(processedItem);
+            }
+        }
+
+        return processedItems.join('\n\n');
+    }
+
+    /**
+     * Process a single context item for selective copying
+     * @param item The context item to process
+     * @param childIndex The 1-based index of the child being created
+     * @returns Processed item string, or null if item should be excluded
+     */
+    private processContextItem(item: string, childIndex: number): string | null {
+        // Must start with a star to be considered for selective copying
+        if (!item.startsWith('*')) {
+            return item;
+        }
+
+        // After the initial '*', extract a prefix made of digits, commas, dashes, plus and spaces
+        // Example accepted prefixes: "2-5", "1,3,5", "1, 3, 5", "10", "2 - 20", "2+"
+        const afterStar = item.slice(1);
+        let endIndex = 0;
+        while (endIndex < afterStar.length) {
+            const ch = afterStar.charAt(endIndex);
+            if (!/[0-9,\-\+\s]/.test(ch)) break;
+            endIndex++;
+        }
+
+        const rawRange = afterStar.slice(0, endIndex).trim() || '';
+
+        // If there was no valid range immediately after '*', treat as normal context item
+        if (!rawRange || !/^[0-9,\-\+\s]+$/.test(rawRange)) {
+            return item;
+        }
+
+        // The remaining part is the content; optionally skip a separator like ':', '-', '–', '—' and following spaces/newlines
+        let content = afterStar.slice(endIndex);
+        content = content.replace(/^\s*[:\-–—]?\s*/, '');
+
+        // Parse the number range and check if child index matches
+        if (this.isIndexInRange(childIndex, rawRange)) {
+            // Child index matches, include item but replace pattern with just '*'
+            return `*${content}`;
+        }
+        
+        // Child index doesn't match, exclude item
+        return null;
+    }
+
+    /**
+     * Check if a child index falls within a number range specification
+     * @param childIndex The 1-based child index to check
+     * @param rangeString The range specification (e.g., "1,3,5" or "2-5" or "3")
+     * @returns True if index is in range, false otherwise
+     */
+    private isIndexInRange(childIndex: number, rangeString: string): boolean {
+        // Handle open-ended start: "N+" means N to infinity
+        const plusMatch = rangeString.match(/^(\d+)\s*\+$/);
+        if (plusMatch) {
+            const start = parseInt(plusMatch[1]!, 10);
+            if (!isNaN(start)) {
+                return childIndex >= start;
+            }
+        }
+
+        // Handle comma-separated list (e.g., "1,3,5" or "1, 3, 5")
+        if (rangeString.includes(',')) {
+            const numbers = rangeString.split(',')
+                .map(n => parseInt(n.trim(), 10))
+                .filter(n => !isNaN(n));
+            return numbers.includes(childIndex);
+        }
+
+        // Handle range (e.g., "2-5")
+        if (rangeString.includes('-')) {
+            const parts = rangeString.split('-').map(n => parseInt(n.trim(), 10));
+            if (parts.length === 2 && parts[0] !== undefined && parts[1] !== undefined) {
+                const start = parts[0];
+                const end = parts[1];
+                if (!isNaN(start) && !isNaN(end)) {
+                    return childIndex >= start && childIndex <= end;
+                }
+            }
+        }
+
+        // Handle single number (e.g., "3")
+        const singleNumber = parseInt(rangeString.trim(), 10);
+        if (!isNaN(singleNumber)) {
+            return childIndex === singleNumber;
+        }
+
+        // If parsing fails, include by default (safe fallback)
+        return true;
+    }
+
+    /**
+     * Test function for selective context logic (development/debugging only)
+     * This function can be used to verify the selective context copying works correctly
+     */
+    public testSelectiveContext(context: string, childIndex: number): string {
+        return this.processSelectiveContext(context, childIndex);
     }
 
     /**

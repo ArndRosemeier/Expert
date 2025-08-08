@@ -1092,6 +1092,13 @@ export class UnifiedGenerationService {
             return { childIds: node.children.map(child => child.id), childrenCreated: false };
         }
 
+        // Check if node content has ===<title>=== sections for algorithmic generation
+        const sections = this.parseContentSections(node.content);
+        if (sections.length > 0) {
+            console.log(`🔧 Using algorithmic section-based generation for "${node.title}" - found ${sections.length} sections`);
+            return await this.createChildrenFromSections(nodeId, sections);
+        }
+
         try {
             // Set isGenerating flag and update tree to show spinner
             node.isGenerating = true;
@@ -1109,7 +1116,14 @@ export class UnifiedGenerationService {
 
             // Get the outline prompt template
             const prompts = this.deps.settingsManager.getPrompts();
-            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode);
+            // Conditional inclusion of parent content for child generation from outline
+            let includeParentContent = false;
+            const parentForDraft = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+            if (parentForDraft) {
+                const sections = this.parseContentSections(parentForDraft.content || '');
+                includeParentContent = sections.length === 0;
+            }
+            const context = this.deps.contextService.compileNodeContext(nodeId, this.deps.rootNode, includeParentContent);
 
             const prompt = this.deps.promptService.fillGenerationPrompt(
                 prompts.create_children_from_outline_user,
@@ -1148,8 +1162,10 @@ export class UnifiedGenerationService {
             const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
             const childIds: string[] = [];
 
-            nodeItems.forEach(item => {
-                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
+            nodeItems.forEach((item, index) => {
+                // Child index is 1-based
+                const childIndex = index + 1;
+                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel, childIndex);
                 childIds.push(newNode.id);
                 
                 // Set the content description as initial content if provided
@@ -1171,13 +1187,8 @@ export class UnifiedGenerationService {
                         newNode.promoteToMaster(draftVersionId, ['draft']);
                     }
                     
-                    // Set context for generated child content
-                    if (newNode.parentId) {
-                        const parent = this.deps.treeService.findNodeById(newNode.parentId, this.deps.rootNode);
-                        if (parent && parent.context) {
-                            newNode.setContext(parent.context, 'generated');
-                        }
-                    }
+                    // Note: Context is now handled automatically in TreeService.addNode with selective copying
+                    // No need for manual context setting here as it was redundant
                 }
             });
 
@@ -2014,7 +2025,19 @@ export class UnifiedGenerationService {
         const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node);
 
         // Fill the placeholders
-        const context = this.deps.contextService.compileNodeContext(node.id, this.deps.rootNode);
+        // Conditional inclusion of parent content in context:
+        // - If parent has sections (===<title>===), DO NOT include parent content (it will be present via sections and extra content may confuse the AI)
+        // - Otherwise include the parent content to ensure relevant info is available
+        let includeParentContent = false;
+        if (node.parentId) {
+            const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+            if (parentNode && parentNode.content) {
+                const parentSections = this.parseContentSections(parentNode.content);
+                const parentHasSections = parentSections.length > 0;
+                includeParentContent = !parentHasSections;
+            }
+        }
+        const context = this.deps.contextService.compileNodeContext(node.id, this.deps.rootNode, includeParentContent);
         const path = this.deps.treeService.getNodePath(node.id, this.deps.rootNode);
         const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
         
@@ -2038,6 +2061,158 @@ export class UnifiedGenerationService {
         }
 
         return loopInput;
+    }
+
+    /**
+     * Parse content sections that follow ===<title>=== format
+     * Returns array of sections with title and content
+     */
+    private parseContentSections(content: string): Array<{title: string, content: string}> {
+        if (!content || !content.trim()) {
+            return [];
+        }
+
+        const lines = content.split('\n');
+        const sections: Array<{title: string, content: string}> = [];
+        let currentSection: {title: string, content: string[]} | null = null;
+
+        for (const line of lines) {
+            // Check if line matches ===<title>=== pattern
+            const sectionMatch = line.match(/^===(.+?)===\s*$/);
+            
+            if (sectionMatch) {
+                // Save previous section if it exists
+                if (currentSection) {
+                    sections.push({
+                        title: currentSection.title,
+                        content: currentSection.content.join('\n').trim()
+                    });
+                }
+                
+                // Start new section
+                const title = sectionMatch[1];
+                if (title) {
+                    currentSection = {
+                        title: title.trim(),
+                        content: []
+                    };
+                }
+            } else if (currentSection) {
+                // Add line to current section content
+                currentSection.content.push(line);
+            }
+            // Ignore lines before the first section
+        }
+
+        // Save the last section if it exists
+        if (currentSection) {
+            sections.push({
+                title: currentSection.title,
+                content: currentSection.content.join('\n').trim()
+            });
+        }
+
+        return sections.filter(section => section.title.length > 0);
+    }
+
+    /**
+     * Create children from parsed content sections
+     * Similar to LLM generation but uses algorithmic parsing
+     */
+    private async createChildrenFromSections(nodeId: string, sections: Array<{title: string, content: string}>): Promise<{ childIds: string[]; childrenCreated: boolean }> {
+        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+        if (!node) throw new Error(`Node not found for section-based creation: ${nodeId}`);
+
+        try {
+            // Set isGenerating flag and update tree to show spinner
+            node.isGenerating = true;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-started' });
+            
+            // Emit start progress
+            this.currentOperationProgress = {
+                current: 1,
+                total: 3,
+                message: `Creating children from sections for "${node.title}"`
+            };
+            this.currentNodeId = nodeId;
+            this.currentOperationType = 'draft';
+            this.emitUnifiedProgress();
+
+            // Update progress mid-way
+            this.currentOperationProgress = {
+                current: 2,
+                total: 3,
+                message: `Processing ${sections.length} sections for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+
+            const childIds: string[] = [];
+            
+            // Get the creator model name for tracking (same as LLM generation)
+            const currentProfile = this.deps.settingsManager.getLastUsedProfile();
+            const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
+
+            sections.forEach((section, index) => {
+                // Child index is 1-based
+                const childIndex = index + 1;
+                const newNode = this.deps.treeService.addNode(section.title, nodeId, this.deps.rootNode, creatorModel, childIndex);
+                childIds.push(newNode.id);
+                
+                // Set the section content as initial content with "Draft: " prefix (same as LLM generation)
+                if (section.content && section.content.trim()) {
+                    // Fix metadata type
+                    const metadata: { [key: string]: unknown } = {};
+                    if (creatorModel) {
+                        metadata['creatorModel'] = creatorModel;
+                    }
+                    
+                    const draftVersionId = newNode.addVersion(['generated', 'draft'], {
+                        content: `Draft: ${section.content}`,
+                        title: newNode.title,
+                        context: newNode.context
+                    }, metadata);
+                    
+                    // Promote the draft version to master (keeping the draft tag)
+                    if (draftVersionId) {
+                        newNode.promoteToMaster(draftVersionId, ['draft']);
+                    }
+                    
+                    // Note: Context is now handled automatically in TreeService.addNode with selective copying
+                    // No need for manual context setting here as it was redundant
+                }
+            });
+
+            await this.deps.saveToStorage();
+            
+            // Emit completion progress
+            this.currentOperationProgress = {
+                current: 3,
+                total: 3,
+                message: `Created ${childIds.length} children from sections for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+            
+            console.log(`✅ Created ${childIds.length} children from sections for "${node.title}"`);
+            
+            // Update tree immediately after children are created
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'children-created' });
+            
+            return { childIds, childrenCreated: true };
+            
+        } catch (error) {
+            // Show error through the error service (includes console logging)
+            await GenerationErrorService.getInstance().showContentGenerationError(
+                error as Error, 
+                node.title, 
+                'Section-based Creation'
+            );
+            
+            throw error;
+        } finally {
+            // Clear isGenerating flag and update tree to hide spinner
+            node.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-completed' });
+        }
     }
 
     /**

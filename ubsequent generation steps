@@ -1,0 +1,3 @@
+[33m9478c43[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: Move pruning controls to top of dialog for better UX
+[33mb41741f[m feat: Add multiple cutoff points for flexible context pruning
+[33m31908dc[m feat: Streamline context pruning with interactive checkboxes
