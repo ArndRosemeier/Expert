@@ -1328,6 +1328,9 @@ export class XMLStoryModal extends SimpleModal {
             // Send to AI with real-time streaming
             let response = '';
             await this.openRouterClient.streamingChat(modelPurpose, conversation, {
+                onStart: () => {
+                    // no-op start hook for streaming lifecycle compliance
+                },
                 onChunk: (chunk: string) => {
                     response += chunk;
                     // Update the message in real-time as chunks arrive
