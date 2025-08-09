@@ -42,7 +42,8 @@ export class PromptService {
         node: DocumentNode, 
         context: string, 
         path: string, 
-        count?: number
+        count?: number,
+        languageOverride?: string | null
     ): string {
         let draftOrFresh: string;
         if (node.content && node.content.trim() !== '') {
@@ -89,7 +90,7 @@ Please improve and expand this content.`;
         }
         
         const expansionService = createPromptExpansionService(this.settingsManager);
-        const filledPrompt = expansionService.expandPrompt(promptTemplate, promptContext);
+        const filledPrompt = expansionService.expandPrompt(promptTemplate, promptContext, languageOverride);
         
         // Special handling for root node prompts (no additional placeholders needed)
         if (!node.parentId) {

@@ -1129,7 +1129,9 @@ export class UnifiedGenerationService {
                 prompts.create_children_from_outline_user,
                 node,
                 context,
-                this.deps.treeService.getNodePath(nodeId, this.deps.rootNode)
+                this.deps.treeService.getNodePath(nodeId, this.deps.rootNode),
+                undefined,
+                this.getProjectLanguageForNode() || null
             );
 
             // Apply remaining placeholder replacements using centralized service
@@ -2039,7 +2041,14 @@ export class UnifiedGenerationService {
         }
         const context = this.deps.contextService.compileNodeContext(node.id, this.deps.rootNode, includeParentContent);
         const path = this.deps.treeService.getNodePath(node.id, this.deps.rootNode);
-        const filledPrompt = this.deps.promptService.fillGenerationPrompt(rawPrompt, node, context, path);
+        const filledPrompt = this.deps.promptService.fillGenerationPrompt(
+            rawPrompt,
+            node,
+            context,
+            path,
+            undefined,
+            capturedLanguage || null
+        );
         
         // Filter criteria appropriately - use template-based leaf detection, not children count
         const isLeafNode = node.isLeaf;
