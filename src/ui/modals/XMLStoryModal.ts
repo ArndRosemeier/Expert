@@ -1051,6 +1051,10 @@ export class XMLStoryModal extends SimpleModal {
                         🗑️ Clear Chat
                     </button>
                     
+                    <button id="split-into-parts-btn" class="sidebar-button primary">
+                        ✂️ Split Into Parts
+                    </button>
+                    
                                                 <button id="create-project-btn" class="sidebar-button primary">
                                 🚀 Update Node
                     </button>
@@ -1179,6 +1183,11 @@ export class XMLStoryModal extends SimpleModal {
         updateNodeBtn?.addEventListener('click', () => {
             void this.updateSourceNode();
         });
+
+        // Split into parts button
+        const splitBtn = container.querySelector('#split-into-parts-btn') as HTMLButtonElement | null;
+        if (!splitBtn) throw new Error('Split Into Parts button missing');
+        splitBtn.addEventListener('click', () => { void this.splitSourceNodeIntoParts(splitBtn); });
 
         // Close modal button with unsaved changes check
         const closeBtn = container.querySelector('#close-modal-btn');
@@ -2567,6 +2576,64 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
+    private async splitSourceNodeIntoParts(buttonEl?: HTMLButtonElement): Promise<void> {
+        if (!this.sourceNode) {
+            alert('No source node available');
+            return;
+        }
+        const original = this.sourceNode.content || '';
+        if (!original.trim()) {
+            alert('Source node has no content to split.');
+            return;
+        }
+        try {
+            // Progress indicator on button
+            if (buttonEl) {
+                buttonEl.disabled = true;
+                const originalText = buttonEl.textContent || '';
+                buttonEl.dataset['origText'] = originalText;
+                buttonEl.textContent = '⏳ Splitting…';
+            }
+
+            const module = await import('../../services/TextSegmentationService');
+            const svc = module.TextSegmentationService.getInstance();
+            const settingsManager = this.settingsManager;
+            const result = await svc.segmentByParagraphMarkers(original, {
+                granularity: 'custom',
+                language: settingsManager.getLanguage() || 'English',
+                purpose: 'editor'
+            });
+            const { paragraphs, sections } = result;
+            const chunks: string[] = [];
+            for (let i = 0; i < sections.length; i++) {
+                const sec = sections[i]!;
+                const startIdx = sec.startParagraphIndex;
+                const endIdxExclusive = i + 1 < sections.length ? sections[i + 1]!.startParagraphIndex : paragraphs.length + 1;
+                chunks.push(`===${sec.title}===`);
+                const selected: string[] = [];
+                for (let p = startIdx; p < endIdxExclusive; p++) {
+                    const para = paragraphs[p - 1]!;
+                    selected.push(para.text.trimEnd());
+                }
+                chunks.push(selected.join('\n\n'));
+            }
+            const newContent = chunks.join('\n\n');
+
+            // ONLY update the outline editor and its history; do NOT modify the node here.
+            // Persist to node is done via the Update Node button.
+            this.setOutlineContentFromAI(newContent);
+        } catch (e) {
+            console.error('Split into parts failed', e);
+            alert(`Split into parts failed: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+            if (buttonEl) {
+                const originalText = buttonEl.dataset['origText'] || '✂️ Split Into Parts';
+                buttonEl.textContent = originalText;
+                buttonEl.disabled = false;
+            }
+        }
+    }
+
     /**
      * Set visual feedback state for the update button
      */
@@ -3176,20 +3243,10 @@ export class XMLStoryModal extends SimpleModal {
      * Ensure default buttons exist
      */
     private ensureDefaultButtons(): void {
-        const sectionSplitterButtonExists = this.customButtons.some(button => button.id === 'default-section-splitter');
-        
-        if (!sectionSplitterButtonExists) {
-            const prompts = this.settingsManager.getPrompts();
-            const defaultSectionButton = {
-                id: 'default-section-splitter',
-                caption: '📄 Split into Sections',
-                prompt: prompts.split_into_sections_user
-            };
-            
-            // Add at the beginning of the array so it appears first
-            this.customButtons.unshift(defaultSectionButton);
-            console.log('Added default section splitter button');
-        }
+        // Intentionally no-op: the legacy default "Split into Sections" button is deprecated.
+        // A dedicated action is provided in the node chat sidebar.
+        // If an old default exists, remove it to avoid duplication.
+        this.customButtons = this.customButtons.filter(b => b.id !== 'default-section-splitter');
     }
 
     /**

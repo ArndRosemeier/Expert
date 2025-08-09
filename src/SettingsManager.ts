@@ -710,21 +710,12 @@ export class SettingsManager {
     }
 
     /**
-     * Get the effective language setting - project language first, then global language
-     * This is used by generation services to determine what language to use
+     * Get the effective language setting for general operations.
+     * IMPORTANT: This should return the GLOBAL language, not the active project.
+     * Project-specific language resolution must be handled by services that
+     * know the triggering node (e.g., UnifiedGenerationService.getProjectLanguageForNode).
      */
     public getLanguage(): string {
-        // Check active project first
-        const activeProject = state.getActiveProject();
-        
-        if (activeProject) {
-            const projectLanguage = activeProject.getLanguage();
-            if (projectLanguage) {
-                return projectLanguage;
-            }
-        }
-        
-        // Fallback to global language setting
         return this.globalLanguage;
     }
 

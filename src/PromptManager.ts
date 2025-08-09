@@ -87,6 +87,10 @@ export interface OrchestratorPrompts {
 
     // For converting outlines to section format
     split_into_sections_user: string;
+
+    // For text segmentation across full curated text
+    text_segmentation_system: string;
+    text_segmentation_user: string;
 }
 
 interface PromptDefinition {
@@ -1612,6 +1616,50 @@ CRITICAL REQUIREMENTS:
 Each section should have a clear, descriptive title, and the existing content should be organized under these headers without loss of detail. This enables automatic generation of child nodes from the sections.`.trim(),
         placeholders: [],
         description: "User prompt to convert an outline into the ===<title>=== section format used for algorithmic child generation."
+    }
+    ,
+    text_segmentation_system: {
+        text: `
+            You are segmenting a long text into logical sections.
+            The text is provided in full, with each paragraph prefixed by a marker of the form ==pN== (for example, ==p17==).
+
+            Split scope: {{split_scope}}
+
+            CRITICAL OUTPUT FORMAT:
+            Return ONLY a raw JSON array where each item is an object with EXACTLY these fields (no surrounding text):
+            - "start": the paragraph ID where the section starts (e.g., "p1", "p17")
+            - "title": a concise title for that section
+
+            RULES:
+            - The FIRST item MUST have start = "p1" and a non-empty title.
+            - Subsequent items mark the start of later sections. The last section implicitly ends at the end of the text.
+            - Do NOT include any other fields, explanations, or text outside the JSON array.
+            - Do NOT wrap the JSON in Markdown code fences. Do NOT add prose before or after. Reply with the JSON array only.
+
+            Example (format only):
+            [
+              { "start": "p1", "title": "Opening and Premise" },
+              { "start": "p42", "title": "Complication Escalates" },
+              { "start": "p80", "title": "Climax and Resolution" }
+            ]
+
+            Write any content strings in {{language}}. JSON field names must always remain in English.
+        `.trim(),
+        placeholders: ['split_scope', 'language'],
+        description: 'System prompt for full-text segmentation: requests a JSON array of section starts with titles; first must start at p1.'
+    },
+    text_segmentation_user: {
+        text: `
+            Full text with paragraph markers follows between the delimiters.
+            Segment it according to the split scope and return ONLY the JSON array as specified.
+            Do NOT wrap in Markdown code fences. Do NOT add any explanation. Respond with the JSON array only.
+
+            ---CURATED-START---
+            {{curated_text}}
+            ---CURATED-END---
+        `.trim(),
+        placeholders: ['curated_text'],
+        description: 'User prompt carrying the curated full text with ==pN== markers.'
     }
 };
 

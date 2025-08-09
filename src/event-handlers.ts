@@ -168,7 +168,7 @@ function showProgressModal(message: string): HTMLElement {
                 padding: 2rem;
                 border-radius: 8px;
                 text-align: center;
-                max-width: 300px;
+                max-width: 560px;
                 width: 90%;
             ">
                 <div style="margin-bottom: 1rem;">
@@ -182,7 +182,8 @@ function showProgressModal(message: string): HTMLElement {
                         margin: 0 auto;
                     "></div>
                 </div>
-                <div style="font-size: 1rem; color: #333;">${message}</div>
+                <div class="progress-message" style="font-size: 1rem; color: #333; margin-bottom: 0.75rem;">${message}</div>
+                <div class="progress-log" style="text-align: left; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:0.5rem 0.75rem; max-height:40vh; overflow:auto; font-size:0.9rem; color:#374151; white-space: pre-wrap;"></div>
             </div>
         </div>
         <style>
@@ -197,6 +198,25 @@ function showProgressModal(message: string): HTMLElement {
     modalElement.innerHTML = modalHtml;
     document.body.appendChild(modalElement);
     return modalElement;
+}
+
+function progressSetMessage(modalElement: HTMLElement, message: string): void {
+    try {
+        const el = modalElement.querySelector('.progress-message');
+        if (el) el.textContent = message;
+    } catch {}
+}
+
+function progressLog(modalElement: HTMLElement, line: string): void {
+    try {
+        const log = modalElement.querySelector('.progress-log');
+        if (log) {
+            const entry = document.createElement('div');
+            entry.textContent = line;
+            log.appendChild(entry);
+            (log as HTMLElement).scrollTop = (log as HTMLElement).scrollHeight;
+        }
+    } catch {}
 }
 
 /**
@@ -1101,7 +1121,7 @@ export async function initialize() {
             if (!file) return;
             
             try {
-                const progressModal = showProgressModal('Analyzing document structure...');
+                const progressModal = showProgressModal('Preparing import...');
                 
                 let textContent: string;
                 const fileName = file.name.toLowerCase();
@@ -1110,12 +1130,14 @@ export async function initialize() {
                 try {
                     if (isPdfFile) {
                         // Extract text from PDF
+                        progressSetMessage(progressModal, 'Extracting text from PDF...');
                         textContent = await extractTextFromPDF(file);
                         if (!textContent.trim()) {
                             throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
                         }
                     } else {
                         // Read text file
+                        progressSetMessage(progressModal, 'Reading text file...');
                         textContent = await new Promise<string>((resolve, reject) => {
                             const reader = new FileReader();
                             reader.onload = (event) => {
@@ -1128,57 +1150,45 @@ export async function initialize() {
                         });
                     }
                     
-                    // Use DocumentImportService to parse the document
-                    const { DocumentImportService } = await import('./DocumentImportService');
-                    const importService = new DocumentImportService({
-                        detection: { 
-                            minimumConfidence: 0.1,
-                            enableHeaderDetection: true,
-                            enableNumberingDetection: true,
-                            enableKeywordDetection: true,
-                            enableIndentationDetection: true,
-                            enableFormattingDetection: true,
-                            maxContentLength: 10000
-                        }
-                    });
-                    
-                    const parsedDocument = importService.parseDocument(textContent, file.name);
-                    
+                    // Ask user to pick a template
                     closeProgressModal(progressModal);
-                    
-                    // Show import preview with confidence warning if low
-                    let confirmMessage = `📄 Hierarchical Document Import\n\n` +
-                        `Document: "${file.name}"\n` +
-                        `Format: ${parsedDocument.format.toUpperCase()}\n` +
-                        `Detected: ${parsedDocument.hierarchy.length} top-level sections\n` +
-                        `Confidence: ${(parsedDocument.totalConfidence * 100).toFixed(1)}%\n` +
-                        `Words: ${parsedDocument.metadata.wordCount}\n`;
-                    
-                    if (parsedDocument.totalConfidence < 0.3) {
-                        confirmMessage += `\n⚠️ Low confidence detection. The structure may not be accurate.\n`;
+                    const template = await showTemplateSelector();
+                    if (!template) return;
+
+                    // Run hierarchical segmentation using the selected template
+                    const openRouterClient = state.getOpenRouterClient()!;
+                    const settingsManager = state.getSettingsManager()!;
+                    const { HierarchicalImportService } = await import('./services/HierarchicalImportService');
+                    const importer = new HierarchicalImportService(openRouterClient, settingsManager);
+
+                    const runModal = showProgressModal('Segmenting document by template...');
+                    try {
+                        progressLog(runModal, `Finding ${(template.hierarchyLevels[1] || 'parts').toLowerCase()} in ${file.name}...`);
+                        const spans = await importer.segmentByTemplate(textContent, template, {
+                            splitStart: (level, parentTitle) => progressLog(runModal, `Finding ${level.toLowerCase()} in "${parentTitle}"...`),
+                            splitDone: (level, parentTitle, count) => progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`)
+                        });
+                        progressLog(runModal, `Found ${spans.length} ${(template.hierarchyLevels[1] || 'parts').toLowerCase()} at top level.`);
+                        progressSetMessage(runModal, 'Building project...');
+
+                        // Build the project: create tree, assign scene contents, summarize chapters and root
+                        const projectTitle = file.name.replace(/\.[^/.]+$/, '');
+                        const project = await buildProjectFromSpans(projectTitle, template, textContent, spans, {
+                            summarizeStart: (title: string, n: number) => progressLog(runModal, `Summarizing ${title} from ${n} children...`),
+                            summarizeDone: (title: string) => progressLog(runModal, `Summarized ${title}.`)
+                        }, importer);
+                        closeProgressModal(runModal);
+
+                        // Add to state and initialize UI
+                        state.addProject(project);
+                        state.setActiveProject(project.rootNode.id);
+                        recreateAndReconfigureServices();
+                        await project.saveToStorage();
+                        await initializeProjectUI(project);
+                    } catch (err) {
+                        closeProgressModal(runModal);
+                        throw err;
                     }
-                    
-                    confirmMessage += `\nCreate project from this structure?`;
-                    
-                    const confirmImport = confirm(confirmMessage);
-                    
-                    if (!confirmImport) {
-                        return;
-                    }
-                    
-                    // Convert hierarchy to project structure
-                    const projectTitle = parsedDocument.metadata.title || file.name.replace(/\.[^/.]+$/, '');
-                    const hierarchyLevels = extractHierarchyLevels(parsedDocument.hierarchy);
-                    
-                    // Create template from detected hierarchy
-                    const template = new ProjectTemplate(
-                        `Imported from ${file.name}`,
-                        hierarchyLevels,
-                        []
-                    );
-                    
-                    // Create project with proper hierarchical structure
-                    await createHierarchicalProject(projectTitle, template, parsedDocument.hierarchy, file.name, parsedDocument.totalConfidence);
                     
                 } catch (error) {
                     // Always close progress modal on any error
@@ -1198,94 +1208,115 @@ export async function initialize() {
         document.body.removeChild(fileInput);
     }
 
-    // Function to create project with proper hierarchical structure from DocumentImportService
-    async function createHierarchicalProject(projectTitle: string, template: ProjectTemplate, hierarchyNodes: any[], fileName: string, confidence: number): Promise<void> {
-        const orchestrator = state.getOrchestrator();
-        const settingsManager = state.getSettingsManager();
-        const client = state.getOpenRouterClient();
+    // (legacy createHierarchicalProject removed)
 
-        if (!orchestrator || !settingsManager || !client) {
-            throw new Error('Core services not initialized. Cannot create hierarchical project.');
-        }
+    async function showTemplateSelector(): Promise<ProjectTemplate | null> {
+                    const stateModule = await import('./state');
+                    const tm = stateModule.getTemplateManager();
+                    const names = tm ? tm.getTemplateNames().sort() : [];
 
-        // Create the project
+        return new Promise<ProjectTemplate | null>((resolve) => {
+            const backdrop = document.createElement('div');
+            backdrop.style.cssText = `position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;`;
+
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `background: white; border-radius: 12px; padding: 1rem; width: min(90vw, 520px); max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);`;
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 0.75rem 0;">Select Template</h3>
+                <div style="display: grid; gap: 0.5rem;">
+                    ${names.map(name => `<button data-name="${name}" style="text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; cursor: pointer;">${name}</button>`).join('')}
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
+                    <button id="tpl-cancel" style="padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer;">Cancel</button>
+                </div>
+            `;
+
+            backdrop.appendChild(dialog);
+            document.body.appendChild(backdrop);
+
+            const onCancel = () => {
+                cleanup();
+                resolve(null);
+            };
+            const cleanup = () => {
+                document.body.removeChild(backdrop);
+            };
+
+            dialog.querySelectorAll('button[data-name]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const name = (btn as HTMLButtonElement).dataset['name']!;
+                    const tpl = tm?.getTemplate(name) || null;
+                    cleanup();
+                    resolve(tpl);
+                });
+            });
+            dialog.querySelector('#tpl-cancel')?.addEventListener('click', onCancel);
+            backdrop.addEventListener('click', (e) => { if (e.target === backdrop) onCancel(); });
+        });
+    }
+
+    async function buildProjectFromSpans(
+        projectTitle: string,
+        template: ProjectTemplate,
+        fullText: string,
+        spans: any[],
+        hooks: { summarizeStart?: (title: string, n: number) => void; summarizeDone?: (title: string) => void } | undefined,
+        importer: { summarizeChildrenToParent: (childrenTexts: string[]) => Promise<string> }
+    ): Promise<ProjectManager> {
+        const orchestrator = state.getOrchestrator()!;
+        const settingsManager = state.getSettingsManager()!;
+        const client = state.getOpenRouterClient()!;
         const project = new ProjectManager(projectTitle, template, orchestrator, settingsManager, client);
-        
-        // Set the project language to match current language setting
-        try {
-            const currentLanguage = settingsManager.getLanguage();
-            project.setLanguage(currentLanguage);
-            console.log(`🌐 Imported project language set to: ${currentLanguage}`);
-        } catch (error) {
-            console.warn('Could not set imported project language:', error);
-        }
-        
-        // Ensure all nodes share the same template reference
         AssertFlatTemplateCopy(project);
 
-        // Set root node title and add metadata about the import
-        const rootNode = project.rootNode;
-        rootNode.setTitle(projectTitle, 'master');
-        
-        // Add import metadata to root node
-        const rootMasterVersion = rootNode.getMasterVersion();
-        if (rootMasterVersion) {
-            rootMasterVersion.metadata = rootMasterVersion.metadata || {};
-            rootMasterVersion.metadata['importSource'] = fileName;
-            rootMasterVersion.metadata['detectionConfidence'] = confidence;
-            rootMasterVersion.metadata['importType'] = 'hierarchical';
-            rootMasterVersion.metadata['importTimestamp'] = new Date().toISOString();
+        const root = project.rootNode;
+        root.setTitle(projectTitle, 'master');
+
+        // Recursively build nodes from spans (handles any depth)
+        async function buildChildren(parentId: string, nodeSpans: Array<{ title: string; startChar: number; endChar: number; children?: any[] }>): Promise<string[]> {
+            const contents: string[] = [];
+            for (let i = 0; i < nodeSpans.length; i++) {
+                const span = nodeSpans[i]!;
+                const node = project.addNode(span.title, parentId);
+
+                let nodeContent = '';
+                if (span.children && span.children.length > 0) {
+                    // Build grandchildren first, then summarize
+                    const childContents = await buildChildren(node.id, span.children);
+                    if (childContents.length > 0) {
+                        hooks?.summarizeStart?.(span.title, childContents.length);
+                        nodeContent = await importer.summarizeChildrenToParent(childContents);
+                        node.setContent(nodeContent, 'master');
+                        hooks?.summarizeDone?.(span.title);
+                    } else {
+                        // Fallback to original text slice
+                        nodeContent = fullText.slice(span.startChar, span.endChar).trim();
+                        node.setContent(nodeContent, 'master');
+                    }
+                } else {
+                    // Leaf: assign exact text slice
+                    nodeContent = fullText.slice(span.startChar, span.endChar).trim();
+                    node.setContent(nodeContent, 'master');
+                }
+                contents.push(nodeContent);
+            }
+            return contents;
         }
 
-        // Recursively create nodes from hierarchy
-        await createNodesFromHierarchy(project, rootNode.id, hierarchyNodes);
+        const topContents = await buildChildren(root.id, spans);
 
-        // Add to state and save
-        state.addProject(project);
-        
-        // Set the new project as active and select its root node
-        state.setActiveProject(project.rootNode.id);
-        
-        // Recreate and configure services for the new project
-        recreateAndReconfigureServices();
-        
-        // Save to storage
-        await project.saveToStorage();
-        
-        // Initialize the project UI
-        await initializeProjectUI(project);
-        
-        console.log(`✅ Hierarchical project "${projectTitle}" created successfully with ${hierarchyNodes.length} top-level sections`);
-    }
-
-    // Helper function to recursively create DocumentNode instances from hierarchy
-    async function createNodesFromHierarchy(project: ProjectManager, parentId: string | null, hierarchyNodes: any[]): Promise<void> {
-        for (const hierarchyNode of hierarchyNodes) {
-            // Create the node using ProjectManager's addNode method
-            const documentNode = project.addNode(hierarchyNode.title, parentId);
-            
-            // Set the content for this node
-            if (hierarchyNode.content && hierarchyNode.content.trim()) {
-                documentNode.setContent(hierarchyNode.content.trim(), 'master');
-            }
-            
-            // Add detection metadata
-            const masterVersion = documentNode.getMasterVersion();
-            if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
-                masterVersion.metadata['detectionMethod'] = hierarchyNode.detectionMethod;
-                masterVersion.metadata['detectionConfidence'] = hierarchyNode.confidence;
-                masterVersion.metadata['hierarchyLevel'] = hierarchyNode.level;
-                masterVersion.metadata['startPosition'] = hierarchyNode.startPosition;
-                masterVersion.metadata['endPosition'] = hierarchyNode.endPosition;
-            }
-            
-            // Recursively create children
-            if (hierarchyNode.children && hierarchyNode.children.length > 0) {
-                await createNodesFromHierarchy(project, documentNode.id, hierarchyNode.children);
-            }
+        // Summarize root from immediate children contents
+        if (topContents.length > 0) {
+            hooks?.summarizeStart?.(projectTitle, topContents.length);
+            const rootContent = await importer.summarizeChildrenToParent(topContents);
+            root.setContent(rootContent, 'master');
+            hooks?.summarizeDone?.(projectTitle);
         }
+
+        return project;
     }
+
+    // (legacy createNodesFromHierarchy removed)
 
     // Helper function to handle text import with AI analysis (extracted from original function)
     async function handleTextImportWithAI(textContent: string, fileName: string): Promise<void> {
@@ -1347,36 +1378,7 @@ export async function initialize() {
         }
     }
 
-    // Helper function to extract hierarchy levels for template creation
-    function extractHierarchyLevels(hierarchyNodes: any[]): string[] {
-        const levels = new Set<number>();
-        
-        function collectLevels(nodes: any[]): void {
-            for (const node of nodes) {
-                levels.add(node.level);
-                if (node.children && node.children.length > 0) {
-                    collectLevels(node.children);
-                }
-            }
-        }
-        
-        collectLevels(hierarchyNodes);
-        
-        const sortedLevels = Array.from(levels).sort((a, b) => a - b);
-        const levelNames: string[] = [];
-        
-        for (let i = 0; i < sortedLevels.length; i++) {
-            switch (i) {
-                case 0: levelNames.push('Book'); break;
-                case 1: levelNames.push('Chapter'); break;
-                case 2: levelNames.push('Section'); break;
-                case 3: levelNames.push('Subsection'); break;
-                default: levelNames.push(`Level ${i + 1}`); break;
-            }
-        }
-        
-        return levelNames.length > 0 ? levelNames : ['Document', 'Section'];
-    }
+    // (legacy extractHierarchyLevels removed)
     
     try {
     getElementById('manageTemplatesBtn').addEventListener('click', openTemplateEditor);

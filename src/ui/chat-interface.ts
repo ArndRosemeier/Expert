@@ -159,6 +159,7 @@ export class ChatInterface {
                         " onmouseover="this.style.backgroundColor='#5a6268'" onmouseout="this.style.backgroundColor='#6c757d'">
                             📋 Copy Conversation
                         </button>
+                        
                         ${this.customSystemPrompt ? `
                         <div style="
                             border-top: 1px solid #444;
@@ -568,6 +569,14 @@ export class ChatInterface {
         if (copyConversationButton) {
             copyConversationButton.addEventListener('click', () => {
                 this.copyConversationToClipboard();
+            });
+        }
+
+        // Split into parts button
+        const splitButton = this.chatContainer?.querySelector('#split-into-parts-btn');
+        if (splitButton) {
+            splitButton.addEventListener('click', () => {
+                void this.splitCurrentNodeIntoParts();
             });
         }
 
@@ -1498,5 +1507,64 @@ For each suggestion, provide clear justification for why the change would improv
                 }
             });
         });
+    }
+
+    private async splitCurrentNodeIntoParts(): Promise<void> {
+        try {
+            if (!this.nodeStructure) {
+                alert('No node context available for splitting.');
+                return;
+            }
+
+            const stateModule = await import('../state');
+            const activeProject = stateModule.getActiveProject();
+            if (!activeProject) throw new Error('No active project');
+
+            const module = await import('../services/TextSegmentationService');
+            const svc = module.TextSegmentationService.getInstance();
+
+            const original = this.nodeStructure.content || '';
+            if (!original.trim()) {
+                alert('Current node has no content to split.');
+                return;
+            }
+
+            // Perform segmentation with generic scope "parts"
+            const result = await svc.segmentByParagraphMarkers(original, {
+                granularity: 'custom',
+                language: this.settingsManager.getLanguage() || 'English',
+                purpose: 'editor'
+            });
+
+            const { paragraphs, sections } = result;
+            const chunks: string[] = [];
+
+            for (let i = 0; i < sections.length; i++) {
+                const sec = sections[i]!;
+                const startIdx = sec.startParagraphIndex; // 1-based
+                const endIdxExclusive = i + 1 < sections.length ? sections[i + 1]!.startParagraphIndex : paragraphs.length + 1;
+
+                // Add section header line
+                chunks.push(`===${sec.title}===`);
+
+                // Append the original paragraphs for this section, preserving separation
+                const selected: string[] = [];
+                for (let p = startIdx; p < endIdxExclusive; p++) {
+                    const para = paragraphs[p - 1]!;
+                    selected.push(para.text.trimEnd());
+                }
+                chunks.push(selected.join('\n\n'));
+            }
+
+            const newContent = chunks.join('\n\n');
+
+            this.nodeStructure.setContent(newContent, 'segmented');
+            await activeProject.saveToStorage();
+
+            alert('Content split into parts successfully.');
+        } catch (err) {
+            console.error('Split into parts failed:', err);
+            alert(`Split into parts failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 } 
