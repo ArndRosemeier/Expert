@@ -2981,8 +2981,9 @@ export class XMLStoryModal extends SimpleModal {
         const button = document.getElementById('create-project-btn');
         if (!button || !this.sourceNode) return;
         
-        const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
-        button.innerHTML = `🚀 Update ${templateLevel}`;
+        const rawLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
+        const levelName = this.getBaseLevelName(rawLevel);
+        button.innerHTML = `🚀 Update ${levelName}`;
     }
 
     /**
@@ -2992,7 +2993,8 @@ export class XMLStoryModal extends SimpleModal {
         const messageElement = document.getElementById('initial-chat-message');
         if (!messageElement || !this.sourceNode) return;
         
-        const templateLevel = this.sourceNode.template[this.sourceNode.level] || 'content';
+        const rawLevel = this.sourceNode.template[this.sourceNode.level] || 'content';
+        const templateLevel = this.getBaseLevelName(rawLevel);
         const title = this.titleInput?.value || this.sourceNode.title || 'this content';
         
         messageElement.innerHTML = `
@@ -3007,6 +3009,16 @@ export class XMLStoryModal extends SimpleModal {
             
             The current content and context are loaded in the editor on the right. What would you like to work on?
         `;
+    }
+
+    /**
+     * Extract base template level name without fixed-count suffix
+     * Examples: "Act 3" -> "Act", "Chapter 10" -> "Chapter", "Book" -> "Book"
+     */
+    private getBaseLevelName(raw: string): string {
+        if (!raw) return 'node';
+        // Remove trailing number token and surrounding spaces
+        return raw.replace(/\s+\d+\s*$/, '').trim();
     }
 
     /**
