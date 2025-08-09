@@ -133,16 +133,29 @@ export class NodeCreationService implements INodeCreationService {
 
         // Update parent content if requested
         if (updateParent && parentNode.content) {
-            let updatedParentContent = parentNode.content;
-            
+            const parentText = parentNode.content.trim();
+            const usesSectionMarkers = /(\n|^)\s*===.+?===\s*(\n|$)/.test(parentText);
+
+            let appended: string;
             if (draft) {
-                // Simply append the draft content as a new paragraph
-                updatedParentContent = parentNode.content.trim() + '\n\n' + draft.trim();
+                if (usesSectionMarkers) {
+                    const sectionTitle = `===${title.trim()}===`;
+                    appended = `${sectionTitle}\n\n${draft.trim()}`;
+                } else {
+                    appended = draft.trim();
+                }
             } else {
-                // If no draft, just append a simple reference to the new child
-                updatedParentContent = parentNode.content.trim() + '\n\n' + `The next section, "${title}", will be developed further.`;
+                const placeholder = `The next section, "${title}", will be developed further.`;
+                if (usesSectionMarkers) {
+                    const sectionTitle = `===${title.trim()}===`;
+                    appended = `${sectionTitle}\n\n${placeholder}`;
+                } else {
+                    appended = placeholder;
+                }
             }
-            
+
+            const updatedParentContent = `${parentText}\n\n${appended}`;
+
             // Use version management system to update parent content
             parentNode.setContent(updatedParentContent, 'master');
         }
