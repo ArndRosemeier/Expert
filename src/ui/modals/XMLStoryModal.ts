@@ -2577,13 +2577,13 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     private async splitSourceNodeIntoParts(buttonEl?: HTMLButtonElement): Promise<void> {
-        if (!this.sourceNode) {
-            alert('No source node available');
+        if (!this.outlineEditor) {
+            alert('Outline editor not initialized.');
             return;
         }
-        const original = this.sourceNode.content || '';
-        if (!original.trim()) {
-            alert('Source node has no content to split.');
+        const current = this.getCurrentOutlineContent();
+        if (!current.trim()) {
+            alert('Outline editor has no content to split.');
             return;
         }
         try {
@@ -2598,9 +2598,9 @@ export class XMLStoryModal extends SimpleModal {
             const module = await import('../../services/TextSegmentationService');
             const svc = module.TextSegmentationService.getInstance();
             const settingsManager = this.settingsManager;
-            const result = await svc.segmentByParagraphMarkers(original, {
+            const result = await svc.segmentByParagraphMarkers(current, {
                 granularity: 'custom',
-                language: settingsManager.getLanguage() || 'English',
+                language: (typeof settingsManager.getGlobalLanguage === 'function' ? settingsManager.getGlobalLanguage() : settingsManager.getLanguage()) || 'English',
                 purpose: 'editor'
             });
             const { paragraphs, sections } = result;

@@ -328,7 +328,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
     content_generation_user: {
         text: `
-            Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            Generate content in {{language}}.
             
             You are writing the content for the node at the following path: "{{path}}".
 
@@ -353,13 +353,14 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
     branch_content_generation_user: {
         text: `
-            Generate outline in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            Generate outline in {{language}}.
             
             You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
             This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
 
-            This content should be a detailed prose outline or comprehensive summary that thoroughly describes what will logically follow. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. 
-            Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use bullet points, markdown formatting, or section headers.
+            This content should be a detailed prose outline. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. 
+            Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use lists or other structural elements, the outline has to be flowing text.
+            Ignore style contexts, they are not for outlining. Outline will never be told in first person, it is always in omniscient third person.
 
             Here is the context of the document so far:
             ---
