@@ -97,6 +97,54 @@ export class XMLStoryModal extends SimpleModal {
     private outlineEditor: UniversalTextEditor | null = null;
     private outlineHistory: Array<{content: string, timestamp: Date, source: 'user' | 'ai'}> = [];
     private currentOutlineVersion = -1;
+    private async handleCloseWithSaveChoices(): Promise<void> {
+        const hasChanges = this.hasUnsavedChanges();
+        if (!hasChanges) {
+            await this.close();
+            return;
+        }
+        const { showGenericModal } = await import('./index');
+        return new Promise<void>((resolve) => {
+            showGenericModal(
+                {
+                    content: 'You have unsaved changes. What would you like to do?',
+                    actions: [
+                        {
+                            id: 'save',
+                            label: 'Close and Save Changes',
+                            type: 'primary',
+                            handler: async () => {
+                                // Trigger the existing update logic then close
+                                await this.updateSourceNode();
+                                await this.close();
+                                resolve();
+                            }
+                        },
+                        {
+                            id: 'discard',
+                            label: 'Close Without Saving',
+                            type: 'danger',
+                            handler: async () => {
+                                await this.close();
+                                resolve();
+                            }
+                        },
+                        {
+                            id: 'cancel',
+                            label: 'Cancel',
+                            type: 'outline',
+                            handler: async () => {
+                                // Do nothing, just close this confirmation modal
+                                resolve();
+                            }
+                        }
+                    ]
+                },
+                { title: 'Unsaved Changes', maxWidth: '420px' }
+            );
+            // Default focus on primary button is handled by the browser; nothing else needed
+        });
+    }
     
     // Initialization data to apply after modal opens
     private pendingInitializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode} | undefined;
@@ -1189,37 +1237,14 @@ export class XMLStoryModal extends SimpleModal {
         if (!splitBtn) throw new Error('Split Into Parts button missing');
         splitBtn.addEventListener('click', () => { void this.splitSourceNodeIntoParts(splitBtn); });
 
-        // Close modal button with unsaved changes check
+        // Close modal button with unsaved changes check (3 options)
         const closeBtn = container.querySelector('#close-modal-btn');
-        closeBtn?.addEventListener('click', () => {
-            // Check for unsaved changes before closing
-            const hasChanges = this.hasUnsavedChanges();
-            
-            // Check for unsaved changes before closing
-            if (hasChanges) {
-                const confirmed = confirm(
-                    'You have unsaved changes. Are you sure you want to close without updating the source node?'
-                );
-                if (!confirmed) {
-                    return; // Don't close the modal
-                }
-            }
-            void this.close();
-        });
+        closeBtn?.addEventListener('click', () => { void this.handleCloseWithSaveChoices(); });
         
         // Setup custom ESC key handler with unsaved changes check
         const escapeHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                // Check for unsaved changes before closing
-                if (this.hasUnsavedChanges()) {
-                    const confirmed = confirm(
-                        'You have unsaved changes. Are you sure you want to close without updating the source node?'
-                    );
-                    if (!confirmed) {
-                        return; // Don't close the modal
-                    }
-                }
-                void this.close();
+                void this.handleCloseWithSaveChoices();
             }
         };
         document.addEventListener('keydown', escapeHandler);
