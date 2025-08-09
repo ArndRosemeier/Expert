@@ -226,6 +226,9 @@ export class AddChildNodeModal extends BaseModal {
     private createAIMode(): HTMLElement {
         const container = createElement('div', { classes: ['ai-mode'] });
 
+        // Direction controls (always visible in AI mode)
+        container.appendChild(this.createDirectionInput());
+
         if (this.childModalState.isGenerating) {
             container.appendChild(this.createLoadingState());
         } else if (this.childModalState.error) {
@@ -233,7 +236,7 @@ export class AddChildNodeModal extends BaseModal {
         } else if (this.childModalState.suggestions.length > 0) {
             container.appendChild(this.createSuggestionsView());
         } else {
-            // Initial state - show empty state with generate button
+            // Initial state - show empty state with generate button (without direction input here)
             container.appendChild(this.createEmptyAIState());
         }
 
@@ -355,37 +358,8 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         const description = createElement('div', {
-            content: 'Optionally provide direction for the AI suggestions, then click generate.',
+            content: 'Optionally provide direction above, then click generate.',
             attributes: { style: 'font-size: 14px; color: #666; margin-bottom: 16px; line-height: 1.4;' }
-        });
-
-        // User direction input area
-        const directionLabel = createElement('label', {
-            content: 'Direction (optional):',
-            attributes: { style: 'display: block; font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; text-align: left;' }
-        });
-
-        const directionTextarea = createElement('textarea', {
-            attributes: { 
-                placeholder: 'e.g., "Focus on character development", "Include a conflict scene", "Explore the theme of redemption"...',
-                style: 'width: 100%; height: 80px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; margin-bottom: 16px; box-sizing: border-box;'
-            }
-        }) as HTMLTextAreaElement;
-
-        // Update state when user types
-        directionTextarea.addEventListener('input', () => {
-            this.childModalState.userDirection = directionTextarea.value;
-        });
-
-        // Set initial value
-        directionTextarea.value = this.childModalState.userDirection;
-
-        // Focus styling
-        directionTextarea.addEventListener('focus', () => {
-            directionTextarea.style.borderColor = '#4CAF50';
-        });
-        directionTextarea.addEventListener('blur', () => {
-            directionTextarea.style.borderColor = '#e0e0e0';
         });
 
         const generateButton = createElement('button', {
@@ -410,11 +384,44 @@ export class AddChildNodeModal extends BaseModal {
         container.appendChild(icon);
         container.appendChild(title);
         container.appendChild(description);
-        container.appendChild(directionLabel);
-        container.appendChild(directionTextarea);
         container.appendChild(generateButton);
 
         return container;
+    }
+
+    private createDirectionInput(): HTMLElement {
+        const wrapper = createElement('div', {
+            attributes: { style: 'margin-bottom: 16px; text-align: left;' }
+        });
+
+        const directionLabel = createElement('label', {
+            content: 'Direction (optional):',
+            attributes: { style: 'display: block; font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px;' }
+        });
+
+        const directionTextarea = createElement('textarea', {
+            attributes: {
+                placeholder: 'e.g., "Focus on character development", "Include a conflict scene", "Explore the theme of redemption"...',
+                style: 'width: 100%; min-height: 6rem; padding: 0.75rem; border: 0.125rem solid #e0e0e0; border-radius: 0.375rem; font-size: 0.875rem; font-family: inherit; resize: vertical; box-sizing: border-box;'
+            }
+        }) as HTMLTextAreaElement;
+
+        directionTextarea.addEventListener('input', () => {
+            this.childModalState.userDirection = directionTextarea.value;
+        });
+
+        directionTextarea.value = this.childModalState.userDirection;
+
+        directionTextarea.addEventListener('focus', () => {
+            directionTextarea.style.borderColor = '#4CAF50';
+        });
+        directionTextarea.addEventListener('blur', () => {
+            directionTextarea.style.borderColor = '#e0e0e0';
+        });
+
+        wrapper.appendChild(directionLabel);
+        wrapper.appendChild(directionTextarea);
+        return wrapper;
     }
 
     private createLoadingState(): HTMLElement {
