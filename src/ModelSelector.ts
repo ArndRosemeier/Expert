@@ -1696,15 +1696,33 @@ export class ModelSelector {
     return this.modelEndpoints[modelId]!; // Crash if endpoints not loaded!
   }
 
-  // Determine if a model supports thinking either at model level or via any provider endpoint
+  // Determine if a model supports reasoning/thinking either at model level or via any provider endpoint
   private hasThinkingSupport(modelId: string, selectedProviderSlug?: string): boolean {
     const model = this.models.find(m => m.id === modelId);
     if (!model) return false;
-    if (Array.isArray(model.supported_parameters) && model.supported_parameters.includes('thinking')) {
+    
+    // Debug logging for troubleshooting
+    if (modelId.includes('o3-mini') || modelId.includes('gemini') || modelId.includes('claude')) {
+      console.log(`[DEBUG] Model ${modelId} supported_parameters:`, model.supported_parameters);
+    }
+    
+    // Check if model supports reasoning parameter (the actual OpenRouter parameter)
+    if (Array.isArray(model.supported_parameters) && 
+        (model.supported_parameters.includes('reasoning') || model.supported_parameters.includes('thinking'))) {
       return true;
     }
+    
     const endpoints = this.getProvidersForModel(modelId) || [];
     if (endpoints.length === 0) return false;
+    
+    // Debug logging for troubleshooting endpoints
+    if (modelId.includes('o3-mini') || modelId.includes('gemini') || modelId.includes('claude')) {
+      console.log(`[DEBUG] Model ${modelId} endpoints:`, endpoints.map(ep => ({
+        name: ep.provider_name || ep.name,
+        supported_parameters: ep.supported_parameters
+      })));
+    }
+    
     // If a specific provider is selected, check it first
     if (selectedProviderSlug) {
       const endpoint = endpoints.find(ep => {
@@ -1712,12 +1730,15 @@ export class ModelSelector {
         const slug = this.getProviderSlug(providerDisplayName);
         return slug === selectedProviderSlug || selectedProviderSlug.startsWith(slug + '-');
       });
-      if (endpoint && Array.isArray(endpoint.supported_parameters) && endpoint.supported_parameters.includes('thinking')) {
+      if (endpoint && Array.isArray(endpoint.supported_parameters) && 
+          (endpoint.supported_parameters.includes('reasoning') || endpoint.supported_parameters.includes('thinking'))) {
         return true;
       }
     }
-    // Otherwise, if any endpoint announces thinking support, enable it
-    return endpoints.some(ep => Array.isArray(ep.supported_parameters) && ep.supported_parameters.includes('thinking'));
+    
+    // Otherwise, if any endpoint announces reasoning/thinking support, enable it
+    return endpoints.some(ep => Array.isArray(ep.supported_parameters) && 
+                              (ep.supported_parameters.includes('reasoning') || ep.supported_parameters.includes('thinking')));
   }
 
   /**
