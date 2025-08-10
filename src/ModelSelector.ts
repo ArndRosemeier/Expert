@@ -920,86 +920,75 @@ export class ModelSelector {
           }
         ));
 
-        // Thinking controls (detect support from model or any provider endpoint)
-        const thinkingEnabled = this.hasThinkingSupport(validModel.id, this.selectedProviders[purpose.key]);
-        const thinkWrap = document.createElement('div');
-        thinkWrap.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; grid-column: 1 / -1;';
+        // Unified reasoning/thinking controls (model-agnostic and future-proof)
+        const reasoningSupport = this.getReasoningSupport(validModel.id, this.selectedProviders[purpose.key]);
+        if (reasoningSupport.supported) {
+          const reasoningWrap = document.createElement('div');
+          reasoningWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.75rem; grid-column: 1 / -1; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; margin-top: 0.5rem;';
+          
+          // Header with enable checkbox
+          const headerWrap = document.createElement('label');
+          headerWrap.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; cursor: pointer;';
+          const enableCheck = document.createElement('input');
+          enableCheck.type = 'checkbox';
+          enableCheck.checked = !!(params.thinking?.enabled || params.reasoning?.effort || params.reasoning?.budget_tokens);
+          enableCheck.style.cssText = 'width: 16px; height: 16px;';
+          
+          const headerLabel = document.createElement('span');
+          headerLabel.textContent = 'Enable Advanced Reasoning';
+          headerLabel.style.cssText = 'font-weight: 600; font-size: 0.9rem; color: #1f2937;';
+          
+          headerWrap.appendChild(enableCheck);
+          headerWrap.appendChild(headerLabel);
+          reasoningWrap.appendChild(headerWrap);
+          
+          // Description text
+          const helpText = document.createElement('div');
+          helpText.textContent = reasoningSupport.description;
+          helpText.style.cssText = 'font-size: 0.8rem; color: #6b7280; margin-top: -0.25rem; line-height: 1.4;';
+          reasoningWrap.appendChild(helpText);
 
-        const thinkToggleWrap = document.createElement('label');
-        thinkToggleWrap.style.cssText = 'display: flex; align-items: center; gap: 0.5rem;';
-        const thinkCheckbox = document.createElement('input');
-        thinkCheckbox.type = 'checkbox';
-        thinkCheckbox.checked = !!(params.thinking?.enabled);
-        thinkCheckbox.disabled = !thinkingEnabled;
-        thinkCheckbox.style.cssText = 'width: 16px; height: 16px;';
-        const thinkLabel = document.createElement('span');
-        thinkLabel.textContent = 'Enable thinking';
-        thinkLabel.style.cssText = 'font-size: 0.9rem; color: #374151;';
-        thinkToggleWrap.appendChild(thinkCheckbox);
-        thinkToggleWrap.appendChild(thinkLabel);
-
-        const budgetWrap = createLabeledNumber(
-          'Thinking budget (tokens)',
-          params.thinking?.budget_tokens,
-          256,
-          200000,
-          1,
-          'e.g., 4096',
-          thinkingEnabled && !!(params.thinking?.enabled),
-          (val) => {
-            params.thinking = params.thinking || {};
-            if (val === undefined) {
-              delete params.thinking.budget_tokens;
+          // Controls container (shown when enabled)
+          const controlsWrap = document.createElement('div');
+          controlsWrap.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem;';
+          
+          // Create appropriate controls based on model support
+          this.createReasoningControls(controlsWrap, reasoningSupport, params, purpose.key, enableCheck);
+          
+          reasoningWrap.appendChild(controlsWrap);
+          
+          // Update controls visibility when checkbox changes
+          const updateControlsVisibility = () => {
+            controlsWrap.style.opacity = enableCheck.checked ? '1' : '0.5';
+            controlsWrap.style.pointerEvents = enableCheck.checked ? 'auto' : 'none';
+            Array.from(controlsWrap.querySelectorAll('input, select')).forEach((el: Element) => {
+              (el as HTMLInputElement | HTMLSelectElement).disabled = !enableCheck.checked;
+            });
+          };
+          
+          enableCheck.addEventListener('change', async () => {
+            if (!enableCheck.checked) {
+              // Clear all reasoning-related params
+              delete params.thinking;
+              delete params.reasoning;
             } else {
-              params.thinking.budget_tokens = val;
+              // Initialize based on model support
+              if (reasoningSupport.supportsEffort && !reasoningSupport.supportsTokens) {
+                params.reasoning = { effort: 'medium' };
+              } else if (reasoningSupport.supportsTokens && !reasoningSupport.supportsEffort) {
+                params.thinking = { enabled: true, budget_tokens: 2048 };
+              } else {
+                // Both supported, default to effort-based
+                params.reasoning = { effort: 'medium' };
+              }
             }
-          }
-        );
-
-        thinkCheckbox.addEventListener('change', async () => {
-          params.thinking = params.thinking || {};
-          params.thinking.enabled = thinkCheckbox.checked;
-          await this.setSelectedParams(purpose.key, params);
-          this.update();
-        });
-
-        thinkWrap.appendChild(thinkToggleWrap);
-        thinkWrap.appendChild(budgetWrap);
-
-        paramsContainer.appendChild(thinkWrap);
-
-        // Reasoning effort (if thinking enabled)
-        const effortWrap = document.createElement('label');
-        effortWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;';
-        const effortLab = document.createElement('span');
-        effortLab.textContent = 'Reasoning effort';
-        effortLab.style.cssText = 'font-size: 0.85rem; color: #374151;';
-        const effortSelect = document.createElement('select');
-        effortSelect.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
-        ;['','low','medium','high'].forEach(v => {
-          const o = document.createElement('option');
-          o.value = v as string;
-          o.textContent = v === '' ? 'Default' : v;
-          effortSelect.appendChild(o);
-        });
-        effortSelect.value = (params.reasoning && params.reasoning.effort) ? params.reasoning.effort : '';
-        effortSelect.disabled = !thinkingEnabled || !thinkCheckbox.checked;
-        effortSelect.addEventListener('change', async () => {
-          const v = effortSelect.value as '' | 'low' | 'medium' | 'high';
-          if (v === '') {
-            if (params.reasoning) delete params.reasoning.effort;
-          } else {
-            params.reasoning = params.reasoning || {};
-            params.reasoning.effort = v;
-          }
-          await this.setSelectedParams(purpose.key, params);
-        });
-        thinkCheckbox.addEventListener('change', () => {
-          effortSelect.disabled = !thinkingEnabled || !thinkCheckbox.checked;
-        });
-        effortWrap.appendChild(effortLab);
-        effortWrap.appendChild(effortSelect);
-        paramsContainer.appendChild(effortWrap);
+            updateControlsVisibility();
+            await this.setSelectedParams(purpose.key, params);
+          });
+          
+          updateControlsVisibility(); // Initial state
+          paramsContainer.appendChild(reasoningWrap);
+        }
 
         section.appendChild(paramsContainer);
       }
@@ -1711,49 +1700,178 @@ export class ModelSelector {
     return this.modelEndpoints[modelId]!; // Crash if endpoints not loaded!
   }
 
-  // Determine if a model supports reasoning/thinking either at model level or via any provider endpoint
-  private hasThinkingSupport(modelId: string, selectedProviderSlug?: string): boolean {
+
+
+  // Get comprehensive reasoning support information for a model
+  private getReasoningSupport(modelId: string, _selectedProviderSlug?: string): {
+    supported: boolean;
+    supportsEffort: boolean;
+    supportsTokens: boolean;
+    description: string;
+  } {
     const model = this.models.find(m => m.id === modelId);
-    if (!model) return false;
-    
-    // Debug logging for troubleshooting
-    if (modelId.includes('o3-mini') || modelId.includes('gemini') || modelId.includes('claude')) {
-      console.log(`[DEBUG] Model ${modelId} supported_parameters:`, model.supported_parameters);
+    if (!model) {
+      return { supported: false, supportsEffort: false, supportsTokens: false, description: 'Model not found' };
     }
     
-    // Check if model supports reasoning parameter (the actual OpenRouter parameter)
-    if (Array.isArray(model.supported_parameters) && 
-        (model.supported_parameters.includes('reasoning') || model.supported_parameters.includes('thinking'))) {
-      return true;
-    }
+    // Debug logging to see what parameters all models in settings actually report
+    console.log(`[MODEL PARAMS] ${model.id}:`, {
+      supported_parameters: model.supported_parameters,
+      has_reasoning: model.supported_parameters?.includes('reasoning'),
+      has_thinking: model.supported_parameters?.includes('thinking')
+    });
     
+    const modelParams = new Set(model.supported_parameters || []);
     const endpoints = this.getProvidersForModel(modelId) || [];
-    if (endpoints.length === 0) return false;
     
-    // Debug logging for troubleshooting endpoints
-    if (modelId.includes('o3-mini') || modelId.includes('gemini') || modelId.includes('claude')) {
-      console.log(`[DEBUG] Model ${modelId} endpoints:`, endpoints.map(ep => ({
-        name: ep.provider_name || ep.name,
-        supported_parameters: ep.supported_parameters
-      })));
+    // Collect all supported parameters from endpoints too
+    const allParams = new Set(modelParams);
+    endpoints.forEach(ep => {
+      (ep.supported_parameters || []).forEach(param => allParams.add(param));
+    });
+    
+    const hasReasoning = allParams.has('reasoning');
+    const hasThinking = allParams.has('thinking');
+    const supported = hasReasoning || hasThinking;
+    
+    if (!supported) {
+      return { supported: false, supportsEffort: false, supportsTokens: false, description: 'This model does not support advanced reasoning' };
     }
     
-    // If a specific provider is selected, check it first
-    if (selectedProviderSlug) {
-      const endpoint = endpoints.find(ep => {
-        const providerDisplayName = ep.provider_name || ep.name;
-        const slug = this.getProviderSlug(providerDisplayName);
-        return slug === selectedProviderSlug || selectedProviderSlug.startsWith(slug + '-');
+    // Determine which approaches are supported based on model characteristics
+    let supportsEffort = false;
+    let supportsTokens = false;
+    let description = '';
+    
+    // Model-specific logic for determining reasoning approach
+    if (modelId.includes('openai/o') || modelId.includes('openai/gpt-o') || modelId.includes('grok')) {
+      supportsEffort = true;
+      description = 'Uses effort-based reasoning (low/medium/high intensity)';
+    } else if (modelId.includes('anthropic/claude') || modelId.includes('gemini') && modelId.includes('thinking')) {
+      supportsTokens = true;
+      description = 'Uses token budget for reasoning (specify max tokens)';
+    } else if (hasReasoning && hasThinking) {
+      // Model supports both, offer both approaches
+      supportsEffort = true;
+      supportsTokens = true;
+      description = 'Supports both effort-based and token budget reasoning approaches';
+    } else if (hasReasoning) {
+      // Generic reasoning support, assume effort-based is primary
+      supportsEffort = true;
+      supportsTokens = true; // Allow both for flexibility
+      description = 'Supports advanced reasoning with configurable intensity or token budget';
+    } else {
+      // Only thinking parameter
+      supportsTokens = true;
+      description = 'Uses token budget for reasoning (specify max tokens)';
+    }
+    
+    return { supported, supportsEffort, supportsTokens, description };
+  }
+
+  // Create appropriate reasoning controls based on what the model supports
+  private createReasoningControls(container: HTMLElement, support: ReturnType<typeof this.getReasoningSupport>, params: any, purposeKey: string, _enableCheck: HTMLInputElement): void {
+    // Clear existing controls
+    container.innerHTML = '';
+    
+    if (support.supportsEffort) {
+      // Effort-based control
+      const effortWrap = document.createElement('label');
+      effortWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+      
+      const effortLabel = document.createElement('span');
+      effortLabel.textContent = 'Reasoning Intensity';
+      effortLabel.style.cssText = 'font-size: 0.85rem; color: #374151; font-weight: 500;';
+      
+      const effortSelect = document.createElement('select');
+      effortSelect.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
+      
+      const effortOptions = [
+        { value: '', label: 'Default' },
+        { value: 'low', label: 'Low (faster, less thorough)' },
+        { value: 'medium', label: 'Medium (balanced)' },
+        { value: 'high', label: 'High (slower, more thorough)' }
+      ];
+      
+      effortOptions.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === (params.reasoning?.effort || '')) option.selected = true;
+        effortSelect.appendChild(option);
       });
-      if (endpoint && Array.isArray(endpoint.supported_parameters) && 
-          (endpoint.supported_parameters.includes('reasoning') || endpoint.supported_parameters.includes('thinking'))) {
-        return true;
-      }
+      
+      effortSelect.addEventListener('change', async () => {
+        if (!params.reasoning) params.reasoning = {};
+        params.reasoning.effort = effortSelect.value === '' ? undefined : effortSelect.value as 'low' | 'medium' | 'high';
+        await this.setSelectedParams(purposeKey, params);
+      });
+      
+      effortWrap.appendChild(effortLabel);
+      effortWrap.appendChild(effortSelect);
+      container.appendChild(effortWrap);
     }
     
-    // Otherwise, if any endpoint announces reasoning/thinking support, enable it
-    return endpoints.some(ep => Array.isArray(ep.supported_parameters) && 
-                              (ep.supported_parameters.includes('reasoning') || ep.supported_parameters.includes('thinking')));
+    if (support.supportsTokens) {
+      // Token budget control  
+      const tokenWrap = document.createElement('label');
+      tokenWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+      
+      const tokenLabel = document.createElement('span');
+      tokenLabel.textContent = support.supportsEffort ? 'Token Budget (optional)' : 'Reasoning Token Budget';
+      tokenLabel.style.cssText = 'font-size: 0.85rem; color: #374151; font-weight: 500;';
+      
+      const tokenInput = document.createElement('input');
+      tokenInput.type = 'number';
+      tokenInput.min = '256';
+      tokenInput.max = '32000';
+      tokenInput.step = '256';
+      tokenInput.placeholder = 'e.g., 2048';
+      tokenInput.value = (params.thinking?.budget_tokens || params.reasoning?.budget_tokens) ? String(params.thinking?.budget_tokens || params.reasoning?.budget_tokens) : '';
+      tokenInput.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
+      
+      tokenInput.addEventListener('focus', () => { tokenInput.style.borderColor = '#3b82f6'; });
+      tokenInput.addEventListener('blur', () => { tokenInput.style.borderColor = '#d1d5db'; });
+      tokenInput.addEventListener('change', async () => {
+        const val = tokenInput.value.trim();
+        const numVal = val === '' ? undefined : Math.max(256, Number(val));
+        
+        if (support.supportsEffort && !support.supportsTokens) {
+          // Effort-only model, shouldn't happen but handle gracefully
+          return;
+        } else if (!support.supportsEffort && support.supportsTokens) {
+          // Token-only model (like Claude)
+          params.thinking = params.thinking || {};
+          if (numVal === undefined) {
+            delete params.thinking.budget_tokens;
+          } else {
+            params.thinking.budget_tokens = numVal;
+          }
+        } else {
+          // Both supported, use reasoning object for consistency
+          params.reasoning = params.reasoning || {};
+          if (numVal === undefined) {
+            delete params.reasoning.budget_tokens;
+          } else {
+            params.reasoning.budget_tokens = numVal;
+          }
+        }
+        
+        await this.setSelectedParams(purposeKey, params);
+      });
+      
+      tokenWrap.appendChild(tokenLabel);
+      tokenWrap.appendChild(tokenInput);
+      container.appendChild(tokenWrap);
+    }
+    
+    // If model supports both, add explanatory text
+    if (support.supportsEffort && support.supportsTokens) {
+      const helpText = document.createElement('div');
+      helpText.textContent = 'Note: Effort setting takes priority. Use token budget for fine-grained control when effort is set to "Default".';
+      helpText.style.cssText = 'grid-column: 1 / -1; font-size: 0.75rem; color: #6b7280; font-style: italic; margin-top: 0.25rem;';
+      container.appendChild(helpText);
+    }
   }
 
   /**
