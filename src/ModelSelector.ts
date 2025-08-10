@@ -905,8 +905,8 @@ export class ModelSelector {
           }
         ));
 
-        // Thinking controls (only when supported)
-        const thinkingEnabled = supported.has('thinking');
+        // Thinking controls (detect support from model or any provider endpoint)
+        const thinkingEnabled = this.hasThinkingSupport(validModel.id, this.selectedProviders[purpose.key]);
         const thinkWrap = document.createElement('div');
         thinkWrap.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; grid-column: 1 / -1;';
 
@@ -1660,6 +1660,30 @@ export class ModelSelector {
    */
   private getProvidersForModel(modelId: string): OpenRouterModel['endpoints'] {
     return this.modelEndpoints[modelId]!; // Crash if endpoints not loaded!
+  }
+
+  // Determine if a model supports thinking either at model level or via any provider endpoint
+  private hasThinkingSupport(modelId: string, selectedProviderSlug?: string): boolean {
+    const model = this.models.find(m => m.id === modelId);
+    if (!model) return false;
+    if (Array.isArray(model.supported_parameters) && model.supported_parameters.includes('thinking')) {
+      return true;
+    }
+    const endpoints = this.getProvidersForModel(modelId) || [];
+    if (endpoints.length === 0) return false;
+    // If a specific provider is selected, check it first
+    if (selectedProviderSlug) {
+      const endpoint = endpoints.find(ep => {
+        const providerDisplayName = ep.provider_name || ep.name;
+        const slug = this.getProviderSlug(providerDisplayName);
+        return slug === selectedProviderSlug || selectedProviderSlug.startsWith(slug + '-');
+      });
+      if (endpoint && Array.isArray(endpoint.supported_parameters) && endpoint.supported_parameters.includes('thinking')) {
+        return true;
+      }
+    }
+    // Otherwise, if any endpoint announces thinking support, enable it
+    return endpoints.some(ep => Array.isArray(ep.supported_parameters) && ep.supported_parameters.includes('thinking'));
   }
 
   /**
