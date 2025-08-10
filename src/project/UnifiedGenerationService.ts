@@ -1086,16 +1086,19 @@ export class UnifiedGenerationService {
         const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
         if (!node) throw new Error(`Node not found for draft creation: ${nodeId}`);
 
-        // Check if node already has children
+        // Parse content sections once
+        const sections = this.parseContentSections(node.content);
+
+        // If node already has children and sections exist, fill only missing ones deterministically
         if (node.children.length > 0) {
-            console.log(`⏭️ Skipping draft creation for "${node.title}" - already has children`);
+            if (sections.length > 0) {
+                return await this.fillMissingChildrenFromSections(nodeId, sections);
+            }
             return { childIds: node.children.map(child => child.id), childrenCreated: false };
         }
 
-        // Check if node content has ===<title>=== sections for algorithmic generation
-        const sections = this.parseContentSections(node.content);
+        // If no children and sections exist, create all children from sections deterministically
         if (sections.length > 0) {
-            console.log(`🔧 Using algorithmic section-based generation for "${node.title}" - found ${sections.length} sections`);
             return await this.createChildrenFromSections(nodeId, sections);
         }
 
@@ -2156,39 +2159,10 @@ export class UnifiedGenerationService {
             this.emitUnifiedProgress();
 
             const childIds: string[] = [];
-            
-            // Get the creator model name for tracking (same as LLM generation)
-            const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-            const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
 
             sections.forEach((section, index) => {
-                // Child index is 1-based
-                const childIndex = index + 1;
-                const newNode = this.deps.treeService.addNode(section.title, nodeId, this.deps.rootNode, creatorModel, childIndex);
-                childIds.push(newNode.id);
-                
-                // Set the section content as initial content with "Draft: " prefix (same as LLM generation)
-                if (section.content && section.content.trim()) {
-                    // Fix metadata type
-                    const metadata: { [key: string]: unknown } = {};
-                    if (creatorModel) {
-                        metadata['creatorModel'] = creatorModel;
-                    }
-                    
-                    const draftVersionId = newNode.addVersion(['generated', 'draft'], {
-                        content: `Draft: ${section.content}`,
-                        title: newNode.title,
-                        context: newNode.context
-                    }, metadata);
-                    
-                    // Promote the draft version to master (keeping the draft tag)
-                    if (draftVersionId) {
-                        newNode.promoteToMaster(draftVersionId, ['draft']);
-                    }
-                    
-                    // Note: Context is now handled automatically in TreeService.addNode with selective copying
-                    // No need for manual context setting here as it was redundant
-                }
+                const created = this.createChildFromSection(nodeId, section.title, section.content, index + 1);
+                childIds.push(created.id);
             });
 
             await this.deps.saveToStorage();
@@ -2222,6 +2196,105 @@ export class UnifiedGenerationService {
             node.isGenerating = false;
             this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-completed' });
         }
+    }
+
+    /**
+     * Fills in only missing children based on deterministic sections
+     */
+    private async fillMissingChildrenFromSections(nodeId: string, sections: Array<{ title: string; content: string }>): Promise<{ childIds: string[]; childrenCreated: boolean }> {
+        const node = this.deps.treeService.findNodeById(nodeId, this.deps.rootNode);
+        if (!node) throw new Error(`Node not found for section-based fill: ${nodeId}`);
+
+        const existingByTitle = new Map<string, number>();
+        node.children.forEach((child, idx) => existingByTitle.set(child.title, idx));
+
+        const missingIndices: number[] = [];
+        sections.forEach((section, idx) => {
+            if (!existingByTitle.has(section.title)) {
+                missingIndices.push(idx);
+            }
+        });
+
+        if (missingIndices.length === 0) {
+            return { childIds: node.children.map(c => c.id), childrenCreated: false };
+        }
+
+        node.isGenerating = true;
+        this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-started' });
+
+        this.currentOperationProgress = {
+            current: 1,
+            total: 2,
+            message: `Creating ${missingIndices.length} missing section child(ren) for "${node.title}"`
+        };
+        this.currentNodeId = nodeId;
+        this.currentOperationType = 'draft';
+        this.emitUnifiedProgress();
+
+        const createdChildIds: string[] = [];
+
+        try {
+            for (const sectionIndex of missingIndices) {
+                const section = sections[sectionIndex]!;
+                const created = this.createChildFromSection(nodeId, section.title, section.content, sectionIndex + 1);
+                createdChildIds.push(created.id);
+
+                const currentIdx = node.children.findIndex(c => c.id === created.id);
+                if (currentIdx === -1) {
+                    throw new Error('Newly created child not found among parent children');
+                }
+                const targetIdx = sectionIndex;
+                if (currentIdx !== targetIdx) {
+                    const movedNode = node.children.splice(currentIdx, 1)[0]!;
+                    node.children.splice(Math.min(targetIdx, node.children.length), 0, movedNode);
+                }
+            }
+
+            await this.deps.saveToStorage();
+
+            this.currentOperationProgress = {
+                current: 2,
+                total: 2,
+                message: `Created ${createdChildIds.length} missing section child(ren) for "${node.title}"`
+            };
+            this.emitUnifiedProgress();
+
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'children-created' });
+
+            return { childIds: node.children.map(c => c.id), childrenCreated: true };
+        } finally {
+            node.isGenerating = false;
+            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'draft-creation-completed' });
+        }
+    }
+
+    /**
+     * Create a single child node from a section using the same logic as bulk creation
+     */
+    private createChildFromSection(parentId: string, title: string, content: string, sectionIndex: number) {
+        const currentProfile = this.deps.settingsManager.getLastUsedProfile();
+        const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
+
+        const newNode = this.deps.treeService.addNode(title, parentId, this.deps.rootNode, creatorModel, sectionIndex);
+
+        if (content && content.trim()) {
+            const metadata: { [key: string]: unknown } = {};
+            if (creatorModel) {
+                metadata['creatorModel'] = creatorModel;
+            }
+
+            const draftVersionId = newNode.addVersion(['generated', 'draft'], {
+                content: `Draft: ${content}`,
+                title: newNode.title,
+                context: newNode.context
+            }, metadata);
+
+            if (draftVersionId) {
+                newNode.promoteToMaster(draftVersionId, ['draft']);
+            }
+        }
+
+        return newNode;
     }
 
     /**
