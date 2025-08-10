@@ -784,11 +784,17 @@ export class ModelSelector {
         const supported = new Set<string>(validModel.supported_parameters || []);
         const params = { ...(this.selectedParams[purpose.key] || {}) };
 
-        // Debug logging to see what parameters models actually report
-        if (validModel.id.includes('gpt') || validModel.id.includes('claude') || validModel.id.includes('gemini') || validModel.id.includes('o3')) {
-          console.log(`[DEBUG] Model ${validModel.id} supported_parameters:`, validModel.supported_parameters);
-          console.log(`[DEBUG] Supported set size: ${supported.size}, has temperature: ${supported.has('temperature')}, has top_p: ${supported.has('top_p')}`);
-        }
+        // Debug logging to see what parameters all models in settings actually report
+        console.log(`[MODEL PARAMS] ${validModel.id}:`, {
+          supported_parameters: validModel.supported_parameters,
+          has_temperature: supported.has('temperature'),
+          has_top_p: supported.has('top_p'),
+          has_max_output_tokens: supported.has('max_output_tokens'),
+          has_max_tokens: supported.has('max_tokens'),
+          has_reasoning: supported.has('reasoning'),
+          has_thinking: supported.has('thinking'),
+          supported_set_size: supported.size
+        });
 
         const paramsContainer = document.createElement('div');
         paramsContainer.style.cssText = `
