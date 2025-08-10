@@ -111,10 +111,8 @@ export class ModelSelector {
     // Set new timeout for debounced save
     this.saveTimeoutId = window.setTimeout(async () => {
       try {
-        console.log('💾 Saving OpenRouter API key to IndexedDB...');
         const storage = await this.storageService;
         await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
-        console.log('✅ OpenRouter API key saved successfully to IndexedDB');
         
         // Update button states after successful save
         this.updateButtonStates();
@@ -784,17 +782,7 @@ export class ModelSelector {
         const supported = new Set<string>(validModel.supported_parameters || []);
         const params = { ...(this.selectedParams[purpose.key] || {}) };
 
-        // Debug logging to see what parameters all models in settings actually report
-        console.log(`[MODEL PARAMS] ${validModel.id}:`, {
-          supported_parameters: validModel.supported_parameters,
-          has_temperature: supported.has('temperature'),
-          has_top_p: supported.has('top_p'),
-          has_max_output_tokens: supported.has('max_output_tokens'),
-          has_max_tokens: supported.has('max_tokens'),
-          has_reasoning: supported.has('reasoning'),
-          has_thinking: supported.has('thinking'),
-          supported_set_size: supported.size
-        });
+        
 
         const paramsContainer = document.createElement('div');
         paramsContainer.style.cssText = `
@@ -1149,8 +1137,7 @@ export class ModelSelector {
       const creditsData = await creditsResponse.json();
       this.error = null;
       
-      console.log('OpenRouter key response:', keyData); // Debug logging
-      console.log('OpenRouter credits response:', creditsData); // Debug logging
+      
       
       // Check if we have the expected data structure
       if (!keyData?.data || !creditsData?.data) {
@@ -1332,8 +1319,6 @@ export class ModelSelector {
       const key = await storage.get<string>(STORAGE_KEY_API_KEY);
       if (key) {
         this.apiKey = key;
-      } else {
-        console.log('ℹ️ No OpenRouter API key found in IndexedDB');
       }
     } catch (error) {
       console.error('❌ Failed to load API key from storage:', error);
@@ -1351,16 +1336,11 @@ export class ModelSelector {
       if (key) {
         this.apiKey = key;
         
-      } else {
-        console.log('ℹ️ No OpenRouter API key found in IndexedDB');
       }
 
       const models = await storage.get<Record<string, string>>(STORAGE_KEY_MODELS);
       if (models) {
         this.selectedModels = models;
-        console.log('✅ OpenRouter model selections loaded from IndexedDB:', models);
-      } else {
-        console.log('ℹ️ No OpenRouter model selections found in IndexedDB');
       }
 
       const providers = await storage.get<Record<string, string>>(STORAGE_KEY_PROVIDERS);
@@ -1373,20 +1353,15 @@ export class ModelSelector {
             updatedProviders[key] = value;
           } else {
             clearedCount++;
-            console.log(`🔄 Clearing invalid Google provider selection: ${key} = ${value}`);
           }
         }
         this.selectedProviders = updatedProviders;
         
         if (clearedCount > 0) {
-          console.log(`🔄 Cleared ${clearedCount} invalid Google provider selection(s), forcing re-selection`);
           // Save the cleaned up providers
           await storage.set(STORAGE_KEY_PROVIDERS, updatedProviders);
-        } else {
-          console.log('✅ OpenRouter provider selections loaded from IndexedDB:', providers);
         }
       } else {
-        console.log('ℹ️ No OpenRouter provider selections found in IndexedDB, will default to automatic');
         // Initialize with automatic for all purposes
         this.selectedProviders = {};
         PURPOSES.forEach(purpose => {
@@ -1423,7 +1398,6 @@ export class ModelSelector {
       await storage.set(STORAGE_KEY_PROVIDERS, this.selectedProviders);
       await storage.set('openrouter_model_params', this.selectedParams);
       // Web search preferences are now saved only to profiles, not global storage
-      console.log('✅ OpenRouter configuration saved to IndexedDB');
     } catch (error) {
       console.error('❌ Failed to save OpenRouter configuration to IndexedDB:', error);
       throw error;
@@ -1462,7 +1436,6 @@ export class ModelSelector {
     if (fetchPromises.length > 0) {
       try {
         await Promise.all(fetchPromises);
-        console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} models after profile switch`);
       } catch (error) {
         console.error('❌ Some endpoint fetches failed during profile switch:', error);
         // Continue with update even if some fetches failed - the error will be thrown by fetchModelEndpoints
@@ -1594,13 +1567,11 @@ export class ModelSelector {
           this.selectedParams = {};
         }
         
-        console.log(`✅ All settings loaded from profile: ${activeProfileName}`);
       } else {
         this.selectedModels = {};
         this.webSearchEnabled = {};
         this.selectedProviders = {};
         this.selectedParams = {};
-        console.log(`ℹ️ No profile found: ${activeProfileName}`);
       }
       
       // Pre-fetch endpoint information for loaded models
@@ -1615,7 +1586,6 @@ export class ModelSelector {
       if (fetchPromises.length > 0) {
         try {
           await Promise.all(fetchPromises);
-          console.log(`📋 Pre-fetched endpoint information for ${fetchPromises.length} models`);
         } catch (error) {
           console.error('❌ Some endpoint fetches failed:', error);
         }
@@ -1649,10 +1619,8 @@ export class ModelSelector {
       
       if (activeProfile && activeProfile.webSearchEnabled) {
         this.webSearchEnabled = { ...activeProfile.webSearchEnabled };
-        console.log(`✅ Web search settings loaded from profile: ${activeProfileName}`, this.webSearchEnabled);
       } else {
         this.webSearchEnabled = {};
-        console.log(`ℹ️ No web search settings found in profile: ${activeProfileName}`);
       }
     } catch (error) {
       console.error('❌ Failed to load web search settings from profile:', error);
@@ -1683,7 +1651,6 @@ export class ModelSelector {
         };
         
         await settingsManager.saveProfile(activeProfileName, updatedProfile);
-        console.log(`✅ Web search settings saved to profile: ${activeProfileName}`);
       }
     } catch (error) {
       console.error('❌ Failed to save web search settings to profile:', error);
@@ -1735,12 +1702,7 @@ export class ModelSelector {
       return { supported: false, supportsEffort: false, supportsTokens: false, description: 'Model not found' };
     }
     
-    // Debug logging to see what parameters all models in settings actually report
-    console.log(`[MODEL PARAMS] ${model.id}:`, {
-      supported_parameters: model.supported_parameters,
-      has_reasoning: model.supported_parameters?.includes('reasoning'),
-      has_thinking: model.supported_parameters?.includes('thinking')
-    });
+    
     
     const modelParams = new Set(model.supported_parameters || []);
     const endpoints = this.getProvidersForModel(modelId) || [];

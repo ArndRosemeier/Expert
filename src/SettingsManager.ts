@@ -346,7 +346,7 @@ export class SettingsManager {
                 
                 // Clean up default criteria immediately to prevent old defaults from overriding new system criteria
                 if (hasDefaultCriteria) {
-                    console.log('🧹 Cleaning up default criteria from profiles...');
+                    
                     
                     // Re-save to storage with smart criteria logic (but keep full profiles in memory)
                     await this.saveProfiles(true);
@@ -425,7 +425,7 @@ export class SettingsManager {
                 });
                 
                 if (hasDefaultPrompts) {
-                    console.log('🧹 Cleaning up default prompts from storage...');
+                    
                     await this.savePrompts(this.prompts);
                 }
             } else {
@@ -595,7 +595,7 @@ export class SettingsManager {
             // Save only the modified prompts
             await storage.set(PROMPT_STORAGE_KEY, modifiedPrompts);
             
-            console.log(`💾 Saved ${Object.keys(modifiedPrompts).length} modified prompts (out of ${Object.keys(prompts).length} total)`);
+            
         } catch (error) {
             console.error('Failed to save prompts to storage', error);
         }
@@ -637,10 +637,7 @@ export class SettingsManager {
             profileToSave.taskModelConfigs = { ...profile.taskModelConfigs };
         }
 
-        console.log(`💾 Saving profile "${name}" with deep-copied settings`);
-        console.log(`🔍 Profile references - Original models object:`, profile.selectedModels);
-        console.log(`🔍 Profile references - Deep copied models object:`, profileToSave.selectedModels);
-        console.log(`🔍 Objects are different references:`, profile.selectedModels !== profileToSave.selectedModels);
+        
 
         this.profiles[name] = profileToSave;
         
@@ -764,7 +761,7 @@ export class SettingsManager {
 
 
 
-    private async saveProfiles(isCleanupOperation: boolean = false): Promise<void> {
+    private async saveProfiles(_isCleanupOperation: boolean = false): Promise<void> {
         try {
             const storage = await this.storageService;
             
@@ -788,14 +785,6 @@ export class SettingsManager {
             });
             
             await storage.set(SETTINGS_PROFILES_KEY, profilesForStorage);
-            
-            // Only log detailed info during cleanup operations
-            if (isCleanupOperation) {
-                const defaultCount = Object.values(this.profiles).filter(p => p && this.areDefaultCriteria(p.criteria || DEFAULT_CRITERIA)).length;
-                const customCount = Object.keys(this.profiles).length - defaultCount;
-                
-                console.log(`💾 Cleanup complete: ${Object.keys(this.profiles).length} profiles (${customCount} with custom criteria, ${defaultCount} using defaults)`);
-            }
         } catch (error) {
             console.error("Failed to save settings profiles to storage", error);
         }
