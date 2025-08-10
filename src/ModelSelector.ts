@@ -51,7 +51,7 @@ export class ModelSelector {
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
   private selectedProviders: Record<string, string> = {}; // Track provider selections per purpose
-  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }> = {};
+  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> = {};
   private modelEndpoints: Record<string, OpenRouterModel['endpoints']> = {}; // Cache endpoint data
   private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
@@ -952,6 +952,40 @@ export class ModelSelector {
         thinkWrap.appendChild(budgetWrap);
 
         paramsContainer.appendChild(thinkWrap);
+
+        // Reasoning effort (if thinking enabled)
+        const effortWrap = document.createElement('label');
+        effortWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;';
+        const effortLab = document.createElement('span');
+        effortLab.textContent = 'Reasoning effort';
+        effortLab.style.cssText = 'font-size: 0.85rem; color: #374151;';
+        const effortSelect = document.createElement('select');
+        effortSelect.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
+        ;['','low','medium','high'].forEach(v => {
+          const o = document.createElement('option');
+          o.value = v as string;
+          o.textContent = v === '' ? 'Default' : v;
+          effortSelect.appendChild(o);
+        });
+        effortSelect.value = (params.reasoning && params.reasoning.effort) ? params.reasoning.effort : '';
+        effortSelect.disabled = !thinkingEnabled || !thinkCheckbox.checked;
+        effortSelect.addEventListener('change', async () => {
+          const v = effortSelect.value as '' | 'low' | 'medium' | 'high';
+          if (v === '') {
+            if (params.reasoning) delete params.reasoning.effort;
+          } else {
+            params.reasoning = params.reasoning || {};
+            params.reasoning.effort = v;
+          }
+          await this.setSelectedParams(purpose.key, params);
+        });
+        thinkCheckbox.addEventListener('change', () => {
+          effortSelect.disabled = !thinkingEnabled || !thinkCheckbox.checked;
+        });
+        effortWrap.appendChild(effortLab);
+        effortWrap.appendChild(effortSelect);
+        paramsContainer.appendChild(effortWrap);
+
         section.appendChild(paramsContainer);
       }
 
@@ -1434,11 +1468,11 @@ export class ModelSelector {
     return this.selectedProviders;
   }
 
-  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }> {
+  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> {
     return this.selectedParams;
   }
 
-  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }): Promise<void> {
+  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }): Promise<void> {
     this.selectedParams[purpose] = { ...params };
     await this.saveToStorage();
     this.update();

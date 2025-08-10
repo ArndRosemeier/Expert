@@ -16,6 +16,10 @@ export interface OpenRouterRequest {
     type?: 'enabled' | 'disabled';
     budget_tokens?: number;
   };
+  reasoning?: {
+    effort?: 'low' | 'medium' | 'high';
+    budget_tokens?: number;
+  };
   plugins?: Array<{
     id: string;
     max_results?: number;
@@ -869,7 +873,7 @@ export class OpenRouterClient {
         const modelSelector = state.getModelSelector();
         const params = modelSelector?.getSelectedParams?.();
         if (params && params[purpose]) {
-          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } };
+          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
           if (typeof p.temperature === 'number') {
             request.temperature = Math.max(0, Math.min(2, p.temperature));
           }
@@ -883,6 +887,12 @@ export class OpenRouterClient {
             request.thinking = {
               type: 'enabled',
               ...(p.thinking.budget_tokens ? { budget_tokens: Math.max(256, Math.floor(p.thinking.budget_tokens)) } : {})
+            };
+          }
+          if (p.reasoning && (p.reasoning.effort || p.reasoning.budget_tokens)) {
+            request.reasoning = {
+              ...(p.reasoning.effort ? { effort: p.reasoning.effort } as any : {}),
+              ...(p.reasoning.budget_tokens ? { budget_tokens: Math.max(256, Math.floor(p.reasoning.budget_tokens)) } : {})
             };
           }
         }
