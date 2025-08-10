@@ -779,6 +779,182 @@ export class ModelSelector {
         section.appendChild(providerSelect);
       }
 
+      // Model parameter controls (temperature/top_p/max tokens, thinking)
+      if (validModel) {
+        const supported = new Set<string>(validModel.supported_parameters || []);
+        const params = { ...(this.selectedParams[purpose.key] || {}) };
+
+        const paramsContainer = document.createElement('div');
+        paramsContainer.style.cssText = `
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px dashed #d1d5db;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.75rem 1rem;
+        `;
+
+        const heading = document.createElement('div');
+        heading.textContent = 'Model parameters';
+        heading.style.cssText = `
+          grid-column: 1 / -1;
+          font-weight: bold;
+          font-size: 0.95rem;
+          color: #111827;
+        `;
+        paramsContainer.appendChild(heading);
+
+        // Helper to create labeled input
+        const createLabeledNumber = (
+          labelText: string,
+          value: number | undefined,
+          min: number,
+          max: number,
+          step: number,
+          placeholder: string,
+          enabled: boolean,
+          onChange: (val: number | undefined) => void
+        ) => {
+          const wrap = document.createElement('label');
+          wrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+          const lab = document.createElement('span');
+          lab.textContent = labelText;
+          lab.style.cssText = 'font-size: 0.85rem; color: #374151;';
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = String(min);
+          input.max = String(max);
+          input.step = String(step);
+          input.placeholder = placeholder;
+          input.value = value !== undefined ? String(value) : '';
+          input.disabled = !enabled;
+          input.style.cssText = `
+            padding: 0.5rem 0.75rem;
+            border: 1.5px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            background: ${enabled ? '#fff' : '#f9fafb'};
+          `;
+          input.addEventListener('focus', () => { if (enabled) input.style.borderColor = '#3b82f6'; });
+          input.addEventListener('blur', () => { input.style.borderColor = '#d1d5db'; });
+          input.addEventListener('change', async () => {
+            const raw = input.value.trim();
+            const num = raw === '' ? undefined : Number(raw);
+            onChange(num);
+            await this.setSelectedParams(purpose.key, params);
+          });
+          wrap.appendChild(lab);
+          wrap.appendChild(input);
+          return wrap;
+        };
+
+        // Temperature (default available or when explicitly supported)
+        const tempEnabled = supported.size === 0 || supported.has('temperature');
+        paramsContainer.appendChild(createLabeledNumber(
+          'Temperature (0–2)',
+          params.temperature,
+          0,
+          2,
+          0.01,
+          'e.g., 0.7',
+          tempEnabled,
+          (val) => {
+            if (val === undefined) {
+              delete params.temperature;
+            } else {
+              params.temperature = val;
+            }
+          }
+        ));
+
+        // Top-p
+        const topPEnabled = supported.size === 0 || supported.has('top_p');
+        paramsContainer.appendChild(createLabeledNumber(
+          'Top-p (0–1)',
+          params.top_p,
+          0,
+          1,
+          0.01,
+          'e.g., 0.9',
+          topPEnabled,
+          (val) => {
+            if (val === undefined) {
+              delete params.top_p;
+            } else {
+              params.top_p = val;
+            }
+          }
+        ));
+
+        // Max output tokens
+        const maxTokEnabled = supported.size === 0 || supported.has('max_output_tokens');
+        paramsContainer.appendChild(createLabeledNumber(
+          'Max output tokens',
+          params.max_output_tokens,
+          1,
+          128000,
+          1,
+          'e.g., 2048',
+          maxTokEnabled,
+          (val) => {
+            if (val === undefined) {
+              delete params.max_output_tokens;
+            } else {
+              params.max_output_tokens = val;
+            }
+          }
+        ));
+
+        // Thinking controls (only when supported)
+        const thinkingEnabled = supported.has('thinking');
+        const thinkWrap = document.createElement('div');
+        thinkWrap.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; grid-column: 1 / -1;';
+
+        const thinkToggleWrap = document.createElement('label');
+        thinkToggleWrap.style.cssText = 'display: flex; align-items: center; gap: 0.5rem;';
+        const thinkCheckbox = document.createElement('input');
+        thinkCheckbox.type = 'checkbox';
+        thinkCheckbox.checked = !!(params.thinking?.enabled);
+        thinkCheckbox.disabled = !thinkingEnabled;
+        thinkCheckbox.style.cssText = 'width: 16px; height: 16px;';
+        const thinkLabel = document.createElement('span');
+        thinkLabel.textContent = 'Enable thinking';
+        thinkLabel.style.cssText = 'font-size: 0.9rem; color: #374151;';
+        thinkToggleWrap.appendChild(thinkCheckbox);
+        thinkToggleWrap.appendChild(thinkLabel);
+
+        const budgetWrap = createLabeledNumber(
+          'Thinking budget (tokens)',
+          params.thinking?.budget_tokens,
+          256,
+          200000,
+          1,
+          'e.g., 4096',
+          thinkingEnabled && !!(params.thinking?.enabled),
+          (val) => {
+            params.thinking = params.thinking || {};
+            if (val === undefined) {
+              delete params.thinking.budget_tokens;
+            } else {
+              params.thinking.budget_tokens = val;
+            }
+          }
+        );
+
+        thinkCheckbox.addEventListener('change', async () => {
+          params.thinking = params.thinking || {};
+          params.thinking.enabled = thinkCheckbox.checked;
+          await this.setSelectedParams(purpose.key, params);
+          this.update();
+        });
+
+        thinkWrap.appendChild(thinkToggleWrap);
+        thinkWrap.appendChild(budgetWrap);
+
+        paramsContainer.appendChild(thinkWrap);
+        section.appendChild(paramsContainer);
+      }
+
       if (validModel && pricingUl) {
         section.appendChild(pricingUl);
       }
