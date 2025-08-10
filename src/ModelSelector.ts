@@ -806,15 +806,23 @@ export class ModelSelector {
           gap: 0.75rem 1rem;
         `;
 
-        const heading = document.createElement('div');
-        heading.textContent = 'Model parameters';
-        heading.style.cssText = `
-          grid-column: 1 / -1;
-          font-weight: bold;
-          font-size: 0.95rem;
-          color: #111827;
-        `;
-        paramsContainer.appendChild(heading);
+        // Track if any controls are added
+        let hasAnyControls = false;
+        
+        const addHeadingIfNeeded = () => {
+          if (!hasAnyControls) {
+            const heading = document.createElement('div');
+            heading.textContent = 'Model parameters';
+            heading.style.cssText = `
+              grid-column: 1 / -1;
+              font-weight: bold;
+              font-size: 0.95rem;
+              color: #111827;
+            `;
+            paramsContainer.appendChild(heading);
+            hasAnyControls = true;
+          }
+        };
 
         // Helper to create labeled input
         const createLabeledNumber = (
@@ -860,69 +868,77 @@ export class ModelSelector {
           return wrap;
         };
 
-        // Temperature (assume supported unless explicitly not listed in a populated supported_parameters)
-        const tempEnabled = supported.size === 0 || supported.has('temperature') || 
-                           !validModel.supported_parameters || validModel.supported_parameters.length === 0;
-        paramsContainer.appendChild(createLabeledNumber(
-          'Temperature (0–2)',
-          params.temperature,
-          0,
-          2,
-          0.01,
-          'e.g., 0.7',
-          tempEnabled,
-          (val) => {
-            if (val === undefined) {
-              delete params.temperature;
-            } else {
-              params.temperature = val;
-            }
-          }
-        ));
-
-        // Top-p (assume supported unless explicitly not listed in a populated supported_parameters)  
-        const topPEnabled = supported.size === 0 || supported.has('top_p') ||
-                           !validModel.supported_parameters || validModel.supported_parameters.length === 0;
-        paramsContainer.appendChild(createLabeledNumber(
-          'Top-p (0–1)',
-          params.top_p,
-          0,
-          1,
-          0.01,
-          'e.g., 0.9',
-          topPEnabled,
-          (val) => {
-            if (val === undefined) {
-              delete params.top_p;
-            } else {
-              params.top_p = val;
-            }
-          }
-        ));
-
-        // Max output tokens (assume supported unless explicitly not listed in a populated supported_parameters)
-        const maxTokEnabled = supported.size === 0 || supported.has('max_output_tokens') || supported.has('max_tokens') ||
+        // Only show basic parameters that the model actually supports
+        const tempSupported = supported.size === 0 || supported.has('temperature') || 
                               !validModel.supported_parameters || validModel.supported_parameters.length === 0;
-        paramsContainer.appendChild(createLabeledNumber(
-          'Max output tokens',
-          params.max_output_tokens,
-          1,
-          128000,
-          1,
-          'e.g., 2048',
-          maxTokEnabled,
-          (val) => {
-            if (val === undefined) {
-              delete params.max_output_tokens;
-            } else {
-              params.max_output_tokens = val;
+        if (tempSupported) {
+          addHeadingIfNeeded();
+          paramsContainer.appendChild(createLabeledNumber(
+            'Temperature (0–2)',
+            params.temperature,
+            0,
+            2,
+            0.01,
+            'e.g., 0.7',
+            true, // Always enabled if shown
+            (val) => {
+              if (val === undefined) {
+                delete params.temperature;
+              } else {
+                params.temperature = val;
+              }
             }
-          }
-        ));
+          ));
+        }
+
+        const topPSupported = supported.size === 0 || supported.has('top_p') ||
+                             !validModel.supported_parameters || validModel.supported_parameters.length === 0;
+        if (topPSupported) {
+          addHeadingIfNeeded();
+          paramsContainer.appendChild(createLabeledNumber(
+            'Top-p (0–1)',
+            params.top_p,
+            0,
+            1,
+            0.01,
+            'e.g., 0.9',
+            true, // Always enabled if shown
+            (val) => {
+              if (val === undefined) {
+                delete params.top_p;
+              } else {
+                params.top_p = val;
+              }
+            }
+          ));
+        }
+
+        const maxTokSupported = supported.size === 0 || supported.has('max_output_tokens') || supported.has('max_tokens') ||
+                               !validModel.supported_parameters || validModel.supported_parameters.length === 0;
+        if (maxTokSupported) {
+          addHeadingIfNeeded();
+          paramsContainer.appendChild(createLabeledNumber(
+            'Max output tokens',
+            params.max_output_tokens,
+            1,
+            128000,
+            1,
+            'e.g., 2048',
+            true, // Always enabled if shown
+            (val) => {
+              if (val === undefined) {
+                delete params.max_output_tokens;
+              } else {
+                params.max_output_tokens = val;
+              }
+            }
+          ));
+        }
 
         // Unified reasoning/thinking controls (model-agnostic and future-proof)
         const reasoningSupport = this.getReasoningSupport(validModel.id, this.selectedProviders[purpose.key]);
         if (reasoningSupport.supported) {
+          addHeadingIfNeeded();
           const reasoningWrap = document.createElement('div');
           reasoningWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.75rem; grid-column: 1 / -1; padding: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; margin-top: 0.5rem;';
           
@@ -950,7 +966,7 @@ export class ModelSelector {
 
           // Controls container (shown when enabled)
           const controlsWrap = document.createElement('div');
-          controlsWrap.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.5rem;';
+          controlsWrap.style.cssText = 'display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.5rem;';
           
           // Create appropriate controls based on model support
           this.createReasoningControls(controlsWrap, reasoningSupport, params, purpose.key, enableCheck);
@@ -973,13 +989,15 @@ export class ModelSelector {
               delete params.reasoning;
             } else {
               // Initialize based on model support
-              if (reasoningSupport.supportsEffort && !reasoningSupport.supportsTokens) {
+              const useEffortApproach = reasoningSupport.supportsEffort && (!reasoningSupport.supportsTokens || 
+                reasoningSupport.description.includes('effort-based'));
+              
+              if (useEffortApproach) {
                 params.reasoning = { effort: 'medium' };
-              } else if (reasoningSupport.supportsTokens && !reasoningSupport.supportsEffort) {
-                params.thinking = { enabled: true, budget_tokens: 2048 };
+                delete params.thinking;
               } else {
-                // Both supported, default to effort-based
-                params.reasoning = { effort: 'medium' };
+                params.thinking = { enabled: true, budget_tokens: 2048 };
+                delete params.reasoning;
               }
             }
             updateControlsVisibility();
@@ -990,7 +1008,10 @@ export class ModelSelector {
           paramsContainer.appendChild(reasoningWrap);
         }
 
-        section.appendChild(paramsContainer);
+        // Only add the params container to the section if it has controls
+        if (hasAnyControls) {
+          section.appendChild(paramsContainer);
+        }
       }
 
       if (validModel && pricingUl) {
@@ -1774,10 +1795,15 @@ export class ModelSelector {
     // Clear existing controls
     container.innerHTML = '';
     
-    if (support.supportsEffort) {
-      // Effort-based control
+    // Determine the single best approach for this model (no mixed UI)
+    const useEffortApproach = support.supportsEffort && (!support.supportsTokens || 
+      // Prefer effort for OpenAI models even if they support both
+      support.description.includes('effort-based'));
+    
+    if (useEffortApproach) {
+      // Show only effort-based control
       const effortWrap = document.createElement('label');
-      effortWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+      effortWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;';
       
       const effortLabel = document.createElement('span');
       effortLabel.textContent = 'Reasoning Intensity';
@@ -1802,23 +1828,25 @@ export class ModelSelector {
       });
       
       effortSelect.addEventListener('change', async () => {
+        // Clear any token-based params when using effort
+        delete params.thinking;
         if (!params.reasoning) params.reasoning = {};
         params.reasoning.effort = effortSelect.value === '' ? undefined : effortSelect.value as 'low' | 'medium' | 'high';
+        if (params.reasoning.budget_tokens) delete params.reasoning.budget_tokens;
         await this.setSelectedParams(purposeKey, params);
       });
       
       effortWrap.appendChild(effortLabel);
       effortWrap.appendChild(effortSelect);
       container.appendChild(effortWrap);
-    }
-    
-    if (support.supportsTokens) {
-      // Token budget control  
+      
+    } else if (support.supportsTokens) {
+      // Show only token budget control
       const tokenWrap = document.createElement('label');
-      tokenWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+      tokenWrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;';
       
       const tokenLabel = document.createElement('span');
-      tokenLabel.textContent = support.supportsEffort ? 'Token Budget (optional)' : 'Reasoning Token Budget';
+      tokenLabel.textContent = 'Reasoning Token Budget';
       tokenLabel.style.cssText = 'font-size: 0.85rem; color: #374151; font-weight: 500;';
       
       const tokenInput = document.createElement('input');
@@ -1836,25 +1864,15 @@ export class ModelSelector {
         const val = tokenInput.value.trim();
         const numVal = val === '' ? undefined : Math.max(256, Number(val));
         
-        if (support.supportsEffort && !support.supportsTokens) {
-          // Effort-only model, shouldn't happen but handle gracefully
-          return;
-        } else if (!support.supportsEffort && support.supportsTokens) {
-          // Token-only model (like Claude)
-          params.thinking = params.thinking || {};
-          if (numVal === undefined) {
-            delete params.thinking.budget_tokens;
-          } else {
-            params.thinking.budget_tokens = numVal;
-          }
+        // Clear any effort-based params when using tokens
+        if (params.reasoning?.effort) delete params.reasoning.effort;
+        
+        // Use thinking object for token-only models
+        params.thinking = params.thinking || {};
+        if (numVal === undefined) {
+          delete params.thinking.budget_tokens;
         } else {
-          // Both supported, use reasoning object for consistency
-          params.reasoning = params.reasoning || {};
-          if (numVal === undefined) {
-            delete params.reasoning.budget_tokens;
-          } else {
-            params.reasoning.budget_tokens = numVal;
-          }
+          params.thinking.budget_tokens = numVal;
         }
         
         await this.setSelectedParams(purposeKey, params);
@@ -1863,14 +1881,6 @@ export class ModelSelector {
       tokenWrap.appendChild(tokenLabel);
       tokenWrap.appendChild(tokenInput);
       container.appendChild(tokenWrap);
-    }
-    
-    // If model supports both, add explanatory text
-    if (support.supportsEffort && support.supportsTokens) {
-      const helpText = document.createElement('div');
-      helpText.textContent = 'Note: Effort setting takes priority. Use token budget for fine-grained control when effort is set to "Default".';
-      helpText.style.cssText = 'grid-column: 1 / -1; font-size: 0.75rem; color: #6b7280; font-style: italic; margin-top: 0.25rem;';
-      container.appendChild(helpText);
     }
   }
 
