@@ -51,6 +51,7 @@ export class ModelSelector {
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
   private selectedProviders: Record<string, string> = {}; // Track provider selections per purpose
+  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }> = {};
   private modelEndpoints: Record<string, OpenRouterModel['endpoints']> = {}; // Cache endpoint data
   private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
@@ -1185,6 +1186,7 @@ export class ModelSelector {
       await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
       await storage.set(STORAGE_KEY_MODELS, this.selectedModels);
       await storage.set(STORAGE_KEY_PROVIDERS, this.selectedProviders);
+      await storage.set('openrouter_model_params', this.selectedParams);
       // Web search preferences are now saved only to profiles, not global storage
       console.log('✅ OpenRouter configuration saved to IndexedDB');
     } catch (error) {
@@ -1254,6 +1256,16 @@ export class ModelSelector {
 
   public getSelectedProviders(): Record<string, string> {
     return this.selectedProviders;
+  }
+
+  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }> {
+    return this.selectedParams;
+  }
+
+  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } }): Promise<void> {
+    this.selectedParams[purpose] = { ...params };
+    await this.saveToStorage();
+    this.update();
   }
 
   public getApiKey(): string {
@@ -1338,11 +1350,21 @@ export class ModelSelector {
           }
         });
         
+        // Load per-model params (global for now)
+        try {
+          const storage = await this.storageService;
+          const savedParams = await storage.get<Record<string, any>>('openrouter_model_params');
+          this.selectedParams = savedParams || {};
+        } catch {
+          this.selectedParams = {};
+        }
+        
         console.log(`✅ All settings loaded from profile: ${activeProfileName}`);
       } else {
         this.selectedModels = {};
         this.webSearchEnabled = {};
         this.selectedProviders = {};
+        this.selectedParams = {};
         console.log(`ℹ️ No profile found: ${activeProfileName}`);
       }
       

@@ -7,6 +7,15 @@ export interface OpenRouterRequest {
   model: string;
   messages: OpenRouterMessage[];
   stream?: boolean;
+  // Optional model parameters
+  temperature?: number;
+  top_p?: number;
+  max_output_tokens?: number;
+  // Reasoning/thinking parameters for models that support it
+  thinking?: {
+    type?: 'enabled' | 'disabled';
+    budget_tokens?: number;
+  };
   plugins?: Array<{
     id: string;
     max_results?: number;
@@ -854,6 +863,33 @@ export class OpenRouterClient {
         messages,
         stream: true
       };
+      
+      // Apply per-purpose model parameters if configured
+      try {
+        const modelSelector = state.getModelSelector();
+        const params = modelSelector?.getSelectedParams?.();
+        if (params && params[purpose]) {
+          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number } };
+          if (typeof p.temperature === 'number') {
+            request.temperature = Math.max(0, Math.min(2, p.temperature));
+          }
+          if (typeof p.top_p === 'number') {
+            request.top_p = Math.max(0, Math.min(1, p.top_p));
+          }
+          if (typeof p.max_output_tokens === 'number') {
+            request.max_output_tokens = Math.max(1, Math.floor(p.max_output_tokens));
+          }
+          if (p.thinking && p.thinking.enabled) {
+            request.thinking = {
+              type: 'enabled',
+              ...(p.thinking.budget_tokens ? { budget_tokens: Math.max(256, Math.floor(p.thinking.budget_tokens)) } : {})
+            };
+          }
+        }
+      } catch (e) {
+        // Intentionally let errors surface in development logs without blocking the request
+        console.error('Failed to apply per-purpose model parameters:', e);
+      }
       
       // Add provider routing if specified
       if (provider) {
