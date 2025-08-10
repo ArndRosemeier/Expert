@@ -1759,34 +1759,43 @@ export class ModelSelector {
       return { supported: false, supportsEffort: false, supportsTokens: false, description: 'This model does not support advanced reasoning' };
     }
     
-    // Determine which approaches are supported based on model characteristics
+    // Determine which approaches are supported based on actual API metadata
     let supportsEffort = false;
     let supportsTokens = false;
     let description = '';
     
-    // Model-specific logic for determining reasoning approach
-    // OpenAI reasoning models (o-series and GPT-5) use effort-based approach
-    if (modelId.includes('openai/o') || modelId.includes('openai/gpt-o') || 
-        modelId.includes('openai/gpt-5') || modelId.includes('grok')) {
-      supportsEffort = true;
-      description = 'Uses effort-based reasoning (low/medium/high intensity)';
-    } else if (modelId.includes('anthropic/claude') || modelId.includes('gemini') && modelId.includes('thinking')) {
-      supportsTokens = true;
-      description = 'Uses token budget for reasoning (specify max tokens)';
-    } else if (hasReasoning && hasThinking) {
-      // Model supports both, offer both approaches
+    // Use the actual supported_parameters to determine capabilities
+    if (hasReasoning && hasThinking) {
+      // Model supports both reasoning approaches
       supportsEffort = true;
       supportsTokens = true;
       description = 'Supports both effort-based and token budget reasoning approaches';
     } else if (hasReasoning) {
-      // Generic reasoning support, assume effort-based is primary
+      // Model only supports reasoning parameter
+      // Default to effort-based approach for reasoning parameter
       supportsEffort = true;
-      supportsTokens = true; // Allow both for flexibility
-      description = 'Supports advanced reasoning with configurable intensity or token budget';
-    } else {
-      // Only thinking parameter
+      description = 'Uses effort-based reasoning (low/medium/high intensity)';
+    } else if (hasThinking) {
+      // Model only supports thinking parameter
       supportsTokens = true;
       description = 'Uses token budget for reasoning (specify max tokens)';
+    }
+    
+    // If no specific reasoning/thinking parameters, but model reports other reasoning capabilities,
+    // we can still offer basic reasoning controls
+    if (!hasReasoning && !hasThinking && allParams.size > 0) {
+      // Check if any reasoning-related parameters exist
+      const reasoningParams = Array.from(allParams).filter(param => 
+        param.toLowerCase().includes('reason') || 
+        param.toLowerCase().includes('think') ||
+        param.toLowerCase().includes('effort')
+      );
+      
+      if (reasoningParams.length > 0) {
+        supportsEffort = true;
+        supportsTokens = true;
+        description = 'Supports advanced reasoning with configurable parameters';
+      }
     }
     
     return { supported, supportsEffort, supportsTokens, description };
@@ -1798,9 +1807,10 @@ export class ModelSelector {
     container.innerHTML = '';
     
     // Determine the single best approach for this model (no mixed UI)
-    const useEffortApproach = support.supportsEffort && (!support.supportsTokens || 
-      // Prefer effort for OpenAI models even if they support both
-      support.description.includes('effort-based'));
+    // If model supports only one approach, use that
+    // If model supports both, prefer effort-based as it's more user-friendly
+    const useEffortApproach = support.supportsEffort && 
+      (!support.supportsTokens || support.description.includes('effort-based'));
     
     if (useEffortApproach) {
       // Show only effort-based control
