@@ -506,7 +506,24 @@ export class UnifiedGenerationService {
                     }
                 }
                 
-                // Priority 4: Expansion
+                // Priority 4: Sections-based repair (deterministic fill-in for existing children)
+                // If node has deterministic sections and already has some children, fill only the missing ones
+                if (targetState.canExpand && node.children.length > 0) {
+                    const sections = this.parseContentSections(node.content);
+                    if (sections.length > 0) {
+                        const existingTitles = new Set(node.children.map(c => c.title));
+                        const hasMissing = sections.some(s => !existingTitles.has(s.title));
+                        if (hasMissing) {
+                            const result = await this.fillMissingChildrenFromSections(node.id, sections);
+                            if (result.childrenCreated) {
+                                workDone = true;
+                                break; // Exit immediately - fresh assessment next iteration
+                            }
+                        }
+                    }
+                }
+
+                // Priority 5: Expansion
                 if (workNeeded.expansion) {
                     if (DEBUG_STATELESS_GENERATION) {
                         console.log(`🔍 STATELESS DEBUG: Checking if "${node.title}" can expand...`);
