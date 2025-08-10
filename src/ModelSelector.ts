@@ -784,6 +784,12 @@ export class ModelSelector {
         const supported = new Set<string>(validModel.supported_parameters || []);
         const params = { ...(this.selectedParams[purpose.key] || {}) };
 
+        // Debug logging to see what parameters models actually report
+        if (validModel.id.includes('gpt') || validModel.id.includes('claude') || validModel.id.includes('gemini') || validModel.id.includes('o3')) {
+          console.log(`[DEBUG] Model ${validModel.id} supported_parameters:`, validModel.supported_parameters);
+          console.log(`[DEBUG] Supported set size: ${supported.size}, has temperature: ${supported.has('temperature')}, has top_p: ${supported.has('top_p')}`);
+        }
+
         const paramsContainer = document.createElement('div');
         paramsContainer.style.cssText = `
           margin-top: 0.75rem;
@@ -848,8 +854,9 @@ export class ModelSelector {
           return wrap;
         };
 
-        // Temperature (default available or when explicitly supported)
-        const tempEnabled = supported.size === 0 || supported.has('temperature');
+        // Temperature (assume supported unless explicitly not listed in a populated supported_parameters)
+        const tempEnabled = supported.size === 0 || supported.has('temperature') || 
+                           !validModel.supported_parameters || validModel.supported_parameters.length === 0;
         paramsContainer.appendChild(createLabeledNumber(
           'Temperature (0–2)',
           params.temperature,
@@ -867,8 +874,9 @@ export class ModelSelector {
           }
         ));
 
-        // Top-p
-        const topPEnabled = supported.size === 0 || supported.has('top_p');
+        // Top-p (assume supported unless explicitly not listed in a populated supported_parameters)  
+        const topPEnabled = supported.size === 0 || supported.has('top_p') ||
+                           !validModel.supported_parameters || validModel.supported_parameters.length === 0;
         paramsContainer.appendChild(createLabeledNumber(
           'Top-p (0–1)',
           params.top_p,
@@ -886,8 +894,9 @@ export class ModelSelector {
           }
         ));
 
-        // Max output tokens
-        const maxTokEnabled = supported.size === 0 || supported.has('max_output_tokens');
+        // Max output tokens (assume supported unless explicitly not listed in a populated supported_parameters)
+        const maxTokEnabled = supported.size === 0 || supported.has('max_output_tokens') || supported.has('max_tokens') ||
+                              !validModel.supported_parameters || validModel.supported_parameters.length === 0;
         paramsContainer.appendChild(createLabeledNumber(
           'Max output tokens',
           params.max_output_tokens,
