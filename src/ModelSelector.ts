@@ -1765,7 +1765,9 @@ export class ModelSelector {
     let description = '';
     
     // Model-specific logic for determining reasoning approach
-    if (modelId.includes('openai/o') || modelId.includes('openai/gpt-o') || modelId.includes('grok')) {
+    // OpenAI reasoning models (o-series and GPT-5) use effort-based approach
+    if (modelId.includes('openai/o') || modelId.includes('openai/gpt-o') || 
+        modelId.includes('openai/gpt-5') || modelId.includes('grok')) {
       supportsEffort = true;
       description = 'Uses effort-based reasoning (low/medium/high intensity)';
     } else if (modelId.includes('anthropic/claude') || modelId.includes('gemini') && modelId.includes('thinking')) {
