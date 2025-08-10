@@ -18,7 +18,8 @@ export interface OpenRouterRequest {
   };
   reasoning?: {
     effort?: 'low' | 'medium' | 'high';
-    budget_tokens?: number;
+    max_tokens?: number;
+    budget_tokens?: number; // Internal storage only, gets mapped to max_tokens
   };
   plugins?: Array<{
     id: string;
@@ -890,10 +891,15 @@ export class OpenRouterClient {
             };
           }
           if (p.reasoning && (p.reasoning.effort || p.reasoning.budget_tokens)) {
-            request.reasoning = {
-              ...(p.reasoning.effort ? { effort: p.reasoning.effort } as any : {}),
-              ...(p.reasoning.budget_tokens ? { budget_tokens: Math.max(256, Math.floor(p.reasoning.budget_tokens)) } : {})
-            };
+            request.reasoning = {};
+            // Use effort-based approach if specified (takes priority)
+            if (p.reasoning.effort) {
+              request.reasoning.effort = p.reasoning.effort;
+            } 
+            // Otherwise use token budget approach (but never both together)
+            else if (p.reasoning.budget_tokens) {
+              request.reasoning.max_tokens = Math.max(256, Math.floor(p.reasoning.budget_tokens));
+            }
           }
         }
       } catch (e) {
