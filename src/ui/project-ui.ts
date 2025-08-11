@@ -2486,6 +2486,17 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
         </div>
 
+        <!-- Conditional Context Panel (embedded, below context, above app log) -->
+        <div class="node-section" id="conditional-context-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <label>Conditional Context</label>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">Edit items that apply based on conditions, items automatically apply to descendants</span>
+                </div>
+            </div>
+            <div id="conditional-context-host" style="width: 100%; min-height: 300px; display: flex; flex-direction: column;"></div>
+        </div>
+
         <!-- UI Logger Section -->
         <div id="ui-log-container" class="ui-log-container">
             <div class="ui-log-header">
@@ -2597,6 +2608,40 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 { disabled: false, className: 'button button-primary' }
             );
         });
+    }
+
+    // Mount Conditional Context Editor into the panel
+    try {
+        const host = document.getElementById('conditional-context-host');
+        if (host && projectManager) {
+            // Lazy import to avoid bundling cost until needed
+            const { ConditionalContextEditor } = await import('./components/ConditionalContextEditor');
+            // Clean previous content (destroy old editor if any was mounted)
+            host.innerHTML = '';
+            const editor = new ConditionalContextEditor({ node, projectManager, showPreview: false });
+            // Store instance on the host for cleanup on re-render
+            (host as any).__ccEditor?.destroy?.();
+            (host as any).__ccEditor = editor;
+            editor.mount(host);
+
+            // Wire click-through from ConditionalContextEditor to select nodes in main UI
+            // Remove previous listener if present
+            const prevListener = (host as any).__ccSelectListener as EventListener | undefined;
+            if (prevListener) {
+                window.removeEventListener('cc-select-node', prevListener);
+            }
+
+            const onCcSelect = (ev: Event) => {
+                const detail = (ev as CustomEvent<{ nodeId: string }>).detail;
+                if (detail && detail.nodeId) {
+                    setSelectedNodeAndRedraw(detail.nodeId);
+                }
+            };
+            (host as any).__ccSelectListener = onCcSelect as EventListener;
+            window.addEventListener('cc-select-node', onCcSelect as EventListener);
+        }
+    } catch (e) {
+        console.error('Failed to mount Conditional Context Editor panel:', e);
     }
 
     // Set up event listeners for level-based generation controls

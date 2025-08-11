@@ -1,8 +1,9 @@
 import { BaseModal } from './core/BaseModal';
 import { addEventListenerWithCleanup } from './core/modal-utils';
 import { getContextItems, formatContextItems } from '../../ContextFormat';
-import { DocumentNode } from '../../DocumentNode';
+import { DocumentNode, ConditionalContextCondition, ConditionLogicOperator } from '../../DocumentNode';
 import { PromptManager } from '../../PromptManager';
+import { findProjectByNode } from '../../state';
 
 interface ContextItemInfo {
     text: string;
@@ -232,6 +233,46 @@ export class ContextItemsEditorModal extends BaseModal {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
                 }
+                /* Conditional context (read-only preview) */
+                .conditional-context-section {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    margin-top: 1rem;
+                }
+                .conditional-context-section .section-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 0.75rem 1rem;
+                    background: #fff7ed;
+                    border-left: 0.25rem solid #fb923c;
+                    border-radius: 0.5rem;
+                    font-weight: 600;
+                }
+                .conditional-context-items {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+                .conditional-readonly {
+                    background: #fff7ed;
+                    border: 0.0625rem solid #fed7aa;
+                    border-radius: 0.5rem;
+                    padding: 0.75rem;
+                }
+                .conditional-readonly .element-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.375rem;
+                }
+                .conditional-conditions {
+                    font-size: 0.8125rem;
+                    color: #7c2d12;
+                }
+                .conditional-text {
+                    color: #111827;
+                }
             </style>
             <div class="context-items-editor">
                 <div class="context-items-header">
@@ -249,6 +290,8 @@ export class ContextItemsEditorModal extends BaseModal {
                 <div class="context-items-list" id="context-items-list">
                     ${this.renderContextItems()}
                 </div>
+                
+                ${this.renderConditionalContextPreviewSection()}
                 
                 <div class="modal-actions">
                     <div class="modal-actions-left">
@@ -329,6 +372,54 @@ export class ContextItemsEditorModal extends BaseModal {
         } else {
             return `${this.contextItems.length} items`;
         }
+    }
+
+    private renderConditionalContextPreviewSection(): string {
+        const project = findProjectByNode(this.node);
+        const root = (project ? project.rootNode : this.node);
+        const matching = this.node.getApplicableConditionalContextItems(root);
+        if (matching.length === 0) {
+            return '';
+        }
+        const itemsHtml = matching.map(item => {
+            const conditions = item.conditions && item.conditions.length > 0
+                ? this.formatConditionsForDisplay(item.conditions, item.logic)
+                : '<em>Unconditional</em>';
+            const safeText = (item.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            return `
+                <div class="conditional-readonly">
+                    <div class="element-content">
+                        <div class="conditional-conditions">${conditions}</div>
+                        <div class="conditional-text">${safeText.replace(/\n/g, '<br/>')}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return `
+            <div class="conditional-context-section">
+                <div class="section-header">
+                    <span>Conditional Context (applies to this node)</span>
+                </div>
+                <div class="conditional-context-items">${itemsHtml}</div>
+            </div>
+        `;
+    }
+
+    private formatConditionsForDisplay(conditions: ConditionalContextCondition[], logic: ConditionLogicOperator): string {
+        const parts = conditions.map((c) => {
+            if (!c || typeof c !== 'object') return '(invalid)';
+            if (c.type === 'contains' || c.type === 'contains_not') {
+                const scopeLabel = c.scope === 'this_content' ? 'this' : (c.scope === 'this_and_previous_same_layer' ? 'this + previous (same layer)' : (c.scope === 'path' ? 'path' : String(c.scope)));
+                const mode = c.type === 'contains' ? 'contains' : 'does not contain';
+                const flags = `${c.wordwise ? 'wordwise' : 'substring'}, ${c.caseSensitive ? 'case-sensitive' : 'case-insensitive'}`;
+                return `[${scopeLabel}] ${mode} "${(c.term || '').replace(/"/g, '\"')}" (${flags})`;
+            }
+            if (c.type === 'layer_comparison') {
+                return `layer ${c.comparator} ${c.layerName}`;
+            }
+            return '(unknown condition)';
+        });
+        return parts.join(` ${logic} `);
     }
 
     private getOrganizedContextItems(): ContextItemInfo[] {
