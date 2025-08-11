@@ -30,6 +30,17 @@ export class ContextService {
 
         const contextParts: string[] = [];
 
+        // 0. Add matching conditional context items for this node and its ancestors
+        try {
+            const conditional = targetNode.assembleConditionalContext(targetNode, rootNode);
+            if (conditional && conditional.trim()) {
+                contextParts.push(`CONDITIONAL CONTEXT (matching items):\n---\n${conditional}\n---`);
+            }
+        } catch (e) {
+            // Fail loudly to surface errors instead of silently ignoring
+            throw e;
+        }
+
         // 1. Add the current node's own context if it exists
         if (targetNode.context && targetNode.context.trim()) {
             const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
