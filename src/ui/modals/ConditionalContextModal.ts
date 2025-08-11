@@ -514,9 +514,9 @@ export class ConditionalContextModal extends SimpleModal {
             if (!this.selectedItemId) return;
             const updated = [...allConditions];
             if (typeSelect.value === 'contains') {
-                updated[index] = { type: 'contains', scope: ConditionalScope.ThisContent, term: 'term', wordwise: true, caseSensitive: false };
+                updated[index] = { type: 'contains', scope: ConditionalScope.ThisAndPreviousSameLayer, term: 'term', wordwise: true, caseSensitive: false };
             } else if (typeSelect.value === 'contains_not') {
-                updated[index] = { type: 'contains_not', scope: ConditionalScope.ThisContent, term: 'term', wordwise: true, caseSensitive: false } as any;
+                updated[index] = { type: 'contains_not', scope: ConditionalScope.ThisAndPreviousSameLayer, term: 'term', wordwise: true, caseSensitive: false } as any;
             } else {
                 updated[index] = { type: 'layer_comparison', comparator: '=', layerName: this.node.template[this.node.level] || (this.node.template[0] ?? '') };
             }
@@ -680,7 +680,7 @@ export class ConditionalContextModal extends SimpleModal {
         if (!item) return;
         const updated = [...item.conditions, {
             type: 'contains',
-            scope: ConditionalScope.ThisContent,
+            scope: ConditionalScope.ThisAndPreviousSameLayer,
             term: 'term',
             wordwise: true,
             caseSensitive: false
