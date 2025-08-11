@@ -1265,16 +1265,19 @@ export class XMLStoryModal extends SimpleModal {
         // No conversation persistence - each session starts fresh
         
         // Apply initialization data if provided, or set default message
-                if (this.pendingInitializationData) {
-                    await this.applyInitializationData(this.pendingInitializationData);
-                    this.pendingInitializationData = undefined;
-                }
+        if (this.pendingInitializationData) {
+            await this.applyInitializationData(this.pendingInitializationData);
+            this.pendingInitializationData = undefined;
+            
+            // Re-initialize the outline editor now that we have proper history
+            this.initializeUnifiedOutlineEditor();
+        }
         
         // Load custom buttons after initialization
         await this.loadCustomButtons();
         
-        // Show initial message if no initialization data
-        if (!this.pendingInitializationData) {
+        // Show initial message if no initialization data was provided
+        if (!this.sourceNode) {
                 const messageElement = document.getElementById('initial-chat-message');
                 if (messageElement) {
                     messageElement.innerHTML = `
