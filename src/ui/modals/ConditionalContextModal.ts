@@ -26,6 +26,7 @@ export class ConditionalContextModal extends SimpleModal {
     private duplicateButton!: HTMLButtonElement;
     private addConditionButton!: HTMLButtonElement;
     private addItemButton!: HTMLButtonElement;
+    private toggleAllButton!: HTMLButtonElement;
     private importItemsButton!: HTMLButtonElement;
     private removeItemButton!: HTMLButtonElement;
     private previewAsSelect!: HTMLSelectElement;
@@ -114,6 +115,16 @@ export class ConditionalContextModal extends SimpleModal {
             cursor: pointer;
         `;
 
+        this.toggleAllButton = createElement('button', { content: 'Toggle all' });
+        this.toggleAllButton.title = 'Toggle selection of all items';
+        this.toggleAllButton.style.cssText = `
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            background: #eef2ff;
+            cursor: pointer;
+        `;
+
         this.removeItemButton = createElement('button', { content: 'Remove selected' });
         this.removeItemButton.title = 'Remove the currently selected item';
         this.removeItemButton.style.cssText = `
@@ -125,6 +136,7 @@ export class ConditionalContextModal extends SimpleModal {
         `;
 
         itemButtonsRow.appendChild(this.addItemButton);
+        itemButtonsRow.appendChild(this.toggleAllButton);
         itemButtonsRow.appendChild(this.importItemsButton);
         itemButtonsRow.appendChild(this.removeItemButton);
 
@@ -383,6 +395,7 @@ export class ConditionalContextModal extends SimpleModal {
     private wireEvents(): void {
         addEventListenerWithCleanup(this.addItemButton, 'click', () => this.handleAddItem(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.addConditionButton, 'click', () => this.handleAddCondition(), this.cleanupHandlers);
+        addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleDelete(); }, this.cleanupHandlers);
         addEventListenerWithCleanup(this.saveButton, 'click', () => this.handleSave(), this.cleanupHandlers);
@@ -654,6 +667,18 @@ export class ConditionalContextModal extends SimpleModal {
             console.error(e);
             alert(String(e));
         }
+    }
+
+    private handleToggleAll(): void {
+        const items = this.node.getConditionalContextItems();
+        if (items.length === 0) return;
+        const allSelected = this.selectedIds.size === items.length;
+        if (allSelected) {
+            this.selectedIds.clear();
+        } else {
+            this.selectedIds = new Set(items.map(i => i.id));
+        }
+        this.refreshItemsList();
     }
 
     private handleAddCondition(): void {
