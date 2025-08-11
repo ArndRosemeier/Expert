@@ -2534,11 +2534,7 @@ export class XMLStoryModal extends SimpleModal {
                 })
                 .join('\n\n'); // Separate context items by paragraphs
 
-            if (!outlineContent && !contextContent) {
-                console.warn('No content changes found. Please modify the outline or context items first.');
-                this.setUpdateButtonState('error', 'No content changes found');
-                return;
-            }
+            // Allow saving even with empty outline and empty context (explicitly clearing content/context)
 
 
             
@@ -2551,8 +2547,8 @@ export class XMLStoryModal extends SimpleModal {
 
                 
                 // Update the version directly (not the master)
-                chatEditedVersion.content = outlineContent || chatEditedVersion.content;
-                chatEditedVersion.context = contextContent || chatEditedVersion.context;
+                chatEditedVersion.content = outlineContent;
+                chatEditedVersion.context = contextContent;
                 chatEditedVersion.timestamp = new Date();
                 
                 // Promote this updated version to master
@@ -2562,8 +2558,8 @@ export class XMLStoryModal extends SimpleModal {
                 // Create new version with chat_edited tag
 
                 const newVersionId = this.sourceNode.addVersion(['chat_edited'], {
-                    content: outlineContent || this.sourceNode.content,
-                    context: contextContent || this.sourceNode.context
+                    content: outlineContent,
+                    context: contextContent
                 });
                 
                 if (newVersionId) {
