@@ -38,7 +38,7 @@ export class ConditionalContextModal extends SimpleModal {
     // State
     private selectedItemId: string | null = null;
     private selectedIds: Set<string> = new Set();
-    private activePreviewTab: 'assembled' | 'content' = 'assembled';
+    private activePreviewTab: 'assembled' | 'content' = 'content';
 
     constructor(config: ConditionalContextModalConfig) {
         super({ id: config.id, closable: true, backdrop: true, width: '90vw', height: '90vh' });
@@ -343,15 +343,16 @@ export class ConditionalContextModal extends SimpleModal {
         this.previewTabs.style.cssText = `
             display: flex; gap: 0.5rem; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem;
         `;
-        this.assembledTabBtn = createElement('button', { content: 'Assembled context' }) as HTMLButtonElement;
         this.contentTabBtn = createElement('button', { content: 'Node content' }) as HTMLButtonElement;
+        this.assembledTabBtn = createElement('button', { content: 'Assembled context' }) as HTMLButtonElement;
         const baseTabCss = `
             padding: 0.4rem 0.75rem; border: 1px solid transparent; border-radius: 0.5rem; background: transparent; cursor: pointer;
         `;
         this.assembledTabBtn.style.cssText = baseTabCss;
         this.contentTabBtn.style.cssText = baseTabCss;
-        this.previewTabs.appendChild(this.assembledTabBtn);
+        // Order: Node content first, then Assembled context
         this.previewTabs.appendChild(this.contentTabBtn);
+        this.previewTabs.appendChild(this.assembledTabBtn);
         this.previewText = createElement('div');
         this.previewText.style.cssText = `
             border: 1px solid #e5e7eb;
