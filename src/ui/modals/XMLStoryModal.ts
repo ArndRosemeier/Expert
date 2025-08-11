@@ -1328,7 +1328,7 @@ export class XMLStoryModal extends SimpleModal {
             );
 
             // Always include dynamic context as a separate system-level prompt
-                const currentOutline = this.getCurrentOutlineContent() || 'No outline content yet.';
+                const currentOutline = this.getCurrentOutlineSafe() || 'No outline content yet.';
                 const currentContextItems = this.formatContextItemsForAI();
                 const humanEdits = this.formatHumanEditsForAI();
                 const userPromptContext = {
@@ -2201,7 +2201,7 @@ export class XMLStoryModal extends SimpleModal {
             return;
         }
 
-        const currentContent = this.getCurrentOutlineContent();
+        const currentContent = this.getCurrentOutlineSafe();
         const newContent = currentContent + '\n\n' + command.content;
         
         this.setOutlineContentFromAI(newContent);
@@ -2232,7 +2232,7 @@ export class XMLStoryModal extends SimpleModal {
             return;
         }
 
-        const currentContent = this.getCurrentOutlineContent();
+        const currentContent = this.getCurrentOutlineSafe();
         
         // Use fuzzy search that ignores non-alphanumeric characters
         const fuzzyMatches = this.findFuzzyMatches(currentContent, command.searchText);
@@ -2287,7 +2287,7 @@ export class XMLStoryModal extends SimpleModal {
             return;
         }
 
-        const currentContent = this.getCurrentOutlineContent();
+        const currentContent = this.getCurrentOutlineSafe();
         
         // Find the section using the section parsing logic from UnifiedGenerationService
         const sections = this.parseContentSections(currentContent);
@@ -2325,7 +2325,7 @@ export class XMLStoryModal extends SimpleModal {
             return;
         }
 
-        const currentContent = this.getCurrentOutlineContent();
+        const currentContent = this.getCurrentOutlineSafe();
         
         // Find the section using the section parsing logic from UnifiedGenerationService
         const sections = this.parseContentSections(currentContent);
@@ -2521,7 +2521,7 @@ export class XMLStoryModal extends SimpleModal {
             }
 
             // Get unified outline content
-            const outlineContent = this.getCurrentOutlineContent();
+            const outlineContent = this.getCurrentOutlineSafe();
 
             // Get context items (individual elements as before)
             const storyElements = this.storySystem.service.getElementsForContext();
@@ -2712,8 +2712,8 @@ export class XMLStoryModal extends SimpleModal {
         }
 
         try {
-            // Get current outline content (same logic as updateSourceNode)
-            const currentOutlineContent = this.getCurrentOutlineContent();
+            // Get current outline content (safe in early/late lifecycle)
+            const currentOutlineContent = this.getCurrentOutlineSafe();
 
             // Get current context items (same logic as updateSourceNode)
             const storyElements = this.storySystem.service.getElementsForContext();
@@ -2870,6 +2870,14 @@ export class XMLStoryModal extends SimpleModal {
         }
         
         return this.outlineEditor.getText();
+    }
+
+    /**
+     * Safe accessor used during initialization or shutdown when editor may not exist yet.
+     * Uses history as the authoritative source in that phase.
+     */
+    private getCurrentOutlineSafe(): string {
+        return this.outlineEditor ? this.outlineEditor.getText() : this.getCurrentOutlineFromHistory();
     }
 
     /**
