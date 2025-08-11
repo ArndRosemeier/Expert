@@ -672,12 +672,14 @@ export class ConditionalContextModal extends SimpleModal {
     private handleToggleAll(): void {
         const items = this.node.getConditionalContextItems();
         if (items.length === 0) return;
-        const allSelected = this.selectedIds.size === items.length;
-        if (allSelected) {
-            this.selectedIds.clear();
-        } else {
-            this.selectedIds = new Set(items.map(i => i.id));
+        // Invert selection for each item
+        const nextSelected = new Set<string>();
+        for (const item of items) {
+            if (!this.selectedIds.has(item.id)) {
+                nextSelected.add(item.id);
+            }
         }
+        this.selectedIds = nextSelected;
         this.refreshItemsList();
     }
 
