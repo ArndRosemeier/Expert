@@ -2875,10 +2875,10 @@ export class XMLStoryModal extends SimpleModal {
         // Clear placeholder if it exists
         outlineContainer.innerHTML = '';
 
-        // Prefer history; if none, fall back to source node's current content
+        // Prefer history; if none yet, fall back to pending initialization data, then source node content
         const currentContent = (this.outlineHistory.length > 0)
             ? this.getCurrentOutlineFromHistory()
-            : (this.sourceNode?.content || '');
+            : (this.pendingInitializationData?.content || this.sourceNode?.content || '');
 
         // Create a textarea for the UniversalTextEditor
         const textarea = document.createElement('textarea');
