@@ -1820,7 +1820,7 @@ export class XMLStoryModal extends SimpleModal {
             try {
                 const project = getActiveProject();
                 const root = project?.rootNode ?? this.sourceNode; // Fallback to node if project unavailable
-                const matching = this.sourceNode.collectMatchingConditionalContextItems(this.sourceNode, root);
+                const matching = this.sourceNode.getApplicableConditionalContextItems(root);
                 if (matching.length > 0) {
                     html += `
                         <div class="story-section">

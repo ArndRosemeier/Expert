@@ -785,8 +785,8 @@ export class ConditionalContextModal extends SimpleModal {
         const triggerId = this.previewAsSelect.value || this.node.id;
         const triggeringNode = this.findById(root, triggerId) || this.node;
         try {
-            const items = this.node.collectMatchingConditionalContextItems(triggeringNode, root);
-            const text = this.node.assembleConditionalContext(triggeringNode, root);
+            const items = triggeringNode.getApplicableConditionalContextItems(root);
+            const text = triggeringNode.assembleApplicableConditionalContext(root);
             this.previewMatches.innerHTML = '';
             if (items.length === 0) {
                 this.previewMatches.textContent = 'No matching items.';

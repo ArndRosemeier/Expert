@@ -1343,6 +1343,35 @@ export class DocumentNode {
     }
 
     /**
+     * Central helper: get applicable conditional context items for THIS node,
+     * evaluated with this node as the trigger against the provided root.
+     */
+    public getApplicableConditionalContextItems(root: DocumentNode): ConditionalContextItem[] {
+        return this.collectMatchingConditionalContextItems(this, root);
+    }
+
+    /**
+     * Central helper: assemble applicable conditional context TEXT for THIS node.
+     */
+    public assembleApplicableConditionalContext(root: DocumentNode): string {
+        return this.assembleConditionalContext(this, root);
+    }
+
+    /**
+     * Central static helper: get applicable conditional context items for an arbitrary node.
+     */
+    public static getApplicableConditionalContextItemsFor(triggeringNode: DocumentNode, root: DocumentNode): ConditionalContextItem[] {
+        return triggeringNode.collectMatchingConditionalContextItems(triggeringNode, root);
+    }
+
+    /**
+     * Central static helper: assemble applicable conditional context TEXT for an arbitrary node.
+     */
+    public static assembleApplicableConditionalContextFor(triggeringNode: DocumentNode, root: DocumentNode): string {
+        return triggeringNode.assembleConditionalContext(triggeringNode, root);
+    }
+
+    /**
      * Collect matching conditional context items from this node and ancestors (root-first order).
      */
     public collectMatchingConditionalContextItems(triggeringNode: DocumentNode, root: DocumentNode): ConditionalContextItem[] {
