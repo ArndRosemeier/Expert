@@ -30,11 +30,15 @@ export class ConditionalContextModal extends SimpleModal {
     private evaluateButton!: HTMLButtonElement;
     private previewMatches!: HTMLElement;
     private previewText!: HTMLElement;
+    private previewTabs!: HTMLElement;
+    private assembledTabBtn!: HTMLButtonElement;
+    private contentTabBtn!: HTMLButtonElement;
     private editor!: UniversalTextEditor;
 
     // State
     private selectedItemId: string | null = null;
     private selectedIds: Set<string> = new Set();
+    private activePreviewTab: 'assembled' | 'content' = 'assembled';
 
     constructor(config: ConditionalContextModalConfig) {
         super({ id: config.id, closable: true, backdrop: true, width: '90vw', height: '90vh' });
@@ -331,11 +335,23 @@ export class ConditionalContextModal extends SimpleModal {
         matchesCol.appendChild(matchesLabel);
         matchesCol.appendChild(this.previewMatches);
 
-        // Right: Assembled context (with label)
+        // Right: Assembled context with tabs
         const assembledCol = createElement('div');
         assembledCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 60%; min-width: 0;';
-        const assembledLabel = createElement('div', { content: 'Assembled context' });
-        assembledLabel.style.cssText = 'font-weight: 600; color: #374151;';
+        // Tabs
+        this.previewTabs = createElement('div');
+        this.previewTabs.style.cssText = `
+            display: flex; gap: 0.5rem; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem;
+        `;
+        this.assembledTabBtn = createElement('button', { content: 'Assembled context' }) as HTMLButtonElement;
+        this.contentTabBtn = createElement('button', { content: 'Node content' }) as HTMLButtonElement;
+        const baseTabCss = `
+            padding: 0.4rem 0.75rem; border: 1px solid transparent; border-radius: 0.5rem; background: transparent; cursor: pointer;
+        `;
+        this.assembledTabBtn.style.cssText = baseTabCss;
+        this.contentTabBtn.style.cssText = baseTabCss;
+        this.previewTabs.appendChild(this.assembledTabBtn);
+        this.previewTabs.appendChild(this.contentTabBtn);
         this.previewText = createElement('div');
         this.previewText.style.cssText = `
             border: 1px solid #e5e7eb;
@@ -346,7 +362,7 @@ export class ConditionalContextModal extends SimpleModal {
             flex: 1 1 auto;
             min-height: 0;
         `;
-        assembledCol.appendChild(assembledLabel);
+        assembledCol.appendChild(this.previewTabs);
         assembledCol.appendChild(this.previewText);
 
         previewSplit.appendChild(matchesCol);
@@ -362,6 +378,7 @@ export class ConditionalContextModal extends SimpleModal {
         this.wireEvents();
         this.refreshItemsList();
         this.selectFirstItem();
+        this.updatePreviewTabsUI();
         this.evaluatePreview();
 
         return container;
@@ -374,6 +391,8 @@ export class ConditionalContextModal extends SimpleModal {
         addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleDelete(); }, this.cleanupHandlers);
         addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
+        addEventListenerWithCleanup(this.assembledTabBtn, 'click', () => { this.activePreviewTab = 'assembled'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
+        addEventListenerWithCleanup(this.contentTabBtn, 'click', () => { this.activePreviewTab = 'content'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
     }
 
     private refreshItemsList(): void {
@@ -758,12 +777,26 @@ export class ConditionalContextModal extends SimpleModal {
                 });
                 this.previewMatches.appendChild(ul);
             }
-            this.previewText.textContent = text || '';
+            if (this.activePreviewTab === 'assembled') {
+                this.previewText.textContent = text || '';
+            } else {
+                this.previewText.textContent = triggeringNode.content || '';
+            }
         } catch (e) {
             console.error(e);
             this.previewMatches.textContent = 'Error evaluating preview';
             this.previewText.textContent = String(e);
         }
+    }
+
+    private updatePreviewTabsUI(): void {
+        const activate = (btn: HTMLButtonElement, active: boolean) => {
+            btn.style.background = active ? '#eef2ff' : 'transparent';
+            btn.style.borderColor = active ? '#c7d2fe' : 'transparent';
+            btn.style.color = active ? '#1f2937' : '#374151';
+        };
+        activate(this.assembledTabBtn, this.activePreviewTab === 'assembled');
+        activate(this.contentTabBtn, this.activePreviewTab === 'content');
     }
 
     private handleApplyToSelected(): void {
