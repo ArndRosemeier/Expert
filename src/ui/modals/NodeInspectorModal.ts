@@ -4,7 +4,7 @@ import { analyzeTagsInHierarchy } from '../../ProjectUtils';
 import { Rating } from '../../types/RatingTypes';
 import { findProjectByNode } from '../../state';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
-import { openConditionalContextModal } from './ModalFactory';
+import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 
 
 // ============================================================================
@@ -330,6 +330,9 @@ class ContentViewer extends UIComponent {
 // ============================================================================
 
 export class NodeInspectorModal extends BaseModal {
+    // Embedded Conditional Context editor and listener
+    private ccEditor: ConditionalContextEditor | null = null;
+    private ccSelectListener: EventListener | null = null;
     private node: DocumentNode | null = null;
     private selectedVersionId: string | null = null;
 
@@ -385,6 +388,13 @@ export class NodeInspectorModal extends BaseModal {
             window.removeEventListener('todoListChanged', (this as any)._todoChangeHandler as EventListener);
             delete (this as any)._todoChangeHandler;
         }
+        // Cleanup embedded Conditional Context editor and listener
+        try { this.ccEditor?.destroy(); } catch {}
+        this.ccEditor = null;
+        if (this.ccSelectListener) {
+            window.removeEventListener('cc-select-node', this.ccSelectListener);
+            this.ccSelectListener = null;
+        }
         
         // UniversalTextEditor now has automatic cleanup - no manual cleanup needed!
         
@@ -427,24 +437,7 @@ export class NodeInspectorModal extends BaseModal {
             titleEl.textContent = 'Untitled Node';
         }
 
-        const ccBtn = document.createElement('button');
-        ccBtn.textContent = 'Conditional context';
-        ccBtn.title = 'Open conditional context editor';
-        ccBtn.style.cssText = `
-            margin-left: auto;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #f9fafb;
-            cursor: pointer;
-        `;
-        ccBtn.addEventListener('click', () => {
-            if (!this.node) return;
-            void openConditionalContextModal(this.node);
-        });
-
         header.appendChild(titleEl);
-        header.appendChild(ccBtn);
         container.appendChild(header);
 
         // Body (two columns)
@@ -774,30 +767,34 @@ export class NodeInspectorModal extends BaseModal {
             ${hasRatings ? ratingsHtml : ''}
             
             <div class="version-sections">
-                <div class="version-section">
-                    <h4 class="section-title">Title</h4>
-                    <div class="section-content">
+                <div class="version-section" id="ins-title-section">
+                    <h4 class="section-title" id="ins-title-toggle" style="cursor: pointer;">▼ Title</h4>
+                    <div class="section-content foldable-content" id="ins-title-content">
                         <input type="text" class="title-editor" id="inspector-title-editor" value="${this.escapeHtml(version.title || '')}" placeholder="Enter title...">
                     </div>
                 </div>
                 
-                <div class="version-section">
-                    <h4 class="section-title">Content</h4>
-                    <div class="section-content">
+                <div class="version-section" id="ins-content-section">
+                    <h4 class="section-title" id="ins-content-toggle" style="cursor: pointer;">▼ Content</h4>
+                    <div class="section-content foldable-content" id="ins-content-content">
                         <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
                     </div>
                 </div>
                 
-                <div class="version-section">
-                    <h4 class="section-title">Context</h4>
-                    <div class="section-content">
+                <div class="version-section" id="ins-context-section">
+                    <h4 class="section-title" id="ins-context-toggle" style="cursor: pointer;">▼ Context</h4>
+                    <div class="section-content foldable-content" id="ins-context-content">
                         <textarea class="context-editor auto-resize" id="inspector-context-editor" placeholder="Enter context...">${this.escapeHtml(version.context || '')}</textarea>
                     </div>
                 </div>
-                
                 <div class="version-section">
-                    <h4 class="section-title">Notes</h4>
-                    <div class="section-content">
+                    <h4 class="section-title">Conditional Context</h4>
+                    <div class="section-content" id="inspector-conditional-context-host" style="width: 100%; min-height: 300px; display: flex; flex-direction: column;"></div>
+                </div>
+                
+                <div class="version-section" id="ins-notes-section">
+                    <h4 class="section-title" id="ins-notes-toggle" style="cursor: pointer;">▼ Notes</h4>
+                    <div class="section-content foldable-content" id="ins-notes-content">
                         <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${this.escapeHtml(this.node?.notes || '')}</textarea>
                     </div>
                 </div>
@@ -805,6 +802,87 @@ export class NodeInspectorModal extends BaseModal {
 
             `;
         
+        // Mount embedded Conditional Context editor (no preview)
+        setTimeout(() => {
+            try {
+                const host = wrapper.querySelector('#inspector-conditional-context-host') as HTMLElement;
+                if (host && this.node) {
+                    // Destroy previous instance if any
+                    try { this.ccEditor?.destroy(); } catch {}
+                    this.ccEditor = new ConditionalContextEditor({
+                        node: this.node,
+                        projectManager: findProjectByNode(this.node)!,
+                        showPreview: false,
+                        onNavigateToNodeId: (nodeId: string) => {
+                            try {
+                                const pm = findProjectByNode(this.node!);
+                                if (!pm) return;
+                                void import('../../project/TreeService')
+                                    .then(({ TreeService }) => {
+                                        const ts = new TreeService();
+                                        const target = ts.findNodeById(nodeId, pm.rootNode);
+                                        if (target) {
+                                            // Update inspector state and re-render in-place
+                                            this.node = target;
+                                            const versions = target.getAllVersions();
+                                            const master = versions.find(v => v.tags.has('master'));
+                                            this.selectedVersionId = master ? master.id : (versions[0]?.id ?? null);
+                                            this.rerender();
+                                        }
+                                    })
+                                    .catch((e) => {
+                                        console.error('Failed to navigate in NodeInspector:', e);
+                                    });
+                            } catch (e) {
+                                console.error('Failed to navigate in NodeInspector:', e);
+                            }
+                        }
+                    });
+                    this.ccEditor.mount(host);
+
+                    // Rewire node-select from embedded editor
+                    if (this.ccSelectListener) {
+                        window.removeEventListener('cc-select-node', this.ccSelectListener);
+                    }
+                    this.ccSelectListener = ((ev: Event) => {
+                        const detail = (ev as CustomEvent<{ nodeId: string }>).detail;
+                        if (detail && detail.nodeId) {
+                            // Select in main UI and also re-render inspector to reflect new path/title
+                            void import('../project-ui')
+                                .then(({ setSelectedNodeAndRedraw }) => {
+                                    setSelectedNodeAndRedraw(detail.nodeId);
+                                })
+                                .catch((e) => {
+                                    console.error('Failed to update selection in main UI:', e);
+                                });
+                            // Optionally, close and reopen to the selected node; for now, just refresh header
+                        }
+                    }) as EventListener;
+                    window.addEventListener('cc-select-node', this.ccSelectListener);
+                }
+            } catch (e) {
+                console.error('Failed to mount embedded Conditional Context editor in NodeInspector:', e);
+            }
+        }, 0);
+
+        // Wire fold/unfold behavior
+        const attachToggle = (toggleId: string, contentId: string) => {
+            const t = wrapper.querySelector('#' + toggleId) as HTMLElement | null;
+            const c = wrapper.querySelector('#' + contentId) as HTMLElement | null;
+            if (t && c) {
+                t.addEventListener('click', () => {
+                    const isCollapsed = c.classList.toggle('collapsed');
+                    const label = t.textContent || '';
+                    const clean = label.replace(/^([▼▶])\s*/, '');
+                    t.textContent = (isCollapsed ? '▶ ' : '▼ ') + clean;
+                });
+            }
+        };
+        attachToggle('ins-title-toggle', 'ins-title-content');
+        attachToggle('ins-content-toggle', 'ins-content-content');
+        attachToggle('ins-context-toggle', 'ins-context-content');
+        attachToggle('ins-notes-toggle', 'ins-notes-content');
+
         return wrapper;
     }
 
@@ -1503,6 +1581,8 @@ export class NodeInspectorModal extends BaseModal {
                 border-radius: 8px;
                 overflow: hidden;
             }
+            .foldable-content { display: block; }
+            .foldable-content.collapsed { display: none; }
             .section-title {
                 background: #f9fafb;
                 color: #374151;

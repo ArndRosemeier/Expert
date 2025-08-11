@@ -39,7 +39,7 @@ export class ConditionalContextModal extends SimpleModal {
 
         return container;
     }
-    
+
 }
 
 

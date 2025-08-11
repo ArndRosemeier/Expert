@@ -7,6 +7,7 @@ export interface ConditionalContextEditorConfig {
     node: DocumentNode;
     projectManager: ProjectManager;
     showPreview?: boolean; // show matched items/node content/assembled context
+    onNavigateToNodeId?: (nodeId: string) => void; // optional callback for ancestor source link behavior
 }
 
 /**
@@ -18,6 +19,7 @@ export class ConditionalContextEditor {
     private node: DocumentNode;
     private projectManager: ProjectManager;
     private showPreview: boolean;
+    private onNavigateToNodeId: ((nodeId: string) => void) | undefined;
 
     private container: HTMLElement | null = null;
     private cleanupHandlers: Array<() => void> = [];
@@ -51,6 +53,7 @@ export class ConditionalContextEditor {
         this.node = config.node;
         this.projectManager = config.projectManager;
         this.showPreview = config.showPreview !== undefined ? config.showPreview : true;
+        this.onNavigateToNodeId = config.onNavigateToNodeId;
     }
 
     public mount(container: HTMLElement): void {
@@ -396,6 +399,10 @@ export class ConditionalContextEditor {
     private refreshItemsList(): void {
         this.itemsList.innerHTML = '';
         const items = this.node.getConditionalContextItems();
+        // Compute applicability for this node once
+        const root = this.projectManager.rootNode;
+        const matchingNow = this.node.getApplicableConditionalContextItems(root);
+        const matchingIdsNow = new Set<string>(matchingNow.map(m => m.id));
         if (items.length === 0) {
             const empty = createElement('div', { content: 'No items yet.' });
             empty.style.cssText = 'color: #6b7280;';
@@ -403,6 +410,7 @@ export class ConditionalContextEditor {
             // Do not return; still show inherited items even if none locally
         }
         items.forEach(item => {
+            const applies = matchingIdsNow.has(item.id);
             const row = createElement('div');
             row.style.cssText = `
                 display: flex;
@@ -413,6 +421,17 @@ export class ConditionalContextEditor {
                 padding: 0.5rem;
                 cursor: pointer;
                 background: ${this.selectedItemId === item.id ? '#eff6ff' : 'transparent'};
+            `;
+            // Status dot
+            const dot = createElement('span');
+            dot.style.cssText = `
+                display: inline-block;
+                width: 0.5rem;
+                height: 0.5rem;
+                border-radius: 50%;
+                margin-top: 0.375rem;
+                background: ${applies ? '#16a34a' : '#dc2626'};
+                flex: 0 0 auto;
             `;
             const checkbox = createElement('input') as HTMLInputElement;
             checkbox.type = 'checkbox';
@@ -433,6 +452,7 @@ export class ConditionalContextEditor {
             meta.style.cssText = 'color: #6b7280; font-size: 0.875rem;';
             infoCol.appendChild(title);
             infoCol.appendChild(meta);
+            row.appendChild(dot);
             row.appendChild(checkbox);
             row.appendChild(infoCol);
             row.addEventListener('click', () => {
@@ -449,10 +469,8 @@ export class ConditionalContextEditor {
             header.style.cssText = 'margin-top: 0.5rem; font-weight: 600; color: #374151;';
             this.itemsList.appendChild(header);
 
-            // Compute applicability set
-            const root = this.projectManager.rootNode;
-            const matching = this.node.getApplicableConditionalContextItems(root);
-            const matchingIds = new Set<string>(matching.map(m => m.id));
+            // Compute applicability set (reuse computed above)
+            const matchingIds = matchingIdsNow;
 
             inherited.forEach(({ sourceNode, item }) => {
                 const applies = matchingIds.has(item.id);
@@ -501,8 +519,12 @@ export class ConditionalContextEditor {
                 sourceLink.style.cssText = 'color: #2563eb; text-decoration: none; cursor: pointer;';
                 sourceLink.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const event = new CustomEvent<{ nodeId: string }>('cc-select-node', { detail: { nodeId: sourceNode.id } });
-                    window.dispatchEvent(event);
+                    if (this.onNavigateToNodeId) {
+                        this.onNavigateToNodeId(sourceNode.id);
+                    } else {
+                        const event = new CustomEvent<{ nodeId: string }>('cc-select-node', { detail: { nodeId: sourceNode.id } });
+                        window.dispatchEvent(event);
+                    }
                 });
                 const logicSpan = createElement('span', { content: `${item.logic} • ${item.conditions.length} condition(s)` });
                 meta.appendChild(sourceLabel);

@@ -1825,7 +1825,7 @@ export class XMLStoryModal extends SimpleModal {
                     html += `
                         <div class="story-section">
                             <div class="story-section-header">
-                                <span>Conditional Context (applies to this node)</span>
+                                <span>Conditional Context (applies to this node, not editable here)</span>
                             </div>
                             <div class="story-elements">
                                 ${matching.map(item => {

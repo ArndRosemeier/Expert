@@ -2449,10 +2449,11 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
 
 
 
-        <div class="node-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div class="node-section" id="content-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; cursor: pointer;" id="content-toggle">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
-                    <label for="node-content">Content</label>
+                    <span class="toggle-icon" id="content-toggle-icon">▼</span>
+                    <label for="node-content" style="cursor: pointer;">Content</label>
                     <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ? node.creatorModel : 'user text, not generated'}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 1rem;">
@@ -2462,19 +2463,19 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                         <button id="version-next-btn" class="version-nav-btn" title="Next version">›</button>
                         <button id="use-this-version-btn" class="button button-primary button-sm" style="display: none;">Use This Version</button>
                     </div>
-
                 </div>
             </div>
-            <div id="content-display-area">
+            <div id="content-display-area" class="foldable-content">
                 <textarea id="node-content" class="large-textarea" rows="15" placeholder="Node content will be generated or can be written here...">${node.content || ''}</textarea>
             </div>
         </div>
         
-        <div class="node-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div class="node-section" id="context-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; cursor: pointer;" id="context-toggle">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span class="toggle-icon" id="context-toggle-icon">▼</span>
                     <button id="context-adjuster-btn" class="info-button" title="Context Adjuster - Remove problematic context items" style="font-size: 0.8rem; padding: 2px 4px; margin-right: 2px;">🔧</button>
-                    <label for="node-context">Context</label>
+                    <label for="node-context" style="cursor: pointer;">Context</label>
                     <button id="context-info-btn" class="info-button" title="Edit Context Items" style="margin-left: 4px;">📝</button>
                     <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">${getContextInfoText(node.context || '')}</span>
                 </div>
@@ -2483,7 +2484,9 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                     <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
                 </div>
             </div>
-            <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
+            <div id="context-display-area" class="foldable-content">
+                <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
+            </div>
         </div>
 
         <!-- Conditional Context Panel (embedded, below context, above app log) -->
@@ -2491,7 +2494,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <label>Conditional Context</label>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">Edit items that apply based on conditions, items automatically apply to descendants</span>
+                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">Edit items and conditions, items are automatically evaluated on all descendants</span>
                 </div>
             </div>
             <div id="conditional-context-host" style="width: 100%; min-height: 300px; display: flex; flex-direction: column;"></div>
@@ -2559,6 +2562,33 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     
     // Update the content display to show the current version
     updateVersionContentDisplay();
+
+    // Wire fold/unfold for Content
+    const contentToggle = document.getElementById('content-toggle');
+    const contentAreaEl = document.getElementById('content-display-area');
+    const contentIcon = document.getElementById('content-toggle-icon');
+    if (contentToggle && contentAreaEl && contentIcon) {
+        contentToggle.addEventListener('click', (e) => {
+            // Avoid toggling when inner actionable buttons are clicked (e.g., version nav)
+            if ((e.target as HTMLElement).closest('#version-navigation')) return;
+            const collapsed = contentAreaEl.classList.toggle('collapsed');
+            contentIcon.textContent = collapsed ? '▶' : '▼';
+        });
+    }
+
+    // Wire fold/unfold for Context
+    const contextToggle = document.getElementById('context-toggle');
+    const contextAreaEl = document.getElementById('context-display-area');
+    const contextIcon = document.getElementById('context-toggle-icon');
+    if (contextToggle && contextAreaEl && contextIcon) {
+        contextToggle.addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).closest('#node-propagate-context-btn') || (e.target as HTMLElement).closest('#node-extract-context-btn') || (e.target as HTMLElement).closest('#context-info-btn') || (e.target as HTMLElement).closest('#context-adjuster-btn')) {
+                return;
+            }
+            const collapsed = contextAreaEl.classList.toggle('collapsed');
+            contextIcon.textContent = collapsed ? '▶' : '▼';
+        });
+    }
 
     // Check if any operation is currently running on this node or any other node in the project
     const isAnyNodeGenerating = projectManager.isAnyNodeGenerating();
@@ -4531,6 +4561,8 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             .details-view textarea, .details-view select, .details-view input { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid var(--secondary-300); }
             .details-view .form-group { margin-bottom: 1rem; }
             .action-buttons { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
+            .foldable-content { display: block; }
+            .foldable-content.collapsed { display: none; }
             .spinner {
                 display: inline-block;
                 width: 20px;
