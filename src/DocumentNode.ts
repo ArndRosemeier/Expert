@@ -8,7 +8,8 @@ export type ConditionLogicOperator = 'AND' | 'OR';
 
 export enum ConditionalScope {
     ThisContent = 'this_content',
-    ThisAndPreviousSameLayer = 'this_and_previous_same_layer'
+    ThisAndPreviousSameLayer = 'this_and_previous_same_layer',
+    Path = 'path'
 }
 
 export interface ContainsCondition {
@@ -1435,6 +1436,9 @@ export class DocumentNode {
             const { parent, indexInParent } = parentInfo;
             const slice = parent.children.slice(0, indexInParent + 1);
             return slice.map(n => n.content || '').filter(s => s && s.length > 0).join('\n\n');
+        }
+        if (scope === ConditionalScope.Path) {
+            return triggeringNode.getPath(root);
         }
         const neverScope: never = scope;
         throw new Error(`Unsupported scope: ${neverScope as any}`);

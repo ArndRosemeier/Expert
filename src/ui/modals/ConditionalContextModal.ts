@@ -535,7 +535,8 @@ export class ConditionalContextModal extends SimpleModal {
             const scopeSelect = createElement('select') as HTMLSelectElement;
             const scopes: Array<{ value: ConditionalScope; label: string }> = [
                 { value: ConditionalScope.ThisContent, label: 'this content' },
-                { value: ConditionalScope.ThisAndPreviousSameLayer, label: 'this + previous (same layer)' }
+                { value: ConditionalScope.ThisAndPreviousSameLayer, label: 'this + previous (same layer)' },
+                { value: ConditionalScope.Path, label: 'path' }
             ];
             scopes.forEach(s => {
                 const opt = createElement('option', { content: s.label }) as HTMLOptionElement;
