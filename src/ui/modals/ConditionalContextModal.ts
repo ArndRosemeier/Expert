@@ -500,7 +500,7 @@ export class ConditionalContextModal extends SimpleModal {
 
         // Type selector
         const typeSelect = createElement('select') as HTMLSelectElement;
-        ['contains', 'layer_comparison'].forEach(t => {
+        ['contains', 'contains_not', 'layer_comparison'].forEach(t => {
             const opt = createElement('option', { content: t }) as HTMLOptionElement;
             opt.value = t;
             typeSelect.appendChild(opt);
@@ -511,6 +511,8 @@ export class ConditionalContextModal extends SimpleModal {
             const updated = [...allConditions];
             if (typeSelect.value === 'contains') {
                 updated[index] = { type: 'contains', scope: ConditionalScope.ThisContent, term: 'term', wordwise: true, caseSensitive: false };
+            } else if (typeSelect.value === 'contains_not') {
+                updated[index] = { type: 'contains_not', scope: ConditionalScope.ThisContent, term: 'term', wordwise: true, caseSensitive: false } as any;
             } else {
                 updated[index] = { type: 'layer_comparison', comparator: '=', layerName: this.node.template[this.node.level] || (this.node.template[0] ?? '') };
             }
@@ -524,7 +526,7 @@ export class ConditionalContextModal extends SimpleModal {
         row.appendChild(typeSelect);
 
         // Dynamic fields
-        if (cond.type === 'contains') {
+        if (cond.type === 'contains' || cond.type === 'contains_not') {
             // Scope
             const scopeSelect = createElement('select') as HTMLSelectElement;
             const scopes: Array<{ value: ConditionalScope; label: string }> = [

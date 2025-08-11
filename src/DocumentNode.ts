@@ -19,13 +19,21 @@ export interface ContainsCondition {
     caseSensitive: boolean;
 }
 
+export interface NotContainsCondition {
+    type: 'contains_not';
+    scope: ConditionalScope;
+    term: string;
+    wordwise: boolean;
+    caseSensitive: boolean;
+}
+
 export interface LayerComparisonCondition {
     type: 'layer_comparison';
     comparator: '>' | '<' | '=';
     layerName: string; // Must match an entry in template[] exactly
 }
 
-export type ConditionalContextCondition = ContainsCondition | LayerComparisonCondition;
+export type ConditionalContextCondition = ContainsCondition | NotContainsCondition | LayerComparisonCondition;
 
 export interface ConditionalContextItem {
     id: string;
@@ -421,7 +429,7 @@ export class DocumentNode {
                     if (!c || typeof c !== 'object' || typeof c.type !== 'string') {
                         throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} has invalid condition`);
                     }
-                    if (c.type === 'contains') {
+                    if (c.type === 'contains' || c.type === 'contains_not') {
                         if (!Object.values(ConditionalScope).includes(c.scope)) {
                             throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition has invalid scope: ${c.scope}`);
                         }
@@ -431,14 +439,25 @@ export class DocumentNode {
                         if (typeof c.wordwise !== 'boolean' || typeof c.caseSensitive !== 'boolean') {
                             throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition wordwise/caseSensitive must be boolean`);
                         }
-                        const cond: ContainsCondition = {
-                            type: 'contains',
-                            scope: c.scope,
-                            term: c.term,
-                            wordwise: c.wordwise,
-                            caseSensitive: c.caseSensitive
-                        };
-                        return cond;
+                        if (c.type === 'contains') {
+                            const cond: ContainsCondition = {
+                                type: 'contains',
+                                scope: c.scope,
+                                term: c.term,
+                                wordwise: c.wordwise,
+                                caseSensitive: c.caseSensitive
+                            };
+                            return cond;
+                        } else {
+                            const cond: NotContainsCondition = {
+                                type: 'contains_not',
+                                scope: c.scope,
+                                term: c.term,
+                                wordwise: c.wordwise,
+                                caseSensitive: c.caseSensitive
+                            };
+                            return cond;
+                        }
                     } else if (c.type === 'layer_comparison') {
                         if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
                             throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} layer-comparison has invalid comparator: ${c.comparator}`);
@@ -1249,7 +1268,7 @@ export class DocumentNode {
 
         // Validate conditions
         conditions.forEach((c, idx) => {
-            if (c.type === 'contains') {
+            if (c.type === 'contains' || c.type === 'contains_not') {
                 if (!Object.values(ConditionalScope).includes(c.scope)) {
                     throw new Error(`Invalid contains-condition scope at index ${idx}`);
                 }
@@ -1346,7 +1365,7 @@ export class DocumentNode {
 
     private validateConditions(conditions: ConditionalContextCondition[]): void {
         conditions.forEach((c, idx) => {
-            if (c.type === 'contains') {
+            if (c.type === 'contains' || c.type === 'contains_not') {
                 if (!Object.values(ConditionalScope).includes(c.scope)) {
                     throw new Error(`Invalid contains-condition scope at index ${idx}`);
                 }
@@ -1369,9 +1388,10 @@ export class DocumentNode {
 
     private evaluateConditionalContextItem(item: ConditionalContextItem, triggeringNode: DocumentNode, root: DocumentNode): boolean {
         const evaluator = (cond: ConditionalContextCondition): boolean => {
-            if (cond.type === 'contains') {
+            if (cond.type === 'contains' || cond.type === 'contains_not') {
                 const haystack = this.getContentForScope(cond.scope, triggeringNode, root);
-                return DocumentNode.containsMatch(haystack, cond.term, cond.wordwise, cond.caseSensitive);
+                const match = DocumentNode.containsMatch(haystack, cond.term, cond.wordwise, cond.caseSensitive);
+                return cond.type === 'contains' ? match : !match;
             }
             if (cond.type === 'layer_comparison') {
                 const layerIndexOfTrigger = triggeringNode.level;
