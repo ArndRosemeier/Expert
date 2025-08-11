@@ -20,10 +20,7 @@ export class ConditionalContextModal extends SimpleModal {
     private editorContainer!: HTMLElement;
     private conditionsContainer!: HTMLElement;
     private logicSelect!: HTMLSelectElement;
-    private saveButton!: HTMLButtonElement;
-    private revertButton!: HTMLButtonElement;
-    private deleteButton!: HTMLButtonElement;
-    private duplicateButton!: HTMLButtonElement;
+    
     private addConditionButton!: HTMLButtonElement;
     private addItemButton!: HTMLButtonElement;
     private toggleAllButton!: HTMLButtonElement;
@@ -259,27 +256,6 @@ export class ConditionalContextModal extends SimpleModal {
             cursor: pointer;
         `;
 
-        // Actions
-        const actionRow = createElement('div');
-        actionRow.style.cssText = `display: flex; gap: 0.5rem; align-items: center;`;
-        this.saveButton = createElement('button', { content: 'Save' }) as HTMLButtonElement;
-        this.revertButton = createElement('button', { content: 'Revert' }) as HTMLButtonElement;
-        this.deleteButton = createElement('button', { content: 'Delete' }) as HTMLButtonElement;
-        this.duplicateButton = createElement('button', { content: 'Duplicate' }) as HTMLButtonElement;
-        [this.saveButton, this.revertButton, this.deleteButton, this.duplicateButton].forEach(btn => {
-            btn.style.cssText = `
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                cursor: pointer;
-            `;
-        });
-        actionRow.appendChild(this.saveButton);
-        actionRow.appendChild(this.revertButton);
-        actionRow.appendChild(this.deleteButton);
-        actionRow.appendChild(this.duplicateButton);
-
         // Bulk apply actions
         const bulkRow = createElement('div');
         bulkRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
@@ -303,7 +279,6 @@ export class ConditionalContextModal extends SimpleModal {
         rightPane.appendChild(logicRow);
         rightPane.appendChild(this.conditionsContainer);
         rightPane.appendChild(this.addConditionButton);
-        rightPane.appendChild(actionRow);
         rightPane.appendChild(bulkRow);
 
         mainSplit.appendChild(leftPane);
@@ -398,10 +373,6 @@ export class ConditionalContextModal extends SimpleModal {
         addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleDelete(); }, this.cleanupHandlers);
-        addEventListenerWithCleanup(this.saveButton, 'click', () => this.handleSave(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.revertButton, 'click', () => this.handleRevert(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.deleteButton, 'click', () => this.handleDelete(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.duplicateButton, 'click', () => this.handleDuplicate(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
     }
 
@@ -735,16 +706,6 @@ export class ConditionalContextModal extends SimpleModal {
             .filter(p => p.length > 0);
     }
 
-    private handleSave(): void {
-        // No-op save: edits are applied live. Refresh preview.
-        this.evaluatePreview();
-    }
-
-    private handleRevert(): void {
-        // Reload UI from current node state
-        this.applySelectionToUI();
-    }
-
     private async handleDelete(): Promise<void> {
         if (!this.selectedItemId) return;
         const confirmed = confirm('Delete this item?');
@@ -758,15 +719,7 @@ export class ConditionalContextModal extends SimpleModal {
         }
     }
 
-    private handleDuplicate(): void {
-        if (!this.selectedItemId) return;
-        const item = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
-        if (!item) return;
-        const newId = this.node.addConditionalContextItem(item.text, item.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[], item.logic);
-        this.refreshItemsList();
-        this.selectItem(newId);
-        this.schedulePersist();
-    }
+    
 
     private populateTriggeringNodeOptions(): void {
         const root = this.projectManager.rootNode;
