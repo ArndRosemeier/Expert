@@ -1481,4 +1481,23 @@ export class DocumentNode {
         }
         return null;
     }
+
+    /**
+     * Builds the hierarchical path from the provided root to this node, formatted as
+     * "LevelName: Title => LevelName: Title => ..." with numeric suffixes removed from level names.
+     */
+    public getPath(root: DocumentNode): string {
+        const chain = DocumentNode.findPathFromRoot(root, this.id);
+        if (!chain || chain.length === 0) {
+            throw new Error(`Cannot build path: node ${this.id} not found under provided root`);
+        }
+        const parts = chain.map((n) => {
+            const rawLevelName = (n.template[n.level] || `Level ${n.level}`).trim();
+            const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+            const levelName = (match && match[1] ? match[1] : rawLevelName).trim();
+            const cleanTitle = (n.title || '').trim();
+            return `${levelName}: ${cleanTitle}`;
+        });
+        return parts.join(' => ');
+    }
 }

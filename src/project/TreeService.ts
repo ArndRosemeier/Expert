@@ -237,24 +237,9 @@ export class TreeService {
      * @returns A formatted string representing the path.
      */
     public getNodePath(nodeId: string, rootNode: DocumentNode): string {
-        const path: string[] = [];
-        let currentNode = this.findNodeById(nodeId, rootNode);
-        
-        while (currentNode) {
-            const rawLevelName = (currentNode.template[currentNode.level] || `Level ${currentNode.level}`).trim();
-            
-            // Extract just the base name (remove numbers)
-            // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
-            const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-            const levelName = (match && match[1] ? match[1] : rawLevelName).trim();
-            
-            // Trim both level name and node title to remove any leading/trailing whitespace
-            const cleanTitle = currentNode.title.trim();
-            path.unshift(`${levelName}: ${cleanTitle}`);
-            currentNode = currentNode.parentId ? this.findNodeById(currentNode.parentId, rootNode) : null;
-        }
-        
-        return path.join(' => ');
+        const node = this.findNodeById(nodeId, rootNode);
+        if (!node) return '';
+        return node.getPath(rootNode);
     }
 
     /**
