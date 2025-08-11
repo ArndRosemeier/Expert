@@ -1499,6 +1499,18 @@ export class DocumentNode {
         return found ? path : [];
     }
 
+    /**
+     * Public helper: returns the path from the provided root to the target node (inclusive).
+     * Throws if the target node is not found under the root.
+     */
+    public static getPathFromRoot(root: DocumentNode, targetId: string): DocumentNode[] {
+        const chain = DocumentNode.findPathFromRoot(root, targetId);
+        if (!chain || chain.length === 0) {
+            throw new Error(`Cannot build path: node ${targetId} not found under provided root`);
+        }
+        return chain;
+    }
+
     private static findParentAndIndex(root: DocumentNode, targetId: string): { parent: DocumentNode; indexInParent: number } | null {
         const stack: DocumentNode[] = [root];
         while (stack.length > 0) {

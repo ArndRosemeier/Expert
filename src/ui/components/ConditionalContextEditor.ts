@@ -485,6 +485,14 @@ export class ConditionalContextEditor {
                 const title = createElement('div', { content: truncateText((item.text || '').split('\n')[0] || '', 80) || '(empty text)' });
                 title.style.cssText = 'font-weight: 500; color: #4b5563;';
 
+                // Conditions line (use established formatting)
+                const conditionsDiv = createElement('div');
+                const conditionsText = (item.conditions && item.conditions.length > 0)
+                    ? this.formatConditionsForDisplay(item.conditions as any, item.logic as any)
+                    : '<em>Unconditional</em>';
+                conditionsDiv.innerHTML = conditionsText;
+                conditionsDiv.style.cssText = 'font-size: 0.75rem; color: #7c2d12;';
+
                 const meta = createElement('div');
                 meta.style.cssText = 'color: #6b7280; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;';
                 const sourceLabel = createElement('span', { content: 'from' });
@@ -502,6 +510,7 @@ export class ConditionalContextEditor {
                 meta.appendChild(logicSpan);
 
                 infoCol.appendChild(title);
+                infoCol.appendChild(conditionsDiv);
                 infoCol.appendChild(meta);
 
                 row.appendChild(dot);
@@ -513,8 +522,12 @@ export class ConditionalContextEditor {
 
     private buildInheritedItems(): Array<{ sourceNode: DocumentNode; item: ReturnType<DocumentNode['getConditionalContextItems']>[number] }> {
         const root = this.projectManager.rootNode;
-        const path = this.findPath(root, this.node.id);
-        if (!path || path.length === 0) return [];
+        let path: DocumentNode[] = [];
+        try {
+            path = DocumentNode.getPathFromRoot(root, this.node.id);
+        } catch {
+            return [];
+        }
         const ancestors = path.slice(0, -1); // Exclude current node
         const results: Array<{ sourceNode: DocumentNode; item: ReturnType<DocumentNode['getConditionalContextItems']>[number] }> = [];
         for (const ancestor of ancestors) {
@@ -526,18 +539,26 @@ export class ConditionalContextEditor {
         return results;
     }
 
-    private findPath(root: DocumentNode, targetId: string): DocumentNode[] | null {
-        const path: DocumentNode[] = [];
-        const dfs = (n: DocumentNode): boolean => {
-            path.push(n);
-            if (n.id === targetId) return true;
-            for (const c of n.children) {
-                if (dfs(c)) return true;
+    /**
+     * Turn conditional context conditions into a human-readable string (established formatting)
+     */
+    private formatConditionsForDisplay(conditions: ConditionalContextCondition[], logic: ConditionLogicOperator): string {
+        const parts = conditions.map((c) => {
+            if (!c || typeof c !== 'object') return '(invalid)';
+            if ((c as any).type === 'contains' || (c as any).type === 'contains_not') {
+                const cc = c as any;
+                const scopeLabel = cc.scope === 'this_content' ? 'this' : (cc.scope === 'this_and_previous_same_layer' ? 'this + previous (same layer)' : (cc.scope === 'path' ? 'path' : String(cc.scope)));
+                const mode = cc.type === 'contains' ? 'contains' : 'does not contain';
+                const flags = `${cc.wordwise ? 'wordwise' : 'substring'}, ${cc.caseSensitive ? 'case-sensitive' : 'case-insensitive'}`;
+                return `[${scopeLabel}] ${mode} "${(cc.term || '').replace(/"/g, '\"')}" (${flags})`;
             }
-            path.pop();
-            return false;
-        };
-        return dfs(root) ? path : null;
+            if ((c as any).type === 'layer_comparison') {
+                const lc = c as any;
+                return `layer ${lc.comparator} ${lc.layerName}`;
+            }
+            return '(unknown condition)';
+        });
+        return parts.join(` ${logic} `);
     }
 
     private selectFirstItem(): void {

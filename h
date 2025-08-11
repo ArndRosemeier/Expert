@@ -1,0 +1,1 @@
+[33m3eab3e0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m feat(conditional-context): reusable editor; panel in main UI; optional preview; show inherited items with applicability and clickable source; minor label update
