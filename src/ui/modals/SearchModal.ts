@@ -37,6 +37,7 @@ export class SearchModal extends BaseModal {
     private caseSensitive: boolean = false;
     private searchInContent: boolean = true;
     private searchInContext: boolean = true;
+    private searchInConditional: boolean = false;
 
     constructor() {
         super({
@@ -106,6 +107,9 @@ export class SearchModal extends BaseModal {
                     <label class="checkbox-label">
                         <input type="checkbox" id="search-context" checked> Search in context
                     </label>
+                    <label class="checkbox-label" title="Search only this node's conditional context items (not inherited, not recursive)">
+                        <input type="checkbox" id="search-conditional"> Search in conditional context (this node only)
+                    </label>
                 </div>
 
                 <!-- Status -->
@@ -172,6 +176,7 @@ export class SearchModal extends BaseModal {
         const caseSensitiveCheckbox = container.querySelector('#case-sensitive') as HTMLInputElement;
         const searchContentCheckbox = container.querySelector('#search-content') as HTMLInputElement;
         const searchContextCheckbox = container.querySelector('#search-context') as HTMLInputElement;
+        const searchConditionalCheckbox = container.querySelector('#search-conditional') as HTMLInputElement;
 
         includeAllVersionsCheckbox.addEventListener('change', (e) => {
             this.includeAllVersions = (e.target as HTMLInputElement).checked;
@@ -189,6 +194,11 @@ export class SearchModal extends BaseModal {
         searchContextCheckbox.addEventListener('change', (e) => {
             this.searchInContext = (e.target as HTMLInputElement).checked;
             this.updateReplaceButtonState();
+        });
+
+        searchConditionalCheckbox.addEventListener('change', (e) => {
+            this.searchInConditional = (e.target as HTMLInputElement).checked;
+            // Replace button state unaffected by conditional context (replace does not operate on conditional items)
         });
 
         // Enter key in replace input
@@ -227,7 +237,8 @@ export class SearchModal extends BaseModal {
             includeAllVersions: this.includeAllVersions,
             caseSensitive: this.caseSensitive,
             searchInContent: this.searchInContent,
-            searchInContext: this.searchInContext
+            searchInContext: this.searchInContext,
+            searchInConditionalContext: this.searchInConditional
         };
 
         this.showStatus('Searching...');
@@ -331,7 +342,9 @@ export class SearchModal extends BaseModal {
 
             for (const result of nodeResults) {
                 const highlightedParagraph = this.highlightMatch(result.paragraph, result.matchStart, result.matchLength);
-                const versionInfo = result.version.tags.has('master') ? 'Master' : Array.from(result.version.tags).join(', ');
+                const versionInfo = result.contentType === 'conditional'
+                    ? 'Conditional (this node)'
+                    : (result.version.tags.has('master') ? 'Master' : Array.from(result.version.tags).join(', '));
                 
                 html += `
                     <div class="result-paragraph" data-node-id="${node.id}" data-version-id="${result.version.id}">

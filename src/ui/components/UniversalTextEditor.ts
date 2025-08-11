@@ -323,6 +323,8 @@ export class UniversalTextEditor {
         // Add to container first
         this.container.appendChild(editorContainer);
         (this.container.style as any).display = 'flex';
+        // Ensure search bar (inserted before) appears above the editor, not as a side column
+        (this.container.style as any).flexDirection = 'column';
         (this.container.style as any).flex = '1 1 auto';
         (this.container.style as any).minHeight = '0';
         
@@ -1823,14 +1825,15 @@ export class UniversalTextEditor {
             flex-direction: row;
             align-items: center;
             gap: 8px;
-            padding: 8px 12px;
+            padding: 4px 8px;
             background: #2a2a2a;
             border: 1px solid #555;
             border-radius: 4px;
             font-size: 12px;
             color: #fff;
-            position: relative;
-            z-index: 1000;
+            position: sticky;
+            top: 0;
+            z-index: 5;
             margin-bottom: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         `;
@@ -1840,8 +1843,8 @@ export class UniversalTextEditor {
         this.searchInput.type = 'text';
         this.searchInput.placeholder = 'Search...';
         this.searchInput.style.cssText = `
-            flex: 1;
-            padding: 4px 8px;
+            flex: 0 1 240px;
+            padding: 2px 6px;
             border: 1px solid #666;
             border-radius: 3px;
             background: #1a1a1a;
@@ -1855,8 +1858,8 @@ export class UniversalTextEditor {
         this.replaceInput.type = 'text';
         this.replaceInput.placeholder = 'Replace...';
         this.replaceInput.style.cssText = `
-            flex: 1;
-            padding: 4px 8px;
+            flex: 0 1 240px;
+            padding: 2px 6px;
             border: 1px solid #666;
             border-radius: 3px;
             background: #1a1a1a;
@@ -1959,14 +1962,14 @@ export class UniversalTextEditor {
             margin-left: 4px;
         `;
         
-        // Assemble the search bar with new layout
+        // Assemble the search bar with compact layout order
         this.searchBar.appendChild(findBtn);
         this.searchBar.appendChild(this.searchInput);
         this.searchBar.appendChild(prevBtn);
         this.searchBar.appendChild(nextBtn);
+        this.searchBar.appendChild(this.replaceInput);
         this.searchBar.appendChild(replaceBtn);
         this.searchBar.appendChild(replaceAllBtn);
-        this.searchBar.appendChild(this.replaceInput);
         this.searchBar.appendChild(resultsCount);
         this.searchBar.appendChild(closeBtn);
         

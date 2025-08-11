@@ -24,6 +24,8 @@ export interface SearchOptions {
     searchInContent: boolean;
     /** Search in context */
     searchInContext: boolean;
+    /** Search in conditional context (only on the triggering/root node) */
+    searchInConditionalContext?: boolean;
 }
 
 export interface SearchResult {
@@ -32,7 +34,7 @@ export interface SearchResult {
     /** Version where the match was found */
     version: ContentVersion;
     /** Type of content where match was found */
-    contentType: 'content' | 'context';
+    contentType: 'content' | 'context' | 'conditional';
     /** The paragraph containing the match */
     paragraph: string;
     /** Position of the match within the paragraph */
@@ -81,6 +83,11 @@ export class SearchService {
         
         // Recursively search through all nodes - assume functions exist and work
         this.searchNodeRecursive(rootNode, regex, options, results);
+
+        // Additionally search conditional context on the triggering/root node only (not recursive)
+        if (options.searchInConditionalContext) {
+            this.searchConditionalOnRootOnly(rootNode, regex, results);
+        }
         
         return results;
     }
@@ -260,6 +267,40 @@ export class SearchService {
         // Recursively replace in children - NO defensive check
         for (const child of node.children) {
             this.replaceNodeRecursive(child, regex, options, result);
+        }
+    }
+
+    /**
+     * Search only the triggering/root node's conditional context items
+     */
+    private static searchConditionalOnRootOnly(
+        rootNode: DocumentNode,
+        regex: RegExp,
+        results: SearchResult[]
+    ): void {
+        // Use master version as placeholder for version linkage in results
+        const master = rootNode.getMasterVersion()!;
+        const items = rootNode.getConditionalContextItems();
+        for (let index = 0; index < items.length; index++) {
+            const item = items[index]!;
+            const text = item.text || '';
+            regex.lastIndex = 0;
+            let match: RegExpExecArray | null;
+            while ((match = regex.exec(text)) !== null) {
+                results.push({
+                    node: rootNode,
+                    version: master,
+                    contentType: 'conditional',
+                    paragraph: text,
+                    matchStart: match.index,
+                    matchLength: match[0].length,
+                    paragraphIndex: index
+                });
+                if (match.index === regex.lastIndex) {
+                    regex.lastIndex++;
+                }
+                if (!regex.global) break;
+            }
         }
     }
 }
