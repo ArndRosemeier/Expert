@@ -234,6 +234,8 @@ export class UnifiedGenerationService {
         analyzedNodes: [],
         totalAnalyzed: 0
     };
+    // Limit readiness checks to subtree when starting below root
+    private scopeRootNode: DocumentNode | null = null;
 
     constructor(dependencies: UnifiedGenerationDependencies) {
         this.deps = dependencies;
@@ -331,6 +333,8 @@ export class UnifiedGenerationService {
         if (!startNode) {
             throw new Error(`Node not found: ${startNodeId}`);
         }
+        // Set scope root so sibling readiness checks are limited to this subtree
+        this.scopeRootNode = startNode;
         
         // Log generation start to UI logger if available
         void import('../utils/UILogger').then(({ uiLogger }) => {
@@ -364,6 +368,8 @@ export class UnifiedGenerationService {
         } finally {
             // Always cleanup this instance from active registry
             UnifiedGenerationService.activeInstances.delete(this);
+            // Clear scope after run
+            this.scopeRootNode = null;
             // Clear accumulated contradictions
             this.accumulatedContradictions = {
                 hasContradictions: false,
@@ -701,11 +707,12 @@ export class UnifiedGenerationService {
             return false;
         }
         
-        // Get all siblings at the same level using centralized level collection
-        const siblings = this.deps.treeService.getNodesAtTemplateLevel(this.deps.rootNode, node.level);
+        // Get all siblings at the same level using centralized level collection, limited to scope root
+        const scopeRoot = this.scopeRootNode ?? this.deps.rootNode;
+        const siblings = this.deps.treeService.getNodesAtTemplateLevel(scopeRoot, node.level);
         
         if (DEBUG_STATELESS_GENERATION) {
-            console.log(`   📋 Found ${siblings.length} siblings at level ${node.level}:`);
+            console.log(`   📋 Found ${siblings.length} siblings at level ${node.level} within scope "${scopeRoot.title}":`);
             siblings.forEach(sibling => {
                 console.log(`      - "${sibling.title}"`);
             });
