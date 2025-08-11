@@ -2,7 +2,7 @@ import { BaseModal } from './core/BaseModal';
 import type { DocumentNode, ContentVersion } from '../../DocumentNode';
 import { analyzeTagsInHierarchy } from '../../ProjectUtils';
 import { Rating } from '../../types/RatingTypes';
-import { getActiveProject } from '../../state';
+import { findProjectByNode } from '../../state';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { openConditionalContextModal } from './ModalFactory';
 
@@ -419,7 +419,13 @@ export class NodeInspectorModal extends BaseModal {
 
         const titleEl = document.createElement('h1');
         titleEl.className = 'node-title-fat';
-        titleEl.textContent = this.node ? this.node.title : 'Untitled Node';
+        if (this.node) {
+            const project = findProjectByNode(this.node);
+            const root = project?.rootNode ?? this.node;
+            titleEl.textContent = this.node.getPath(root);
+        } else {
+            titleEl.textContent = 'Untitled Node';
+        }
 
         const ccBtn = document.createElement('button');
         ccBtn.textContent = 'Conditional context';
@@ -944,16 +950,16 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private getProjectRoot(): DocumentNode {
-        const projectManager = getActiveProject()!;
-        return projectManager.rootNode;
+        if (!this.node) {
+            throw new Error('NodeInspectorModal: node is not set');
+        }
+        const projectManager = findProjectByNode(this.node);
+        return projectManager?.rootNode ?? this.node;
     }
 
     private async persistNodeChanges(): Promise<void> {
         try {
-            // Get the active project manager
-            const { getActiveProject } = await import('../../state');
-            const projectManager = getActiveProject();
-            
+            const projectManager = this.node ? findProjectByNode(this.node) : null;
             if (projectManager) {
                 // Save the project to storage
                 await projectManager.saveToStorage();
@@ -1216,7 +1222,7 @@ export class NodeInspectorModal extends BaseModal {
                 background: #f9fafb;
             }
             .node-title-fat {
-                font-size: 1.875rem;
+                font-size: 1.1rem;
                 font-weight: 800;
                 color: #1f2937;
                 margin: 0;

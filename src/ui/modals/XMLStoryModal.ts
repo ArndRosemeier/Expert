@@ -24,7 +24,7 @@ import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { DocumentNode } from '../../DocumentNode';
 import { 
-    getActiveProject
+    findProjectByNode
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
@@ -1818,7 +1818,7 @@ export class XMLStoryModal extends SimpleModal {
         // Conditional context (read-only, appended at bottom, clearly distinct)
         if (this.sourceNode) {
             try {
-                const project = getActiveProject();
+                const project = this.sourceNode ? findProjectByNode(this.sourceNode) : null;
                 const root = project?.rootNode ?? this.sourceNode; // Fallback to node if project unavailable
                 const matching = this.sourceNode.getApplicableConditionalContextItems(root);
                 if (matching.length > 0) {
@@ -2658,12 +2658,12 @@ export class XMLStoryModal extends SimpleModal {
 
 
             // Save the project
-            const activeProject = getActiveProject();
-            if (activeProject) {
-                await activeProject.saveToStorage();
+            const project = findProjectByNode(this.sourceNode);
+            if (project) {
+                await project.saveToStorage();
                 
                 // Trigger UI update by emitting tree-update-needed event
-                activeProject.emit('tree-update-needed', { 
+                project.emit('tree-update-needed', { 
                     nodeId: this.sourceNode.id, 
                     reason: 'chat-edited' 
                 });
