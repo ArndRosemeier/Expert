@@ -126,8 +126,8 @@ export class ConditionalContextModal extends SimpleModal {
             cursor: pointer;
         `;
 
-        this.removeItemButton = createElement('button', { content: 'Remove selected' });
-        this.removeItemButton.title = 'Remove the currently selected item';
+        this.removeItemButton = createElement('button', { content: 'Remove checked' });
+        this.removeItemButton.title = 'Remove all checked items';
         this.removeItemButton.style.cssText = `
             padding: 0.5rem 1rem;
             border-radius: 0.5rem;
@@ -390,7 +390,7 @@ export class ConditionalContextModal extends SimpleModal {
         addEventListenerWithCleanup(this.addConditionButton, 'click', () => this.handleAddCondition(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleDelete(); }, this.cleanupHandlers);
+        addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleRemoveChecked(); }, this.cleanupHandlers);
         addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.assembledTabBtn, 'click', () => { this.activePreviewTab = 'assembled'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
         addEventListenerWithCleanup(this.contentTabBtn, 'click', () => { this.activePreviewTab = 'content'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
@@ -726,15 +726,29 @@ export class ConditionalContextModal extends SimpleModal {
             .filter(p => p.length > 0);
     }
 
-    private async handleDelete(): Promise<void> {
-        if (!this.selectedItemId) return;
-        const confirmed = confirm('Delete this item?');
+    // Removed single-item delete usage from UI; bulk remove is preferred now
+
+    private async handleRemoveChecked(): Promise<void> {
+        const items = this.node.getConditionalContextItems();
+        if (items.length === 0 || this.selectedIds.size === 0) return;
+        const toRemove = items.filter(i => this.selectedIds.has(i.id)).map(i => i.id);
+        const confirmed = confirm(`Delete ${toRemove.length} checked item${toRemove.length === 1 ? '' : 's'}?`);
         if (!confirmed) return;
-        const success = this.node.removeConditionalContextItem(this.selectedItemId);
-        if (success) {
-            this.refreshItemsList();
-            this.selectFirstItem();
-            this.evaluatePreview();
+        let removed = 0;
+        for (const id of toRemove) {
+            if (this.node.removeConditionalContextItem(id)) {
+                removed++;
+                if (this.selectedItemId === id) {
+                    this.selectedItemId = null;
+                }
+            }
+        }
+        // Reset checked state
+        this.selectedIds.clear();
+        this.refreshItemsList();
+        this.selectFirstItem();
+        this.evaluatePreview();
+        if (removed > 0) {
             this.schedulePersist();
         }
     }
