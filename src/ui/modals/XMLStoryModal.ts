@@ -1737,7 +1737,14 @@ export class XMLStoryModal extends SimpleModal {
         const cursorPosition = shouldRestoreFocus ? this.messageInput?.selectionStart : null;
 
         // Get all elements for context items only (outline is now unified)
-        const allElements = this.storySystem.service.getElementsForContext();
+        let allElements: StoryElement[] = [];
+        try {
+            const fetched = this.storySystem.service.getElementsForContext();
+            allElements = Array.isArray(fetched) ? fetched : [];
+        } catch (e) {
+            console.error('Failed to fetch context elements for whiteboard:', e);
+            allElements = [];
+        }
         const contextElements = allElements.filter((el: StoryElement) => el.type === 'context');
         
         // Clear existing context editors (outline editor is persistent)
@@ -1764,7 +1771,7 @@ export class XMLStoryModal extends SimpleModal {
                 </div>
                     <div class="story-elements">
                     <div id="unified-outline-editor" style="min-height: 200px; border: 1px solid #ddd; border-radius: 8px; padding: 12px;">
-                        ${!hasOutlineHistory ? '<div style="color: #999; font-style: italic;">Start writing your outline here or ask AI to create one...</div>' : ''}
+                        ${'' /* Always render editor below; placeholder handled by textarea placeholder */}
                     </div>
                     </div>
                 </div>
