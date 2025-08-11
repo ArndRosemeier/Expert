@@ -502,6 +502,12 @@ export class ConditionalContextModal extends SimpleModal {
         const row = createElement('div');
         row.style.cssText = `display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;`;
 
+        const getLiveConditions = (): ConditionalContextCondition[] => {
+            if (!this.selectedItemId) return [...allConditions];
+            const liveItem = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
+            return liveItem ? (liveItem.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[]) : [...allConditions];
+        };
+
         // Type selector
         const typeSelect = createElement('select') as HTMLSelectElement;
         ['contains', 'contains_not', 'layer_comparison'].forEach(t => {
@@ -512,7 +518,7 @@ export class ConditionalContextModal extends SimpleModal {
         typeSelect.value = cond.type;
         typeSelect.addEventListener('change', () => {
             if (!this.selectedItemId) return;
-            const updated = [...allConditions];
+            const updated = getLiveConditions();
             if (typeSelect.value === 'contains') {
                 updated[index] = { type: 'contains', scope: ConditionalScope.ThisAndPreviousSameLayer, term: 'term', wordwise: true, caseSensitive: false };
             } else if (typeSelect.value === 'contains_not') {
@@ -546,7 +552,7 @@ export class ConditionalContextModal extends SimpleModal {
             scopeSelect.value = cond.scope;
             scopeSelect.addEventListener('change', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], scope: scopeSelect.value as ConditionalScope };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); this.schedulePersist(); } catch (e) { console.error(e); alert(String(e)); }
             });
@@ -559,7 +565,7 @@ export class ConditionalContextModal extends SimpleModal {
             termInput.value = cond.term;
             termInput.addEventListener('input', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], term: termInput.value };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); this.schedulePersist(); } catch (e) { console.error(e); }
             });
@@ -573,7 +579,7 @@ export class ConditionalContextModal extends SimpleModal {
             wordwiseCheckbox.checked = cond.wordwise;
             wordwiseCheckbox.addEventListener('change', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], wordwise: wordwiseCheckbox.checked };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); this.schedulePersist(); } catch (e) { console.error(e); }
             });
@@ -587,7 +593,7 @@ export class ConditionalContextModal extends SimpleModal {
             csCheckbox.checked = cond.caseSensitive;
             csCheckbox.addEventListener('change', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], caseSensitive: csCheckbox.checked };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); this.schedulePersist(); } catch (e) { console.error(e); }
             });
@@ -604,7 +610,7 @@ export class ConditionalContextModal extends SimpleModal {
             cmpSelect.value = cond.comparator;
             cmpSelect.addEventListener('change', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], comparator: cmpSelect.value as any };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); this.schedulePersist(); } catch (e) { console.error(e); }
             });
@@ -620,7 +626,7 @@ export class ConditionalContextModal extends SimpleModal {
             layerSelect.value = cond.layerName;
             layerSelect.addEventListener('change', () => {
                 if (!this.selectedItemId) return;
-                const updated = [...allConditions];
+                const updated = getLiveConditions();
                 (updated[index] as any) = { ...updated[index], layerName: layerSelect.value };
                 try { this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated }); } catch (e) { console.error(e); }
             });
@@ -638,11 +644,12 @@ export class ConditionalContextModal extends SimpleModal {
         `;
         removeBtn.addEventListener('click', () => {
             if (!this.selectedItemId) return;
-            const updated = allConditions.filter((_, i) => i !== index);
+            const updated = getLiveConditions().filter((_, i) => i !== index);
             try {
                 this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
                 this.renderConditions();
                 this.refreshItemsList();
+                this.schedulePersist();
             } catch (e) { console.error(e); alert(String(e)); }
         });
         row.appendChild(removeBtn);
