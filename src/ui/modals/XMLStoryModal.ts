@@ -1275,7 +1275,12 @@ export class XMLStoryModal extends SimpleModal {
         
         // Load custom buttons after initialization
         await this.loadCustomButtons();
-        
+
+        // Ensure initial chat message is updated when a source node is present
+        if (this.sourceNode) {
+            this.updateInitialChatMessage();
+        }
+
         // Show initial message if no initialization data was provided
         if (!this.sourceNode) {
                 const messageElement = document.getElementById('initial-chat-message');
