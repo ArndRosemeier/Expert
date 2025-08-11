@@ -1947,8 +1947,9 @@ export class XMLStoryModal extends SimpleModal {
             const style = document.createElement('style');
             style.id = styleId;
             style.textContent = `
-                .conditional-readonly { background: #f9fafb; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; }
-                .conditional-readonly .conditional-conditions { font-size: 12px; color: #475569; margin-bottom: 6px; }
+                .conditional-readonly { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px; }
+                .conditional-readonly .element-content { display: flex; flex-direction: column; gap: 6px; }
+                .conditional-readonly .conditional-conditions { font-size: 12px; color: #7c2d12; margin-bottom: 2px; }
                 .conditional-readonly .conditional-text { color: #111827; }
             `;
             document.head.appendChild(style);
