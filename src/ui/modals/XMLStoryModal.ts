@@ -1800,6 +1800,42 @@ export class XMLStoryModal extends SimpleModal {
                 </div>
             `;
 
+        // Conditional context (read-only, appended at bottom, clearly distinct)
+        if (this.sourceNode) {
+            try {
+                const project = getActiveProject();
+                const root = project?.rootNode ?? this.sourceNode; // Fallback to node if project unavailable
+                const matching = this.sourceNode.collectMatchingConditionalContextItems(this.sourceNode, root);
+                if (matching.length > 0) {
+                    html += `
+                        <div class="story-section">
+                            <div class="story-section-header">
+                                <span>Conditional Context (applies to this node)</span>
+                            </div>
+                            <div class="story-elements">
+                                ${matching.map(item => {
+                                    const conditions = item.conditions && item.conditions.length > 0
+                                        ? this.formatConditionsForDisplay(item.conditions, item.logic)
+                                        : '<em>Unconditional</em>';
+                                    const safeText = (item.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                                    return `
+                                        <div class="story-element conditional-readonly">
+                                            <div class="element-content">
+                                                <div class="conditional-conditions">${conditions}</div>
+                                                <div class="conditional-text">${safeText.replace(/\n/g, '<br/>')}</div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.warn('Failed to render conditional context preview:', e);
+            }
+        }
+
         this.whiteboardContainer.innerHTML = html;
 
         // Initialize the unified outline editor
@@ -1904,6 +1940,19 @@ export class XMLStoryModal extends SimpleModal {
                 });
             });
         });
+
+        // Style readonly conditional items distinctly
+        const styleId = 'conditional-context-inline-style';
+        if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                .conditional-readonly { background: #f9fafb; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; }
+                .conditional-readonly .conditional-conditions { font-size: 12px; color: #475569; margin-bottom: 6px; }
+                .conditional-readonly .conditional-text { color: #111827; }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     private async handleElementEdit(elementId: string, newContent: string): Promise<void> {
@@ -2027,6 +2076,26 @@ export class XMLStoryModal extends SimpleModal {
             });
 
         return formatted;
+    }
+
+    /**
+     * Turn conditional context conditions into a human-readable string
+     */
+    private formatConditionsForDisplay(conditions: any[], logic: 'AND' | 'OR'): string {
+        const parts = conditions.map((c) => {
+            if (!c || typeof c !== 'object') return '(invalid)';
+            if (c.type === 'contains' || c.type === 'contains_not') {
+                const scopeLabel = c.scope === 'this_content' ? 'this' : (c.scope === 'this_and_previous_same_layer' ? 'this + previous (same layer)' : (c.scope === 'path' ? 'path' : String(c.scope)));
+                const mode = c.type === 'contains' ? 'contains' : 'does not contain';
+                const flags = `${c.wordwise ? 'wordwise' : 'substring'}, ${c.caseSensitive ? 'case-sensitive' : 'case-insensitive'}`;
+                return `[${scopeLabel}] ${mode} "${(c.term || '').replace(/"/g, '\"')}" (${flags})`;
+            }
+            if (c.type === 'layer_comparison') {
+                return `layer ${c.comparator} ${c.layerName}`;
+            }
+            return '(unknown condition)';
+        });
+        return parts.join(` ${logic} `);
     }
 
     private formatHumanEditsForAI(): string {
