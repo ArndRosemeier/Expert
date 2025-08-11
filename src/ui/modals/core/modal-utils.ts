@@ -59,8 +59,18 @@ export function formatTimestamp(timestamp: Date): string {
  * Truncates text to a specified length with ellipsis
  */
 export function truncateText(text: string, maxLength: number): string {
+    if (!text) return '';
     if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 3) + '...';
+
+    // Reserve space for ellipsis
+    const limit = Math.max(0, maxLength - 3);
+    const slice = text.substring(0, limit);
+
+    // Find last word boundary within the slice
+    const lastSpace = slice.lastIndexOf(' ');
+    const cutIndex = lastSpace > 0 ? lastSpace : limit;
+
+    return slice.substring(0, cutIndex).replace(/[\s\.,;:!\-]+$/,'') + '...';
 }
 
 /**

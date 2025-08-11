@@ -9,12 +9,9 @@ export * from './core/modal-utils';
 
 // Modal implementations (explicit exports to avoid conflicts)
 export { SettingsModal } from './SettingsModal';
-export type { SettingsModalConfig } from './SettingsModal';
 export { ExportModal } from './ExportModal';
-export type { ExportModalConfig } from './ExportModal';
-export { showGenericModal, showAlert, showConfirm, GenericModal } from './GenericModal';
+export { showGenericModal, GenericModal } from './GenericModal';
 export { AILogModal } from './AILogModal';
-export type { AILogModalConfig } from './AILogModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
 export { KeyValidationModal } from './KeyValidationModal';
 export { VersionMismatchModal } from './VersionMismatchModal';
@@ -34,6 +31,7 @@ export { ManualModal } from './ManualModal';
 export { RedundancyDetectorModal } from './RedundancyDetectorModal';
 export { LogicErrorDetectorModal } from './LogicErrorDetectorModal';
 export { LogicOutlineFixerModal } from './LogicOutlineFixerModal';
+export { ConditionalContextModal } from './ConditionalContextModal';
 
 // Modal components and services
 export * from './components/CriteriaEditor';
@@ -49,7 +47,6 @@ export * from './services/GenerationErrorService';
 
 // Types
 export * from './types/ModalTypes';
-export * from './types/ExportTypes';
 export * from '../../types/CoherenceTypes';
 export * from '../../types/ContextAdjusterTypes';
 

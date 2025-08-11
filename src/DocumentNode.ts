@@ -2,6 +2,38 @@ import { LoopHistoryItem } from './LoopOrchestrator';
 import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 
+// ---------------- Conditional Context System (parallel to legacy context) ----------------
+
+export type ConditionLogicOperator = 'AND' | 'OR';
+
+export enum ConditionalScope {
+    ThisContent = 'this_content',
+    ThisAndPreviousSameLayer = 'this_and_previous_same_layer'
+}
+
+export interface ContainsCondition {
+    type: 'contains';
+    scope: ConditionalScope;
+    term: string;
+    wordwise: boolean;
+    caseSensitive: boolean;
+}
+
+export interface LayerComparisonCondition {
+    type: 'layer_comparison';
+    comparator: '>' | '<' | '=';
+    layerName: string; // Must match an entry in template[] exactly
+}
+
+export type ConditionalContextCondition = ContainsCondition | LayerComparisonCondition;
+
+export interface ConditionalContextItem {
+    id: string;
+    text: string;
+    conditions: ConditionalContextCondition[];
+    logic: ConditionLogicOperator; // How to combine conditions within this item
+}
+
 /**
  * Reference to a related node for todo items
  */
@@ -117,6 +149,9 @@ export class DocumentNode {
     // --- User Notes ---
     notes: string = '';
 
+    // --- Conditional Context (new system, parallel to legacy `context`) ---
+    private conditionalContextItems: ConditionalContextItem[] = [];
+
     constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
@@ -224,7 +259,8 @@ export class DocumentNode {
             overviewBoardCache: Array.from(this.overviewBoardCache.entries()), // Convert Map to Array for JSON
             lastGenerationParameters: this.lastGenerationParameters,
             todos: this.todos,
-            notes: this.notes
+            notes: this.notes,
+            conditionalContextItems: this.conditionalContextItems
         };
     }
 
@@ -357,6 +393,80 @@ export class DocumentNode {
         
         // Restore notes
         node.notes = data.notes || '';
+
+        // Restore conditional context items (fail loudly on malformed data)
+        if (data.conditionalContextItems !== undefined) {
+            if (!Array.isArray(data.conditionalContextItems)) {
+                throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: conditionalContextItems must be an array');
+            }
+
+            node.conditionalContextItems = data.conditionalContextItems.map((raw: any) => {
+                if (!raw || typeof raw !== 'object') {
+                    throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: context item must be an object');
+                }
+                if (typeof raw.id !== 'string' || !raw.id) {
+                    throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: context item missing valid id');
+                }
+                if (typeof raw.text !== 'string') {
+                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} missing text`);
+                }
+                if (raw.logic !== 'AND' && raw.logic !== 'OR') {
+                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} has invalid logic: ${raw.logic}`);
+                }
+                if (!Array.isArray(raw.conditions)) {
+                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} conditions must be an array`);
+                }
+
+                const conditions: ConditionalContextCondition[] = raw.conditions.map((c: any) => {
+                    if (!c || typeof c !== 'object' || typeof c.type !== 'string') {
+                        throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} has invalid condition`);
+                    }
+                    if (c.type === 'contains') {
+                        if (!Object.values(ConditionalScope).includes(c.scope)) {
+                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition has invalid scope: ${c.scope}`);
+                        }
+                        if (typeof c.term !== 'string' || c.term.trim() === '') {
+                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition requires non-empty term`);
+                        }
+                        if (typeof c.wordwise !== 'boolean' || typeof c.caseSensitive !== 'boolean') {
+                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition wordwise/caseSensitive must be boolean`);
+                        }
+                        const cond: ContainsCondition = {
+                            type: 'contains',
+                            scope: c.scope,
+                            term: c.term,
+                            wordwise: c.wordwise,
+                            caseSensitive: c.caseSensitive
+                        };
+                        return cond;
+                    } else if (c.type === 'layer_comparison') {
+                        if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
+                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} layer-comparison has invalid comparator: ${c.comparator}`);
+                        }
+                        if (typeof c.layerName !== 'string' || c.layerName.trim() === '') {
+                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} layer-comparison requires layerName`);
+                        }
+                        const cond: LayerComparisonCondition = {
+                            type: 'layer_comparison',
+                            comparator: c.comparator,
+                            layerName: c.layerName
+                        };
+                        return cond;
+                    }
+                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} has unknown condition type: ${c.type}`);
+                });
+
+                const item: ConditionalContextItem = {
+                    id: raw.id,
+                    text: raw.text,
+                    logic: raw.logic,
+                    conditions
+                };
+                return item;
+            });
+        } else {
+            node.conditionalContextItems = [];
+        }
         
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {
@@ -1113,5 +1223,242 @@ export class DocumentNode {
         return this.todos.filter(todo => 
             todo.relatedNodes.some(ref => ref.id === nodeId)
         );
+    }
+
+    // ---------------- Conditional Context API ----------------
+
+    public getConditionalContextItems(): ConditionalContextItem[] {
+        return this.conditionalContextItems.map(item => ({
+            id: item.id,
+            text: item.text,
+            logic: item.logic,
+            conditions: item.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[]
+        }));
+    }
+
+    public addConditionalContextItem(text: string, conditions: ConditionalContextCondition[], logic: ConditionLogicOperator): string {
+        if (!text || typeof text !== 'string') {
+            throw new Error('Conditional context item requires non-empty text');
+        }
+        if (!Array.isArray(conditions)) {
+            throw new Error('Conditional context item requires conditions array');
+        }
+        if (logic !== 'AND' && logic !== 'OR') {
+            throw new Error(`Invalid logic: ${logic}`);
+        }
+
+        // Validate conditions
+        conditions.forEach((c, idx) => {
+            if (c.type === 'contains') {
+                if (!Object.values(ConditionalScope).includes(c.scope)) {
+                    throw new Error(`Invalid contains-condition scope at index ${idx}`);
+                }
+                if (c.term.trim() === '') {
+                    throw new Error(`Contains-condition term cannot be empty (index ${idx})`);
+                }
+            } else if (c.type === 'layer_comparison') {
+                if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
+                    throw new Error(`Invalid layer comparator at index ${idx}`);
+                }
+                if (!c.layerName || c.layerName.trim() === '') {
+                    throw new Error(`Layer comparison requires layerName at index ${idx}`);
+                }
+            } else {
+                const neverType: never = c;
+                throw new Error(`Unknown condition type: ${(neverType as any).type}`);
+            }
+        });
+
+        const id = uuidv4();
+        const item: ConditionalContextItem = { id, text, conditions, logic };
+        this.conditionalContextItems.push(item);
+        return id;
+    }
+
+    public updateConditionalContextItem(id: string, updates: Partial<Pick<ConditionalContextItem, 'text' | 'logic' | 'conditions'>>): void {
+        const item = this.conditionalContextItems.find(i => i.id === id);
+        if (!item) {
+            throw new Error(`Conditional context item not found: ${id}`);
+        }
+        if (updates.text !== undefined) {
+            if (typeof updates.text !== 'string') {
+                throw new Error('Updated text must be a string');
+            }
+            // Allow empty text during live editing; consumers may validate on save if needed
+            item.text = updates.text;
+        }
+        if (updates.logic !== undefined) {
+            if (updates.logic !== 'AND' && updates.logic !== 'OR') {
+                throw new Error(`Invalid logic: ${updates.logic}`);
+            }
+            item.logic = updates.logic;
+        }
+        if (updates.conditions !== undefined) {
+            if (!Array.isArray(updates.conditions)) {
+                throw new Error('Conditions update must be an array');
+            }
+            // Reuse validator
+            this.validateConditions(updates.conditions);
+            item.conditions = updates.conditions;
+        }
+    }
+
+    public removeConditionalContextItem(id: string): boolean {
+        const index = this.conditionalContextItems.findIndex(i => i.id === id);
+        if (index === -1) {
+            return false;
+        }
+        this.conditionalContextItems.splice(index, 1);
+        return true;
+    }
+
+    /**
+     * Assemble matching conditional context TEXT from this node and all ancestors.
+     * The triggering node is used for evaluating all conditions (for both this node's and ancestors' items).
+     * Items are concatenated separated by two newlines, in order from root → ... → this.
+     */
+    public assembleConditionalContext(triggeringNode: DocumentNode, root: DocumentNode): string {
+        const items = this.collectMatchingConditionalContextItems(triggeringNode, root);
+        return items.map(i => i.text).join('\n\n');
+    }
+
+    /**
+     * Collect matching conditional context items from this node and ancestors (root-first order).
+     */
+    public collectMatchingConditionalContextItems(triggeringNode: DocumentNode, root: DocumentNode): ConditionalContextItem[] {
+        // Build ancestor chain from root to this node
+        const chain = DocumentNode.findPathFromRoot(root, this.id);
+        if (!chain || chain.length === 0) {
+            throw new Error(`Cannot assemble conditional context: node ${this.id} not found under provided root`);
+        }
+        const results: ConditionalContextItem[] = [];
+        for (const ancestor of chain) {
+            for (const item of ancestor.conditionalContextItems) {
+                if (this.evaluateConditionalContextItem(item, triggeringNode, root)) {
+                    results.push(item);
+                }
+            }
+        }
+        return results;
+    }
+
+    // ---------------- Internal helpers for conditional context ----------------
+
+    private validateConditions(conditions: ConditionalContextCondition[]): void {
+        conditions.forEach((c, idx) => {
+            if (c.type === 'contains') {
+                if (!Object.values(ConditionalScope).includes(c.scope)) {
+                    throw new Error(`Invalid contains-condition scope at index ${idx}`);
+                }
+                if (c.term.trim() === '') {
+                    throw new Error(`Contains-condition term cannot be empty (index ${idx})`);
+                }
+            } else if (c.type === 'layer_comparison') {
+                if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
+                    throw new Error(`Invalid layer comparator at index ${idx}`);
+                }
+                if (!c.layerName || c.layerName.trim() === '') {
+                    throw new Error(`Layer comparison requires layerName at index ${idx}`);
+                }
+            } else {
+                const neverType: never = c;
+                throw new Error(`Unknown condition type: ${(neverType as any).type}`);
+            }
+        });
+    }
+
+    private evaluateConditionalContextItem(item: ConditionalContextItem, triggeringNode: DocumentNode, root: DocumentNode): boolean {
+        const evaluator = (cond: ConditionalContextCondition): boolean => {
+            if (cond.type === 'contains') {
+                const haystack = this.getContentForScope(cond.scope, triggeringNode, root);
+                return DocumentNode.containsMatch(haystack, cond.term, cond.wordwise, cond.caseSensitive);
+            }
+            if (cond.type === 'layer_comparison') {
+                const layerIndexOfTrigger = triggeringNode.level;
+                const targetIndex = DocumentNode.mapLayerNameToIndex(triggeringNode.template, cond.layerName);
+                if (targetIndex === -1) {
+                    throw new Error(`Layer name not found in template: ${cond.layerName}`);
+                }
+                switch (cond.comparator) {
+                    case '>': return layerIndexOfTrigger > targetIndex;
+                    case '<': return layerIndexOfTrigger < targetIndex;
+                    case '=': return layerIndexOfTrigger === targetIndex;
+                }
+            }
+            const neverType: never = cond;
+            throw new Error(`Unsupported condition type: ${(neverType as any).type}`);
+        };
+
+        // Unconditional: no conditions means always include
+        if (!item.conditions || item.conditions.length === 0) {
+            return true;
+        }
+
+        if (item.logic === 'AND') {
+            return item.conditions.every(evaluator);
+        } else if (item.logic === 'OR') {
+            return item.conditions.some(evaluator);
+        }
+        throw new Error(`Invalid item.logic: ${item.logic}`);
+    }
+
+    private getContentForScope(scope: ConditionalScope, triggeringNode: DocumentNode, root: DocumentNode): string {
+        if (scope === ConditionalScope.ThisContent) {
+            return triggeringNode.content || '';
+        }
+        if (scope === ConditionalScope.ThisAndPreviousSameLayer) {
+            const parentInfo = DocumentNode.findParentAndIndex(root, triggeringNode.id);
+            if (!parentInfo) {
+                // No parent → only this node
+                return triggeringNode.content || '';
+            }
+            const { parent, indexInParent } = parentInfo;
+            const slice = parent.children.slice(0, indexInParent + 1);
+            return slice.map(n => n.content || '').filter(s => s && s.length > 0).join('\n\n');
+        }
+        const neverScope: never = scope;
+        throw new Error(`Unsupported scope: ${neverScope as any}`);
+    }
+
+    private static containsMatch(haystack: string, needle: string, wordwise: boolean, caseSensitive: boolean): boolean {
+        const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = wordwise ? `\\b${escaped}\\b` : escaped;
+        const flags = caseSensitive ? 'g' : 'gi';
+        const regex = new RegExp(pattern, flags);
+        return regex.test(haystack);
+    }
+
+    private static mapLayerNameToIndex(template: string[], layerName: string): number {
+        return template.findIndex(name => name === layerName);
+    }
+
+    private static findPathFromRoot(root: DocumentNode, targetId: string): DocumentNode[] {
+        const path: DocumentNode[] = [];
+        const found = (function dfs(node: DocumentNode): boolean {
+            path.push(node);
+            if (node.id === targetId) return true;
+            for (const child of node.children) {
+                if (dfs(child)) return true;
+            }
+            path.pop();
+            return false;
+        })(root);
+        return found ? path : [];
+    }
+
+    private static findParentAndIndex(root: DocumentNode, targetId: string): { parent: DocumentNode; indexInParent: number } | null {
+        const stack: DocumentNode[] = [root];
+        while (stack.length > 0) {
+            const node = stack.pop()!;
+            for (let i = 0; i < node.children.length; i++) {
+                const child = node.children[i];
+                if (!child) continue;
+                if (child.id === targetId) {
+                    return { parent: node, indexInParent: i };
+                }
+            }
+            for (const child of node.children) stack.push(child);
+        }
+        return null;
     }
 }

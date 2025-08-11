@@ -310,6 +310,11 @@ export class UniversalTextEditor {
      */
     private initializeEnhancedMode(): void {
         const editorContainer = document.createElement('div');
+        editorContainer.style.width = '100%';
+        editorContainer.style.height = '100%';
+        editorContainer.style.display = 'flex';
+        editorContainer.style.flex = '1 1 auto';
+        editorContainer.style.minHeight = '0';
         this.enhancedEditor = new TextEditorWithHighlighting(editorContainer);
         
         // Apply configuration
@@ -317,11 +322,21 @@ export class UniversalTextEditor {
         
         // Add to container first
         this.container.appendChild(editorContainer);
+        (this.container.style as any).display = 'flex';
+        (this.container.style as any).flex = '1 1 auto';
+        (this.container.style as any).minHeight = '0';
         
         // Apply styling to match textarea
         const editorDiv = editorContainer.querySelector('.text-editor-with-highlighting') as HTMLElement;
         if (this.options.className) {
             editorDiv.className += ' ' + this.options.className;
+        }
+        if (editorDiv) {
+            editorDiv.style.width = '100%';
+            editorDiv.style.height = '100%';
+            editorDiv.style.flex = '1 1 auto';
+            editorDiv.style.minHeight = '0';
+            editorDiv.style.boxSizing = 'border-box';
         }
         
         // Set up event listeners AFTER DOM is assembled

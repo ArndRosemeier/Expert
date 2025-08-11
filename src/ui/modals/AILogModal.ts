@@ -4,7 +4,7 @@
 
 import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
-import { createElement } from './core/modal-utils';
+import { createElement, truncateText as truncateTextGlobal } from './core/modal-utils';
 import { AILogService } from '../../AILogService';
 
 export interface AILogModalConfig extends ModalConfig {
@@ -351,8 +351,7 @@ export class AILogModal extends BaseModal {
     }
 
     private truncateText(text: string, maxLength: number): string {
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
+        return truncateTextGlobal(text, maxLength);
     }
 
     private escapeHtml(text: string): string {

@@ -15,6 +15,7 @@ import { SettingsManager } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
 import { ProjectManager } from '../../ProjectManager';
 import { DocumentNode } from '../../DocumentNode';
+import { ConditionalContextModal } from './ConditionalContextModal';
 
 export interface ModalFactoryDependencies {
     settingsManager: SettingsManager;
@@ -520,6 +521,29 @@ export class ModalFactory {
     public getActiveModalIds(): string[] {
         return this.registry.getOpenModals();
     }
+
+    /**
+     * Creates and optionally opens Conditional Context modal
+     */
+    public async createConditionalContextModal(node: DocumentNode, options: ModalOptions = {}): Promise<ConditionalContextModal> {
+        const { autoOpen = true, replaceExisting = true } = options;
+        const currentProjectManager = await this.getCurrentProjectManager();
+
+        if (replaceExisting) {
+            const existing = this.registry.get('conditional-context-modal');
+            if (existing) {
+                void existing.close();
+            }
+        }
+
+        const modal = new ConditionalContextModal({ id: 'conditional-context-modal', node, projectManager: currentProjectManager });
+        this.registry.register(modal);
+        this.setupModalCleanup(modal);
+        if (autoOpen) {
+            void modal.open();
+        }
+        return modal;
+    }
 }
 
 /**
@@ -600,6 +624,11 @@ export function openComprehensiveExportModal(): ComprehensiveExportModal {
 export async function openConversationalGenerationModal(node: DocumentNode): Promise<ConversationalGenerationModal> {
     const factory = getDefaultModalFactory();
     return factory.createConversationalGenerationModal(node, { autoOpen: true });
+}
+
+export async function openConditionalContextModal(node: DocumentNode): Promise<ConditionalContextModal> {
+    const factory = getDefaultModalFactory();
+    return factory.createConditionalContextModal(node, { autoOpen: true });
 }
 
 /**

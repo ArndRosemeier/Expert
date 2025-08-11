@@ -44,15 +44,16 @@ export function showGenericModal(
         : content;
 
     const modalConfig: ModalConfig & { content: GenericModalContent } = {
-        id: config.id || `generic-modal-${Date.now()}`,
-        maxWidth: config.maxWidth || '80vw',
-        maxHeight: config.maxHeight || '90vh',
-        closable: config.closable !== false,
-        backdrop: config.backdrop !== false,
+        id: config.id ?? `generic-modal-${Date.now()}`,
+        maxWidth: config.maxWidth ?? '80vw',
+        maxHeight: config.maxHeight ?? '90vh',
+        closable: config.closable ?? true,
+        backdrop: config.backdrop ?? true,
         content: modalContent,
-        ...(config.title !== undefined && { title: config.title }),
-        ...(config.width !== undefined && { width: config.width }),
-        ...(config.height !== undefined && { height: config.height })
+        // Only include optional props when defined to satisfy exactOptionalPropertyTypes
+        ...(config.title !== undefined ? { title: config.title } : {}),
+        ...(config.width !== undefined ? { width: config.width } : {}),
+        ...(config.height !== undefined ? { height: config.height } : {})
     };
 
     // Use the simplified modal system - no registry needed!
@@ -85,9 +86,7 @@ export function showAlert(
                     type: 'primary',
                     handler: async () => {
                         // Modal will close automatically when the action completes
-                        if (onClose) {
-                            onClose();
-                        }
+                        onClose?.();
                     }
                 }
             ]
@@ -117,9 +116,7 @@ export function showConfirm(
                     label: 'Cancel',
                     type: 'outline',
                     handler: async () => {
-                        if (onCancel) {
-                            onCancel();
-                        }
+                        onCancel?.();
                     }
                 },
                 {
@@ -127,9 +124,7 @@ export function showConfirm(
                     label: 'Confirm',
                     type: 'primary',
                     handler: async () => {
-                        if (onConfirm) {
-                            onConfirm();
-                        }
+                        onConfirm?.();
                     }
                 }
             ]

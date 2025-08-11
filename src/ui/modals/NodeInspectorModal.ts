@@ -4,6 +4,7 @@ import { analyzeTagsInHierarchy } from '../../ProjectUtils';
 import { Rating } from '../../types/RatingTypes';
 import { getActiveProject } from '../../state';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
+import { openConditionalContextModal } from './ModalFactory';
 
 
 // ============================================================================
@@ -412,9 +413,32 @@ export class NodeInspectorModal extends BaseModal {
         // Header
         const header = document.createElement('div');
         header.className = 'inspector-header';
-        header.innerHTML = `
-            <h1 class="node-title-fat">${this.node ? this.escapeHtml(this.node.title) : 'Untitled Node'}</h1>
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.justifyContent = 'space-between';
+
+        const titleEl = document.createElement('h1');
+        titleEl.className = 'node-title-fat';
+        titleEl.textContent = this.node ? this.node.title : 'Untitled Node';
+
+        const ccBtn = document.createElement('button');
+        ccBtn.textContent = 'Conditional context';
+        ccBtn.title = 'Open conditional context editor';
+        ccBtn.style.cssText = `
+            margin-left: auto;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            cursor: pointer;
         `;
+        ccBtn.addEventListener('click', () => {
+            if (!this.node) return;
+            void openConditionalContextModal(this.node);
+        });
+
+        header.appendChild(titleEl);
+        header.appendChild(ccBtn);
         container.appendChild(header);
 
         // Body (two columns)
