@@ -36,7 +36,6 @@ export class SearchModal extends BaseModal {
     private includeAllVersions: boolean = true;
     private caseSensitive: boolean = false;
     private searchInContent: boolean = true;
-    private searchInContext: boolean = true;
     private searchInConditional: boolean = true;
 
     constructor() {
@@ -103,9 +102,6 @@ export class SearchModal extends BaseModal {
                     </label>
                     <label class="checkbox-label">
                         <input type="checkbox" id="search-content" checked> Search in content
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="search-context" checked> Search in context
                     </label>
                     <label class="checkbox-label" title="Search conditional context items in this node and all child nodes">
                         <input type="checkbox" id="search-conditional" checked> Search in conditional context
@@ -175,7 +171,6 @@ export class SearchModal extends BaseModal {
         const includeAllVersionsCheckbox = container.querySelector('#include-all-versions') as HTMLInputElement;
         const caseSensitiveCheckbox = container.querySelector('#case-sensitive') as HTMLInputElement;
         const searchContentCheckbox = container.querySelector('#search-content') as HTMLInputElement;
-        const searchContextCheckbox = container.querySelector('#search-context') as HTMLInputElement;
         const searchConditionalCheckbox = container.querySelector('#search-conditional') as HTMLInputElement;
 
         includeAllVersionsCheckbox.addEventListener('change', (e) => {
@@ -188,11 +183,6 @@ export class SearchModal extends BaseModal {
 
         searchContentCheckbox.addEventListener('change', (e) => {
             this.searchInContent = (e.target as HTMLInputElement).checked;
-            this.updateReplaceButtonState();
-        });
-
-        searchContextCheckbox.addEventListener('change', (e) => {
-            this.searchInContext = (e.target as HTMLInputElement).checked;
             this.updateReplaceButtonState();
         });
 
@@ -237,7 +227,6 @@ export class SearchModal extends BaseModal {
             includeAllVersions: this.includeAllVersions,
             caseSensitive: this.caseSensitive,
             searchInContent: this.searchInContent,
-            searchInContext: this.searchInContext,
             searchInConditionalContext: this.searchInConditional
         };
 
@@ -262,7 +251,6 @@ export class SearchModal extends BaseModal {
 
         const scopes = [];
         if (this.searchInContent) scopes.push('Content');
-        if (this.searchInContext) scopes.push('Context');
         if (this.searchInConditional) scopes.push('Conditional Context');
         
         const confirmed = confirm(
@@ -280,7 +268,6 @@ export class SearchModal extends BaseModal {
             includeAllVersions: this.includeAllVersions,
             caseSensitive: this.caseSensitive,
             searchInContent: this.searchInContent,
-            searchInContext: this.searchInContext,
             searchInConditionalContext: this.searchInConditional,
             replaceText: replaceText
         };
@@ -479,7 +466,7 @@ export class SearchModal extends BaseModal {
     private updateReplaceButtonState(): void {
         const replaceBtn = document.querySelector('#replace-all-btn') as HTMLButtonElement;
         const hasSearchPattern: string = this.searchInput!.value.trim();
-        const hasTargetContent: boolean = this.searchInContent || this.searchInContext || this.searchInConditional;
+        const hasTargetContent: boolean = this.searchInContent || this.searchInConditional;
         replaceBtn.disabled = !hasSearchPattern || !hasTargetContent;
     }
 

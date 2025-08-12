@@ -22,9 +22,7 @@ export interface SearchOptions {
     caseSensitive: boolean;
     /** Search in content */
     searchInContent: boolean;
-    /** Search in context */
-    searchInContext: boolean;
-    /** Search in conditional context (only on the triggering/root node) */
+    /** Search in conditional context */
     searchInConditionalContext?: boolean;
 }
 
@@ -57,7 +55,7 @@ export interface ReplaceResult {
     nodeResults: Array<{
         node: DocumentNode;
         version: ContentVersion;
-        contentType: 'content' | 'context' | 'conditional';
+        contentType: 'content' | 'conditional';
         replacements: number;
     }>;
 }
@@ -151,11 +149,6 @@ export class SearchService {
             if (options.searchInContent) {
                 this.searchInText(node, version, 'content', version.content, regex, results);
             }
-            
-            // Search in context
-            if (options.searchInContext) {
-                // Context search removed - using conditional context system
-            }
         }
         
         // Search in conditional context items
@@ -175,7 +168,7 @@ export class SearchService {
     private static searchInText(
         node: DocumentNode,
         version: ContentVersion,
-        contentType: 'content' | 'context',
+        contentType: 'content',
         text: string,
         regex: RegExp,
         results: SearchResult[]
@@ -238,13 +231,6 @@ export class SearchService {
                 version.content = version.content.replace(regex, options.replaceText);
                 const contentReplacements: number = (beforeContent.match(regex) || []).length;
                 nodeReplacements += contentReplacements;
-            }
-            
-            // Replace in context
-            if (options.searchInContext) {
-                // Context replacement removed - using conditional context system
-                const contextReplacements: number = 0;
-                nodeReplacements += contextReplacements;
             }
             
 
