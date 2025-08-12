@@ -37,7 +37,7 @@ export class SearchModal extends BaseModal {
     private caseSensitive: boolean = false;
     private searchInContent: boolean = true;
     private searchInContext: boolean = true;
-    private searchInConditional: boolean = false;
+    private searchInConditional: boolean = true;
 
     constructor() {
         super({
@@ -108,7 +108,7 @@ export class SearchModal extends BaseModal {
                         <input type="checkbox" id="search-context" checked> Search in context
                     </label>
                     <label class="checkbox-label" title="Search only this node's conditional context items (not inherited, not recursive)">
-                        <input type="checkbox" id="search-conditional"> Search in conditional context (this node only)
+                        <input type="checkbox" id="search-conditional" checked> Search in conditional context (this node only)
                     </label>
                 </div>
 
