@@ -225,6 +225,27 @@ export class ConditionalContextEditor {
             this.applySelectionToUI();
         }, 0);
 
+        // Trigger words editor (above logic)
+        const triggerRow = createElement('div');
+        triggerRow.style.cssText = 'display:flex; flex-direction:column; gap:0.25rem;';
+        const triggerLabel = createElement('div', { content: 'Trigger words (comma-separated, optional):' });
+        triggerLabel.style.cssText = 'font-weight:600;';
+        const triggerInputWrap = createElement('div');
+        triggerInputWrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
+        const triggerEditor = new UniversalTextEditor(triggerInputWrap, { mode: 'enhanced', autoResize: false }, {
+            onBlur: () => {
+                if (!this.selectedItemId) return;
+                const raw = triggerEditor.getText().trim();
+                const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+                const dedup = Array.from(new Set(parts));
+                this.node.updateConditionalContextItem(this.selectedItemId, { keywords: dedup });
+                this.refreshItemsList();
+                this.schedulePersist();
+            }
+        });
+        triggerRow.appendChild(triggerLabel);
+        triggerRow.appendChild(triggerInputWrap);
+
         // Logic selector
         const logicRow = createElement('div');
         logicRow.style.cssText = `display: flex; gap: 0.5rem; align-items: center;`;
@@ -287,6 +308,7 @@ export class ConditionalContextEditor {
 
         rightPane.appendChild(editorHeader);
         rightPane.appendChild(this.editorContainer);
+        rightPane.appendChild(triggerRow);
         rightPane.appendChild(logicRow);
         rightPane.appendChild(this.conditionsContainer);
         rightPane.appendChild(this.addConditionButton);
@@ -652,6 +674,14 @@ export class ConditionalContextEditor {
             return;
         }
         if (this.editor) this.editor.setText(item.text || '');
+        // Set trigger editor text
+        try {
+            const triggers = Array.isArray(item.keywords) ? item.keywords.join(', ') : '';
+            const el = (triggerRow.querySelector('.text-editor-with-highlighting') || triggerRow.querySelector('textarea')) as HTMLElement | null;
+            if (el) { /* noop */ }
+            // Use editor instance created earlier
+            (triggerEditor as any).setText ? (triggerEditor as any).setText(triggers) : undefined;
+        } catch {}
         this.logicSelect.value = item.logic;
         this.renderConditions();
     }
