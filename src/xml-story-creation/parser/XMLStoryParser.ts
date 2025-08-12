@@ -162,15 +162,17 @@ export class XMLStoryParser {
         // Enforce correct edit syntax only: require paired closing tag in either form above
         
         // Handle append commands
-        const appendCommandRegex = /<append>\s*([\s\S]*?)\s*<\/append>/gi;
-        textWithMarkers = textWithMarkers.replace(appendCommandRegex, (_match, content) => {
+        const appendCommandRegex = /(<append>\s*[\s\S]*?\s*<\/append>)/gi;
+        textWithMarkers = textWithMarkers.replace(appendCommandRegex, (full) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
+            const contentMatch = /<append>\s*([\s\S]*?)\s*<\/append>/i.exec(full);
             
             commands.push({
                 type: 'append',
-                content: content.trim(),
+                content: (contentMatch?.[1] || '').trim(),
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
             
             return markerId;
@@ -180,13 +182,14 @@ export class XMLStoryParser {
         
         // Handle simple closing-form commands (refresh, delete, rename)
         const simpleCommandRegex = /<\/(refresh|delete|rename)(?:\s+[^>]*)?\s*>/gi;
-        textWithMarkers = textWithMarkers.replace(simpleCommandRegex, (_match, commandType) => {
+        textWithMarkers = textWithMarkers.replace(simpleCommandRegex, (full, commandType) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             
             commands.push({
                 type: commandType as 'refresh' | 'delete' | 'rename',
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
             
             return markerId;
@@ -195,12 +198,13 @@ export class XMLStoryParser {
         // Enforce correct simple command syntax only
         // Self-closing variants allowed: <refresh/> <delete id="..."/> <rename id="..."/>
         const selfClosingCmdRegex = /<(refresh|delete|rename)(\s+[^>]*?)?\s*\/>/gi;
-        textWithMarkers = textWithMarkers.replace(selfClosingCmdRegex, (_match, commandType, parametersText) => {
+        textWithMarkers = textWithMarkers.replace(selfClosingCmdRegex, (full, commandType, parametersText) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             const command: SystemCommand = {
                 type: (commandType as string).toLowerCase() as SystemCommand['type'],
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             };
             const paramsText = (parametersText || '').toString();
             if (paramsText.trim()) {
@@ -212,12 +216,13 @@ export class XMLStoryParser {
 
         // Paired form for delete only: <delete id="..."></delete>
         const deletePairedRegex = /<delete\s+([^>]*?)>\s*<\/delete>/gi;
-        textWithMarkers = textWithMarkers.replace(deletePairedRegex, (_match, parametersText) => {
+        textWithMarkers = textWithMarkers.replace(deletePairedRegex, (full, parametersText) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             const command: SystemCommand = {
                 type: 'delete',
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             };
             if ((parametersText || '').trim()) {
                 command.parameters = this.parseCommandParameters(parametersText);
@@ -228,7 +233,7 @@ export class XMLStoryParser {
 
         // Handle replace_command 
         const replaceCommandRegex = /<replace_command>\s*<search>\s*([\s\S]*?)\s*<\/search>\s*<replace>\s*([\s\S]*?)\s*<\/replace>\s*<\/replace_command>/gi;
-        textWithMarkers = textWithMarkers.replace(replaceCommandRegex, (_match, searchText, replaceText) => {
+        textWithMarkers = textWithMarkers.replace(replaceCommandRegex, (full, searchText, replaceText) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             
             commands.push({
@@ -236,7 +241,8 @@ export class XMLStoryParser {
                 searchText: searchText.trim(),
                 replaceText: replaceText.trim(),
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
             
             return markerId;
@@ -244,7 +250,7 @@ export class XMLStoryParser {
 
         // Handle replace_section command
         const replaceSectionRegex = /<replace_section\s+section="([^"]+)"\s*>\s*([\s\S]*?)\s*<\/replace_section>/gi;
-        textWithMarkers = textWithMarkers.replace(replaceSectionRegex, (_match, sectionTitle, content) => {
+        textWithMarkers = textWithMarkers.replace(replaceSectionRegex, (full, sectionTitle, content) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             
             commands.push({
@@ -252,7 +258,8 @@ export class XMLStoryParser {
                 sectionTitle: sectionTitle.trim(),
                 content: content.trim(),
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
             
             return markerId;
@@ -260,14 +267,15 @@ export class XMLStoryParser {
 
         // Handle remove_section command
         const removeSectionRegex = /<remove_section\s+section="([^"]+)"\s*\/?>/gi;
-        textWithMarkers = textWithMarkers.replace(removeSectionRegex, (_match, sectionTitle) => {
+        textWithMarkers = textWithMarkers.replace(removeSectionRegex, (full, sectionTitle) => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             
             commands.push({
                 type: 'remove_section',
                 sectionTitle: sectionTitle.trim(),
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
             
             return markerId;
@@ -276,21 +284,21 @@ export class XMLStoryParser {
         // Legacy change_context_scope removed
         // Handle context add/edit/remove (self-closing) with optional keyword
         const contextAddRegex = /<context\s+([^>]*?)\s*\/>/gi;
-        textWithMarkers = textWithMarkers.replace(contextAddRegex, (_match, parametersText) => {
+        textWithMarkers = textWithMarkers.replace(contextAddRegex, (full, parametersText) => {
             const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
             if (params['id'] && (params['text'] || params['description'])) {
                 // Treat as edit by id
                 const text = (params['text'] || params['description'] || '').toString();
                 const trigger = (params['trigger'] || params['keyword'] || '').toString();
-                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId });
+                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId, rawXml: full });
             } else if (params['text'] || params['description']) {
                 // Add without explicit id (id will be client-assigned)
                 const text = (params['text'] || params['description'] || '').toString();
                 const trigger = (params['trigger'] || params['keyword'] || '').toString();
-                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId });
+                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId, rawXml: full });
             } else if (params['id'] && params['remove'] === 'true') {
-                commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId });
+                commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId, rawXml: full });
             }
             return markerId;
         });
