@@ -1441,7 +1441,7 @@ export class XMLStoryModal extends SimpleModal {
                 const contextCountBefore = this.storySystem.service.getElementsForContext()
                     .filter(el => el.type === 'context').length;
 
-                // Process AI response through XML system
+                // Process AI response through XML system (do not remove commands from text)
                 const parseResult = await this.storySystem.processAIResponse(response);
 
                 // Handle outline_replace commands
@@ -1487,16 +1487,13 @@ export class XMLStoryModal extends SimpleModal {
                     await this.offerAICorrection();
                 }
 
-                // Update the streaming message with cleaned text and XML highlighting
-                const formattedContent = this.applyXMLHighlighting(
-                    this.parseMarkdownForChat(parseResult.cleanedText), 
-                    parseResult.systemCommands as unknown as XMLStoryCommand[]
-                );
-                this.updateStreamingMessageWithHTML(placeholderMessage, formattedContent);
+                // Display the original text (with commands left in) and apply generic XML formatting
+                const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[]);
+                this.updateStreamingMessageWithHTML(placeholderMessage, formatted);
                 this.finalizeStreamingMessage(placeholderMessage);
 
                 // Add AI response to conversation history
-                this.conversationHistory.push({ role: 'assistant', content: parseResult.cleanedText });
+                this.conversationHistory.push({ role: 'assistant', content: response });
 
                 // No more retry state to reset
 
@@ -1634,6 +1631,24 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
+    // Generic XML formatter: wrap any <.../> or <...>...</...> blocks in a styled box, no command-specific formatting
+    private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = []): string {
+        const html = this.parseMarkdownForChat(text);
+        // Highlight XML blocks with minimal styling
+        const xmlBlockRegex = /<(?:\w+)(?:\s[^>]*)?>[\s\S]*?<\/\w+>|<\w+(?:\s[^>]*)?\/>/gi;
+        const executedRawSet = new Set(commands.filter(c => (c as any).executedRaw).map(c => (c as any).executedRaw as string));
+        return html.replace(xmlBlockRegex, (m) => {
+            const isExecuted = executedRawSet.has(m);
+            const check = isExecuted ? '<span style="color:#16a34a;font-weight:600;padding-left:6px;">✓</span>' : '';
+            return `<div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:6px;padding:6px;margin:6px 0;white-space:pre-wrap;">`+
+                   `<code style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;">${this.escapeHtml(m)}</code>${check}</div>`;
+        });
+    }
+
+    private escapeHtml(s: string): string {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
     /**
      * Simple markdown parser for chat messages
      * Handles basic formatting and applies XML highlighting cleanly
@@ -1667,121 +1682,12 @@ export class XMLStoryModal extends SimpleModal {
     /**
      * Apply XML command highlighting by replacing markers with highlighted commands
      */
-    private applyXMLHighlighting(cleanContent: string, systemCommands?: XMLStoryCommand[]): string {
-        if (!systemCommands || systemCommands.length === 0) {
-            return cleanContent;
-        }
-
-        let result = cleanContent;
-
-        // Replace each marker with its corresponding highlighted command
-        systemCommands.forEach((cmd) => {
-            if (cmd.markerId) {
-                const highlightHtml = this.createSystemCommandHighlight(cmd);
-                result = result.replace(cmd.markerId, highlightHtml);
-            }
-        });
-
-        // If there are any commands without markers (shouldn't happen), add them at the end as fallback
-        const unmarkedCommands = systemCommands.filter(cmd => !cmd.markerId || result.includes(cmd.markerId));
-        if (unmarkedCommands.length > 0) {
-            const fallbackSection = `
-                <div class="xml-commands-container" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size: 0.9em; color: #888; margin-bottom: 0.5rem; font-style: italic;">Additional executed XML-commands:</div>
-                    ${unmarkedCommands.map(cmd => this.createSystemCommandHighlight(cmd)).join('')}
-                </div>
-            `;
-            result += fallbackSection;
-        }
-
-        return `<div class="clean-content">${result}</div>`;
-    }
+    // Removed applyXMLHighlighting; all formatting handled by formatXMLBlocksGenerically
 
     /**
      * Create HTML for a single system command highlight
      */
-    private createSystemCommandHighlight(command: XMLStoryCommand): string {
-        const escapeHtml = (text: string) => text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-
-        switch (command.type) {
-            case 'refresh':
-            case 'rename':
-                return `<div class="xml-command-highlight" title="Executed command">
-                    &lt;/${command.type}&gt;
-                </div>`;
-            case 'delete':
-                {
-                    const params = command.parameters ? Object.entries(command.parameters).map(([k,v]) => `${k}="${v}"`).join(' ') : '';
-                    return `<div class="xml-command-highlight" title="Delete command executed">
-                        <strong>&lt;/delete ${escapeHtml(params)}&gt;</strong>
-                    </div>`;
-                }
-                
-            case 'outline_replace':
-                const content = command.content || '';
-                return `<div class="xml-command-highlight outline-replace-command" title="Outline replacement executed">
-                    <strong>&lt;/outline_replace&gt;</strong>
-                    <div class="command-content">${escapeHtml(content.trim())}</div>
-                    <strong>&lt;/outline_replace&gt;</strong>
-                </div>`;
-                
-            case 'edit':
-                const params = command.parameters ? Object.entries(command.parameters).map(([k,v]) => `${k}="${v}"`).join(' ') : '';
-                const editContent = command.content || '';
-                return `<div class="xml-command-highlight edit-command" title="Edit command executed">
-                    <strong>&lt;/edit ${escapeHtml(params)}&gt;</strong>
-                    <div class="command-content">${escapeHtml(editContent.trim())}</div>
-                    <strong>&lt;/edit&gt;</strong>
-                </div>`;
-                
-            case 'append':
-                const appendContent = command.content || '';
-                return `<div class="xml-command-highlight append-command" title="Append command executed">
-                    <strong>&lt;append&gt;</strong>
-                    <div class="command-content">${escapeHtml(appendContent.trim())}</div>
-                    <strong>&lt;/append&gt;</strong>
-                </div>`;
-                
-            case 'replace_command':
-                const searchText = command.searchText || '';
-                const replaceText = command.replaceText || '';
-                return `<div class="xml-command-highlight replace-command" title="Replace command executed">
-                    <strong>&lt;replace_command&gt;</strong>
-                    <div class="command-content">
-                        <div><strong>&lt;search&gt;</strong> ${escapeHtml(searchText.trim())} <strong>&lt;/search&gt;</strong></div>
-                        <div><strong>&lt;replace&gt;</strong> ${escapeHtml(replaceText.trim())} <strong>&lt;/replace&gt;</strong></div>
-                    </div>
-                    <strong>&lt;/replace_command&gt;</strong>
-                </div>`;
-                
-            case 'replace_section':
-                const sectionTitle = (command['sectionTitle'] as string) || '';
-                const sectionContent = command.content || '';
-                return `<div class="xml-command-highlight replace-section-command" title="Section replace command executed">
-                    <strong>&lt;replace_section section="${escapeHtml(sectionTitle)}"&gt;</strong>
-                    <div class="command-content">${escapeHtml(sectionContent.trim())}</div>
-                    <strong>&lt;/replace_section&gt;</strong>
-                </div>`;
-                
-            case 'remove_section':
-                const removeSectionTitle = (command['sectionTitle'] as string) || '';
-                return `<div class="xml-command-highlight remove-section-command" title="Section remove command executed">
-                    <strong>&lt;remove_section section="${escapeHtml(removeSectionTitle)}"&gt;</strong>
-                </div>`;
-            
-            // legacy change_context_scope no longer supported
-                
-            default:
-                return `<div class="xml-command-highlight" title="Unknown command: ${command.type}">
-                    &lt;/${command.type}&gt;
-                </div>`;
-        }
-    }
+    // Removed legacy createSystemCommandHighlight
 
     /**
      * Finalize streaming message by removing cursor

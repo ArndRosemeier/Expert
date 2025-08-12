@@ -511,10 +511,12 @@ export class XMLStoryService {
                 
             case 'edit':
                 this.handleEditCommand(command);
+                (command as any).executedRaw = this.reconstructRawXML(command);
                 break;
                 
             case 'delete':
                 this.handleDeleteCommand(command);
+                (command as any).executedRaw = this.reconstructRawXML(command);
                 break;
                 
             case 'append':
@@ -564,6 +566,36 @@ export class XMLStoryService {
             default:
                 console.warn('Unknown system command:', command.type);
         }
+    }
+
+    private reconstructRawXML(command: SystemCommand): string {
+        switch (command.type) {
+            case 'edit': {
+                const id = command.parameters?.['id'] || '';
+                const content = (command.content || command.parameters?.['description'] || '').toString();
+                return `</edit id="${id}">${content}</edit>`;
+            }
+            case 'delete': {
+                const id = command.parameters?.['id'] || '';
+                return `</delete id="${id}">`;
+            }
+            case 'context_add': {
+                const text = command.parameters?.['text'] || '';
+                const trig = command.parameters?.['trigger'] ? ` trigger="${command.parameters?.['trigger']}"` : '';
+                return `<context text="${text}"${trig} />`;
+            }
+            case 'context_edit': {
+                const id = command.parameters?.['id'] || '';
+                const text = command.parameters?.['text'] || '';
+                const trig = command.parameters?.['trigger'] ? ` trigger="${command.parameters?.['trigger']}"` : '';
+                return `<context id="${id}" text="${text}"${trig} />`;
+            }
+            case 'context_remove': {
+                const id = command.parameters?.['id'] || '';
+                return `<context id="${id}" remove="true" />`;
+            }
+        }
+        return '';
     }
 
     // Legacy handler removed: change_context_scope
