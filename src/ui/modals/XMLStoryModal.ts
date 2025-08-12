@@ -1659,9 +1659,11 @@ export class XMLStoryModal extends SimpleModal {
 
             const block = match[0];
             const isExecuted = executedRawSet.has(block);
-            const check = isExecuted ? '<span style="color:#16a34a;font-weight:600;padding-left:6px;">✓</span>' : '';
-            resultHtml += `<div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:6px;padding:6px;margin:6px 0;white-space:pre-wrap;">`+
-                           `<code style=\"font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;\">${this.escapeHtml(block)}</code>${check}</div>`;
+            const badge = isExecuted
+                ? '<span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;font-size:12px;">✓ Executed</span>'
+                : '';
+            resultHtml += `<div style="border:2px solid ${isExecuted ? '#16a34a' : '#e5e7eb'};background:${isExecuted ? '#ecfdf5' : '#f9fafb'};border-radius:8px;padding:8px;margin:8px 0;white-space:pre-wrap;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">`+
+                           `<code style=\"flex:1 1 auto;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;\">${this.escapeHtml(block)}</code>${badge}</div>`;
             lastIndex = index + block.length;
         }
 
