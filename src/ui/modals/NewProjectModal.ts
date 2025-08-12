@@ -36,7 +36,8 @@ export class NewProjectModal extends BaseModal {
         super({
             ...config,
             title: '🚀 Create New Project',
-            id: 'new-project-modal'
+            id: 'new-project-modal',
+            backdrop: false // Disable backdrop clicking for outline factory
         });
 
         this.onCreate = config.onCreate;
