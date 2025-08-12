@@ -282,13 +282,13 @@ export class XMLStoryParser {
             if (params['id'] && (params['text'] || params['description'])) {
                 // Treat as edit by id
                 const text = (params['text'] || params['description'] || '').toString();
-                const keyword = (params['keyword'] || '').toString();
-                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, keyword }, timestamp: new Date(), markerId });
+                const trigger = (params['trigger'] || params['keyword'] || '').toString();
+                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId });
             } else if (params['text'] || params['description']) {
                 // Add without explicit id (id will be client-assigned)
                 const text = (params['text'] || params['description'] || '').toString();
-                const keyword = (params['keyword'] || '').toString();
-                commands.push({ type: 'context_add', parameters: { text, keyword }, timestamp: new Date(), markerId });
+                const trigger = (params['trigger'] || params['keyword'] || '').toString();
+                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId });
             } else if (params['id'] && params['remove'] === 'true') {
                 commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId });
             }

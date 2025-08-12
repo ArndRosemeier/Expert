@@ -1455,7 +1455,7 @@ export class XMLStoryModal extends SimpleModal {
                 for (const command of parseResult.systemCommands) {
                     if (command.type === 'context_add') {
                         const text = command.parameters?.['text'] || '';
-                        const keyword = command.parameters?.['keyword'] || '';
+                        const keyword = (command.parameters?.['trigger'] || command.parameters?.['keyword'] || '') as string;
                         if (text.trim().length === 0) continue;
                         const tempId = `ctx-staged-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
                         this.stagedAddItem({
@@ -1468,7 +1468,7 @@ export class XMLStoryModal extends SimpleModal {
                     } else if (command.type === 'context_edit') {
                         const id = command.parameters?.['id'];
                         const text = command.parameters?.['text'];
-                        const keyword = command.parameters?.['keyword'];
+                        const keyword = (command.parameters?.['trigger'] || command.parameters?.['keyword']) as string | undefined;
                         if (!id) continue;
                         if (text !== undefined) this.stagedUpdateItem(id, { text });
                         if (keyword !== undefined) this.stagedUpdateItem(id, { keywords: keyword ? [keyword] : [] });
@@ -1969,7 +1969,7 @@ export class XMLStoryModal extends SimpleModal {
 
             // Keywords editor (comma-separated)
             const kwRow = document.createElement('div'); kwRow.style.cssText='display:flex; flex-direction:column; gap:0.25rem;';
-            const kwLabel = document.createElement('div'); kwLabel.textContent='Keywords (comma-separated, optional):'; kwLabel.style.cssText='font-weight:600;';
+            const kwLabel = document.createElement('div'); kwLabel.textContent='Trigger words (comma-separated, optional):'; kwLabel.style.cssText='font-weight:600;';
             const kwContainer = document.createElement('div'); kwContainer.style.cssText='border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
             kwRow.appendChild(kwLabel); kwRow.appendChild(kwContainer); wrap.appendChild(kwRow);
             const currentStageItem = this.getStagedItems().find(i => i.id === itemId);
@@ -2209,11 +2209,11 @@ export class XMLStoryModal extends SimpleModal {
             globals.forEach(g => lines.push(`- ${g}`));
         }
         lines.push('');
-        lines.push('Keyworded context:');
+        lines.push('Triggered context (by trigger word):');
         if (keyworded.length === 0) {
             lines.push('- (none)');
         } else {
-            keyworded.forEach(k => lines.push(`- keyword: ${k.keyword}; text: ${k.text}`));
+            keyworded.forEach(k => lines.push(`- trigger: ${k.keyword}; text: ${k.text}`));
         }
         return lines.join('\n');
     }
@@ -2223,20 +2223,20 @@ export class XMLStoryModal extends SimpleModal {
      */
     private getKeywordContextRulesForAI(): string {
         return [
-            'CONTEXT RULES',
+            'CONTEXT RULES (Trigger words)',
             '',
-            '- When adding or editing a context entry, decide if it is global or keyworded.',
-            '- Global: omit keyword.',
-            '- Keyworded: include a short, specific keyword (often a character or entity name) using keyword="…".',
-            '- Do not emit any conditions or scopes; only use the keyword attribute to indicate keyworded entries.',
+            '- When adding or editing a context entry, decide if it is global or has a trigger word.',
+            '- Global: omit trigger.',
+            '- Triggered: include a short, specific trigger word (often a character or entity name) using trigger="…".',
+            '- Do not emit any conditions or scopes; only use the trigger attribute to indicate triggered entries.',
             '',
             'Allowed context commands:',
-            '- <context add text="…" [keyword="…"] />',
-            '- <context edit id="…" text="…" [keyword="…"] />',
+            '- <context add text="…" [trigger="…"] />',
+            '- <context edit id="…" text="…" [trigger="…"] />',
             '- <context remove id="…" />',
             '',
             'Important:',
-            '- If editing an existing entry that already has conditions internally, do not attempt to rewrite or mention them. Only include keyword when you want it keyworded.',
+            '- If editing an existing entry that already has conditions internally, do not attempt to rewrite or mention them. Only include a trigger when you want it to be triggered.',
             '- Do not emit any other context control tags or custom condition logic.'
         ].join('\n');
     }
@@ -2341,15 +2341,15 @@ export class XMLStoryModal extends SimpleModal {
                 return `</delete id="${(command.parameters as any)?.id || 'unknown'}">`;
             case 'context_add': {
                 const p = (command.parameters as Record<string, unknown>) || {};
-                const keywordVal = typeof p['keyword'] === 'string' && (p['keyword'] as string).length > 0 ? (p['keyword'] as string) : '';
-                const kw = keywordVal ? ` keyword="${keywordVal}"` : '';
+                const trigVal = typeof p['trigger'] === 'string' && (p['trigger'] as string).length > 0 ? (p['trigger'] as string) : '';
+                const kw = trigVal ? ` trigger="${trigVal}"` : '';
                 const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
                 return `<context text="${text}"${kw} />`;
             }
             case 'context_edit': {
                 const p = (command.parameters as Record<string, unknown>) || {};
-                const keywordVal = typeof p['keyword'] === 'string' && (p['keyword'] as string).length > 0 ? (p['keyword'] as string) : '';
-                const kw = keywordVal ? ` keyword="${keywordVal}"` : '';
+                const trigVal = typeof p['trigger'] === 'string' && (p['trigger'] as string).length > 0 ? (p['trigger'] as string) : '';
+                const kw = trigVal ? ` trigger="${trigVal}"` : '';
                 const id = typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : 'unknown';
                 const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
                 return `<context id="${id}" text="${text}"${kw} />`;

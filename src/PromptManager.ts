@@ -1467,16 +1467,17 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 - For removing sections: <remove_section section="SECTION_TITLE">
 - Work with the existing outline structure and improve/expand it holistically
 
-**For Conditional Context Items (keyword-based):**
-- Context items are GLOBAL by default. To add a global item, omit any keyword.
-- To make a context item non-global, include a short keyword (e.g., a character or entity name). Items with a keyword will only become active when that keyword has been mentioned.
+**For Conditional Context Items (trigger-word based):**
+- Context items are GLOBAL by default. To add a global item, omit any trigger word.
+- To make a context item non-global, include a short trigger word (e.g., a character or entity name). Items with a trigger word will only become active when that trigger word has been mentioned.
 - Allowed context commands (executed immediately when present):
-  - <context add text="…" [keyword="…"] />
-  - <context edit id="…" text="…" [keyword="…"] />
+  - <context add text="…" [trigger="…"] />
+  - <context edit id="…" text="…" [trigger="…"] />
   - <context remove id="…" />
 - Do NOT use star-based prefixes (like * or *2-4). That syntax is obsolete.
-- Do NOT emit any custom condition logic. Only the optional keyword attribute is supported here.
+- Do NOT emit any custom condition logic. Only the optional trigger attribute is supported here.
 - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
+- The "Triggered context" list provided to you is the complete and authoritative set of trigger-word entries for this step. When asked to reference or list items with trigger words, use ONLY that list. Do not infer or invent additional triggered entries.
 
 ⚠️ CRITICAL EXECUTION NOTE:
 - Any XML command you include in your response WILL BE EXECUTED IMMEDIATELY by the system.
@@ -1522,18 +1523,19 @@ EDITING COMMANDS:
 - For replacing sections: Use <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
 - For removing sections: Use <remove_section section="SECTION_TITLE">
 - Conditional context (keyword-based):
-  • <context add text="…" [keyword="…"] />
-  • <context edit id="…" text="…" [keyword="…"] />
+  • <context add text="…" [trigger="…"] />
+  • <context edit id="…" text="…" [trigger="…"] />
   • <context remove id="…" />
 
 CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
 
 CONTEXT ITEM RULES:
-- Items are GLOBAL by default (omit keyword).
-- To make an item non-global, include a concise keyword (often a character or entity) via keyword="…". Such items become active only after that keyword has been mentioned.
+- Items are GLOBAL by default (omit trigger).
+- To make an item non-global, include a concise trigger word (often a character or entity) via trigger="…". Such items become active only after that trigger has been mentioned.
 - Do NOT use star-based prefixes (like * or *2-4); that syntax is obsolete.
-- Do NOT emit any condition logic; only the optional keyword is supported.
+- Do NOT emit any condition logic; only the optional trigger is supported.
 - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs only within XML commands.
+- The "Triggered context" section above is authoritative. When asked to list or reason about triggered entries, reference EXACTLY those items and their trigger words. If none are listed, state that there are none. Do NOT assume that other items have triggers unless you explicitly add them via context commands in this response.
 
 Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
 
