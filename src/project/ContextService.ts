@@ -41,11 +41,7 @@ export class ContextService {
             throw e;
         }
 
-        // 1. Add the current node's own context if it exists
-        if (targetNode.context && targetNode.context.trim()) {
-            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
-            contextParts.push(`CURRENT NODE CONTEXT (${nodeLevelName}: "${targetNode.title}"):\n---\n${targetNode.context}\n---`);
-        }
+        // Traditional context removed - conditional context is handled elsewhere
 
         // 2. Optionally add the parent's content (structural outline)
         if (includeParentContent && targetNode.parentId) {
@@ -81,19 +77,14 @@ export class ContextService {
      * @param rootNode The root node of the tree.
      * @returns Array with parent context string (empty if no parent or parent has no context).
      */
-    public collectParentContextForSummary(targetNode: DocumentNode, rootNode: DocumentNode): string[] {
+    public collectParentContextForSummary(targetNode: DocumentNode, _rootNode: DocumentNode): string[] {
         const contextChain: string[] = [];
         
         if (!targetNode.parentId) {
             return contextChain;
         }
         
-        const parent = this.treeService.findNodeById(targetNode.parentId, rootNode);
-        if (parent && parent.context && parent.context.trim()) {
-            const levelName = parent.template[parent.level] || `Level ${parent.level}`;
-            contextChain.push(`PARENT (${levelName}: "${parent.title}"):\n---\n${parent.context}\n---`);
-        }
-
+        // Traditional parent context removed - conditional context is handled elsewhere
         return contextChain;
     }
 
@@ -114,16 +105,9 @@ export class ContextService {
 
         const contextInfo: string[] = [];
         
-        // Own context
-        if (node.context && node.context.trim()) {
-            contextInfo.push(`Own context: ${node.context.length} chars`);
-        }
+        // Traditional context removed - using conditional context system
 
-        // Parent context
-        const parentContext = this.collectParentContextForSummary(node, rootNode);
-        if (parentContext.length > 0) {
-            contextInfo.push(`Inherited from parent`);
-        }
+        // Traditional parent context removed
 
         // Adjacent node context (new approach)
         const previousNode = this.treeService.getPreviousNode(node);

@@ -76,7 +76,7 @@ export interface FrozenSettings {
     taskModelConfigs: {
         coherence_analysis: { outline: string; prose: string };
         fix_contradiction: { outline: string; prose: string };
-        context_adjustment: { outline: string; prose: string };
+        // context_adjustment removed - traditional context system removed
         text_polishing: { outline: string; prose: string };
     };
 }
@@ -89,14 +89,11 @@ export interface GenerationLevels {
     draftLevel: number;
     /** Which levels get content generated (must be ≤ draftLevel) */
     contentLevel: number;
-    /** Which levels get context auto-pruned */
-    contextPruneLevel: number;
     /** Which levels get coherence checking (must be < draftLevel) */
     coherenceLevel: number;
     /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
     autofixSeverity: number;
-    /** Context pruning scope (none: 0, severe: 1, medium: 2, relaxed: 3) */
-    pruneScope: number;
+    // pruneScope completely removed - was only needed for traditional context adjustment
     /** Frozen settings captured at generation start */
     frozenSettings: FrozenSettings;
 }
@@ -221,7 +218,7 @@ export class UnifiedGenerationService {
     private currentIterationProgress: { current: number; total: number; message: string } | null = null;
     private currentStageProgress: { current: number; total: number; message: string } | null = null;
     private currentNodeId: string | null = null;
-    private currentOperationType: 'content' | 'draft' | 'context' | 'coherence' | null = null;
+    private currentOperationType: 'content' | 'draft' | 'coherence' | null = null; // 'context' removed - traditional context system removed
     // Add contradiction collection system
     private accumulatedContradictions: {
         hasContradictions: boolean;
@@ -400,7 +397,7 @@ export class UnifiedGenerationService {
         if (!startNode) throw new Error(`Start node not found: ${startNodeId}`);
 
         // Calculate maximum level we might work on based on generation parameters
-        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
+        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.coherenceLevel);
         
         // Keep looping until no more work can be done or abort is requested
         let workDone = true;
@@ -575,11 +572,11 @@ export class UnifiedGenerationService {
         const targetStates: TargetState[] = [];
         
         // Calculate the maximum level that should receive any work based on generation parameters
-        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.contextPruneLevel, levels.coherenceLevel);
+        const maxGenerationLevel = Math.max(levels.draftLevel, levels.contentLevel, levels.coherenceLevel);
         
         if (DEBUG_STATELESS_GENERATION) {
             console.log(`🎯 STATELESS DEBUG: calculateTargetStates called`);
-            console.log(`   Generation levels: draft=${levels.draftLevel}, content=${levels.contentLevel}, contextPrune=${levels.contextPruneLevel}, coherence=${levels.coherenceLevel}`);
+            console.log(`   Generation levels: draft=${levels.draftLevel}, content=${levels.contentLevel}, coherence=${levels.coherenceLevel}`);
             console.log(`   Processing levels: ${minLevel} to ${maxLevel} (maxGenerationLevel=${maxGenerationLevel})`);
         }
         
@@ -591,7 +588,7 @@ export class UnifiedGenerationService {
                 
                 targetStates[level] = {
                     level,
-                    needsContextPruning: levels.contextPruneLevel >= level && level > 0, // Skip root level
+                    needsContextPruning: false, // Context pruning removed - using conditional context system
                     needsContent: levels.contentLevel >= level,
                     needsCoherenceCheck: needsCoherenceCheck, // Coherence checks parent-child relationship, so skip root level
                     canExpand: level < levels.draftLevel
@@ -630,7 +627,7 @@ export class UnifiedGenerationService {
         const masterVersion = node.getMasterVersion();
         
         const state = {
-            hasContextPruning: node.ContextIsAdjusted(),
+            hasContextPruning: false, // Context pruning removed with traditional context
             hasContent: this.nodeHasContent(node),
             hasCoherenceCheck: node.isConsistentToParent(),
             hasChildren: node.children.length > 0
@@ -845,7 +842,7 @@ export class UnifiedGenerationService {
     /**
      * Handle context pruning for a node
      */
-    private async handleContextPruning(nodeId: string, levels: GenerationLevels): Promise<void> {
+    private async handleContextPruning(nodeId: string, _levels: GenerationLevels): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested) {
             console.log(`🛑 Context pruning aborted for node: ${nodeId}`);
@@ -860,173 +857,13 @@ export class UnifiedGenerationService {
             return;
         }
 
-        // Check if context has already been AI-adjusted (skip if so)
-        if (node.ContextIsAdjusted()) {
-            return;
-        }
-
-        try {
-            // Set isGenerating flag and update tree to show spinner
-            node.isGenerating = true;
-            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'context-pruning-started' });
-            
-            // Emit start progress
-            this.currentOperationProgress = {
-                current: 1,
-                total: 3,
-                message: `Auto-pruning context for "${node.title}"`
-            };
-            this.currentNodeId = nodeId;
-            this.currentOperationType = 'context';
-            this.emitUnifiedProgress();
-            
-            let contextChanged = false;
-            
-            // Use AI decision context pruning
-            // Using AI decision context rating mode (logging reduced)
-            
-            // Update progress
-            this.currentOperationProgress = {
-                current: 2,
-                total: 3,
-                message: `AI analyzing context relevancy for "${node.title}"`
-            };
-            this.emitUnifiedProgress();
-            
-            contextChanged = await this.runContextSortingMode(node, levels.frozenSettings.language, levels.pruneScope);
-            
-            // Emit completion progress
-            this.currentOperationProgress = {
-                current: 3,
-                total: 3,
-                message: contextChanged ? `Auto-pruned context for "${node.title}"` : `No context issues found for "${node.title}"`
-            };
-            this.emitUnifiedProgress();
-        } finally {
-            // Clear isGenerating flag and update tree to hide spinner
-            node.isGenerating = false;
-            this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'context-pruning-completed' });
-            
-            // Clear operation type after context pruning
-            this.currentOperationType = null;
-            this.emitUnifiedProgress();
-        }
+        // Context adjustment removed with traditional context system
+        // Skip context adjustment entirely
+        return;
     }
 
-    /**
-     * Run context sorting mode - AI sorts items by relevance and applies scope-based cutoff for automatic pruning
-     */
-    private async runContextSortingMode(node: DocumentNode, capturedLanguage?: string, pruneScope?: number): Promise<boolean> {
-        const { getContextItems, formatContextItems } = await import('../ContextFormat');
-        const { ContextAdjusterService } = await import('../ui/modals/services/ContextAdjusterService');
-        
-        // Create context adjuster service (new sorting-based system)
-        const contextAdjusterService = new ContextAdjusterService(
-            this.deps.openRouterClient,
-            this.deps.settingsManager
-        );
-        
-        // Create a minimal ProjectManager interface for the service
-        const projectManagerInterface = {
-            findNodeById: (id: string) => this.deps.treeService.findNodeById(id, this.deps.rootNode)
-        };
-        
-        // Analyze context using new sorting service (with sorting mode enabled)
-        const analysisResult = await contextAdjusterService.analyzeContext(node, projectManagerInterface as any, capturedLanguage, true);
-        
-        if (!analysisResult.sortingResult) {
-            // No sorting results (probably all protected items), mark as adjusted and return
-            const nodeContext = node.context || '';
-            node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
-            await this.deps.saveToStorage();
-            console.log(`✅ No context items to sort for "${node.title}" - tagged as context_ai_adjusted`);
-            return false;
-        }
-        
-        // Get original context items
-        const nodeContext = node.context || '';
-        const originalContextItems = getContextItems(nodeContext);
-        
-        // Determine which cutoff to use based on pruneScope
-        const { sorted_items, sparse_cutoff, medium_cutoff, elaborate_cutoff } = analysisResult.sortingResult;
-        
-        let selectedCutoff: number;
-        let scopeName: string;
-        
-        if (pruneScope === undefined || pruneScope === 0) {
-            // No pruning - use all items
-            selectedCutoff = sorted_items.length;
-            scopeName = "none";
-        } else if (pruneScope === 1) {
-            // Severe pruning - use sparse cutoff
-            selectedCutoff = sparse_cutoff;
-            scopeName = "severe";
-        } else if (pruneScope === 2) {
-            // Medium pruning - use medium cutoff (default)
-            selectedCutoff = medium_cutoff;
-            scopeName = "medium";
-        } else if (pruneScope === 3) {
-            // Relaxed pruning - use elaborate cutoff
-            selectedCutoff = elaborate_cutoff;
-            scopeName = "relaxed";
-        } else {
-            // Fallback to medium for invalid values
-            selectedCutoff = medium_cutoff;
-            scopeName = "medium (fallback)";
-        }
-        
-        // Build items to keep based on selected cutoff
-        const itemsToKeep: string[] = [];
-        const itemsRemoved: string[] = [];
-        
-        sorted_items.forEach((itemNum, index) => {
-            const itemIndex = itemNum - 1; // Convert to 0-based index
-            const position = index + 1; // 1-based position in sorted list
-            
-            if (itemIndex >= 0 && itemIndex < originalContextItems.length) {
-                const item = originalContextItems[itemIndex];
-                if (item) { // Guard against undefined
-                    if (position <= selectedCutoff) {
-                        itemsToKeep.push(item);
-                    } else {
-                        itemsRemoved.push(item);
-                        // Context item removed based on selected cutoff (logging reduced)
-                    }
-                }
-            }
-        });
-        
-        // Add back any protected items (starting with "*") that weren't included in sorting
-        originalContextItems.forEach((item) => {
-            if (item && item.trim().startsWith('*')) {
-                // Protected item - always keep
-                if (!itemsToKeep.includes(item)) {
-                    itemsToKeep.push(item);
-                    // Protected context item kept (logging reduced to reduce noise)
-                }
-            }
-        });
-        
-        // Build new context from kept items
-        const newContext = formatContextItems(itemsToKeep);
-        const contextChanged = newContext !== nodeContext;
-        
-        if (contextChanged) {
-            // Update context with AI adjustment tag (add ai_pruned tag for new system)
-            node.setContextWithTags(newContext, ['context_ai_adjusted', 'context_ai_pruned']);
-            await this.deps.saveToStorage();
-            
-            console.log(`✅ Auto-pruned context for "${node.title}": kept ${itemsToKeep.length}/${originalContextItems.length} items (${scopeName} cutoff: ${selectedCutoff})`);
-        } else {
-            // No changes but still tag as processed
-            node.setContextWithTags(nodeContext, ['context_ai_adjusted']);
-            await this.deps.saveToStorage();
-            
-            console.log(`✅ Context analysis completed for "${node.title}": no changes needed (${scopeName} cutoff: ${selectedCutoff})`);
-        }
-        
-        return contextChanged;
-    }
+
+
 
     /**
      * Handle content generation for a node
@@ -1207,8 +1044,7 @@ export class UnifiedGenerationService {
                     
                     const draftVersionId = newNode.addVersion(['generated', 'draft'], {
                         content: `Draft: ${item.description}`,
-                        title: newNode.title,
-                        context: newNode.context
+                        title: newNode.title
                     }, metadata);
                     
                     // Promote the draft version to master (keeping the draft tag)
@@ -1599,16 +1435,7 @@ export class UnifiedGenerationService {
             }
         }
         
-        if (this.currentOperationType === 'context' && this.currentNodeId) {
-            // For context adjustment, use TaskModelService to get the correct model
-            const node = this.deps.treeService.findNodeById(this.currentNodeId, this.deps.rootNode);
-        if (node) {
-                const isLeafNode = node.isLeaf;
-                const modelPurpose = this.taskModelService.getModelPurposeForTask('context_adjustment', isLeafNode);
-                const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
-                return this.formatModelName(modelName);
-            }
-        }
+        // Context adjustment removed - traditional context system removed
         
         // For content generation operations without loop phase info, select appropriate model based on node type
         if (this.currentOperationType === 'content' && this.currentNodeId) {
@@ -1944,11 +1771,13 @@ export class UnifiedGenerationService {
 
 
     /**
-     * Extract settings override from node context (copied from GenerationService)
+     * Extract settings override from node context (now from conditional context)
      */
     private extractSettingsOverride(node: DocumentNode): string | null {
-        const context = node.context || '';
-        const match = context.match(/\[settings:([^\]]+)\]/);
+        // Check conditional context items for settings overrides
+        const root = this.deps.rootNode;
+        const conditionalContext = node.assembleApplicableConditionalContext(root);
+        const match = conditionalContext.match(/\[settings:([^\]]+)\]/);
         return match ? match[1] || null : null;
     }
 
@@ -2309,8 +2138,7 @@ export class UnifiedGenerationService {
 
             const draftVersionId = newNode.addVersion(['generated', 'draft'], {
                 content: `Draft: ${content}`,
-                title: newNode.title,
-                context: newNode.context
+                title: newNode.title
             }, metadata);
 
             if (draftVersionId) {

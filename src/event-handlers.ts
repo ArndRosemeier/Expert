@@ -18,6 +18,7 @@ import { TemplateManager } from './TemplateManager';
 import { STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
+import { getContextItems } from './ContextFormat';
 import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
 
 
@@ -320,6 +321,66 @@ interface AIGeneratedData {
     options?: any;
 }
 
+/**
+ * Generate a simple random ID
+ */
+function generateSimpleId(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+/**
+ * Parses AI-generated conditional context with trigger tags and creates conditional context items
+ */
+function parseAIConditionalContext(rootNode: DocumentNode, aiContext: string): void {
+    if (!aiContext || typeof aiContext !== 'string' || !aiContext.trim()) {
+        return;
+    }
+
+    // Split into paragraphs (each paragraph is a context item)
+    const contextItems = getContextItems(aiContext);
+    
+    for (const itemText of contextItems) {
+        const trimmedText = itemText.trim();
+        if (!trimmedText) continue;
+
+        // Check if this item has trigger tags
+        const triggerMatch = trimmedText.match(/^<trigger>(.*?)<\/trigger>(.*)/s);
+        
+        if (triggerMatch && triggerMatch[1] && triggerMatch[2]) {
+            // This is a triggered context item
+            const triggerWordsString = triggerMatch[1];
+            const contextText = triggerMatch[2].trim();
+            
+            // Parse trigger words (comma-separated)
+            const keywords = triggerWordsString
+                .split(',')
+                .map(word => word.trim())
+                .filter(word => word.length > 0);
+            
+            // Add conditional context item with trigger words as keywords
+            // We'll have to manually access the conditionalContextItems for now since addConditionalContextItem doesn't support keywords
+            const conditionalItem = {
+                id: generateSimpleId(),
+                text: contextText,
+                conditions: [],
+                logic: 'OR' as const,
+                keywords: keywords
+            };
+            
+            // Directly add to the node's conditional context items array
+            (rootNode as any).conditionalContextItems.push(conditionalItem);
+            
+            console.log(`✅ Added triggered context item with keywords: [${keywords.join(', ')}]`);
+        } else {
+            // This is a global context item (no trigger tags)
+            rootNode.addConditionalContextItem(trimmedText, [], 'OR');
+            console.log(`✅ Added global context item`);
+        }
+    }
+    
+    console.log(`✅ Parsed ${contextItems.length} AI conditional context items`);
+}
+
 function handleCreateProject(title: string, template: ProjectTemplate, aiData?: unknown) {
     const orchestrator = state.getOrchestrator();
     const settingsManager = state.getSettingsManager();
@@ -359,8 +420,10 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
         }
         
         if (typedAiData.context !== undefined) {
-            rootNode.setContext(typedAiData.context, 'master');
-            console.log('✅ Applied AI context to root node, length:', typedAiData.context.length);
+            // Parse AI-generated conditional context with trigger tags
+            console.log('🔄 Parsing AI-generated conditional context items');
+            parseAIConditionalContext(rootNode, typedAiData.context);
+            console.log('✅ Applied AI conditional context to root node, length:', typedAiData.context.length);
         }
         
         // Store AI metadata in content for reference
@@ -463,7 +526,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             }
 
             if (importData.context !== undefined) {
-                rootNode.setContext(importData.context, 'imported');
+                // Traditional context removed - context handled by conditional context system
             }
 
             if (importData.generationPrompt !== undefined) {
@@ -584,7 +647,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         }
 
         if (childData.context !== undefined) {
-            newNode.setContext(childData.context, 'imported');
+            // Traditional context removed - context handled by conditional context system
         }
 
         if (childData.generationPrompt !== undefined) {

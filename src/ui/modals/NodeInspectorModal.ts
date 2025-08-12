@@ -538,7 +538,7 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-preview">
                     ${version.title ? `<div class="preview-title"><strong>Title:</strong> ${this.escapeHtml(version.title.substring(0, 40))}${version.title.length > 40 ? '…' : ''}</div>` : ''}
                     <div class="preview-content"><strong>Content:</strong> ${this.escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
-                    ${version.context ? `<div class="preview-context"><strong>Context:</strong> ${this.escapeHtml(version.context.substring(0, 40))}${version.context.length > 40 ? '…' : ''}</div>` : ''}
+                    <!-- Context preview removed - using conditional context system -->
                 </div>
                 ${actionButtons}
             `;
@@ -781,12 +781,7 @@ export class NodeInspectorModal extends BaseModal {
                     </div>
                 </div>
                 
-                <div class="version-section" id="ins-context-section">
-                    <h4 class="section-title" id="ins-context-toggle" style="cursor: pointer;">▼ Context</h4>
-                    <div class="section-content foldable-content" id="ins-context-content">
-                        <textarea class="context-editor auto-resize" id="inspector-context-editor" placeholder="Enter context...">${this.escapeHtml(version.context || '')}</textarea>
-                    </div>
-                </div>
+                <!-- Traditional context section removed - using conditional context system -->
                 <div class="version-section">
                     <h4 class="section-title">Conditional Context</h4>
                     <div class="section-content" id="inspector-conditional-context-host" style="width: 100%; min-height: 300px; display: flex; flex-direction: column;"></div>
@@ -1076,7 +1071,7 @@ export class NodeInspectorModal extends BaseModal {
 
         const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
         const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
-        const contextEditor = document.getElementById('inspector-context-editor') as HTMLTextAreaElement;
+        // contextEditor removed - using conditional context system
         const notesEditor = document.getElementById('inspector-notes-editor') as HTMLTextAreaElement;
 
         // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
@@ -1093,19 +1088,7 @@ export class NodeInspectorModal extends BaseModal {
             });
         }
 
-        // Upgrade context textarea to enhanced UniversalTextEditor - Drop-in replacement test!
-        if (contextEditor) {
-            const enhancedContextEditor = UniversalTextEditor.replace(contextEditor, {
-                mode: 'enhanced'  // Enable AI features for context editing too
-            });
-            
-            // Add blur event listener using standard DOM API - should work exactly like before
-            enhancedContextEditor.addEventListener('blur', async () => {
-                this.saveContext(enhancedContextEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
+        // Traditional context editor removed - using conditional context system
 
         // Upgrade notes textarea to enhanced UniversalTextEditor - Drop-in replacement!
         if (notesEditor) {
@@ -1179,43 +1162,7 @@ export class NodeInspectorModal extends BaseModal {
         }
     }
 
-    private saveContext(newContext: string): void {
-        if (!this.node || !this.selectedVersionId) return;
-
-        try {
-            // Find the specific version being edited
-            const selectedVersion = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
-            if (!selectedVersion) {
-                console.error('Selected version not found for editing');
-                return;
-            }
-
-            // Update the specific version's context
-            selectedVersion.context = newContext;
-            selectedVersion.timestamp = new Date();
-            selectedVersion.tags.add('edited');
-            selectedVersion.tags.add('context_edited');
-            
-            // Only propagate context to descendants if we're editing the master version
-            if (selectedVersion.tags.has('master')) {
-                const propagateRecursively = (parentNode: DocumentNode) => {
-                    for (const child of parentNode.children) {
-                        // Propagate to ALL versions of the child node
-                        const allVersions = child.getAllVersions();
-                        for (const version of allVersions) {
-                            version.context = parentNode.context;
-                            version.timestamp = new Date();
-                            version.tags.add('context_propagated');
-                        }
-                        propagateRecursively(child);
-                    }
-                };
-                propagateRecursively(this.node);
-            }
-        } catch (error) {
-            console.error('Failed to save context:', error);
-        }
-    }
+    // saveContext method removed - using conditional context system
 
     private saveNotes(newNotes: string): void {
         if (!this.node) return;

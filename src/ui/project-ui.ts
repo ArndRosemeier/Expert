@@ -8,8 +8,8 @@ import { openReaderView } from './reader-gui';
 import { openAddChildNodeModal, getDefaultModalFactory } from './modals/ModalFactory';
 import { CoherenceService } from './modals/services/CoherenceService';
 import { CoherenceModal } from './modals/CoherenceModal';
-import { ContextAdjusterService } from './modals/services/ContextAdjusterService';
-import { ContextAdjusterModal } from './modals/ContextAdjusterModal';
+// ContextAdjusterService removed - using conditional context system
+// ContextAdjusterModal removed - using conditional context system
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
@@ -18,9 +18,9 @@ import { UniversalTextEditor } from './components/UniversalTextEditor';
 
 // Global references to enhanced editors for access across functions
 let enhancedContentEditor: UniversalTextEditor | null = null;
-let enhancedContextEditor: UniversalTextEditor | null = null;
+// enhancedContextEditor removed - using conditional context system
 
-import { getContextInfoText } from '../ContextFormat';
+// getContextInfoText import removed - using conditional context system
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 import { LoopProgress } from '../LoopOrchestrator';
@@ -194,7 +194,7 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
         } else {
             const hasContent = node.content && node.content.trim().length > 0;
             const isDraft = masterVersion.tags.has('draft');
-            const isContextAdjusted = node.ContextIsAdjusted();
+            const isContextAdjusted = false; // Context adjustment removed with traditional context
             const isConsistentWithParent = node.isConsistentToParent();
             
             // Finished: all conditions met
@@ -334,7 +334,7 @@ function getNodeStatusTooltip(node: DocumentNode): string {
     
     const hasContent = node.content && node.content.trim().length > 0;
     const isDraft = masterVersion.tags.has('draft');
-    const isContextAdjusted = node.ContextIsAdjusted();
+    const isContextAdjusted = false; // Context adjustment removed with traditional context
     const isConsistentWithParent = node.isConsistentToParent();
     
     // Finished: all conditions met
@@ -392,10 +392,10 @@ let selectedNodeId: string | null = null;
 // Level-based generation state
 let draftLevelState: number = -1;
 let contentLevelState: number = -1;
-let contextPruneLevelState: number = -1;
+// contextPruneLevelState removed - using conditional context system
 let coherenceLevelState: number = -1;
 let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
-let pruneScopeState: number = 2; // Default to medium (2)
+// pruneScopeState removed - prune scope UI removed
 
 
 // Simple bulk operation tracking
@@ -517,10 +517,9 @@ async function saveLevelStates() {
         await storage.set('expert_app_level_states', {
             draftLevel: draftLevelState,
             contentLevel: contentLevelState,
-            contextPruneLevel: contextPruneLevelState,
             coherenceLevel: coherenceLevelState,
-            autofixSeverity: autofixSeverityState,
-            pruneScope: pruneScopeState
+            autofixSeverity: autofixSeverityState
+            // pruneScope removed - prune scope UI removed
         });
     } catch (error) {
         console.warn('Failed to save level states:', error);
@@ -531,14 +530,14 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, pruneScope: number}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
-            contextPruneLevelState = saved.contextPruneLevel ?? -1;
+            // contextPruneLevelState removed with traditional context system
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? -1;
-            pruneScopeState = saved.pruneScope ?? 2; // Default to medium
+            // pruneScopeState removed - prune scope UI removed
         }
     } catch (error) {
         console.warn('Failed to load level states:', error);
@@ -550,10 +549,10 @@ function captureCurrentDropdownValues() {
     try {
         const draftSelector = document.getElementById('draft-level-selector') as HTMLSelectElement;
         const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
-        const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
+        // contextPruneSelector removed - using conditional context system
         const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
         const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
-        const pruneScopeSelector = document.getElementById('prune-scope-selector') as HTMLSelectElement;
+        // pruneScopeSelector removed - prune scope UI removed
         
         if (draftSelector) {
             draftLevelState = parseInt(draftSelector.value);
@@ -561,18 +560,14 @@ function captureCurrentDropdownValues() {
         if (contentSelector) {
             contentLevelState = parseInt(contentSelector.value);
         }
-        if (contextPruneSelector) {
-            contextPruneLevelState = parseInt(contextPruneSelector.value);
-        }
+        // contextPruneSelector removed with traditional context system
         if (coherenceSelector) {
             coherenceLevelState = parseInt(coherenceSelector.value);
         }
         if (autofixSeveritySelector) {
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
         }
-        if (pruneScopeSelector) {
-            pruneScopeState = parseInt(pruneScopeSelector.value);
-        }
+        // pruneScopeSelector removed - prune scope UI removed
     } catch (error) {
         console.warn('Failed to capture dropdown values:', error);
     }
@@ -989,7 +984,7 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
 
     // Copy all properties using version management system
     newNode.setContent(sourceNode.content, 'master');
-    newNode.setContext(sourceNode.context, 'master');
+    // Context copying removed - using conditional context system
     
     // Copy other properties directly
     newNode.generationPrompt = sourceNode.generationPrompt;
@@ -1485,12 +1480,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                         if (contentTextArea) contentTextArea.value = node.content;
                     }
                     
-                    if (enhancedContextEditor) {
-                        enhancedContextEditor.value = node.context;
-                    } else {
-                        const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                        if (contextTextArea) contextTextArea.value = node.context;
-                    }
+                    // Context editor removed - using conditional context system
                 }
             }
         }
@@ -1582,14 +1572,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     const handleSummaryGenerated = (e: { nodeId: string; summary: string }) => {
         if (e.nodeId === selectedNodeId) {
             // Update enhanced editor if it exists, otherwise fall back to original method
-            if (enhancedContextEditor) {
-                enhancedContextEditor.value = e.summary;
-            } else {
-                const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                if (contextTextArea) {
-                    contextTextArea.value = e.summary;
-                }
-            }
+            // Context UI removed - using conditional context system
         }
     };
 
@@ -2391,35 +2374,9 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                 </select>
                             </div>
                             
-                            <!-- Context Prune Level -->
-                            <div class="level-selector">
-                                <label for="context-prune-level-selector" title="Which levels get context auto-pruned">
-                                    <span class="level-icon">🔧</span>
-                                    Prune Level:
-                                </label>
-                                <select id="context-prune-level-selector" class="level-dropdown">
-                                    <option value="-1" ${contextPruneLevelState === -1 ? 'selected' : ''}>None</option>
-                                    ${node.template.slice(node.level).map((levelName, index) => {
-                                        const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
-                                        return `<option value="${actualLevel}" ${contextPruneLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
-                                    }).join('')}
-                                </select>
-                            </div>
+                            <!-- Context Prune Level removed - using conditional context system -->
                             
-                            <!-- Prune Scope -->
-                            <div class="level-selector">
-                                <label for="prune-scope-selector" title="How aggressively to prune context during auto-pruning">
-                                    <span class="level-icon">🎯</span>
-                                    Prune Scope:
-                                </label>
-                                <select id="prune-scope-selector" class="level-dropdown">
-                                    <option value="0" ${pruneScopeState === 0 ? 'selected' : ''}>No pruning</option>
-                                    <option value="1" ${pruneScopeState === 1 ? 'selected' : ''}>🔥 Severe</option>
-                                    <option value="2" ${pruneScopeState === 2 ? 'selected' : ''}>⚖️ Medium</option>
-                                    <option value="3" ${pruneScopeState === 3 ? 'selected' : ''}>📚 Relaxed</option>
-                                </select>
-                            </div>
+                            <!-- Prune Scope removed - prune scope UI removed -->
                 </div>
                 
                         <!-- Validation Messages -->
@@ -2470,24 +2427,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             </div>
         </div>
         
-        <div class="node-section" id="context-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; cursor: pointer;" id="context-toggle">
-                <div style="display: flex; align-items: baseline; gap: 0.5rem;">
-                    <span class="toggle-icon" id="context-toggle-icon">▼</span>
-                    <button id="context-adjuster-btn" class="info-button" title="Context Adjuster - Remove problematic context items" style="font-size: 0.8rem; padding: 2px 4px; margin-right: 2px;">🔧</button>
-                    <label for="node-context" style="cursor: pointer;">Context</label>
-                    <button id="context-info-btn" class="info-button" title="Edit Context Items" style="margin-left: 4px;">📝</button>
-                    <span style="font-size: 0.8rem; color: #6c757d; font-style: italic; line-height: 1;">${getContextInfoText(node.context || '')}</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <button id="node-propagate-context-btn" class="button button-secondary">Propagate</button>
-                    <button id="node-extract-context-btn" class="button button-secondary">Extract Context</button>
-                </div>
-            </div>
-            <div id="context-display-area" class="foldable-content">
-                <textarea id="node-context" class="large-textarea" rows="5" placeholder="Additional context information for this node can be written here.">${node.context || ''}</textarea>
-            </div>
-        </div>
+        <!-- Context section removed - using conditional context system -->
 
         <!-- Conditional Context Panel (embedded, below context, above app log) -->
         <div class="node-section" id="conditional-context-panel">
@@ -2582,7 +2522,8 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     const contextIcon = document.getElementById('context-toggle-icon');
     if (contextToggle && contextAreaEl && contextIcon) {
         contextToggle.addEventListener('click', (e) => {
-            if ((e.target as HTMLElement).closest('#node-propagate-context-btn') || (e.target as HTMLElement).closest('#node-extract-context-btn') || (e.target as HTMLElement).closest('#context-info-btn') || (e.target as HTMLElement).closest('#context-adjuster-btn')) {
+            // Skip propagation for any remaining button interactions
+            if ((e.target as HTMLElement).closest('button')) {
                 return;
             }
             const collapsed = contextAreaEl.classList.toggle('collapsed');
@@ -2603,17 +2544,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     generateBtn.className = 'button button-primary';
     generateBtn.id = 'node-generate-btn';
     
-    // Handle context buttons state
-    const extractContextBtn = getElementById('node-extract-context-btn') as HTMLButtonElement;
-    const propagateContextBtn = getElementById('node-propagate-context-btn') as HTMLButtonElement;
-    
-    if (extractContextBtn) {
-        extractContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
-    }
-    
-    if (propagateContextBtn) {
-        propagateContextBtn.disabled = shouldDisableButtons || isAnyOperationInProgress;
-    }
+    // Context buttons removed - using conditional context system now
 
     // Update button text to show current state - USING SAFE METHOD to prevent listener loss
     if (isThisNodeGenerating) {
@@ -2677,7 +2608,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Set up event listeners for level-based generation controls
     const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
     const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
-    const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
+    // context-prune-level-selector removed - using conditional context system
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
     const validationMessage = getElementById('level-validation-message') as HTMLDivElement;
@@ -2688,14 +2619,14 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         const params = node.lastGenerationParameters;
         if (draftLevelSelector) draftLevelSelector.value = params.draftLevel.toString();
         if (contentLevelSelector) contentLevelSelector.value = params.contentLevel.toString();
-        if (contextPruneLevelSelector) contextPruneLevelSelector.value = params.contextPruneLevel.toString();
+        // contextPruneLevelSelector removed - using conditional context system
         if (coherenceLevelSelector) coherenceLevelSelector.value = params.coherenceLevel.toString();
         if (autofixSeveritySelector) autofixSeveritySelector.value = params.autofixSeverity.toString();
         
         // Update global state variables to match restored values
         draftLevelState = params.draftLevel;
         contentLevelState = params.contentLevel;
-        contextPruneLevelState = params.contextPruneLevel;
+        // contextPruneLevelState removed - using conditional context system
         coherenceLevelState = params.coherenceLevel;
         autofixSeverityState = params.autofixSeverity;
         
@@ -2741,7 +2672,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     };
     
     // Add validation event listeners
-    const levelSelectors = [draftLevelSelector, contentLevelSelector, contextPruneLevelSelector, coherenceLevelSelector];
+    const levelSelectors = [draftLevelSelector, contentLevelSelector, coherenceLevelSelector];
     
     levelSelectors.forEach(selector => {
         if (selector) {
@@ -2763,15 +2694,14 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // This must happen AFTER the DOM elements are created and appended above
     // Use safe element access to prevent errors during DOM updates
     const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
+    // contextTextArea removed - using conditional context system
     const nodeTitleDisplay = document.getElementById('node-title-display') as HTMLElement;
     
     // RACE CONDITION FIX: Ensure elements exist before proceeding (safety check with retry mechanism)  
-    if (!contentTextArea || !contextTextArea || !nodeTitleDisplay) {
+    if (!contentTextArea || !nodeTitleDisplay) {
         // During rapid UI updates, DOM might be in transition state - retry once after a short delay
         const missingElements = {
             contentTextArea: !!contentTextArea,
-            contextTextArea: !!contextTextArea,
             nodeTitleDisplay: !!nodeTitleDisplay
         };
         
@@ -2810,36 +2740,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         });
     }
 
-    // Upgrade context textarea to enhanced UniversalTextEditor - Drop-in replacement!
-    if (contextTextArea) {
-        enhancedContextEditor = UniversalTextEditor.replace(contextTextArea, {
-            mode: 'enhanced'  // Enable AI features for context editing too
-        });
-        
-        // Context textarea - save context changes to node only on blur (when focus is lost)
-        enhancedContextEditor.addEventListener('blur', () => {
-            if (projectManager && selectedNodeId) {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (node) {
-                    const newContext = enhancedContextEditor!.value;
-                    // Use version management system to update context with "edited" and "context_edited" tags
-                    node.setContextWithTags(newContext, ['edited', 'context_edited']);
-                    
-                    // Update the context items count display
-                    const contextLabel = document.querySelector('label[for="node-context"]');
-                    if (contextLabel) {
-                        const contextInfoSpan = contextLabel.parentElement?.querySelector('span');
-                        if (contextInfoSpan) {
-                            contextInfoSpan.textContent = getContextInfoText(newContext);
-                        }
-                    }
-                    
-                    // Save to storage immediately since this only happens on blur
-                    void projectManager.saveToStorage();
-                }
-            }
-        });
-    }
+    // Enhanced context editor removed - using conditional context system
 
 
 
@@ -3390,10 +3291,9 @@ This action cannot be undone.`;
                         const levels = {
                             draftLevel: -1, // No children creation
                             contentLevel: node.level, // Generate content only for this level  
-                            contextPruneLevel: -1, // No context pruning
                             coherenceLevel: -1, // No coherence checking
                             autofixSeverity: -1, // No autofix
-                            pruneScope: 0 // No pruning for content-only generation
+                            // pruneScope completely removed - was only needed for traditional context adjustment
                         };
                         
                         // Start unified generation
@@ -3483,10 +3383,9 @@ This action cannot be undone.`;
                         const levels = {
                             draftLevel: node.level + 1, // Create children one level down
                             contentLevel: node.level + 1, // Generate content for the children
-                            contextPruneLevel: node.level + 1, // Prune context for children
                             coherenceLevel: node.level, // Check coherence at parent level
                             autofixSeverity: -1, // No autofix
-                            pruneScope: 2 // Use medium pruning for bulk generation
+                            // pruneScope completely removed - was only needed for traditional context adjustment
                         };
                         
                         // Start unified generation
@@ -3823,82 +3722,12 @@ This action cannot be undone.`;
                 if (!node) return;
                 
                 // Import and open context editor modal
-                void import('./modals/ContextInfoModal').then(async ({ ContextInfoModal }) => {
-                    const contextModal = new ContextInfoModal(node);
-                    await contextModal.open();
-                }).catch(error => {
-                    console.error('Failed to open context editor modal:', error);
-                    alert('Failed to open context editor. Please try again.');
-                });
+                // Context editor modal removed - using conditional context system
+                console.log('Context editor removed - use conditional context editor instead');
             }
             break;
 
-        case 'node-propagate-context-btn':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
-
-                // Function to propagate context to all descendants and ALL their versions
-                const propagateContextToDescendants = (parentNode: DocumentNode) => {
-                    const propagatedCount = { count: 0 };
-                    
-                    const propagateRecursively = (sourceNode: DocumentNode) => {
-                        for (const child of sourceNode.children) {
-                            // Propagate to ALL versions of the child node
-                            const allVersions = child.getAllVersions();
-                            for (const version of allVersions) {
-                                version.context = sourceNode.context;
-                                version.timestamp = new Date();
-                                version.tags.add('context_propagated');
-                            }
-                            propagatedCount.count++;
-                            propagateRecursively(child);
-                        }
-                    };
-                    
-                    propagateRecursively(parentNode);
-                    return propagatedCount.count;
-                };
-
-                const propagatedCount = propagateContextToDescendants(node);
-                
-                if (propagatedCount > 0) {
-                    // Save the project after propagation
-                    void projectManager.saveToStorage().catch(console.error);
-                    alert(`Context propagated to ${propagatedCount} descendant node(s).`);
-                    
-                    // Refresh the UI to show updated context if we're viewing a child node
-                    const currentNode = projectManager.findNodeById(selectedNodeId);
-                    if (currentNode) {
-                        if (enhancedContextEditor) {
-                            enhancedContextEditor.value = currentNode.context;
-                        } else {
-                            const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                            if (contextTextArea) {
-                                contextTextArea.value = currentNode.context;
-                            }
-                        }
-                    }
-                } else {
-                    alert('This node has no child nodes to propagate context to.');
-                }
-            }
-            break;
-
-        case 'node-extract-context-btn':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
-
-                // Import and open extract context modal
-                void import('./modal-manager').then(({ openExtractContextModal }) => {
-                    openExtractContextModal(projectManager!, node);
-                }).catch((error: unknown) => {
-                    console.error('Failed to open extract context modal:', error);
-                    alert('Failed to open extract context dialog. Please try again.');
-                });
-            }
-            break;
+        // node-propagate-context-btn and node-extract-context-btn removed - using conditional context system
 
         case 'check-coherence-btn':
             {
@@ -4047,22 +3876,8 @@ This action cannot be undone.`;
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (!node) return;
 
-                // Create context adjuster service instance
-                const contextService = new ContextAdjusterService(
-                    state.getOpenRouterClient()!,
-                    state.getSettingsManager()!
-                );
-
-                // Check if node is eligible for context analysis
-                if (!contextService.isNodeEligible(node)) {
-                    alert(contextService.getIneligibilityReason(node));
-                    return;
-                }
-
-                // Create and show modal in loading state
-                // The modal handles its own analysis internally, no need to call analyzeContext separately
-                const analysisModal = new ContextAdjusterModal();
-                void analysisModal.openInLoadingState(node);
+                // Context adjuster functionality completely removed - using conditional context system
+                console.log('Context adjustment removed - use conditional context items instead');
             }
             break;
 
@@ -4283,10 +4098,7 @@ export async function setupEventListeners() {
             const select = e.target as HTMLSelectElement;
             contentLevelState = parseInt(select.value);
             void saveLevelStates();
-        } else if (e.target.id === 'context-prune-level-selector') {
-            const select = e.target as HTMLSelectElement;
-            contextPruneLevelState = parseInt(select.value);
-            void saveLevelStates();
+        // context-prune-level-selector removed - using conditional context system
         } else if (e.target.id === 'coherence-level-selector') {
             const select = e.target as HTMLSelectElement;
             coherenceLevelState = parseInt(select.value);
@@ -4295,10 +4107,7 @@ export async function setupEventListeners() {
             const select = e.target as HTMLSelectElement;
             autofixSeverityState = parseInt(select.value);
             void saveLevelStates();
-        } else if (e.target.id === 'prune-scope-selector') {
-            const select = e.target as HTMLSelectElement;
-            pruneScopeState = parseInt(select.value);
-            void saveLevelStates();
+        // prune-scope-selector removed - prune scope UI removed
 
         } else if ((e.target as HTMLInputElement).name === 'generation-type') {
             // Handle generation type radio button changes
@@ -4346,14 +4155,14 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     await loadLevelStates();
     
     // Set sensible defaults for first-time usage if no states were loaded
-    if (draftLevelState === -1 && contentLevelState === -1 && contextPruneLevelState === -1 && coherenceLevelState === -1) {
+    if (draftLevelState === -1 && contentLevelState === -1 && coherenceLevelState === -1) {
         // First time - set some sensible defaults
         if (activeProject) {
             const currentNode = activeProject.findNodeById(selectedNodeId || activeProject.rootNode.id);
             if (currentNode) {
                 draftLevelState = currentNode.level; // Create children at current level
                 contentLevelState = currentNode.level; // Generate content at current level
-                contextPruneLevelState = -1; // No context pruning by default
+                // contextPruneLevelState removed - using conditional context system
                 coherenceLevelState = -1; // No coherence checking by default
             }
         }
@@ -5082,10 +4891,10 @@ export function renderMultiProjectTree() {
                     void renderNodeDetails();
                     
                     // Open node inspector modal
-                    void import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
-                        const inspectorModal = new NodeInspectorModal();
-                        inspectorModal.openWithNode(node);
-                    }).catch(error => {
+                    void import('./modals/index').then(({ NodeInspectorModal }) => {
+                        const modal = new NodeInspectorModal();
+                        modal.openWithNode(node);
+                    }).catch((error: unknown) => {
                         console.error('Failed to open node inspector modal:', error);
                         alert('Failed to open node inspector. Please try again.');
                     });
@@ -5209,7 +5018,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         }
 
         if (importData.context !== undefined) {
-            importedNode.setContext(importData.context, 'imported');
+            // Context import removed - using conditional context system
         }
 
         if (importData.generationPrompt !== undefined) {
@@ -5325,7 +5134,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         }
 
         if (childData.context !== undefined) {
-            newNode.setContext(childData.context, 'imported');
+            // Context import removed - using conditional context system
         }
 
         if (childData.generationPrompt !== undefined) {
@@ -5409,12 +5218,12 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     // Get level values from dropdowns
     const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
     const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
-    const contextPruneLevelSelector = getElementById('context-prune-level-selector') as HTMLSelectElement;
+    // context-prune-level-selector removed - using conditional context system
     const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
     const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
-    const pruneScopeSelector = getElementById('prune-scope-selector') as HTMLSelectElement;
+    // pruneScopeSelector removed - prune scope UI removed
     
-    if (!draftLevelSelector || !contentLevelSelector || !contextPruneLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector || !pruneScopeSelector) {
+    if (!draftLevelSelector || !contentLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector) {
         console.error('Level selector dropdowns not found');
         return;
     }
@@ -5422,10 +5231,10 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     // Get level values
     const draftLevel = parseInt(draftLevelSelector.value);
     const contentLevel = parseInt(contentLevelSelector.value);
-    const contextPruneLevel = parseInt(contextPruneLevelSelector.value);
+    // contextPruneLevel removed - using conditional context system
     const coherenceLevel = parseInt(coherenceLevelSelector.value);
     const autofixSeverity = parseInt(autofixSeveritySelector.value);
-    const pruneScope = parseInt(pruneScopeSelector.value);
+    // pruneScope removed - prune scope UI removed
     
     // Validate levels
     if (contentLevel > draftLevel) {
@@ -5439,7 +5248,7 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     }
     
     // Check if any work needs to be done
-    if (draftLevel === -1 && contentLevel === -1 && contextPruneLevel === -1 && coherenceLevel === -1) {
+    if (draftLevel === -1 && contentLevel === -1 && coherenceLevel === -1) {
         alert('Please select at least one level for generation');
         return;
     }
@@ -5469,10 +5278,9 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
         const levels = {
             draftLevel,
             contentLevel,
-            contextPruneLevel,
             coherenceLevel,
-            autofixSeverity,
-            pruneScope
+            autofixSeverity
+            // pruneScope completely removed - was only needed for traditional context adjustment
         };
         
         // Store generation parameters in the node for next time
@@ -5625,7 +5433,7 @@ async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
     const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
     
     // Create single context sticker at free space location
-    const contextSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.context || 'No context available');
+    const contextSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, 'Conditional context available'); // Traditional context removed
     contextSticker.setColor('#fff9c4'); // Default yellow
     contextSticker.source = { nodeId: node.id, type: 'context' };
     
@@ -5663,7 +5471,7 @@ async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
         // Create context sticker (standard yellow) inside the background rectangle
         const contextSticker = ideaBoard.createNewPostIt(
             { x: freeSpace.x + 20, y: freeSpace.y + 200 }, 
-            node.context || 'No context available'
+            'Conditional context available' // Traditional context removed
         );
         contextSticker.setColor('#fff9c4'); // Standard yellow
         contextSticker.source = { nodeId: node.id, type: 'context' };
@@ -5810,7 +5618,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const initializationData = {
             title: node.title || 'Untitled',
             content: node.content || '',
-            contextItems: node.context ? node.context.split('\n\n').filter(item => item.trim()) : [],
+            contextItems: [], // Traditional context removed - using conditional context
             sourceNode: node
         };
 
@@ -5825,79 +5633,17 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
     },
 
     
-    'node-propagate-context-btn': (_e: Event) => {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        const propagateContextToDescendants = (parentNode: DocumentNode) => {
-            const propagatedCount = { count: 0 };
-            
-            const propagateRecursively = (sourceNode: DocumentNode) => {
-                for (const child of sourceNode.children) {
-                    // Propagate to ALL versions of the child node
-                    const allVersions = child.getAllVersions();
-                    for (const version of allVersions) {
-                        version.context = sourceNode.context;
-                        version.timestamp = new Date();
-                        version.tags.add('context_propagated');
-                    }
-                    propagatedCount.count++;
-                    propagateRecursively(child);
-                }
-            };
-            
-            propagateRecursively(parentNode);
-            return propagatedCount.count;
-        };
-        
-        const propagatedCount = propagateContextToDescendants(node);
-        
-        if (propagatedCount > 0) {
-            void projectManager.saveToStorage().catch(console.error);
-            alert(`Context propagated to ${propagatedCount} descendant node(s).`);
-            
-            const currentNode = projectManager.findNodeById(selectedNodeId);
-            if (currentNode) {
-                if (enhancedContextEditor) {
-                    enhancedContextEditor.value = currentNode.context;
-                } else {
-                    const contextTextArea = document.getElementById('node-context') as HTMLTextAreaElement;
-                    if (contextTextArea) {
-                        contextTextArea.value = currentNode.context;
-                    }
-                }
-            }
-        } else {
-            alert('This node has no child nodes to propagate context to.');
-        }
-    },
+    // 'node-propagate-context-btn': removed - using conditional context system
     
-    'node-extract-context-btn': (_e: Event) => {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        void import('./modal-manager').then(({ openExtractContextModal }) => {
-            openExtractContextModal(projectManager!, node);
-        }).catch((error: unknown) => {
-            console.error('Failed to open extract context modal:', error);
-            alert('Failed to open extract context dialog. Please try again.');
-        });
-    },
+    // 'node-extract-context-btn': removed - using conditional context system
     
     'context-adjuster-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        void import('./modals/ContextAdjusterModal').then(({ ContextAdjusterModal }) => {
-            const contextAdjusterModal = new ContextAdjusterModal();
-            void contextAdjusterModal.openInLoadingState(node);
-        }).catch((error: unknown) => {
-            console.error('Failed to open context adjuster modal:', error);
-            alert('Failed to open context adjuster. Please try again.');
-        });
+        // Context adjuster modal removed - using conditional context system
+        console.log('Context adjustment removed - use conditional context items instead');
     },
     
     'context-info-btn': (_e: Event) => {
@@ -5905,13 +5651,8 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        void import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
-            const contextModal = new ContextItemsEditorModal(node);
-            void contextModal.open();
-        }).catch((error: unknown) => {
-            console.error('Failed to open context items editor modal:', error);
-            alert('Failed to open context items editor. Please try again.');
-        });
+        // ContextInfoModal removed - using conditional context system
+        console.log('Context items editor removed - use conditional context editor instead');
     },
     
     'edit-context-btn': (_e: Event) => {
@@ -5919,13 +5660,9 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        void import('./modals/ContextInfoModal').then(({ ContextItemsEditorModal }) => {
-            const contextModal = new ContextItemsEditorModal(node);
-            void contextModal.open();
-        }).catch((error: unknown) => {
-            console.error('Failed to open context editor modal:', error);
-            alert('Failed to open context editor. Please try again.');
-        });
+        // ContextInfoModal removed - using conditional context system
+            // ContextItemsEditorModal removed - using conditional context system
+            console.log('Context editor removed - use conditional context editor instead');
     },
     
     'node-inspector-btn': (_e: Event) => {
@@ -5933,11 +5670,11 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         
-        // Import and open node inspector modal (using V2 - the more recent version)
-                                void import('./modals/NodeInspectorModal').then(({ NodeInspectorModal }) => {
-                            const inspectorModal = new NodeInspectorModal();
-            inspectorModal.openWithNode(node);
-        }).catch(error => {
+        // Import and open node inspector modal
+        void import('./modals/index').then(({ NodeInspectorModal }) => {
+            const modal = new NodeInspectorModal();
+            modal.openWithNode(node);
+        }).catch((error: unknown) => {
             console.error('Failed to open node inspector modal:', error);
             alert('Failed to open node inspector. Please try again.');
         });

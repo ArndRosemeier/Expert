@@ -208,7 +208,7 @@ export class ExportService implements IExportService {
         const exportObject: any = {
             title: node.title,
             content: node.content,
-            context: node.context ?? undefined,
+            // context removed - using conditional context system
             generationPrompt: node.generationPrompt ?? undefined,
             level: node.level,
             template: node.template,  // Include template in root node for reimport
@@ -227,7 +227,7 @@ export class ExportService implements IExportService {
                     id: version.id,
                     content: version.content,
                     title: version.title,
-                    context: version.context,
+                    // context removed - using conditional context system
                     tags: Array.from(version.tags), // Convert Set to Array for JSON
                     timestamp: version.timestamp.toISOString() // Convert Date to ISO string
                 };
@@ -267,9 +267,7 @@ export class ExportService implements IExportService {
         };
 
         // Conditionally add optional properties if they have values
-        if (node.context) {
-            data.context = node.context;
-        }
+        // Traditional context export removed - using conditional context system
         if (node.generationPrompt) {
             data.generationPrompt = node.generationPrompt;
         }
@@ -300,7 +298,7 @@ export class ExportService implements IExportService {
                     id: version.id,
                     content: version.content,
                     title: version.title,
-                    context: version.context,
+                    // context removed - using conditional context system
                     tags: Array.from(version.tags), // Convert Set to Array for JSON
                     timestamp: version.timestamp.toISOString() // Convert Date to ISO string
                 };
@@ -528,10 +526,7 @@ export class ExportService implements IExportService {
         <${headingTag} id="${nodeId}">${escapeHtml(node.title)}</${headingTag}>`;
         }
 
-        if (node.context && node.context.trim()) {
-            html += `
-        <div class="summary">${formatContentAsHtml(node.context)}</div>`;
-        }
+        // Traditional context section removed
 
         if (node.content && node.content.trim()) {
             html += `
@@ -1071,8 +1066,8 @@ export class ExportService implements IExportService {
             markdown += `${headingPrefix} ${node.title}\n\n`;
         }
 
-        if (node.context && node.context.trim()) {
-            markdown += `*${node.context}*\n\n`;
+        if (false) { // Traditional context check removed
+            // Traditional context markdown removed
         }
 
         if (node.content && node.content.trim()) {
@@ -1114,8 +1109,8 @@ export class ExportService implements IExportService {
             text += `${indent}${node.title}\n`;
         }
 
-        if (node.context && node.context.trim()) {
-            text += `${indent}Context: ${node.context}\n`;
+        if (false) { // Traditional context check removed
+            // Traditional context text export removed
         }
 
         if (node.content && node.content.trim()) {

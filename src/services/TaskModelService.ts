@@ -29,7 +29,7 @@ export interface AllTaskModelConfigs {
     coherence_analysis: TaskModelConfig;
     fix_contradiction: TaskModelConfig;
     text_polishing: TaskModelConfig;
-    context_adjustment: TaskModelConfig;
+    // context_adjustment removed - traditional context system removed
     context_rating: TaskModelConfig;
     logic_error_analysis: TaskModelConfig;
     logic_child_fix: TaskModelConfig;
@@ -57,10 +57,7 @@ const DEFAULT_TASK_MODEL_CONFIGS: AllTaskModelConfigs = {
         outline: 'creator',  // Default to creator for polishing outline nodes
         prose: 'prose'       // Default to prose for polishing prose nodes
     },
-    context_adjustment: {
-        outline: 'creator',  // Default to creator for context analysis in outline nodes
-        prose: 'prose'       // Default to prose for context analysis in prose nodes
-    },
+    // context_adjustment removed - traditional context system removed
     context_rating: {
         outline: 'creator',  // Default to creator for context rating in outline nodes
         prose: 'prose'       // Default to prose for context rating in prose nodes
@@ -208,7 +205,7 @@ export class TaskModelService {
             coherence_analysis: 'Coherence Analysis',
             fix_contradiction: 'Fix Contradiction',
             text_polishing: 'Text Polishing',
-            context_adjustment: 'Context Analysis',
+            // context_adjustment removed - traditional context system removed
             context_rating: 'Context Rating',
             logic_error_analysis: 'Logic Error Analysis',
             logic_child_fix: 'Logic Child Fix'

@@ -46,7 +46,7 @@ export class BatchUpdateModal {
     private batchTagInput: HTMLInputElement;
     private titleCheckbox: HTMLInputElement;
     private contentCheckbox: HTMLInputElement;
-    private contextCheckbox: HTMLInputElement;
+    // contextCheckbox removed - using conditional context system
     private runButton: HTMLButtonElement;
     private closeButton: HTMLButtonElement;
     private stopButton: HTMLButtonElement;
@@ -70,7 +70,7 @@ export class BatchUpdateModal {
         this.batchTagInput = document.createElement('input');
         this.titleCheckbox = document.createElement('input');
         this.contentCheckbox = document.createElement('input');
-        this.contextCheckbox = document.createElement('input');
+        // contextCheckbox initialization removed
         this.runButton = document.createElement('button');
         this.closeButton = document.createElement('button');
         this.stopButton = document.createElement('button');
@@ -245,9 +245,7 @@ export class BatchUpdateModal {
             const contentLabel = this.createCheckboxLabel('Content', this.contentCheckbox, true);
             checkboxContainer.appendChild(contentLabel);
             
-            // Context checkbox
-            const contextLabel = this.createCheckboxLabel('Context', this.contextCheckbox, false);
-            checkboxContainer.appendChild(contextLabel);
+            // Context checkbox removed - using conditional context system
             
             fieldSection.appendChild(checkboxContainer);
             controlsContainer.appendChild(fieldSection);
@@ -505,12 +503,7 @@ export class BatchUpdateModal {
                 });
             }
             
-            if (this.contextCheckbox.checked && node.context) {
-                updates.push({
-                    field: 'context',
-                    originalValue: node.context
-                });
-            }
+            // Context updates removed - using conditional context system instead
             
             // Add updates to string map, grouping by original value
             for (const update of updates) {
@@ -521,51 +514,11 @@ export class BatchUpdateModal {
             }
         }
         
-        // Debug logging: Show all contexts from selected nodes
-        console.log('🔍 BatchUpdate Context Analysis:');
+        // Debug logging simplified - context analysis removed
+        console.log('🔍 BatchUpdate Analysis:');
         console.log(`Selected ${selectedNodes.length} nodes for batch update`);
         
-        // Log each node's context
-        selectedNodes.forEach((node, index) => {
-            console.log(`\nNode ${index + 1}: "${node.title}"`);
-            console.log(`Context length: ${node.context?.length || 0}`);
-            if (node.context) {
-                const preview = node.context.substring(0, 100).replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-                console.log(`Context preview: "${preview}${node.context.length > 100 ? '...' : ''}"`);
-                console.log(`Context (first 200 chars): "${node.context.substring(0, 200)}"`);
-            } else {
-                console.log('Context: null/undefined');
-            }
-        });
-        
-        // Compare every context to every other context
-        console.log('\n🔍 Context Comparison Matrix:');
-        for (let i = 0; i < selectedNodes.length; i++) {
-            for (let j = i + 1; j < selectedNodes.length; j++) {
-                const nodeA = selectedNodes[i];
-                const nodeB = selectedNodes[j];
-                if (!nodeA || !nodeB) continue; // Safety check
-                
-                const contextA = nodeA.context || '';
-                const contextB = nodeB.context || '';
-                
-                const isIdentical = contextA === contextB;
-                const lengthDiff = Math.abs(contextA.length - contextB.length);
-                
-                console.log(`"${nodeA.title}" vs "${nodeB.title}": ${isIdentical ? '✅ IDENTICAL' : '❌ DIFFERENT'} (length diff: ${lengthDiff})`);
-                
-                if (!isIdentical && lengthDiff < 10) {
-                    // Show character-by-character comparison for similar-length strings
-                    console.log('  Character-by-character diff (first 50 chars):');
-                    const minLength = Math.min(contextA.length, contextB.length);
-                    for (let k = 0; k < Math.min(minLength, 50); k++) {
-                        if (contextA[k] !== contextB[k]) {
-                            console.log(`    Position ${k}: A="${contextA.charCodeAt(k)}" (${contextA[k]}) vs B="${contextB.charCodeAt(k)}" (${contextB[k]})`);
-                        }
-                    }
-                }
-            }
-        }
+        // Context comparison debug logging removed - using conditional context system
         
         // Debug logging: Show deduplication results
         console.log('\n🔍 BatchUpdate String Deduplication Results:');
@@ -576,7 +529,7 @@ export class BatchUpdateModal {
                 const nodeTitle = selectedNodes.find(n => 
                     (fu.field === 'title' && n.title === originalString) ||
                     (fu.field === 'content' && n.content === originalString) ||
-                    (fu.field === 'context' && n.context === originalString)
+                    false // Context field removed - using conditional context system
                 )?.title || 'Unknown';
                 console.log(`    - ${fu.field} from "${nodeTitle}"`);
             });
@@ -679,13 +632,7 @@ export class BatchUpdateModal {
                     }
                 }
                 
-                if (this.contextCheckbox.checked && node.context) {
-                    const processedValue = processingMap[node.context];
-                    if (processedValue && processedValue !== node.context) {
-                        nodeUpdates['context'] = processedValue;
-                        hasChanges = true;
-                    }
-                }
+                // Context processing removed - using conditional context system
                 
                 if (hasChanges) {
                     // Determine tags to apply
@@ -699,8 +646,7 @@ export class BatchUpdateModal {
                     // Create new version with updates
                     const versionId = node.addVersion(tags, {
                         title: nodeUpdates['title'] || node.title,
-                        content: nodeUpdates['content'] || node.content,
-                        context: nodeUpdates['context'] || node.context
+                        content: nodeUpdates['content'] || node.content
                     });
                     
                     console.log(`🔧 Created version for "${node.title}": ${versionId ? 'SUCCESS' : 'FAILED'} (versionId: ${versionId})`);
@@ -758,7 +704,7 @@ export class BatchUpdateModal {
             return;
         }
         
-        const hasFieldSelected = this.titleCheckbox.checked || this.contentCheckbox.checked || this.contextCheckbox.checked;
+        const hasFieldSelected = this.titleCheckbox.checked || this.contentCheckbox.checked;
         if (!hasFieldSelected) {
             alert('Please select at least one field to update.');
             return;

@@ -102,7 +102,7 @@ export class CoherenceService {
 
         return {
             parentContent: node.content || '',
-            parentContext: node.context || '',
+            parentContext: '', // Traditional context removed
             childrenContent: childrenContent,
             parentNodeTitle: node.title || 'Untitled Node',
             childNodeTitles: validChildren.map(child => child.title || 'Untitled'),
@@ -346,7 +346,7 @@ If the problem persists, try rephrasing explicit content in your project to be l
         // Use frozen settings - no fallbacks, errors fly if missing
         const fixPrompt = frozenSettings.fixContradictionPrompt
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
-            .replace(/\{\{parent_context\}\}/g, parentNode.context || '')
+            .replace(/\{\{parent_context\}\}/g, '') // Traditional context removed
             .replace(/\{\{child_title\}\}/g, childNode.title || 'Untitled')
             .replace(/\{\{child_content\}\}/g, childNode.content || '')
             .replace(/\{\{fact_in_outline\}\}/g, contradiction.fact_in_outline)

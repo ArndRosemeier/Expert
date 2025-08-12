@@ -3,7 +3,7 @@ import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode } from '../../../DocumentNode';
 import { ContextRatingRequest, ContextRatingResult, ContextRating } from '../../../types/ContextRatingTypes';
 import { ProjectManager } from '../../../ProjectManager';
-import { getContextItems } from '../../../ContextFormat';
+// getContextItems import removed - traditional context removed
 import { TaskModelService } from '../../../services/TaskModelService';
 
 export class ContextRatingService {
@@ -39,10 +39,10 @@ export class ContextRatingService {
     /**
      * Check if node context differs from actual parent context
      */
-    checkContextMismatch(node: DocumentNode, projectManager: ProjectManager): { hasMismatch: boolean; parentContext: string } {
-        const parentNode = node.parentId ? projectManager.findNodeById(node.parentId) : null;
-        const actualParentContext = parentNode?.context || '';
-        const nodeContext = node.context || '';
+    checkContextMismatch(_node: DocumentNode, _projectManager: ProjectManager): { hasMismatch: boolean; parentContext: string } {
+        // parentNode lookup removed - traditional context removed
+        const actualParentContext = ''; // Traditional context removed
+        const nodeContext = ''; // Traditional context removed
         
         return {
             hasMismatch: actualParentContext !== nodeContext,
@@ -76,7 +76,7 @@ export class ContextRatingService {
         const contextCheck = this.checkContextMismatch(node, projectManager);
         
         // Format context items as numbered list, filtering out items that start with "*"
-        const allContextItems = getContextItems(node.context || '');
+        const allContextItems: string[] = []; // Traditional context removed
         
         // Create filtered list (exclude items starting with "*") and mapping
         const filteredContextItems: string[] = [];
@@ -101,7 +101,7 @@ export class ContextRatingService {
                 ratings: [],
                 analysisTimestamp: new Date(),
                 nodeId: node.id,
-                originalContext: node.context || '',
+                originalContext: '', // Traditional context removed
                 contextMismatch: contextCheck.hasMismatch
             };
         }
@@ -178,7 +178,7 @@ export class ContextRatingService {
             ratings,
             analysisTimestamp: new Date(),
             nodeId: node.id,
-            originalContext: node.context || '',
+            originalContext: '', // Traditional context removed
             contextMismatch: contextCheck.hasMismatch
         };
     }

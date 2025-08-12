@@ -636,17 +636,31 @@ TEMPLATE RULES:
 - Only use fixed numbers when specifically requested by the user or structurally important
 - Keep hierarchy levels to 3-4 levels max for usability
 
-CONTEXT GUIDELINES:
+CONTEXT GUIDELINES (CONDITIONAL CONTEXT SYSTEM):
 - Include information that helps maintain project consistency
 - Format as separate paragraphs where each paragraph is a distinct context item
 - Use double newlines to separate each context item (paragraph breaks)
-- For narratives: must include SPECIFIC character details (names, ages, personalities, backgrounds, motivations, relationships), world-building, themes, style guide
-- For business: may include target market, financial considerations, strategy, style guide
-- For research: may include methodology, variables, ethical considerations, style guide
-- Always include a style guide appropriate to the project type
-- Each category should be its own paragraph (context item) when applicable
-- Only include what's actually relevant to the specific project
-- Be comprehensive but focused - aim for actionable information
+- Each context item can be either GLOBAL (always visible) or TRIGGERED (visible when trigger words appear)
+
+TRIGGER WORD SYSTEM:
+- For context that should only appear when specific elements are mentioned, start the paragraph with: <trigger>word1, word2, word3</trigger>
+- Global context (no trigger): Start paragraph normally without any tags
+- Examples:
+  * <trigger>Marcus, Detective Smith</trigger>Marcus Wilde is a 28-year-old detective with social anxiety who specializes in cybercrime cases.
+  * <trigger>New York, Manhattan, Brooklyn</trigger>The story takes place in modern-day New York City, focusing on the contrast between wealthy Manhattan and working-class Brooklyn.
+  * The overall tone should be dark and gritty, with moments of unexpected humor. (This is global - no trigger needed)
+
+FOR NARRATIVES SPECIFICALLY:
+- Character details: Use triggers with character names and aliases
+- Locations: Use triggers with place names, regions, building names
+- Objects/Items: Use triggers with specific item names, artifacts, vehicles
+- Themes, tone, style guides: Usually global (no triggers needed)
+- World-building rules: May be global or triggered depending on scope
+
+FOR OTHER PROJECT TYPES:
+- Business: Target markets, stakeholders (triggered), general strategy (global)
+- Research: Specific methodologies, variables (triggered), ethical guidelines (global)
+- Technical: Feature-specific details (triggered), general standards (global)
 
 CHARACTER REQUIREMENTS (for narratives):
 - Characters must be SPECIFIC and DETAILED, not generic
@@ -696,7 +710,7 @@ Hierarchy: [Level1|Level2|Level3] (use pipe separators)
 Scaffolding: [Doc1, Doc2, Doc3] (comma-separated list of helpful documents)
 
 Section: Context
-[All relevant contextual information including characters (for narratives), style guides, themes, methodology, etc., formatted as separate paragraphs where each paragraph is a distinct context item separated by double newlines]
+[All relevant contextual information using the conditional context system. Each paragraph is a separate context item. Use <trigger>word1, word2</trigger> at the start of paragraphs that should only appear when specific elements are mentioned. Global context items (always visible) should start normally without trigger tags. Separate each context item with double newlines.]
 
 Section: Concept
 [A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
@@ -1260,21 +1274,22 @@ A compelling, genre-appropriate title
 A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
 
 ===BACKGROUND CONTEXT===
-Setting, premise, and world details (300-500 words) that establish the story's foundation.
+Setting, premise, and world details (300-500 words) formatted for the conditional context system.
 
 CRITICAL FORMAT REQUIREMENTS:
 - Use the exact delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT==="
 - Each section must be clearly separated
 - The context section must be formatted as one paragraph per context item
-- Items that persist throughout the entire story must start with "*"
-- Non-persistent items have no prefix
+- Use CONDITIONAL CONTEXT SYSTEM with trigger words:
+  * For context that should appear when specific elements are mentioned: <trigger>word1, word2</trigger>Context text...
+  * For global context (always visible): Start paragraph normally without tags
 
 Context Format Examples:
-*Sarah Chen is a 32-year-old cybersecurity expert who discovers she can interface directly with digital systems through neural implants. She is driven by the mysterious death of her brother and has a tendency to take dangerous risks when pursuing the truth.
+<trigger>Sarah, Sarah Chen, cyber expert</trigger>Sarah Chen is a 32-year-old cybersecurity expert who discovers she can interface directly with digital systems through neural implants. She is driven by the mysterious death of her brother and has a tendency to take dangerous risks when pursuing the truth.
 
-*The story takes place in Neo-Singapore 2087, where towering arcologies house millions while the old city below has become a lawless digital frontier. Corporate AIs control most aspects of daily life through the OmniNet.
+<trigger>Neo-Singapore, arcologies, OmniNet, 2087</trigger>The story takes place in Neo-Singapore 2087, where towering arcologies house millions while the old city below has become a lawless digital frontier. Corporate AIs control most aspects of daily life through the OmniNet.
 
-The story begins when Sarah receives an encrypted message from her supposedly dead brother, leading her to question everything she believes about his death and the nature of reality itself.
+The overall tone should be cyberpunk with themes of identity, technology, and family bonds. The pacing should build tension gradually while maintaining action sequences.
 
 {{noise_names}}
 

@@ -127,7 +127,7 @@ export class NodeCreationService implements INodeCreationService {
             childNode.addVersion(['draft'], {
                 content: draftContent,
                 title: childNode.title,
-                context: childNode.context
+                // context removed - using conditional context system
             }, metadata);
         }
 

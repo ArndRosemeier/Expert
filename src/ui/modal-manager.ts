@@ -558,15 +558,12 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
     // Add result to node context
     addToContextBtn?.addEventListener('click', () => {
         if (extractResult) {
-            const currentContext = node.context || '';
-            const newContext = currentContext + (currentContext ? '\n\n' : '') + extractResult.value;
-                        // Update context using version management system with "edited" and "context_edited" tags
-            node.setContextWithTags(newContext, ['edited', 'context_edited']);
+            // Traditional context extraction and editing removed - using conditional context system
             
             // Update the context textarea in the UI immediately
             const contextTextarea = document.getElementById('node-context') as HTMLTextAreaElement;
             if (contextTextarea) {
-                contextTextarea.value = newContext;
+                // contextTextarea update removed
             }
             
             // Save project and refresh UI

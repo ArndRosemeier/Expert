@@ -15,14 +15,14 @@ export { AILogModal } from './AILogModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
 export { KeyValidationModal } from './KeyValidationModal';
 export { VersionMismatchModal } from './VersionMismatchModal';
-export { ContextInfoModal } from './ContextInfoModal';
+// ContextInfoModal removed - using conditional context system
 export { MigrationSelectionModal } from './MigrationSelectionModal';
 export { NewProjectModal } from './NewProjectModal';
 export type { NewProjectModalConfig } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';
 export { CoherenceModal } from './CoherenceModal';
 export { GenerationLevelsHelpModal } from './GenerationLevelsHelpModal';
-export { ContextAdjusterModal } from './ContextAdjusterModal';
+// ContextAdjusterModal removed - using conditional context system
 export { PolisherModal } from './PolisherModal';
 export { NodeInspectorModal } from './NodeInspectorModal';
 export { TagManagerModal } from './TagManagerModal';
@@ -42,7 +42,7 @@ export * from './services/PromptManagementService';
 export * from './services/SettingsService';
 export * from './services/ProjectGenerationService';
 export * from './services/CoherenceService';
-export * from './services/ContextAdjusterService';
+// ContextAdjusterService export removed - service deleted
 export * from './services/GenerationErrorService';
 
 // Types

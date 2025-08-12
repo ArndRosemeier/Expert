@@ -64,8 +64,8 @@ export class LogicChildFixerService {
             .replace(/\{\{language\}\}/g, language);
     }
 
-    private getNodeContext(node: DocumentNode): string {
-        return node.context;
+    private getNodeContext(_node: DocumentNode): string {
+        return ''; // Traditional context removed - using conditional context system
     }
 
     private parseChildFixResponse(response: string, originalContent: string): FixedChildResult {

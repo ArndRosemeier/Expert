@@ -159,7 +159,7 @@ export class SearchService {
             
             // Search in context
             if (options.searchInContext) {
-                this.searchInText(node, version, 'context', version.context, regex, results);
+                // Context search removed - using conditional context system
             }
         }
         
@@ -242,9 +242,8 @@ export class SearchService {
             
             // Replace in context
             if (options.searchInContext) {
-                const beforeContext: string = version.context;
-                version.context = version.context.replace(regex, options.replaceText);
-                const contextReplacements: number = (beforeContext.match(regex) || []).length;
+                // Context replacement removed - using conditional context system
+                const contextReplacements: number = 0;
                 nodeReplacements += contextReplacements;
             }
             

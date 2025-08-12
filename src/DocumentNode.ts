@@ -1,6 +1,7 @@
 import { LoopHistoryItem } from './LoopOrchestrator';
 import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
+import { getContextItems } from './ContextFormat';
 
 // ---------------- Conditional Context System (parallel to legacy context) ----------------
 
@@ -76,7 +77,6 @@ export interface TodoItem {
 export interface LastGenerationParameters {
     draftLevel: number;
     contentLevel: number;
-    contextPruneLevel: number;
     coherenceLevel: number;
     autofixSeverity: number;
 }
@@ -88,7 +88,6 @@ export interface ContentVersion {
     id: string;
     content: string;
     title: string;
-    context: string;
     tags: Set<string>;
     timestamp: Date;
     ratings?: Rating[];
@@ -162,7 +161,7 @@ export class DocumentNode {
     // --- Conditional Context (new system, parallel to legacy `context`) ---
     private conditionalContextItems: ConditionalContextItem[] = [];
 
-    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContext: string = '', initialContent: string = '') {
+    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '') {
         this.id = uuidv4();
         this.level = level;
         this.parentId = parentId;
@@ -180,12 +179,11 @@ export class DocumentNode {
         this.lastGenerationParameters = null; // Initialize as null
         this.notes = ''; // Initialize notes as empty string
         
-        // Create initial master version
+        // Create initial master version (no context field)
         const initialVersion = {
             id: uuidv4(),
             content: initialContent || '',
             title: initialTitle,
-            context: initialContext || '',
             tags: new Set(['master']),
             timestamp: new Date(),
             metadata: {}
@@ -282,7 +280,7 @@ export class DocumentNode {
         const safeTitle = (typeof data.title === 'string' && data.title.trim()) ? data.title : 'Untitled';
         
         // Create node with empty initial values (will be overwritten by versions)
-        const node = new DocumentNode(data.level, safeTitle, data.parentId, data.template, '', '');
+        const node = new DocumentNode(data.level, safeTitle, data.parentId, data.template, '');
         
         // Restore basic properties
         node.id = data.id;
@@ -292,6 +290,41 @@ export class DocumentNode {
         node.generationHistory = data.generationHistory || [];
         node.isGenerating = false; // Always reset transient state on load
         node.generationSessions = data.generationSessions || [];
+        
+        // MIGRATION: Check for legacy context migration BEFORE processing anything else
+        const hasNoConditionalContext = !data.conditionalContextItems || data.conditionalContextItems.length === 0;
+        const isRootNode = data.parentId === null;
+        let legacyContextMigrated = false;
+        
+        if (hasNoConditionalContext && isRootNode && data.versions && Array.isArray(data.versions)) {
+            // Look for legacy context in raw version data before it gets processed
+            const rawMasterVersion = data.versions.find((v: any) => {
+                if (Array.isArray(v.tags)) {
+                    return v.tags.includes('master');
+                } else if (v.tags && typeof v.tags === 'object') {
+                    return v.tags.master || Object.values(v.tags).includes('master');
+                }
+                return false;
+            });
+            
+            if (rawMasterVersion && rawMasterVersion.context) {
+                const legacyContext = rawMasterVersion.context;
+                
+                if (typeof legacyContext === 'string' && legacyContext.trim()) {
+                    const contextItems = getContextItems(legacyContext);
+                    
+                    node.conditionalContextItems = contextItems.map(text => ({
+                        id: uuidv4(),
+                        text: text.trim(),
+                        conditions: [], // No conditions = always applies
+                        logic: 'OR' as ConditionLogicOperator,
+                        keywords: []
+                    }));
+                    legacyContextMigrated = true;
+                    console.log(`✅ Migrated ${contextItems.length} legacy context items to conditional context`);
+                }
+            }
+        }
         
         // Restore overview board cache - FAIL LOUDLY on corruption
         if (data.overviewBoardCache && Array.isArray(data.overviewBoardCache)) {
@@ -405,7 +438,8 @@ export class DocumentNode {
         node.notes = data.notes || '';
 
         // Restore conditional context items (fail loudly on malformed data)
-        if (data.conditionalContextItems !== undefined) {
+        // Only restore if not already migrated from legacy context
+        if (!legacyContextMigrated && data.conditionalContextItems !== undefined) {
             if (!Array.isArray(data.conditionalContextItems)) {
                 throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: conditionalContextItems must be an array');
             }
@@ -491,9 +525,11 @@ export class DocumentNode {
                 };
                 return item;
             });
-        } else {
+        } else if (!legacyContextMigrated) {
             node.conditionalContextItems = [];
         }
+        
+        // Legacy context migration moved to before version processing
         
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {
@@ -516,8 +552,11 @@ export class DocumentNode {
                     tags = new Set(['master']); // Fallback to master tag
                 }
                 
+                // Remove legacy context field from versions during migration
+                const { context, ...cleanVersion } = v;
+                
                 return {
-                    ...v,
+                    ...cleanVersion,
                     title: (typeof v.title === 'string' && v.title.trim()) ? v.title : safeTitle,
                     tags: tags,
                     timestamp: new Date(v.timestamp)
@@ -530,9 +569,8 @@ export class DocumentNode {
             // 1. Handle main content (from data.content or data._content)
             const mainContent = data.content || data._content || '';
             const mainTitle = data.title || safeTitle;
-            const mainContext = data.context || data.summary || '';
             
-            if (mainContent || mainTitle !== 'Untitled' || mainContext) {
+            if (mainContent || mainTitle !== 'Untitled') {
                 const masterMetadata: { [key: string]: any } = {};
                 
                 // Preserve legacy creatorModel if it exists
@@ -544,7 +582,6 @@ export class DocumentNode {
                     id: uuidv4(),
                     content: mainContent,
                     title: mainTitle,
-                    context: mainContext,
                     tags: new Set(['master', 'legacy']),
                     timestamp: new Date(),
                     metadata: masterMetadata
@@ -575,7 +612,6 @@ export class DocumentNode {
                                 id: uuidv4(),
                                 content: iteration.content,
                                 title: mainTitle,
-                                context: mainContext,
                                 tags: tags,
                                 timestamp: new Date(iteration.timestamp || session.startTime),
                                 metadata: iterationMetadata
@@ -599,7 +635,6 @@ export class DocumentNode {
                     id: uuidv4(),
                     content: '',
                     title: safeTitle,
-                    context: '',
                     tags: new Set(['master']),
                     timestamp: new Date(),
                     metadata: {}
@@ -641,13 +676,7 @@ export class DocumentNode {
         return masterVersion.title;
     }
 
-    get context(): string {
-        const masterVersion = this.getMasterVersion();
-        if (!masterVersion) {
-            throw new Error(`DocumentNode ${this.id}: No master version available - node data corrupted`);
-        }
-        return masterVersion.context;
-    }
+
 
     get creatorModel(): string | null {
         const masterVersion = this.getMasterVersion();
@@ -693,7 +722,7 @@ export class DocumentNode {
      * @param ratings Optional ratings array
      * @returns The ID of the created version, or null if no version was created
      */
-    addVersion(tags: string[], fields?: { title?: string, content?: string, context?: string }, metadata?: { [key: string]: any }, ratings?: Rating[]): string | null {
+    addVersion(tags: string[], fields?: { title?: string, content?: string }, metadata?: { [key: string]: any }, ratings?: Rating[]): string | null {
         const tagSet = new Set(tags);
         
         // Check if a version with this exact tag combination already exists
@@ -717,7 +746,6 @@ export class DocumentNode {
         }
         const defaultTitle = masterVersion.title;
         const defaultContent = masterVersion.content;
-        const defaultContext = masterVersion.context;
         
         // Check if we should replace an empty master version
         const masterIsEmpty = masterVersion && masterVersion.content.trim() === '';
@@ -746,7 +774,6 @@ export class DocumentNode {
             id: uuidv4(),
             content: fields?.content ?? defaultContent,
             title: fields?.title ?? defaultTitle,
-            context: fields?.context ?? defaultContext,
             tags: tagSet,
             timestamp: new Date(),
             metadata: metadata || {},
@@ -799,42 +826,7 @@ export class DocumentNode {
         }
     }
 
-    /**
-     * Sets context. If tag provided, adds that tag to the master version only when context actually changes.
-     * @param context New context value
-     * @param tag Optional tag - if provided, adds this tag to the master version when context changes
-     */
-    setContext(context: string, tag?: string): void {
-        const masterVersion = this.getMasterVersion();
-        if (masterVersion) {
-            // Only proceed if context actually changed
-            if (masterVersion.context !== context) {
-                masterVersion.context = context;
-                masterVersion.timestamp = new Date();
-                
-                // Add tag if provided (only when context actually changed)
-                if (tag) {
-                    masterVersion.tags.add(tag);
-                }
-            }
-        }
-    }
 
-    /**
-     * Sets context with multiple tags.
-     * @param context New context value
-     * @param tags Array of tags to add to the master version
-     */
-    setContextWithTags(context: string, tags: string[]): void {
-        const masterVersion = this.getMasterVersion();
-        if (masterVersion) {
-            masterVersion.context = context;
-            masterVersion.timestamp = new Date();
-            
-            // Add all tags
-            tags.forEach(tag => masterVersion.tags.add(tag));
-        }
-    }
 
     /**
      * Sets title. If tag provided, adds that tag to the master version only when title actually changes.
@@ -927,13 +919,12 @@ export class DocumentNode {
      * Sets content during generation process (does NOT promote to master automatically).
      */
     setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number): void {
-        // Get current master version for title/context preservation
+        // Get current master version for title preservation
         const currentMaster = this.getMasterVersion();
         if (!currentMaster) {
             throw new Error(`DocumentNode ${this.id}: Cannot set generation content - no master version exists (node not properly initialized)`);
         }
         const preservedTitle = currentMaster.title;
-        const preservedContext = currentMaster.context;
         
         const tags = ['generated']; // Do NOT include master tag automatically
         if (iterationIndex !== undefined) {
@@ -963,8 +954,7 @@ export class DocumentNode {
         
         this.addVersion(tags, {
             content: newContent,
-            title: preservedTitle,
-            context: preservedContext
+            title: preservedTitle
         }, metadata, ratings);
     }
 
@@ -1150,38 +1140,7 @@ export class DocumentNode {
         return null;
     }
 
-    /**
-     * Checks if the node's context has been AI-adjusted.
-     * Returns true if the master version has the 'context_ai_adjusted' tag,
-     * or if all other versions with 'context_ai_adjusted' tag have the same context as the master.
-     */
-    ContextIsAdjusted(): boolean {
-        const masterVersion = this.getMasterVersion();
-        if (!masterVersion) {
-            return false;
-        }
-        
-        // First check if master version has context_ai_adjusted tag
-        if (masterVersion.tags.has('context_ai_adjusted')) {
-            return true;
-        }
-        
-        // Find all other versions with context_ai_adjusted tag
-        const adjustedVersions = this.getVersionsWithTag('context_ai_adjusted');
-        
-        // If no adjusted versions found, return false
-        if (adjustedVersions.length === 0) {
-            return false;
-        }
-        
-        // Check if all adjusted versions have the same context as master
-        const masterContext = masterVersion.context;
-        const allVersionsMatch = adjustedVersions.every(version => 
-            version.context === masterContext
-        );
-        
-        return allVersionsMatch;
-    }
+
 
     /**
      * Add a todo item to this node

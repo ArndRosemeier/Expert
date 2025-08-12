@@ -681,7 +681,7 @@ export class TagManagerModal extends BaseModal {
                 node.addVersion([trimmedTag], {
                     title: sourceVersion.title,
                     content: sourceVersion.content,
-                    context: sourceVersion.context
+                    // context removed - using conditional context system
                 });
             }
         });

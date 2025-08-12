@@ -316,10 +316,7 @@ export class SettingsManager {
                                     outline: 'creator' as const,
                                     prose: 'prose' as const
                                 },
-                                context_adjustment: {
-                                    outline: 'creator' as const,
-                                    prose: 'prose' as const
-                                },
+                                // context_adjustment removed - traditional context system removed
                                 context_rating: {
                                     outline: 'creator' as const,
                                     prose: 'prose' as const
@@ -384,10 +381,7 @@ export class SettingsManager {
                         outline: 'creator' as const,
                         prose: 'prose' as const
                     },
-                    context_adjustment: {
-                        outline: 'creator' as const,
-                        prose: 'prose' as const
-                    },
+                    // context_adjustment removed - traditional context system removed
                     context_rating: {
                         outline: 'creator' as const,
                         prose: 'prose' as const
@@ -1095,10 +1089,7 @@ export class SettingsManager {
                     outline: 'creator' as const,
                     prose: 'prose' as const
                 },
-                context_adjustment: {
-                    outline: 'creator' as const,
-                    prose: 'prose' as const
-                },
+                // context_adjustment removed - traditional context system removed
                 context_rating: {
                     outline: 'creator' as const,
                     prose: 'prose' as const

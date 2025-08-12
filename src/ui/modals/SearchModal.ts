@@ -13,7 +13,7 @@
 import { BaseModal } from './core/BaseModal';
 import { SearchService, type SearchOptions, type SearchResult, type ReplaceOptions, type ReplaceResult } from './services/SearchService';
 import type { DocumentNode } from '../../DocumentNode';
-import { NodeInspectorModal } from './NodeInspectorModal';
+// NodeInspectorModal imported dynamically when needed
 
 // ============================================================================
 // SEARCH MODAL CLASS
@@ -383,10 +383,20 @@ export class SearchModal extends BaseModal {
      */
     private async openNodeInspector(nodeId: string): Promise<void> {
         // Find the node in the hierarchy
-        const targetNode: DocumentNode = this.findNodeById(this.rootNode!, nodeId)!;
+        const targetNode = this.findNodeById(this.rootNode!, nodeId);
+        if (!targetNode) {
+            console.error('Node not found for inspector:', nodeId);
+            return;
+        }
 
-        const inspectorModal = new NodeInspectorModal();
-        inspectorModal.openWithNode(targetNode);
+        try {
+            const { NodeInspectorModal } = await import('./NodeInspectorModal');
+            const modal = new NodeInspectorModal();
+            modal.openWithNode(targetNode);
+        } catch (error) {
+            console.error('Failed to open node inspector:', error);
+            alert('Failed to open node inspector. Please try again.');
+        }
     }
 
     /**

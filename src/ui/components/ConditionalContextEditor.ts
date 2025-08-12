@@ -9,7 +9,7 @@ export interface ConditionalContextEditorConfig {
     showPreview?: boolean; // show matched items/node content/assembled context
     onNavigateToNodeId?: (nodeId: string) => void; // optional callback for ancestor source link behavior
     showInheritedByDefault?: boolean; // if true, inherited items are shown initially
-    allowLegacyImport?: boolean; // if false, hide the legacy import control
+    // allowLegacyImport removed - traditional context system removed
 }
 
 /**
@@ -23,7 +23,7 @@ export class ConditionalContextEditor {
     private showPreview: boolean;
     private onNavigateToNodeId: ((nodeId: string) => void) | undefined;
     private showInherited: boolean;
-    private allowLegacyImport: boolean;
+    // allowLegacyImport removed - traditional context system removed
 
     private container: HTMLElement | null = null;
     private cleanupHandlers: Array<() => void> = [];
@@ -37,7 +37,7 @@ export class ConditionalContextEditor {
     private addConditionButton!: HTMLButtonElement;
     private addItemButton!: HTMLButtonElement;
     private toggleAllButton!: HTMLButtonElement;
-    private importItemsButton!: HTMLButtonElement;
+    // importItemsButton removed - traditional context system removed
     private removeItemButton!: HTMLButtonElement;
     private previewAsSelect!: HTMLSelectElement;
     private evaluateButton!: HTMLButtonElement;
@@ -60,7 +60,7 @@ export class ConditionalContextEditor {
         this.showPreview = config.showPreview !== undefined ? config.showPreview : true;
         this.onNavigateToNodeId = config.onNavigateToNodeId;
         this.showInherited = !!config.showInheritedByDefault;
-        this.allowLegacyImport = config.allowLegacyImport !== undefined ? config.allowLegacyImport : true;
+        // allowLegacyImport initialization removed - traditional context system removed
     }
 
     public mount(container: HTMLElement): void {
@@ -112,17 +112,7 @@ export class ConditionalContextEditor {
             cursor: pointer;
         `;
 
-        if (this.allowLegacyImport) {
-            this.importItemsButton = createElement('button', { content: 'Import items' });
-            this.importItemsButton.title = 'Import paragraphs from legacy context';
-            this.importItemsButton.style.cssText = `
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid #d1d5db;
-                background: #f3f4f6;
-                cursor: pointer;
-            `;
-        }
+        // Import items button removed - traditional context system removed
 
         this.toggleAllButton = createElement('button', { content: 'Toggle all' });
         this.toggleAllButton.title = 'Toggle selection of all items';
@@ -146,9 +136,7 @@ export class ConditionalContextEditor {
 
         itemButtonsRow.appendChild(this.addItemButton);
         itemButtonsRow.appendChild(this.toggleAllButton);
-        if (this.allowLegacyImport) {
-            itemButtonsRow.appendChild(this.importItemsButton);
-        }
+        // Import items button removed - traditional context system removed
         itemButtonsRow.appendChild(this.removeItemButton);
 
         // Show inherited toggle
@@ -435,9 +423,7 @@ export class ConditionalContextEditor {
         addEventListenerWithCleanup(this.addItemButton, 'click', () => this.handleAddItem(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.addConditionButton, 'click', () => this.handleAddCondition(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
-        if (this.allowLegacyImport && this.importItemsButton) {
-            addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
-        }
+        // Import items button event listener removed - traditional context system removed
         addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleRemoveChecked(); }, this.cleanupHandlers);
         if (this.showPreview) {
             addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
@@ -887,37 +873,7 @@ export class ConditionalContextEditor {
         this.refreshItemsList();
     }
 
-    private handleImportLegacyContext(): void {
-        const legacy = this.node.context || '';
-        const paragraphs = this.parseLegacyContextParagraphs(legacy);
-        if (paragraphs.length === 0) {
-            alert('No paragraphs found in legacy context.');
-            return;
-        }
-
-        const existing = new Set(this.node.getConditionalContextItems().map(i => i.text));
-        let imported = 0;
-        for (const para of paragraphs) {
-            if (!para) continue;
-            if (existing.has(para)) continue;
-            this.node.addConditionalContextItem(para, [], 'OR');
-            existing.add(para);
-            imported++;
-        }
-
-        this.refreshItemsList();
-        if (imported > 0) {
-            this.schedulePersist();
-        }
-        alert(imported > 0 ? `Imported ${imported} item${imported === 1 ? '' : 's'} from legacy context.` : 'All legacy context paragraphs are already present.');
-    }
-
-    private parseLegacyContextParagraphs(text: string): string[] {
-        return text
-            .split(/\r?\n\s*\r?\n+/)
-            .map(p => p.trim())
-            .filter(p => p.length > 0);
-    }
+    // Legacy context import methods removed - traditional context system removed
 
     private async handleRemoveChecked(): Promise<void> {
         const items = this.node.getConditionalContextItems();

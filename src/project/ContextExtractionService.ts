@@ -14,11 +14,11 @@ export class ContextExtractionService {
     ) {}
 
     /**
-     * Extracts specific context information from a node and its descendants.
-     * @param node The root node to extract from
+     * Extracts specific context information from a node and its descendants and stores as conditional context.
+     * @param node The root node to extract from (where conditional context will be stored)
      * @param extractionPrompt What to extract (e.g., "characters", "places", "themes")
      * @param depth How deep to traverse (0=only this node, 1=include children, 2=include grandchildren, etc.)
-     * @returns Extracted context information
+     * @returns Extracted context information string (also stored as conditional context items)
      */
     public async extractContext(
         node: DocumentNode, 
@@ -37,8 +37,12 @@ export class ContextExtractionService {
         
         // Use the OpenRouter client to perform the extraction
         const result = await this.openRouterClient.chat('editor', fullPrompt);
+        const extractedText = result.trim();
 
-        return result.trim();
+        // Convert extracted text to conditional context items and add to the node
+        await this.addExtractedContextToNode(node, extractedText, extractionPrompt);
+
+        return extractedText;
     }
 
     /**
@@ -214,16 +218,12 @@ export class ContextExtractionService {
         const levelName = node.template[node.level] || `Level ${node.level}`;
         let nodeInfo = `${prefix}${levelName}: "${node.title}"`;
         
-        // For the root node (the one chat started with), include the full context if available
+        // For the root node (the one chat started with), include content only (context removed)
         if (isRootNode && currentDepth === 0) {
-            if (node.context && node.context.trim()) {
-                nodeInfo += `\n${prefix}  Context: ${node.context}`;
-            }
-            
             if (node.content && node.content.trim()) {
                 nodeInfo += `\n${prefix}  Content: ${node.content}`;
-            } else if (!node.context || !node.context.trim()) {
-                nodeInfo += `\n${prefix}  [No content or context]`;
+            } else {
+                nodeInfo += `\n${prefix}  [No content]`;
             }
         } else {
             // For child nodes, include full content
@@ -285,9 +285,7 @@ export class ContextExtractionService {
         let totalContentLength = 0;
         
         // For root node, include both context and content
-        if (node.context && node.context.trim()) {
-            totalContentLength += node.context.length;
-        }
+        // Traditional context length calculation removed
         if (node.content && node.content.trim()) {
             totalContentLength += node.content.length;
         }
@@ -298,7 +296,7 @@ export class ContextExtractionService {
         totalContentLength += childNodesWithContent.reduce((sum, n) => sum + (n.content?.length || 0), 0);
         
         // Total nodes with content (including root if it has context or content)
-        const rootHasContent = (node.context && node.context.trim()) || (node.content && node.content.trim());
+        const rootHasContent = (node.content && node.content.trim());
         const totalNodesWithContent = (rootHasContent ? 1 : 0) + childNodesWithContent.length;
         
         let summary = `Chat Context Analysis:\n\n`;
@@ -311,9 +309,7 @@ export class ContextExtractionService {
         // Break down content by type
         if (rootHasContent) {
             summary += `Root node "${node.title}":\n`;
-            if (node.context && node.context.trim()) {
-                summary += `- Context: ${node.context.length.toLocaleString()} chars\n`;
-            }
+            // Traditional context summary removed
             if (node.content && node.content.trim()) {
                 summary += `- Content: ${node.content.length.toLocaleString()} chars\n`;
             }
@@ -414,7 +410,7 @@ export class ContextExtractionService {
         
         // Copy all properties
         clonedNode.setContent(node.content, 'master');
-        clonedNode.setContext(node.context, 'master');
+        // Traditional context copying removed - conditional context is preserved in cloning
         clonedNode.generationPrompt = node.generationPrompt;
         clonedNode.isPromptGenerating = node.isPromptGenerating;
         clonedNode.collapsed = node.collapsed;
@@ -444,5 +440,26 @@ export class ContextExtractionService {
         }
         
         return clonedNode;
+    }
+
+    /**
+     * Converts extracted context text to conditional context items and adds them to the node.
+     * @param node The node to add conditional context items to
+     * @param extractedText The extracted context text
+     * @param extractionPrompt The original extraction prompt (used for labeling)
+     */
+    private async addExtractedContextToNode(node: DocumentNode, extractedText: string, extractionPrompt: string): Promise<void> {
+        const { getContextItems } = await import('../ContextFormat');
+        
+        // Parse the extracted text into context items
+        const contextItems = getContextItems(extractedText);
+        
+        // Add each context item as a conditional context item (no conditions = always applies)
+        contextItems.forEach(text => {
+            const itemId = node.addConditionalContextItem(text.trim(), [], 'OR');
+            console.log(`Added conditional context item: ${itemId}`);
+        });
+        
+        console.log(`✅ Added ${contextItems.length} conditional context items from extraction: "${extractionPrompt}"`);
     }
 } 

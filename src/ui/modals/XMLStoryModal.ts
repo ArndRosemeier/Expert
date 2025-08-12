@@ -2726,7 +2726,7 @@ export class XMLStoryModal extends SimpleModal {
             await this.applyStagedToNode();
 
             // Legacy normal-context is ignored; conditional context is stored on the node
-            const contextContent = '';
+            // contextContent removed - using conditional context system
 
             // Allow saving even with empty outline and empty context (explicitly clearing content/context)
 
@@ -2742,7 +2742,7 @@ export class XMLStoryModal extends SimpleModal {
                 
                 // Update the version directly (not the master)
                 chatEditedVersion.content = outlineContent;
-                chatEditedVersion.context = contextContent;
+                // Context assignment removed - using conditional context system
                 chatEditedVersion.timestamp = new Date();
                 
                 // Promote this updated version to master
@@ -2753,7 +2753,7 @@ export class XMLStoryModal extends SimpleModal {
 
                 const newVersionId = this.sourceNode.addVersion(['chat_edited'], {
                     content: outlineContent,
-                    context: contextContent
+                    // context removed - using conditional context system
                 });
                 
                 if (newVersionId) {
