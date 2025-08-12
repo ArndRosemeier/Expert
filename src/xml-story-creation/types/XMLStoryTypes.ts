@@ -58,6 +58,7 @@ export interface SystemCommand {
     sectionTitle?: string; // For section commands: the section title to target
     timestamp: Date;
     markerId?: string; // Unique marker ID for positioning in text
+    executedRaw?: string; // Raw XML used to mark executed commands in chat
 }
 
 export interface ParseError {
