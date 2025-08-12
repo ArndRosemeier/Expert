@@ -188,28 +188,4 @@ export const DEFAULT_RECURSIVE_REDUNDANCY_CONFIG: RecursiveRedundancyConfig = {
     continueAfterRedundancies: true
 };
 
-/**
- * Modal state for tracking user interactions
- */
-export interface RedundancyModalState {
-    /** Current analysis result being displayed */
-    currentAnalysis: RedundancyAnalysisResult | null;
-    
-    /** Current recursive analysis result */
-    currentRecursiveAnalysis: RecursiveRedundancyResult | null;
-    
-    /** IDs of nodes marked for deletion */
-    markedForDeletion: Set<string>;
-    
-    /** Whether analysis is currently running */
-    isAnalyzing: boolean;
-    
-    /** Current progress of recursive analysis */
-    analysisProgress: RedundancyAnalysisProgress | null;
-    
-    /** User's review status for each redundancy */
-    reviewedRedundancies: Set<string>;
-    
-    /** Whether recursive mode is enabled */
-    recursiveModeEnabled: boolean;
-} 
+ 

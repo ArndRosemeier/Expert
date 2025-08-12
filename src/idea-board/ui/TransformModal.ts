@@ -8,7 +8,7 @@ export interface TransformResult {
   count: number;
 }
 
-export interface TransformModalConfig extends ModalConfig {
+interface TransformModalConfig extends ModalConfig {
   onTransformConfirmed?: (result: TransformResult) => void;
   defaultInstruction?: string;
   outgoingConnectionCount?: number; // If provided, count field is locked to this value

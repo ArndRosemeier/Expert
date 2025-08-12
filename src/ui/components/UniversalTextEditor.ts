@@ -62,7 +62,7 @@ class AIUndoState {
     }
 }
 
-export type TextEditorMode = 'simple' | 'enhanced';
+type TextEditorMode = 'simple' | 'enhanced';
 
 export interface UniversalTextEditorOptions {
     mode?: TextEditorMode;

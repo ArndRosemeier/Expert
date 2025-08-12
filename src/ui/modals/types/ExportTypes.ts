@@ -94,7 +94,7 @@ export interface NodeExportData {
 /**
  * Content version data for export/import
  */
-export interface ContentVersionExportData {
+interface ContentVersionExportData {
     id: string;
     content: string;
     title: string;
@@ -106,12 +106,4 @@ export interface ContentVersionExportData {
     metadata?: { [key: string]: any };
 }
 
-/**
- * Export generation options
- */
-export interface ExportGenerationOptions {
-    includeEmptyNodes?: boolean;
-    includeGenerationData?: boolean;
-    includeRatings?: boolean;
-    maxDepth?: number;
-} 
+ 

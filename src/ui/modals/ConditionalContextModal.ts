@@ -4,7 +4,7 @@ import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 
-export interface ConditionalContextModalConfig {
+interface ConditionalContextModalConfig {
     id: string;
     node: DocumentNode;
     projectManager: ProjectManager;

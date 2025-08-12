@@ -40,17 +40,7 @@ export interface OutlineGenerationResult {
   genreThemesContext: string;       // Generated with "*" prefix for genre & themes
 }
 
-export interface OutlineFactoryDefaults {
-  ideas: string;
-  genres: GenreSelection;
-  styleGuide: StyleSelection;
-  context: ContextConfig;
-}
 
-export interface OutlineFactoryPersistence {
-  lastUsedConfig: OutlineFactoryConfig;
-  defaults: OutlineFactoryDefaults;
-}
 
 export interface ValidationResult {
   isValid: boolean;

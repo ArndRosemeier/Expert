@@ -15,10 +15,6 @@ export function getElementById<T extends HTMLElement>(id: string): T {
 }
 
 // --- Safe DOM Access (returns null if not found) ---
-export function getElementByIdSafe<T extends HTMLElement>(id: string): T | null {
-    const element = document.getElementById(id);
-    return element as T | null;
-}
 
 // --- DOM Elements (Lazy Access) ---
 export const modalContainer = () => getElementById<HTMLElement>('modal-container');

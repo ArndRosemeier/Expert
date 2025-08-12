@@ -254,13 +254,6 @@ export interface HumanEditEvent extends XMLStoryEvent {
     };
 }
 
-export interface CommandFailedEvent extends XMLStoryEvent {
-    type: 'command_failed';
-    payload: {
-        command: SystemCommand;
-        error: string;
-    };
-}
 
 // ============================================================================
 // CONFIGURATION TYPES

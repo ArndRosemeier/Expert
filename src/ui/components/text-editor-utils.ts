@@ -63,19 +63,6 @@ export function replaceTextareaWithUniversalEditor(
     return universalEditor;
 }
 
-/**
- * Create a drop-in replacement function for document.createElement('textarea')
- */
-export function createUniversalTextarea(
-    container: HTMLElement,
-    initialMode: 'simple' | 'enhanced' = 'simple'
-): UniversalTextEditor {
-    return new UniversalTextEditor(container, { 
-        mode: initialMode,
-        autoResize: true,
-        className: 'large-textarea'
-    });
-}
 
 /**
  * Helper to add a mode switcher button to a Universal Text Editor
@@ -113,38 +100,4 @@ export function addModeSwitcher(
     return switchButton;
 }
 
-/**
- * Migrate all textareas in a container to Universal Text Editors
- */
-export function migrateTextareasInContainer(
-    container: HTMLElement,
-    defaultMode: 'simple' | 'enhanced' = 'simple',
-    addSwitchers: boolean = false
-): UniversalTextEditor[] {
-    const textareas = Array.from(container.querySelectorAll('textarea'));
-    const editors: UniversalTextEditor[] = [];
-    
-    textareas.forEach(textarea => {
-        // Create wrapper for the editor and potentially the switcher
-        const wrapper = document.createElement('div');
-        wrapper.className = 'universal-editor-wrapper';
-        
-        // Insert wrapper before textarea
-        textarea.parentNode?.insertBefore(wrapper, textarea);
-        
-        // Replace textarea with Universal Editor
-        const editor = replaceTextareaWithUniversalEditor(textarea, defaultMode);
-        
-        // Move the editor container into the wrapper
-        const editorContainer = editor.getHTMLElement().parentElement!;
-        wrapper.appendChild(editorContainer);
-        
-        if (addSwitchers) {
-            addModeSwitcher(editor, wrapper, 'top');
-        }
-        
-        editors.push(editor);
-    });
-    
-    return editors;
-} 
+ 

@@ -11,7 +11,7 @@ import type { OverviewElement } from './types/GraphTypes';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
 
-export interface OverviewBoardModalConfig extends ModalConfig {
+interface OverviewBoardModalConfig extends ModalConfig {
   selectedNode: DocumentNode;
   openRouterClient: OpenRouterClient;
   settingsManager: SettingsManager;

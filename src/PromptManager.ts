@@ -1,4 +1,3 @@
-import { SettingsManager } from './SettingsManager';
 import { STORAGE_KEYS } from './constants';
 
 export const PROMPT_STORAGE_KEY = STORAGE_KEYS.PROMPTS;
@@ -1640,20 +1639,4 @@ export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
 
 // Simple prompt manager class for specific use cases (like context transformation)
 // For the main settings UI, use PromptManagementService instead
-export class PromptManager {
-    private prompts: OrchestratorPrompts;
-    private settingsManager: SettingsManager;
-
-    constructor(
-        _root: HTMLElement, 
-        _onSave: (prompts: OrchestratorPrompts) => void,
-        settingsManager: SettingsManager
-    ) {
-        this.settingsManager = settingsManager;
-        this.prompts = this.settingsManager.getPrompts();
-    }
-
-    public getPrompts(): OrchestratorPrompts {
-        return this.prompts;
-    }
-} 
+ 

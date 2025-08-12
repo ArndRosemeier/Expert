@@ -13,7 +13,7 @@ export enum ConditionalScope {
     Path = 'path'
 }
 
-export interface ContainsCondition {
+interface ContainsCondition {
     type: 'contains';
     scope: ConditionalScope;
     term: string;
@@ -21,7 +21,7 @@ export interface ContainsCondition {
     caseSensitive: boolean;
 }
 
-export interface NotContainsCondition {
+interface NotContainsCondition {
     type: 'contains_not';
     scope: ConditionalScope;
     term: string;
@@ -29,7 +29,7 @@ export interface NotContainsCondition {
     caseSensitive: boolean;
 }
 
-export interface LayerComparisonCondition {
+interface LayerComparisonCondition {
     type: 'layer_comparison';
     comparator: '>' | '<' | '=';
     layerName: string; // Must match an entry in template[] exactly
@@ -37,7 +37,7 @@ export interface LayerComparisonCondition {
 
 export type ConditionalContextCondition = ContainsCondition | NotContainsCondition | LayerComparisonCondition;
 
-export interface ConditionalContextItem {
+interface ConditionalContextItem {
     id: string;
     text: string;
     conditions: ConditionalContextCondition[];
@@ -74,7 +74,7 @@ export interface TodoItem {
 /**
  * Generation parameters that are remembered per node
  */
-export interface LastGenerationParameters {
+interface LastGenerationParameters {
     draftLevel: number;
     contentLevel: number;
     coherenceLevel: number;

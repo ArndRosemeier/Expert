@@ -1,69 +1,15 @@
 /**
  * XML Story Creation System
- * 
+ *
  * Main entry point for the XML-enabled collaborative story creation feature.
  * This module provides a complete system for parsing AI responses with embedded
  * XML tags, managing story elements on a visual whiteboard, and handling
  * bidirectional collaboration between humans and AI.
  */
-
 // Core Types
-export type {
-    StoryElement,
-    StoryElementType,
-    ParsedResponse,
-    SystemCommand,
-    ParseError,
-    HumanEdit,
-    EditableFieldState,
-    HighlightType,
-    ElementHighlight,
-    HighlightState,
-    WhiteboardState,
-    WhiteboardContext,
-    ContextRefreshOptions,
-    AIFeedbackMessage,
-    HumanEditSummary,
-    XMLTagDefinition,
-    AIEditCommand,
-    RelationshipElement,
-    XMLStoryEvent,
-    ElementCreatedEvent,
-    ElementUpdatedEvent,
-    HumanEditEvent,
-    XMLStoryConfig,
-    ElementID,
-    ElementTypeFilter,
-    ElementMap,
-    HighlightMap,
-    EditRecord
-} from './types/XMLStoryTypes';
-
-// Constants and Configurations
-export {
-    XML_TAG_DEFINITIONS,
-    DEFAULT_XML_STORY_CONFIG,
-    isStoryElement,
-    isHumanEdit,
-    isSystemCommand
-} from './types/XMLStoryTypes';
-
-// Core Services
-export { XMLStoryService, createXMLStoryService } from './services/XMLStoryService';
-export type { XMLStoryEventCallback } from './services/XMLStoryService';
+export type { XMLStoryEvent } from "./types/XMLStoryTypes";
 import { createXMLStoryService } from './services/XMLStoryService';
-
-export { ElementIDGenerator, createIDGenerator, generateElementId } from './services/ElementIDGenerator';
-
-
-// Parser
-export { XMLStoryParser, createXMLStoryParser } from './parser/XMLStoryParser';
 import { createXMLStoryParser } from './parser/XMLStoryParser';
-
-// Re-export commonly used types for convenience
-export type XMLStoryServiceType = import('./services/XMLStoryService').XMLStoryService;
-export type XMLStoryParserType = import('./parser/XMLStoryParser').XMLStoryParser;
-export type ElementIDGeneratorType = import('./services/ElementIDGenerator').ElementIDGenerator;
 
 /**
  * Create a complete XML Story Creation system instance
@@ -151,70 +97,4 @@ export const XMLStoryValidation = {
     }
 };
 
-/**
- * Helper function to create example story elements for testing/demo
- */
-export function createExampleStoryElements(): import('./types/XMLStoryTypes').StoryElement[] {
-    const now = new Date();
-    
-    return [
-        {
-            id: 'discovery',
-            type: 'outline',
-            description: 'Elara discovers her brother\'s journal with cryptic map references',
-            timestamp: now,
-            sourceText: XML_TAG_EXAMPLES.outline,
-            lastModified: now,
-            isHumanEdited: false,
-            editHistory: [],
-            isNewFromAI: true,
-            isUpdatedByAI: false,
-            highlightUntilNext: true
-        },
-        {
-            id: 'elara',
-            type: 'context',
-            description: 'Elara: A skilled cartographer seeking her missing brother',
-            timestamp: now,
-            sourceText: XML_TAG_EXAMPLES.context,
-            lastModified: now,
-            isHumanEdited: false,
-            editHistory: [],
-            isNewFromAI: true,
-            isUpdatedByAI: false,
-            highlightUntilNext: true
-        },
-        {
-            id: 'neo_venice',
-            type: 'context',
-            description: 'Neo-Venice: A cyberpunk city built on the ruins of Venice',
-            timestamp: now,
-            sourceText: `<context id="neo_venice" description="Neo-Venice: A cyberpunk city built on the ruins of Venice" />`,
-            lastModified: now,
-            isHumanEdited: false,
-            editHistory: [],
-            isNewFromAI: true,
-            isUpdatedByAI: false,
-            highlightUntilNext: true
-        }
-    ];
-}
-
-/**
- * Version information
- */
-export const XML_STORY_VERSION = {
-    major: 1,
-    minor: 0,
-    patch: 0,
-    name: 'Collaborative Canvas'
-};
-
-// Default export for convenience
-export default {
-    createXMLStorySystem,
-    XML_TAG_EXAMPLES,
-    XMLStoryValidation,
-    createExampleStoryElements,
-    XML_STORY_VERSION
-}; 
+ 

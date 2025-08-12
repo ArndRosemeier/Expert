@@ -178,27 +178,4 @@ export function getErrorTypeDescription(type: LogicErrorType): string {
     return descriptions[type];
 }
 
-/**
- * Modal state for tracking user interactions
- */
-export interface LogicErrorModalState {
-    /** Current analysis result being displayed */
-    currentAnalysis: LogicAnalysisResult | null;
-    
-    /** IDs of errors marked as reviewed */
-    reviewedErrors: Set<string>;
-    
-    /** IDs of errors marked as resolved */
-    resolvedErrors: Set<string>;
-    
-    /** Whether analysis is currently running */
-    isAnalyzing: boolean;
-    
-    /** Current filter settings for viewing results */
-    filters: {
-        errorTypes: LogicErrorType[];
-        severityRange: [number, number];
-        showReviewed: boolean;
-        showResolved: boolean;
-    };
-} 
+ 
