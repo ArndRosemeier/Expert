@@ -602,17 +602,25 @@ export class XMLStoryParser {
      */
     private parseCommandParameters(parametersText: string): Record<string, string> {
         const parameters: Record<string, string> = {};
-        
-        // Simple key=value parsing
-        const paramRegex = /(\w+)=["']([^"']*?)["']/g;
-        let match;
-        
-        while ((match = paramRegex.exec(parametersText)) !== null) {
-            if (match[1] && match[2] !== undefined) {
-                parameters[match[1]] = match[2];
-            }
+        if (!parametersText) return parameters;
+
+        // Parse double-quoted attributes (allow any chars including newlines and '>')
+        const dq = /(\w+)\s*=\s*"([\s\S]*?)"/g;
+        let m: RegExpExecArray | null;
+        while ((m = dq.exec(parametersText)) !== null) {
+            const key = m[1] ?? '';
+            const val = m[2] ?? '';
+            if (key) parameters[key] = val;
         }
-        
+
+        // Parse single-quoted attributes
+        const sq = /(\w+)\s*=\s*'([\s\S]*?)'/g;
+        while ((m = sq.exec(parametersText)) !== null) {
+            const key = m[1] ?? '';
+            const val = m[2] ?? '';
+            if (key) parameters[key] = val;
+        }
+
         return parameters;
     }
     
