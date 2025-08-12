@@ -698,7 +698,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'detect-redundant-children': 'detect-redundant-children-btn',
                             'detect-logic-errors': 'detect-logic-errors-btn',
                             'fix-logic-outline': 'fix-logic-outline-btn',
-                            'context-adjuster': 'context-adjuster-btn',
+
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn',
                             'set-project-language': 'set-project-language-btn'
@@ -1128,7 +1128,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'detect-redundant-children': 'detect-redundant-children-btn',
                             'detect-logic-errors': 'detect-logic-errors-btn',
                             'fix-logic-outline': 'fix-logic-outline-btn',
-                            'context-adjuster': 'context-adjuster-btn',
+
                             'batch-update': 'batch-update-btn',
                             'tag-manager': 'tag-manager-btn',
                             'set-project-language': 'set-project-language-btn'
@@ -1273,9 +1273,7 @@ function createActionsDropdownContent(node: DocumentNode): string {
                             🔧 Fix Logic in Outline
                         </button>
                     ` : ''}
-                    <button class="action-btn" data-action="context-adjuster">
-                        🎯 Context Adjuster
-                    </button>
+
                     <button class="action-btn" data-action="send-content-to-idea-board">
                         💡 Send Content to Idea Board
                     </button>
@@ -3861,15 +3859,7 @@ This action cannot be undone.`;
             }
             break;
 
-        case 'context-adjuster-btn':
-            {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (!node) return;
 
-                // Context adjuster functionality completely removed - using conditional context system
-                console.log('Context adjustment removed - use conditional context items instead');
-            }
-            break;
 
         case 'batch-update-btn':
             {
@@ -5627,14 +5617,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
     
     // 'node-extract-context-btn': removed - using conditional context system
     
-    'context-adjuster-btn': (_e: Event) => {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        // Context adjuster modal removed - using conditional context system
-        console.log('Context adjustment removed - use conditional context items instead');
-    },
+
     
     'context-info-btn': (_e: Event) => {
         if (!projectManager || !selectedNodeId) return;
