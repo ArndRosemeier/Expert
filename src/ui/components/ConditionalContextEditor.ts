@@ -540,20 +540,16 @@ export class ConditionalContextEditor {
                 const title = createElement('div', { content: truncateText((item.text || '').split('\n')[0] || '', 80) || '(empty text)' });
                 title.style.cssText = 'font-weight: 500; color: #4b5563;';
 
-                // Conditions line (use established formatting)
+                // Conditions line with source info (use established formatting)
                 const conditionsDiv = createElement('div');
                 const conditionsText = (item.conditions && item.conditions.length > 0)
                     ? this.formatConditionsForDisplay(item.conditions as any, item.logic as any)
                     : '<em>Unconditional</em>';
-                conditionsDiv.innerHTML = conditionsText;
-                conditionsDiv.style.cssText = 'font-size: 0.75rem; color: #7c2d12;';
-
-                const meta = createElement('div');
-                meta.style.cssText = 'color: #6b7280; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;';
-                const sourceLabel = createElement('span', { content: 'from' });
+                
+                // Create source link for conditions line
                 const sourceLink = createElement('a', { content: sourceNode.title || 'Untitled' }) as HTMLAnchorElement;
                 sourceLink.href = '#';
-                sourceLink.style.cssText = 'color: #2563eb; text-decoration: none; cursor: pointer;';
+                sourceLink.style.cssText = 'color: #2563eb; text-decoration: none; cursor: pointer; margin-left: 0.5rem;';
                 sourceLink.addEventListener('click', (e) => {
                     e.preventDefault();
                     if (this.onNavigateToNodeId) {
@@ -563,9 +559,14 @@ export class ConditionalContextEditor {
                         window.dispatchEvent(event);
                     }
                 });
+                
+                conditionsDiv.innerHTML = conditionsText + ' <span style="color: #6b7280;">from</span> ';
+                conditionsDiv.appendChild(sourceLink);
+                conditionsDiv.style.cssText = 'font-size: 0.75rem; color: #7c2d12;';
+
+                const meta = createElement('div');
+                meta.style.cssText = 'color: #6b7280; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;';
                 const logicSpan = createElement('span', { content: `${item.logic} • ${item.conditions.length} condition(s)` });
-                meta.appendChild(sourceLabel);
-                meta.appendChild(sourceLink);
                 meta.appendChild(logicSpan);
 
                 infoCol.appendChild(title);
