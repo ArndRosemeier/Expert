@@ -808,6 +808,7 @@ export class NodeInspectorModal extends BaseModal {
                         node: this.node,
                         projectManager: findProjectByNode(this.node)!,
                         showPreview: false,
+                        showInheritedByDefault: true,
                         onNavigateToNodeId: (nodeId: string) => {
                             try {
                                 const pm = findProjectByNode(this.node!);

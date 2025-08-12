@@ -194,28 +194,20 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
         } else {
             const hasContent = node.content && node.content.trim().length > 0;
             const isDraft = masterVersion.tags.has('draft');
-            const isContextAdjusted = false; // Context adjustment removed with traditional context
             const isConsistentWithParent = node.isConsistentToParent();
+            const hasOwnConditionalContext = node.getConditionalContextItems().length > 0;
             
-            // Finished: all conditions met
-            if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
+            // Special case: Non-root node with its own conditional context (exceptional)
+            if (hasOwnConditionalContext) {
+                statusIcon = '🔷'; // Special diamond icon for non-root nodes with own context
+            }
+            // Finished: content done and coherent with parent
+            else if (hasContent && !isDraft && isConsistentWithParent) {
                 statusIcon = '⭐';
             }
-            // Content done, coherent with parent (but no context adjustment)
-            else if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
-                statusIcon = '✨';
-            }
-            // Content done, context adjusted (but no coherence check)
-            else if (hasContent && !isDraft && isContextAdjusted) {
-                statusIcon = '🟢';
-            }
-            // Content done, nothing much else
+            // Content done - basic state
             else if (hasContent && !isDraft) {
                 statusIcon = '🟡';
-            }
-            // Draft with adjusted context
-            else if (hasContent && isDraft && isContextAdjusted) {
-                statusIcon = '🟠';
             }
             // Pure draft
             else {
@@ -284,11 +276,9 @@ function getProjectRootTooltip(rootNode: DocumentNode): string {
     
     // Define the order and descriptions for each status type
     const statusOrder = [
-        { icon: '⭐', description: 'Finished' },
-        { icon: '✨', description: 'Content done and coherent with parent' },
-        { icon: '🟢', description: 'Content done with context adjusted' },
+        { icon: '⭐', description: 'Finished - content done and coherent with parent' },
+        { icon: '🔷', description: 'Has own conditional context (exceptional for non-root)' },
         { icon: '🟡', description: 'Content done - basic state' },
-        { icon: '🟠', description: 'Draft with adjusted context' },
         { icon: '🟣', description: 'Pure draft' }
     ];
     
@@ -2194,13 +2184,13 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 align-items: center;
                 margin-bottom: 0.75rem;
             }
-            .help-button:hover {
+            .help-button:hover, .node-inspector-button:hover {
                 background: #e9ecef !important;
                 border-color: #495057 !important;
                 color: #495057 !important;
                 transform: scale(1.05);
             }
-            .help-button:active {
+            .help-button:active, .node-inspector-button:active {
                 transform: scale(0.95);
             }
         </style>
@@ -2209,7 +2199,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             <div class="header-left">
                 <!-- Title Row -->
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                    <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions">i</button>
+                    <button id="node-inspector-btn" class="node-inspector-button" title="Inspect Node Versions" style="width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; font-weight: bold;">i</button>
                     <h2 id="node-title-display" contenteditable="true" style="margin: 0;">${node.title}</h2>
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
                     ${(() => {
@@ -2579,7 +2569,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             const { ConditionalContextEditor } = await import('./components/ConditionalContextEditor');
             // Clean previous content (destroy old editor if any was mounted)
             host.innerHTML = '';
-            const editor = new ConditionalContextEditor({ node, projectManager, showPreview: false });
+            const editor = new ConditionalContextEditor({ node, projectManager, showPreview: false, showInheritedByDefault: true });
             // Store instance on the host for cleanup on re-render
             (host as any).__ccEditor?.destroy?.();
             (host as any).__ccEditor = editor;

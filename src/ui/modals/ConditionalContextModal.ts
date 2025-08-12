@@ -34,7 +34,7 @@ export class ConditionalContextModal extends SimpleModal {
         container.appendChild(host);
 
         // Mount reusable editor
-        this.editor = new ConditionalContextEditor({ node: this.node, projectManager: this.projectManager, showPreview: true });
+        this.editor = new ConditionalContextEditor({ node: this.node, projectManager: this.projectManager, showPreview: true, showInheritedByDefault: true });
         this.editor.mount(host);
 
         return container;
