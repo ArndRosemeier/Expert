@@ -559,61 +559,14 @@ export class XMLStoryService {
                 });
                 break;
 
-            case 'change_context_scope':
-                // Change scope prefix of a specific context item by id
-                this.handleChangeContextScope(command);
-                break;
+            // 'change_context_scope' removed (legacy). Ignore if encountered.
                 
             default:
                 console.warn('Unknown system command:', command.type);
         }
     }
 
-    private handleChangeContextScope(command: SystemCommand): void {
-        const id = command.parameters?.['id'];
-        const newScope = command.parameters?.['scope'];
-        if (!id || !newScope) {
-            this.emitEvent({
-                type: 'command_failed',
-                payload: { command, error: 'change_context_scope requires id and scope parameters' },
-                timestamp: new Date()
-            });
-            return;
-        }
-        const element = this.getElement(id);
-        if (!element || element.type !== 'context') {
-            this.emitEvent({
-                type: 'command_failed',
-                payload: { command, error: `Context element with id "${id}" not found` },
-                timestamp: new Date()
-            });
-            return;
-        }
-        // Replace existing leading scope prefix (if any) up to first non-scope char with the provided scope
-        // Scope examples: *, *2-5, *2+, *1,3,5
-        const trimmed = element.description.trimStart();
-        const leadingWhitespace = element.description.slice(0, element.description.length - trimmed.length);
-        const rest = trimmed.replace(/^\*[^\S\r\n]*[0-9,\-\+\s]*:?\s*/, '');
-        const updatedDescription = `${leadingWhitespace}${newScope.trim()} ${rest}`.trimEnd();
-
-        // Update element
-        const oldDescription = element.description;
-        element.description = updatedDescription;
-        element.isUpdatedByAI = true;
-        element.highlightUntilNext = true;
-        element.lastModified = new Date();
-        element.editHistory.push({
-            timestamp: new Date(),
-            type: 'ai_edit',
-            changes: { description: { from: oldDescription, to: updatedDescription } }
-        });
-
-        this.emitEvent({
-            type: 'element_updated',
-            payload: { element, command },
-            timestamp: new Date()
-        });
-    }
+    // Legacy handler removed: change_context_scope
     
     /**
      * Handle AI edit commands (supports both old attribute-based and new content-based syntax)

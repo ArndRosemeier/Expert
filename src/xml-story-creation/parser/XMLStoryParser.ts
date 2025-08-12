@@ -273,22 +273,29 @@ export class XMLStoryParser {
             return markerId;
         });
 
-        // Handle change_context_scope command: </change_context_scope id="ID" scope="*2-5"/>
-        const changeScopeRegex = /<\/change_context_scope\s+([^>]*?)\s*>/gi;
-        textWithMarkers = textWithMarkers.replace(changeScopeRegex, (_match, parametersText) => {
+        // Legacy change_context_scope removed
+        // Handle context add/edit/remove (self-closing) with optional keyword
+        const contextAddRegex = /<context\s+([^>]*?)\s*\/>/gi;
+        textWithMarkers = textWithMarkers.replace(contextAddRegex, (_match, parametersText) => {
+            const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
-            const command: SystemCommand = {
-                type: 'change_context_scope',
-                timestamp: new Date(),
-                markerId
-            };
-            const paramsText = (parametersText || '').toString();
-            if (paramsText.trim()) {
-                command.parameters = this.parseCommandParameters(paramsText);
+            if (params['id'] && (params['text'] || params['description'])) {
+                // Treat as edit by id
+                const text = (params['text'] || params['description'] || '').toString();
+                const keyword = (params['keyword'] || '').toString();
+                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, keyword }, timestamp: new Date(), markerId });
+            } else if (params['text'] || params['description']) {
+                // Add without explicit id (id will be client-assigned)
+                const text = (params['text'] || params['description'] || '').toString();
+                const keyword = (params['keyword'] || '').toString();
+                commands.push({ type: 'context_add', parameters: { text, keyword }, timestamp: new Date(), markerId });
+            } else if (params['id'] && params['remove'] === 'true') {
+                commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId });
             }
-            commands.push(command);
             return markerId;
         });
+
+        // Ignore any stray legacy tags if encountered (no-op)
 
         return { commands, textWithMarkers };
     }

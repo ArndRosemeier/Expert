@@ -11,6 +11,8 @@ export interface OpenRouterRequest {
   temperature?: number;
   top_p?: number;
   max_output_tokens?: number;
+  // Some providers (OpenAI-compatible) expect `max_tokens` instead
+  max_tokens?: number;
   // Reasoning/thinking parameters for models that support it
   thinking?: {
     type?: 'enabled' | 'disabled';
@@ -279,6 +281,36 @@ export class OpenRouterClient {
       console.error(`Failed to get model config for purpose ${purpose}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Determine which max tokens key the selected model supports.
+   * Defaults to 'max_tokens' if unknown.
+   */
+  private async getMaxTokensParameterKey(modelId: string): Promise<'max_output_tokens' | 'max_tokens'> {
+    try {
+      const allModels = await this.fetchModels();
+      const modelInfo = allModels.find(m => m.id === modelId);
+      const supported = new Set<string>(modelInfo?.supported_parameters || []);
+      if (supported.has('max_output_tokens')) return 'max_output_tokens';
+      if (supported.has('max_tokens')) return 'max_tokens';
+      // Check provider endpoints for additional hints
+      if (modelInfo) {
+        try {
+          const endpoints = await this.fetchModelEndpoints(modelId);
+          for (const ep of endpoints) {
+            const epParams = new Set<string>(ep.supported_parameters || []);
+            if (epParams.has('max_output_tokens')) return 'max_output_tokens';
+            if (epParams.has('max_tokens')) return 'max_tokens';
+          }
+        } catch {
+          // Ignore endpoint fetch issues; fall back to default
+        }
+      }
+    } catch {
+      // Ignore fetch issues and use default
+    }
+    return 'max_tokens';
   }
 
   /**
@@ -882,7 +914,13 @@ export class OpenRouterClient {
             request.top_p = Math.max(0, Math.min(1, p.top_p));
           }
           if (typeof p.max_output_tokens === 'number') {
-            request.max_output_tokens = Math.max(1, Math.floor(p.max_output_tokens));
+            const normalized = Math.max(1, Math.floor(p.max_output_tokens));
+            const key = await this.getMaxTokensParameterKey(model);
+            if (key === 'max_output_tokens') {
+              request.max_output_tokens = normalized;
+            } else {
+              request.max_tokens = normalized;
+            }
           }
           if (p.thinking && p.thinking.enabled) {
             request.thinking = {

@@ -41,6 +41,7 @@ export interface ConditionalContextItem {
     text: string;
     conditions: ConditionalContextCondition[];
     logic: ConditionLogicOperator; // How to combine conditions within this item
+    keywords?: string[]; // New: explicit keywords for simplified LLM interface
 }
 
 /**
@@ -425,6 +426,11 @@ export class DocumentNode {
                 if (!Array.isArray(raw.conditions)) {
                     throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} conditions must be an array`);
                 }
+                if (raw.keywords !== undefined) {
+                    if (!Array.isArray(raw.keywords) || !raw.keywords.every((k: any) => typeof k === 'string')) {
+                        throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} keywords must be an array of strings`);
+                    }
+                }
 
                 const conditions: ConditionalContextCondition[] = raw.conditions.map((c: any) => {
                     if (!c || typeof c !== 'object' || typeof c.type !== 'string') {
@@ -480,7 +486,8 @@ export class DocumentNode {
                     id: raw.id,
                     text: raw.text,
                     logic: raw.logic,
-                    conditions
+                    conditions,
+                    keywords: Array.isArray(raw.keywords) ? raw.keywords.slice() : []
                 };
                 return item;
             });
@@ -1252,7 +1259,8 @@ export class DocumentNode {
             id: item.id,
             text: item.text,
             logic: item.logic,
-            conditions: item.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[]
+            conditions: item.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[],
+            keywords: Array.isArray(item.keywords) ? item.keywords.slice() : []
         }));
     }
 
@@ -1290,12 +1298,12 @@ export class DocumentNode {
         });
 
         const id = uuidv4();
-        const item: ConditionalContextItem = { id, text, conditions, logic };
+        const item: ConditionalContextItem = { id, text, conditions, logic, keywords: [] };
         this.conditionalContextItems.push(item);
         return id;
     }
 
-    public updateConditionalContextItem(id: string, updates: Partial<Pick<ConditionalContextItem, 'text' | 'logic' | 'conditions'>>): void {
+    public updateConditionalContextItem(id: string, updates: Partial<Pick<ConditionalContextItem, 'text' | 'logic' | 'conditions' | 'keywords'>>): void {
         const item = this.conditionalContextItems.find(i => i.id === id);
         if (!item) {
             throw new Error(`Conditional context item not found: ${id}`);
@@ -1320,6 +1328,12 @@ export class DocumentNode {
             // Reuse validator
             this.validateConditions(updates.conditions);
             item.conditions = updates.conditions;
+        }
+        if (updates.keywords !== undefined) {
+            if (!Array.isArray(updates.keywords) || !updates.keywords.every(k => typeof k === 'string')) {
+                throw new Error('Keywords update must be an array of strings');
+            }
+            item.keywords = updates.keywords.slice();
         }
     }
 
@@ -1417,6 +1431,18 @@ export class DocumentNode {
     }
 
     private evaluateConditionalContextItem(item: ConditionalContextItem, triggeringNode: DocumentNode, root: DocumentNode): boolean {
+        // 1) Keyword gate: if keywords are defined, require at least one keyword to appear
+        //    in the combined content of this node and all previous siblings at the same layer
+        if (Array.isArray(item.keywords) && item.keywords.length > 0) {
+            const haystack = this.getContentForScope(ConditionalScope.ThisAndPreviousSameLayer, triggeringNode, root);
+            const keywordMatched = item.keywords.some((kw) =>
+                DocumentNode.containsMatch(haystack, kw, /*wordwise*/ true, /*caseSensitive*/ false)
+            );
+            if (!keywordMatched) {
+                return false;
+            }
+        }
+
         const evaluator = (cond: ConditionalContextCondition): boolean => {
             if (cond.type === 'contains' || cond.type === 'contains_not') {
                 const haystack = this.getContentForScope(cond.scope, triggeringNode, root);
@@ -1439,7 +1465,7 @@ export class DocumentNode {
             throw new Error(`Unsupported condition type: ${(neverType as any).type}`);
         };
 
-        // Unconditional: no conditions means always include
+        // 2) Unconditional (after keyword gate): no conditions means include
         if (!item.conditions || item.conditions.length === 0) {
             return true;
         }

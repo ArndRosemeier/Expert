@@ -331,6 +331,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             Generate content in {{language}}.
             
             You are writing the content for the node at the following path: "{{path}}".
+            The node is a "leaf" node, meaning it will not be expanded into child nodes later.
+            It is the final text that the user will see, so follow all style instructions, do your best to make it good.
 
             Here is the context of the story so far:
             ---
@@ -343,6 +345,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
             Coherence is king. Logical problems must be avoided at all costs.
+            Do not repeat anything from the PREVIOUS CONTENT (if there is one).
+            This content needs to fit in between the PREVIOUS CONTENT and the NEXT CONTENT (if there is one).
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, section headers or lists.
             The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure content that belongs in this section.
@@ -374,6 +378,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             IMPORTANT: 
             Your response should contain ONLY the requested outline content, nothing more.
             Coherence is king. Logical problems must be avoided at all costs.
+            Do not repeat anything from the PREVIOUS CONTENT (if there is one).
+            This content needs to fit in between the PREVIOUS CONTENT and the NEXT CONTENT (if there is one).
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, lists or section headers. 
             The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure outline text that belongs in this section.
@@ -1461,34 +1467,22 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 - For removing sections: <remove_section section="SECTION_TITLE">
 - Work with the existing outline structure and improve/expand it holistically
 
-**For Context Items (Individual Elements):**
-- Create specific context items for characters, locations, and world-building details
-- Use: <context id="unique_id">Full description including name/title and details</context>
-- Each context item should be focused and self-contained
-            - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs solely inside XML commands/tags; never mention IDs in natural language responses.
+**For Conditional Context Items (keyword-based):**
+- Context items are GLOBAL by default. To add a global item, omit any keyword.
+- To make a context item non-global, include a short keyword (e.g., a character or entity name). Items with a keyword will only become active when that keyword has been mentioned.
+- Allowed context commands (executed immediately when present):
+  - <context add text="…" [keyword="…"] />
+  - <context edit id="…" text="…" [keyword="…"] />
+  - <context remove id="…" />
+- Do NOT use star-based prefixes (like * or *2-4). That syntax is obsolete.
+- Do NOT emit any custom condition logic. Only the optional keyword attribute is supported here.
+- IDs are INTERNAL ONLY. Users do not see IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
 
-            ⚠️ CRITICAL EXECUTION NOTE:
-            - Any XML command you include in your response WILL BE EXECUTED IMMEDIATELY by the system.
-            - These commands are NOT suggestions. Do not include them as examples or hypotheticals.
-            - Only output XML commands when you are certain you want the change to be applied right now.
-            - If you want to discuss a possible change without executing it, use plain natural language, not XML commands.
-
-            **Selective Context Inheritance (Optional):**
-- Context items can optionally target specific child indices during child generation by starting with a star followed by a number range, then a space, then the content.
-- Supported formats (child indices are 1-based):
-  - Single index: *3 This applies only to the 3rd child
-  - Range: *2-5 This applies to children 2 through 5
-              - Open-ended: *2+ This applies to children 2 and all following
-              - List: *1, 3, 6 This applies to children 1, 3, and 6
-- When children are created, only matching children inherit the item. The numeric part will be removed automatically and replaced with a single * in the child context.
-- Items without such a numeric prefix are inherited by all children.
-
-            **Token-efficient scope change command:**
-            - To change ONLY the scope/prefix of an existing context item without editing its content, use the compact command:
-              - </change_context_scope id="CONTEXT_ID" scope="*|*2-5|*2+|*1,3,5">
-            - This updates just the leading scope prefix (e.g., *, *2-5, *2+) on the targeted context item.
-
-- **Global items**: Start description with just * for elements that persist throughout the entire story (main characters, core world-building, fundamental themes, style guides, genre, etc.)
+⚠️ CRITICAL EXECUTION NOTE:
+- Any XML command you include in your response WILL BE EXECUTED IMMEDIATELY by the system.
+- These commands are NOT suggestions. Do not include them as examples or hypotheticals.
+- Only output XML commands when you are certain you want the change to be applied right now.
+- If you want to discuss a possible change without executing it, use plain natural language, not XML commands.
 
 🎯 EDITING GUIDELINES:
 - Complete outline rewrites: </outline_replace> tags
@@ -1496,61 +1490,17 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 - Replace parts of outline: <replace_command> with <search> and <replace> for precise edits
 - Replace specific sections: <replace_section section="SECTION_TITLE"> for targeting ===title=== sections
 - Remove sections: <remove_section section="SECTION_TITLE"> to delete ===title=== sections entirely
-- Add individual context items for new characters, locations, concepts
-- Edit existing context items using: </edit id="element_id">Description content</edit>
-- Remove context items using: </delete id="element_id">
+- Add or edit conditional context items using the keyword-based commands above
 - IMPORTANT: For replace_command, search text must be unique and exact
 - IMPORTANT: Section commands work with the exact title between === markers (without the === symbols)
-
-💡 EXAMPLE RESPONSES:
-
-"I see an opportunity to strengthen your outline structure. Here's an improved version:
-
-</outline_replace>
-Chapter 1: The Accident
-Elena's life changes forever when a mysterious car crash leaves her physically unharmed but fundamentally altered.
-
-Chapter 2: Strange Discoveries  
-Elena begins to notice unusual abilities and seeks answers from her grandmother Rosa.
-
-Chapter 3: The Truth Unveiled
-Rosa reveals the family's supernatural heritage and Elena's role as the chosen guardian.
-</outline_replace>
-
-I also want to add a key character and update an existing one:
-
-<context id="dr_hassan">Dr. Hassan is the emergency room physician who first examines Elena after her accident. He becomes suspicious when her injuries do not match the severity of the crash, leading him to investigate further and potentially become an ally in her journey.</context>
-
-<context id="elena_main">*Elena Rodriguez is the 28-year-old protagonist with newly awakened supernatural abilities. She works as a librarian and is driven by curiosity and a strong sense of justice. Her powers manifest after the mysterious car accident.</context>
-
-</edit id="rosa_character">Rosa Martinez is Elena's wise but secretive grandmother who has been hiding the family's supernatural legacy for decades. She possesses ancient knowledge of protective rituals and serves as Elena's reluctant mentor, torn between keeping her granddaughter safe and preparing her for the dangers ahead.</edit>
-
-This structure gives you a clearer narrative flow while adding the medical professional and deepening Rosa's character development."
-
-System commands available:
-- </refresh> - Request current state
-- </outline_replace>COMPLETE_OUTLINE_TEXT</outline_replace> - Replace entire outline
-- <append>CONTENT_TO_ADD</append> - Append content to end of outline
-- <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command> - Replace specific outline text
-- <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section> - Replace a specific ===title=== section
-- <remove_section section="SECTION_TITLE"> - Remove a specific ===title=== section entirely
-            - Edit context item (paired tag REQUIRED, one of):
-              • <edit id="element_id">Description content</edit>
-              • </edit id="element_id">Description content</edit>
-            - Delete context item (allowed XML variants):
-              • <delete id="element_id"/>
-              • <delete id="element_id"></delete>
-              • </delete id="element_id"> (closing-form)
-            
-            IMPORTANT: Any system command you output will be applied immediately. Do not include commands as examples or suggestions. Use natural language if you do not intend to execute a change.
 
 {{noise_names}}
 
 Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
 
-Remember: You are a creative editor focused on improving narrative structure through complete outline revisions and detailed context development.`.trim(),
+Remember: You are a creative editor focused on improving narrative structure through complete outline revisions and keyword-based conditional context.`.trim(),
         placeholders: ['language'],
-        description: "System prompt for collaborative node editing with unified outline and individual context items."
+        description: "System prompt for collaborative node editing with unified outline and keyword-based conditional context items."
     },
 
     node_chat_editor_user: {
@@ -1571,38 +1521,25 @@ EDITING COMMANDS:
 - For replacing outline parts: Use <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command>
 - For replacing sections: Use <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
 - For removing sections: Use <remove_section section="SECTION_TITLE">
-        - For new context items: Use <context id="unique_id">Description content</context>
-        - For editing context items (paired tag REQUIRED, one of):
-          • <edit id="element_id">Description content</edit>
-          • </edit id="element_id">Description content</edit>
-        - For removing context items (allowed XML variants):
-          • <delete id="element_id"/>
-          • <delete id="element_id"></delete>
-          • </delete id="element_id">
-        - For changing ONLY the scope/prefix of a context item (token-efficient): Use </change_context_scope id="element_id" scope="*|*2-5|*2+|*1,3,5">
+- Conditional context (keyword-based):
+  • <context add text="…" [keyword="…"] />
+  • <context edit id="…" text="…" [keyword="…"] />
+  • <context remove id="…" />
 
-        CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
+CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
 
-CONTEXT ITEM CONVENTIONS:
-- Start with * for global elements (main characters, core world-building): *Character Name is...
-- No prefix for situational elements (temporary characters, specific locations): Location Name is...
-        - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs only within XML commands/tags; do not surface IDs in prose.
-
-        OPTIONAL SELECTIVE INHERITANCE PREFIX:
-- You may target context items to specific future child indices by starting the item with a star and a number range, then a space, then the content.
-- Formats (indices are 1-based):
-  - *3 Content... → only 3rd child inherits
-  - *2-5 Content... → children 2 through 5 inherit
-          - *2+ Content... → children 2 and all following inherit
-          - *1, 3, 6 Content... → children 1, 3, and 6 inherit
-        - Use </change_context_scope id="element_id" scope="..."> to update only the scope without changing the content
-- During child creation, matching children will inherit this item with the numeric part stripped to a single *. Items without the numeric prefix are inherited by all children.
+CONTEXT ITEM RULES:
+- Items are GLOBAL by default (omit keyword).
+- To make an item non-global, include a concise keyword (often a character or entity) via keyword="…". Such items become active only after that keyword has been mentioned.
+- Do NOT use star-based prefixes (like * or *2-4); that syntax is obsolete.
+- Do NOT emit any condition logic; only the optional keyword is supported.
+- IDs are INTERNAL ONLY. Users do not see IDs. Use IDs only within XML commands.
 
 Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
 
 Help improve the structure and develop the content through thoughtful editing suggestions.`.trim(),
         placeholders: ['current_outline', 'current_context_items', 'human_edits'],
-        description: "User prompt for collaborative editing with unified outline and individual context items."
+        description: "User prompt for collaborative editing with unified outline and keyword-based conditional context items."
     }
     ,
     split_into_sections_user: {

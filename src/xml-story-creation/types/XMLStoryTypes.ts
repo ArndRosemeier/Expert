@@ -50,7 +50,7 @@ export interface ParsedResponse {
 }
 
 export interface SystemCommand {
-    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command' | 'replace_section' | 'remove_section' | 'change_context_scope';
+    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command' | 'replace_section' | 'remove_section' | 'context_add' | 'context_edit' | 'context_remove';
     parameters?: Record<string, string>;
     content?: string; // For commands like outline_replace that have content between tags
     searchText?: string; // For replace_command: what to search for
@@ -184,7 +184,7 @@ export const XML_TAG_DEFINITIONS: XMLTagDefinition[] = [
         tagName: 'context',
         elementType: 'context',
         requiredAttributes: ['id', 'description'],
-        optionalAttributes: ['position'],
+        optionalAttributes: ['position', 'keyword'],
         allowsContent: false,
         isSelfClosing: true
     }

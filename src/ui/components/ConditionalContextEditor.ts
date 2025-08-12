@@ -8,6 +8,8 @@ export interface ConditionalContextEditorConfig {
     projectManager: ProjectManager;
     showPreview?: boolean; // show matched items/node content/assembled context
     onNavigateToNodeId?: (nodeId: string) => void; // optional callback for ancestor source link behavior
+    showInheritedByDefault?: boolean; // if true, inherited items are shown initially
+    allowLegacyImport?: boolean; // if false, hide the legacy import control
 }
 
 /**
@@ -20,6 +22,8 @@ export class ConditionalContextEditor {
     private projectManager: ProjectManager;
     private showPreview: boolean;
     private onNavigateToNodeId: ((nodeId: string) => void) | undefined;
+    private showInherited: boolean;
+    private allowLegacyImport: boolean;
 
     private container: HTMLElement | null = null;
     private cleanupHandlers: Array<() => void> = [];
@@ -54,6 +58,8 @@ export class ConditionalContextEditor {
         this.projectManager = config.projectManager;
         this.showPreview = config.showPreview !== undefined ? config.showPreview : true;
         this.onNavigateToNodeId = config.onNavigateToNodeId;
+        this.showInherited = !!config.showInheritedByDefault;
+        this.allowLegacyImport = config.allowLegacyImport !== undefined ? config.allowLegacyImport : true;
     }
 
     public mount(container: HTMLElement): void {
@@ -105,15 +111,17 @@ export class ConditionalContextEditor {
             cursor: pointer;
         `;
 
-        this.importItemsButton = createElement('button', { content: 'Import items' });
-        this.importItemsButton.title = 'Import paragraphs from legacy context';
-        this.importItemsButton.style.cssText = `
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #f3f4f6;
-            cursor: pointer;
-        `;
+        if (this.allowLegacyImport) {
+            this.importItemsButton = createElement('button', { content: 'Import items' });
+            this.importItemsButton.title = 'Import paragraphs from legacy context';
+            this.importItemsButton.style.cssText = `
+                padding: 0.5rem 1rem;
+                border-radius: 0.5rem;
+                border: 1px solid #d1d5db;
+                background: #f3f4f6;
+                cursor: pointer;
+            `;
+        }
 
         this.toggleAllButton = createElement('button', { content: 'Toggle all' });
         this.toggleAllButton.title = 'Toggle selection of all items';
@@ -137,8 +145,25 @@ export class ConditionalContextEditor {
 
         itemButtonsRow.appendChild(this.addItemButton);
         itemButtonsRow.appendChild(this.toggleAllButton);
-        itemButtonsRow.appendChild(this.importItemsButton);
+        if (this.allowLegacyImport) {
+            itemButtonsRow.appendChild(this.importItemsButton);
+        }
         itemButtonsRow.appendChild(this.removeItemButton);
+
+        // Show inherited toggle
+        const inheritedToggleWrap = createElement('label');
+        inheritedToggleWrap.style.cssText = 'margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem; color: #374151;';
+        const inheritedCheckbox = createElement('input') as HTMLInputElement;
+        inheritedCheckbox.type = 'checkbox';
+        inheritedCheckbox.checked = this.showInherited;
+        inheritedCheckbox.addEventListener('change', () => {
+            this.showInherited = inheritedCheckbox.checked;
+            this.refreshItemsList();
+        });
+        const inheritedLbl = createElement('span', { content: 'Show inherited' });
+        inheritedToggleWrap.appendChild(inheritedCheckbox);
+        inheritedToggleWrap.appendChild(inheritedLbl);
+        itemButtonsRow.appendChild(inheritedToggleWrap);
 
         this.itemsList = createElement('div');
         this.itemsList.style.cssText = `
@@ -387,7 +412,9 @@ export class ConditionalContextEditor {
         addEventListenerWithCleanup(this.addItemButton, 'click', () => this.handleAddItem(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.addConditionButton, 'click', () => this.handleAddCondition(), this.cleanupHandlers);
         addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
+        if (this.allowLegacyImport && this.importItemsButton) {
+            addEventListenerWithCleanup(this.importItemsButton, 'click', () => this.handleImportLegacyContext(), this.cleanupHandlers);
+        }
         addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleRemoveChecked(); }, this.cleanupHandlers);
         if (this.showPreview) {
             addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
@@ -462,8 +489,9 @@ export class ConditionalContextEditor {
         });
 
         // Inherited items from ancestors (read-only)
-        const inherited = this.buildInheritedItems();
-        if (inherited.length > 0) {
+        if (this.showInherited) {
+            const inherited = this.buildInheritedItems();
+            if (inherited.length > 0) {
             // Header
             const header = createElement('div', { content: 'Inherited items from ancestors' });
             header.style.cssText = 'margin-top: 0.5rem; font-weight: 600; color: #374151;';
@@ -539,6 +567,7 @@ export class ConditionalContextEditor {
                 row.appendChild(infoCol);
                 this.itemsList.appendChild(row);
             });
+            }
         }
     }
 
