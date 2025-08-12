@@ -100,7 +100,7 @@ export class XMLStoryModal extends SimpleModal {
 
     // New state for inline conditional context UI
     private selectedConditionalItemId: string | null = null;
-    private showInheritedConditional: boolean = false;
+    private showInheritedConditional: boolean = true;
     private stagedConditionalItems: Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }> | null = null;
 
     private getStagedItems(): Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }> {
