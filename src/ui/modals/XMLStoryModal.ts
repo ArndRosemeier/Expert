@@ -1444,14 +1444,15 @@ export class XMLStoryModal extends SimpleModal {
                 // Process AI response through XML system (do not remove commands from text)
                 const parseResult = await this.storySystem.processAIResponse(response);
 
-                // Handle outline_replace commands
+                // Handle outline_replace commands and mark executed
                 for (const command of parseResult.systemCommands) {
                     if (command.type === 'outline_replace' && command.content) {
                         this.setOutlineContentFromAI(command.content);
+                        (command as any).executedRaw = (command as any).rawXml || '';
                     }
                 }
 
-                // Intercept staged context commands
+                // Intercept staged context commands and mark executed
                 for (const command of parseResult.systemCommands) {
                     if (command.type === 'context_add') {
                         const text = command.parameters?.['text'] || '';
@@ -1465,6 +1466,7 @@ export class XMLStoryModal extends SimpleModal {
                             conditions: [],
                             keywords: keyword ? [keyword] : []
                         });
+                        (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_edit') {
                         const id = command.parameters?.['id'];
                         const text = command.parameters?.['text'];
@@ -1472,10 +1474,12 @@ export class XMLStoryModal extends SimpleModal {
                         if (!id) continue;
                         if (text !== undefined) this.stagedUpdateItem(id, { text });
                         if (keyword !== undefined) this.stagedUpdateItem(id, { keywords: keyword ? [keyword] : [] });
+                        (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_remove') {
                         const id = command.parameters?.['id'];
                         if (!id) continue;
                         this.stagedRemoveItem(id);
+                        (command as any).executedRaw = (command as any).rawXml || '';
                     }
                 }
 
