@@ -47,6 +47,7 @@ export class ConditionalContextEditor {
     private assembledTabBtn!: HTMLButtonElement;
     private contentTabBtn!: HTMLButtonElement;
     private editor!: UniversalTextEditor;
+    private triggerEditor: UniversalTextEditor | null = null;
 
     // State
     private selectedItemId: string | null = null;
@@ -232,10 +233,10 @@ export class ConditionalContextEditor {
         triggerLabel.style.cssText = 'font-weight:600;';
         const triggerInputWrap = createElement('div');
         triggerInputWrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
-        const triggerEditor = new UniversalTextEditor(triggerInputWrap, { mode: 'enhanced', autoResize: false }, {
+        this.triggerEditor = new UniversalTextEditor(triggerInputWrap, { mode: 'enhanced', autoResize: false }, {
             onBlur: () => {
                 if (!this.selectedItemId) return;
-                const raw = triggerEditor.getText().trim();
+                const raw = this.triggerEditor ? this.triggerEditor.getText().trim() : '';
                 const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
                 const dedup = Array.from(new Set(parts));
                 this.node.updateConditionalContextItem(this.selectedItemId, { keywords: dedup });
@@ -676,11 +677,8 @@ export class ConditionalContextEditor {
         if (this.editor) this.editor.setText(item.text || '');
         // Set trigger editor text
         try {
-            const triggers = Array.isArray(item.keywords) ? item.keywords.join(', ') : '';
-            const el = (triggerRow.querySelector('.text-editor-with-highlighting') || triggerRow.querySelector('textarea')) as HTMLElement | null;
-            if (el) { /* noop */ }
-            // Use editor instance created earlier
-            (triggerEditor as any).setText ? (triggerEditor as any).setText(triggers) : undefined;
+            const triggersVal = Array.isArray(item.keywords) ? item.keywords.join(', ') : '';
+            this.triggerEditor?.setText(triggersVal);
         } catch {}
         this.logicSelect.value = item.logic;
         this.renderConditions();
