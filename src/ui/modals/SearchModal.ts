@@ -260,9 +260,14 @@ export class SearchModal extends BaseModal {
         const searchPattern: string = this.searchInput!.value.trim();
         const replaceText: string = this.replaceInput!.value;
 
+        const scopes = [];
+        if (this.searchInContent) scopes.push('Content');
+        if (this.searchInContext) scopes.push('Context');
+        if (this.searchInConditional) scopes.push('Conditional Context');
+        
         const confirmed = confirm(
             `This will replace all occurrences of "${searchPattern}" with "${replaceText}" in the current node and all subnodes.\n\n` +
-            `Search scope: ${this.searchInContent ? 'Content' : ''}${this.searchInContent && this.searchInContext ? ' + ' : ''}${this.searchInContext ? 'Context' : ''}\n` +
+            `Search scope: ${scopes.join(' + ')}\n` +
             `Versions: ${this.includeAllVersions ? 'All versions' : 'Master only'}\n\n` +
             `This action cannot be undone. Continue?`
         );
@@ -276,6 +281,7 @@ export class SearchModal extends BaseModal {
             caseSensitive: this.caseSensitive,
             searchInContent: this.searchInContent,
             searchInContext: this.searchInContext,
+            searchInConditionalContext: this.searchInConditional,
             replaceText: replaceText
         };
 
