@@ -1448,7 +1448,9 @@ export class XMLStoryModal extends SimpleModal {
                 for (const command of parseResult.systemCommands) {
                     if (command.type === 'outline_replace' && command.content) {
                         this.setOutlineContentFromAI(command.content);
-                        (command as any).executedRaw = (command as any).rawXml || '';
+                        // Reconstruct raw XML if parser didn't retain it
+                        const reconstructed = `</outline_replace>${command.content}</outline_replace>`;
+                        (command as any).executedRaw = (command as any).rawXml || reconstructed;
                     }
                 }
 
@@ -1635,14 +1637,18 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
-    // Generic XML formatter: wrap any <.../> or <...>...</...> blocks in a styled box, no command-specific formatting
+    // Generic XML formatter: wrap any <.../> or <tag>...</tag> blocks in a styled box, command-agnostic.
     private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = []): string {
         const executedRawSet = new Set(
             (commands || [])
                 .map(c => (c as any).executedRaw as string | undefined)
                 .filter((s): s is string => typeof s === 'string' && s.length > 0)
         );
-        const xmlRegex = /<\w+(?:\s[^>]*)?>[\s\S]*?<\/\w+>|<\w+(?:\s[^>]*)?\/>/g;
+        // Fuzzy set to tolerate insignificant whitespace differences
+        const normalizeXml = (s: string) => s.replace(/\s+/g, ' ').trim();
+        const executedRawNormalizedSet = new Set(Array.from(executedRawSet).map(normalizeXml));
+        // Use backreference to ensure the closing tag matches the opening tag name (prevents partial matches like </search> closing a <replace_command>)
+        const xmlRegex = /<([a-zA-Z][\w-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>|<([a-zA-Z][\w-]*)(?:\s[^>]*)?\/>/g;
 
         let resultHtml = '';
         let lastIndex = 0;
@@ -1658,7 +1664,7 @@ export class XMLStoryModal extends SimpleModal {
             }
 
             const block = match[0];
-            const isExecuted = executedRawSet.has(block);
+            const isExecuted = executedRawSet.has(block) || executedRawNormalizedSet.has(normalizeXml(block));
             const badge = isExecuted
                 ? '<span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;font-size:12px;">✓ Executed</span>'
                 : '';
@@ -2390,6 +2396,8 @@ export class XMLStoryModal extends SimpleModal {
         const newContent = currentContent + '\n\n' + command.content;
         
         this.setOutlineContentFromAI(newContent);
+        // Mark executed so chat can show the checkmark in a command-agnostic way
+        (command as any).executedRaw = (command as any).rawXml || '';
         // AI content appended successfully
     }
 
@@ -2458,6 +2466,8 @@ export class XMLStoryModal extends SimpleModal {
             match.start + trimmedReplaceText.length,
             'highlight-ai-replacement'
         );
+        // Mark executed so chat can show the checkmark in a command-agnostic way
+        (command as any).executedRaw = (command as any).rawXml || '';
         // AI content replacement completed successfully
     }
 
@@ -2496,6 +2506,8 @@ export class XMLStoryModal extends SimpleModal {
         ).join('\n\n');
         
         this.setOutlineContentFromAI(newContent);
+        // Mark executed so chat can show the checkmark in a command-agnostic way
+        (command as any).executedRaw = (command as any).rawXml || '';
         // AI section replacement completed successfully
     }
 
@@ -2532,6 +2544,8 @@ export class XMLStoryModal extends SimpleModal {
             : '';
         
         this.setOutlineContentFromAI(newContent);
+        // Mark executed so chat can show the checkmark in a command-agnostic way
+        (command as any).executedRaw = (command as any).rawXml || '';
         // AI section removal completed successfully
     }
 
@@ -2878,6 +2892,80 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
+    // --- Conditional-context change detection helpers ---
+    private normalizeConditionalItemsForCompare(
+        items: Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }>
+    ): string[] {
+        const safeItems = items.map((item) => {
+            const normalizedConditions = item.conditions
+                .map((c) => {
+                    if (c.type === 'contains' || c.type === 'contains_not') {
+                        return {
+                            type: c.type,
+                            scope: c.scope,
+                            term: c.term,
+                            wordwise: c.wordwise,
+                            caseSensitive: c.caseSensitive
+                        } as const;
+                    }
+                    // layer_comparison
+                    return {
+                        type: 'layer_comparison' as const,
+                        comparator: c.comparator,
+                        layerName: c.layerName
+                    };
+                })
+                .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
+            const normalizedKeywords = Array.isArray(item.keywords)
+                ? [...item.keywords].sort((a, b) => a.localeCompare(b))
+                : [];
+
+            return JSON.stringify({
+                // Exclude id from comparison on purpose
+                text: item.text,
+                logic: item.logic,
+                conditions: normalizedConditions,
+                keywords: normalizedKeywords
+            });
+        });
+
+        return safeItems.sort((a, b) => a.localeCompare(b));
+    }
+
+    private getCurrentNodeConditionalItemsSnapshot(): Array<{
+        id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[];
+    }> {
+        if (!this.sourceNode) {
+            throw new Error('XMLStoryModal: sourceNode is required to read conditional context');
+        }
+        return this.sourceNode.getConditionalContextItems().map((i) => ({
+            id: i.id,
+            text: i.text,
+            logic: i.logic,
+            conditions: i.conditions.map((c) => ({ ...(c as any) })) as ConditionalContextCondition[],
+            keywords: Array.isArray((i as any).keywords) ? (i as any).keywords.slice() : []
+        }));
+    }
+
+    private haveStagedConditionalChanges(): boolean {
+        // If user never staged anything, no pending conditional-context changes
+        if (!this.stagedConditionalItems) return false;
+
+        // Ensure staging is initialized (copies current node items when first used)
+        const staged = this.getStagedItems();
+        const current = this.getCurrentNodeConditionalItemsSnapshot();
+
+        const a = this.normalizeConditionalItemsForCompare(staged);
+        const b = this.normalizeConditionalItemsForCompare(current);
+
+        if (a.length !== b.length) return true;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return true;
+        }
+        return false;
+    }
+
     /**
      * Check if there are unsaved changes by comparing current content with source node
      */
@@ -2891,34 +2979,21 @@ export class XMLStoryModal extends SimpleModal {
             // Get current outline content (safe in early/late lifecycle)
             const currentOutlineContent = this.getCurrentOutlineSafe();
 
-            // Get current context items (same logic as updateSourceNode)
-            const storyElements = this.storySystem.service.getElementsForContext();
-            const contextElements = storyElements.filter(el => el.type === 'context');
-            const currentContextContent = contextElements
-                .map(el => {
-                    const description = el.description.replace(/\n+/g, ' ').trim();
-                    return description;
-                })
-                .join('\n\n');
-
             // Compare with source node's current content
             const sourceOutlineContent = this.sourceNode.content || '';
 
-            // Only outline diff matters; conditional context is persisted via applyStagedToNode in update
             const outlineChanged = (currentOutlineContent || '') !== sourceOutlineContent;
-            const contextChanged = false;
+            const conditionalChanged = this.haveStagedConditionalChanges();
 
             console.log('🔍 hasUnsavedChanges check:', {
                 currentOutline: currentOutlineContent?.substring(0, 100) + '...',
                 sourceOutline: sourceOutlineContent?.substring(0, 100) + '...',
-                currentContext: currentContextContent?.substring(0, 50) + '...',
-                sourceContext: '(legacy removed)',
                 outlineChanged,
-                contextChanged,
-                result: outlineChanged || contextChanged
+                conditionalChanged,
+                result: outlineChanged || conditionalChanged
             });
 
-            return outlineChanged || contextChanged;
+            return outlineChanged || conditionalChanged;
         } catch (error) {
             console.error('Error checking for unsaved changes:', error);
             // If we can't determine during initialization, there are no changes yet
