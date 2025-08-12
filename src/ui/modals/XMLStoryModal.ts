@@ -1633,16 +1633,40 @@ export class XMLStoryModal extends SimpleModal {
 
     // Generic XML formatter: wrap any <.../> or <...>...</...> blocks in a styled box, no command-specific formatting
     private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = []): string {
-        const html = this.parseMarkdownForChat(text);
-        // Highlight XML blocks with minimal styling
-        const xmlBlockRegex = /<(?:\w+)(?:\s[^>]*)?>[\s\S]*?<\/\w+>|<\w+(?:\s[^>]*)?\/>/gi;
-        const executedRawSet = new Set(commands.filter(c => (c as any).executedRaw).map(c => (c as any).executedRaw as string));
-        return html.replace(xmlBlockRegex, (m) => {
-            const isExecuted = executedRawSet.has(m);
+        const executedRawSet = new Set(
+            (commands || [])
+                .map(c => (c as any).executedRaw as string | undefined)
+                .filter((s): s is string => typeof s === 'string' && s.length > 0)
+        );
+        const xmlRegex = /<\w+(?:\s[^>]*)?>[\s\S]*?<\/\w+>|<\w+(?:\s[^>]*)?\/>/g;
+
+        let resultHtml = '';
+        let lastIndex = 0;
+        const matches = Array.from(text.matchAll(xmlRegex));
+
+        for (const match of matches) {
+            const index = (match as any).index as number | undefined;
+            if (index === undefined) continue;
+
+            if (index > lastIndex) {
+                const nonXml = text.slice(lastIndex, index);
+                resultHtml += this.escapeHtml(nonXml).replace(/\n/g, '<br/>');
+            }
+
+            const block = match[0];
+            const isExecuted = executedRawSet.has(block);
             const check = isExecuted ? '<span style="color:#16a34a;font-weight:600;padding-left:6px;">✓</span>' : '';
-            return `<div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:6px;padding:6px;margin:6px 0;white-space:pre-wrap;">`+
-                   `<code style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;">${this.escapeHtml(m)}</code>${check}</div>`;
-        });
+            resultHtml += `<div style="border:1px solid #e5e7eb;background:#f9fafb;border-radius:6px;padding:6px;margin:6px 0;white-space:pre-wrap;">`+
+                           `<code style=\"font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;\">${this.escapeHtml(block)}</code>${check}</div>`;
+            lastIndex = index + block.length;
+        }
+
+        if (lastIndex < text.length) {
+            const tail = text.slice(lastIndex);
+            resultHtml += this.escapeHtml(tail).replace(/\n/g, '<br/>' );
+        }
+
+        return resultHtml;
     }
 
     private escapeHtml(s: string): string {
