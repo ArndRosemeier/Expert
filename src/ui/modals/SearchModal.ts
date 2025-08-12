@@ -107,8 +107,8 @@ export class SearchModal extends BaseModal {
                     <label class="checkbox-label">
                         <input type="checkbox" id="search-context" checked> Search in context
                     </label>
-                    <label class="checkbox-label" title="Search only this node's conditional context items (not inherited, not recursive)">
-                        <input type="checkbox" id="search-conditional" checked> Search in conditional context (this node only)
+                    <label class="checkbox-label" title="Search conditional context items in this node and all child nodes">
+                        <input type="checkbox" id="search-conditional" checked> Search in conditional context
                     </label>
                 </div>
 
@@ -198,7 +198,7 @@ export class SearchModal extends BaseModal {
 
         searchConditionalCheckbox.addEventListener('change', (e) => {
             this.searchInConditional = (e.target as HTMLInputElement).checked;
-            // Replace button state unaffected by conditional context (replace does not operate on conditional items)
+            this.updateReplaceButtonState();
         });
 
         // Enter key in replace input
@@ -473,7 +473,7 @@ export class SearchModal extends BaseModal {
     private updateReplaceButtonState(): void {
         const replaceBtn = document.querySelector('#replace-all-btn') as HTMLButtonElement;
         const hasSearchPattern: string = this.searchInput!.value.trim();
-        const hasTargetContent: boolean = this.searchInContent || this.searchInContext;
+        const hasTargetContent: boolean = this.searchInContent || this.searchInContext || this.searchInConditional;
         replaceBtn.disabled = !hasSearchPattern || !hasTargetContent;
     }
 

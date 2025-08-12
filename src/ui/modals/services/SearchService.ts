@@ -57,7 +57,7 @@ export interface ReplaceResult {
     nodeResults: Array<{
         node: DocumentNode;
         version: ContentVersion;
-        contentType: 'content' | 'context';
+        contentType: 'content' | 'context' | 'conditional';
         replacements: number;
     }>;
 }
@@ -83,11 +83,6 @@ export class SearchService {
         
         // Recursively search through all nodes - assume functions exist and work
         this.searchNodeRecursive(rootNode, regex, options, results);
-
-        // Additionally search conditional context on the triggering/root node only (not recursive)
-        if (options.searchInConditionalContext) {
-            this.searchConditionalOnRootOnly(rootNode, regex, results);
-        }
         
         return results;
     }
@@ -161,6 +156,11 @@ export class SearchService {
             if (options.searchInContext) {
                 // Context search removed - using conditional context system
             }
+        }
+        
+        // Search in conditional context items
+        if (options.searchInConditionalContext) {
+            this.searchConditionalContextItems(node, regex, results);
         }
         
         // Recursively search children - NO defensive check, assume children exist if node has them
@@ -247,6 +247,20 @@ export class SearchService {
                 nodeReplacements += contextReplacements;
             }
             
+            // Replace in conditional context items (for any node at or below triggering node)
+            if (options.searchInConditionalContext) {
+                const conditionalReplacements = this.replaceConditionalContextItems(node, regex, options.replaceText);
+                if (conditionalReplacements > 0) {
+                    result.nodeResults.push({
+                        node: node,
+                        version,
+                        contentType: 'conditional',
+                        replacements: conditionalReplacements
+                    });
+                    result.totalReplacements += conditionalReplacements;
+                }
+            }
+            
             // Record replacements for this version
             if (nodeReplacements > 0) {
                 // Update version timestamp
@@ -270,16 +284,16 @@ export class SearchService {
     }
 
     /**
-     * Search only the triggering/root node's conditional context items
+     * Search conditional context items of any node
      */
-    private static searchConditionalOnRootOnly(
-        rootNode: DocumentNode,
+    private static searchConditionalContextItems(
+        node: DocumentNode,
         regex: RegExp,
         results: SearchResult[]
     ): void {
         // Use master version as placeholder for version linkage in results
-        const master = rootNode.getMasterVersion()!;
-        const items = rootNode.getConditionalContextItems();
+        const master = node.getMasterVersion()!;
+        const items = node.getConditionalContextItems();
         for (let index = 0; index < items.length; index++) {
             const item = items[index]!;
             const text = item.text || '';
@@ -287,7 +301,7 @@ export class SearchService {
             let match: RegExpExecArray | null;
             while ((match = regex.exec(text)) !== null) {
                 results.push({
-                    node: rootNode,
+                    node: node,
                     version: master,
                     contentType: 'conditional',
                     paragraph: text,
@@ -301,5 +315,38 @@ export class SearchService {
                 if (!regex.global) break;
             }
         }
+    }
+
+    /**
+     * Replace text in conditional context items of any node
+     */
+    private static replaceConditionalContextItems(
+        node: DocumentNode,
+        regex: RegExp,
+        replaceText: string
+    ): number {
+        let totalReplacements = 0;
+        const items = node.getConditionalContextItems();
+        
+        for (let index = 0; index < items.length; index++) {
+            const item = items[index]!;
+            const originalText = item.text || '';
+            
+            // Count matches before replacement
+            const matches = originalText.match(regex) || [];
+            const replacements = matches.length;
+            
+            if (replacements > 0) {
+                // Perform replacement
+                const newText = originalText.replace(regex, replaceText);
+                
+                // Update the conditional context item
+                node.updateConditionalContextItem(item.id, { text: newText });
+                
+                totalReplacements += replacements;
+            }
+        }
+        
+        return totalReplacements;
     }
 }
