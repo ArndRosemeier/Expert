@@ -2087,6 +2087,20 @@ export class XMLStoryModal extends SimpleModal {
             if (inheritedFrom) {
                 const from = document.createElement('span'); from.style.cssText='font-size:0.8rem; color:#6b7280;'; from.textContent = `from ${inheritedFrom.title}`;
                 right.appendChild(from);
+            } else {
+                // Local item controls
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.title = 'Remove this context entry';
+                removeBtn.textContent = '×';
+                removeBtn.style.cssText = 'border:1px solid #e5e7eb;border-radius:6px;width:22px;height:22px;line-height:20px;text-align:center;background:#fff;color:#6b7280;cursor:pointer;';
+                removeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.stagedRemoveItem(id);
+                    this.renderInlineConditionalContext();
+                });
+                right.appendChild(removeBtn);
             }
             // Render keyword chips ABOVE the header/text
             if (Array.isArray(keywords) && keywords.length > 0) {
