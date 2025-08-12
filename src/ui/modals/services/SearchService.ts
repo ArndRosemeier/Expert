@@ -247,19 +247,7 @@ export class SearchService {
                 nodeReplacements += contextReplacements;
             }
             
-            // Replace in conditional context items (for any node at or below triggering node)
-            if (options.searchInConditionalContext) {
-                const conditionalReplacements = this.replaceConditionalContextItems(node, regex, options.replaceText);
-                if (conditionalReplacements > 0) {
-                    result.nodeResults.push({
-                        node: node,
-                        version,
-                        contentType: 'conditional',
-                        replacements: conditionalReplacements
-                    });
-                    result.totalReplacements += conditionalReplacements;
-                }
-            }
+
             
             // Record replacements for this version
             if (nodeReplacements > 0) {
@@ -274,6 +262,22 @@ export class SearchService {
                 });
                 
                 result.totalReplacements += nodeReplacements;
+            }
+        }
+        
+        // Replace in conditional context items (node-level, not version-level)
+        if (options.searchInConditionalContext) {
+            const conditionalReplacements = this.replaceConditionalContextItems(node, regex, options.replaceText);
+            if (conditionalReplacements > 0) {
+                // Use master version as a representative for conditional context changes
+                const masterVersion = node.getMasterVersion()!;
+                result.nodeResults.push({
+                    node: node,
+                    version: masterVersion,
+                    contentType: 'conditional',
+                    replacements: conditionalReplacements
+                });
+                result.totalReplacements += conditionalReplacements;
             }
         }
         
@@ -328,8 +332,6 @@ export class SearchService {
         let totalReplacements = 0;
         const items = node.getConditionalContextItems();
         
-        console.log(`🔍 Replacing in conditional context: node="${node.title}", items=${items.length}, regex=${regex}`);
-        
         for (let index = 0; index < items.length; index++) {
             const item = items[index]!;
             const originalText = item.text || '';
@@ -338,24 +340,17 @@ export class SearchService {
             const matches = originalText.match(regex) || [];
             const replacements = matches.length;
             
-            console.log(`📝 Item ${index}: "${originalText.substring(0, 50)}..." → ${replacements} matches`);
-            
             if (replacements > 0) {
                 // Perform replacement
                 const newText = originalText.replace(regex, replaceText);
                 
-                console.log(`✏️ Replacing: "${originalText}" → "${newText}"`);
-                
                 // Update the conditional context item
                 node.updateConditionalContextItem(item.id, { text: newText });
-                
-                console.log(`✅ Updated item ${item.id} with new text: "${newText}"`);
                 
                 totalReplacements += replacements;
             }
         }
         
-        console.log(`🎯 Total replacements in conditional context: ${totalReplacements}`);
         return totalReplacements;
     }
 }
