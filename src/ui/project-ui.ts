@@ -912,9 +912,9 @@ async function handleSetProjectLanguage(): Promise<void> {
 
 async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
     try {
-        // Get the current template and slice it to start from the source node's level
+        // Build adjusted template from the source node's own template to ensure exact match
         const currentTemplate = projectManager!.template;
-        const adjustedHierarchyLevels = currentTemplate.hierarchyLevels.slice(sourceNode.level);
+        const adjustedHierarchyLevels = sourceNode.template.slice(sourceNode.level);
         
         if (adjustedHierarchyLevels.length === 0) {
             alert('Cannot create project: No template levels available for this node.');
@@ -930,6 +930,8 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
 
         // Deep copy the source node and all its children, adjusting levels
         const newRootNode = deepCopyNodeWithLevelAdjustment(sourceNode, -sourceNode.level, adjustedHierarchyLevels);
+        // Ensure new root has no parent
+        newRootNode.parentId = null;
 
         // Create unique project title
         const baseTitle = sourceNode.level === 0 ? `${sourceNode.title} (Copy)` : sourceNode.title;
@@ -997,9 +999,22 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
         adjustedTemplate
     );
 
-    // Copy all properties using version management system
-    newNode.setContent(sourceNode.content, 'master');
-    // Context copying removed - using conditional context system
+    // Rebuild versions and tags from source node
+    const sourceVersions = sourceNode.getAllVersions();
+    const masterVersion = sourceVersions.find(v => v.tags.has('master')) || null;
+    let newMasterId: string | null = null;
+    if (masterVersion) {
+        const masterTags = Array.from(masterVersion.tags).filter(t => t !== 'master');
+        newMasterId = newNode.addVersion(masterTags, { title: masterVersion.title, content: masterVersion.content }, masterVersion.metadata, masterVersion.ratings);
+    }
+    for (const v of sourceVersions) {
+        if (masterVersion && v.id === masterVersion.id) continue;
+        const tags = Array.from(v.tags).filter(t => t !== 'master');
+        newNode.addVersion(tags, { title: v.title, content: v.content }, v.metadata, v.ratings);
+    }
+    if (newMasterId) {
+        newNode.promoteToMaster(newMasterId);
+    }
     
     // Copy other properties directly
     newNode.generationPrompt = sourceNode.generationPrompt;
@@ -1009,14 +1024,16 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
     newNode.isGenerating = sourceNode.isGenerating;
     newNode.generationSessions = sourceNode.generationSessions.map(session => ({...session}));
     
-    // Set creator model in metadata if it exists
-    if (sourceNode.creatorModel) {
-        const masterVersion = newNode.getMasterVersion();
-        if (masterVersion) {
-            masterVersion.metadata = masterVersion.metadata || {};
-            masterVersion.metadata['creatorModel'] = sourceNode.creatorModel;
+    // Copy conditional context items using public API
+    const items = sourceNode.getConditionalContextItems();
+    for (const item of items) {
+        const newId = newNode.addConditionalContextItem(item.text, item.conditions, item.logic);
+        if (item.keywords && item.keywords.length > 0) {
+            newNode.updateConditionalContextItem(newId, { keywords: item.keywords.slice() });
         }
     }
+
+    // Versions include metadata; no extra handling needed here
 
     // Recursively copy children with level adjustment
     newNode.children = sourceNode.children.map(child => 
