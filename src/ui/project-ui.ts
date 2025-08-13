@@ -385,6 +385,10 @@ let contentLevelState: number = -1;
 // contextPruneLevelState removed - using conditional context system
 let coherenceLevelState: number = -1;
 let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
+let deterministicChildCreationState: boolean = false;
+
+// Export for use by DocumentNode
+(globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
 // pruneScopeState removed - prune scope UI removed
 
 
@@ -489,8 +493,20 @@ const handleExpandButtonClick = async (e: Event) => {
 
 
 // Version navigation state
+import type { Rating } from '../types/RatingTypes';
+
 let currentVersionIndex: number = 0;
-let availableVersions: any[] = [];
+
+interface VersionView {
+    content: string;
+    ratings: Rating[] | null;
+    isCurrent: boolean;
+    label: string;
+    timestamp?: Date;
+    totalScore: number;
+}
+
+let availableVersions: VersionView[] = [];
 
 // Button labels - centralized for consistency
 const BUTTON_LABELS = {
@@ -508,7 +524,8 @@ async function saveLevelStates() {
             draftLevel: draftLevelState,
             contentLevel: contentLevelState,
             coherenceLevel: coherenceLevelState,
-            autofixSeverity: autofixSeverityState
+            autofixSeverity: autofixSeverityState,
+            deterministicChildCreation: deterministicChildCreationState
             // pruneScope removed - prune scope UI removed
         });
     } catch (error) {
@@ -520,13 +537,15 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, deterministicChildCreation: boolean}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
             // contextPruneLevelState removed with traditional context system
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? -1;
+            deterministicChildCreationState = saved.deterministicChildCreation ?? false;
+            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
             // pruneScopeState removed - prune scope UI removed
         }
     } catch (error) {
@@ -556,6 +575,12 @@ function captureCurrentDropdownValues() {
         }
         if (autofixSeveritySelector) {
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
+        }
+        
+        // Update deterministic child creation state
+        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
+        if (deterministicCheckbox) {
+            deterministicChildCreationState = deterministicCheckbox.checked;
         }
         // pruneScopeSelector removed - prune scope UI removed
     } catch (error) {
@@ -1423,6 +1448,23 @@ export async function renderProjectUI(proj: ProjectManager) {
 
 // --- Event Listener Setup ---
 
+interface ManagerListeners {
+    handleGenerationStarted: (e: { nodeId: string, node: DocumentNode }) => void;
+    handleCompletion: (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => void;
+    handleBulkGenerationComplete: (e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }) => void;
+    handleAborted: (e: { nodeId: string, node: DocumentNode }) => void;
+    handleError: (message: string) => void;
+    handleLoopProgress: (e: { nodeId: string, progress: LoopProgress }) => void;
+    handleUnifiedProgress: (e: { nodeId: string; operations?: { message: string; current: number; total: number }; iterations?: { message: string; current: number; total: number }; stages?: { message: string; current: number; total: number }; detail?: string }) => void;
+    handleSummaryGenerated: (e: { nodeId: string, summary: string }) => void;
+    handleProjectLoaded: () => void;
+    handleTreeUpdateNeeded: (e: { nodeId: string; reason: string }) => void;
+    handleCoherenceAnalysisStarted: (e: { nodeId: string, node: DocumentNode }) => void;
+    handleCoherenceAnalysisComplete: (e: { nodeId: string, node: DocumentNode, hasContradictions: boolean, contradictionCount: number }) => void;
+}
+
+const managerListenerRegistry = new WeakMap<ProjectManager, ManagerListeners>();
+
 function setupProjectManagerListeners(manager: ProjectManager) {
     const handleGenerationStarted = (e: { nodeId: string, node: DocumentNode }) => {
         // Just refresh the tree to show spinner for the generating node
@@ -1723,56 +1765,21 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
-    // We need to store the listeners so we can remove them correctly.
-    // A more robust solution might use a map on the project instance itself.
-    // @ts-ignore - attaching to the object for simplicity to ensure removal
-    if (manager._completionListener) {
-        // @ts-ignore
-        manager.off('nodeGenerationStarted', manager._generationStartedListener);
-        // @ts-ignore
-        manager.off('nodeGenerationComplete', manager._completionListener);
-        // @ts-ignore
-        manager.off('bulkGenerationComplete', manager._bulkGenerationCompleteListener);
-        // @ts-ignore
-        manager.off('error', manager._errorListener);
-        // @ts-ignore
-        manager.off('loop-progress', manager._loopProgressListener);
-        // @ts-ignore
-        manager.off('unified-progress', manager._unifiedProgressListener);
-        // @ts-ignore
-        manager.off('nodeSummaryGenerated', manager._summaryGeneratedListener);
-        // @ts-ignore
-        manager.off('project-loaded', manager._projectLoadedListener);
-        // @ts-ignore
-        manager.off('tree-update-needed', manager._treeUpdateNeededListener);
-        // @ts-ignore
-        manager.off('coherenceAnalysisStarted', manager._coherenceAnalysisStartedListener);
-        // @ts-ignore
-        manager.off('coherenceAnalysisComplete', manager._coherenceAnalysisCompleteListener);
+    // Remove previous listeners if registered
+    const existing = managerListenerRegistry.get(manager);
+    if (existing) {
+        manager.off('nodeGenerationStarted', existing.handleGenerationStarted);
+        manager.off('nodeGenerationComplete', existing.handleCompletion);
+        manager.off('bulkGenerationComplete', existing.handleBulkGenerationComplete);
+        manager.off('error', existing.handleError);
+        manager.off('loop-progress', existing.handleLoopProgress);
+        manager.off('unified-progress', existing.handleUnifiedProgress);
+        manager.off('nodeSummaryGenerated', existing.handleSummaryGenerated);
+        manager.off('project-loaded', existing.handleProjectLoaded);
+        manager.off('tree-update-needed', existing.handleTreeUpdateNeeded);
+        manager.off('coherenceAnalysisStarted', existing.handleCoherenceAnalysisStarted);
+        manager.off('coherenceAnalysisComplete', existing.handleCoherenceAnalysisComplete);
     }
-
-    // @ts-ignore
-    manager._generationStartedListener = handleGenerationStarted;
-    // @ts-ignore
-    manager._completionListener = handleCompletion;
-    // @ts-ignore
-    manager._bulkGenerationCompleteListener = handleBulkGenerationComplete;
-    // @ts-ignore
-    manager._errorListener = handleError;
-    // @ts-ignore
-    manager._loopProgressListener = handleLoopProgress;
-    // @ts-ignore
-    manager._unifiedProgressListener = handleUnifiedProgress;
-    // @ts-ignore
-    manager._summaryGeneratedListener = handleSummaryGenerated;
-    // @ts-ignore
-    manager._projectLoadedListener = handleProjectLoaded;
-    // @ts-ignore
-    manager._treeUpdateNeededListener = handleTreeUpdateNeeded;
-    // @ts-ignore
-    manager._coherenceAnalysisStartedListener = handleCoherenceAnalysisStarted;
-    // @ts-ignore
-    manager._coherenceAnalysisCompleteListener = handleCoherenceAnalysisComplete;
     
     manager.on('nodeGenerationStarted', handleGenerationStarted);
     manager.on('nodeGenerationComplete', handleCompletion);
@@ -1786,6 +1793,21 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     manager.on('tree-update-needed', handleTreeUpdateNeeded);
     manager.on('coherenceAnalysisStarted', handleCoherenceAnalysisStarted);
     manager.on('coherenceAnalysisComplete', handleCoherenceAnalysisComplete);
+
+    managerListenerRegistry.set(manager, {
+        handleGenerationStarted,
+        handleCompletion,
+        handleBulkGenerationComplete,
+        handleAborted,
+        handleError,
+        handleLoopProgress,
+        handleUnifiedProgress,
+        handleSummaryGenerated,
+        handleProjectLoaded,
+        handleTreeUpdateNeeded,
+        handleCoherenceAnalysisStarted,
+        handleCoherenceAnalysisComplete
+    });
 }
 
 
@@ -2559,6 +2581,27 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         });
     }
 
+    // Handle deterministic child creation checkbox visibility and events
+    const deterministicContainer = document.getElementById('deterministic-child-creation-container');
+    const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
+    
+    if (deterministicContainer && deterministicCheckbox) {
+        // Show checkbox only for non-leaf nodes (outline nodes)
+        const templateLevels = Object.keys(node.template || {}).map(k => parseInt(k)).filter(n => !isNaN(n));
+        const maxLevel = templateLevels.length > 0 ? Math.max(...templateLevels) : -1;
+        const isLeafNode = node.template && node.template[node.level] && node.level === maxLevel;
+        
+        deterministicContainer.style.display = isLeafNode ? 'none' : 'flex';
+        
+        // Add change handler to update global state
+        deterministicCheckbox.onchange = () => {
+            deterministicChildCreationState = deterministicCheckbox.checked;
+            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+            console.log(`[UI] Checkbox changed: deterministicChildCreationState=${deterministicChildCreationState}`);
+            void saveLevelStates(); // Save to storage like other level states
+        };
+    }
+
     // Mount Conditional Context Editor into the panel
     try {
         const host = document.getElementById('conditional-context-host');
@@ -2610,6 +2653,14 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         // contextPruneLevelSelector removed - using conditional context system
         if (coherenceLevelSelector) coherenceLevelSelector.value = params.coherenceLevel.toString();
         if (autofixSeveritySelector) autofixSeveritySelector.value = params.autofixSeverity.toString();
+        
+        // Restore deterministic child creation checkbox
+        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
+        if (deterministicCheckbox && params.deterministicChildCreation !== undefined) {
+            deterministicCheckbox.checked = params.deterministicChildCreation;
+            deterministicChildCreationState = params.deterministicChildCreation;
+            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+        }
         
         // Update global state variables to match restored values
         draftLevelState = params.draftLevel;
@@ -2761,9 +2812,9 @@ function initializeVersionNavigation(node: DocumentNode) {
     currentVersionIndex = 0;
 
     // Helper function to calculate total score
-    const calculateTotalScore = (ratings: any[]): number => {
+    const calculateTotalScore = (ratings: Rating[]): number => {
         if (!ratings || ratings.length === 0) return 0;
-        return ratings.reduce((sum, rating) => sum + rating.score, 0);
+        return ratings.reduce((sum, rating) => sum + rating.actual, 0);
     };
 
     // Add current content as version (will be sorted by score)
@@ -2902,7 +2953,7 @@ function updateVersionNavigationUI() {
         versionNav.style.display = 'flex';
         
         // Update indicator text - just show the version label
-        const currentVersion = availableVersions[currentVersionIndex];
+        const currentVersion = availableVersions[currentVersionIndex]!;
         versionIndicator.textContent = currentVersion.label;
         
         // Update button states
@@ -2917,7 +2968,7 @@ function updateVersionNavigationUI() {
 }
 
 function updateVersionContentDisplay() {
-    const currentVersion = availableVersions[currentVersionIndex];
+    const currentVersion = availableVersions[currentVersionIndex]!;
     if (!currentVersion) return;
     
     // Update the content textarea to show the selected version's content
@@ -2966,20 +3017,20 @@ function renderRatingsView() {
     void import('./components/RatingsRenderer').then(({ RatingsRenderer }) => {
         // Get ratings from the currently selected version
         const currentVersion = availableVersions[currentVersionIndex];
-        let versionRatings: any[] = [];
+        let versionRatings: Rating[] = [];
         let versionLabel = 'Current';
         let timestampToShow: Date | null = null;
         
         if (currentVersion && currentVersion.ratings) {
             versionRatings = currentVersion.ratings;
             versionLabel = currentVersion.label;
-            timestampToShow = currentVersion.timestamp;
+            timestampToShow = currentVersion.timestamp ?? null;
         } else if (currentVersion && currentVersion.isCurrent) {
             // For current version, try to get ratings from chosen iteration
             const chosenIteration = node.getChosenIteration();
             if (chosenIteration && chosenIteration.ratings) {
                 versionRatings = chosenIteration.ratings;
-                timestampToShow = chosenIteration.timestamp;
+                timestampToShow = chosenIteration.timestamp ?? null;
             }
         }
         
@@ -3003,16 +3054,16 @@ function renderRatingsView() {
         }
         
         // Convert ratings to expected format for unified Rating interface
-        const formattedRatings = versionRatings.map((rating: any) => ({
-            actual: rating.actual || rating.score || 0, // Support both old and new formats
-            goal: rating.goal as number,
-            criterion: rating.criterion as string,
-            justification: rating.justification as string,
-            passed: (rating.actual || rating.score || 0) >= (rating.goal || 0)
+        const formattedRatings = versionRatings.map((rating: Rating) => ({
+            actual: rating.actual,
+            goal: rating.goal,
+            criterion: rating.criterion,
+            justification: rating.justification,
+            passed: rating.actual >= rating.goal
         }));
         
         // Render using shared component
-        const options: any = {
+        const options: import('./components/RatingsRenderer').RatingsDisplayOptions = {
             title: `Quality Ratings for ${versionLabel} Content`,
             showTimestamp: !!timestampToShow,
             compact: false,
@@ -3024,7 +3075,7 @@ function renderRatingsView() {
             options.timestamp = new Date(timestampToShow);
         }
         
-        const ratingsHtml = RatingsRenderer.renderRatings(formattedRatings, options);
+        const ratingsHtml = RatingsRenderer.renderRatings(formattedRatings as Rating[], options);
         
         ratingsDisplay.innerHTML = ratingsHtml;
         
@@ -4473,6 +4524,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                 <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
                     ${AI_ASSISTANT_EMOJI}
                 </button>
+                <div id="deterministic-child-creation-container" style="display: none; align-items: center; margin-right: 0.5rem;">
+                    <input type="checkbox" id="deterministic-child-creation-checkbox" ${deterministicChildCreationState ? 'checked' : ''} style="margin-right: 0.5rem; cursor: pointer;" />
+                    <label for="deterministic-child-creation-checkbox" style="font-size: 0.9rem; color: #374151; cursor: pointer; user-select: none; white-space: nowrap;">Deterministic child creation</label>
+                </div>
                 <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">
                     ⚡ Generate
                 </button>
@@ -5259,7 +5314,8 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
             draftLevel,
             contentLevel,
             coherenceLevel,
-            autofixSeverity
+            autofixSeverity,
+            deterministicChildCreation: deterministicChildCreationState
             // pruneScope completely removed - was only needed for traditional context adjustment
         };
         
@@ -5739,21 +5795,10 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node || !availableVersions[currentVersionIndex]) return;
         
-        const selectedVersion = availableVersions[currentVersionIndex];
+        const selectedVersion = availableVersions[currentVersionIndex]!;
         // Use version management system to update content
         node.setContent(selectedVersion.content, 'master');
-        // Safely restore generation metadata, defaulting to empty arrays if missing
-        node.generationHistory = selectedVersion.generationHistory || [];
-        node.generationSessions = selectedVersion.generationSessions || [];
-        
-        // Set creator model in version metadata if it exists
-        if (selectedVersion.creatorModel) {
-            const masterVersion = node.getMasterVersion();
-            if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
-                masterVersion.metadata['creatorModel'] = selectedVersion.creatorModel;
-            }
-        }
+        // Generation metadata restoration from VersionView is not applicable
         
         void projectManager.saveToStorage().catch(console.error);
         

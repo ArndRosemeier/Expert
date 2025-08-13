@@ -13,6 +13,13 @@ export interface OpenRouterRequest {
   max_output_tokens?: number;
   // Some providers (OpenAI-compatible) expect `max_tokens` instead
   max_tokens?: number;
+  // Optional verbosity parameter for models that support it
+  verbosity?: string | number;
+  // OpenAI Responses API-style nested parameters (provider-specific)
+  text?: {
+    verbosity?: string | number;
+    format?: { type: string } | string;
+  };
   // Reasoning/thinking parameters for models that support it
   thinking?: {
     type?: 'enabled' | 'disabled';
@@ -313,6 +320,8 @@ export class OpenRouterClient {
     return 'max_tokens';
   }
 
+  
+
   /**
    * Map a provider selection value back to the actual endpoint name for API calls
    */
@@ -329,6 +338,8 @@ export class OpenRouterClient {
       const endpoints = await client.fetchModelEndpoints(modelId);
       
       if (!endpoints || endpoints.length === 0) {
+        // Log helpful diagnostics for missing endpoints (console only)
+        console.info(`[OpenRouterClient] No provider endpoints for ${modelId}. Supported params cannot be resolved per provider.`);
         return null;
       }
 
@@ -906,7 +917,7 @@ export class OpenRouterClient {
         const modelSelector = state.getModelSelector();
         const params = modelSelector?.getSelectedParams?.();
         if (params && params[purpose]) {
-          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
+          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
           if (typeof p.temperature === 'number') {
             request.temperature = Math.max(0, Math.min(2, p.temperature));
           }
@@ -921,6 +932,23 @@ export class OpenRouterClient {
             } else {
               request.max_tokens = normalized;
             }
+          }
+          if (typeof p.verbosity !== 'undefined') {
+            // Always prefer OpenAI Responses-style field globally; providers that don't support it should ignore it
+            const existingFormat = request.text && request.text.format;
+            request.text = {
+              ...(request.text || {}),
+              verbosity: p.verbosity,
+              // Default to structured format object { type: 'text' }
+              format: existingFormat ? existingFormat : { type: 'text' }
+            };
+            // Do not send top-level verbosity to avoid provider-specific 400s
+            if (typeof request.verbosity !== 'undefined') {
+              delete (request as any).verbosity;
+            }
+            const fmt = request.text.format as any;
+            const fmtDesc = typeof fmt === 'string' ? fmt : (fmt && fmt.type ? `{ type: "${fmt.type}" }` : 'unknown');
+            console.info(`[OpenRouterClient] Setting global text.verbosity=${String(p.verbosity)} format=${fmtDesc} for model ${model}`);
           }
           if (p.thinking && p.thinking.enabled) {
             request.thinking = {

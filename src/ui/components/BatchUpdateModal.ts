@@ -274,7 +274,7 @@ export class BatchUpdateModal {
             this.instructionInput.style.fontFamily = 'inherit';
             this.instructionInput.style.boxSizing = 'border-box';
             this.instructionInput.style.resize = 'vertical';
-            this.instructionInput.placeholder = 'Describe how you want the selected fields to be updated...\n\nExample: "Make the text more formal and professional"';
+            this.instructionInput.placeholder = 'Describe how you want the selected fields to be updated...\n\nExample: "Make the text more formal and professional"\n\nHint: Leave this empty to use Just copy mode (no AI) — it will create a new version with the current master content and your batch tags.';
             instructionSection.appendChild(this.instructionInput);
             
             controlsContainer.appendChild(instructionSection);
@@ -686,6 +686,45 @@ export class BatchUpdateModal {
     }
 
     /**
+     * Just copy mode: create new versions from current master content without AI.
+     */
+    private async applyCopyMode(batchTag: string): Promise<void> {
+        const selectedNodes = this.tree.getSelectedNodes();
+        this.appendLog(`📝 Copying current master content to new versions`, 'success', `Applying tags and promoting to master`);
+        
+        for (const node of selectedNodes) {
+            if (this.shouldAbort) break;
+            try {
+                this.tree.highlightNode(node.id);
+                const master = node.getMasterVersion();
+                if (!master) {
+                    this.appendLog(`⏭️ ${node.title}`, 'error', `No master version found, skipping`);
+                    continue;
+                }
+                const tags = ['batch'];
+                if (batchTag) tags.push(batchTag);
+                const versionId = node.addVersion(tags, { title: node.title, content: node.content });
+                if (versionId) {
+                    try {
+                        node.promoteToMaster(versionId);
+                    } catch (e) {
+                        this.appendLog(`⚠️ ${node.title}`, 'error', `Version created but promotion to master failed: ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                    await this.persistNodeChanges();
+                    this.appendLog(`✅ ${node.title}`, 'success', `Copied master to new version (${tags.join(', ')})`);
+                } else {
+                    this.appendLog(`⚠️ ${node.title}`, 'error', `Failed to create new version (duplicate tags?)`);
+                }
+            } catch (error) {
+                if (!this.shouldAbort) {
+                    this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
+                }
+            }
+        }
+        this.tree.highlightNode('');
+    }
+
+    /**
      * Run the 3-phase batch update process
      */
     private async handleRun() {
@@ -699,10 +738,7 @@ export class BatchUpdateModal {
             return;
         }
         
-        if (!instruction) {
-            alert('Please enter update instructions.');
-            return;
-        }
+        const justCopyMode = instruction.length === 0;
         
         const hasFieldSelected = this.titleCheckbox.checked || this.contentCheckbox.checked;
         if (!hasFieldSelected) {
@@ -724,39 +760,47 @@ export class BatchUpdateModal {
         this.logPanel.innerHTML = '';
         
         try {
-            this.appendLog(`🚀 Starting 3-Phase Batch Update`, 'success', `Processing ${selectedNodes.length} nodes with instruction: "${instruction}"`);
-            
-            // Phase 1: Collect unique strings
-            this.appendLog(`📋 Phase 1: Collecting unique strings`, 'success', `Analyzing selected nodes and fields...`);
-            const stringMap = this.collectTargetStrings();
-            const uniqueCount = stringMap.size;
-            
-            if (uniqueCount === 0) {
-                this.appendLog(`⚠️ No content to process`, 'error', `Selected fields are empty in all selected nodes.`);
-                return;
+            if (justCopyMode) {
+                this.appendLog(`🚀 Starting Just copy`, 'success', `Processing ${selectedNodes.length} nodes (no AI calls)`);
+            } else {
+                this.appendLog(`🚀 Starting 3-Phase Batch Update`, 'success', `Processing ${selectedNodes.length} nodes with instruction: "${instruction}"`);
             }
             
-            this.appendLog(`✅ Phase 1 Complete`, 'success', `Found ${uniqueCount} unique strings (deduplication saved ${this.getTotalStrings(stringMap) - uniqueCount} API calls)`);
-            
-            // Phase 2: Process strings
-            const processingMap = await this.processStrings(stringMap, instruction);
+            if (justCopyMode) {
+                await this.applyCopyMode(customBatchTag || this.batchTag);
+            } else {
+                // Phase 1: Collect unique strings
+                this.appendLog(`📋 Phase 1: Collecting unique strings`, 'success', `Analyzing selected nodes and fields...`);
+                const stringMap = this.collectTargetStrings();
+                const uniqueCount = stringMap.size;
+                
+                if (uniqueCount === 0) {
+                    this.appendLog(`⚠️ No content to process`, 'error', `Selected fields are empty in all selected nodes.`);
+                    return;
+                }
+                
+                this.appendLog(`✅ Phase 1 Complete`, 'success', `Found ${uniqueCount} unique strings (deduplication saved ${this.getTotalStrings(stringMap) - uniqueCount} API calls)`);
+                
+                // Phase 2: Process strings
+                const processingMap = await this.processStrings(stringMap, instruction);
+                
+                if (this.shouldAbort) {
+                    this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
+                    return;
+                }
+                
+                this.appendLog(`✅ Phase 2 Complete`, 'success', `Processed ${Object.keys(processingMap).length} strings`);
+                
+                // Phase 3: Apply updates
+                await this.applyProcessedStrings(stringMap, processingMap, customBatchTag || this.batchTag);
+            }
             
             if (this.shouldAbort) {
                 this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
                 return;
             }
             
-            this.appendLog(`✅ Phase 2 Complete`, 'success', `Processed ${Object.keys(processingMap).length} strings`);
-            
-            // Phase 3: Apply updates
-            await this.applyProcessedStrings(stringMap, processingMap, customBatchTag || this.batchTag);
-            
-            if (this.shouldAbort) {
-                this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
-                return;
-            }
-            
-            this.appendLog(`🎉 Batch Update Complete`, 'success', `Successfully processed all selected nodes. New versions created with 'batch' tag.`);
+            this.appendLog(`🎉 Batch ${justCopyMode ? 'Copy' : 'Update'} Complete`, 'success', `Successfully processed all selected nodes. New versions created with 'batch' tag.`);
             
         } catch (error) {
             if (!this.shouldAbort) {

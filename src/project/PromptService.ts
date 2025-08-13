@@ -15,9 +15,10 @@ export class PromptService {
     /**
      * Gets the raw, unprocessed generation prompt for a node, which includes placeholders.
      * @param node The node for which to get the prompt template.
+     * @param deterministicChildCreation Whether to use deterministic child creation for this generation.
      * @returns The raw prompt template string.
      */
-    public getRawGenerationPrompt(node: DocumentNode): string {
+    public getRawGenerationPrompt(node: DocumentNode, deterministicChildCreation?: boolean): string {
         const prompts = this.settingsManager.getPrompts();
         
         // Special handling for root node (text expansion)
@@ -25,7 +26,19 @@ export class PromptService {
             return prompts.expand_text_user;
         }
         
-        return node.isLeaf ? prompts.content_generation_user : prompts.branch_content_generation_user;
+        if (node.isLeaf) {
+            console.log(`[PromptService] Node "${node.title}" is leaf - using content_generation_user`);
+            return prompts.content_generation_user;
+        } else {
+            // For non-leaf nodes, check if deterministic child creation is enabled
+            const useDeterministic = deterministicChildCreation ?? false;
+            const selectedPrompt = useDeterministic ? 'deterministic_outline_generation_user' : 'branch_content_generation_user';
+            console.log(`[PromptService] Node "${node.title}" (non-leaf): useDeterministic=${useDeterministic}, selectedPrompt=${selectedPrompt}`);
+            console.log(`[PromptService] Prompt selection call stack:`, new Error().stack);
+            return useDeterministic 
+                ? prompts.deterministic_outline_generation_user 
+                : prompts.branch_content_generation_user;
+        }
     }
 
     /**
@@ -54,7 +67,7 @@ export class PromptService {
 ${node.content}
 ---
 
-Please expand this draft into full, detailed content. Use the draft as a guide for what should be covered, but write complete, polished content that goes well beyond the brief draft description.`;
+Please expand this draft into full, detailed content. Use the draft as a bible for what should be covered. Do not advance the plot past the draft.`;
             } else {
                 draftOrFresh = `You have this existing content to revise or expand:
 ---
@@ -68,7 +81,13 @@ Please improve and expand this content.`;
         }
 
         // Use centralized prompt expansion
-        const generationOptions: any = {
+        const generationOptions: {
+            context: string;
+            draftOrFresh: string;
+            childLevelName: string;
+            generateCount: string;
+            count?: number;
+        } = {
             context: context,
             draftOrFresh: draftOrFresh,
             childLevelName: node.childLevelName || '',
@@ -223,7 +242,8 @@ Please improve and expand this content.`;
             '{{content}}': 'The current content of the node (if any)',
             '{{child_level_name}}': 'The name of the child level (for branch nodes)',
             '{{count}}': 'The number of items to generate (for list generation)',
-            '{{generate_count}}': 'Smart count instruction: "exactly X entries" when count specified, "as many entries as make logical sense" when not specified'
+            '{{generate_count}}': 'Smart count instruction: "exactly X entries" when count specified, "as many entries as make logical sense" when not specified',
+            '{{child_count}}': 'Smart count instruction for child section creation based on template definition'
         };
     }
 

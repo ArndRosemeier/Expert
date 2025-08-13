@@ -79,6 +79,7 @@ interface LastGenerationParameters {
     contentLevel: number;
     coherenceLevel: number;
     autofixSeverity: number;
+    deterministicChildCreation?: boolean;
 }
 
 /**
@@ -1529,5 +1530,29 @@ export class DocumentNode {
             return `${levelName}: ${cleanTitle}`;
         });
         return parts.join(' => ');
+    }
+
+    /**
+     * Get deterministic child creation setting for this node
+     */
+    public getDeterministicChildCreation(): boolean {
+        return this.lastGenerationParameters?.deterministicChildCreation ?? false;
+    }
+
+    /**
+     * Set deterministic child creation setting for this node
+     */
+    public setDeterministicChildCreation(enabled: boolean): void {
+        if (!this.lastGenerationParameters) {
+            this.lastGenerationParameters = {
+                draftLevel: -1,
+                contentLevel: -1,
+                coherenceLevel: -1,
+                autofixSeverity: 0,
+                deterministicChildCreation: enabled
+            };
+        } else {
+            this.lastGenerationParameters.deterministicChildCreation = enabled;
+        }
     }
 }

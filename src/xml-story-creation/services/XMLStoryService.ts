@@ -561,6 +561,13 @@ export class XMLStoryService {
                 });
                 break;
 
+            // Context commands are handled directly by XMLStoryModal, not here
+            case 'context_add':
+            case 'context_edit':
+            case 'context_remove':
+                // Skip processing these - let the modal handle them
+                break;
+
             // 'change_context_scope' removed (legacy). Ignore if encountered.
                 
             default:

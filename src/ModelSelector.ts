@@ -51,7 +51,7 @@ export class ModelSelector {
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
   private selectedProviders: Record<string, string> = {}; // Track provider selections per purpose
-  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> = {};
+  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> = {};
   private modelEndpoints: Record<string, OpenRouterModel['endpoints']> = {}; // Cache endpoint data
   private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
@@ -88,6 +88,13 @@ export class ModelSelector {
     if (this.apiKey && !this.fetched) {
       try {
         await this.fetchModels();
+        // If models are already selected in the profile, log their params too
+        for (const purpose of PURPOSES) {
+          const selectedModel = this.selectedModels[purpose.key];
+          if (selectedModel && this.modelEndpoints[selectedModel]) {
+            try { await this.logModelParameterSupport(selectedModel); } catch {}
+          }
+        }
       } catch (error) {
         console.warn('Failed to auto-fetch models during initialization:', error);
       }
@@ -687,6 +694,8 @@ export class ModelSelector {
         if (modelId) {
           // Fetch endpoint information for the selected model
           await this.fetchModelEndpoints(modelId);
+          // Log supported parameters for quick diagnostics
+          await this.logModelParameterSupport(modelId);
         }
         
         const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
@@ -922,6 +931,44 @@ export class ModelSelector {
             }
           ));
         }
+
+        // Verbosity (always show for experimentation)
+        addHeadingIfNeeded();
+        const wrap = document.createElement('label');
+        wrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+        const lab = document.createElement('span');
+        lab.textContent = 'Verbosity';
+        lab.style.cssText = 'font-size: 0.85rem; color: #374151;';
+        const select = document.createElement('select');
+        select.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
+        const options: Array<{ value: ''; label: string } | { value: 'low' | 'medium' | 'high'; label: string }> = [
+          { value: '', label: 'Default' },
+          { value: 'low', label: 'Low (brief)' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High (detailed)' }
+        ];
+        options.forEach(opt => {
+          const o = document.createElement('option');
+          o.value = String(opt.value);
+          o.textContent = opt.label;
+          const currentVerbosity = (params.verbosity ?? '') as string | number;
+          if (String(opt.value) === String(currentVerbosity)) o.selected = true;
+          select.appendChild(o);
+        });
+        select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
+        select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
+        select.addEventListener('change', async () => {
+          const v = (select.value || '') as '' | 'low' | 'medium' | 'high';
+          if (v === '') {
+            delete params.verbosity;
+          } else {
+            params.verbosity = v;
+          }
+          await this.setSelectedParams(purpose.key, params);
+        });
+        wrap.appendChild(lab);
+        wrap.appendChild(select);
+        paramsContainer.appendChild(wrap);
 
         // Unified reasoning/thinking controls (model-agnostic and future-proof)
         const reasoningSupport = this.getReasoningSupport(validModel.id, this.selectedProviders[purpose.key]);
@@ -1466,11 +1513,11 @@ export class ModelSelector {
     return this.selectedProviders;
   }
 
-  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> {
+  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> {
     return this.selectedParams;
   }
 
-  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }): Promise<void> {
+  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }): Promise<void> {
     this.selectedParams[purpose] = { ...params };
     await this.saveToStorage();
     this.update();
@@ -1665,7 +1712,10 @@ export class ModelSelector {
       const client = OpenRouterClient.getInstance();
       const endpoints = await client.fetchModelEndpoints(modelId);
       this.modelEndpoints[modelId] = endpoints;
-      
+      // Log parameters immediately after endpoints are fetched
+      try {
+        await this.logModelParameterSupport(modelId);
+      } catch {}
 
     } catch (error) {
       console.error(`❌ CRITICAL: Failed to fetch endpoints for model ${modelId}:`, error);
@@ -1686,6 +1736,30 @@ export class ModelSelector {
    */
   private getProvidersForModel(modelId: string): OpenRouterModel['endpoints'] {
     return this.modelEndpoints[modelId]!; // Crash if endpoints not loaded!
+  }
+
+  
+
+  // Log model and endpoint supported parameters to help diagnose missing controls like verbosity
+  private async logModelParameterSupport(modelId: string): Promise<void> {
+    const model = this.models.find(m => m.id === modelId)!;
+    const endpoints = this.modelEndpoints[modelId]!;
+    const modelParams = (model.supported_parameters || []).join(', ') || '(none)';
+    const lines: string[] = [];
+    lines.push(`Model: ${model.name} (${model.id})`);
+    lines.push(`Supported parameters (model-level): ${modelParams}`);
+    if (endpoints && endpoints.length > 0) {
+      lines.push(`Provider endpoints: ${endpoints.length}`);
+      endpoints.forEach((ep, idx) => {
+        const epParams = (ep.supported_parameters || []).join(', ') || '(none)';
+        const providerLabel = ep.provider_name || ep.name || `endpoint-${idx}`;
+        lines.push(`- ${providerLabel}: ${epParams}`);
+      });
+    } else {
+      lines.push('No provider endpoints available');
+    }
+    const message = lines.join('\n');
+    console.info('[ModelSelector] Model parameter support\n' + message);
   }
 
 

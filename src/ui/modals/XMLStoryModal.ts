@@ -115,7 +115,10 @@ export class XMLStoryModal extends SimpleModal {
     private stagedUpdateItem(id: string, updates: Partial<{ text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords: string[] }>): void {
         const items = this.getStagedItems();
         const idx = items.findIndex(i => i.id === id);
-        if (idx === -1) return;
+
+        if (idx === -1) {
+            throw new Error(`Context item with id "${id}" not found in staged items. Available IDs: ${items.map(i => i.id).join(', ')}`);
+        }
         const current = items[idx]!;
         items[idx] = {
             id: current.id,
@@ -129,7 +132,10 @@ export class XMLStoryModal extends SimpleModal {
     private stagedRemoveItem(id: string): void {
         const items = this.getStagedItems();
         const idx = items.findIndex(i => i.id === id);
-        if (idx !== -1) items.splice(idx, 1);
+        if (idx === -1) {
+            throw new Error(`Context item with id "${id}" not found for removal. Available IDs: ${items.map(i => i.id).join(', ')}`);
+        }
+        items.splice(idx, 1);
     }
 
     private stagedAddItem(newItem: { id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }): void {
@@ -1470,12 +1476,21 @@ export class XMLStoryModal extends SimpleModal {
                         });
                         (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_edit') {
-                        const id = command.parameters?.['id'];
-                        const text = command.parameters?.['text'];
-                        const keyword = (command.parameters?.['trigger'] || command.parameters?.['keyword']) as string | undefined;
-                        if (!id) continue;
-                        if (text !== undefined) this.stagedUpdateItem(id, { text });
-                        if (keyword !== undefined) this.stagedUpdateItem(id, { keywords: keyword ? [keyword] : [] });
+                        if (!command.parameters) {
+                            throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
+                        }
+                        const id = command.parameters['id'];
+                        const text = command.parameters['text'];
+                        const keyword = command.parameters['trigger'] || command.parameters['keyword'];
+                        if (!id) {
+                            throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
+                        }
+                        if (text !== undefined) {
+                            this.stagedUpdateItem(id, { text });
+                        }
+                        if (keyword !== undefined) {
+                            this.stagedUpdateItem(id, { keywords: keyword ? [keyword] : [] });
+                        }
                         (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_remove') {
                         const id = command.parameters?.['id'];
@@ -2138,38 +2153,36 @@ export class XMLStoryModal extends SimpleModal {
      * Build simplified context list for the LLM: Global vs Keyworded, without exposing conditions
      */
     private formatKeywordContextForAI(): string {
-        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required');
-        const project = findProjectByNode(this.sourceNode);
-        const root = project?.rootNode ?? this.sourceNode;
-        const applicable = this.sourceNode.getApplicableConditionalContextItems(root);
+        const stagedItems = this.getStagedItems();
 
-        const globals: string[] = [];
-        const keyworded: Array<{ keyword: string; text: string }> = [];
-        for (const item of applicable) {
-            const kws = Array.isArray((item as any).keywords) ? ((item as any).keywords as string[]) : [];
+        const globals: Array<{ id: string; text: string }> = [];
+        const keyworded: Array<{ id: string; keyword: string; text: string }> = [];
+        
+        for (const item of stagedItems) {
+            const kws = Array.isArray(item.keywords) ? item.keywords : [];
             if (kws.length === 0) {
-                globals.push(item.text || '');
+                globals.push({ id: item.id, text: item.text || '' });
             } else {
                 // use first keyword for display; support multiple keywords later
-                keyworded.push({ keyword: kws[0]!, text: item.text || '' });
+                keyworded.push({ id: item.id, keyword: kws[0]!, text: item.text || '' });
             }
         }
 
         const lines: string[] = [];
-        lines.push('CONTEXT OVERVIEW');
+        lines.push('CURRENT CONTEXT ITEMS (with IDs for editing):');
         lines.push('');
         lines.push('Global context:');
         if (globals.length === 0) {
             lines.push('- (none)');
         } else {
-            globals.forEach(g => lines.push(`- ${g}`));
+            globals.forEach(g => lines.push(`- ID: ${g.id} | Text: ${g.text}`));
         }
         lines.push('');
         lines.push('Triggered context (by trigger word):');
         if (keyworded.length === 0) {
             lines.push('- (none)');
         } else {
-            keyworded.forEach(k => lines.push(`- trigger: ${k.keyword}; text: ${k.text}`));
+            keyworded.forEach(k => lines.push(`- ID: ${k.id} | Trigger: ${k.keyword} | Text: ${k.text}`));
         }
         return lines.join('\n');
     }

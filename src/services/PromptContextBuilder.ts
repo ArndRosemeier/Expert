@@ -1,10 +1,11 @@
 import { DocumentNode } from '../DocumentNode.js';
 import { SettingsManager } from '../SettingsManager.js';
 import { PlaceholderContext } from './PromptExpansionService.js';
+import { QualityCriterion } from '../types.js';
 
 export class PromptContextBuilder {
     
-    private static getValidatedCriteria(settingsManager: SettingsManager): any[] {
+    private static getValidatedCriteria(settingsManager: SettingsManager): QualityCriterion[] {
         const profile = settingsManager.getLastUsedProfile();
         if (!profile) {
             throw new Error('No active profile available - settings configuration corrupted');
@@ -26,7 +27,9 @@ export class PromptContextBuilder {
             node: {
                 title: node.title,
                 content: node.content,
-                isLeaf: node.isLeaf
+                isLeaf: node.isLeaf,
+                level: node.level,
+                template: node.template
             },
             project: {
                 title: 'Current Project', // TODO: Get actual project title

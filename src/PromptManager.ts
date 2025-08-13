@@ -17,6 +17,7 @@ export interface OrchestratorPrompts {
     expand_list_user: string;
     content_generation_user: string;
     branch_content_generation_user: string;
+    deterministic_outline_generation_user: string;
     create_children_from_outline_user: string;
     
     // For context extraction
@@ -345,7 +346,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
             Coherence is king. Logical problems must be avoided at all costs.
             Do not repeat anything from the PREVIOUS CONTENT (if there is one).
-            This content needs to fit in between the PREVIOUS CONTENT and the NEXT CONTENT (if there is one).
+            This content needs to continue the PREVIOUS CONTENT. If there is no PREVIOUS CONTENT, this content is considered a story start.
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, section headers or lists.
             The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure content that belongs in this section.
@@ -378,13 +379,61 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             Your response should contain ONLY the requested outline content, nothing more.
             Coherence is king. Logical problems must be avoided at all costs.
             Do not repeat anything from the PREVIOUS CONTENT (if there is one).
-            This content needs to fit in between the PREVIOUS CONTENT and the NEXT CONTENT (if there is one).
+            This content needs to continue the PREVIOUS CONTENT.
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, lists or section headers. 
             The content should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure outline text that belongs in this section.
         `.trim(),
         placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
         description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
+    },
+
+    deterministic_outline_generation_user: {
+        text: `
+            
+            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
+            This is a "branch" node that will be expanded into child nodes. Your task is to generate content for this branch node that includes clear section divisions.
+
+            Create an outline that includes {{child_count}} distinct sections. Each section should be marked with section headers in the format:
+            ===Section Title===
+
+            The content should be a detailed prose outline with rich details about key points, characters, plot developments, themes, and specific elements. Each section should cover a distinct aspect of the content and be substantial enough to warrant its own child node. 
+            If it is not feasible to create {{child_count}} sections, that is ok. Create less.
+
+            Generate outline with sections and titles in {{language}}.
+
+            Structure your response like this:
+            ===First Section Title===
+            [Detailed prose content for this section...]
+
+            ===Second Section Title===
+            [Detailed prose content for this section...]
+
+            [Continue for all sections...]
+
+            Titles inside the ===Title=== headers must also always be in {{language}}. This is critical.
+
+            Here is the context of the document so far:
+            ---
+            {{context}}
+            ---
+
+            {{draftorfresh}}
+
+            {{noise_names}}
+
+            IMPORTANT: 
+            - Each section must be marked with ===Title=== headers
+            - Content within sections should be flowing prose, not lists
+            - Be descriptive and specific - this will guide child node creation
+            - Coherence is king. Logical problems must be avoided at all costs.
+            - Do not repeat anything from PREVIOUS CONTENT (if there is one).
+            - This content needs to continue the PREVIOUS CONTENT.
+            - Content should be definitive, not tentative
+            - No meta-commentary or explanations outside the outline itself
+        `.trim(),
+        placeholders: ['path', 'context', 'child_level_name', 'child_count', 'draftorfresh', 'language'],
+        description: "Generates outline content with clear section divisions (===title===) for deterministic child creation from sections."
     },
 
     create_children_from_outline_user: {

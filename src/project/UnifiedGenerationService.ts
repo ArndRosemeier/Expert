@@ -93,6 +93,8 @@ export interface GenerationLevels {
     coherenceLevel: number;
     /** Autofix severity threshold (-1 = disabled, 1-10 = threshold) */
     autofixSeverity: number;
+    /** Whether to use deterministic child creation for outline nodes */
+    deterministicChildCreation?: boolean;
     // pruneScope completely removed - was only needed for traditional context adjustment
     /** Frozen settings captured at generation start */
     frozenSettings: FrozenSettings;
@@ -459,7 +461,7 @@ export class UnifiedGenerationService {
                     if (DEBUG_STATELESS_GENERATION) {
                         console.log(`✅ STATELESS DEBUG: Performing content generation on "${node.title}"`);
                     }
-                    await this.handleContentGeneration(node.id);
+                    await this.handleContentGeneration(node.id, levels);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
@@ -541,9 +543,9 @@ export class UnifiedGenerationService {
                             workDone = true;
                             break; // Exit immediately - fresh assessment next iteration
                         }
-                    } else if (DEBUG_STATELESS_GENERATION) {
-                        console.log(`❌ STATELESS DEBUG: "${node.title}" cannot expand (siblings not ready)`);
-                    }
+                                    } else if (DEBUG_STATELESS_GENERATION) {
+                    console.log(`❌ STATELESS DEBUG: "${node.title}" cannot expand (siblings not ready)`);
+                }
                 }
             }
             
@@ -561,6 +563,9 @@ export class UnifiedGenerationService {
         // Log graceful exit if aborted
         if (this.abortRequested) {
             console.log(`🛑 Generation gracefully aborted for UnifiedGenerationService instance ${this.instanceId}`);
+        } else if (!workDone) {
+            // Generation stopped without doing work - check if expansion is blocked by coherence requirements
+            this.checkForBlockedExpansion(startNodeId, levels);
         }
     }
 
@@ -680,6 +685,80 @@ export class UnifiedGenerationService {
         }
         
         return workNeeded;
+    }
+
+    /**
+     * Check if generation stopped due to expansion being blocked by coherence requirements
+     */
+    private checkForBlockedExpansion(startNodeId: string, levels: GenerationLevels): void {
+        const allNodes = this.collectAllDescendants(startNodeId);
+        const targetStates = this.calculateTargetStates(levels, 0, Math.max(...allNodes.map(n => n.level)));
+        
+        // Look for nodes that want to expand but are blocked by sibling requirements
+        for (const node of allNodes) {
+            const targetState = targetStates[node.level];
+            if (!targetState || !targetState.canExpand) continue;
+            
+            const currentState = this.getNodeCurrentState(node);
+            if (currentState.hasChildren) continue; // Already has children
+            
+            // Check if this node wants to expand but can't due to siblings
+            const canExpand = this.canNodeExpand(node, targetState);
+            if (!canExpand) {
+                // Found a node that wants to expand but is blocked - show feedback
+                this.showExpansionBlockedFeedback(node, targetState);
+                return; // Only show one alert to avoid spam
+            }
+        }
+    }
+
+    /**
+     * Show user feedback when expansion is blocked due to sibling requirements
+     */
+    private showExpansionBlockedFeedback(node: DocumentNode, targetState: TargetState): void {
+        if (!node.parentId) return;
+        
+        const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
+        if (!parentNode || !parentNode.children || parentNode.children.length === 0) return;
+        
+        // Get sibling states to provide specific feedback
+        const siblingStates = parentNode.children.map(sibling => {
+            const siblingCurrentState = this.getNodeCurrentState(sibling);
+            const siblingWorkNeeded = this.getWorkNeeded(sibling, targetState);
+            
+            const isReady = (!targetState.needsContextPruning || siblingCurrentState.hasContextPruning) && 
+                           (!targetState.needsContent || siblingCurrentState.hasContent) && 
+                           (!targetState.needsCoherenceCheck || siblingCurrentState.hasCoherenceCheck);
+            
+            return {
+                name: sibling.title,
+                isReady,
+                needsContent: siblingWorkNeeded.contentGeneration,
+                needsCoherence: targetState.needsCoherenceCheck && !siblingCurrentState.hasCoherenceCheck
+            };
+        });
+        
+        const notReadySiblings = siblingStates.filter(s => !s.isReady);
+        
+        if (notReadySiblings.length === 0) return; // Shouldn't happen, but safety check
+        
+        // Build user-friendly message
+        let message = `Cannot expand "${node.title}" because sibling nodes need to be completed first:\n\n`;
+        
+        notReadySiblings.forEach(sibling => {
+            const requirements = [];
+            if (sibling.needsContent) requirements.push('content generation');
+            if (sibling.needsCoherence) requirements.push('coherence check');
+            
+            message += `• "${sibling.name}" needs: ${requirements.join(', ')}\n`;
+        });
+        
+        message += '\nOptions to proceed:\n';
+        message += '1. Complete the required steps for these nodes first, OR\n';
+        message += '2. Lower the coherence level in generation settings to skip coherence requirements';
+        
+        // Show alert to user
+        alert(message);
     }
 
     /**
@@ -868,7 +947,7 @@ export class UnifiedGenerationService {
     /**
      * Handle content generation for a node
      */
-    private async handleContentGeneration(nodeId: string): Promise<void> {
+    private async handleContentGeneration(nodeId: string, levels: GenerationLevels): Promise<void> {
         // Check for abort at start of operation
         if (this.abortRequested) {
             console.log(`🛑 Content generation aborted for node: ${nodeId}`);
@@ -902,7 +981,7 @@ export class UnifiedGenerationService {
             this.emitUnifiedProgress();
 
             // Build loop input
-            const loopInput = this.buildLoopInput(node);
+            const loopInput = this.buildLoopInput(node, levels);
 
             // Run the content generation loop
             await this.runContentLoop(nodeId, loopInput);
@@ -1132,23 +1211,54 @@ export class UnifiedGenerationService {
             this.emitUnifiedProgress();
 
             // Use autofix-enabled analysis if autofix severity is set
-            const result = await this.coherenceService.analyzeCoherenceWithAutofix(
-                parentNode,
-                levels.autofixSeverity,
-                levels.frozenSettings, // Use frozen settings for consistent behavior
-                true, // isAutomaticMode = true (triggered by generation)
-                this.deps.rootNode.id, // projectId
-                // Add progress callback for contradiction fixing
-                (progressMessage: string, current?: number, total?: number) => {
-                    // Update stage progress to show autofix progress
+            // Retry up to 3 times if the AI returns a malformed/empty response
+            let result: CoherenceResult | null = null;
+            let lastError: unknown = null;
+            const maxAttempts = 3;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    result = await this.coherenceService.analyzeCoherenceWithAutofix(
+                        parentNode,
+                        levels.autofixSeverity,
+                        levels.frozenSettings, // Use frozen settings for consistent behavior
+                        true, // isAutomaticMode = true (triggered by generation)
+                        this.deps.rootNode.id, // projectId
+                        // Add progress callback for contradiction fixing
+                        (progressMessage: string, current?: number, total?: number) => {
+                            // Update stage progress to show autofix progress
+                            this.currentStageProgress = {
+                                current: current || 2,
+                                total: total || 2,
+                                message: progressMessage
+                            };
+                            this.emitUnifiedProgress();
+                        }
+                    );
+                    break; // success
+                } catch (error) {
+                    lastError = error;
+                    if (this.abortRequested) {
+                        throw error;
+                    }
+                    const msg = error instanceof Error ? error.message : String(error);
+                    const isMalformed = /malformed|Failed to parse analysis results|Empty response/i.test(msg);
+                    if (!isMalformed || attempt === maxAttempts) {
+                        // Non-retryable error or out of attempts
+                        throw error;
+                    }
+                    // Update stage to reflect retry
                     this.currentStageProgress = {
-                        current: current || 2,
-                        total: total || 2,
-                        message: progressMessage
+                        current: 1,
+                        total: levels.autofixSeverity !== -1 ? 2 : 1,
+                        message: `Malformed coherence response, retrying (${attempt + 1}/${maxAttempts})...`
                     };
                     this.emitUnifiedProgress();
                 }
-            );
+            }
+            // Type guard: result must be non-null here due to throw on final failure
+            if (!result) {
+                throw lastError instanceof Error ? lastError : new Error('Coherence analysis failed with unknown error');
+            }
             
             // Update progress after analysis/fixing is complete
             if (levels.autofixSeverity !== -1 && result.hasContradictions) {
@@ -1857,7 +1967,7 @@ export class UnifiedGenerationService {
     /**
      * Build loop input for content generation
      */
-    private buildLoopInput(node: DocumentNode): LoopInput {
+    private buildLoopInput(node: DocumentNode, levels: GenerationLevels): LoopInput {
         // CRITICAL: Get project language dynamically at generation time to prevent race conditions
         const capturedLanguage = this.getProjectLanguageForNode() || this.deps.settingsManager.getLanguage();
         
@@ -1880,7 +1990,7 @@ export class UnifiedGenerationService {
         }
 
         // Get the raw prompt from the node
-        const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node);
+        const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node, levels.deterministicChildCreation);
 
         // Fill the placeholders
         // Conditional inclusion of parent content in context:

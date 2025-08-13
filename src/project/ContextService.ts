@@ -59,11 +59,7 @@ export class ContextService {
             contextParts.push(`PREVIOUS ${nodeLevelName.toUpperCase()} CONTENT ("${previousNode.title}"):\n---\n${previousNode.content}\n---`);
         }
 
-        const nextNode = this.treeService.getNextNode(targetNode);
-        if (nextNode && nextNode.content && nextNode.content.trim()) {
-            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
-            contextParts.push(`NEXT ${nodeLevelName.toUpperCase()} CONTENT ("${nextNode.title}"):\n---\n${nextNode.content}\n---`);
-        }
+		// Intentionally omit NEXT node content from context; generation prompts handle it explicitly
 
         return contextParts.join('\n\n====================\n\n');
     }

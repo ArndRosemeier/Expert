@@ -9,6 +9,8 @@ export interface PlaceholderContext {
         content?: string;
         isLeaf?: boolean;
         path?: string;
+        level?: number;
+        template?: string[];
     };
     
     // Project context
@@ -541,6 +543,11 @@ class PromptExpansionService {
         this.registerContextPlaceholder('generate_count', (context) => ({
             value: context.generation!.generateCount || `exactly ${context.generation!.count!} entries`,
             description: 'Smart count instruction for generation'
+        }));
+        
+        this.registerContextPlaceholder('child_count', (context) => ({
+            value: this.getChildCountInstruction(context),
+            description: 'Smart count instruction for child section creation'
         }));
         
         this.registerContextPlaceholder('draftorfresh', (context) => ({
@@ -1126,6 +1133,34 @@ class PromptExpansionService {
                 reject(new Error(`Failed to load modal system: ${error.message}`));
             });
         });
+    }
+
+    /**
+     * Get child count instruction based on template definition for the level below current node
+     */
+    private getChildCountInstruction(context: PlaceholderContext): string {
+        // Minimal text as requested: either "some" or "exactly X"
+        // Try to infer child count from the next level name (e.g., "Chapter 4")
+        const template = context.node?.template;
+        const level = context.node?.level;
+        if (!template || typeof level !== 'number') {
+            return 'some';
+        }
+        const childLevelIndex = level + 1;
+        const childLevelName = template[childLevelIndex];
+        if (!childLevelName) {
+            return 'some';
+        }
+        const nameToParse: string = String(childLevelName);
+        const match = nameToParse.match(/\b(\d+)\b/);
+        if (!match) {
+            return 'some';
+        }
+        const count = parseInt(match[1]!, 10);
+        if (!Number.isFinite(count) || count <= 0) {
+            return 'some';
+        }
+        return `exactly ${count}`;
     }
 }
 
