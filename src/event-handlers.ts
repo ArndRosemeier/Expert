@@ -3,7 +3,7 @@ import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
-import { DocumentNode, GenerationSession, ContentVersion } from './DocumentNode';
+import { DocumentNode, GenerationSession, ContentVersion, ConditionLogicOperator, ConditionalContextCondition } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
 import { initializeProjectUI } from './ui/project-ui';
 import { LoopHistoryItem } from './LoopOrchestrator';
@@ -463,6 +463,14 @@ interface ImportNodeData {
     versions?: ContentVersion[];
     collapsed?: boolean;
     creatorModel?: string;
+    // Conditional context (node-level)
+    conditionalContextItems?: Array<{
+        id: string;
+        text: string;
+        logic: ConditionLogicOperator;
+        conditions: ConditionalContextCondition[];
+        keywords?: string[];
+    }>;
     // Legacy fields for backward compatibility
     template?: any; // Project template for text imports (different usage)
 }
@@ -502,7 +510,8 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
                 generationSessions: importData.generationSessions ?? [],
                 versions: importData.versions, // This will be properly handled by DocumentNode.fromJSON
                 collapsed: importData.collapsed ?? false,
-                children: [] // Will be handled recursively
+                children: [], // Will be handled recursively
+                conditionalContextItems: Array.isArray(importData.conditionalContextItems) ? importData.conditionalContextItems : []
             };
             
             // Create new root node with full version data
@@ -531,6 +540,20 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
 
             if (importData.generationPrompt !== undefined) {
                 rootNode.generationPrompt = importData.generationPrompt;
+            }
+
+            // Restore conditional context items (node-level)
+            if (Array.isArray(importData.conditionalContextItems)) {
+                const existing = rootNode.getConditionalContextItems();
+                for (const item of existing) {
+                    rootNode.removeConditionalContextItem(item.id);
+                }
+                for (const raw of importData.conditionalContextItems) {
+                    const newId = rootNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                    if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                        rootNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                    }
+                }
             }
         }
 
@@ -634,6 +657,19 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         if (childData.collapsed !== undefined) {
             newNode.collapsed = childData.collapsed;
         }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(childData.conditionalContextItems)) {
+            const existing = newNode.getConditionalContextItems();
+            for (const item of existing) {
+                newNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of childData.conditionalContextItems) {
+                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
+        }
         
     } else {
         console.log(`🔄 Importing project child with legacy format (no version data)`);
@@ -652,6 +688,19 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
 
         if (childData.generationPrompt !== undefined) {
             newNode.generationPrompt = childData.generationPrompt;
+        }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(childData.conditionalContextItems)) {
+            const existing = newNode.getConditionalContextItems();
+            for (const item of existing) {
+                newNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of childData.conditionalContextItems) {
+                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
         }
     }
 

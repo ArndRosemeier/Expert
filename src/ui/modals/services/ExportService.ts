@@ -219,6 +219,18 @@ export class ExportService implements IExportService {
             generationSessions: (node.generationSessions && node.generationSessions.length > 0) ? node.generationSessions : undefined
         };
 
+        // Export node-level conditional context items
+        const ccItems = node.getConditionalContextItems();
+        if (ccItems && ccItems.length > 0) {
+            exportObject.conditionalContextItems = ccItems.map(i => ({
+                id: i.id,
+                text: i.text,
+                logic: i.logic,
+                conditions: i.conditions,
+                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined
+            }));
+        }
+
         // Enhanced: Export complete version and tagging system for root node
         const allVersions = node.getAllVersions();
         if (allVersions && allVersions.length > 0) {
@@ -316,6 +328,18 @@ export class ExportService implements IExportService {
                 
                 return exportVersion;
             });
+        }
+
+        // Export node-level conditional context items
+        const ccItems = node.getConditionalContextItems();
+        if (ccItems && ccItems.length > 0) {
+            (data as any).conditionalContextItems = ccItems.map(i => ({
+                id: i.id,
+                text: i.text,
+                logic: i.logic,
+                conditions: i.conditions,
+                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined
+            }));
         }
 
         // Export UI state

@@ -385,7 +385,7 @@ let contentLevelState: number = -1;
 // contextPruneLevelState removed - using conditional context system
 let coherenceLevelState: number = -1;
 let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
-let deterministicChildCreationState: boolean = false;
+let deterministicChildCreationState: boolean = true;
 
 // Export for use by DocumentNode
 (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
@@ -544,7 +544,7 @@ async function loadLevelStates() {
             // contextPruneLevelState removed with traditional context system
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? -1;
-            deterministicChildCreationState = saved.deterministicChildCreation ?? false;
+            deterministicChildCreationState = saved.deterministicChildCreation ?? true;
             (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
             // pruneScopeState removed - prune scope UI removed
         }
@@ -5057,6 +5057,19 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         if (importData.collapsed !== undefined) {
             importedNode.collapsed = importData.collapsed;
         }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(importData.conditionalContextItems)) {
+            const existing = importedNode.getConditionalContextItems();
+            for (const item of existing) {
+                importedNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of importData.conditionalContextItems) {
+                const newId = importedNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    importedNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
+        }
         
     } else {
         // Importing with legacy format
@@ -5092,6 +5105,19 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         
         if (importData.generationSessions !== undefined && Array.isArray(importData.generationSessions)) {
             importedNode.generationSessions = importData.generationSessions;
+        }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(importData.conditionalContextItems)) {
+            const existing = importedNode.getConditionalContextItems();
+            for (const item of existing) {
+                importedNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of importData.conditionalContextItems) {
+                const newId = importedNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    importedNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
         }
     }
 
@@ -5173,6 +5199,19 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         if (childData.collapsed !== undefined) {
             newNode.collapsed = childData.collapsed;
         }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(childData.conditionalContextItems)) {
+            const existing = newNode.getConditionalContextItems();
+            for (const item of existing) {
+                newNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of childData.conditionalContextItems) {
+                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
+        }
         
     } else {
                     // Importing child with legacy format
@@ -5208,6 +5247,19 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         
         if (childData.generationSessions !== undefined && Array.isArray(childData.generationSessions)) {
             newNode.generationSessions = childData.generationSessions;
+        }
+        // Restore conditional context items (node-level)
+        if (Array.isArray(childData.conditionalContextItems)) {
+            const existing = newNode.getConditionalContextItems();
+            for (const item of existing) {
+                newNode.removeConditionalContextItem(item.id);
+            }
+            for (const raw of childData.conditionalContextItems) {
+                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
+                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
+                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
+                }
+            }
         }
     }
 
