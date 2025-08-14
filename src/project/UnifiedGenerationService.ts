@@ -1285,18 +1285,18 @@ export class UnifiedGenerationService {
             });
             
             if (!result.hasContradictions) {
-                // Path 1: No contradictions found - tag children as consistent immediately
+                // Path 1: No contradictions found - tag analyzed children as consistent immediately
                 this.accumulatedContradictions.analyzedNodes.push(parentNode);
                 this.accumulatedContradictions.totalAnalyzed++;
-                await this.tagChildrenAsConsistent(parentNode);
+                await this.tagSpecificChildrenAsConsistent(parentNode, result.childNodeIds);
             } else {
                 // Contradictions found
                 if (levels.autofixSeverity !== -1) {
                     // Path 2: Autofix enabled - contradictions were handled automatically
-                    // Tag children as consistent since autofix resolved all contradictions
+                    // Tag analyzed children as consistent since autofix resolved issues or recorded them
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
-                    await this.tagChildrenAsConsistent(parentNode);
+                    await this.tagSpecificChildrenAsConsistent(parentNode, result.childNodeIds);
                 } else {
                     // Path 3: Autofix disabled - show modal immediately, then tag as consistent
                     console.log(`🔍 Showing coherence modal for "${parentNode.title}" with ${result.contradictions.length} contradictions`);
@@ -1313,11 +1313,11 @@ export class UnifiedGenerationService {
                     // Show the modal and wait for user to close it
                     await this.showCoherenceModalAndWait(parentNode, modalResult);
                     
-                    // After modal closes (regardless of what user did), tag children as consistent
+                    // After modal closes (regardless of what user did), tag analyzed children as consistent
                     // This prevents the infinite loop - the user has seen the contradictions
                     this.accumulatedContradictions.analyzedNodes.push(parentNode);
                     this.accumulatedContradictions.totalAnalyzed++;
-                    await this.tagChildrenAsConsistent(parentNode);
+                    await this.tagSpecificChildrenAsConsistent(parentNode, result.childNodeIds);
                 }
             }
             
@@ -1486,30 +1486,25 @@ export class UnifiedGenerationService {
         }
     }
 
+    
+
     /**
-     * Tag children of a single parent node as consistent to parent
+     * Tag only a specific set of children (by IDs) as consistent to parent
      */
-    private async tagChildrenAsConsistent(parentNode: DocumentNode): Promise<void> {
-        console.log(`🏷️ Tagging children of "${parentNode.title}" as consistent to parent (immediate after coherence check)`);
-        
+    private async tagSpecificChildrenAsConsistent(parentNode: DocumentNode, childIds: string[]): Promise<void> {
+        const idSet = new Set(childIds);
         let taggedCount = 0;
-        
-        // Tag all children's master versions
         for (const childNode of parentNode.children) {
+            if (!idSet.has(childNode.id)) continue;
             const masterVersion = childNode.getMasterVersion();
             if (masterVersion) {
-                // Add the consistent_to_parent tag
                 masterVersion.tags.add('consistent_to_parent');
-                masterVersion.timestamp = new Date(); // Update timestamp
+                masterVersion.timestamp = new Date();
                 taggedCount++;
             } else {
                 console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
             }
         }
-        
-
-        
-        // Save the project after tagging
         await this.saveProjectAfterBatchTagging();
     }
 

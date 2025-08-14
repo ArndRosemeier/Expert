@@ -137,11 +137,16 @@ export class CoherenceService {
         const request = this.prepareAnalysisRequest(node);
         
         // Use frozen settings - no fallbacks, errors fly if missing
-        const analysisPrompt = frozenSettings.coherenceAnalysisPrompt
+        let analysisPrompt = frozenSettings.coherenceAnalysisPrompt
             .replace(/\{\{parent_content\}\}/g, request.parentContent)
             .replace(/\{\{parent_context\}\}/g, request.parentContext)
             .replace(/\{\{children_content\}\}/g, request.childrenContent)
             .replace(/\{\{language\}\}/g, frozenSettings.language);
+
+        // Strengthen prompt with allowed child titles and strict JSON output requirements
+        const allowedTitles = JSON.stringify(request.childNodeTitles);
+        const strictGuard = `\n\nSTRICT INSTRUCTIONS:\n- Only reference offending_child_title from this exact list: ${allowedTitles}.\n- If none of these children are inconsistent, return an empty JSON array: []\n- Output must be ONLY a JSON array (no code fences, no prose), with items of the form:\n  [{\n    "offending_child_title": string,\n    "fact_in_outline": string,\n    "fact_in_expansion": string,\n    "justification": string,\n    "severity": number (1-10)\n  }]`;
+        analysisPrompt += strictGuard;
 
         try {
             console.log(`🔍 Starting coherence analysis for "${node.title}" with ${request.childNodes.length} child nodes`);
@@ -170,7 +175,8 @@ export class CoherenceService {
                 hasContradictions: contradictions.length > 0,
                 analysisTimestamp: new Date(),
                 parentNodeId: node.id,
-                childNodeIds: node.children.map(child => child.id)
+                // Only include analyzed children (Final and not already consistent)
+                childNodeIds: request.childNodes.map(child => child.id)
             };
         } catch (error) {
             // Log detailed error information
@@ -218,7 +224,8 @@ If the problem persists, try rephrasing explicit content in your project to be l
                 }
             }
             
-            throw new Error(`Coherence analysis failed due to malformed AI response. Please try again.`);
+            // Re-throw with message matching retry heuristic in UnifiedGenerationService
+            throw new Error('Failed to parse analysis results: malformed coherence response');
         }
     }
 
@@ -227,17 +234,40 @@ If the problem persists, try rephrasing explicit content in your project to be l
      */
     private parseAnalysisResponse(response: string, childNodes: Array<{id: string; title: string; content: string; isLeaf: boolean}>): CoherenceContradiction[] {
         try {
-            // Try to extract JSON from response
-            const jsonMatch = response.match(/\[[\s\S]*\]/);
-            if (!jsonMatch) {
-                throw new Error('No JSON array found in response');
+            // Normalize common wrappers: code fences and leading/trailing prose
+            const candidates: string[] = [];
+
+            // 1) Code fence extraction
+            const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+            let fenceMatch: RegExpExecArray | null;
+            while ((fenceMatch = fenceRegex.exec(response)) !== null) {
+                if (fenceMatch[1]) candidates.push(fenceMatch[1].trim());
             }
 
-            const parsed = JSON.parse(jsonMatch[0]);
-            
-            if (!Array.isArray(parsed)) {
-                throw new Error('Response is not an array');
+            // 2) JSON array lazy match
+            const arrayLazyMatch = response.match(/\[[\s\S]*?\]/);
+            if (arrayLazyMatch) candidates.push(arrayLazyMatch[0].trim());
+
+            // 3) Raw response as fallback
+            candidates.push(response.trim());
+
+            let parsedValue: unknown = null;
+            for (const candidate of candidates) {
+                try {
+                    const parsed = JSON.parse(candidate);
+                    parsedValue = parsed;
+                    break;
+                } catch (e) {
+                    // Try next candidate
+                }
             }
+
+            if (parsedValue === null) {
+                throw new Error(`No valid JSON found in response`);
+            }
+
+            // Accept either an array of items or a single item
+            const parsedArray: any[] = Array.isArray(parsedValue) ? parsedValue : [parsedValue];
 
             // Create a mapping from child title to child ID
             const titleToIdMap = new Map<string, string>();
@@ -246,12 +276,12 @@ If the problem persists, try rephrasing explicit content in your project to be l
             });
 
             // Validate and normalize contradictions
-            return parsed.map((item, index) => {
+            return parsedArray.map((item, index) => {
                 if (!item || typeof item !== 'object') {
                     throw new Error(`Invalid contradiction at index ${index}`);
                 }
 
-                const offendingChildTitle = String(item.offending_child_title || '').trim();
+                let offendingChildTitle = String(item.offending_child_title || '').trim();
                 
                 const contradiction: CoherenceContradiction = {
                     fact_in_outline: String(item.fact_in_outline || '').trim(),
@@ -278,7 +308,7 @@ If the problem persists, try rephrasing explicit content in your project to be l
                     }
                 }
                 
-                // No fallback - if we can't match the title, that's an error that must be visible
+                // Strict: if we can't match the title, error out
                 if (!childId) {
                     throw new Error(`Could not match offending child title "${offendingChildTitle}" to any child node. Available titles: ${childNodes.map(c => c.title).join(', ')}`);
                 }
