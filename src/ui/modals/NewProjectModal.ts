@@ -9,6 +9,7 @@ import { ModalConfig } from './types/ModalTypes';
 import { ManualProjectCreator, ManualProjectCreatorConfig } from './components/ManualProjectCreator';
 import { AIProjectCreator, AIProjectCreatorConfig } from './components/AIProjectCreator';
 import { OutlineFactory } from './components/OutlineFactory';
+import { GuidedOutlineCreator, GuidedOutlineCreatorConfig } from './components/GuidedOutlineCreator';
 import { OutlineGenerationResult } from '../../types/OutlineFactoryTypes';
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 import { ProjectTemplate } from '../../ProjectTemplate';
@@ -21,7 +22,7 @@ export interface NewProjectModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
 }
 
-type TabType = 'manual' | 'ai' | 'outline';
+type TabType = 'manual' | 'ai' | 'outline' | 'guided';
 
 export class NewProjectModal extends BaseModal {
     private onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
@@ -29,6 +30,7 @@ export class NewProjectModal extends BaseModal {
     private manualCreator: ManualProjectCreator;
     private aiCreator: AIProjectCreator;
     private outlineFactory: OutlineFactory;
+    private guidedCreator: GuidedOutlineCreator;
     private currentTabContent: HTMLElement | null = null;
     private settingsManager: SettingsManager;
 
@@ -61,6 +63,14 @@ export class NewProjectModal extends BaseModal {
         this.aiCreator = new AIProjectCreator(aiConfig);
         this.outlineFactory = new OutlineFactory(createElement('div'));
         
+        const guidedConfig: GuidedOutlineCreatorConfig = {
+            onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
+                this.handleProjectCreated(title, template, aiData);
+            },
+            settingsManager: this.settingsManager
+        };
+        this.guidedCreator = new GuidedOutlineCreator(guidedConfig);
+        
         // Set up outline factory event listener
         this.outlineFactory.onChange(() => {
             // Auto-save configuration on changes - handled internally by OutlineFactory
@@ -75,7 +85,7 @@ export class NewProjectModal extends BaseModal {
         container.innerHTML = `
             <style>
                 .new-project-modal {
-                    max-width: 1200px;
+                    max-width: 80%;
                     width: 90vw;
                     max-height: 90vh;
                     overflow-y: auto;
@@ -135,13 +145,13 @@ export class NewProjectModal extends BaseModal {
                 }
                 
                 .tab-content {
-                    min-height: 400px;
-                    padding: 0 0 2rem 0;
+                    min-height: 50vh;
+                    padding: 0 0 4% 0;
                 }
                 
                 /* Make modal wider for 2-column layout */
                 .modal {
-                    max-width: 1000px;
+                    max-width: 75%;
                 }
                 
                 .modal-body {
@@ -258,6 +268,10 @@ export class NewProjectModal extends BaseModal {
                                 data-tab="outline">
                             🏭 Outline Factory
                         </button>
+                        <button class="tab-btn ${this.activeTab === 'guided' ? 'active' : ''}" 
+                                data-tab="guided">
+                            🗣️ Guided Outline
+                        </button>
                     </div>
                     <div class="tab-content" id="tab-content-container">
                         <!-- Tab content will be rendered here -->
@@ -331,6 +345,14 @@ export class NewProjectModal extends BaseModal {
                     await this.handleOutlineGenerationResult(result);
                 });
             });
+        } else if (this.activeTab === 'guided') {
+            // Render GuidedOutlineCreator component
+            const content = this.guidedCreator.render();
+            contentContainer.innerHTML = content;
+            this.guidedCreator.setupEventListeners(contentContainer);
+            
+            // Set up cancel event handler
+            contentContainer.addEventListener('guided-cancel', async () => this.close());
         } else {
             // Generate content for manual/ai tabs
         const content = this.activeTab === 'manual' 
@@ -385,6 +407,9 @@ export class NewProjectModal extends BaseModal {
         if (this.currentTabContent) {
             if (this.activeTab === 'outline') {
                 // OutlineFactory handles its own cleanup
+            } else if (this.activeTab === 'guided') {
+                // Cleanup guided creator
+                this.guidedCreator.cleanup();
             } else {
             // Cleanup the active component
             const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
@@ -415,6 +440,7 @@ export class NewProjectModal extends BaseModal {
         // Clean up components
         this.manualCreator.cleanup();
         this.aiCreator.cleanup();
+        this.guidedCreator.cleanup();
         // OutlineFactory handles its own cleanup internally
         
         await super.close();

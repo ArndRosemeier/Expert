@@ -18,6 +18,7 @@ import { OpenRouterClient } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { XMLStoryEvent } from '../../xml-story-creation';
 import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
+import { generateElementId } from '../../xml-story-creation/services/ElementIDGenerator';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
@@ -1466,7 +1467,7 @@ export class XMLStoryModal extends SimpleModal {
                         const text = command.parameters?.['text'] || '';
                         const keyword = (command.parameters?.['trigger'] || command.parameters?.['keyword'] || '') as string;
                         if (text.trim().length === 0) continue;
-                        const tempId = `ctx-staged-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+                        const tempId = generateElementId('context');
                         this.stagedAddItem({
                             id: tempId,
                             text,
@@ -2175,14 +2176,14 @@ export class XMLStoryModal extends SimpleModal {
         if (globals.length === 0) {
             lines.push('- (none)');
         } else {
-            globals.forEach(g => lines.push(`- ID: ${g.id} | Text: ${g.text}`));
+            globals.forEach(g => lines.push(`- ${g.id}: ${g.text}`));
         }
         lines.push('');
         lines.push('Triggered context (by trigger word):');
         if (keyworded.length === 0) {
             lines.push('- (none)');
         } else {
-            keyworded.forEach(k => lines.push(`- ID: ${k.id} | Trigger: ${k.keyword} | Text: ${k.text}`));
+            keyworded.forEach(k => lines.push(`- ${k.id} [${k.keyword}]: ${k.text}`));
         }
         return lines.join('\n');
     }
@@ -2203,6 +2204,11 @@ export class XMLStoryModal extends SimpleModal {
             '- <context add text="…" [trigger="…"] />',
             '- <context edit id="…" text="…" [trigger="…"] />',
             '- <context remove id="…" />',
+            '',
+            'ID Format Examples:',
+            '- For context item c_001: <context edit id="c_001" text="..." />',
+            '- For context item c_042: <context edit id="c_042" text="..." />',
+            '- Use the exact ID shown in the context list (like c_001, c_042, etc.)',
             '',
             'Important:',
             '- If editing an existing entry that already has conditions internally, do not attempt to rewrite or mention them. Only include a trigger when you want it to be triggered.',
@@ -3515,7 +3521,7 @@ export class XMLStoryModal extends SimpleModal {
         console.log('Caption entered:', caption);
         if (!caption) return;
         
-        const buttonId = `custom-btn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const buttonId = `custom-btn-${Date.now()}`;
         const newButton = {
             id: buttonId,
             caption: caption.trim(),
@@ -3646,7 +3652,7 @@ export class XMLStoryModal extends SimpleModal {
         }
         
         // Apply the highlight
-        const highlightId = `persistent-highlight-${Date.now()}`;
+        const highlightId = `highlight-${Date.now()}`;
         this.outlineEditor.addHighlight(
             highlightId,
             this.persistentHighlight.startPos,

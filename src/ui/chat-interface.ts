@@ -53,6 +53,13 @@ export class ChatInterface {
     }
 
     /**
+     * Check if we're in guided outline mode
+     */
+    private isGuidedOutlineMode(): boolean {
+        return this.chatTitle === 'Guided Outline Creation';
+    }
+
+    /**
      * Load the last used chat model from storage
      */
     private async loadLastUsedModel(): Promise<void> {
@@ -172,7 +179,7 @@ export class ChatInterface {
                                 margin-bottom: 0.75rem;
                                 text-transform: uppercase;
                                 letter-spacing: 0.5px;
-                            ">${this.isManualSupportMode() ? 'Quick Help' : 'Standard Actions'}</div>
+                            ">${this.isManualSupportMode() ? 'Quick Help' : (this.isGuidedOutlineMode() ? 'Outline Creation' : 'Standard Actions')}</div>
                             ${this.isManualSupportMode() ? `
                             <button id="getting-started-btn" style="
                                 width: 100%;
@@ -218,6 +225,18 @@ export class ChatInterface {
                             " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
                                 🔧 Troubleshooting Help
                             </button>
+                            ` : this.isGuidedOutlineMode() ? `
+                            <div style="
+                                color: #007bff;
+                                font-size: 0.85rem;
+                                margin-bottom: 1rem;
+                                padding: 0.75rem;
+                                background: rgba(0, 123, 255, 0.1);
+                                border-radius: 6px;
+                                border-left: 3px solid #007bff;
+                            ">
+                                💡 Tell me about your story idea and I'll ask clarifying questions to create a detailed outline with context items.
+                            </div>
                             ` : `
                             <button id="consistency-check-btn" style="
                                 width: 100%;
@@ -274,6 +293,8 @@ export class ChatInterface {
                             ${this.customSystemPrompt ? 
                                 (this.isManualSupportMode() ? 
                                     '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>📚 Manual Support Ready</strong></p><p>I have access to the complete user manual and can help you understand how to use the Expert System. Ask me anything about the app features, workflows, or troubleshooting!</p>' 
+                                    : this.isGuidedOutlineMode() ?
+                                    '<p style="color: #007bff; margin-bottom: 0.5rem;"><strong>🗣️ Guided Outline Creation</strong></p><p>I will help you create a structured story outline through conversation. Describe your story idea to get started!</p>'
                                     : '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>✓ Context Loaded</strong></p><p>This chat has specific context about your document structure. Ask questions about the content, request edits, or get suggestions.</p>')
                                 : '<p>Select a model and start chatting. Your conversation will build context as you continue.</p>'
                             }
