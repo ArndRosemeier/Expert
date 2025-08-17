@@ -2,6 +2,7 @@ import { LoopHistoryItem } from './LoopOrchestrator';
 import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 import { getContextItems } from './ContextFormat';
+import { generateNewContextID } from './ContextIDGenerator';
 
 // ---------------- Conditional Context System (parallel to legacy context) ----------------
 
@@ -162,8 +163,13 @@ export class DocumentNode {
     // --- Conditional Context (new system, parallel to legacy `context`) ---
     private conditionalContextItems: ConditionalContextItem[] = [];
 
-    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '') {
-        this.id = uuidv4();
+    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '', rootNode?: DocumentNode) {
+        // Generate context ID if we have a root node, otherwise use temporary UUID (will be normalized later)
+        if (rootNode) {
+            this.id = generateNewContextID(rootNode);
+        } else {
+            this.id = uuidv4(); // Temporary ID, will be normalized during project loading
+        }
         this.level = level;
         this.parentId = parentId;
         this.template = template;
@@ -191,6 +197,16 @@ export class DocumentNode {
         };
         
         this.versions = [initialVersion];
+    }
+
+    /**
+     * Updates this node's ID to use the new context ID format
+     * @param rootNode The root node for scanning existing IDs
+     * @returns The new ID that was assigned
+     */
+    updateToNewContextID(rootNode: DocumentNode): string {
+        this.id = generateNewContextID(rootNode);
+        return this.id;
     }
 
     /**

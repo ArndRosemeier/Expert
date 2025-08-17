@@ -5,6 +5,7 @@ import { EventEmitter } from './EventEmitter';
 import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
+import { ContextIDGenerator } from './ContextIDGenerator';
 
 
 
@@ -124,6 +125,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // This allows project-wide template modifications while child nodes share the reference
         const rootNodeTemplate = [...this.template.hierarchyLevels];
         this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate);
+        
+        // Ensure root node uses the new ID format
+        this.rootNode.id = 'id_1'; // Root node always gets id_1
 
         // Initialize extracted services
         this.treeService = new TreeService();
@@ -324,7 +328,57 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                 const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
                     ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
                 );
-                return { projects, activeProjectId: activeProjectId ?? null };
+                
+                // Handle ID normalization and storage updates
+                let updatedActiveProjectId = activeProjectId;
+                const storageUpdatesNeeded: { oldId: string, newId: string, project: ProjectManager }[] = [];
+                
+                for (const project of projects) {
+                    const oldRootId = (project as any)._oldRootId;
+                    if (oldRootId && oldRootId !== project.rootNode.id) {
+                        // This project had its ID normalized
+                        storageUpdatesNeeded.push({ oldId: oldRootId, newId: project.rootNode.id, project });
+                        
+                        // Update active project ID if it was affected
+                        if (activeProjectId === oldRootId) {
+                            updatedActiveProjectId = project.rootNode.id;
+                            console.log(`🔄 Updated active project ID from ${oldRootId} to ${project.rootNode.id}`);
+                        }
+                        
+                        // Clean up the temporary property
+                        delete (project as any)._oldRootId;
+                    }
+                }
+                
+                // Update storage if there were ID changes
+                if (storageUpdatesNeeded.length > 0) {
+                    console.log(`🔄 Updating storage for ${storageUpdatesNeeded.length} projects with normalized IDs`);
+                    
+                    for (const { oldId, newId, project } of storageUpdatesNeeded) {
+                        // Remove old storage entry
+                        await services.indexedDB!.delete('projects', oldId);
+                        
+                        // Add new storage entry with new ID
+                        const projectRecord: ProjectRecord = {
+                            id: newId,
+                            title: project.projectTitle,
+                            templateName: project.template.name,
+                            createdAt: new Date(),
+                            lastModified: new Date(),
+                            data: project.save()
+                        };
+                        await services.indexedDB!.set('projects', newId, projectRecord);
+                    }
+                    
+                    // Update active project ID in storage if it changed
+                    if (updatedActiveProjectId !== activeProjectId) {
+                        await services.storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, updatedActiveProjectId);
+                    }
+                    
+                    console.log('✅ Storage updated with normalized IDs');
+                }
+                
+                return { projects, activeProjectId: updatedActiveProjectId ?? null };
             }
             
             return { projects: [], activeProjectId: null };
@@ -367,6 +421,22 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // The rootNode is created in the constructor, but we need to overwrite it
         // with the hydrated version of our saved node tree.
         project.rootNode = this.rehydrateNode(plainObject.rootNode);
+        
+        // Normalize all IDs in the project tree to use the new format
+        console.log('🔄 Normalizing context IDs to new format...');
+        const oldRootId = project.rootNode.id;
+        const idMapping = ContextIDGenerator.getInstance().normalizeProjectTreeIds(project.rootNode);
+        if (idMapping.size > 0) {
+            console.log(`✅ Normalized ${idMapping.size} IDs to new format`);
+            
+            // Update selected node ID if it was affected
+            if (project.selectedNodeId && idMapping.has(project.selectedNodeId)) {
+                project.selectedNodeId = idMapping.get(project.selectedNodeId)!;
+            }
+            
+            // Store the old root ID for later storage updates
+            (project as any)._oldRootId = oldRootId;
+        }
         
         // The rootNode is now properly set - no need to recreate GenerationService
         

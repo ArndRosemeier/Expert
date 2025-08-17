@@ -58,7 +58,7 @@ export class TreeService {
         }
 
         const newLevel = parent.level + 1;
-        const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
+        const newNode = new DocumentNode(newLevel, title, parent.id, parent.template, '', rootNode);
         
         // Traditional context inheritance removed - conditional context handles this automatically
         

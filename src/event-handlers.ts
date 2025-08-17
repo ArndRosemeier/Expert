@@ -724,7 +724,7 @@ function importChildNodeWithRootTemplateForProject(project: ProjectManager, pare
     const newLevel = parent.level + 1;
     // Use root template (shallow copy) instead of parent template
     const rootTemplate = [...project.rootNode.template];
-    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate, '', project.rootNode);
     
     parent.children.push(newNode);
     

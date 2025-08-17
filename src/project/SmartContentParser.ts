@@ -454,8 +454,10 @@ export class SmartContentParser {
     /**
      * Enhanced debugging for development
      */
-    private static debug(..._args: any[]): void {
-        // Debug logging disabled to reduce console noise
+    private static debug(...args: any[]): void {
+        if (this.debugEnabled) {
+            console.log('[SmartContentParser]', ...args);
+        }
     }
 
     /**

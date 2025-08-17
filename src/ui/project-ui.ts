@@ -15,6 +15,7 @@ import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
 import { UniversalTextEditor } from './components/UniversalTextEditor';
+import { ContextIDGenerator } from '../ContextIDGenerator';
 
 // Global references to enhanced editors for access across functions
 let enhancedContentEditor: UniversalTextEditor | null = null;
@@ -958,6 +959,10 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
         // Replace the auto-generated root with our copied structure
         newProjectManager.rootNode = newRootNode;
         
+        // Normalize all IDs in the copied project tree to use the new format
+        const idMapping = ContextIDGenerator.getInstance().normalizeProjectTreeIds(newProjectManager.rootNode);
+        console.log(`✅ Normalized ${idMapping.size} IDs in copied project`);
+        
         // Update the root node title to match the unique project title using version management
         newRootNode.setTitle(uniqueTitle, 'master');
 
@@ -987,7 +992,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
 }
 
 function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustment: number, adjustedTemplate: string[]): DocumentNode {
-    // Create new node with adjusted level
+    // Create new node with adjusted level (without root node for ID generation - will be normalized later)
     const newLevel = sourceNode.level + levelAdjustment;
     const newNode = new DocumentNode(
         newLevel,
@@ -5279,7 +5284,7 @@ function importChildNodeWithRootTemplate(projectManager: ProjectManager, parentI
     const newLevel = parent.level + 1;
     // Use root template (shallow copy) instead of parent template
     const rootTemplate = [...projectManager.rootNode.template];
-    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate, '', projectManager.rootNode);
     
     parent.children.push(newNode);
     
