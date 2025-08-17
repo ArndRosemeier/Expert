@@ -142,8 +142,7 @@ export class ProjectGenerationService {
                 title: projectTitle,
                 template: new ProjectTemplate(
                     aiResponse.Template.name,
-                    aiResponse.Template.hierarchyLevels,
-                    aiResponse.Template.scaffoldingDocuments
+                    aiResponse.Template.hierarchyLevels
                 ),
                 content: aiResponse.Content,
                 context: aiResponse.Context,

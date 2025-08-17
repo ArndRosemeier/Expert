@@ -142,13 +142,13 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                 // Extract template - first try from project level, then from root node, then from child nodes
                 let templateData = data.template;
                 
-                if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                if (!templateData || !templateData.name || !templateData.hierarchyLevels) {
                     // Check if root node has template as array (node export format)
                     if (data.template && Array.isArray(data.template)) {
                         templateData = {
                             name: `Imported Template (${data.title || 'Unknown'})`,
                             hierarchyLevels: data.template,
-                            scaffoldingDocuments: []
+                            
                         };
                     } else if (data.children && data.children.length > 0) {
                         // Try to extract template from first child that has one
@@ -164,7 +164,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                             templateData = {
                                 name: `Imported Template (${data.title || 'Unknown'})`,
                                 hierarchyLevels: foundTemplate,
-                                scaffoldingDocuments: []
+                                
                             };
                         } else {
                             throw new Error('Invalid import file: Missing or incomplete template information');
@@ -177,8 +177,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                 // Create template from extracted data
                 const bestTemplate = new ProjectTemplate(
                     templateData.name,
-                    templateData.hierarchyLevels,
-                    templateData.scaffoldingDocuments
+                    templateData.hierarchyLevels
                 );
                 
                 // Calculate depth for display purposes

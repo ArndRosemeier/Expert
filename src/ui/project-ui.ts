@@ -529,7 +529,7 @@ async function saveLevelStates() {
             // pruneScope removed - prune scope UI removed
         });
     } catch (error) {
-        console.warn('Failed to save level states:', error);
+        // Failed to save level states
     }
 }
 
@@ -549,7 +549,7 @@ async function loadLevelStates() {
             // pruneScopeState removed - prune scope UI removed
         }
     } catch (error) {
-        console.warn('Failed to load level states:', error);
+        // Failed to load level states
     }
 }
 
@@ -584,7 +584,7 @@ function captureCurrentDropdownValues() {
         }
         // pruneScopeSelector removed - prune scope UI removed
     } catch (error) {
-        console.warn('Failed to capture dropdown values:', error);
+        // Failed to capture dropdown values
     }
 }
 
@@ -818,8 +818,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         // Create new template
         const newTemplate = new ProjectTemplate(
             'custom',
-            newHierarchyLevels,
-            currentTemplate.scaffoldingDocuments
+            newHierarchyLevels
         );
 
         // Create new root node with the extended template
@@ -913,7 +912,6 @@ async function handleSetProjectLanguage(): Promise<void> {
 async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
     try {
         // Build adjusted template from the source node's own template to ensure exact match
-        const currentTemplate = projectManager!.template;
         const adjustedHierarchyLevels = sourceNode.template.slice(sourceNode.level);
         
         if (adjustedHierarchyLevels.length === 0) {
@@ -924,8 +922,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
         // Create new template for the extracted project
         const newTemplate = new ProjectTemplate(
             `${sourceNode.title} Project`,
-            adjustedHierarchyLevels,
-            currentTemplate.scaffoldingDocuments
+            adjustedHierarchyLevels
         );
 
         // Deep copy the source node and all its children, adjusting levels
@@ -952,7 +949,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
                 newProjectManager.setLanguage(sourceLanguage);
             }
         } catch (e) {
-            console.warn('Failed to copy project language to new project:', e);
+            // Failed to copy project language to new project
         }
 
         // Ensure all nodes share the same template reference
@@ -976,7 +973,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
         // Refresh the project tree to show the new project
         renderMultiProjectTree();
 
-        console.log(`New project "${uniqueTitle}" created with ID: ${newProjectManager.rootNode.id}`);
+        // New project created successfully
         
         const message = sourceNode.level === 0 
             ? `Successfully created copy of project "${uniqueTitle}".`
@@ -1439,7 +1436,7 @@ export async function renderProjectUI(proj: ProjectManager) {
         const modalFactory = getDefaultModalFactory();
         modalFactory.updateDependencies({ projectManager: proj });
     } catch (error) {
-        console.warn('Modal factory not initialized yet:', error);
+        // Modal factory not initialized yet
     }
     
     // One-time setup for event listeners from the manager
@@ -1624,7 +1621,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
     };
 
     const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: unknown; success: boolean }) => {
-        console.log(`🎯 Bulk generation complete for node "${e.node.title}" (ID: ${e.nodeId})`);
+        // Bulk generation complete for node
         
         // Clear bulk operation flag
         isBulkOperationActive = false;
@@ -1632,7 +1629,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Check if coherence check was requested for this generation
         if (e.node && (e.node as any)._pendingCoherenceCheck && e.success) {
             const completedNode = e.node;
-            console.log(`🔍 Auto-starting coherence analysis for node "${completedNode.title}" (ID: ${completedNode.id})`);
+            // Auto-starting coherence analysis for node
             
             // Clear the pending flag
             delete (completedNode as any)._pendingCoherenceCheck;
@@ -1649,8 +1646,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 
                         // Check if node is eligible for coherence analysis
                         if (!coherenceService.isNodeEligible(completedNode)) {
-                            const reason = coherenceService.getIneligibilityReason(completedNode);
-                            console.log(`⏭️ Skipping auto-coherence check for "${completedNode.title}" - ${reason}`);
+                            // Skipping auto-coherence check - node not eligible
                             return;
                         }
 
@@ -4195,7 +4191,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             const modalFactory = getDefaultModalFactory();
             modalFactory.updateDependencies({ projectManager: activeProject });
         } catch (error) {
-            console.warn('Modal factory not initialized yet:', error);
+            // Modal factory not initialized yet
         }
     }
     

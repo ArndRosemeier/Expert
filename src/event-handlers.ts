@@ -1093,13 +1093,13 @@ export async function initialize() {
                     // Extract template - first try from project level, then from root node, then from child nodes
                     let templateData = importData.template;
                     
-                    if (!templateData || !templateData.name || !templateData.hierarchyLevels || !templateData.scaffoldingDocuments) {
+                    if (!templateData || !templateData.name || !templateData.hierarchyLevels) {
                         // Check if root node has template as array (node export format)
                         if (importData.template && Array.isArray(importData.template)) {
                             templateData = {
                                 name: `Imported Template (${importData.title || 'Unknown'})`,
                                 hierarchyLevels: importData.template,
-                                scaffoldingDocuments: []
+                                
                             };
                         } else if (importData.children && importData.children.length > 0) {
                             // Try to extract template from first child that has one
@@ -1115,7 +1115,7 @@ export async function initialize() {
                                 templateData = {
                                     name: `Imported Template (${importData.title || 'Unknown'})`,
                                     hierarchyLevels: foundTemplate,
-                                    scaffoldingDocuments: []
+                                    
                                 };
                             } else {
                                 throw new Error('Invalid import file: Missing or incomplete template information');
@@ -1128,8 +1128,7 @@ export async function initialize() {
                     // Create template from extracted data
                     const bestTemplate = new ProjectTemplate(
                         templateData.name,
-                        templateData.hierarchyLevels,
-                        templateData.scaffoldingDocuments
+                        templateData.hierarchyLevels
                     );
                     
                     // Import project data
@@ -1464,8 +1463,7 @@ export async function initialize() {
             // Create template from parsed data
             const template = new ProjectTemplate(
                 parsedContent.template.name,
-                parsedContent.template.hierarchyLevels,
-                parsedContent.template.scaffoldingDocuments
+                parsedContent.template.hierarchyLevels
             );
             
             // Create import data in the same format as JSON import

@@ -96,7 +96,7 @@ export class ModelSelector {
           }
         }
       } catch (error) {
-        console.warn('Failed to auto-fetch models during initialization:', error);
+        // Failed to auto-fetch models during initialization
       }
     }
   }
@@ -1284,7 +1284,7 @@ export class ModelSelector {
       
       // BUGFIX: Don't clear models if fetch returned zero models (likely an API/network issue)
       if (this.models.length === 0) {
-        console.warn('⚠️ Fetched 0 models - this might be an API issue. Not clearing existing selections.');
+        // Fetched 0 models - possible API issue, not clearing existing selections
         this.fetched = true;
         this.update();
         return;
@@ -1301,7 +1301,7 @@ export class ModelSelector {
       for (const purpose of PURPOSES) {
         const selectedModel = this.selectedModels[purpose.key];
         if (selectedModel && !modelIds.has(selectedModel)) {
-          console.warn(`⚠️ Model "${selectedModel}" for ${purpose.key} no longer exists in fetched models, clearing selection`);
+          // Model no longer exists in fetched models, clearing selection
           this.selectedModels[purpose.key] = '';
           modelsCleared = true;
         }
@@ -1337,7 +1337,7 @@ export class ModelSelector {
           // Pre-fetched endpoint information for selected models
           this.update(); // Re-render to show provider options if available
         } catch (error) {
-          console.warn('⚠️ Some endpoint fetches failed during initialization:', error);
+          // Some endpoint fetches failed during initialization
           this.update(); // Still render even if some fetches failed
         }
       } else {
@@ -1566,7 +1566,7 @@ export class ModelSelector {
       const state = await import('./state');
       const settingsManager = state.getSettingsManager();
       if (!settingsManager) {
-        console.warn('⚠️ SettingsManager not available - using empty settings');
+        // SettingsManager not available - using empty settings
         this.selectedModels = {};
         this.webSearchEnabled = {};
         this.selectedProviders = {};
@@ -1656,7 +1656,7 @@ export class ModelSelector {
       const state = await import('./state');
       const settingsManager = state.getSettingsManager();
       if (!settingsManager) {
-        console.warn('⚠️ SettingsManager not available - using empty web search settings');
+        // SettingsManager not available - using empty web search settings
         this.webSearchEnabled = {};
         return;
       }
@@ -1683,7 +1683,7 @@ export class ModelSelector {
       const state = await import('./state');
       const settingsManager = state.getSettingsManager();
       if (!settingsManager) {
-        console.warn('⚠️ SettingsManager not available - web search settings not saved to profile');
+        // SettingsManager not available - web search settings not saved to profile
         return;
       }
 
@@ -1758,8 +1758,7 @@ export class ModelSelector {
     } else {
       lines.push('No provider endpoints available');
     }
-    const message = lines.join('\n');
-    console.info('[ModelSelector] Model parameter support\n' + message);
+    // Model parameter support info logged (removed to reduce console noise)
   }
 
 

@@ -34,8 +34,7 @@ function setupViewTemplateEditor(
     // Create a copy of the template to avoid modifying the original until save
     const templateCopy = new ProjectTemplate(
         template.name,
-        [...template.hierarchyLevels],
-        [...template.scaffoldingDocuments]
+        [...template.hierarchyLevels]
     );
 
     const editor = new SingleTemplateEditor({
@@ -71,8 +70,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
         // Convert template hierarchy to ProjectTemplate
         const template = new ProjectTemplate(
             `${rootNode.title} Template`,
-            templateHierarchy,
-            []
+            templateHierarchy
         );
 
         let singleTemplateEditor: SingleTemplateEditor | null = null;

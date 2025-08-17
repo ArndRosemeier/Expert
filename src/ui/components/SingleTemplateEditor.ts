@@ -198,7 +198,7 @@ export class SingleTemplateEditor {
             });
         }
 
-        return new ProjectTemplate(name, levels, this.template.scaffoldingDocuments);
+        return new ProjectTemplate(name, levels);
     }
 
     public updateTemplate(template: ProjectTemplate): void {

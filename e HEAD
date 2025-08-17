@@ -1,0 +1,20 @@
+* [33m538c56e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m Implement Guided Outline project creation and fix XML chat ID issues
+* [33mc6882d9[m Export/Reimport: include and restore conditionalContextItems for nodes (root and children); UI: default deterministic child creation to true and persist; types: extend NodeExportData; import handlers updated for both project and node imports
+* [33ma241f37[m Coherence: analyze only Final+inconsistent children; return analyzed child IDs; tag only analyzed children; harden parser to extract JSON robustly without special-casing; keep strict title matching and loud errors
+* [33m93551a0[m Copy to new project: preserve template from source, copy conditional context items, copy all versions/tags, and keep original master version
+* [33m298b26a[m Batch Update: add 'Just copy' mode (no AI) when instructions empty; Prompt: {{child_count}} returns 'some' or 'exactly X'; Context: exclude next-node content; Coherence: retry malformed response up to 3x; Types: stronger typing for ratings and prompts; UI: listener registry without ts-ignore
+* [33m0db21bd[m Dead-code cleanup: prune unused exports with TSR, delete unused files, and export ConnectionData for idea-board types. Run typecheck clean.
+* [33mbdb3527[m Remove context adjuster button from UI
+* [33mf1c69b6[m Remove obsolete traditional context search/replace functionality
+* [33m6dbc5f0[m Fix missing searchInConditionalContext option in replace functionality
+* [33mcb89bc0[m Fix conditional context replacement by moving it outside version loop
+* [33md7b8f40[m Add debug logging to conditional context replacement
+* [33m8eac0b2[m Enable conditional context text replacement in search/replace functionality
+* [33m1a90772[m Enable conditional context search by default in Ctrl+F functionality
+* [33m30843cc[m Make NewProjectModal non-dismissible by backdrop clicks
+* [33mf1449ea[m Move source info from right side to after conditions text for inherited items
+* [33mf41f317[m Make inherited conditional context visible by default in XML chat editor
+* [33ma572796[m Fix NodeInspector button styling and update tree node icons
+* [33m9a370aa[m Complete traditional context system removal and migration
+* [33mfc18a09[m XMLStory chat: show ✓ on executed commands (replace/append/section) and detect staged conditional context as unsaved changes; whitespace-robust XML block matching
+* [33m9e863e9[m Chat XML: make executed ✓ prominent with pill badge and green accent box; non-executed stays neutral

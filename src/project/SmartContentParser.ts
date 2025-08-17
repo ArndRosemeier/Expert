@@ -13,7 +13,6 @@ export interface ParsedContent {
     template?: {
         name: string;
         hierarchyLevels: string[];
-        scaffoldingDocuments: string[];
     };
 }
 
@@ -23,7 +22,6 @@ export interface AIProjectSections {
     template?: {
         name: string;
         hierarchy: string;
-        scaffolding: string;
     };
     context: string;
     concept: string;
@@ -35,13 +33,13 @@ export interface AIProjectStructure {
     Template: {
         name: string;
         hierarchyLevels: string[];
-        scaffoldingDocuments: string[];
     };
     Context: string;
 }
 
 export class SmartContentParser {
-    private static debugEnabled: boolean = true;
+    // Debug logging disabled - kept for compatibility
+    private static debugEnabled: boolean = false;
 
     /**
      * Parse generation response with enhanced strategies
@@ -157,16 +155,14 @@ export class SmartContentParser {
     /**
      * Parse template section content
      */
-    private static parseTemplateSection(content: string): { name: string; hierarchy: string; scaffolding: string } | null {
+    private static parseTemplateSection(content: string): { name: string; hierarchy: string } | null {
         const nameMatch = content.match(/Template\s*Name:\s*(.+?)(?=\n|$)/i);
         const hierarchyMatch = content.match(/Hierarchy:\s*(.+?)(?=\n|$)/i);
-        const scaffoldingMatch = content.match(/Scaffolding:\s*(.+?)(?=\n|$)/i);
 
         if (nameMatch && nameMatch[1] && hierarchyMatch && hierarchyMatch[1]) {
             return {
                 name: nameMatch[1].trim(),
-                hierarchy: hierarchyMatch[1].trim(),
-                scaffolding: (scaffoldingMatch && scaffoldingMatch[1]) ? scaffoldingMatch[1].trim() : ''
+                hierarchy: hierarchyMatch[1].trim()
             };
         }
 
@@ -185,15 +181,9 @@ export class SmartContentParser {
                 ? templateData.hierarchy.split('|').map(level => level.trim())
                 : [];
 
-            // Convert scaffolding string to array
-            const scaffoldingDocuments = templateData.scaffolding
-                ? templateData.scaffolding.split(',').map(doc => doc.trim()).filter(doc => doc.length > 0)
-                : [];
-
             const template = {
                 name: templateData.name,
-                hierarchyLevels,
-                scaffoldingDocuments
+                hierarchyLevels
             };
 
             return {
@@ -418,7 +408,6 @@ export class SmartContentParser {
         this.debug('  - Template exists:', !!obj?.Template);
         this.debug('  - Template.name type:', typeof obj?.Template?.name);
         this.debug('  - Template.hierarchyLevels is array:', Array.isArray(obj?.Template?.hierarchyLevels));
-        this.debug('  - Template.scaffoldingDocuments is array:', Array.isArray(obj?.Template?.scaffoldingDocuments));
         this.debug('  - Context type:', typeof obj?.Context);
         
         const isValid = obj && 
@@ -426,7 +415,6 @@ export class SmartContentParser {
                obj.Template &&
                typeof obj.Template.name === 'string' &&
                Array.isArray(obj.Template.hierarchyLevels) &&
-               Array.isArray(obj.Template.scaffoldingDocuments) &&
                (typeof obj.Context === 'string' || typeof obj.Context === 'object');
         
         this.debug('  - Overall valid:', isValid);
@@ -466,10 +454,8 @@ export class SmartContentParser {
     /**
      * Enhanced debugging for development
      */
-    private static debug(...args: any[]): void {
-        if (this.debugEnabled) {
-            console.log('[SmartContentParser]', ...args);
-        }
+    private static debug(..._args: any[]): void {
+        // Debug logging disabled to reduce console noise
     }
 
     /**

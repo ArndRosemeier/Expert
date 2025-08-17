@@ -81,6 +81,19 @@ On the left, you'll see your project organized like folders:
 
 ---
 
+### What the AI Can Change (User Guide)
+
+- Outline: the overall structure and flow of your project.
+- Sections: optional headings for Acts/Chapters only (e.g., `===Act I===`, `===Chapter 1===`).
+- Context items: short facts like characters, locations, and themes.
+
+Tips:
+- Ask clearly: "Improve `===Chapter 2===` by raising the stakes."
+- Keep triggers short for context items (names/keywords only).
+- Complex activation rules for context must be edited manually.
+
+---
+
 ## Essential Tools for Beginners
 
 ### Polish Your Text

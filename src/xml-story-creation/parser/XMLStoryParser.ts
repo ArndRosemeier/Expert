@@ -102,22 +102,29 @@ export class XMLStoryParser {
         let markerIndex = 0;
         
         // Handle outline_replace commands (with content between tags)
-        const outlineReplaceRegex = /<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/gi;
-        let outlineMatch;
-        while ((outlineMatch = outlineReplaceRegex.exec(textWithMarkers)) !== null) {
-            const content = outlineMatch[1] || '';
+        // Accept the correct form <outline_replace>...</outline_replace>
+        // and be tolerant to the legacy/mistyped form </outline_replace>...</outline_replace>
+        const outlineReplaceOpenClose = /(<outline_replace>\s*[\s\S]*?\s*<\/outline_replace>)/gi;
+        const outlineReplaceCloseClose = /(<\/outline_replace>\s*[\s\S]*?\s*<\/outline_replace>)/gi;
+
+        const processOutlineReplaceBlock = (full: string): string => {
             const markerId = `__XML_CMD_${markerIndex++}__`;
-            
+            // Extract inner content regardless of which variant matched
+            const innerMatch = /<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/i.exec(full)
+                || /<outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/i.exec(full);
+            const content = (innerMatch?.[1] || '').trim();
             commands.push({
                 type: 'outline_replace',
-                content: content.trim(),
+                content,
                 timestamp: new Date(),
-                markerId
+                markerId,
+                rawXml: full
             });
-            
-            // Replace the command with a marker
-            textWithMarkers = textWithMarkers.replace(outlineMatch[0], markerId);
-        }
+            return markerId;
+        };
+
+        textWithMarkers = textWithMarkers.replace(outlineReplaceOpenClose, processOutlineReplaceBlock);
+        textWithMarkers = textWithMarkers.replace(outlineReplaceCloseClose, processOutlineReplaceBlock);
         
         // Handle edit commands with content between tags (support both </edit ...> and <edit ...>)
         const editOpenTagRegex = /<edit\s+([^>]*?)>\s*([\s\S]*?)\s*<\/edit>/gi;
@@ -287,6 +294,8 @@ export class XMLStoryParser {
         textWithMarkers = textWithMarkers.replace(contextAddRegex, (full, parametersText) => {
             const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
+            // Support boolean-style flags like "remove" without a value
+            const hasRemoveFlag = /(?:^|\s)remove(?:\s|=|$)/i.test(parametersText || '');
             if (params['id'] && (params['text'] || params['description'])) {
                 // Treat as edit by id
                 const text = (params['text'] || params['description'] || '').toString();
@@ -297,7 +306,7 @@ export class XMLStoryParser {
                 const text = (params['text'] || params['description'] || '').toString();
                 const trigger = (params['trigger'] || params['keyword'] || '').toString();
                 commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId, rawXml: full });
-            } else if (params['id'] && params['remove'] === 'true') {
+            } else if (params['id'] && (params['remove'] === 'true' || hasRemoveFlag)) {
                 commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId, rawXml: full });
             }
             return markerId;
@@ -331,7 +340,7 @@ export class XMLStoryParser {
         // Process both types of matches
         const matches = [...selfClosingMatches, ...contentMatches];
 
-        console.log(`🔍 Found ${matches.length} XML tags to parse:`, matches.map(m => m[0]));
+
 
         for (const match of matches) {
             const fullMatch = match[0];
@@ -367,7 +376,7 @@ export class XMLStoryParser {
                     attributes['description'] = textContent;
                 }
 
-                console.log(`✅ Parsed ${tagName} with attributes:`, attributes);
+
 
                 // Find tag definition
                 const tagDef = XML_TAG_DEFINITIONS.find(def => def.tagName === tagName);
@@ -392,7 +401,6 @@ export class XMLStoryParser {
 
                 if (element) {
                     elements.push(element);
-                    console.log(`🎯 Created element:`, element.id, element.description);
                 }
 
                 // Remove the tag from cleaned text
@@ -421,7 +429,7 @@ export class XMLStoryParser {
         const elementTagRegex = /<(outline|context)(\s[^>]*?)?\s*(?:\/>|>\s*[\s\S]*?<\/\1>)/gi;
         cleanedText = cleanedText.replace(elementTagRegex, _m => '');
 
-        console.log(`📊 Extraction complete: ${elements.length} elements, ${errors.length} errors`);
+
         
         return { 
             elements, 
@@ -525,9 +533,9 @@ export class XMLStoryParser {
             const position = parseInt(positionStr, 10);
             if (!isNaN(position) && position > 0) {
                 element.insertPosition = position;
-                console.log(`🎯 Element ${id} will be inserted at position ${position}`);
+                
             } else {
-                console.warn(`⚠️ Invalid position attribute "${positionStr}" for element ${id}, ignoring`);
+                // Invalid position attribute, ignoring
             }
         }
         

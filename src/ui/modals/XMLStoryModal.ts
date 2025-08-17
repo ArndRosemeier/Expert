@@ -1534,7 +1534,7 @@ export class XMLStoryModal extends SimpleModal {
 
                 // Show any errors
                 if (parseResult.errors.length > 0) {
-                    console.warn('XML parsing errors:', parseResult.errors);
+                    // XML parsing errors occurred
                 }
             }
 
@@ -2036,8 +2036,28 @@ export class XMLStoryModal extends SimpleModal {
             const header = document.createElement('div'); header.style.cssText='display:flex; align-items:center; justify-content:space-between; gap:0.5rem;';
             const isSelected = this.selectedConditionalItemId === id;
             const title = document.createElement('div');
-            title.style.cssText='font-weight:600; color:#111827;';
-            title.textContent = isSelected ? 'Editing' : ((text || '').split('\n')[0] || '(empty)');
+            title.style.cssText='font-weight:600; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+            let displayText = isSelected ? 'Editing' : ((text || '') || '(empty)');
+            const maxLength = 200; // Character limit for title display
+            
+            if (!isSelected && (text || '').includes('\n')) {
+                // Multi-line content - show first line with indicator
+                const lines = (text || '').split('\n');
+                const firstLine = lines[0] || '';
+                const lineCount = lines.length;
+                displayText = firstLine + ` (+${lineCount - 1} more line${lineCount > 2 ? 's' : ''})`;
+            }
+            
+            if (displayText.length > maxLength && !isSelected) {
+                title.textContent = displayText.substring(0, maxLength) + '...';
+            } else {
+                title.textContent = displayText;
+            }
+            
+            // Always set full text as tooltip for hover
+            if (!isSelected && text && text.length > 0) {
+                title.title = text;
+            }
             const right = document.createElement('div'); right.style.cssText='display:flex; align-items:center; gap:0.5rem;';
             const applies = appliesNow.has(id);
             const dot = document.createElement('span'); dot.style.cssText='display:inline-block;width:8px;height:8px;border-radius:50%;'; dot.style.background = applies ? '#16a34a' : '#dc2626';
@@ -2074,12 +2094,18 @@ export class XMLStoryModal extends SimpleModal {
             }
             header.appendChild(title); header.appendChild(right); row.appendChild(header);
 
-            const condCompact = document.createElement('div'); condCompact.style.cssText='font-size:0.85rem; color:#374151; margin-top:4px;';
+            const condCompact = document.createElement('div'); condCompact.style.cssText='font-size:0.85rem; color:#374151; margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+            const condText = document.createElement('span');
             if (Array.isArray(keywords) && keywords.length > 0) {
-                condCompact.textContent = `keyworded entry`;
+                condText.textContent = `keyworded entry`;
             } else {
-                condCompact.innerHTML = renderConditionsCompact(conditions, logic);
+                condText.innerHTML = renderConditionsCompact(conditions, logic);
             }
+            const idBadge = document.createElement('span');
+            idBadge.style.cssText = 'font-size:0.85rem; color:#6b7280;';
+            idBadge.textContent = `(id: ${id})`;
+            condCompact.appendChild(condText);
+            condCompact.appendChild(idBadge);
             if (!isSelected) {
                 row.appendChild(condCompact);
             }
@@ -2284,7 +2310,7 @@ export class XMLStoryModal extends SimpleModal {
     private async handleCommandFailure(event: XMLStoryEvent): Promise<void> {
         const { command, error } = event.payload as { command: XMLStoryCommand; error: string };
         
-        console.warn(`⚠️ Command failed: ${command.type} - ${error}`);
+        // Command failed during execution
         
         // Generate raw XML representation of the failed command
         const rawXml = this.reconstructCommandXML(command);
@@ -2407,7 +2433,7 @@ export class XMLStoryModal extends SimpleModal {
     private handleOutlineAppend(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: XMLStoryCommand };
         if (!command.content) {
-            console.warn('Append command missing content');
+            // Append command missing content
             return;
         }
 
@@ -2733,7 +2759,7 @@ export class XMLStoryModal extends SimpleModal {
             this.setUpdateButtonState('loading');
             
             if (!this.sourceNode) {
-                console.warn('No source node available to update');
+                // No source node available to update
                 this.setUpdateButtonState('error', 'No source node available');
                 return;
             }
@@ -2779,7 +2805,7 @@ export class XMLStoryModal extends SimpleModal {
                     this.sourceNode.promoteToMaster(newVersionId);
     
                 } else {
-                    console.warn('Failed to create new chat_edited version - may already exist');
+                    // Failed to create new chat_edited version - may already exist
                 }
             }
             
@@ -2795,7 +2821,7 @@ export class XMLStoryModal extends SimpleModal {
                     nodeId: this.sourceNode.id, 
                     reason: 'chat-edited' 
                 });
-                console.log('🔄 Triggered main UI refresh for node:', this.sourceNode.id);
+
             }
 
             // Success feedback
@@ -2990,7 +3016,7 @@ export class XMLStoryModal extends SimpleModal {
      */
     private hasUnsavedChanges(): boolean {
         if (!this.sourceNode) {
-            console.log('🔍 hasUnsavedChanges: No sourceNode, returning false');
+
             return false;
         }
 
@@ -3004,13 +3030,7 @@ export class XMLStoryModal extends SimpleModal {
             const outlineChanged = (currentOutlineContent || '') !== sourceOutlineContent;
             const conditionalChanged = this.haveStagedConditionalChanges();
 
-            console.log('🔍 hasUnsavedChanges check:', {
-                currentOutline: currentOutlineContent?.substring(0, 100) + '...',
-                sourceOutline: sourceOutlineContent?.substring(0, 100) + '...',
-                outlineChanged,
-                conditionalChanged,
-                result: outlineChanged || conditionalChanged
-            });
+
 
             return outlineChanged || conditionalChanged;
         } catch (error) {
@@ -3319,7 +3339,7 @@ export class XMLStoryModal extends SimpleModal {
      */
     private resetOutlineToOriginal(): void {
         if (!this.sourceNode) {
-            console.warn('No source node available for outline reset');
+            // No source node available for outline reset
             return;
         }
 
@@ -3340,7 +3360,7 @@ export class XMLStoryModal extends SimpleModal {
             this.updateOutlineControls();
             
             // Note: Reset doesn't change the source node, just the editor state
-            console.log('🔄 Reset outline to original content');
+            // Reset outline to original content
         }
     }
 
@@ -3438,7 +3458,7 @@ export class XMLStoryModal extends SimpleModal {
                 }
             }
         } catch (error) {
-            console.warn('📝 Error loading saved model selection:', error);
+            // Error loading saved model selection
         }
     }
 
@@ -3456,19 +3476,13 @@ export class XMLStoryModal extends SimpleModal {
      * Load custom buttons from storage and add default buttons
      */
     private async loadCustomButtons(): Promise<void> {
-        console.log('loadCustomButtons called');
-        console.log('sourceNode:', this.sourceNode);
         const storageKey = `xml-story-custom-buttons-${this.sourceNode!.id}`;
-        console.log('Storage key:', storageKey);
         
         const storage = await StorageService.getInstance();
         const stored = await storage.get(storageKey);
-        console.log('Stored data:', stored);
         if (stored) {
             this.customButtons = stored as Array<{id: string, caption: string, prompt: string}>;
-            console.log('Loaded custom buttons:', this.customButtons);
         } else {
-            console.log('No stored custom buttons found');
             this.customButtons = [];
         }
         
@@ -3497,28 +3511,25 @@ export class XMLStoryModal extends SimpleModal {
         // Filter out default buttons when saving
         const userCustomButtons = this.customButtons.filter(button => !button.id.startsWith('default-'));
         await storage.set(storageKey, userCustomButtons);
-        console.log('Custom buttons saved successfully (excluding defaults)');
+
     }
     
     /**
      * Create a new custom button from current prompt
      */
     private async createCustomButton(): Promise<void> {
-        console.log('createCustomButton called');
         if (!this.messageInput) {
-            console.log('No messageInput found');
             return;
         }
         
         const currentPrompt = this.messageInput.value.trim();
-        console.log('Current prompt:', currentPrompt);
         if (!currentPrompt) {
             alert('Please enter a prompt in the message input first.');
             return;
         }
         
         const caption = prompt('Enter a caption for this button:');
-        console.log('Caption entered:', caption);
+        // Caption entered for custom button
         if (!caption) return;
         
         const buttonId = `custom-btn-${Date.now()}`;
@@ -3528,9 +3539,9 @@ export class XMLStoryModal extends SimpleModal {
             prompt: currentPrompt
         };
         
-        console.log('Adding new button:', newButton);
+        // Adding new custom button
         this.customButtons.push(newButton);
-        console.log('Custom buttons array:', this.customButtons);
+        // Custom buttons array updated
         await this.saveCustomButtons();
         this.renderCustomButtons();
     }
@@ -3539,10 +3550,9 @@ export class XMLStoryModal extends SimpleModal {
      * Render custom buttons in the sidebar
      */
     private renderCustomButtons(): void {
-        console.log('renderCustomButtons called');
-        console.log('customButtonsContainer:', this.customButtonsContainer);
+        // Rendering custom buttons
         if (!this.customButtonsContainer) {
-            console.log('customButtonsContainer not found!');
+            // Custom buttons container not found
             return;
         }
         
@@ -3675,7 +3685,7 @@ export class XMLStoryModal extends SimpleModal {
 
 
     public override async close(): Promise<void> {
-        console.log('🚪 XMLStoryModal.close() called - proceeding with cleanup and close');
+        // XMLStoryModal.close() called - proceeding with cleanup and close
         
         // Clean up text editors
         this.elementEditors.forEach(editor => editor.destroy());

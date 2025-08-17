@@ -127,7 +127,7 @@ export class ReaderEditor {
     public async executeAction(actionId: string): Promise<void> {
         const context = this.getCurrentEditContext();
         if (!context || !this.currentActiveEditor) {
-            console.warn('No edit context available for action execution');
+            // No edit context available for action execution
             return;
         }
 
@@ -144,7 +144,7 @@ export class ReaderEditor {
                 if (result) {
                     // Use version management system to update content with Edited tag
                     result.node.setContent(currentContent, 'Edited');
-                    console.log(`📝 Updated node content before AI action: ${result.node.title}`);
+                    // Updated node content before AI action
                 }
             }
             
@@ -183,7 +183,7 @@ export class ReaderEditor {
         } catch (error) {
             // Handle cancellation gracefully without error message
             if (error instanceof Error && error.message === 'ACTION_CANCELED') {
-                console.log('Action was canceled by user');
+                // Action was canceled by user
                 // Clear any preview highlights that might be showing
                 if (this.currentActiveEditor && this.currentActiveEditor.editor.hasPreviewHighlight()) {
                     this.currentActiveEditor.editor.clearAllHighlights();
@@ -368,7 +368,7 @@ export class ReaderEditor {
         // Ctrl+S or Cmd+S: Manual save (just show feedback, actual save happens on close)
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
             event.preventDefault();
-            console.log('💾 Save requested - content will be saved when reader closes');
+            // Save requested - content will be saved when reader closes
             return;
         }
     }
@@ -378,7 +378,7 @@ export class ReaderEditor {
      */
     private showActionLoadingState(actionId: string): void {
         this.activeActionsCount++;
-        console.log(`🔄 AI action started: ${actionId} (${this.activeActionsCount} active)`);
+        // AI action started
         
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
@@ -392,7 +392,7 @@ export class ReaderEditor {
      */
     private hideActionLoadingState(actionId: string): void {
         this.activeActionsCount = Math.max(0, this.activeActionsCount - 1);
-        console.log(`✅ AI action completed: ${actionId} (${this.activeActionsCount} active)`);
+        // AI action completed
         
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
         if (button) {
@@ -531,7 +531,7 @@ export class ReaderEditor {
      * Cleanup resources - robustly copy ALL content back to nodes
      */
     public async destroy(): Promise<void> {
-        console.log('💾 Reader closing - copying all content back to nodes...');
+        // Reader closing - copying all content back to nodes
         
         // Robustly copy ALL current content from ALL editors back to their nodes
         // This catches changes from any source: user typing, AI actions, etc.
@@ -544,16 +544,16 @@ export class ReaderEditor {
                 // Always update node content with current editor content using version management
                 // regardless of dirty state or how the content got there, mark as Edited
                 result.node.setContent(currentContent, 'Edited');
-                console.log(`📝 Copied content from reader to node: ${result.node.title}`);
+                // Copied content from reader to node
             } else {
-                console.warn(`⚠️ Node not found for editor: ${nodeId}`);
+                // Node not found for editor
             }
         });
         
         // Save the entire project to storage after updating all nodes
         if (this.nodeEditors.size > 0) {
             await this.projectManager.saveToStorage();
-            console.log('💾 All reader content saved to storage');
+            // All reader content saved to storage
         }
         
         this.removeEventListeners();

@@ -1583,7 +1583,7 @@ RECENT USER EDITS:
 {{human_edits}}
 
 EDITING COMMANDS:
-- For complete outline rewrites: Use </outline_replace>COMPLETE_NEW_OUTLINE</outline_replace>
+- For complete outline rewrites: Use <outline_replace>COMPLETE_NEW_OUTLINE</outline_replace>
 - For appending to outline: Use <append>CONTENT_TO_ADD</append>
 - For replacing outline parts: Use <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command>
 - For replacing sections: Use <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>

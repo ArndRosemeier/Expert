@@ -239,8 +239,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             projectTitle: this.projectTitle,
             template: {
                 name: this.template.name,
-                hierarchyLevels: this.template.hierarchyLevels,
-                scaffoldingDocuments: this.template.scaffoldingDocuments
+                hierarchyLevels: this.template.hierarchyLevels
             },
             rootNode: this.rootNode,
             selectedNodeId: this.selectedNodeId,
@@ -353,8 +352,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Re-create the template instance
         const template = new ProjectTemplate(
             plainObject.template.name,
-            plainObject.template.hierarchyLevels,
-            plainObject.template.scaffoldingDocuments
+            plainObject.template.hierarchyLevels
         );
         
         // Create the project manager instance

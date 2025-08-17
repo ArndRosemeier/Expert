@@ -197,8 +197,7 @@ export class TemplateSelector {
 
             const duplicatedTemplate = new ProjectTemplate(
                 newName.trim(), 
-                [...template.hierarchyLevels], 
-                [...template.scaffoldingDocuments]
+                [...template.hierarchyLevels]
             );
             await templateManager.saveTemplate(newName.trim(), duplicatedTemplate);
             

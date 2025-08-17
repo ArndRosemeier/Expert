@@ -455,6 +455,47 @@ This fits your story's theme of moral choices and gives the hero agency in the d
 
 ---
 
+### AI Editing Capabilities (User Guide)
+
+This section explains what the AI can change for you and how to phrase requests in natural language. No special commands are required.
+
+#### What the AI can change
+- Outline: the overall structure and content summary of your project.
+- Context items: short, reusable facts (e.g., characters, locations, themes) used to keep consistency.
+
+#### Outline editing and Sections
+- The outline is a single document that describes structure and flow.
+- Sections are optional but recommended for larger projects to guide AI edits.
+- Use sections specifically for structural divisions such as Acts or Chapters.
+  - Examples: `===Act I===`, `===Act II===`, `===Chapter 1===`, `===Chapter 2===`
+- Characters, themes, and similar background elements should be modeled as context items (not outline sections).
+- What you can ask:
+  - "Rewrite the outline to make the midpoint stronger."
+  - "Add an `===Act II===` section that escalates conflict."
+  - "Tighten the ending section and remove redundant parts."
+
+#### Context items with triggers
+- Context items keep facts consistent across your project (e.g., characters, locations, themes).
+- Each item can be:
+  - Global: always active.
+  - Triggered: active only when a specific keyword appears (e.g., a character name).
+- What you can ask:
+  - "Create a global context item for the city history."
+  - "Update Sarah’s context item to include her new backstory."
+  - "Add a triggered context item for 'Neo-Singapore' that describes the skyline and tech vibe."
+
+#### Limitations
+- The AI can set or change the single trigger keyword for a context item.
+- More complex activation conditions (beyond a single trigger keyword) must be edited manually.
+
+#### Tips for better results
+- Be explicit: "Strengthen the stakes in `===Chapter 2===` without changing the character motivations."
+- Use clear section titles for Acts/Chapters to help the AI target the right part of the outline.
+- Keep triggers short: use names or single keywords, not sentences.
+- Iterate: ask for a small improvement, review, then continue.
+
+---
+
 ## Templates & Structure
 
 ### Template Creation

@@ -21,7 +21,6 @@ export interface AIGenerationResponse {
     Template: {
         name: string;
         hierarchyLevels: string[];
-        scaffoldingDocuments: string[];
     };
     Context: string;  // Consolidated context: characters, style guides, themes, etc. (converted from object if needed)
 }
@@ -174,9 +173,7 @@ export class AIProjectGenerator {
             if (!Array.isArray(response.Template.hierarchyLevels) || response.Template.hierarchyLevels.length === 0) {
                 errors.push('Template hierarchy levels are missing or invalid');
             }
-            if (!Array.isArray(response.Template.scaffoldingDocuments)) {
-                errors.push('Template scaffolding documents are missing or invalid');
-            }
+            // scaffoldingDocuments removed
         }
 
         if (!response.Context || response.Context.trim().length === 0) {
