@@ -156,21 +156,21 @@ export class ContextIDGenerator {
             return currentId;
         }
         
-        // Otherwise, generate a new ID
+        // For everything else (UUIDs, cid_ temporary IDs, etc.), generate a new ID
         return this.generateNewContextID(rootNode);
     }
     
     /**
-     * Convert a project tree to use normalized context IDs.
-     * This is used during project loading to ensure all IDs follow the new format.
+     * Normalize ONLY conditional context item IDs in a project tree.
+     * Tree node IDs are left unchanged.
      * 
      * @param rootNode The root node of the project to normalize
      * @returns Map of old IDs to new IDs for reference tracking
      */
-    public normalizeProjectTreeIds(rootNode: DocumentNode): Map<string, string> {
+    public normalizeConditionalContextIds(rootNode: DocumentNode): Map<string, string> {
         const idMapping = new Map<string, string>();
         
-        // First pass: collect all nodes and create ID mapping
+        // Collect all nodes
         const allNodes: DocumentNode[] = [];
         const collectNodes = (node: DocumentNode): void => {
             allNodes.push(node);
@@ -178,46 +178,18 @@ export class ContextIDGenerator {
         };
         collectNodes(rootNode);
         
-        // Create ID mappings for nodes that need normalization
+        // Only normalize conditional context item IDs - leave node IDs unchanged
         for (const node of allNodes) {
-            let normalizedId: string;
-            
-            // Root node always gets id_1 if it needs normalization
-            if (node === rootNode && !node.id.match(/^id_(\d+)$/)) {
-                normalizedId = 'id_1';
-            } else {
-                normalizedId = this.normalizeContextID(node.id, rootNode);
-            }
-            
-            if (normalizedId !== node.id) {
-                idMapping.set(node.id, normalizedId);
-            }
-        }
-        
-        // Second pass: apply the new IDs
-        for (const node of allNodes) {
-            if (idMapping.has(node.id)) {
-                node.id = idMapping.get(node.id)!;
-            }
-            
-            // Update parentId references
-            if (node.parentId && idMapping.has(node.parentId)) {
-                node.parentId = idMapping.get(node.parentId)!;
-            }
-            
-            // Update version IDs (but keep them as UUIDs since they're not context IDs)
-            // Only update if they were accidentally using the old context ID format
-            
-            // Update conditional context item IDs
             const conditionalItems = (node as any).conditionalContextItems || [];
             conditionalItems.forEach((item: any) => {
-                if (item.id && idMapping.has(item.id)) {
-                    item.id = idMapping.get(item.id)!;
+                if (item.id) {
+                    const normalizedItemId = this.normalizeContextID(item.id, rootNode);
+                    if (normalizedItemId !== item.id) {
+                        idMapping.set(item.id, normalizedItemId);
+                        item.id = normalizedItemId;
+                    }
                 }
             });
-            
-            // Update generation session IDs (keep as UUIDs)
-            // Update todo item IDs (keep as UUIDs)
         }
         
         return idMapping;
@@ -232,4 +204,24 @@ export class ContextIDGenerator {
  */
 export function generateNewContextID(rootNode: DocumentNode): string {
     return ContextIDGenerator.getInstance().generateNewContextID(rootNode);
+}
+
+// Counter for temporary IDs (cid_1, cid_2, etc.)
+let tempIdCounter = 1;
+
+/**
+ * Generate a temporary context ID for staging scenarios
+ * These IDs are used when contexts are created but not yet committed to the project tree
+ * 
+ * @returns A temporary context ID in format "cid_N"
+ */
+export function generateTemporaryContextID(): string {
+    return `cid_${tempIdCounter++}`;
+}
+
+/**
+ * Reset the temporary ID counter (useful for tests or when starting a new session)
+ */
+export function resetTemporaryIdCounter(): void {
+    tempIdCounter = 1;
 }

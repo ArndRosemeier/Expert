@@ -126,8 +126,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         const rootNodeTemplate = [...this.template.hierarchyLevels];
         this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate);
         
-        // Ensure root node uses the new ID format
-        this.rootNode.id = 'id_1'; // Root node always gets id_1
+        // Root node keeps its UUID as the project identifier - only child nodes get normalized IDs
 
         // Initialize extracted services
         this.treeService = new TreeService();
@@ -329,56 +328,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
                     ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
                 );
                 
-                // Handle ID normalization and storage updates
-                let updatedActiveProjectId = activeProjectId;
-                const storageUpdatesNeeded: { oldId: string, newId: string, project: ProjectManager }[] = [];
+                // Context IDs are normalized in memory during project loading
+                // Project IDs (root node IDs) remain unchanged, so activeProjectId is still valid
                 
-                for (const project of projects) {
-                    const oldRootId = (project as any)._oldRootId;
-                    if (oldRootId && oldRootId !== project.rootNode.id) {
-                        // This project had its ID normalized
-                        storageUpdatesNeeded.push({ oldId: oldRootId, newId: project.rootNode.id, project });
-                        
-                        // Update active project ID if it was affected
-                        if (activeProjectId === oldRootId) {
-                            updatedActiveProjectId = project.rootNode.id;
-                            console.log(`🔄 Updated active project ID from ${oldRootId} to ${project.rootNode.id}`);
-                        }
-                        
-                        // Clean up the temporary property
-                        delete (project as any)._oldRootId;
-                    }
-                }
-                
-                // Update storage if there were ID changes
-                if (storageUpdatesNeeded.length > 0) {
-                    console.log(`🔄 Updating storage for ${storageUpdatesNeeded.length} projects with normalized IDs`);
-                    
-                    for (const { oldId, newId, project } of storageUpdatesNeeded) {
-                        // Remove old storage entry
-                        await services.indexedDB!.delete('projects', oldId);
-                        
-                        // Add new storage entry with new ID
-                        const projectRecord: ProjectRecord = {
-                            id: newId,
-                            title: project.projectTitle,
-                            templateName: project.template.name,
-                            createdAt: new Date(),
-                            lastModified: new Date(),
-                            data: project.save()
-                        };
-                        await services.indexedDB!.set('projects', newId, projectRecord);
-                    }
-                    
-                    // Update active project ID in storage if it changed
-                    if (updatedActiveProjectId !== activeProjectId) {
-                        await services.storage.set(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY, updatedActiveProjectId);
-                    }
-                    
-                    console.log('✅ Storage updated with normalized IDs');
-                }
-                
-                return { projects, activeProjectId: updatedActiveProjectId ?? null };
+                return { projects, activeProjectId: activeProjectId ?? null };
             }
             
             return { projects: [], activeProjectId: null };
@@ -422,21 +375,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // with the hydrated version of our saved node tree.
         project.rootNode = this.rehydrateNode(plainObject.rootNode);
         
-        // Normalize all IDs in the project tree to use the new format
-        console.log('🔄 Normalizing context IDs to new format...');
-        const oldRootId = project.rootNode.id;
-        const idMapping = ContextIDGenerator.getInstance().normalizeProjectTreeIds(project.rootNode);
-        if (idMapping.size > 0) {
-            console.log(`✅ Normalized ${idMapping.size} IDs to new format`);
-            
-            // Update selected node ID if it was affected
-            if (project.selectedNodeId && idMapping.has(project.selectedNodeId)) {
-                project.selectedNodeId = idMapping.get(project.selectedNodeId)!;
-            }
-            
-            // Store the old root ID for later storage updates
-            (project as any)._oldRootId = oldRootId;
-        }
+        // Normalize conditional context item IDs to use the new format (IN MEMORY ONLY)
+        ContextIDGenerator.getInstance().normalizeConditionalContextIds(project.rootNode);
         
         // The rootNode is now properly set - no need to recreate GenerationService
         

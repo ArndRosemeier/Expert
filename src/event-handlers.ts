@@ -18,6 +18,7 @@ import { TemplateManager } from './TemplateManager';
 import { STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
+import { generateNewContextID } from './ContextIDGenerator';
 import { getContextItems } from './ContextFormat';
 import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
 
@@ -321,12 +322,7 @@ interface AIGeneratedData {
     options?: any;
 }
 
-/**
- * Generate a simple random ID
- */
-function generateSimpleId(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
+// Removed generateSimpleId - using centralized ContextIDGenerator instead
 
 /**
  * Parses AI-generated conditional context with trigger tags and creates conditional context items
@@ -360,7 +356,7 @@ function parseAIConditionalContext(rootNode: DocumentNode, aiContext: string): v
             // Add conditional context item with trigger words as keywords
             // We'll have to manually access the conditionalContextItems for now since addConditionalContextItem doesn't support keywords
             const conditionalItem = {
-                id: generateSimpleId(),
+                id: generateNewContextID(rootNode),
                 text: contextText,
                 conditions: [],
                 logic: 'OR' as const,
@@ -724,7 +720,7 @@ function importChildNodeWithRootTemplateForProject(project: ProjectManager, pare
     const newLevel = parent.level + 1;
     // Use root template (shallow copy) instead of parent template
     const rootTemplate = [...project.rootNode.template];
-    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate, '', project.rootNode);
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
     
     parent.children.push(newNode);
     

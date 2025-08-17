@@ -959,9 +959,8 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
         // Replace the auto-generated root with our copied structure
         newProjectManager.rootNode = newRootNode;
         
-        // Normalize all IDs in the copied project tree to use the new format
-        const idMapping = ContextIDGenerator.getInstance().normalizeProjectTreeIds(newProjectManager.rootNode);
-        console.log(`✅ Normalized ${idMapping.size} IDs in copied project`);
+        // Normalize conditional context item IDs in the copied project tree to use the new format
+        ContextIDGenerator.getInstance().normalizeConditionalContextIds(newProjectManager.rootNode);
         
         // Update the root node title to match the unique project title using version management
         newRootNode.setTitle(uniqueTitle, 'master');
@@ -5284,7 +5283,7 @@ function importChildNodeWithRootTemplate(projectManager: ProjectManager, parentI
     const newLevel = parent.level + 1;
     // Use root template (shallow copy) instead of parent template
     const rootTemplate = [...projectManager.rootNode.template];
-    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate, '', projectManager.rootNode);
+    const newNode = new DocumentNode(newLevel, title, parent.id, rootTemplate);
     
     parent.children.push(newNode);
     

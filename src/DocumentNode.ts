@@ -3,6 +3,7 @@ import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
 import { getContextItems } from './ContextFormat';
 import { generateNewContextID } from './ContextIDGenerator';
+import { findProjectByNode } from './state';
 
 // ---------------- Conditional Context System (parallel to legacy context) ----------------
 
@@ -163,13 +164,9 @@ export class DocumentNode {
     // --- Conditional Context (new system, parallel to legacy `context`) ---
     private conditionalContextItems: ConditionalContextItem[] = [];
 
-    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '', rootNode?: DocumentNode) {
-        // Generate context ID if we have a root node, otherwise use temporary UUID (will be normalized later)
-        if (rootNode) {
-            this.id = generateNewContextID(rootNode);
-        } else {
-            this.id = uuidv4(); // Temporary ID, will be normalized during project loading
-        }
+    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '') {
+        // Always use UUID for tree node IDs - only conditional context item IDs use the simplified format
+        this.id = uuidv4();
         this.level = level;
         this.parentId = parentId;
         this.template = template;
@@ -208,6 +205,8 @@ export class DocumentNode {
         this.id = generateNewContextID(rootNode);
         return this.id;
     }
+
+
 
     /**
      * Gets the children count from template hierarchy.
@@ -1273,7 +1272,10 @@ export class DocumentNode {
             }
         });
 
-        const id = uuidv4();
+        // Generate simplified context ID for this conditional context item
+        const project = findProjectByNode(this);
+        const rootNode = project ? project.rootNode : this; // fallback to this node if project not found
+        const id = generateNewContextID(rootNode);
         const item: ConditionalContextItem = { id, text, conditions, logic, keywords: [] };
         this.conditionalContextItems.push(item);
         return id;
