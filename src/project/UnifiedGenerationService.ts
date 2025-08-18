@@ -255,16 +255,25 @@ export class UnifiedGenerationService {
 
     public static abortAllInstances(): void {
         console.log(`🛑 Aborting all ${this.activeInstances.size} active UnifiedGenerationService instances`);
-        
+
         // Also log to UI logger if available
         void import('../utils/UILogger').then(({ uiLogger }) => {
             uiLogger.warn(`Aborting ${this.activeInstances.size} active generation instance${this.activeInstances.size !== 1 ? 's' : ''}`);
         }).catch(() => {
             // UI logger not available, that's ok
         });
-        
+
+        // Request cooperative abort on all instances and their running loops/clients
         for (const instance of this.activeInstances) {
-            instance.requestAbort();
+            try {
+                instance.requestAbort();
+                // Proactively stop any running orchestrator loops
+                instance.deps.loopOrchestrator.requestStop();
+                // Abort any ongoing OpenRouter requests without tearing down the client
+                instance.deps.openRouterClient.abort();
+            } catch (error) {
+                console.warn('Abort propagation error on instance', instance, error);
+            }
         }
     }
 
@@ -1784,6 +1793,13 @@ export class UnifiedGenerationService {
                 // Note: Individual content generation does not emit completion events
                 // Only the main unified generation process emits those events
             } else {
+                // If an abort was requested, treat this as a graceful stop, not an error
+                if (this.abortRequested) {
+                    console.log(`🛑 Content generation aborted for: "${node.title}" (no content generated due to abort)`);
+                    // Inform UI to refresh state without error signaling
+                    this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'content-generation-aborted' });
+                    return;
+                }
                 console.log(`❌ Content generation failed for: "${node.title}" (no content generated)`);
                 // Still update tree even on failure to show any partial progress
                 console.log(`📢 EMITTING tree-update-needed event for node ${nodeId}: content-generation-failed`);
@@ -1793,6 +1809,11 @@ export class UnifiedGenerationService {
                 throw new Error(`Content generation failed for node: ${node.title}`);
             }
         } catch (error) {
+            // If we were aborted, suppress error UI and exit quietly
+            if (this.abortRequested) {
+                console.log(`🛑 Suppressing content generation error for "${node.title}" due to abort.`);
+                return;
+            }
             // Show error through the error service (includes console logging)
             await GenerationErrorService.getInstance().showContentGenerationError(
                 error as Error, 

@@ -1815,6 +1815,7 @@ export class XMLStoryModal extends SimpleModal {
                             <input type="checkbox" id="toggle-inherited-conditional" ${this.showInheritedConditional ? 'checked' : ''}/> Show inherited
                         </label>
                         <div style="display:inline-flex; gap:0.75rem; align-items:center; margin-left:auto; flex:0 0 auto; white-space: nowrap;">
+                            <button id="btn-add-context" class="outline-control-btn" style="padding:0.35rem 0.6rem; height:auto; width:auto; font-size:0.9rem;" title="Add a new context item">Add context</button>
                             <button id="btn-discard-staged" class="outline-control-btn" style="padding:0.35rem 0.6rem; height:auto; width:auto; font-size:0.9rem;" title="Discard staged edits">Discard staged</button>
                     </div>
                 </div>
@@ -1840,11 +1841,33 @@ export class XMLStoryModal extends SimpleModal {
         }
         const applyBtn = this.whiteboardContainer.querySelector('#btn-apply-staged') as HTMLButtonElement | null;
         const discardBtn = this.whiteboardContainer.querySelector('#btn-discard-staged') as HTMLButtonElement | null;
+        const addContextBtn = this.whiteboardContainer.querySelector('#btn-add-context') as HTMLButtonElement | null;
         if (applyBtn) {
             applyBtn.addEventListener('click', () => { void this.applyStagedToNode(); });
         }
         if (discardBtn) {
             discardBtn.addEventListener('click', () => { this.stagedConditionalItems = null; this.renderInlineConditionalContext(); });
+        }
+        if (addContextBtn) {
+            addContextBtn.addEventListener('click', () => {
+                const newId = generateElementId('context');
+                this.stagedAddItem({ id: newId, text: '', logic: 'OR', conditions: [], keywords: [] });
+                this.selectedConditionalItemId = newId;
+                this.renderInlineConditionalContext();
+                // Scroll newly added row into view and focus its text editor
+                setTimeout(() => {
+                    const list = this.whiteboardContainer?.querySelector('#conditional-context-inline-list') as HTMLElement | null;
+                    const row = list?.querySelector(`[data-item-id="${newId}"]`) as HTMLElement | null;
+                    if (row) {
+                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        const focusEl = row.querySelector('.text-editor-with-highlighting') as HTMLElement | null
+                            || row.querySelector('textarea') as HTMLElement | null;
+                        if (focusEl) {
+                            (focusEl as HTMLElement).focus();
+                        }
+                    }
+                }, 0);
+            });
         }
         
         // Add event listeners for outline controls only (legacy context add/reset removed)
@@ -2032,6 +2055,7 @@ export class XMLStoryModal extends SimpleModal {
         const makeRow = (id: string, text: string, logic: ConditionLogicOperator, conditions: ConditionalContextCondition[], inheritedFrom?: DocumentNode, keywords?: string[]): HTMLElement => {
             const row = document.createElement('div');
             row.style.cssText = 'border:1px solid #e5e7eb; border-radius:8px; padding:8px; margin-bottom:8px; background:#fff;';
+            (row as any).dataset.itemId = id;
             if (inheritedFrom) { row.style.borderStyle = 'dashed'; row.style.background = '#f9fafb'; }
             const header = document.createElement('div'); header.style.cssText='display:flex; align-items:center; justify-content:space-between; gap:0.5rem;';
             const isSelected = this.selectedConditionalItemId === id;
