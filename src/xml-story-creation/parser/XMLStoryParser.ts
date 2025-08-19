@@ -312,6 +312,22 @@ export class XMLStoryParser {
             return markerId;
         });
 
+        // Handle context add/edit commands with content between tags
+        const contextContentRegex = /<context\s+(add|edit)(\s+[^>]*?)?\s*>\s*([\s\S]*?)\s*<\/context>/gi;
+        textWithMarkers = textWithMarkers.replace(contextContentRegex, (full, commandType, parametersText, content) => {
+            const params = this.parseCommandParameters(parametersText || '');
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            const text = content.trim();
+            const trigger = (params['trigger'] || params['keyword'] || '').toString();
+            
+            if (commandType === 'add') {
+                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId, rawXml: full });
+            } else if (commandType === 'edit' && params['id']) {
+                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId, rawXml: full });
+            }
+            return markerId;
+        });
+
         // Ignore any stray legacy tags if encountered (no-op)
 
         return { commands, textWithMarkers };

@@ -1526,22 +1526,22 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 **For Outline Editing:**
 - The outline is a unified text document (not individual items)
 - **OPTIONAL SECTIONS**: Outlines may contain sections using the format ===<title>=== which enable automatic child node generation
-- For complete rewrites: </outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
+- For complete rewrites: <outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
 - For adding content to the end: <append>CONTENT_TO_ADD</append>
 - For replacing specific parts: <replace_command><search>EXACT_TEXT_TO_FIND</search><replace>NEW_TEXT</replace></replace_command>
-- For replacing specific sections: <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
-- For removing sections: <remove_section section="SECTION_TITLE">
+- For replacing specific ===title=== sections: <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section> 
+- For removing ===title=== sections: <remove_section section="SECTION_TITLE" />
 - Work with the existing outline structure and improve/expand it holistically
 
 **For Conditional Context Items (trigger-word based):**
-- Context items are GLOBAL by default. To add a global item, omit any trigger word.
-- To make a context item non-global, include a short trigger word (e.g., a character or entity name). Items with a trigger word will only become active when that trigger word has been mentioned.
+- Context items are GLOBAL by default. To add a global item, omit the trigger attribute entirely.
+- To make a context item non-global, include a short trigger word (e.g., a character or entity name, just ONE word). Items with a trigger word will only become active when that trigger word has been mentioned.
 - Allowed context commands (executed immediately when present):
-  - <context add text="…" [trigger="…"] />
-  - <context edit id="…" text="…" [trigger="…"] />
-  - <context remove id="…" />
-- Do NOT use star-based prefixes (like * or *2-4). That syntax is obsolete.
-- Do NOT emit any custom condition logic. Only the optional trigger attribute is supported here.
+  - <context add>Your context text here</context> (global context - always visible)
+  - <context add trigger="keyword">Your context text here</context> (triggered context - only visible when "keyword" is mentioned)
+  - <context edit id="existing_id">Updated context text here</context> (edit to global context)
+  - <context edit id="existing_id" trigger="keyword">Updated context text here</context> (edit to triggered context)
+  - <context remove id="existing_id" />
 - IDs are INTERNAL ONLY. Users do not see IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
 - The "Triggered context" list provided to you is the complete and authoritative set of trigger-word entries for this step. When asked to reference or list items with trigger words, use ONLY that list. Do not infer or invent additional triggered entries.
 
@@ -1550,16 +1550,6 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 - These commands are NOT suggestions. Do not include them as examples or hypotheticals.
 - Only output XML commands when you are certain you want the change to be applied right now.
 - If you want to discuss a possible change without executing it, use plain natural language, not XML commands.
-
-🎯 EDITING GUIDELINES:
-- Complete outline rewrites: </outline_replace> tags
-- Append to outline: <append> tags for adding content at the end
-- Replace parts of outline: <replace_command> with <search> and <replace> for precise edits
-- Replace specific sections: <replace_section section="SECTION_TITLE"> for targeting ===title=== sections
-- Remove sections: <remove_section section="SECTION_TITLE"> to delete ===title=== sections entirely
-- Add or edit conditional context items using the keyword-based commands above
-- IMPORTANT: For replace_command, search text must be unique and exact
-- IMPORTANT: Section commands work with the exact title between === markers (without the === symbols)
 
 {{noise_names}}
 
@@ -1582,26 +1572,7 @@ CURRENT CONTEXT ITEMS:
 RECENT USER EDITS:
 {{human_edits}}
 
-EDITING COMMANDS:
-- For complete outline rewrites: Use <outline_replace>COMPLETE_NEW_OUTLINE</outline_replace>
-- For appending to outline: Use <append>CONTENT_TO_ADD</append>
-- For replacing outline parts: Use <replace_command><search>EXACT_TEXT</search><replace>NEW_TEXT</replace></replace_command>
-- For replacing sections: Use <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section>
-- For removing sections: Use <remove_section section="SECTION_TITLE">
-- Conditional context (keyword-based):
-  • <context add text="…" [trigger="…"] />
-  • <context edit id="…" text="…" [trigger="…"] />
-  • <context remove id="…" />
-
 CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
-
-CONTEXT ITEM RULES:
-- Items are GLOBAL by default (omit trigger).
-- To make an item non-global, include a concise trigger word (often a character or entity) via trigger="…". Such items become active only after that trigger has been mentioned.
-- Do NOT use star-based prefixes (like * or *2-4); that syntax is obsolete.
-- Do NOT emit any condition logic; only the optional trigger is supported.
-- IDs are INTERNAL ONLY. Users do not see IDs. Use IDs only within XML commands.
-- The "Triggered context" section above is authoritative. When asked to list or reason about triggered entries, reference EXACTLY those items and their trigger words. If none are listed, state that there are none. Do NOT assume that other items have triggers unless you explicitly add them via context commands in this response.
 
 Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
 
