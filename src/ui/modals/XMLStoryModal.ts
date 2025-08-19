@@ -2222,19 +2222,31 @@ export class XMLStoryModal extends SimpleModal {
         const lines: string[] = [];
         lines.push('CURRENT CONTEXT ITEMS (with IDs for editing):');
         lines.push('');
-        lines.push('Global context:');
-        if (globals.length === 0) {
-            lines.push('- (none)');
+        
+        if (globals.length === 0 && keyworded.length === 0) {
+            lines.push('(no context items)');
         } else {
-            globals.forEach(g => lines.push(`- ${g.id}: ${g.text}`));
+            if (globals.length > 0) {
+                lines.push('Global context:');
+                globals.forEach(g => {
+                    lines.push(`<context_item id="${g.id}" type="global">`);
+                    lines.push(g.text);
+                    lines.push('</context_item>');
+                    lines.push('');
+                });
+            }
+            
+            if (keyworded.length > 0) {
+                lines.push('Triggered context (by trigger word):');
+                keyworded.forEach(k => {
+                    lines.push(`<context_item id="${k.id}" type="triggered" trigger="${k.keyword}">`);
+                    lines.push(k.text);
+                    lines.push('</context_item>');
+                    lines.push('');
+                });
+            }
         }
-        lines.push('');
-        lines.push('Triggered context (by trigger word):');
-        if (keyworded.length === 0) {
-            lines.push('- (none)');
-        } else {
-            keyworded.forEach(k => lines.push(`- ${k.id} [${k.keyword}]: ${k.text}`));
-        }
+        
         return lines.join('\n');
     }
 
@@ -2564,17 +2576,30 @@ export class XMLStoryModal extends SimpleModal {
         
         // Rebuild content with the replaced section
         const newSections = [...sections];
+        
+        // Check if the provided content includes a new section title
+        // If it starts with ===title===, extract that as the new title
+        let newTitle = command['sectionTitle'] as string;
+        let newContent = command.content;
+        
+        const titleMatch = newContent.match(/^===\s*(.+?)\s*===\s*\n?([\s\S]*)$/);
+        if (titleMatch) {
+            // Content includes a new title - use it
+            newTitle = titleMatch[1]!.trim();
+            newContent = titleMatch[2]!.trim();
+        }
+        
         newSections[targetSectionIndex] = {
-            title: command['sectionTitle'] as string,
-            content: command.content
+            title: newTitle,
+            content: newContent
         };
         
         // Reconstruct the outline with all sections
-        const newContent = newSections.map(section => 
+        const finalContent = newSections.map(section => 
             `===${section.title}===\n${section.content}`
         ).join('\n\n');
         
-        this.setOutlineContentFromAI(newContent);
+        this.setOutlineContentFromAI(finalContent);
         // Mark executed so chat can show the checkmark in a command-agnostic way
         (command as any).executedRaw = (command as any).rawXml || '';
         // AI section replacement completed successfully

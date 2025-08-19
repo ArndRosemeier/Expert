@@ -1529,20 +1529,22 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
 - For complete rewrites: <outline_replace>NEW_COMPLETE_OUTLINE_TEXT</outline_replace>
 - For adding content to the end: <append>CONTENT_TO_ADD</append>
 - For replacing specific parts: <replace_command><search>EXACT_TEXT_TO_FIND</search><replace>NEW_TEXT</replace></replace_command>
-- For replacing specific ===title=== sections: <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section> 
+- For replacing specific ===title=== sections: <replace_section section="SECTION_TITLE">NEW_SECTION_CONTENT</replace_section> (you can optionally include ===NEW_TITLE=== at the start to change the section title) 
 - For removing ===title=== sections: <remove_section section="SECTION_TITLE" />
 - Work with the existing outline structure and improve/expand it holistically
 
 **For Conditional Context Items (trigger-word based):**
+- Context items are presented in XML format with clear ID attribution for editing
 - Context items are GLOBAL by default. To add a global item, omit the trigger attribute entirely.
 - To make a context item non-global, include a short trigger word (e.g., a character or entity name, just ONE word). Items with a trigger word will only become active when that trigger word has been mentioned.
+- Context items are displayed as: <context_item id="internal_id" type="global|triggered" trigger="keyword">Content text</context_item>
 - Allowed context commands (executed immediately when present):
   - <context add>Your context text here</context> (global context - always visible)
   - <context add trigger="keyword">Your context text here</context> (triggered context - only visible when "keyword" is mentioned)
   - <context edit id="existing_id">Updated context text here</context> (edit to global context)
   - <context edit id="existing_id" trigger="keyword">Updated context text here</context> (edit to triggered context)
   - <context remove id="existing_id" />
-- IDs are INTERNAL ONLY. Users do not see IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
+- IDs are INTERNAL ONLY for system use. When referencing context items in conversation, refer to their content, not their IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
 - The "Triggered context" list provided to you is the complete and authoritative set of trigger-word entries for this step. When asked to reference or list items with trigger words, use ONLY that list. Do not infer or invent additional triggered entries.
 
 ⚠️ CRITICAL EXECUTION NOTE:
