@@ -25,6 +25,7 @@ let enhancedContentEditor: UniversalTextEditor | null = null;
 import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 import { LoopProgress } from '../LoopOrchestrator';
+import { dragDropManager } from './DragDropManager';
 
 /**
  * Calculate model name based on phase and node for progress display
@@ -4953,6 +4954,34 @@ export function renderMultiProjectTree() {
                 }
             }
         });
+
+        // Initialize drag and drop for this node
+        const nodeId = (el as HTMLElement).dataset['id'];
+        if (nodeId) {
+            // Find the node and project
+            let node: DocumentNode | null = null;
+            let nodeProject: ProjectManager | null = null;
+            
+            for (const project of projects) {
+                node = project.findNodeById(nodeId);
+                if (node) {
+                    nodeProject = project;
+                    break;
+                }
+            }
+            
+            if (node && nodeProject) {
+                // Get the parent tree-item element for drag operations
+                const treeItem = el.closest('.tree-item') as HTMLElement;
+                if (treeItem) {
+                    // Initialize drag functionality
+                    dragDropManager.initializeDragNode(treeItem, node, nodeProject);
+                    
+                    // Initialize drop functionality (nodes can be dropped into other nodes)
+                    dragDropManager.initializeDropTarget(treeItem, node, nodeProject);
+                }
+            }
+        }
     });
 
     // Remove any existing delegated listener to avoid duplicates
