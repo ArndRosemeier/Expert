@@ -28,14 +28,14 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Clarity & Conciseness",
         description: "The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.",
         goal: 7,
-        outline: true,
+        outline: false,
         leaf: true
     },
     {
         name: "Natural & Authentic Tone",
         description: "The language sounds human and authentic. It avoids being overly formal, academic, or robotic.",
         goal: 7,
-        outline: true,
+        outline: false,
         leaf: true
     },
     {
@@ -63,14 +63,14 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Avoids AI Clichés",
         description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' 'tapestry of,' 'testament to,' 'in the realm of,' 'navigate the landscape,' 'meticulous examination of,' 'crucial,' 'pivotal,' 'essential,' 'underscores,' 'harness,' 'illuminate,' 'transformative,' 'fostering,' 'utilize,' 'thus,' 'furthermore,' or 'ostensibly'",
         goal: 8,
-        outline: true,
+        outline: false,
         leaf: true
     },
     {
         name: "Understated Language",
         description: "The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.",
         goal: 8,
-        outline: true,
+        outline: false,
         leaf: true
     },
     {
@@ -84,7 +84,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Original Phrasing",
         description: "The text avoids common idioms and clichés, opting for more original ways to express ideas.",
         goal: 7,
-        outline: true,
+        outline: false,
         leaf: true
     },
     {
@@ -126,9 +126,17 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Immediate clarity",
         description: "Prose won't tell how things are not only to immediately tell how they are. Constructs like \"He was not x, he was y\" are way overused and should be severely limited.",
         goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Keep the essence of the draft intact",
+        description: "Creativity can only be on the details level. The essence of the draft is the ultimate truth, if that gets violated, other contents created for the same project will get inconsistent.",
+        goal: 9,
         outline: true,
         leaf: true
     }
+
 ];
 
 export interface SettingsProfile {

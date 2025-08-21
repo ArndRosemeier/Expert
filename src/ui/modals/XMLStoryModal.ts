@@ -1154,6 +1154,14 @@ export class XMLStoryModal extends SimpleModal {
                         ✂️ Split Into Parts
                     </button>
                     
+                    <button id="gap-analysis-btn" class="sidebar-button">
+                        🔍 Gap Analysis
+                    </button>
+                    
+                    <button id="collaborate-next-part-btn" class="sidebar-button">
+                        🤝 Collaborate on Next Part
+                    </button>
+                    
                                                 <button id="create-project-btn" class="sidebar-button primary">
                                 🚀 Update Node
                     </button>
@@ -1281,6 +1289,18 @@ export class XMLStoryModal extends SimpleModal {
         const updateNodeBtn = container.querySelector('#create-project-btn');
         updateNodeBtn?.addEventListener('click', () => {
             void this.updateSourceNode();
+        });
+
+        // Gap Analysis button
+        const gapAnalysisBtn = container.querySelector('#gap-analysis-btn');
+        gapAnalysisBtn?.addEventListener('click', () => {
+            void this.startGapAnalysis();
+        });
+
+        // Collaborate on Next Part button
+        const collaborateNextPartBtn = container.querySelector('#collaborate-next-part-btn');
+        collaborateNextPartBtn?.addEventListener('click', () => {
+            void this.startCollaborateNextPart();
         });
 
         // Split into parts button
@@ -3281,6 +3301,68 @@ export class XMLStoryModal extends SimpleModal {
                 this.outlineEditor.value = version.content;
             }
             this.updateOutlineControls();
+        }
+    }
+
+    /**
+     * Start Gap Analysis conversation
+     */
+    private async startGapAnalysis(): Promise<void> {
+        try {
+            const prompts = this.settingsManager.getPrompts();
+            const expansionService = createPromptExpansionService(this.settingsManager);
+            
+            const promptContext = {
+                project: {
+                    language: this.settingsManager.getLanguage()
+                }
+            };
+            
+            const expandedPrompt = await expansionService.expandPromptAsync(
+                prompts.gap_analysis_starter, 
+                promptContext
+            );
+            
+            // Set the prompt in the message input and trigger sending
+            if (this.messageInput) {
+                this.messageInput.value = expandedPrompt;
+                await this.sendMessage();
+            }
+            
+        } catch (error) {
+            console.error('Failed to start gap analysis:', error);
+            this.addMessageToChat('assistant', 'Failed to start gap analysis. Please try again.');
+        }
+    }
+
+    /**
+     * Start Collaborate on Next Part conversation
+     */
+    private async startCollaborateNextPart(): Promise<void> {
+        try {
+            const prompts = this.settingsManager.getPrompts();
+            const expansionService = createPromptExpansionService(this.settingsManager);
+            
+            const promptContext = {
+                project: {
+                    language: this.settingsManager.getLanguage()
+                }
+            };
+            
+            const expandedPrompt = await expansionService.expandPromptAsync(
+                prompts.collaborate_next_part_starter, 
+                promptContext
+            );
+            
+            // Set the prompt in the message input and trigger sending
+            if (this.messageInput) {
+                this.messageInput.value = expandedPrompt;
+                await this.sendMessage();
+            }
+            
+        } catch (error) {
+            console.error('Failed to start collaboration:', error);
+            this.addMessageToChat('assistant', 'Failed to start collaboration. Please try again.');
         }
     }
 
