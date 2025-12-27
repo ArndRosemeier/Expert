@@ -1794,33 +1794,39 @@ Based on the adventure description, generate a comprehensive session setup in XM
 Respond with ONLY valid XML in this exact structure:
 
 <rpg_session_setup>
-  <title>Adventure Title</title>
+  <title><![CDATA[Adventure Title]]></title>
   <location>
-    <name>Location Name</name>
-    <description>Detailed location description</description>
+    <name><![CDATA[Location Name]]></name>
+    <description><![CDATA[Detailed location description]]></description>
   </location>
   <character>
-    <name>Character Name</name>
-    <verbatim_user_details>
+    <name><![CDATA[Character Name]]></name>
+    <verbatim_user_details><![CDATA[
       Verbatim (copied) character-related details from the user's adventure description. Include ALL details the user gave for the main character.
-    </verbatim_user_details>
-    <description>
+    ]]></verbatim_user_details>
+    <description><![CDATA[
       Exhaustive player character description including all details from the user's description (do not abbreviate), plus additional coherent details you generate.
-    </description>
+    ]]></description>
   </character>
   <setting>
-    <verbatim_user_details>
+    <verbatim_user_details><![CDATA[
       Verbatim (copied) initial setting/situation details from the user's adventure description. Include ALL details the user gave for the starting scene/situation.
-    </verbatim_user_details>
-    <description>
+    ]]></verbatim_user_details>
+    <description><![CDATA[
       Exhaustive initial scene + situation description (do not abbreviate). This should be long-form, concrete, and faithful to the user's described adventure.
-    </description>
+    ]]></description>
   </setting>
-  <system_prompt>
+  <system_prompt><![CDATA[
     Complete system prompt for the Game Master including style, rules, and guidelines specific to this adventure.
     Use placeholders like {{rpg_current_location}}, {{rpg_player_character}}, etc. where appropriate.
-  </system_prompt>
+  ]]></system_prompt>
 </rpg_session_setup>
+
+## XML Validity Requirements (VERY IMPORTANT)
+- Your output MUST be well-formed XML.
+- Do NOT output anything outside the single <rpg_session_setup> root element.
+- Wrap ALL text fields in CDATA exactly as shown above.
+- Never emit raw "<" or "&" inside text nodes (CDATA is required).
 
 ## Important
 - Be creative and expansive - fill in details the user didn't specify

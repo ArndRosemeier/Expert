@@ -430,55 +430,77 @@ export class RPGView {
         console.log('📤 Full prompt being sent to creator LLM:');
         console.log(prompt);
         console.log('---');
-        
-        // Call the creator model for session setup
-        const response = await this.openRouterClient.chat('creator', prompt);
-        
-        console.log('📄 Session setup response received');
-        console.log('📄 Response:', response);
-        
-        // Parse XML response
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(response, 'text/xml');
-        
-        const parseError = xmlDoc.querySelector('parsererror');
-        if (parseError) {
-            console.error('❌ XML Parse Error:', parseError.textContent);
-            console.error('Raw response:', response);
-            throw new Error(`Failed to parse setup XML: ${parseError.textContent}`);
-        }
-        
-        const root = xmlDoc.querySelector('rpg_session_setup');
-        if (!root) {
-            console.error('❌ Missing rpg_session_setup root in response');
-            console.error('Raw response:', response);
-            throw new Error('Invalid setup response: missing rpg_session_setup root');
-        }
-        
-        const requireText = (selector: string): string => {
-            const el = root.querySelector(selector);
-            const text = el?.textContent?.trim();
-            if (!text) {
-                throw new Error(`Invalid setup response: missing required element '${selector}'`);
-            }
-            return text;
-        };
 
-        const setup = {
-            title: requireText('title'),
-            locationName: requireText('location > name'),
-            locationDescription: requireText('location > description'),
-            characterName: requireText('character > name'),
-            characterVerbatimUserDetails: requireText('character > verbatim_user_details'),
-            characterDescription: requireText('character > description'),
-            settingVerbatimUserDetails: requireText('setting > verbatim_user_details'),
-            settingDescription: requireText('setting > description'),
-            systemPrompt: requireText('system_prompt')
-        };
-        
-        console.log('✅ Parsed setup:', setup);
-        
-        return setup;
+        const maxAttempts = 3;
+        let lastResponse = '';
+        let lastError: unknown = undefined;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (attempt > 1) {
+                this.setCreateSessionStatus(`Invalid XML received. Retrying session setup… (${attempt}/${maxAttempts})`, true);
+            }
+
+            try {
+                // Call the creator model for session setup
+                const response = await this.openRouterClient.chat('creator', prompt);
+                lastResponse = response;
+                
+                console.log(`📄 Session setup response received (attempt ${attempt}/${maxAttempts})`);
+                console.log('📄 Response:', response);
+                
+                // Parse XML response
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(response, 'text/xml');
+                
+                const parseError = xmlDoc.querySelector('parsererror');
+                if (parseError) {
+                    console.error('❌ XML Parse Error:', parseError.textContent);
+                    throw new Error(`Failed to parse setup XML: ${parseError.textContent}`);
+                }
+                
+                const root = xmlDoc.querySelector('rpg_session_setup');
+                if (!root) {
+                    throw new Error('Invalid setup response: missing rpg_session_setup root');
+                }
+                
+                const requireText = (selector: string): string => {
+                    const el = root.querySelector(selector);
+                    const text = el?.textContent?.trim();
+                    if (!text) {
+                        throw new Error(`Invalid setup response: missing required element '${selector}'`);
+                    }
+                    return text;
+                };
+
+                const setup = {
+                    title: requireText('title'),
+                    locationName: requireText('location > name'),
+                    locationDescription: requireText('location > description'),
+                    characterName: requireText('character > name'),
+                    characterVerbatimUserDetails: requireText('character > verbatim_user_details'),
+                    characterDescription: requireText('character > description'),
+                    settingVerbatimUserDetails: requireText('setting > verbatim_user_details'),
+                    settingDescription: requireText('setting > description'),
+                    systemPrompt: requireText('system_prompt')
+                };
+                
+                console.log('✅ Parsed setup:', setup);
+                return setup;
+                
+            } catch (error) {
+                lastError = error;
+                console.error(`❌ Session setup parse failed (attempt ${attempt}/${maxAttempts}):`, error);
+                if (attempt === maxAttempts) {
+                    console.error('Raw response (last attempt):', lastResponse);
+                    throw error instanceof Error
+                        ? error
+                        : new Error(`Session setup failed: ${String(error)}`);
+                }
+            }
+        }
+
+        console.error('Raw response (last attempt):', lastResponse);
+        throw new Error(`Session setup failed after ${maxAttempts} attempts: ${String(lastError)}`);
     }
     
     /**
