@@ -1779,6 +1779,7 @@ Based on the adventure description, generate a comprehensive session setup in XM
 1. **Do NOT summarize or abbreviate user-provided details**.
    - If the user describes the player character in detail (background, motivations, skills, relationships, constraints, tone, etc.), your CHARACTER DESCRIPTION element MUST preserve those details in full.
    - If the user describes the initial setting/situation in detail, your SETTING DESCRIPTION element MUST preserve those details in full.
+   - This explicitly includes details like physiology, sensory triggers, body reactions to stimuli, limitations, compulsions, phobias, allergies, trauma responses, and other “if X then body does Y” constraints.
 2. **Be exhaustive for initial setup**:
    - It is OK (and preferred) to use multiple paragraphs, bullet lists, and concrete specifics.
    - Add details the user did not specify, but never at the cost of losing the user’s details.
@@ -1786,6 +1787,8 @@ Based on the adventure description, generate a comprehensive session setup in XM
    - Avoid generic one-liners like “A brave adventurer…”. Provide a rich, precise description.
 4. **Consistency**:
    - The location, character, setting, and system prompt must clearly belong to the user’s described adventure.
+5. **Lossless capture**:
+   - You MUST also include the verbatim user-provided character- and setting-related details in dedicated VERBATIM elements (copy/paste the relevant parts, do not paraphrase).
 
 ## Output Format (XML)
 Respond with ONLY valid XML in this exact structure:
@@ -1798,11 +1801,17 @@ Respond with ONLY valid XML in this exact structure:
   </location>
   <character>
     <name>Character Name</name>
+    <verbatim_user_details>
+      Verbatim (copied) character-related details from the user's adventure description. Include ALL details the user gave for the main character.
+    </verbatim_user_details>
     <description>
       Exhaustive player character description including all details from the user's description (do not abbreviate), plus additional coherent details you generate.
     </description>
   </character>
   <setting>
+    <verbatim_user_details>
+      Verbatim (copied) initial setting/situation details from the user's adventure description. Include ALL details the user gave for the starting scene/situation.
+    </verbatim_user_details>
     <description>
       Exhaustive initial scene + situation description (do not abbreviate). This should be long-form, concrete, and faithful to the user's described adventure.
     </description>

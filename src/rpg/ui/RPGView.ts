@@ -262,10 +262,16 @@ export class RPGView {
             
             // Create player character
             const playerId = 'player_' + Date.now();
+            const playerDescription =
+                `## Verbatim (from your session description)\n` +
+                `${setup.characterVerbatimUserDetails}\n\n` +
+                `## Consolidated character profile\n` +
+                `${setup.characterDescription}`.trim();
+
             this.worldStateService.createCharacter(worldState, {
                 id: playerId,
                 name: setup.characterName,
-                description: setup.characterDescription,
+                description: playerDescription,
                 state: {},
                 createdAt: Date.now(),
                 updatedAt: Date.now()
@@ -312,8 +318,14 @@ export class RPGView {
                 `${setup.locationDescription}\n\n` +
                 `## Player Character\n` +
                 `${setup.characterName}\n\n` +
+                `### Verbatim (from your session description)\n` +
+                `${setup.characterVerbatimUserDetails}\n\n` +
+                `### Consolidated character profile\n` +
                 `${setup.characterDescription}\n\n` +
                 `## Initial Setting\n` +
+                `### Verbatim (from your session description)\n` +
+                `${setup.settingVerbatimUserDetails}\n\n` +
+                `### Consolidated setting description\n` +
                 `${setup.settingDescription}\n\n` +
                 `## Game Master System Prompt\n` +
                 `${setup.systemPrompt}`.trim();
@@ -376,7 +388,9 @@ export class RPGView {
         locationName: string;
         locationDescription: string;
         characterName: string;
+        characterVerbatimUserDetails: string;
         characterDescription: string;
+        settingVerbatimUserDetails: string;
         settingDescription: string;
         systemPrompt: string;
     }> {
@@ -415,14 +429,25 @@ export class RPGView {
             throw new Error('Invalid setup response: missing rpg_session_setup root');
         }
         
+        const requireText = (selector: string): string => {
+            const el = root.querySelector(selector);
+            const text = el?.textContent?.trim();
+            if (!text) {
+                throw new Error(`Invalid setup response: missing required element '${selector}'`);
+            }
+            return text;
+        };
+
         const setup = {
-            title: root.querySelector('title')?.textContent?.trim() || 'RPG Adventure',
-            locationName: root.querySelector('location > name')?.textContent?.trim() || 'Starting Location',
-            locationDescription: root.querySelector('location > description')?.textContent?.trim() || 'The adventure begins here.',
-            characterName: root.querySelector('character > name')?.textContent?.trim() || 'Adventurer',
-            characterDescription: root.querySelector('character > description')?.textContent?.trim() || 'The player character.',
-            settingDescription: root.querySelector('setting > description')?.textContent?.trim() || '',
-            systemPrompt: root.querySelector('system_prompt')?.textContent?.trim() || ''
+            title: requireText('title'),
+            locationName: requireText('location > name'),
+            locationDescription: requireText('location > description'),
+            characterName: requireText('character > name'),
+            characterVerbatimUserDetails: requireText('character > verbatim_user_details'),
+            characterDescription: requireText('character > description'),
+            settingVerbatimUserDetails: requireText('setting > verbatim_user_details'),
+            settingDescription: requireText('setting > description'),
+            systemPrompt: requireText('system_prompt')
         };
         
         console.log('✅ Parsed setup:', setup);
@@ -447,7 +472,7 @@ export class RPGView {
             // Build context to parse the setting
             const parserContext = this.contextBuilder.buildStateParserContext(
                 session,
-                'Parse the following setting description',
+                `Parse the following setting description.\n\nIMPORTANT CONSTRAINTS:\n- Do NOT update or rewrite the existing PLAYER CHARACTER (${session.worldState.playerCharacterId}).\n- Do NOT update or rewrite the existing STARTING LOCATION (${session.worldState.currentLocationId}).\n- Only create additional entities/lore/relationships/distances that are clearly implied.\n- Do NOT abbreviate or summarize existing details.`,
                 settingDescription
             );
             
