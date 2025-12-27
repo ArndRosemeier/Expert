@@ -53,6 +53,19 @@ export class RPGView {
             this.stateParser
         );
     }
+
+    private setCreateSessionStatus(text: string, isBusy: boolean): void {
+        const statusEl = this.container.querySelector('#rpg-create-session-status') as HTMLElement;
+        const createBtn = this.container.querySelector('#rpg-create-session-btn') as HTMLButtonElement;
+        const cancelBtn = this.container.querySelector('#rpg-cancel-new-session-btn') as HTMLButtonElement;
+
+        statusEl.innerHTML = isBusy
+            ? `<span class="rpg-spinner" aria-hidden="true"></span><span>${text}</span>`
+            : text;
+
+        createBtn.disabled = isBusy;
+        cancelBtn.disabled = isBusy;
+    }
     
     /**
      * Open the RPG view
@@ -203,6 +216,7 @@ export class RPGView {
                         </div>
                     </details>
                 </div>
+                <div id="rpg-create-session-status" class="rpg-create-session-status" aria-live="polite"></div>
                 <button id="rpg-create-session-btn">Create Session</button>
                 <button id="rpg-cancel-new-session-btn">Cancel</button>
             </div>
@@ -241,11 +255,17 @@ export class RPGView {
         const parserPurpose = parserSelect.value;
         
         try {
+            this.setCreateSessionStatus('Preparing session…', true);
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
             console.log('🎲 Generating session setup from description...');
+            this.setCreateSessionStatus('Generating session setup…', true);
             
             // Get the session setup from the LLM
             const setup = await this.generateSessionSetup(adventureDescription);
             
+            this.setCreateSessionStatus('Building world state…', true);
+
             // Create initial world state
             const worldState = this.worldStateService.createEmptyWorldState();
             
@@ -362,21 +382,27 @@ export class RPGView {
             
             // Parse setting description to extract additional entities
             if (setup.settingDescription) {
+                this.setCreateSessionStatus('Parsing initial setting…', true);
                 await this.parseSettingDescription(session, setup.settingDescription);
             }
             
             // Generate initial GM message
+            this.setCreateSessionStatus('Generating Game Master intro…', true);
             await this.generateInitialMessage(session, setup.settingDescription);
             
             // Save session
+            this.setCreateSessionStatus('Saving session…', true);
             await this.worldStateService.saveSession(session);
             
             // Load session
+            this.setCreateSessionStatus('Starting game…', true);
             await this.loadSession(session.id);
             
         } catch (error) {
             console.error('❌ Failed to create session:', error);
             alert(`Failed to create session: ${error instanceof Error ? error.message : error}`);
+            this.setCreateSessionStatus('', false);
+            throw error;
         }
     }
     
