@@ -1966,6 +1966,9 @@ You MUST respond with valid XML following this schema:
 - For new entities, generate stable IDs: lowercase, underscores, descriptive (e.g., "tavern_golden_mug").
 - If no changes, return an empty tag (e.g., <locations></locations>).
 - The "state" field is flexible JSON for dynamic attributes (health, mood, inventory, etc.).
+- **IMPORTANT: Descriptions are canonical**:
+  - Do NOT update/overwrite the DESCRIPTION field for existing CHARACTER or LOCATION entities.
+  - Instead, put new/changed facts into the STATE field (structured JSON) and/or create a new LORE ITEM (preferred for narrative/background facts) and link it via relationships.
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
         `.trim(),
@@ -1990,6 +1993,7 @@ Extract all world state changes from the Game Master's response.
 - If an entity exists (even with a vague name like "a cafe"), UPDATE it with its existing ID.
 - Only CREATE entities that are truly new and don't exist in the world state.
 - If the narrative reveals a proper name for an existing entity (e.g., "a cafe" → "The Grinding Stone"), UPDATE the existing entity with the new name.
+- Do NOT overwrite existing location/character descriptions. Use state updates and/or lore items for new facts.
 
 Output structured XML according to the schema in your system instructions.
         `.trim(),

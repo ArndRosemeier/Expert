@@ -278,7 +278,12 @@ export class RPGInteractionService {
                 } else if (locationUpdate.action === 'update') {
                     const updates: Partial<RPGLocation> = {};
                     if (locationUpdate.name) updates.name = locationUpdate.name;
-                    if (locationUpdate.description) updates.description = locationUpdate.description;
+                    if (locationUpdate.description) {
+                        console.warn(
+                            `⚠️ Ignoring location.description update for '${locationUpdate.id}' (descriptions are canonical). ` +
+                            `Parser attempted to overwrite description.`
+                        );
+                    }
                     if (locationUpdate.state) updates.state = locationUpdate.state;
                     
                     this.worldStateService.updateLocation(worldState, locationUpdate.id, updates);
@@ -304,7 +309,12 @@ export class RPGInteractionService {
                 } else if (characterUpdate.action === 'update') {
                     const updates: Partial<RPGCharacter> = {};
                     if (characterUpdate.name) updates.name = characterUpdate.name;
-                    if (characterUpdate.description) updates.description = characterUpdate.description;
+                    if (characterUpdate.description) {
+                        console.warn(
+                            `⚠️ Ignoring character.description update for '${characterUpdate.id}' (descriptions are canonical). ` +
+                            `Parser attempted to overwrite description.`
+                        );
+                    }
                     if (characterUpdate.state) updates.state = characterUpdate.state;
                     
                     this.worldStateService.updateCharacter(worldState, characterUpdate.id, updates);
