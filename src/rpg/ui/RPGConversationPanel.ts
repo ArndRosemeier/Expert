@@ -5,7 +5,7 @@
  * Displays conversation history and allows user input.
  */
 
-import { RPGGameSession } from '../types/RPGTypes';
+import { RPGConversationMessage, RPGGameSession } from '../types/RPGTypes';
 import { RPGInteractionService } from '../services/RPGInteractionService';
 import { RPGWorldInspector } from './RPGWorldInspector';
 import { getActiveProject } from '../../state';
@@ -97,8 +97,11 @@ export class RPGConversationPanel {
         
         this.messagesContainer.innerHTML = '';
         
-        for (const message of this.session.conversationHistory) {
-            this.appendMessage(message.role, message.content);
+        const lastIndex = this.session.conversationHistory.length - 1;
+        for (let i = 0; i < this.session.conversationHistory.length; i++) {
+            const message = this.session.conversationHistory[i] as RPGConversationMessage;
+            const showRetry = i === lastIndex && message.role === 'assistant' && !!message.preTurnSnapshotId;
+            this.appendMessage(message.role, message.content, showRetry);
         }
         
         // Scroll to bottom
@@ -108,7 +111,7 @@ export class RPGConversationPanel {
     /**
      * Append a single message to the display
      */
-    private appendMessage(role: 'user' | 'assistant', content: string): void {
+    private appendMessage(role: 'user' | 'assistant', content: string, showRetry: boolean = false): void {
         if (!this.messagesContainer) return;
         
         const messageDiv = document.createElement('div');
@@ -119,10 +122,71 @@ export class RPGConversationPanel {
         messageDiv.innerHTML = `
             <div class="rpg-message-role">${roleLabel}</div>
             <div class="rpg-message-content">${this.formatContent(content)}</div>
+            ${showRetry ? `<div class="rpg-message-actions"><button class="rpg-retry-btn" type="button">Retry</button></div>` : ''}
         `;
+
+        if (showRetry) {
+            const retryBtn = messageDiv.querySelector('.rpg-retry-btn') as HTMLButtonElement;
+            retryBtn?.addEventListener('click', () => {
+                void this.retryLastTurn();
+            });
+        }
         
         this.messagesContainer.appendChild(messageDiv);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    private async retryLastTurn(): Promise<void> {
+        if (!this.inputField || !this.submitButton) return;
+        if (this.interactionService.isAnalyzing()) {
+            this.updateStatus('Waiting for analysis...', 'analyzing');
+            await this.interactionService.waitForAnalysisCompletion();
+        }
+
+        const history = this.session.conversationHistory;
+        if (history.length < 2) {
+            alert('Nothing to retry yet.');
+            return;
+        }
+
+        const last = history[history.length - 1];
+        const prev = history[history.length - 2];
+        if (!last || !prev) {
+            alert('Nothing to retry yet.');
+            return;
+        }
+
+        if (last.role !== 'assistant' || prev.role !== 'user') {
+            alert('Retry is only available for the most recent GM answer.');
+            return;
+        }
+
+        const snapshotId = last.preTurnSnapshotId;
+        if (!snapshotId) {
+            alert('Cannot retry: missing pre-turn snapshot.');
+            return;
+        }
+
+        const playerAction = prev.content;
+
+        this.inputField.disabled = true;
+        this.submitButton.disabled = true;
+        this.updateStatus('Retrying (restoring state)...', 'analyzing');
+
+        await this.interactionService.restoreSnapshotIntoSession(this.session, snapshotId);
+
+        // Remove last user + assistant messages, then resend the same user text.
+        this.session.conversationHistory = history.slice(0, -2);
+        this.session.last2Messages = this.session.conversationHistory.slice(-2);
+
+        this.onUpdate();
+        this.renderMessages();
+
+        this.inputField.disabled = false;
+        this.submitButton.disabled = false;
+
+        this.inputField.value = playerAction;
+        await this.handleSubmit();
     }
     
     /**
@@ -213,6 +277,9 @@ export class RPGConversationPanel {
                     this.onUpdate(); // Notify parent to refresh world inspector
                 }
             );
+
+            // Re-render from canonical conversation history so the last assistant message gets the Retry button
+            this.renderMessages();
             
             // Update status to show analysis is running
             this.updateStatus('Analyzing world state...', 'analyzing');

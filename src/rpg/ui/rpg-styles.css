@@ -361,6 +361,27 @@
     line-height: 1.6;
 }
 
+.rpg-message-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.75em;
+    gap: 0.5em;
+}
+
+.rpg-retry-btn {
+    padding: 0.5em 1em;
+    border-radius: 0.35em;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.rpg-retry-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .rpg-input-area {
     display: flex;
     gap: 0.5rem;

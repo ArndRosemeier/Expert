@@ -389,6 +389,11 @@ export class RPGView {
             // Generate initial GM message
             this.setCreateSessionStatus('Generating Game Master intro…', true);
             await this.generateInitialMessage(session, setup.settingDescription);
+
+            // Create an initial snapshot at game start (turn 0)
+            this.setCreateSessionStatus('Creating initial snapshot…', true);
+            const initialSnapshot = await this.worldStateService.createSnapshot(session, 0);
+            session.snapshots.push(initialSnapshot.id);
             
             // Save session
             this.setCreateSessionStatus('Saving session…', true);

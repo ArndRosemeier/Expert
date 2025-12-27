@@ -61,6 +61,11 @@ export class RPGInteractionService {
         onStreamChunk?: (chunk: string) => void,
         onAnalysisComplete?: () => void
     ): Promise<string> {
+        // Create a pre-turn snapshot so we can "Retry" (rollback + resend) later.
+        const currentTurn = Math.floor(session.conversationHistory.length / 2);
+        const preTurnSnapshot = await this.worldStateService.createSnapshot(session, currentTurn);
+        session.snapshots.push(preTurnSnapshot.id);
+
         // Lock state during LLM interaction
         this.worldStateService.lockState('Game LLM generating response');
         
@@ -149,7 +154,8 @@ export class RPGInteractionService {
             const assistantMessage: RPGConversationMessage = {
                 role: 'assistant',
                 content: response,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                preTurnSnapshotId: preTurnSnapshot.id
             };
             
             session.conversationHistory.push(userMessage);
@@ -533,6 +539,11 @@ export class RPGInteractionService {
             isAnalyzing: this.analysisInProgress,
             canSubmit: !this.analysisInProgress
         };
+    }
+
+    async restoreSnapshotIntoSession(session: RPGGameSession, snapshotId: string): Promise<void> {
+        const restored = await this.worldStateService.restoreSnapshot(snapshotId);
+        session.worldState = restored;
     }
 }
 

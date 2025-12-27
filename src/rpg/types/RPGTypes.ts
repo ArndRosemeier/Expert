@@ -91,6 +91,11 @@ export interface RPGConversationMessage {
     role: 'user' | 'assistant';
     content: string;
     timestamp: number;
+    /**
+     * Snapshot ID created BEFORE generating the assistant response for this turn.
+     * Only set on assistant messages so the UI can offer "Retry" (rollback + resend).
+     */
+    preTurnSnapshotId?: string;
 }
 
 /**
