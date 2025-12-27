@@ -224,6 +224,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0; /* Important: allows flex children to shrink and overflow */
 }
 
 .rpg-conversation-header {
@@ -274,6 +275,7 @@
 .rpg-messages,
 #rpg-messages-container {
     flex: 1;
+    min-height: 0; /* Important: allows scrolling to work in flex container */
     overflow-y: auto;
     padding: 1rem;
     background: var(--node-bg, #1a1a1a);
