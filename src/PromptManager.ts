@@ -1981,6 +1981,9 @@ You MUST respond with valid XML following this schema:
 - **IMPORTANT: Descriptions are canonical**:
   - Do NOT update/overwrite the DESCRIPTION field for existing CHARACTER or LOCATION entities.
   - Instead, put new/changed facts into the STATE field (structured JSON) and/or create a new LORE ITEM (preferred for narrative/background facts) and link it via relationships.
+- **OUTPUT RULE (to avoid wasted tokens):**
+  - If action="update" for an existing character or location, OMIT the <description> tag entirely.
+  - Use <state> and/or <lore_item> instead.
 - **For newly created entities (action="create")**:
   - The DESCRIPTION you provide becomes canonical going forward, so it MUST be detailed and not abbreviated.
   - Include VERBATIM EVIDENCE copied from the GM response for any newly created character/location so important nuances cannot be lost.
@@ -2009,6 +2012,7 @@ Extract all world state changes from the Game Master's response.
 - Only CREATE entities that are truly new and don't exist in the world state.
 - If the narrative reveals a proper name for an existing entity (e.g., "a cafe" → "The Grinding Stone"), UPDATE the existing entity with the new name.
 - Do NOT overwrite existing location/character descriptions. Use state updates and/or lore items for new facts.
+- For action="update" on existing characters/locations: OMIT the <description> tag (use <state> and/or <lore_item>).
 - For any newly created character/location: include VERBATIM EVIDENCE copied from the GM response (so details are lossless).
 
 Output structured XML according to the schema in your system instructions.

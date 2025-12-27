@@ -266,6 +266,8 @@ export class RPGInteractionService {
         const worldState = session.worldState;
         
         console.log('🔄 Applying state updates...');
+
+        const warnedCanonicalDescription = new Set<string>();
         
         // Apply location updates
         if (update.locations) {
@@ -326,12 +328,19 @@ export class RPGInteractionService {
                     const updates: Partial<RPGLocation> = {};
                     if (locationUpdate.name) updates.name = locationUpdate.name;
                     if (locationUpdate.description) {
-                        console.warn(
-                            `⚠️ Ignoring location.description update for '${locationUpdate.id}' (descriptions are canonical). ` +
-                            `Parser attempted to overwrite description.`
-                        );
+                        const key = `location:${locationUpdate.id}`;
+                        if (!warnedCanonicalDescription.has(key)) {
+                            warnedCanonicalDescription.add(key);
+                            console.warn(
+                                `⚠️ Ignoring location.description update for '${locationUpdate.id}' (descriptions are canonical). ` +
+                                `Parser should output <state> / lore instead.`
+                            );
+                        }
                     }
-                    if (locationUpdate.state) updates.state = locationUpdate.state;
+                    if (locationUpdate.state) {
+                        const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
+                        updates.state = { ...(existing?.state || {}), ...locationUpdate.state };
+                    }
                     
                     this.worldStateService.updateLocation(worldState, locationUpdate.id, updates);
                     console.log(`  ✅ Updated location: ${locationUpdate.id}`);
@@ -408,12 +417,19 @@ export class RPGInteractionService {
                     const updates: Partial<RPGCharacter> = {};
                     if (characterUpdate.name) updates.name = characterUpdate.name;
                     if (characterUpdate.description) {
-                        console.warn(
-                            `⚠️ Ignoring character.description update for '${characterUpdate.id}' (descriptions are canonical). ` +
-                            `Parser attempted to overwrite description.`
-                        );
+                        const key = `character:${characterUpdate.id}`;
+                        if (!warnedCanonicalDescription.has(key)) {
+                            warnedCanonicalDescription.add(key);
+                            console.warn(
+                                `⚠️ Ignoring character.description update for '${characterUpdate.id}' (descriptions are canonical). ` +
+                                `Parser should output <state> / lore instead.`
+                            );
+                        }
                     }
-                    if (characterUpdate.state) updates.state = characterUpdate.state;
+                    if (characterUpdate.state) {
+                        const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
+                        updates.state = { ...(existing?.state || {}), ...characterUpdate.state };
+                    }
                     
                     this.worldStateService.updateCharacter(worldState, characterUpdate.id, updates);
                     console.log(`  ✅ Updated character: ${characterUpdate.id}`);
