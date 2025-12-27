@@ -40,6 +40,16 @@ export interface IStorageService {
   
   // Advanced operations for exports
   getIndexedDBService?(): IndexedDBService;
+  
+  // RPG-specific operations
+  saveRPGSession<T>(session: T): Promise<void>;
+  loadRPGSession<T>(sessionId: string): Promise<T | null>;
+  deleteRPGSession(sessionId: string): Promise<void>;
+  listRPGSessions<T>(): Promise<T[]>;
+  saveRPGSnapshot<T>(snapshot: T): Promise<void>;
+  loadRPGSnapshot<T>(snapshotId: string): Promise<T | null>;
+  deleteRPGSnapshot(snapshotId: string): Promise<void>;
+  listRPGSnapshots<T>(): Promise<T[]>;
 }
 
 class IndexedDBStorageService implements IStorageService {
@@ -125,6 +135,110 @@ class IndexedDBStorageService implements IStorageService {
   getIndexedDBService(): IndexedDBService {
     return this.indexedDBService;
   }
+
+  // ========================================
+  // RPG-specific methods
+  // ========================================
+
+  /**
+   * Save an RPG game session
+   */
+  async saveRPGSession<T>(session: T): Promise<void> {
+    try {
+      const sessionWithId = session as { id: string };
+      await this.indexedDBService.set('rpg_sessions', sessionWithId.id, session);
+    } catch (error) {
+      console.error('Failed to save RPG session:', error);
+      throw new Error(`Failed to save RPG session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Load an RPG game session by ID
+   */
+  async loadRPGSession<T>(sessionId: string): Promise<T | null> {
+    try {
+      const session = await this.indexedDBService.get<T>('rpg_sessions', sessionId);
+      return session || null;
+    } catch (error) {
+      console.error('Failed to load RPG session:', error);
+      throw new Error(`Failed to load RPG session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Delete an RPG game session
+   */
+  async deleteRPGSession(sessionId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('rpg_sessions', sessionId);
+    } catch (error) {
+      console.error('Failed to delete RPG session:', error);
+      throw new Error(`Failed to delete RPG session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * List all RPG game sessions
+   */
+  async listRPGSessions<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('rpg_sessions');
+    } catch (error) {
+      console.error('Failed to list RPG sessions:', error);
+      throw new Error(`Failed to list RPG sessions: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Save an RPG snapshot
+   */
+  async saveRPGSnapshot<T>(snapshot: T): Promise<void> {
+    try {
+      const snapshotWithId = snapshot as { id: string };
+      await this.indexedDBService.set('rpg_snapshots', snapshotWithId.id, snapshot);
+    } catch (error) {
+      console.error('Failed to save RPG snapshot:', error);
+      throw new Error(`Failed to save RPG snapshot: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Load an RPG snapshot by ID
+   */
+  async loadRPGSnapshot<T>(snapshotId: string): Promise<T | null> {
+    try {
+      const snapshot = await this.indexedDBService.get<T>('rpg_snapshots', snapshotId);
+      return snapshot || null;
+    } catch (error) {
+      console.error('Failed to load RPG snapshot:', error);
+      throw new Error(`Failed to load RPG snapshot: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * Delete an RPG snapshot
+   */
+  async deleteRPGSnapshot(snapshotId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('rpg_snapshots', snapshotId);
+    } catch (error) {
+      console.error('Failed to delete RPG snapshot:', error);
+      throw new Error(`Failed to delete RPG snapshot: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /**
+   * List all RPG snapshots (optionally filtered by session ID via tag or state inspection)
+   */
+  async listRPGSnapshots<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('rpg_snapshots');
+    } catch (error) {
+      console.error('Failed to list RPG snapshots:', error);
+      throw new Error(`Failed to list RPG snapshots: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 }
 
 /**
@@ -166,7 +280,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 3, // Increment version to force schema upgrade
+      version: 4, // Increment version to add RPG stores
       stores: [
         {
           name: 'keyValue',
@@ -197,6 +311,30 @@ export class StorageService {
             {
               name: 'by-purpose',
               keyPath: 'purpose'
+            }
+          ]
+        },
+        {
+          name: 'rpg_sessions',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-createdAt',
+              keyPath: 'createdAt'
+            },
+            {
+              name: 'by-updatedAt',
+              keyPath: 'updatedAt'
+            }
+          ]
+        },
+        {
+          name: 'rpg_snapshots',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-timestamp',
+              keyPath: 'timestamp'
             }
           ]
         }

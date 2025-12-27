@@ -26,6 +26,21 @@ import { GenerationErrorService } from './ui/modals/services/GenerationErrorServ
 import * as pdfjsLib from 'pdfjs-dist';
 
 /**
+ * Open the RPG View
+ */
+async function openRPGMode(): Promise<void> {
+    try {
+        // Import and open the real RPG View
+        const { openRPGView } = await import('./rpg/ui/RPGView');
+        await openRPGView();
+        console.log('🎲 RPG Mode opened');
+    } catch (error) {
+        console.error('❌ Failed to open RPG Mode:', error);
+        alert('Failed to open RPG Mode. Please try again.');
+    }
+}
+
+/**
  * Open the Idea Board in a modal or overlay
  */
 async function openIdeaBoard(): Promise<void> {
@@ -912,6 +927,11 @@ export async function initialize() {
         // Idea Board button
         getElementById('idea-board-btn').addEventListener('click', () => {
             void openIdeaBoard();
+        });
+
+        // RPG Mode button
+        getElementById('rpg-mode-btn').addEventListener('click', () => {
+            void openRPGMode();
         });
 
 

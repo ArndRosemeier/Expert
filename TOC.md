@@ -182,6 +182,52 @@ The Node Chat Editor is a collaborative AI editing interface that allows real-ti
 ### Type System
 - **`src/idea-board/types/BoardTypes.ts`** - Board type definitions
 
+## 🎲 RPG System
+
+**A complete roleplaying game system with dual-LLM workflow, persistent world, and intelligent context construction.**
+
+### Core Components
+- **`src/rpg/types/RPGTypes.ts`** - Core type definitions (entities, relationships, sessions, snapshots)
+- **`src/rpg/services/WorldStateService.ts`** - CRUD operations, snapshots, locking, relationship graph traversal
+- **`src/rpg/services/RPGContextBuilder.ts`** - Context construction with graph traversal and formatting
+- **`src/rpg/services/RPGStateParser.ts`** - XML parser for State Parser LLM output
+- **`src/rpg/services/RPGInteractionService.ts`** - Dual-LLM orchestration (Game LLM + State Parser)
+- **`src/rpg/services/RPGPlaceholderService.ts`** - Prompt placeholder registration
+
+### UI Components
+- **`src/rpg/ui/RPGView.ts`** - Main RPG interface with session management
+- **`src/rpg/ui/RPGConversationPanel.ts`** - Chat interface with streaming support
+- **`src/rpg/ui/RPGWorldInspector.ts`** - Scene/World toggle with tree-based viewer
+- **`src/rpg/ui/RPGSnapshotManager.ts`** - Snapshot browsing and rollback
+- **`src/rpg/ui/rpg-styles.css`** - Complete styling for RPG mode
+
+### Key Features
+- **Dual-LLM Workflow**: Game LLM (narrator) + State Parser LLM (world updates)
+- **Persistent World**: Locations, Characters, Lore with flexible JSON state
+- **Relationship Graph**: BFS traversal for intelligent context inclusion
+- **Emergent Geography**: Distance tracking extracted from narrative
+- **State Locking**: Prevents race conditions during async analysis
+- **Move-by-Move Snapshots**: Automatic save/rollback functionality
+- **XML-Based Updates**: Structured state changes via XML schema
+
+### Prompts (in `src/PromptManager.ts`)
+- **`rpg_game_narration_system`** - Game LLM system prompt with world state placeholders
+- **`rpg_state_parser_system`** - State Parser LLM with XML schema
+- **`rpg_state_parser_user`** - State Parser user prompt
+
+### Storage (in `src/StorageService.ts`)
+- **`rpg_sessions`** store - Game session data
+- **`rpg_snapshots`** store - Save state snapshots
+
+### Usage Flow
+1. Click RPG Mode button (🎲)
+2. Create or load session
+3. Type action → Game LLM generates narrative
+4. State Parser extracts world changes (async)
+5. World state updates + snapshot created
+6. Browse world in Scene/World view
+7. Restore snapshots for rollback
+
 ## 📊 Overview Board System
 
 ### Core Components
