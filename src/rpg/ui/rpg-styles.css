@@ -271,7 +271,8 @@
     color: #ff6b6b;
 }
 
-.rpg-messages {
+.rpg-messages,
+#rpg-messages-container {
     flex: 1;
     overflow-y: auto;
     padding: 1rem;
@@ -695,6 +696,7 @@ button:disabled {
 
 /* Scrollbars */
 .rpg-messages::-webkit-scrollbar,
+#rpg-messages-container::-webkit-scrollbar,
 .rpg-world-content::-webkit-scrollbar,
 .rpg-snapshots-list::-webkit-scrollbar,
 .session-list::-webkit-scrollbar {
@@ -702,6 +704,7 @@ button:disabled {
 }
 
 .rpg-messages::-webkit-scrollbar-track,
+#rpg-messages-container::-webkit-scrollbar-track,
 .rpg-world-content::-webkit-scrollbar-track,
 .rpg-snapshots-list::-webkit-scrollbar-track,
 .session-list::-webkit-scrollbar-track {
@@ -709,6 +712,7 @@ button:disabled {
 }
 
 .rpg-messages::-webkit-scrollbar-thumb,
+#rpg-messages-container::-webkit-scrollbar-thumb,
 .rpg-world-content::-webkit-scrollbar-thumb,
 .rpg-snapshots-list::-webkit-scrollbar-thumb,
 .session-list::-webkit-scrollbar-thumb {
@@ -717,6 +721,7 @@ button:disabled {
 }
 
 .rpg-messages::-webkit-scrollbar-thumb:hover,
+#rpg-messages-container::-webkit-scrollbar-thumb:hover,
 .rpg-world-content::-webkit-scrollbar-thumb:hover,
 .rpg-snapshots-list::-webkit-scrollbar-thumb:hover,
 .session-list::-webkit-scrollbar-thumb:hover {
