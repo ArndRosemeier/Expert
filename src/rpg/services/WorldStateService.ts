@@ -509,6 +509,10 @@ export class WorldStateService {
     // ========================================
     // Utility Methods
     // ========================================
+
+    cloneWorldStateForUndo(worldState: RPGWorldState): RPGWorldState {
+        return this.cloneWorldState(worldState);
+    }
     
     /**
      * Deep clone a world state

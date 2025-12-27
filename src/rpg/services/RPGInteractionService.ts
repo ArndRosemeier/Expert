@@ -29,6 +29,8 @@ export class RPGInteractionService {
     private lastPlayerAction: string = '';
     private lastGMResponse: string = '';
     private onAnalysisComplete?: () => void;
+
+    private rollbackPoints: Map<string, ReturnType<WorldStateService['cloneWorldStateForUndo']>> = new Map();
     
     constructor(
         worldStateService: WorldStateService,
@@ -61,10 +63,9 @@ export class RPGInteractionService {
         onStreamChunk?: (chunk: string) => void,
         onAnalysisComplete?: () => void
     ): Promise<string> {
-        // Create a pre-turn snapshot so we can "Retry" (rollback + resend) later.
-        const currentTurn = Math.floor(session.conversationHistory.length / 2);
-        const preTurnSnapshot = await this.worldStateService.createSnapshot(session, currentTurn);
-        session.snapshots.push(preTurnSnapshot.id);
+        // Capture an in-memory rollback point so we can "Retry" without creating an extra persisted snapshot.
+        const rollbackId = `rollback_${session.id}_${Date.now()}`;
+        this.rollbackPoints.set(rollbackId, this.worldStateService.cloneWorldStateForUndo(session.worldState));
 
         // Lock state during LLM interaction
         this.worldStateService.lockState('Game LLM generating response');
@@ -155,7 +156,7 @@ export class RPGInteractionService {
                 role: 'assistant',
                 content: response,
                 timestamp: Date.now(),
-                preTurnSnapshotId: preTurnSnapshot.id
+                preTurnRollbackId: rollbackId
             };
             
             session.conversationHistory.push(userMessage);
@@ -557,9 +558,21 @@ export class RPGInteractionService {
         };
     }
 
-    async restoreSnapshotIntoSession(session: RPGGameSession, snapshotId: string): Promise<void> {
-        const restored = await this.worldStateService.restoreSnapshot(snapshotId);
-        session.worldState = restored;
+    restoreRollbackPointIntoSession(session: RPGGameSession, rollbackId: string): void {
+        const state = this.rollbackPoints.get(rollbackId);
+        if (!state) {
+            throw new Error(`Rollback point not found: ${rollbackId}`);
+        }
+        // Restore a fresh clone so the stored rollback point remains immutable.
+        session.worldState = this.worldStateService.cloneWorldStateForUndo(state);
+    }
+
+    dropRollbackPoint(rollbackId: string): void {
+        this.rollbackPoints.delete(rollbackId);
+    }
+
+    async deleteSnapshotById(snapshotId: string): Promise<void> {
+        await this.worldStateService.deleteSnapshot(snapshotId);
     }
 }
 

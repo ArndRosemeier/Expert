@@ -92,10 +92,11 @@ export interface RPGConversationMessage {
     content: string;
     timestamp: number;
     /**
-     * Snapshot ID created BEFORE generating the assistant response for this turn.
+     * Rollback point ID captured BEFORE generating the assistant response for this turn.
+     * This is an in-memory rollback key (not a persisted snapshot).
      * Only set on assistant messages so the UI can offer "Retry" (rollback + resend).
      */
-    preTurnSnapshotId?: string;
+    preTurnRollbackId?: string;
 }
 
 /**

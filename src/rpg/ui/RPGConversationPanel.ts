@@ -100,7 +100,7 @@ export class RPGConversationPanel {
         const lastIndex = this.session.conversationHistory.length - 1;
         for (let i = 0; i < this.session.conversationHistory.length; i++) {
             const message = this.session.conversationHistory[i] as RPGConversationMessage;
-            const showRetry = i === lastIndex && message.role === 'assistant' && !!message.preTurnSnapshotId;
+            const showRetry = i === lastIndex && message.role === 'assistant' && !!message.preTurnRollbackId;
             this.appendMessage(message.role, message.content, showRetry);
         }
         
@@ -161,9 +161,9 @@ export class RPGConversationPanel {
             return;
         }
 
-        const snapshotId = last.preTurnSnapshotId;
-        if (!snapshotId) {
-            alert('Cannot retry: missing pre-turn snapshot.');
+        const rollbackId = last.preTurnRollbackId;
+        if (!rollbackId) {
+            alert('Cannot retry: missing rollback point.');
             return;
         }
 
@@ -173,7 +173,14 @@ export class RPGConversationPanel {
         this.submitButton.disabled = true;
         this.updateStatus('Retrying (restoring state)...', 'analyzing');
 
-        await this.interactionService.restoreSnapshotIntoSession(this.session, snapshotId);
+        this.interactionService.restoreRollbackPointIntoSession(this.session, rollbackId);
+        this.interactionService.dropRollbackPoint(rollbackId);
+
+        // Remove last post-turn snapshot (created by analysis) so we don't accumulate extra saves on retry.
+        const lastSnapshotId = this.session.snapshots.pop();
+        if (lastSnapshotId) {
+            await this.interactionService.deleteSnapshotById(lastSnapshotId);
+        }
 
         // Remove last user + assistant messages, then resend the same user text.
         this.session.conversationHistory = history.slice(0, -2);
