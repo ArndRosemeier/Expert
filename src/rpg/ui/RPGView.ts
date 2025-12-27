@@ -298,6 +298,55 @@ export class RPGView {
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             };
+
+            // Persist the initial setup exhaustively as Lore so it stays visible and checkable
+            // (even if later parsing updates shorten entity descriptions).
+            const sessionBriefLoreId = `lore_session_brief_${session.id}`;
+            const sessionBriefContent =
+                `## User Adventure Description\n` +
+                `${adventureDescription}\n\n` +
+                `## Generated Session Title\n` +
+                `${setup.title}\n\n` +
+                `## Starting Location\n` +
+                `${setup.locationName}\n\n` +
+                `${setup.locationDescription}\n\n` +
+                `## Player Character\n` +
+                `${setup.characterName}\n\n` +
+                `${setup.characterDescription}\n\n` +
+                `## Initial Setting\n` +
+                `${setup.settingDescription}\n\n` +
+                `## Game Master System Prompt\n` +
+                `${setup.systemPrompt}`.trim();
+
+            this.worldStateService.createLore(worldState, {
+                id: sessionBriefLoreId,
+                title: 'Session Brief (Initial Setup)',
+                content: sessionBriefContent,
+                tags: ['session', 'initial_setup', 'setting', 'character'],
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+
+            // Link the brief to the starting location + player character so it appears as relevant lore in Scene View
+            this.worldStateService.createRelationship(worldState, {
+                id: `rel_${sessionBriefLoreId}_${locationId}_describes`,
+                fromId: sessionBriefLoreId,
+                toId: locationId,
+                type: 'describes',
+                description: 'Initial session setup / starting scene',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+
+            this.worldStateService.createRelationship(worldState, {
+                id: `rel_${sessionBriefLoreId}_${playerId}_describes`,
+                fromId: sessionBriefLoreId,
+                toId: playerId,
+                type: 'describes',
+                description: 'Player character dossier / initial briefing',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
             
             // Parse setting description to extract additional entities
             if (setup.settingDescription) {

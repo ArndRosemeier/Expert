@@ -1775,6 +1775,18 @@ Based on the adventure description, generate a comprehensive session setup in XM
    - Genre conventions and expectations
    - Important thematic elements
 
+## Critical Requirements (DO NOT VIOLATE)
+1. **Do NOT summarize or abbreviate user-provided details**.
+   - If the user describes the player character in detail (background, motivations, skills, relationships, constraints, tone, etc.), your CHARACTER DESCRIPTION element MUST preserve those details in full.
+   - If the user describes the initial setting/situation in detail, your SETTING DESCRIPTION element MUST preserve those details in full.
+2. **Be exhaustive for initial setup**:
+   - It is OK (and preferred) to use multiple paragraphs, bullet lists, and concrete specifics.
+   - Add details the user did not specify, but never at the cost of losing the user’s details.
+3. **No “short summaries”**:
+   - Avoid generic one-liners like “A brave adventurer…”. Provide a rich, precise description.
+4. **Consistency**:
+   - The location, character, setting, and system prompt must clearly belong to the user’s described adventure.
+
 ## Output Format (XML)
 Respond with ONLY valid XML in this exact structure:
 
@@ -1786,10 +1798,14 @@ Respond with ONLY valid XML in this exact structure:
   </location>
   <character>
     <name>Character Name</name>
-    <description>Character description including personality, background, abilities</description>
+    <description>
+      Exhaustive player character description including all details from the user's description (do not abbreviate), plus additional coherent details you generate.
+    </description>
   </character>
   <setting>
-    <description>Detailed setting description to establish the scene</description>
+    <description>
+      Exhaustive initial scene + situation description (do not abbreviate). This should be long-form, concrete, and faithful to the user's described adventure.
+    </description>
   </setting>
   <system_prompt>
     Complete system prompt for the Game Master including style, rules, and guidelines specific to this adventure.
