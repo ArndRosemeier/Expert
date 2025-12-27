@@ -119,6 +119,11 @@ export interface RPGStateUpdateXML {
         id: string;
         name?: string;
         description?: string;
+        /**
+         * Verbatim evidence copied from the GM response that justifies this entity and captures key details.
+         * Intended mainly for action="create" so the initial description cannot lose important nuances.
+         */
+        verbatimEvidence?: string;
         state?: Record<string, unknown>;
     }>;
     characters?: Array<{
@@ -126,6 +131,11 @@ export interface RPGStateUpdateXML {
         id: string;
         name?: string;
         description?: string;
+        /**
+         * Verbatim evidence copied from the GM response that justifies this entity and captures key details.
+         * Intended mainly for action="create" so the initial description cannot lose important nuances.
+         */
+        verbatimEvidence?: string;
         state?: Record<string, unknown>;
     }>;
     lore?: Array<{

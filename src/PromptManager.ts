@@ -1904,6 +1904,9 @@ You MUST respond with valid XML following this schema:
       <id>unique_identifier</id>
       <name>Location Name</name>
       <description>Location description</description>
+      <verbatim_evidence>
+        For action="create": copy/paste the exact relevant excerpt(s) from the GM response that establish this location and its important details.
+      </verbatim_evidence>
       <state>JSON object with dynamic state</state>
     </location>
     <!-- Repeat for each location -->
@@ -1914,6 +1917,9 @@ You MUST respond with valid XML following this schema:
       <id>unique_identifier</id>
       <name>Character Name</name>
       <description>Character description</description>
+      <verbatim_evidence>
+        For action="create": copy/paste the exact relevant excerpt(s) from the GM response that establish this character and their important traits/details.
+      </verbatim_evidence>
       <state>JSON object with dynamic state</state>
     </character>
     <!-- Repeat for each character -->
@@ -1969,6 +1975,9 @@ You MUST respond with valid XML following this schema:
 - **IMPORTANT: Descriptions are canonical**:
   - Do NOT update/overwrite the DESCRIPTION field for existing CHARACTER or LOCATION entities.
   - Instead, put new/changed facts into the STATE field (structured JSON) and/or create a new LORE ITEM (preferred for narrative/background facts) and link it via relationships.
+- **For newly created entities (action="create")**:
+  - The DESCRIPTION you provide becomes canonical going forward, so it MUST be detailed and not abbreviated.
+  - Include VERBATIM EVIDENCE copied from the GM response for any newly created character/location so important nuances cannot be lost.
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
         `.trim(),
@@ -1994,6 +2003,7 @@ Extract all world state changes from the Game Master's response.
 - Only CREATE entities that are truly new and don't exist in the world state.
 - If the narrative reveals a proper name for an existing entity (e.g., "a cafe" → "The Grinding Stone"), UPDATE the existing entity with the new name.
 - Do NOT overwrite existing location/character descriptions. Use state updates and/or lore items for new facts.
+- For any newly created character/location: include VERBATIM EVIDENCE copied from the GM response (so details are lossless).
 
 Output structured XML according to the schema in your system instructions.
         `.trim(),

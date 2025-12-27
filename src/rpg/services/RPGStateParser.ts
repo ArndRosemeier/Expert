@@ -115,6 +115,11 @@ export class RPGStateParser {
             if (descriptionElement?.textContent) {
                 location.description = descriptionElement.textContent.trim();
             }
+
+            const verbatimEvidenceElement = element.querySelector('verbatim_evidence');
+            if (verbatimEvidenceElement?.textContent) {
+                location.verbatimEvidence = verbatimEvidenceElement.textContent.trim();
+            }
             
             const stateElement = element.querySelector('state');
             if (stateElement?.textContent) {
@@ -167,6 +172,11 @@ export class RPGStateParser {
             const descriptionElement = element.querySelector('description');
             if (descriptionElement?.textContent) {
                 character.description = descriptionElement.textContent.trim();
+            }
+
+            const verbatimEvidenceElement = element.querySelector('verbatim_evidence');
+            if (verbatimEvidenceElement?.textContent) {
+                character.verbatimEvidence = verbatimEvidenceElement.textContent.trim();
             }
             
             const stateElement = element.querySelector('state');

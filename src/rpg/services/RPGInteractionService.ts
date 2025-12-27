@@ -265,16 +265,57 @@ export class RPGInteractionService {
         if (update.locations) {
             for (const locationUpdate of update.locations) {
                 if (locationUpdate.action === 'create') {
+                    const descriptionParts: string[] = [];
+                    if (locationUpdate.verbatimEvidence) {
+                        descriptionParts.push('## First mention (verbatim from GM)');
+                        descriptionParts.push(locationUpdate.verbatimEvidence);
+                        descriptionParts.push('');
+                    } else {
+                        console.error(
+                            `❌ Missing verbatim evidence for newly created location '${locationUpdate.id}'. ` +
+                            `This can cause loss of important details.`
+                        );
+                    }
+                    if (locationUpdate.description) {
+                        descriptionParts.push('## Location description');
+                        descriptionParts.push(locationUpdate.description);
+                    }
+
+                    const combinedDescription = descriptionParts.join('\n').trim();
+
                     const location: RPGLocation = {
                         id: locationUpdate.id,
                         name: locationUpdate.name || locationUpdate.id,
-                        description: locationUpdate.description || '',
+                        description: combinedDescription,
                         state: locationUpdate.state || {},
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
                     this.worldStateService.createLocation(worldState, location);
                     console.log(`  ✅ Created location: ${location.name}`);
+
+                    // Persist verbatim evidence as lore linked to the new location (visibility + future context)
+                    if (locationUpdate.verbatimEvidence) {
+                        const loreId = `lore_first_mention_${location.id}_${Date.now()}`;
+                        this.worldStateService.createLore(worldState, {
+                            id: loreId,
+                            title: `First mention: ${location.name}`,
+                            content: locationUpdate.verbatimEvidence,
+                            tags: ['first_mention', 'verbatim', 'location'],
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        });
+
+                        this.worldStateService.createRelationship(worldState, {
+                            id: `rel_${loreId}_${location.id}_describes_${Date.now()}`,
+                            fromId: loreId,
+                            toId: location.id,
+                            type: 'describes',
+                            description: 'Verbatim excerpt from GM introducing the location',
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        });
+                    }
                 } else if (locationUpdate.action === 'update') {
                     const updates: Partial<RPGLocation> = {};
                     if (locationUpdate.name) updates.name = locationUpdate.name;
@@ -296,16 +337,67 @@ export class RPGInteractionService {
         if (update.characters) {
             for (const characterUpdate of update.characters) {
                 if (characterUpdate.action === 'create') {
+                    const descriptionParts: string[] = [];
+                    if (characterUpdate.verbatimEvidence) {
+                        descriptionParts.push('## First appearance (verbatim from GM)');
+                        descriptionParts.push(characterUpdate.verbatimEvidence);
+                        descriptionParts.push('');
+                    } else {
+                        console.error(
+                            `❌ Missing verbatim evidence for newly created character '${characterUpdate.id}'. ` +
+                            `This can cause loss of important details.`
+                        );
+                    }
+                    if (characterUpdate.description) {
+                        descriptionParts.push('## Character profile');
+                        descriptionParts.push(characterUpdate.description);
+                    }
+
+                    const combinedDescription = descriptionParts.join('\n').trim();
+
                     const character: RPGCharacter = {
                         id: characterUpdate.id,
                         name: characterUpdate.name || characterUpdate.id,
-                        description: characterUpdate.description || '',
+                        description: combinedDescription,
                         state: characterUpdate.state || {},
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
                     this.worldStateService.createCharacter(worldState, character);
                     console.log(`  ✅ Created character: ${character.name}`);
+
+                    // Persist verbatim evidence as lore linked to character + current location (visibility + future context)
+                    if (characterUpdate.verbatimEvidence) {
+                        const loreId = `lore_first_appearance_${character.id}_${Date.now()}`;
+                        this.worldStateService.createLore(worldState, {
+                            id: loreId,
+                            title: `First appearance: ${character.name}`,
+                            content: characterUpdate.verbatimEvidence,
+                            tags: ['first_appearance', 'verbatim', 'character'],
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        });
+
+                        this.worldStateService.createRelationship(worldState, {
+                            id: `rel_${loreId}_${character.id}_describes_${Date.now()}`,
+                            fromId: loreId,
+                            toId: character.id,
+                            type: 'describes',
+                            description: 'Verbatim excerpt from GM introducing the character',
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        });
+
+                        this.worldStateService.createRelationship(worldState, {
+                            id: `rel_${loreId}_${worldState.currentLocationId}_found_${Date.now()}`,
+                            fromId: loreId,
+                            toId: worldState.currentLocationId,
+                            type: 'found_at',
+                            description: 'Where the character was introduced',
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        });
+                    }
                 } else if (characterUpdate.action === 'update') {
                     const updates: Partial<RPGCharacter> = {};
                     if (characterUpdate.name) updates.name = characterUpdate.name;
