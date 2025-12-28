@@ -30,7 +30,7 @@ export class RPGContextBuilder {
         
         // Get player character
         const playerCharacter = this.worldStateService.getCharacter(worldState, worldState.playerCharacterId);
-        const playerCharacterText = this.formatCharacter(playerCharacter);
+        const playerCharacterText = this.formatPlayerCharacterForNarrator(playerCharacter);
         
         // Get characters at current location
         const characterIdsAtLocation = this.worldStateService.getEntitiesAtLocation(worldState, worldState.currentLocationId);
@@ -125,24 +125,37 @@ export class RPGContextBuilder {
         
         return text;
     }
-    
-    private formatCharacter(character: RPGCharacter | undefined): string {
-        if (!character) {
-            return '[Unknown character]';
-        }
-        
-        let text = `**${character.name}**\n`;
-        text += `${character.description}\n`;
 
-        if (Object.keys(character.sceneState).length > 0) {
-            text += `SceneState: ${JSON.stringify(character.sceneState, null, 2)}\n`;
+    /**
+     * The narrator should not be given the player's name as usable surface text.
+     * This prevents NPCs from "cheating" and addressing the player by name without an in-world basis.
+     */
+    private formatPlayerCharacterForNarrator(player: RPGCharacter | undefined): string {
+        if (!player) return '[Unknown player character]';
+
+        const redactedDescription = this.redactPlayerName(player.description, player.name);
+
+        let text = `**You (player)**\n`;
+        text += `${redactedDescription}\n`;
+
+        if (Object.keys(player.sceneState).length > 0) {
+            text += `SceneState: ${JSON.stringify(player.sceneState, null, 2)}\n`;
         }
-        
-        if (Object.keys(character.state).length > 0) {
-            text += `State: ${JSON.stringify(character.state, null, 2)}`;
+
+        if (Object.keys(player.state).length > 0) {
+            text += `State: ${JSON.stringify(player.state, null, 2)}`;
         }
-        
+
         return text;
+    }
+
+    private redactPlayerName(text: string, name: string): string {
+        const safeName = name.trim();
+        if (!safeName) return text;
+
+        const escaped = safeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`\\b${escaped}\\b`, 'g');
+        return text.replace(re, '[REDACTED_PLAYER_NAME]');
     }
     
     private formatCharacterList(worldState: RPGWorldState, playerCharacterId: string, characters: RPGCharacter[]): string {
