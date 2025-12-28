@@ -1984,6 +1984,13 @@ You MUST respond with valid XML following this schema:
   <player_location>
     <current_location_id>current_location_id</current_location_id>
   </player_location>
+
+  <scene>
+    <present_character_ids>
+      <character_id>character_id_1</character_id>
+      <character_id>character_id_2</character_id>
+    </present_character_ids>
+  </scene>
 </rpg_state_update>
 
 ## Rules
@@ -2004,6 +2011,9 @@ You MUST respond with valid XML following this schema:
   - The DESCRIPTION you provide becomes canonical going forward, so it MUST be detailed and not abbreviated.
   - Include VERBATIM EVIDENCE copied from the GM response for any newly created character/location so important nuances cannot be lost.
 - **Scene placement (IMPORTANT)**:
+  - You MUST ALWAYS output a <scene> roster listing all characters physically present in the current scene at the end of the GM response.
+    - Include anyone who is there, enters, travels with the player, or speaks in the scene.
+    - Use existing IDs from Current World State whenever possible.
   - If a character is present in the current scene (i.e., they appear in the GM response as being here/entering/standing nearby), you MUST ensure there is a relationship:
     - from_id = that character’s id
     - to_id = the current location id

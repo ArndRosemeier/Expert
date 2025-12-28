@@ -714,6 +714,44 @@ export class RPGInteractionService {
             this.worldStateService.updateCurrentLocation(worldState, update.playerLocation.currentLocationId);
             console.log(`  ✅ Updated player location: ${update.playerLocation.currentLocationId}`);
         }
+
+        // Enforce scene roster -> located_at (robust against parser missing individual located_at edges)
+        if (update.scene) {
+            const currentLocationId = worldState.currentLocationId;
+            const roster = update.scene.presentCharacterIds;
+
+            for (const characterId of roster) {
+                if (characterId === worldState.playerCharacterId) continue;
+
+                const exists = this.worldStateService.getCharacter(worldState, characterId);
+                if (!exists) {
+                    console.warn(`⚠️ Scene roster referenced unknown character '${characterId}'.`);
+                    continue;
+                }
+
+                // Delete any existing located_at for this character (invariant: one location per character)
+                const existingLocatedAt = this.worldStateService
+                    .listRelationships(worldState)
+                    .filter(r => r.kind === 'located_at' && r.fromId === characterId);
+                for (const rel of existingLocatedAt) {
+                    this.worldStateService.deleteRelationship(worldState, rel.id);
+                }
+
+                this.worldStateService.createRelationship(worldState, {
+                    id: `rel_${characterId}_${currentLocationId}_located_at_${Date.now()}`,
+                    fromId: characterId,
+                    toId: currentLocationId,
+                    kind: 'located_at',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                });
+            }
+
+            console.log(`  ✅ Applied scene roster (${roster.length} ids) to location ${currentLocationId}`);
+        } else {
+            // Loud signal when roster is missing (helps diagnose LLM failures)
+            console.warn('⚠️ No <scene> roster found in state update; scene membership may be incomplete.');
+        }
     }
     
     /**

@@ -246,6 +246,13 @@ export interface RPGStateUpdateXML {
     playerLocation?: {
         currentLocationId: string;
     };
+    /**
+     * Optional scene roster extracted from the GM response.
+     * This exists to make scene membership robust even if individual located_at relationships are missed.
+     */
+    scene?: {
+        presentCharacterIds: string[];
+    };
 }
 
 /**

@@ -65,6 +65,22 @@ export class RPGStateParser {
                     currentLocationId: playerLocationElement.textContent.trim()
                 };
             }
+
+            // Parse scene roster (present characters)
+            const rosterContainer = root.querySelector('scene > present_character_ids');
+            if (rosterContainer) {
+                const ids: string[] = [];
+                const idEls = rosterContainer.querySelectorAll('character_id');
+                for (const el of Array.from(idEls)) {
+                    const text = el.textContent?.trim();
+                    if (text) ids.push(text);
+                }
+                if (ids.length > 0) {
+                    result.scene = { presentCharacterIds: ids };
+                } else {
+                    result.scene = { presentCharacterIds: [] };
+                }
+            }
             
             return result;
             
