@@ -89,6 +89,9 @@ export class RPGConversationPanel {
                 void this.handleSubmit();
             }
         });
+
+        // Initial UX: focus input immediately when the chat opens.
+        this.focusInput();
     }
     
     /**
@@ -387,6 +390,7 @@ export class RPGConversationPanel {
      */
     refresh(): void {
         this.renderMessages();
+        this.focusInput();
     }
 }
 
