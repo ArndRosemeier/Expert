@@ -101,6 +101,11 @@ export class RPGInteractionService {
             
             // Add current player action
             messages.push({role: 'user', content: playerAction});
+
+            // Diagnostics (for UI): how much we send to the narrator LLM this turn
+            const narratorPromptCharCount = messages.reduce((sum, m) => sum + m.content.length, 0);
+            const narratorWorldItemsSentCount = this.countWorldItemsSentToNarrator(session);
+            const narratorWorldItemsTotalCount = this.countWorldItemsTotal(session);
             
             console.log(`🎮 Sending player action to Game LLM (purpose: ${session.narratorPurpose})`);
             
@@ -158,7 +163,10 @@ export class RPGInteractionService {
                 role: 'assistant',
                 content: response,
                 timestamp: Date.now(),
-                preTurnRollbackId: rollbackId
+                preTurnRollbackId: rollbackId,
+                narratorPromptCharCount,
+                narratorWorldItemsSentCount,
+                narratorWorldItemsTotalCount
             };
             
             session.conversationHistory.push(userMessage);
@@ -181,6 +189,45 @@ export class RPGInteractionService {
             console.error('Error in sendPlayerAction:', error);
             throw error;
         }
+    }
+
+    private countWorldItemsSentToNarrator(session: RPGGameSession): number {
+        const worldState = session.worldState;
+
+        const currentLocationCount = worldState.currentLocationId ? 1 : 0;
+        const playerCharacterCount = worldState.playerCharacterId ? 1 : 0;
+
+        const presentCharacterIds = this.worldStateService.getEntitiesAtLocation(worldState, worldState.currentLocationId)
+            .filter(id => id !== worldState.playerCharacterId);
+        const presentCharactersCount = presentCharacterIds.length;
+
+        // Lore: depth-2 traversal same as RPGContextBuilder
+        const relatedEntityIds = new Set<string>();
+        for (const entityId of [worldState.currentLocationId, worldState.playerCharacterId, ...presentCharacterIds]) {
+            const related = this.worldStateService.getRelatedEntities(worldState, entityId, 2);
+            related.forEach(id => relatedEntityIds.add(id));
+        }
+        let relevantLoreCount = 0;
+        for (const id of relatedEntityIds) {
+            if (this.worldStateService.getLore(worldState, id)) {
+                relevantLoreCount += 1;
+            }
+        }
+
+        const knownDistancesCount = this.worldStateService.getKnownDistances(worldState, worldState.currentLocationId).length;
+
+        return currentLocationCount + playerCharacterCount + presentCharactersCount + relevantLoreCount + knownDistancesCount;
+    }
+
+    private countWorldItemsTotal(session: RPGGameSession): number {
+        const worldState = session.worldState;
+        return (
+            worldState.locations.size +
+            worldState.characters.size +
+            worldState.lore.size +
+            worldState.relationships.size +
+            worldState.distances.length
+        );
     }
     
     /**

@@ -357,6 +357,12 @@
     opacity: 0.8;
 }
 
+.rpg-llm-meta {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    margin-bottom: 0.5rem;
+}
+
 .rpg-message-content {
     line-height: 1.6;
 }

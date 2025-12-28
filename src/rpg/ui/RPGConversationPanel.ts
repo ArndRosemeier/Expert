@@ -138,8 +138,17 @@ export class RPGConversationPanel {
             ? `<div class="rpg-message-actions">${actions.join('')}</div>`
             : '';
 
+        const metaHtml =
+            message.role === 'assistant' &&
+            message.narratorPromptCharCount !== undefined &&
+            message.narratorWorldItemsSentCount !== undefined &&
+            message.narratorWorldItemsTotalCount !== undefined
+                ? `<div class="rpg-llm-meta">LLM msg: ${message.narratorPromptCharCount} chars · World sent: ${message.narratorWorldItemsSentCount} items · World total: ${message.narratorWorldItemsTotalCount} items</div>`
+                : '';
+
         messageDiv.innerHTML = `
             <div class="rpg-message-role">${roleLabel}</div>
+            ${metaHtml}
             <div class="rpg-message-content">${this.formatContent(message.content)}</div>
             ${actionsHtml}
         `;

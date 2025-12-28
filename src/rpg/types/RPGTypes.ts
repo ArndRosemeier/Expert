@@ -153,6 +153,12 @@ export interface RPGConversationMessage {
      * Only set on assistant messages (including the initial GM intro).
      */
     checkpointSnapshotId?: string;
+    /**
+     * Diagnostics for the narrator LLM call that produced this assistant message.
+     */
+    narratorPromptCharCount?: number;
+    narratorWorldItemsSentCount?: number;
+    narratorWorldItemsTotalCount?: number;
 }
 
 export interface RPGManualSave {
