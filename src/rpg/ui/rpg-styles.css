@@ -368,6 +368,123 @@
     gap: 0.5em;
 }
 
+.rpg-world-inspector .rpg-entity-editor,
+.rpg-world-inspector .rpg-add-relationship {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.5rem;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.rpg-entity-editor-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+}
+
+.rpg-entity-editor-row label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.rpg-edit-input,
+.rpg-edit-textarea,
+.rpg-edit-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--node-bg, #2d2d2d);
+    color: var(--text-color, #e0e0e0);
+    font-family: inherit;
+}
+
+.rpg-edit-textarea {
+    resize: vertical;
+    min-height: 6rem;
+}
+
+.rpg-entity-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.rpg-entity-editor-actions button {
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.rpg-entity-editor-actions button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.rpg-relationships ul {
+    margin-top: 0.5rem;
+}
+
+.rpg-relationship-editor {
+    margin-top: 0.75rem;
+    padding: 0.65rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.rpg-relationship-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.rpg-relationship-fields label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.rpg-relationship-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.rpg-relationship-actions button {
+    padding: 0.45rem 0.85rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.rpg-relationship-actions button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.rpg-add-relationship-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+}
+
+.rpg-muted {
+    opacity: 0.7;
+}
+
 .rpg-retry-btn {
     padding: 0.5em 1em;
     border-radius: 0.35em;

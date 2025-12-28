@@ -6,7 +6,7 @@
  * - World View: All locations, characters, lore with relationships
  */
 
-import { RPGGameSession } from '../types/RPGTypes';
+import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGRelationship, RPGRelationshipKind } from '../types/RPGTypes';
 import { WorldStateService } from '../services/WorldStateService';
 
 export class RPGWorldInspector {
@@ -57,6 +57,9 @@ export class RPGWorldInspector {
         
         // Get references
         this.contentContainer = this.container.querySelector('#rpg-world-content');
+        this.contentContainer?.addEventListener('click', (e) => {
+            void this.handleContentClick(e);
+        });
         
         // Attach debug mode listener
         const debugCheckbox = this.container.querySelector('#rpg-debug-mode') as HTMLInputElement;
@@ -87,6 +90,76 @@ export class RPGWorldInspector {
         this.renderContent();
     }
     
+    private async handleContentClick(event: Event): Promise<void> {
+        if (!this.contentContainer) return;
+
+        const target = event.target as HTMLElement | null;
+        if (!target) return;
+
+        const header = target.closest('.rpg-tree-category-header') as HTMLElement | null;
+        if (header) {
+            const category = header.getAttribute('data-category');
+            const content = this.contentContainer.querySelector(`.rpg-tree-category-content[data-category="${category}"]`);
+            content?.classList.toggle('collapsed');
+            header.classList.toggle('collapsed');
+            return;
+        }
+
+        const entityHeader = target.closest('.rpg-entity-header') as HTMLElement | null;
+        if (entityHeader) {
+            const entityId = entityHeader.getAttribute('data-entity-id');
+            const content = this.contentContainer.querySelector(`.rpg-entity-details[data-entity-id="${entityId}"]`);
+            content?.classList.toggle('collapsed');
+            entityHeader.classList.toggle('expanded');
+            return;
+        }
+
+        const relationshipLink = target.closest('.rpg-relationship-link') as HTMLElement | null;
+        if (relationshipLink) {
+            const targetId = relationshipLink.getAttribute('data-target-id');
+            if (targetId) {
+                this.scrollToEntity(targetId);
+            }
+            return;
+        }
+
+        const actionEl = target.closest('[data-rpg-action]') as HTMLElement | null;
+        if (!actionEl) return;
+
+        const action = actionEl.getAttribute('data-rpg-action');
+        if (!action) return;
+
+        try {
+            if (action === 'save-entity') {
+                await this.saveEntity(actionEl);
+                return;
+            }
+            if (action === 'delete-entity') {
+                await this.deleteEntity(actionEl);
+                return;
+            }
+            if (action === 'set-current-location') {
+                await this.setCurrentLocation(actionEl);
+                return;
+            }
+            if (action === 'delete-relationship') {
+                await this.deleteRelationship(actionEl);
+                return;
+            }
+            if (action === 'save-relationship') {
+                await this.saveRelationship(actionEl);
+                return;
+            }
+            if (action === 'add-relationship') {
+                await this.addRelationship(actionEl);
+                return;
+            }
+        } catch (err) {
+            console.error('World Inspector action failed:', err);
+            alert(err instanceof Error ? err.message : String(err));
+        }
+    }
+
     /**
      * Render content based on current view
      */
@@ -247,39 +320,6 @@ export class RPGWorldInspector {
         html += '</div>';
         
         this.contentContainer.innerHTML = html;
-        
-        // Attach event listeners for collapsible categories
-        const categoryHeaders = this.contentContainer.querySelectorAll('.rpg-tree-category-header');
-        categoryHeaders.forEach(header => {
-            header.addEventListener('click', () => {
-                const category = header.getAttribute('data-category');
-                const content = this.contentContainer?.querySelector(`.rpg-tree-category-content[data-category="${category}"]`);
-                content?.classList.toggle('collapsed');
-                header.classList.toggle('collapsed');
-            });
-        });
-        
-        // Attach event listeners for expandable entities
-        const entityHeaders = this.contentContainer.querySelectorAll('.rpg-entity-header');
-        entityHeaders.forEach(header => {
-            header.addEventListener('click', () => {
-                const entityId = header.getAttribute('data-entity-id');
-                const content = this.contentContainer?.querySelector(`.rpg-entity-details[data-entity-id="${entityId}"]`);
-                content?.classList.toggle('collapsed');
-                header.classList.toggle('expanded');
-            });
-        });
-        
-        // Attach event listeners for relationship links
-        const relationshipLinks = this.contentContainer.querySelectorAll('.rpg-relationship-link');
-        relationshipLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                const targetId = link.getAttribute('data-target-id');
-                if (targetId) {
-                    this.scrollToEntity(targetId);
-                }
-            });
-        });
     }
     
     /**
@@ -302,71 +342,413 @@ export class RPGWorldInspector {
         // Entity details (collapsible)
         html += `<div class="rpg-entity-details collapsed" data-entity-id="${entityId}">`;
         
-        // Show full entity info
+        // Editable entity info
         if (entityType === 'location') {
             const entity = this.worldStateService.getLocation(worldState, entityId);
             if (entity) {
-                html += `<p class="rpg-entity-desc">${entity.description}</p>`;
-                if (Object.keys(entity.state).length > 0) {
-                    html += `<p class="rpg-entity-state">State: ${JSON.stringify(entity.state)}</p>`;
-                }
+                html += this.renderLocationEditor(entityId);
             }
         } else if (entityType === 'character') {
             const entity = this.worldStateService.getCharacter(worldState, entityId);
             if (entity) {
-                html += `<p class="rpg-entity-desc">${entity.description}</p>`;
-                if (Object.keys(entity.state).length > 0) {
-                    html += `<p class="rpg-entity-state">State: ${JSON.stringify(entity.state)}</p>`;
-                }
+                html += this.renderCharacterEditor(entityId);
             }
         } else if (entityType === 'lore') {
             const entity = this.worldStateService.getLore(worldState, entityId);
             if (entity) {
-                html += `<p class="rpg-entity-desc">${entity.content}</p>`;
-                if (entity.tags.length > 0) {
-                    html += `<p class="rpg-entity-tags">Tags: ${entity.tags.join(', ')}</p>`;
-                }
+                html += this.renderLoreEditor(entityId);
             }
         }
         
-        // Show relationships
-        if (relationships.length > 0) {
-            html += '<div class="rpg-relationships">';
-            html += '<strong>Relationships:</strong>';
-            html += '<ul>';
-            for (const rel of relationships) {
-                const isOutgoing = rel.fromId === entityId;
-                const otherId = isOutgoing ? rel.toId : rel.fromId;
-                const otherEntity = this.getEntityName(otherId);
-                
-                html += '<li>';
-                if (isOutgoing) {
-                    html += `<span class="rpg-relationship-type">${rel.kind}</span> → `;
-                } else {
-                    html += `← <span class="rpg-relationship-type">${rel.kind}</span> `;
-                }
-                html += `<a class="rpg-relationship-link" data-target-id="${otherId}">${otherEntity}</a>`;
-
-                if (rel.kind === 'attitude_towards') {
-                    html += ` <span class="rpg-relationship-desc">(stance=${rel.stance}, intensity=${rel.intensity})</span>`;
-                    if (rel.reason) {
-                        html += ` <span class="rpg-relationship-desc">(${rel.reason})</span>`;
-                    }
-                }
-
-                if (rel.note) {
-                    html += ` <span class="rpg-relationship-desc">(${rel.note})</span>`;
-                }
-                html += '</li>';
-            }
-            html += '</ul>';
-            html += '</div>';
-        }
+        html += this.renderRelationshipsEditor(entityId, relationships);
+        html += this.renderAddRelationshipEditor(entityId);
         
         html += '</div>'; // entity-details
         html += '</div>'; // entity-tree-item
         
         return html;
+    }
+
+    private renderLocationEditor(locationId: string): string {
+        const worldState = this.session.worldState;
+        const location = this.worldStateService.getLocation(worldState, locationId);
+        if (!location) return '';
+
+        const isCurrent = worldState.currentLocationId === locationId;
+
+        return `
+            <div class="rpg-entity-editor" data-entity-id="${locationId}" data-entity-type="location">
+                <div class="rpg-entity-editor-row">
+                    <label>Name</label>
+                    <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(location.name)}" />
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Description</label>
+                    <textarea class="rpg-edit-textarea" data-field="description" rows="6">${this.escapeHtml(location.description)}</textarea>
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>State (JSON)</label>
+                    <textarea class="rpg-edit-textarea" data-field="state" rows="6">${this.escapeHtml(JSON.stringify(location.state, null, 2))}</textarea>
+                </div>
+                <div class="rpg-entity-editor-actions">
+                    <button type="button" data-rpg-action="save-entity" data-entity-id="${locationId}" data-entity-type="location">Save</button>
+                    ${isCurrent ? '' : `<button type="button" data-rpg-action="set-current-location" data-entity-id="${locationId}">Set as current</button>`}
+                    <button type="button" data-rpg-action="delete-entity" data-entity-id="${locationId}" data-entity-type="location">Delete</button>
+                </div>
+            </div>
+        `.trim();
+    }
+
+    private renderCharacterEditor(characterId: string): string {
+        const worldState = this.session.worldState;
+        const character = this.worldStateService.getCharacter(worldState, characterId);
+        if (!character) return '';
+
+        const isPlayer = worldState.playerCharacterId === characterId;
+
+        return `
+            <div class="rpg-entity-editor" data-entity-id="${characterId}" data-entity-type="character">
+                <div class="rpg-entity-editor-row">
+                    <label>Name</label>
+                    <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(character.name)}" />
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Description</label>
+                    <textarea class="rpg-edit-textarea" data-field="description" rows="8">${this.escapeHtml(character.description)}</textarea>
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>State (JSON)</label>
+                    <textarea class="rpg-edit-textarea" data-field="state" rows="6">${this.escapeHtml(JSON.stringify(character.state, null, 2))}</textarea>
+                </div>
+                <div class="rpg-entity-editor-actions">
+                    <button type="button" data-rpg-action="save-entity" data-entity-id="${characterId}" data-entity-type="character">Save</button>
+                    ${isPlayer ? '' : `<button type="button" data-rpg-action="delete-entity" data-entity-id="${characterId}" data-entity-type="character">Delete</button>`}
+                </div>
+            </div>
+        `.trim();
+    }
+
+    private renderLoreEditor(loreId: string): string {
+        const worldState = this.session.worldState;
+        const lore = this.worldStateService.getLore(worldState, loreId);
+        if (!lore) return '';
+
+        return `
+            <div class="rpg-entity-editor" data-entity-id="${loreId}" data-entity-type="lore">
+                <div class="rpg-entity-editor-row">
+                    <label>Title</label>
+                    <input class="rpg-edit-input" data-field="title" value="${this.escapeHtml(lore.title)}" />
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Content</label>
+                    <textarea class="rpg-edit-textarea" data-field="content" rows="8">${this.escapeHtml(lore.content)}</textarea>
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Tags (comma-separated)</label>
+                    <input class="rpg-edit-input" data-field="tags" value="${this.escapeHtml(lore.tags.join(', '))}" />
+                </div>
+                <div class="rpg-entity-editor-actions">
+                    <button type="button" data-rpg-action="save-entity" data-entity-id="${loreId}" data-entity-type="lore">Save</button>
+                    <button type="button" data-rpg-action="delete-entity" data-entity-id="${loreId}" data-entity-type="lore">Delete</button>
+                </div>
+            </div>
+        `.trim();
+    }
+
+    private renderRelationshipsEditor(entityId: string, relationships: RPGRelationship[]): string {
+        if (relationships.length === 0) {
+            return `<div class="rpg-relationships"><strong>Relationships:</strong> <span class="rpg-muted">[none]</span></div>`;
+        }
+
+        let html = '<div class="rpg-relationships">';
+        html += '<strong>Relationships:</strong>';
+        html += '<ul>';
+
+        for (const rel of relationships) {
+            const isOutgoing = rel.fromId === entityId;
+            const otherId = isOutgoing ? rel.toId : rel.fromId;
+            const otherEntity = this.getEntityName(otherId);
+
+            html += `<li class="rpg-relationship-editor" data-rel-id="${rel.id}">`;
+            html += isOutgoing
+                ? `<span class="rpg-relationship-type">${rel.kind}</span> → `
+                : `← <span class="rpg-relationship-type">${rel.kind}</span> `;
+            html += `<a class="rpg-relationship-link" data-target-id="${otherId}">${otherEntity}</a>`;
+
+            html += `<div class="rpg-relationship-fields">`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
+
+            if (rel.kind === 'attitude_towards') {
+                html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
+                html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason || '')}" />`;
+            }
+            html += `</div>`;
+
+            html += `
+                <div class="rpg-relationship-actions">
+                    <button type="button" data-rpg-action="save-relationship" data-rel-id="${rel.id}">Save</button>
+                    <button type="button" data-rpg-action="delete-relationship" data-rel-id="${rel.id}">Delete</button>
+                </div>
+            `;
+            html += '</li>';
+        }
+
+        html += '</ul>';
+        html += '</div>';
+        return html;
+    }
+
+    private renderAddRelationshipEditor(fromId: string): string {
+        const worldState = this.session.worldState;
+
+        const entityOptions: Array<{ id: string; label: string }> = [];
+        for (const loc of this.worldStateService.listLocations(worldState)) entityOptions.push({ id: loc.id, label: `📍 ${loc.name}` });
+        for (const ch of this.worldStateService.listCharacters(worldState)) entityOptions.push({ id: ch.id, label: `👤 ${ch.name}` });
+        for (const lore of this.worldStateService.listLore(worldState)) entityOptions.push({ id: lore.id, label: `📜 ${lore.title}` });
+
+        const kinds: RPGRelationshipKind[] = [
+            'located_at',
+            'describes',
+            'found_at',
+            'knows_name_of',
+            'knows_about',
+            'knows_fact',
+            'attitude_towards'
+        ];
+
+        return `
+            <div class="rpg-add-relationship" data-from-id="${fromId}">
+                <strong>Add relationship</strong>
+                <div class="rpg-add-relationship-grid">
+                    <label>Kind</label>
+                    <select class="rpg-edit-select" data-add-field="kind">
+                        ${kinds.map(k => `<option value="${k}">${k}</option>`).join('')}
+                    </select>
+                    <label>To</label>
+                    <select class="rpg-edit-select" data-add-field="toId">
+                        ${entityOptions.map(o => `<option value="${o.id}">${this.escapeHtml(o.label)}</option>`).join('')}
+                    </select>
+                    <label>Note</label>
+                    <input class="rpg-edit-input" data-add-field="note" value="" />
+                    <label>Stance (attitude)</label>
+                    ${this.renderStanceSelect('neutral', true)}
+                    <label>Intensity (attitude)</label>
+                    ${this.renderIntensitySelect(0, true)}
+                    <label>Reason (attitude)</label>
+                    <input class="rpg-edit-input" data-add-field="reason" value="" />
+                </div>
+                <div class="rpg-entity-editor-actions">
+                    <button type="button" data-rpg-action="add-relationship" data-from-id="${fromId}">Add</button>
+                </div>
+            </div>
+        `.trim();
+    }
+
+    private renderStanceSelect(selected: RPGAttitudeStance, isAddForm: boolean = false): string {
+        const stances: RPGAttitudeStance[] = ['friendly', 'neutral', 'hostile', 'fearful', 'respectful', 'suspicious', 'romantic', 'disgusted'];
+        return `
+            <select class="rpg-edit-select" ${isAddForm ? 'data-add-field="stance"' : 'data-rel-field="stance"'}>
+                ${stances.map(s => `<option value="${s}" ${s === selected ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+        `.trim();
+    }
+
+    private renderIntensitySelect(selected: RPGAttitudeIntensity, isAddForm: boolean = false): string {
+        const values: RPGAttitudeIntensity[] = [-3, -2, -1, 0, 1, 2, 3];
+        return `
+            <select class="rpg-edit-select" ${isAddForm ? 'data-add-field="intensity"' : 'data-rel-field="intensity"'}>
+                ${values.map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+        `.trim();
+    }
+
+    private async saveEntity(actionEl: HTMLElement): Promise<void> {
+        const entityId = actionEl.getAttribute('data-entity-id');
+        const entityType = actionEl.getAttribute('data-entity-type');
+        if (!entityId || !entityType) throw new Error('Save entity: missing entity id/type');
+
+        const editor = this.contentContainer?.querySelector(`.rpg-entity-editor[data-entity-id="${entityId}"]`) as HTMLElement | null;
+        if (!editor) throw new Error(`Save entity: editor not found for ${entityId}`);
+
+        const worldState = this.session.worldState;
+
+        if (entityType === 'location') {
+            const name = (editor.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
+            const description = (editor.querySelector('[data-field="description"]') as HTMLTextAreaElement).value;
+            const stateText = (editor.querySelector('[data-field="state"]') as HTMLTextAreaElement).value;
+            const state = JSON.parse(stateText) as Record<string, unknown>;
+
+            this.worldStateService.updateLocation(worldState, entityId, { name, description, state });
+        } else if (entityType === 'character') {
+            const name = (editor.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
+            const description = (editor.querySelector('[data-field="description"]') as HTMLTextAreaElement).value;
+            const stateText = (editor.querySelector('[data-field="state"]') as HTMLTextAreaElement).value;
+            const state = JSON.parse(stateText) as Record<string, unknown>;
+
+            this.worldStateService.updateCharacter(worldState, entityId, { name, description, state });
+        } else if (entityType === 'lore') {
+            const title = (editor.querySelector('[data-field="title"]') as HTMLInputElement).value.trim();
+            const content = (editor.querySelector('[data-field="content"]') as HTMLTextAreaElement).value;
+            const tagsText = (editor.querySelector('[data-field="tags"]') as HTMLInputElement).value;
+            const tags = tagsText.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+            this.worldStateService.updateLore(worldState, entityId, { title, content, tags });
+        } else {
+            throw new Error(`Save entity: unsupported type '${entityType}'`);
+        }
+
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async deleteEntity(actionEl: HTMLElement): Promise<void> {
+        const entityId = actionEl.getAttribute('data-entity-id');
+        const entityType = actionEl.getAttribute('data-entity-type');
+        if (!entityId || !entityType) throw new Error('Delete entity: missing entity id/type');
+
+        if (!confirm(`Delete ${entityType} '${entityId}'? This will also delete its relationships.`)) {
+            return;
+        }
+
+        const worldState = this.session.worldState;
+
+        if (entityType === 'location') {
+            if (worldState.currentLocationId === entityId) {
+                throw new Error('Cannot delete the current location. Move to another location first.');
+            }
+            this.worldStateService.deleteLocation(worldState, entityId);
+        } else if (entityType === 'character') {
+            if (worldState.playerCharacterId === entityId) {
+                throw new Error('Cannot delete the player character.');
+            }
+            this.worldStateService.deleteCharacter(worldState, entityId);
+        } else if (entityType === 'lore') {
+            this.worldStateService.deleteLore(worldState, entityId);
+        } else {
+            throw new Error(`Delete entity: unsupported type '${entityType}'`);
+        }
+
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async setCurrentLocation(actionEl: HTMLElement): Promise<void> {
+        const locationId = actionEl.getAttribute('data-entity-id');
+        if (!locationId) throw new Error('Set current location: missing entity id');
+
+        this.worldStateService.updateCurrentLocation(this.session.worldState, locationId);
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async deleteRelationship(actionEl: HTMLElement): Promise<void> {
+        const relId = actionEl.getAttribute('data-rel-id');
+        if (!relId) throw new Error('Delete relationship: missing rel id');
+
+        if (!confirm('Delete this relationship?')) return;
+
+        this.worldStateService.deleteRelationship(this.session.worldState, relId);
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async saveRelationship(actionEl: HTMLElement): Promise<void> {
+        const relId = actionEl.getAttribute('data-rel-id');
+        if (!relId) throw new Error('Save relationship: missing rel id');
+
+        const worldState = this.session.worldState;
+        const rel = this.worldStateService.getRelationship(worldState, relId);
+        if (!rel) throw new Error(`Relationship not found: ${relId}`);
+
+        const wrapper = this.contentContainer?.querySelector(`.rpg-relationship-editor[data-rel-id="${relId}"]`) as HTMLElement | null;
+        if (!wrapper) throw new Error(`Relationship editor not found: ${relId}`);
+
+        const note = (wrapper.querySelector('[data-rel-field="note"]') as HTMLInputElement | null)?.value;
+
+        if (rel.kind === 'attitude_towards') {
+            const stance = (wrapper.querySelector('[data-rel-field="stance"]') as HTMLSelectElement).value as RPGAttitudeStance;
+            const intensityVal = Number((wrapper.querySelector('[data-rel-field="intensity"]') as HTMLSelectElement).value);
+            const reason = (wrapper.querySelector('[data-rel-field="reason"]') as HTMLInputElement | null)?.value;
+
+            if (intensityVal !== -3 && intensityVal !== -2 && intensityVal !== -1 && intensityVal !== 0 && intensityVal !== 1 && intensityVal !== 2 && intensityVal !== 3) {
+                throw new Error(`Invalid intensity: ${intensityVal}`);
+            }
+
+            this.worldStateService.updateRelationship(worldState, relId, {
+                ...(note !== undefined && { note }),
+                stance,
+                intensity: intensityVal,
+                ...(reason !== undefined && { reason })
+            });
+        } else {
+            this.worldStateService.updateRelationship(worldState, relId, {
+                ...(note !== undefined && { note })
+            });
+        }
+
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async addRelationship(actionEl: HTMLElement): Promise<void> {
+        const fromId = actionEl.getAttribute('data-from-id');
+        if (!fromId) throw new Error('Add relationship: missing from id');
+
+        const wrapper = this.contentContainer?.querySelector(`.rpg-add-relationship[data-from-id="${fromId}"]`) as HTMLElement | null;
+        if (!wrapper) throw new Error('Add relationship UI not found');
+
+        const kind = (wrapper.querySelector('[data-add-field="kind"]') as HTMLSelectElement).value as RPGRelationshipKind;
+        const toId = (wrapper.querySelector('[data-add-field="toId"]') as HTMLSelectElement).value;
+        const note = (wrapper.querySelector('[data-add-field="note"]') as HTMLInputElement).value;
+
+        const base = {
+            id: `rel_${fromId}_${toId}_${kind}_${Date.now()}`,
+            fromId,
+            toId,
+            kind,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+
+        let rel: RPGRelationship;
+        if (kind === 'attitude_towards') {
+            const stance = (wrapper.querySelector('[data-add-field="stance"]') as HTMLSelectElement).value as RPGAttitudeStance;
+            const intensityVal = Number((wrapper.querySelector('[data-add-field="intensity"]') as HTMLSelectElement).value);
+            const reason = (wrapper.querySelector('[data-add-field="reason"]') as HTMLInputElement).value;
+
+            if (intensityVal !== -3 && intensityVal !== -2 && intensityVal !== -1 && intensityVal !== 0 && intensityVal !== 1 && intensityVal !== 2 && intensityVal !== 3) {
+                throw new Error(`Invalid intensity: ${intensityVal}`);
+            }
+
+            rel = {
+                ...base,
+                kind: 'attitude_towards',
+                stance,
+                intensity: intensityVal,
+                ...(reason.trim().length > 0 && { reason: reason.trim() }),
+                ...(note.trim().length > 0 && { note: note.trim() })
+            };
+        } else {
+            rel = {
+                ...base,
+                kind,
+                ...(note.trim().length > 0 && { note: note.trim() })
+            };
+        }
+
+        this.worldStateService.createRelationship(this.session.worldState, rel);
+        await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
     
     /**
