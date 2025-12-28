@@ -8,7 +8,7 @@
  * 4. State updates are applied and snapshot is created
  */
 
-import { RPGGameSession, RPGConversationMessage, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave } from '../types/RPGTypes';
+import { RPGEntityType, RPGGameSession, RPGConversationMessage, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from './WorldStateService';
 import { RPGContextBuilder } from './RPGContextBuilder';
 import { RPGStateParser } from './RPGStateParser';
@@ -238,6 +238,128 @@ export class RPGInteractionService {
         this.applyLastUsedTurn(session, turn, used);
     }
 
+    async consolidateEntity(
+        session: RPGGameSession,
+        entityType: Exclude<RPGEntityType, 'relationship' | 'distance'>,
+        entityId: string
+    ): Promise<void> {
+        const worldState = session.worldState;
+
+        const entityXml = this.buildEntityXmlForConsolidation(session, entityType, entityId);
+
+        const prompt = `You are an RPG entity state consolidator.\n\n` +
+            `Your task: given a single entity (with canonical description and a possibly bloated/contradictory JSON state), output a CLEAN, CONSOLIDATED JSON state.\n\n` +
+            `Rules:\n` +
+            `- Do NOT rewrite or summarize the entity description. Only output consolidated JSON state.\n` +
+            `- Remove stale / scene-specific facts that no longer make sense globally.\n` +
+            `- If there are contradictions, choose the most recent, most plausible interpretation.\n` +
+            `- Use a small, canonical set of keys. Prefer fewer keys.\n` +
+            `- Output ONLY valid XML in the schema below.\n\n` +
+            `Output schema:\n` +
+            `<rpg_entity_consolidation>\n` +
+            `  <entity_id>${entityId}</entity_id>\n` +
+            `  <state>{...valid JSON...}</state>\n` +
+            `</rpg_entity_consolidation>\n\n` +
+            `Input entity:\n` +
+            `${entityXml}`;
+
+        const response = await this.openRouterClient.chat(session.parserPurpose, prompt);
+
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(response, 'text/xml');
+        const parseError = xmlDoc.querySelector('parsererror');
+        if (parseError) {
+            throw new Error(`Failed to parse consolidation XML: ${parseError.textContent}`);
+        }
+
+        const root = xmlDoc.querySelector('rpg_entity_consolidation');
+        if (!root) {
+            throw new Error('Consolidation response missing <rpg_entity_consolidation> root element.');
+        }
+
+        const idEl = root.querySelector('entity_id');
+        const stateEl = root.querySelector('state');
+        const idText = idEl?.textContent?.trim();
+        const stateText = stateEl?.textContent?.trim();
+        if (!idText) throw new Error('Consolidation response missing <entity_id>.');
+        if (idText !== entityId) throw new Error(`Consolidation response entity_id mismatch: expected '${entityId}', got '${idText}'.`);
+        if (!stateText) throw new Error('Consolidation response missing <state>.');
+
+        const stateObj = JSON.parse(stateText) as Record<string, unknown>;
+
+        const existingTurn = Math.floor(session.conversationHistory.length / 2);
+
+        if (entityType === 'character') {
+            const ch = this.worldStateService.getCharacter(worldState, entityId);
+            if (!ch) throw new Error(`Character not found: ${entityId}`);
+            this.worldStateService.updateCharacter(worldState, entityId, { state: stateObj, lastUsedTurn: Math.max(ch.lastUsedTurn, existingTurn) });
+        } else if (entityType === 'location') {
+            const loc = this.worldStateService.getLocation(worldState, entityId);
+            if (!loc) throw new Error(`Location not found: ${entityId}`);
+            this.worldStateService.updateLocation(worldState, entityId, { state: stateObj, lastUsedTurn: Math.max(loc.lastUsedTurn, existingTurn) });
+        } else if (entityType === 'lore') {
+            const lore = this.worldStateService.getLore(worldState, entityId);
+            if (!lore) throw new Error(`Lore not found: ${entityId}`);
+            // For lore, we consolidate "content" by moving derived state into content? Keep simple: store as JSON into content if requested.
+            // But since you asked about entity state bloat, we only support consolidating lore by normalizing tags/content is out of scope.
+            throw new Error('Consolidation for lore is not supported (lore has no state).');
+        } else {
+            throw new Error(`Unsupported entity type for consolidation: ${entityType}`);
+        }
+
+        session.updatedAt = Date.now();
+        await this.worldStateService.saveSession(session);
+    }
+
+    private buildEntityXmlForConsolidation(
+        session: RPGGameSession,
+        entityType: Exclude<RPGEntityType, 'relationship' | 'distance'>,
+        entityId: string
+    ): string {
+        const worldState = session.worldState;
+
+        if (entityType === 'character') {
+            const ch = this.worldStateService.getCharacter(worldState, entityId);
+            if (!ch) throw new Error(`Character not found: ${entityId}`);
+            return (
+                `<entity kind="character">\n` +
+                `  <id>${ch.id}</id>\n` +
+                `  <name>${ch.name}</name>\n` +
+                `  <description><![CDATA[${ch.description}]]></description>\n` +
+                `  <state_json><![CDATA[${JSON.stringify(ch.state, null, 2)}]]></state_json>\n` +
+                `</entity>`
+            );
+        }
+
+        if (entityType === 'location') {
+            const loc = this.worldStateService.getLocation(worldState, entityId);
+            if (!loc) throw new Error(`Location not found: ${entityId}`);
+            return (
+                `<entity kind="location">\n` +
+                `  <id>${loc.id}</id>\n` +
+                `  <name>${loc.name}</name>\n` +
+                `  <description><![CDATA[${loc.description}]]></description>\n` +
+                `  <state_json><![CDATA[${JSON.stringify(loc.state, null, 2)}]]></state_json>\n` +
+                `</entity>`
+            );
+        }
+
+        if (entityType === 'lore') {
+            const lore = this.worldStateService.getLore(worldState, entityId);
+            if (!lore) throw new Error(`Lore not found: ${entityId}`);
+            return (
+                `<entity kind="lore">\n` +
+                `  <id>${lore.id}</id>\n` +
+                `  <title>${lore.title}</title>\n` +
+                `  <content><![CDATA[${lore.content}]]></content>\n` +
+                `  <tags>${lore.tags.join(',')}</tags>\n` +
+                `</entity>`
+            );
+        }
+
+        throw new Error(`Unsupported entity type: ${entityType}`);
+    }
+
     private collectNarratorUsedWorldItems(session: RPGGameSession): {
         locationIds: string[];
         characterIds: string[];
@@ -450,12 +572,15 @@ export class RPGInteractionService {
             
             // Parse XML
             const stateUpdate = this.stateParser.parseStateUpdate(xmlResponse);
+
+            // Store diagnostics (suspicious entities) on the session for UI display
+            const turn = Math.floor(session.conversationHistory.length / 2);
+            session.suspiciousEntities = this.mapDiagnosticsToSessionFlags(session, stateUpdate.diagnostics, turn);
             
             // Apply state updates (state is already unlocked at this point)
             this.applyStateUpdates(session, stateUpdate);
             
             // Create snapshot
-            const turn = Math.floor(session.conversationHistory.length / 2);
             const snapshot = await this.worldStateService.createSnapshot(session, turn);
 
             // Attach checkpoint to the assistant message for this turn
@@ -475,6 +600,36 @@ export class RPGInteractionService {
             console.error('❌ State analysis error:', error);
             throw error;
         }
+    }
+
+    private mapDiagnosticsToSessionFlags(
+        session: RPGGameSession,
+        diagnostics: RPGStateUpdateXML['diagnostics'] | undefined,
+        conversationTurn: number
+    ): RPGSuspiciousEntityFlag[] {
+        if (!diagnostics) return [];
+
+        const worldState = session.worldState;
+
+        const flags: RPGSuspiciousEntityFlag[] = [];
+        for (const d of diagnostics) {
+            const entityType: RPGEntityType =
+                worldState.locations.has(d.entityId) ? 'location' :
+                worldState.characters.has(d.entityId) ? 'character' :
+                worldState.lore.has(d.entityId) ? 'lore' :
+                worldState.relationships.has(d.entityId) ? 'relationship' :
+                worldState.distances.some(x => x.fromLocationId === d.entityId || x.toLocationId === d.entityId) ? 'distance' :
+                'lore';
+
+            flags.push({
+                entityId: d.entityId,
+                entityType,
+                reason: d.reason,
+                conversationTurn,
+                createdAt: Date.now()
+            });
+        }
+        return flags;
     }
 
     private rebuildSnapshotsFromCheckpoints(session: RPGGameSession): void {

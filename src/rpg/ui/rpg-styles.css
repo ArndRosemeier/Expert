@@ -389,6 +389,12 @@
     opacity: 0.92;
 }
 
+.rpg-suspicious-flag {
+    margin-left: 0.35rem;
+    font-weight: 700;
+    color: rgba(255, 190, 80, 0.95);
+}
+
 .rpg-message-actions {
     display: flex;
     justify-content: flex-end;

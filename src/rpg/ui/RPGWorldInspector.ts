@@ -6,13 +6,16 @@
  * - World View: All locations, characters, lore with relationships
  */
 
-import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGRelationship, RPGRelationshipKind } from '../types/RPGTypes';
+import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from '../services/WorldStateService';
+import { RPGInteractionService } from '../services/RPGInteractionService';
+import { getActiveProject } from '../../state';
 
 export class RPGWorldInspector {
     private container: HTMLElement;
     private session: RPGGameSession;
     private worldStateService: WorldStateService;
+    private interactionService: RPGInteractionService;
     private currentView: 'scene' | 'world' = 'scene';
     public debugMode: boolean = false;
     
@@ -33,13 +36,19 @@ export class RPGWorldInspector {
     constructor(
         container: HTMLElement,
         session: RPGGameSession,
-        worldStateService: WorldStateService
+        worldStateService: WorldStateService,
+        interactionService: RPGInteractionService
     ) {
         this.container = container;
         this.session = session;
         this.worldStateService = worldStateService;
+        this.interactionService = interactionService;
         
         this.render();
+    }
+
+    private getSuspiciousFlag(entityId: string): RPGSuspiciousEntityFlag | undefined {
+        return this.session.suspiciousEntities.find(f => f.entityId === entityId);
     }
     
     /**
@@ -166,6 +175,10 @@ export class RPGWorldInspector {
                 await this.addRelationship(actionEl);
                 return;
             }
+            if (action === 'consolidate-entity') {
+                await this.consolidateEntity(actionEl);
+                return;
+            }
         } catch (err) {
             console.error('World Inspector action failed:', err);
             alert(err instanceof Error ? err.message : String(err));
@@ -192,91 +205,59 @@ export class RPGWorldInspector {
         if (!this.contentContainer) return;
         
         const worldState = this.session.worldState;
-        
-        // Get current location
+
         const currentLocation = this.worldStateService.getLocation(worldState, worldState.currentLocationId);
-        
-        // Get player character
         const playerCharacter = this.worldStateService.getCharacter(worldState, worldState.playerCharacterId);
-        
-        // Get characters at location
+
         const characterIdsAtLocation = this.worldStateService.getEntitiesAtLocation(worldState, worldState.currentLocationId);
         const charactersAtLocation = characterIdsAtLocation
             .map(id => this.worldStateService.getCharacter(worldState, id))
             .filter((c): c is NonNullable<typeof c> => c !== undefined && c.id !== worldState.playerCharacterId);
-        
-        // Get related lore (via relationships)
+
         const relatedEntityIds = this.worldStateService.getRelatedEntities(worldState, worldState.currentLocationId, 1);
         const relevantLore = Array.from(relatedEntityIds)
             .map(id => this.worldStateService.getLore(worldState, id))
             .filter(l => l !== undefined);
-        
-        let html = '<div class="rpg-scene-view">';
-        
-        // Current Location
-        html += '<div class="rpg-section">';
-        html += '<h4>📍 Current Location</h4>';
+
+        let html = '<div class="rpg-world-view">';
+
         if (currentLocation) {
-            html += `<div class="rpg-entity-item" data-entity-id="${currentLocation.id}" data-entity-type="location">`;
-            html += `<strong>${currentLocation.name}</strong><br>`;
-            html += `<span class="rpg-entity-desc">${currentLocation.description}</span>`;
-            if (Object.keys(currentLocation.state).length > 0) {
-                html += `<br><span class="rpg-entity-state">State: ${JSON.stringify(currentLocation.state)}</span>`;
-            }
-            html += '</div>';
-        } else {
-            html += '<p>Unknown location</p>';
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="scene_location">📍 Current Location</div>';
+            html += '<div class="rpg-tree-category-content" data-category="scene_location">';
+            html += this.renderEntityWithRelationships(currentLocation.id, 'location', currentLocation.name);
+            html += '</div></div>';
         }
-        html += '</div>';
-        
-        // Player Character
-        html += '<div class="rpg-section">';
-        html += '<h4>🧙 You</h4>';
+
         if (playerCharacter) {
-            html += `<div class="rpg-entity-item" data-entity-id="${playerCharacter.id}" data-entity-type="character">`;
-            html += `<strong>${playerCharacter.name}</strong><br>`;
-            html += `<span class="rpg-entity-desc">${playerCharacter.description}</span>`;
-            if (Object.keys(playerCharacter.state).length > 0) {
-                html += `<br><span class="rpg-entity-state">State: ${JSON.stringify(playerCharacter.state)}</span>`;
-            }
-            html += '</div>';
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="scene_player">🧙 You</div>';
+            html += '<div class="rpg-tree-category-content" data-category="scene_player">';
+            html += this.renderEntityWithRelationships(playerCharacter.id, 'character', playerCharacter.name);
+            html += '</div></div>';
         }
-        html += '</div>';
-        
-        // Characters Present
+
         if (charactersAtLocation.length > 0) {
-            html += '<div class="rpg-section">';
-            html += '<h4>👥 Characters Present</h4>';
-            for (const character of charactersAtLocation) {
-                html += `<div class="rpg-entity-item" data-entity-id="${character.id}" data-entity-type="character">`;
-                html += `<strong>${character.name}</strong><br>`;
-                html += `<span class="rpg-entity-desc">${character.description}</span>`;
-                if (Object.keys(character.state).length > 0) {
-                    html += `<br><span class="rpg-entity-state">State: ${JSON.stringify(character.state)}</span>`;
-                }
-                html += '</div>';
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="scene_characters">👥 Characters Present (' + charactersAtLocation.length + ')</div>';
+            html += '<div class="rpg-tree-category-content" data-category="scene_characters">';
+            for (const ch of charactersAtLocation) {
+                html += this.renderEntityWithRelationships(ch.id, 'character', ch.name);
             }
-            html += '</div>';
+            html += '</div></div>';
         }
-        
-        // Relevant Lore
+
         if (relevantLore.length > 0) {
-            html += '<div class="rpg-section">';
-            html += '<h4>📜 Relevant Lore</h4>';
-            for (const lore of relevantLore) {
-                html += `<div class="rpg-entity-item" data-entity-id="${lore.id}" data-entity-type="lore">`;
-                html += `<strong>${lore.title}</strong><br>`;
-                html += `<span class="rpg-entity-desc">${lore.content}</span>`;
-                if (lore.tags.length > 0) {
-                    html += `<br><span class="rpg-entity-tags">Tags: ${lore.tags.join(', ')}</span>`;
-                }
-                html += '</div>';
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="scene_lore">📜 Relevant Lore (' + relevantLore.length + ')</div>';
+            html += '<div class="rpg-tree-category-content" data-category="scene_lore">';
+            for (const loreItem of relevantLore) {
+                html += this.renderEntityWithRelationships(loreItem.id, 'lore', loreItem.title);
             }
-            html += '</div>';
+            html += '</div></div>';
         }
-        
+
         html += '</div>';
-        
         this.contentContainer.innerHTML = html;
     }
     
@@ -444,6 +425,7 @@ export class RPGWorldInspector {
         }
 
         const ageClass = this.getAgeClass(lastUsedTurn);
+        const flag = this.getSuspiciousFlag(entityId);
         
         let html = '<div class="rpg-entity-tree-item">';
         
@@ -452,6 +434,9 @@ export class RPGWorldInspector {
         html += `<span class="rpg-expand-icon">▶</span> ${entityName}`;
         if (relationships.length > 0) {
             html += ` <span class="rpg-relationship-count">(${relationships.length} relationships)</span>`;
+        }
+        if (flag) {
+            html += ` <span class="rpg-suspicious-flag" title="${this.escapeHtml(flag.reason)}">⚠</span>`;
         }
         html += ` <small class="rpg-muted">(last used turn: ${lastUsedTurn})</small>`;
         html += '</div>';
@@ -517,6 +502,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${locationId}" data-entity-type="location">Save</button>
+                    <button type="button" data-rpg-action="consolidate-entity" data-entity-id="${locationId}" data-entity-type="location">Consolidate</button>
                     ${isCurrent ? '' : `<button type="button" data-rpg-action="set-current-location" data-entity-id="${locationId}">Set as current</button>`}
                     <button type="button" data-rpg-action="delete-entity" data-entity-id="${locationId}" data-entity-type="location">Delete</button>
                 </div>
@@ -555,6 +541,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${characterId}" data-entity-type="character">Save</button>
+                    <button type="button" data-rpg-action="consolidate-entity" data-entity-id="${characterId}" data-entity-type="character">Consolidate</button>
                     ${isPlayer ? '' : `<button type="button" data-rpg-action="delete-entity" data-entity-id="${characterId}" data-entity-type="character">Delete</button>`}
                 </div>
             </div>
@@ -883,6 +870,28 @@ export class RPGWorldInspector {
 
         this.worldStateService.createRelationship(this.session.worldState, rel);
         await this.worldStateService.saveSession(this.session);
+        this.refresh();
+    }
+
+    private async consolidateEntity(actionEl: HTMLElement): Promise<void> {
+        const entityId = actionEl.getAttribute('data-entity-id');
+        const entityType = actionEl.getAttribute('data-entity-type');
+        if (!entityId || !entityType) throw new Error('Consolidate entity: missing entity id/type');
+
+        if (entityType !== 'character' && entityType !== 'location') {
+            throw new Error(`Consolidation is only supported for characters and locations (got: ${entityType}).`);
+        }
+
+        if (!confirm(`Consolidate ${entityType} "${this.getEntityName(entityId)}"?\n\nThis will rewrite the entity's STATE (JSON) to remove contradictions and stale details.`)) {
+            return;
+        }
+
+        if (!getActiveProject()) {
+            throw new Error('No active project.');
+        }
+
+        // This is an explicit LLM call; we keep it loud and visible in logs.
+        await this.interactionService.consolidateEntity(this.session, entityType, entityId);
         this.refresh();
     }
 

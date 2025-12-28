@@ -210,6 +210,16 @@ export interface RPGManualSave {
     createdAt: number;
 }
 
+export type RPGEntityType = 'location' | 'character' | 'lore' | 'relationship' | 'distance';
+
+export interface RPGSuspiciousEntityFlag {
+    entityId: string;
+    entityType: RPGEntityType;
+    reason: string;
+    conversationTurn: number;
+    createdAt: number;
+}
+
 /**
  * A complete RPG game session
  */
@@ -221,6 +231,7 @@ export interface RPGGameSession {
     last2Messages: RPGConversationMessage[]; // Only last 2 for LLM context
     snapshots: string[]; // Snapshot IDs
     manualSaves: RPGManualSave[];
+    suspiciousEntities: RPGSuspiciousEntityFlag[];
     narratorPurpose: string; // Model purpose for Game LLM (default: 'prose')
     parserPurpose: string; // Model purpose for State Parser LLM (default: 'editor')
     customSystemPrompt?: string; // Custom system prompt for Game LLM (includes style and rules)
@@ -299,6 +310,10 @@ export interface RPGStateUpdateXML {
     scene?: {
         presentCharacterIds: string[];
     };
+    diagnostics?: Array<{
+        entityId: string;
+        reason: string;
+    }>;
 }
 
 /**
@@ -352,6 +367,7 @@ export interface RPGGameSessionSerialized {
     last2Messages: RPGConversationMessage[];
     snapshots: string[];
     manualSaves?: RPGManualSave[];
+    suspiciousEntities?: RPGSuspiciousEntityFlag[];
     narratorPurpose: string;
     parserPurpose: string;
     customSystemPrompt?: string;
@@ -528,6 +544,7 @@ export function serializeSession(session: RPGGameSession): RPGGameSessionSeriali
         last2Messages: session.last2Messages,
         snapshots: session.snapshots,
         manualSaves: session.manualSaves,
+        suspiciousEntities: session.suspiciousEntities,
         narratorPurpose: session.narratorPurpose,
         parserPurpose: session.parserPurpose,
         ...(session.customSystemPrompt !== undefined && { customSystemPrompt: session.customSystemPrompt }),
@@ -545,6 +562,7 @@ export function deserializeSession(serialized: RPGGameSessionSerialized): RPGGam
         last2Messages: serialized.last2Messages,
         snapshots: serialized.snapshots,
         manualSaves: serialized.manualSaves || [],
+        suspiciousEntities: serialized.suspiciousEntities || [],
         narratorPurpose: serialized.narratorPurpose,
         parserPurpose: serialized.parserPurpose,
         ...(serialized.customSystemPrompt !== undefined && { customSystemPrompt: serialized.customSystemPrompt }),

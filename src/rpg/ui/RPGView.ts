@@ -323,6 +323,7 @@ export class RPGView {
                 last2Messages: [],
                 snapshots: [],
                 manualSaves: [],
+                suspiciousEntities: [],
                 narratorPurpose,
                 parserPurpose,
                 ...(setup.systemPrompt && { customSystemPrompt: setup.systemPrompt }),
@@ -777,7 +778,8 @@ export class RPGView {
         this.worldInspector = new RPGWorldInspector(
             worldInspectorContainer,
             this.currentSession,
-            this.worldStateService
+            this.worldStateService,
+            this.interactionService
         );
         
         this.conversationPanel = new RPGConversationPanel(

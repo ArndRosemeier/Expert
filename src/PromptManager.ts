@@ -1991,6 +1991,14 @@ You MUST respond with valid XML following this schema:
       <character_id>character_id_2</character_id>
     </present_character_ids>
   </scene>
+
+  <diagnostics>
+    <!-- Optional. Use this to flag suspicious/bloated/contradictory entity states for user review. -->
+    <suspicious_entity>
+      <entity_id>entity_id</entity_id>
+      <reason>Short reason why this entity looks suspicious (e.g., contradictory state, too many competing fields, stale scene-only facts).</reason>
+    </suspicious_entity>
+  </diagnostics>
 </rpg_state_update>
 
 ## Rules
@@ -2033,6 +2041,11 @@ You MUST respond with valid XML following this schema:
     - kind="attitude_towards": from_id = character, to_id = target character, with <attitude><stance>...</stance><intensity>...</intensity></attitude>
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
+
+## Diagnostics (IMPORTANT)
+- You may optionally flag suspicious entities in <diagnostics>.
+- Suspicious means: the entity's STATE appears contradictory, redundant (multiple competing fields), or contains facts that clearly belong to prior scenes/locations.
+- Do NOT fix these issues here. Only report them so the user can decide to consolidate.
         `.trim(),
         placeholders: [],
         description: 'System prompt for the State Parser LLM. Defines XML schema for extracting structured world state changes from narrative text.'

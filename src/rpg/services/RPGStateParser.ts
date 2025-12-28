@@ -81,6 +81,27 @@ export class RPGStateParser {
                     result.scene = { presentCharacterIds: [] };
                 }
             }
+
+            // Parse diagnostics (suspicious entities)
+            const diagnosticsContainer = root.querySelector('diagnostics');
+            if (diagnosticsContainer) {
+                const items: Array<{ entityId: string; reason: string }> = [];
+                const els = diagnosticsContainer.querySelectorAll('suspicious_entity');
+                for (const el of Array.from(els)) {
+                    const idEl = el.querySelector('entity_id');
+                    const reasonEl = el.querySelector('reason');
+                    const entityId = idEl?.textContent?.trim();
+                    const reason = reasonEl?.textContent?.trim();
+                    if (entityId && reason) {
+                        items.push({ entityId, reason });
+                    }
+                }
+                if (items.length > 0) {
+                    result.diagnostics = items;
+                } else {
+                    result.diagnostics = [];
+                }
+            }
             
             return result;
             
