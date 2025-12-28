@@ -111,6 +111,7 @@ worldStateService.createLocation(worldState, {
     description: 'A cozy tavern...',
     state: { crowded: true },
     createdTurn: 0,
+    lastUsedTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });
@@ -122,6 +123,7 @@ worldStateService.createCharacter(worldState, {
     description: 'A brave soul...',
     state: { health: 100, gold: 50 },
     createdTurn: 0,
+    lastUsedTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });
@@ -133,6 +135,7 @@ worldStateService.createRelationship(worldState, {
     toId: 'tavern',
     kind: 'located_at',
     createdTurn: 0,
+    lastUsedTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });

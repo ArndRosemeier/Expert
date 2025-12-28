@@ -104,6 +104,7 @@ export class WorldStateService {
                 description: updates.description || '',
                 state: updates.state || {},
                 createdTurn: updates.createdTurn ?? 0,
+                lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -115,6 +116,7 @@ export class WorldStateService {
             ...updates,
             id: existing.id, // ID cannot be changed
             createdTurn: existing.createdTurn,
+            lastUsedTurn: updates.lastUsedTurn ?? existing.lastUsedTurn,
             createdAt: existing.createdAt,
             updatedAt: Date.now()
         };
@@ -175,6 +177,7 @@ export class WorldStateService {
                 description: updates.description || '',
                 state: updates.state || {},
                 createdTurn: updates.createdTurn ?? 0,
+                lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -186,6 +189,7 @@ export class WorldStateService {
             ...updates,
             id: existing.id,
             createdTurn: existing.createdTurn,
+            lastUsedTurn: updates.lastUsedTurn ?? existing.lastUsedTurn,
             createdAt: existing.createdAt,
             updatedAt: Date.now()
         };
@@ -241,6 +245,7 @@ export class WorldStateService {
                 content: updates.content || '',
                 tags: updates.tags || [],
                 createdTurn: updates.createdTurn ?? 0,
+                lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -252,6 +257,7 @@ export class WorldStateService {
             ...updates,
             id: existing.id,
             createdTurn: existing.createdTurn,
+            lastUsedTurn: updates.lastUsedTurn ?? existing.lastUsedTurn,
             createdAt: existing.createdAt,
             updatedAt: Date.now()
         };

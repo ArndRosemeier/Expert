@@ -275,6 +275,7 @@ export class RPGView {
                 description: setup.locationDescription,
                 state: {},
                 createdTurn: 0,
+                lastUsedTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -293,6 +294,7 @@ export class RPGView {
                 description: playerDescription,
                 state: {},
                 createdTurn: 0,
+                lastUsedTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -304,6 +306,7 @@ export class RPGView {
                 toId: locationId,
                 kind: 'located_at',
                 createdTurn: 0,
+                lastUsedTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });

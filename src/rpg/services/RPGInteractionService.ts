@@ -80,6 +80,7 @@ export class RPGInteractionService {
         try {
             // Build context for Game LLM
             const gameContext = this.contextBuilder.buildGameNarrationContext(session);
+            const used = this.collectNarratorUsedWorldItems(session);
             
             // Get prompt template (use custom if provided)
             const systemPromptTemplate = session.customSystemPrompt || getPromptText('rpg_game_narration_system');
@@ -178,6 +179,10 @@ export class RPGInteractionService {
             
             // Unlock state before triggering analysis (LLM call is complete)
             this.worldStateService.unlockState();
+
+            // Mark which world items were actually included in the narrator context for this turn.
+            const turn = Math.floor(session.conversationHistory.length / 2);
+            this.applyLastUsedTurn(session, turn, used);
             
             // Trigger async state analysis (non-blocking, state is now unlocked)
             this.triggerStateAnalysis(session, settingsManager);
@@ -189,6 +194,118 @@ export class RPGInteractionService {
             console.error('Error in sendPlayerAction:', error);
             throw error;
         }
+    }
+
+    private collectNarratorUsedWorldItems(session: RPGGameSession): {
+        locationIds: string[];
+        characterIds: string[];
+        loreIds: string[];
+        relationshipIds: string[];
+        distances: Array<{ fromLocationId: string; toLocationId: string }>;
+    } {
+        const worldState = session.worldState;
+
+        const currentLocationId = worldState.currentLocationId;
+        const playerCharacterId = worldState.playerCharacterId;
+        const characterIdsAtLocation = this.worldStateService.getEntitiesAtLocation(worldState, currentLocationId);
+
+        const startingEntities = [
+            currentLocationId,
+            playerCharacterId,
+            ...characterIdsAtLocation
+        ];
+
+        const relatedEntityIds = new Set<string>();
+        for (const entityId of startingEntities) {
+            const related = this.worldStateService.getRelatedEntities(worldState, entityId, 2);
+            related.forEach(id => relatedEntityIds.add(id));
+        }
+
+        const loreIds: string[] = [];
+        for (const entityId of relatedEntityIds) {
+            const lore = this.worldStateService.getLore(worldState, entityId);
+            if (lore) loreIds.push(lore.id);
+        }
+
+        const relationshipIdsSet = new Set<string>();
+        const touchedEntityIds = new Set<string>([
+            currentLocationId,
+            playerCharacterId,
+            ...characterIdsAtLocation,
+            ...loreIds
+        ]);
+        for (const entityId of touchedEntityIds) {
+            const rels = this.worldStateService.getRelationshipsForEntity(worldState, entityId);
+            for (const rel of rels) {
+                relationshipIdsSet.add(rel.id);
+            }
+        }
+
+        const distances = this.worldStateService.getKnownDistances(worldState, currentLocationId).map(d => ({
+            fromLocationId: d.fromLocationId,
+            toLocationId: d.toLocationId
+        }));
+
+        return {
+            locationIds: [currentLocationId],
+            characterIds: [playerCharacterId, ...characterIdsAtLocation],
+            loreIds,
+            relationshipIds: [...relationshipIdsSet],
+            distances
+        };
+    }
+
+    private applyLastUsedTurn(
+        session: RPGGameSession,
+        turn: number,
+        used: {
+            locationIds: string[];
+            characterIds: string[];
+            loreIds: string[];
+            relationshipIds: string[];
+            distances: Array<{ fromLocationId: string; toLocationId: string }>;
+        }
+    ): void {
+        const worldState = session.worldState;
+
+        for (const id of used.locationIds) {
+            const loc = this.worldStateService.getLocation(worldState, id);
+            if (!loc) throw new Error(`Narrator used location '${id}' but it does not exist.`);
+            this.worldStateService.updateLocation(worldState, id, { lastUsedTurn: turn });
+        }
+
+        for (const id of used.characterIds) {
+            const ch = this.worldStateService.getCharacter(worldState, id);
+            if (!ch) throw new Error(`Narrator used character '${id}' but it does not exist.`);
+            this.worldStateService.updateCharacter(worldState, id, { lastUsedTurn: turn });
+        }
+
+        for (const id of used.loreIds) {
+            const lore = this.worldStateService.getLore(worldState, id);
+            if (!lore) throw new Error(`Narrator used lore '${id}' but it does not exist.`);
+            this.worldStateService.updateLore(worldState, id, { lastUsedTurn: turn });
+        }
+
+        for (const id of used.relationshipIds) {
+            const rel = this.worldStateService.getRelationship(worldState, id);
+            if (!rel) throw new Error(`Narrator used relationship '${id}' but it does not exist.`);
+            worldState.relationships.set(id, { ...rel, lastUsedTurn: turn });
+        }
+
+        for (const d of used.distances) {
+            const idx = worldState.distances.findIndex(
+                x => x.fromLocationId === d.fromLocationId && x.toLocationId === d.toLocationId
+            );
+            if (idx === -1) {
+                throw new Error(`Narrator used distance '${d.fromLocationId}' -> '${d.toLocationId}' but it does not exist.`);
+            }
+            const existing = worldState.distances[idx];
+            if (!existing) {
+                throw new Error(`Distance entry missing at index ${idx} for '${d.fromLocationId}' -> '${d.toLocationId}'.`);
+            }
+            worldState.distances[idx] = { ...existing, lastUsedTurn: turn };
+        }
+
     }
 
     private countWorldItemsSentToNarrator(session: RPGGameSession): number {
@@ -490,6 +607,7 @@ export class RPGInteractionService {
                         description: combinedDescription,
                         state: locationUpdate.state || {},
                         createdTurn: turn,
+                        lastUsedTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -548,6 +666,7 @@ export class RPGInteractionService {
                         description: combinedDescription,
                         state: characterUpdate.state || {},
                         createdTurn: turn,
+                        lastUsedTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -588,6 +707,7 @@ export class RPGInteractionService {
                         content: loreUpdate.content || '',
                         tags: loreUpdate.tags || [],
                         createdTurn: turn,
+                        lastUsedTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -625,6 +745,7 @@ export class RPGInteractionService {
                         fromId: relationshipUpdate.fromId,
                         toId: relationshipUpdate.toId,
                         createdTurn: turn,
+                        lastUsedTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -696,6 +817,7 @@ export class RPGInteractionService {
                     distance: distanceUpdate.distance,
                     unit: distanceUpdate.unit,
                     createdTurn: turn,
+                    lastUsedTurn: turn,
                     createdAt: Date.now()
                 };
                 this.worldStateService.addDistance(worldState, distance);
@@ -743,6 +865,7 @@ export class RPGInteractionService {
                     toId: currentLocationId,
                     kind: 'located_at',
                     createdTurn: turn,
+                    lastUsedTurn: turn,
                     createdAt: Date.now(),
                     updatedAt: Date.now()
                 });

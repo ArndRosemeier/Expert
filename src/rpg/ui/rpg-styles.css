@@ -367,6 +367,28 @@
     line-height: 1.6;
 }
 
+/* World Inspector age highlighting (how long since lastUsedTurn) */
+.rpg-entity-header.rpg-age-fresh {
+    border-left: 0.25rem solid rgba(80, 200, 120, 0.85);
+    background: rgba(80, 200, 120, 0.06);
+}
+
+.rpg-entity-header.rpg-age-warm {
+    border-left: 0.25rem solid rgba(200, 190, 80, 0.85);
+    background: rgba(200, 190, 80, 0.05);
+}
+
+.rpg-entity-header.rpg-age-stale {
+    border-left: 0.25rem solid rgba(220, 140, 80, 0.85);
+    background: rgba(220, 140, 80, 0.04);
+}
+
+.rpg-entity-header.rpg-age-cold {
+    border-left: 0.25rem solid rgba(120, 140, 220, 0.75);
+    background: rgba(120, 140, 220, 0.03);
+    opacity: 0.92;
+}
+
 .rpg-message-actions {
     display: flex;
     justify-content: flex-end;

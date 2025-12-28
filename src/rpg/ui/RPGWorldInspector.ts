@@ -21,6 +21,14 @@ export class RPGWorldInspector {
     private getCurrentTurn(): number {
         return Math.floor(this.session.conversationHistory.length / 2);
     }
+
+    private getAgeClass(lastUsedTurn: number): string {
+        const delta = this.getCurrentTurn() - lastUsedTurn;
+        if (delta <= 1) return 'rpg-age-fresh';
+        if (delta <= 3) return 'rpg-age-warm';
+        if (delta <= 8) return 'rpg-age-stale';
+        return 'rpg-age-cold';
+    }
     
     constructor(
         container: HTMLElement,
@@ -330,12 +338,14 @@ export class RPGWorldInspector {
             for (const d of distances) {
                 const fromName = this.worldStateService.getLocation(worldState, d.fromLocationId)?.name || d.fromLocationId;
                 const toName = this.worldStateService.getLocation(worldState, d.toLocationId)?.name || d.toLocationId;
+                const ageClass = this.getAgeClass(d.lastUsedTurn);
                 html += '<div class="rpg-entity-tree-item">';
-                html += `<div class="rpg-entity-header expanded">`;
+                html += `<div class="rpg-entity-header expanded ${ageClass}">`;
                 html += `<span class="rpg-expand-icon">•</span> ${this.escapeHtml(fromName)} → ${this.escapeHtml(toName)} (${this.escapeHtml(String(d.distance))} ${this.escapeHtml(d.unit)})`;
                 html += '</div>';
                 html += `<div class="rpg-entity-details">`;
                 html += `<small class="rpg-muted">Created turn: ${d.createdTurn}</small>`;
+                html += `<br><small class="rpg-muted">Last used turn: ${d.lastUsedTurn}</small>`;
                 html += '</div>';
                 html += '</div>';
             }
@@ -354,15 +364,35 @@ export class RPGWorldInspector {
     private renderEntityWithRelationships(entityId: string, entityType: string, entityName: string): string {
         const worldState = this.session.worldState;
         const relationships = this.worldStateService.getRelationshipsForEntity(worldState, entityId);
+
+        let lastUsedTurn: number;
+        if (entityType === 'location') {
+            const entity = this.worldStateService.getLocation(worldState, entityId);
+            if (!entity) throw new Error(`Location not found: ${entityId}`);
+            lastUsedTurn = entity.lastUsedTurn;
+        } else if (entityType === 'character') {
+            const entity = this.worldStateService.getCharacter(worldState, entityId);
+            if (!entity) throw new Error(`Character not found: ${entityId}`);
+            lastUsedTurn = entity.lastUsedTurn;
+        } else if (entityType === 'lore') {
+            const entity = this.worldStateService.getLore(worldState, entityId);
+            if (!entity) throw new Error(`Lore not found: ${entityId}`);
+            lastUsedTurn = entity.lastUsedTurn;
+        } else {
+            throw new Error(`Unknown entity type: ${entityType}`);
+        }
+
+        const ageClass = this.getAgeClass(lastUsedTurn);
         
         let html = '<div class="rpg-entity-tree-item">';
         
         // Entity header (clickable to expand)
-        html += `<div class="rpg-entity-header" data-entity-id="${entityId}" data-entity-type="${entityType}">`;
+        html += `<div class="rpg-entity-header ${ageClass}" data-entity-id="${entityId}" data-entity-type="${entityType}">`;
         html += `<span class="rpg-expand-icon">▶</span> ${entityName}`;
         if (relationships.length > 0) {
             html += ` <span class="rpg-relationship-count">(${relationships.length} relationships)</span>`;
         }
+        html += ` <small class="rpg-muted">(last used turn: ${lastUsedTurn})</small>`;
         html += '</div>';
         
         // Entity details (collapsible)
@@ -409,6 +439,10 @@ export class RPGWorldInspector {
                     <input class="rpg-edit-input" value="${location.createdTurn}" disabled />
                 </div>
                 <div class="rpg-entity-editor-row">
+                    <label>Last used turn</label>
+                    <input class="rpg-edit-input" value="${location.lastUsedTurn}" disabled />
+                </div>
+                <div class="rpg-entity-editor-row">
                     <label>Name</label>
                     <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(location.name)}" />
                 </div>
@@ -443,6 +477,10 @@ export class RPGWorldInspector {
                     <input class="rpg-edit-input" value="${character.createdTurn}" disabled />
                 </div>
                 <div class="rpg-entity-editor-row">
+                    <label>Last used turn</label>
+                    <input class="rpg-edit-input" value="${character.lastUsedTurn}" disabled />
+                </div>
+                <div class="rpg-entity-editor-row">
                     <label>Name</label>
                     <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(character.name)}" />
                 </div>
@@ -472,6 +510,10 @@ export class RPGWorldInspector {
                 <div class="rpg-entity-editor-row">
                     <label>Created turn</label>
                     <input class="rpg-edit-input" value="${lore.createdTurn}" disabled />
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Last used turn</label>
+                    <input class="rpg-edit-input" value="${lore.lastUsedTurn}" disabled />
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Title</label>
@@ -747,6 +789,7 @@ export class RPGWorldInspector {
             toId,
             kind,
             createdTurn: this.getCurrentTurn(),
+            lastUsedTurn: this.getCurrentTurn(),
             createdAt: Date.now(),
             updatedAt: Date.now()
         };
