@@ -388,7 +388,11 @@ export class RPGView {
             
             // Generate initial GM message
             this.setCreateSessionStatus('Generating Game Master intro…', true);
-            await this.generateInitialMessage(session, setup.settingDescription);
+            const initialGMMessage = await this.generateInitialMessage(session, setup.settingDescription);
+
+            // The initial GM intro can already introduce new entities (especially NPCs). Parse it once before snapshotting.
+            this.setCreateSessionStatus('Analyzing GM intro…', true);
+            await this.parseInitialGMIntro(session, initialGMMessage);
 
             // Create an initial snapshot at game start (turn 0)
             this.setCreateSessionStatus('Creating initial snapshot…', true);
@@ -561,13 +565,58 @@ export class RPGView {
     }
     
     /**
-     * Generate initial GM message to set the stage
+     * Parse the initial GM intro message. The GM can introduce NPCs/objects already in the starting scene.
      */
-    private async generateInitialMessage(session: RPGGameSession, settingDescription?: string): Promise<void> {
-        console.log('📝 Generating initial GM message...');
+    private async parseInitialGMIntro(session: RPGGameSession, gmIntro: string): Promise<void> {
+        if (!gmIntro) return;
+        
+        console.log('📝 Parsing initial GM intro...');
         
         const activeProject = getActiveProject();
         if (!activeProject) return;
+        
+        const settingsManager = activeProject.getSettingsManager();
+        
+        try {
+            const parserContext = this.contextBuilder.buildStateParserContext(
+                session,
+                `Parse the following Game Master intro message.\n\nIMPORTANT CONSTRAINTS:\n- Do NOT update or rewrite the existing PLAYER CHARACTER (${session.worldState.playerCharacterId}).\n- Do NOT update or rewrite the existing STARTING LOCATION (${session.worldState.currentLocationId}).\n- Only create additional entities/lore/relationships/distances that are clearly implied.\n- If the GM intro introduces characters present in the scene, ensure they are located_at the CURRENT LOCATION (${session.worldState.currentLocationId}).\n- Do NOT abbreviate or summarize existing details.`,
+                gmIntro
+            );
+            
+            // Get prompt templates
+            const systemPromptTemplate = getPromptText('rpg_state_parser_system');
+            const userPromptTemplate = getPromptText('rpg_state_parser_user');
+            
+            // Expand prompts
+            const expansionService = createRPGPromptExpansionService(settingsManager);
+            const systemPrompt = expansionService.expandPrompt(systemPromptTemplate, parserContext);
+            const userPrompt = expansionService.expandPrompt(userPromptTemplate, parserContext);
+            
+            const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
+            
+            // Call State Parser LLM
+            const response = await this.openRouterClient.chat(session.parserPurpose, combinedPrompt);
+            console.log('📄 State Parser response received (intro)');
+            
+            const stateUpdate = this.stateParser.parseStateUpdate(response);
+            await this.interactionService.applyStateUpdates(session, stateUpdate);
+            
+            console.log('✅ Initial GM intro parsed successfully');
+        } catch (error) {
+            console.error('❌ Failed to parse initial GM intro:', error);
+            this.setCreateSessionStatus('⚠️ Failed to parse GM intro (world may be incomplete). Check console.', false);
+        }
+    }
+    
+    /**
+     * Generate initial GM message to set the stage
+     */
+    private async generateInitialMessage(session: RPGGameSession, settingDescription?: string): Promise<string> {
+        console.log('📝 Generating initial GM message...');
+        
+        const activeProject = getActiveProject();
+        if (!activeProject) return '';
         
         const settingsManager = activeProject.getSettingsManager();
         
@@ -614,6 +663,7 @@ export class RPGView {
             session.last2Messages = [assistantMessage];
             
             console.log('✅ Initial GM message added to conversation');
+            return response;
             
         } catch (error) {
             console.error('❌ Failed to generate initial message:', error);
@@ -625,6 +675,7 @@ export class RPGView {
             };
             session.conversationHistory.push(fallbackMessage);
             session.last2Messages = [fallbackMessage];
+            return fallbackMessage.content;
         }
     }
     
