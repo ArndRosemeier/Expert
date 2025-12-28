@@ -391,6 +391,7 @@
     display: flex;
     flex-direction: column;
     background: var(--node-bg, #1a1a1a);
+    color: var(--text-color, #e0e0e0);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 0.75rem;
     overflow: hidden;
@@ -402,12 +403,14 @@
     align-items: center;
     padding: 1rem 1.25rem;
     background: var(--header-bg, #252525);
+    color: var(--text-color, #e0e0e0);
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .rpg-save-modal-header h3 {
     margin: 0;
     font-size: 1.05rem;
+    color: var(--text-color, #e0e0e0);
 }
 
 .rpg-save-close-btn {
@@ -427,6 +430,7 @@
     padding: 1rem 1.25rem;
     overflow-y: auto;
     min-height: 0;
+    color: var(--text-color, #e0e0e0);
 }
 
 .rpg-save-empty {
@@ -440,17 +444,20 @@
     padding: 0.85rem 0.9rem;
     border-radius: 0.6rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.04);
     margin-top: 0.75rem;
+    color: var(--text-color, #e0e0e0);
 }
 
 .rpg-save-title {
     font-weight: 600;
+    color: var(--text-color, #e0e0e0);
 }
 
 .rpg-save-meta {
     opacity: 0.75;
     font-size: 0.9rem;
+    color: var(--text-color, #e0e0e0);
 }
 
 .rpg-save-restore-btn {
@@ -461,7 +468,7 @@
     border-radius: 0.45rem;
     border: 1px solid rgba(255, 255, 255, 0.22);
     background: transparent;
-    color: inherit;
+    color: var(--text-color, #e0e0e0);
     cursor: pointer;
 }
 
