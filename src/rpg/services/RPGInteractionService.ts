@@ -75,6 +75,10 @@ export class RPGInteractionService {
         const rollbackId = `rollback_${session.id}_${Date.now()}`;
         this.rollbackPoints.set(rollbackId, this.worldStateService.cloneWorldStateForUndo(session.worldState));
 
+        // Fix corrupted state early: located_at must always be Character -> Location.
+        // If a parser bug ever created Location -> Location located_at edges, later bookkeeping will crash.
+        this.cleanupInvalidLocatedAtRelationships(session);
+
         // Lock state during LLM interaction
         this.worldStateService.lockState('Game LLM generating response');
         
@@ -949,6 +953,16 @@ export class RPGInteractionService {
                 if (relationshipUpdate.action === 'create') {
                     // Enforce invariant: one active located_at per character (prevents missing/duplicate scene membership)
                     if (relationshipUpdate.kind === 'located_at') {
+                        const fromIsCharacter = worldState.characters.has(relationshipUpdate.fromId);
+                        const toIsLocation = worldState.locations.has(relationshipUpdate.toId);
+                        if (!fromIsCharacter || !toIsLocation) {
+                            console.error(
+                                `❌ Invalid located_at relationship ignored: fromId='${relationshipUpdate.fromId}' toId='${relationshipUpdate.toId}'. ` +
+                                `located_at must be Character -> Location.`
+                            );
+                            continue;
+                        }
+
                         const existingLocatedAt = this.worldStateService
                             .listRelationships(worldState)
                             .filter(r => r.kind === 'located_at' && r.fromId === relationshipUpdate.fromId);
@@ -1064,7 +1078,11 @@ export class RPGInteractionService {
 
                 const exists = this.worldStateService.getCharacter(worldState, characterId);
                 if (!exists) {
-                    console.warn(`⚠️ Scene roster referenced unknown character '${characterId}'.`);
+                    if (worldState.locations.has(characterId)) {
+                        console.error(`❌ Scene roster referenced a location id as a character id: '${characterId}'. Ignoring.`);
+                    } else {
+                        console.warn(`⚠️ Scene roster referenced unknown character '${characterId}'.`);
+                    }
                     continue;
                 }
 
@@ -1092,6 +1110,31 @@ export class RPGInteractionService {
         } else {
             // Loud signal when roster is missing (helps diagnose LLM failures)
             console.warn('⚠️ No <scene> roster found in state update; scene membership may be incomplete.');
+        }
+
+        // Final invariant enforcement for this turn: remove any invalid located_at edges that slipped in.
+        this.cleanupInvalidLocatedAtRelationships(session);
+    }
+
+    private cleanupInvalidLocatedAtRelationships(session: RPGGameSession): void {
+        const worldState = session.worldState;
+        const relationships = this.worldStateService.listRelationships(worldState);
+
+        const invalidLocatedAt = relationships.filter(rel => {
+            if (rel.kind !== 'located_at') return false;
+            const fromIsCharacter = worldState.characters.has(rel.fromId);
+            const toIsLocation = worldState.locations.has(rel.toId);
+            return !fromIsCharacter || !toIsLocation;
+        });
+
+        if (invalidLocatedAt.length === 0) return;
+
+        console.error(`❌ Found ${invalidLocatedAt.length} invalid located_at relationship(s). Deleting to restore invariants.`);
+        for (const rel of invalidLocatedAt) {
+            console.error(
+                `  - deleting rel '${rel.id}': fromId='${rel.fromId}' toId='${rel.toId}' (must be Character -> Location)`
+            );
+            this.worldStateService.deleteRelationship(worldState, rel.id);
         }
     }
     
