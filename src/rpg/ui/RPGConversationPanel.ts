@@ -38,6 +38,8 @@ export class RPGConversationPanel {
         // Set up callback for when analysis completes
         this.interactionService.setOnAnalysisComplete(() => {
             this.updateStatus('Ready', 'ready');
+            // Keep keyboard flow: after GM move + analysis, return focus to input.
+            this.focusInput();
         });
         
         this.render();
@@ -347,6 +349,8 @@ export class RPGConversationPanel {
             // Re-enable input (user can type while analysis runs)
             this.inputField.disabled = false;
             this.submitButton.disabled = false;
+            // GM move finished streaming; focus input so the user can continue typing immediately.
+            this.focusInput();
             
         } catch (error) {
             console.error('Error sending player action:', error);
@@ -356,7 +360,16 @@ export class RPGConversationPanel {
             this.inputField.disabled = false;
             this.submitButton.disabled = false;
             this.updateStatus('Error', 'error');
+            this.focusInput();
         }
+    }
+
+    private focusInput(): void {
+        if (!this.inputField) return;
+        if (this.inputField.disabled) return;
+        this.inputField.focus();
+        const end = this.inputField.value.length;
+        this.inputField.setSelectionRange(end, end);
     }
     
     /**
