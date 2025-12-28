@@ -382,6 +382,20 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
+.rpg-checkpoint-btn {
+    padding: 0.5em 1em;
+    border-radius: 0.35em;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.rpg-checkpoint-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .rpg-input-area {
     display: flex;
     gap: 0.5rem;

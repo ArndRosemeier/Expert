@@ -4,7 +4,7 @@
  * Contains:
  * - Conversation Panel (chat with Game LLM)
  * - World Inspector (Scene/World toggle, tree view)
- * - Snapshot Manager (save/load/rollback)
+ * - Checkpoints are attached to assistant messages (restore from answer boxes)
  */
 
 import { RPGGameSession, RPGGameSessionSerialized, RPGConversationMessage, deserializeSession } from '../types/RPGTypes';
@@ -14,7 +14,6 @@ import { RPGStateParser } from '../services/RPGStateParser';
 import { RPGInteractionService } from '../services/RPGInteractionService';
 import { RPGConversationPanel } from './RPGConversationPanel';
 import { RPGWorldInspector } from './RPGWorldInspector';
-import { RPGSnapshotManager } from './RPGSnapshotManager';
 import { StorageService } from '../../StorageService';
 import { getActiveProject } from '../../state';
 import { getPromptText } from '../../PromptManager';
@@ -32,9 +31,7 @@ export class RPGView {
     private interactionService: RPGInteractionService;
     
     // UI Components
-    private conversationPanel: RPGConversationPanel | null = null;
     private worldInspector: RPGWorldInspector | null = null;
-    private snapshotManager: RPGSnapshotManager | null = null;
     
     // Additional services needed for start setting parsing
     private openRouterClient: OpenRouterClient;
@@ -398,6 +395,11 @@ export class RPGView {
             this.setCreateSessionStatus('Creating initial snapshot…', true);
             const initialSnapshot = await this.worldStateService.createSnapshot(session, 0);
             session.snapshots.push(initialSnapshot.id);
+            const firstMsg = session.conversationHistory[0];
+            if (!firstMsg || firstMsg.role !== 'assistant') {
+                throw new Error('Expected initial GM message to be present before creating initial checkpoint.');
+            }
+            firstMsg.checkpointSnapshotId = initialSnapshot.id;
             
             // Save session
             this.setCreateSessionStatus('Saving session…', true);
@@ -692,9 +694,54 @@ export class RPGView {
         }
         
         this.currentSession = deserializeSession(serialized);
+
+        // Migration: attach checkpoint snapshot IDs to assistant messages (for older sessions)
+        await this.attachCheckpointsFromSnapshots(this.currentSession);
         
         // Render main RPG interface
         this.renderMainInterface();
+    }
+
+    private async attachCheckpointsFromSnapshots(session: RPGGameSession): Promise<void> {
+        const storage = await StorageService.getInstance();
+        const allSnapshots = await storage.listRPGSnapshots<{ id: string; timestamp: number; conversationTurn: number }>();
+        const sessionSnapshots = allSnapshots
+            .filter(s => s.id.includes(session.id))
+            .sort((a, b) => a.conversationTurn - b.conversationTurn);
+
+        const byTurn = new Map<number, string>();
+        for (const s of sessionSnapshots) {
+            byTurn.set(s.conversationTurn, s.id);
+        }
+
+        // Initial (turn 0): assistant message at index 0
+        const initialId = byTurn.get(0);
+        if (initialId) {
+            const msg0 = session.conversationHistory[0];
+            if (msg0 && msg0.role === 'assistant') {
+                msg0.checkpointSnapshotId = initialId;
+            }
+        }
+
+        // Turn N assistant message is at index 1 + N*2
+        for (const [turn, snapshotId] of byTurn.entries()) {
+            if (turn === 0) continue;
+            const idx = 1 + (turn * 2);
+            const msg = session.conversationHistory[idx];
+            if (msg && msg.role === 'assistant') {
+                msg.checkpointSnapshotId = snapshotId;
+            }
+        }
+
+        // Rebuild snapshot list from checkpoints
+        const ids: string[] = [];
+        for (const msg of session.conversationHistory) {
+            if (msg.role === 'assistant' && msg.checkpointSnapshotId) {
+                ids.push(msg.checkpointSnapshotId);
+            }
+        }
+        const seen = new Set<string>();
+        session.snapshots = ids.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
     }
     
     /**
@@ -715,7 +762,6 @@ export class RPGView {
                     </div>
                     <div class="rpg-right-panel">
                         <div id="rpg-world-inspector-container"></div>
-                        <div id="rpg-snapshot-manager-container"></div>
                     </div>
                 </div>
             </div>
@@ -727,7 +773,6 @@ export class RPGView {
         // Initialize sub-components
         const conversationContainer = this.container.querySelector('#rpg-conversation-container') as HTMLElement;
         const worldInspectorContainer = this.container.querySelector('#rpg-world-inspector-container') as HTMLElement;
-        const snapshotManagerContainer = this.container.querySelector('#rpg-snapshot-manager-container') as HTMLElement;
         
         // Create world inspector first (needed by conversation panel for debug mode)
         this.worldInspector = new RPGWorldInspector(
@@ -736,19 +781,12 @@ export class RPGView {
             this.worldStateService
         );
         
-        this.conversationPanel = new RPGConversationPanel(
+        new RPGConversationPanel(
             conversationContainer,
             this.currentSession,
             this.interactionService,
             this.worldInspector,
             () => this.onConversationUpdate()
-        );
-        
-        this.snapshotManager = new RPGSnapshotManager(
-            snapshotManagerContainer,
-            this.currentSession,
-            this.worldStateService,
-            () => this.onSnapshotRestore()
         );
         
         // Close button
@@ -764,17 +802,6 @@ export class RPGView {
     private onConversationUpdate(): void {
         // Refresh world inspector
         this.worldInspector?.refresh();
-        this.snapshotManager?.refresh();
-    }
-    
-    /**
-     * Called when a snapshot is restored
-     */
-    private onSnapshotRestore(): void {
-        // Refresh all components
-        this.conversationPanel?.refresh();
-        this.worldInspector?.refresh();
-        this.snapshotManager?.refresh();
     }
     
     /**
@@ -832,9 +859,7 @@ export class RPGView {
         this.container.innerHTML = '';
         this.container.style.display = 'none';
         this.currentSession = null;
-        this.conversationPanel = null;
         this.worldInspector = null;
-        this.snapshotManager = null;
     }
 }
 

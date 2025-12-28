@@ -148,6 +148,11 @@ export interface RPGConversationMessage {
      * Only set on assistant messages so the UI can offer "Retry" (rollback + resend).
      */
     preTurnRollbackId?: string;
+    /**
+     * Persisted checkpoint snapshot ID corresponding to the world state AFTER this assistant message's turn was applied.
+     * Only set on assistant messages (including the initial GM intro).
+     */
+    checkpointSnapshotId?: string;
 }
 
 /**

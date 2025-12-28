@@ -101,7 +101,8 @@ export class RPGConversationPanel {
         for (let i = 0; i < this.session.conversationHistory.length; i++) {
             const message = this.session.conversationHistory[i] as RPGConversationMessage;
             const showRetry = i === lastIndex && message.role === 'assistant' && !!message.preTurnRollbackId;
-            this.appendMessage(message.role, message.content, showRetry);
+            const showRestore = message.role === 'assistant' && !!message.checkpointSnapshotId;
+            this.appendMessage(message, showRetry, showRestore);
         }
         
         // Scroll to bottom
@@ -111,29 +112,80 @@ export class RPGConversationPanel {
     /**
      * Append a single message to the display
      */
-    private appendMessage(role: 'user' | 'assistant', content: string, showRetry: boolean = false): void {
+    private appendMessage(message: RPGConversationMessage, showRetry: boolean = false, showRestore: boolean = false): void {
         if (!this.messagesContainer) return;
         
         const messageDiv = document.createElement('div');
-        messageDiv.className = `rpg-message rpg-message-${role}`;
+        messageDiv.className = `rpg-message rpg-message-${message.role}`;
         
-        const roleLabel = role === 'user' ? 'You' : 'Game Master';
+        const roleLabel = message.role === 'user' ? 'You' : 'Game Master';
+        const checkpointId = message.role === 'assistant' ? message.checkpointSnapshotId : undefined;
         
+        const actions: string[] = [];
+        if (showRestore && checkpointId) {
+            actions.push(`<button class="rpg-checkpoint-btn" type="button" data-snapshot-id="${checkpointId}">Restore checkpoint</button>`);
+        }
+        if (showRetry) {
+            actions.push(`<button class="rpg-retry-btn" type="button">Retry</button>`);
+        }
+
+        const actionsHtml = actions.length > 0
+            ? `<div class="rpg-message-actions">${actions.join('')}</div>`
+            : '';
+
         messageDiv.innerHTML = `
             <div class="rpg-message-role">${roleLabel}</div>
-            <div class="rpg-message-content">${this.formatContent(content)}</div>
-            ${showRetry ? `<div class="rpg-message-actions"><button class="rpg-retry-btn" type="button">Retry</button></div>` : ''}
+            <div class="rpg-message-content">${this.formatContent(message.content)}</div>
+            ${actionsHtml}
         `;
 
-        if (showRetry) {
-            const retryBtn = messageDiv.querySelector('.rpg-retry-btn') as HTMLButtonElement;
-            retryBtn?.addEventListener('click', () => {
-                void this.retryLastTurn();
-            });
-        }
+        const retryBtn = messageDiv.querySelector('.rpg-retry-btn') as HTMLButtonElement | null;
+        retryBtn?.addEventListener('click', () => {
+            void this.retryLastTurn();
+        });
+
+        const restoreBtn = messageDiv.querySelector('.rpg-checkpoint-btn') as HTMLButtonElement | null;
+        restoreBtn?.addEventListener('click', () => {
+            const snapshotId = restoreBtn.getAttribute('data-snapshot-id');
+            if (!snapshotId) {
+                throw new Error('Restore checkpoint clicked but snapshot id missing.');
+            }
+            void this.restoreCheckpoint(snapshotId);
+        });
         
         this.messagesContainer.appendChild(messageDiv);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    private async restoreCheckpoint(snapshotId: string): Promise<void> {
+        if (!this.inputField || !this.submitButton) return;
+
+        if (this.interactionService.isAnalyzing()) {
+            this.updateStatus('Waiting for analysis...', 'analyzing');
+            await this.interactionService.waitForAnalysisCompletion();
+        }
+
+        if (!confirm('Restore this checkpoint? Progress after this point will be lost.')) {
+            return;
+        }
+
+        this.inputField.disabled = true;
+        this.submitButton.disabled = true;
+        this.updateStatus('Restoring checkpoint...', 'analyzing');
+
+        try {
+            await this.interactionService.restoreCheckpointIntoSession(this.session, snapshotId);
+            this.onUpdate();
+            this.renderMessages();
+            this.updateStatus('Ready', 'ready');
+        } catch (error) {
+            console.error('Error restoring checkpoint:', error);
+            alert(`Failed to restore checkpoint: ${error instanceof Error ? error.message : error}`);
+            this.updateStatus('Error', 'error');
+        } finally {
+            this.inputField.disabled = false;
+            this.submitButton.disabled = false;
+        }
     }
 
     private async retryLastTurn(): Promise<void> {
@@ -176,10 +228,11 @@ export class RPGConversationPanel {
         this.interactionService.restoreRollbackPointIntoSession(this.session, rollbackId);
         this.interactionService.dropRollbackPoint(rollbackId);
 
-        // Remove last post-turn snapshot (created by analysis) so we don't accumulate extra saves on retry.
-        const lastSnapshotId = this.session.snapshots.pop();
-        if (lastSnapshotId) {
-            await this.interactionService.deleteSnapshotById(lastSnapshotId);
+        // Remove checkpoint snapshot associated with this assistant message (created by analysis)
+        const checkpointId = last.checkpointSnapshotId;
+        if (checkpointId) {
+            await this.interactionService.deleteSnapshotById(checkpointId);
+            delete last.checkpointSnapshotId;
         }
 
         // Remove last user + assistant messages, then resend the same user text.
@@ -242,8 +295,8 @@ export class RPGConversationPanel {
         this.updateStatus('Generating response...', 'generating');
         
         try {
-            // Display user message immediately
-            this.appendMessage('user', playerAction);
+            // Display user message immediately (optimistic UI)
+            this.appendMessage({ role: 'user', content: playerAction, timestamp: Date.now() });
             
             // Create a placeholder for streaming response
             const assistantMessageDiv = document.createElement('div');

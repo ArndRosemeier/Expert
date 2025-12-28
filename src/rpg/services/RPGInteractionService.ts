@@ -16,6 +16,8 @@ import { OpenRouterClient } from '../../OpenRouterClient';
 import { getPromptText } from '../../PromptManager';
 import { createRPGPromptExpansionService } from './RPGPlaceholderService';
 import { SettingsManager } from '../../SettingsManager';
+import { StorageService } from '../../StorageService';
+import { RPGSnapshotSerialized, deserializeSnapshot } from '../types/RPGTypes';
 
 export class RPGInteractionService {
     private worldStateService: WorldStateService;
@@ -249,7 +251,16 @@ export class RPGInteractionService {
             // Create snapshot
             const turn = Math.floor(session.conversationHistory.length / 2);
             const snapshot = await this.worldStateService.createSnapshot(session, turn);
-            session.snapshots.push(snapshot.id);
+
+            // Attach checkpoint to the assistant message for this turn
+            const lastMessage = session.conversationHistory[session.conversationHistory.length - 1];
+            if (!lastMessage || lastMessage.role !== 'assistant') {
+                throw new Error('Expected last conversation message to be an assistant message when creating a checkpoint.');
+            }
+            lastMessage.checkpointSnapshotId = snapshot.id;
+
+            // Rebuild snapshot list from checkpoints (plus prune old ones)
+            await this.pruneCheckpoints(session, 10);
             
             // Save session
             await this.worldStateService.saveSession(session);
@@ -258,6 +269,89 @@ export class RPGInteractionService {
             console.error('❌ State analysis error:', error);
             throw error;
         }
+    }
+
+    private rebuildSnapshotsFromCheckpoints(session: RPGGameSession): void {
+        const ids: string[] = [];
+        for (const msg of session.conversationHistory) {
+            if (msg.role === 'assistant' && msg.checkpointSnapshotId) {
+                ids.push(msg.checkpointSnapshotId);
+            }
+        }
+        // De-duplicate while preserving order
+        const seen = new Set<string>();
+        session.snapshots = ids.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
+    }
+
+    /**
+     * Keep at most maxCheckpoints checkpoints attached to assistant messages.
+     * Always keeps the initial checkpoint (first assistant message's checkpoint).
+     */
+    private async pruneCheckpoints(session: RPGGameSession, maxCheckpoints: number): Promise<void> {
+        this.rebuildSnapshotsFromCheckpoints(session);
+
+        const assistantMessages = session.conversationHistory.filter(m => m.role === 'assistant');
+        const checkpointMessages = assistantMessages.filter(m => !!m.checkpointSnapshotId);
+
+        if (checkpointMessages.length <= maxCheckpoints) {
+            return;
+        }
+
+        const initialCheckpointId = checkpointMessages[0]?.checkpointSnapshotId;
+        if (!initialCheckpointId) {
+            throw new Error('Checkpoint pruning requires an initial checkpoint snapshot id.');
+        }
+
+        const nonInitial = checkpointMessages.slice(1);
+        const keepCount = maxCheckpoints - 1;
+        const toDelete = nonInitial.slice(0, Math.max(0, nonInitial.length - keepCount));
+
+        for (const msg of toDelete) {
+            const snapshotId = msg.checkpointSnapshotId;
+            if (!snapshotId || snapshotId === initialCheckpointId) continue;
+
+            await this.worldStateService.deleteSnapshot(snapshotId);
+            delete msg.checkpointSnapshotId;
+        }
+
+        this.rebuildSnapshotsFromCheckpoints(session);
+    }
+
+    async restoreCheckpointIntoSession(session: RPGGameSession, snapshotId: string): Promise<void> {
+        // Load snapshot (need conversationTurn as well)
+        const storage = await StorageService.getInstance();
+        const serialized = await storage.loadRPGSnapshot<RPGSnapshotSerialized>(snapshotId);
+        if (!serialized) {
+            throw new Error(`Snapshot not found: ${snapshotId}`);
+        }
+
+        const snapshot = deserializeSnapshot(serialized);
+
+        session.worldState = snapshot.worldState;
+
+        // conversationHistory shape is:
+        // - 1 initial assistant message
+        // - then for each turn: user+assistant (2 messages)
+        const messagesToKeep = 1 + (snapshot.conversationTurn * 2);
+        session.conversationHistory = session.conversationHistory.slice(0, messagesToKeep);
+        session.last2Messages = session.conversationHistory.slice(-2);
+
+        // Delete any checkpoint snapshots no longer referenced (keeps storage clean and enforces cap again)
+        const referenced = new Set<string>();
+        for (const msg of session.conversationHistory) {
+            if (msg.role === 'assistant' && msg.checkpointSnapshotId) {
+                referenced.add(msg.checkpointSnapshotId);
+            }
+        }
+        for (const id of session.snapshots) {
+            if (!referenced.has(id)) {
+                await this.worldStateService.deleteSnapshot(id);
+            }
+        }
+
+        this.rebuildSnapshotsFromCheckpoints(session);
+        await this.pruneCheckpoints(session, 10);
+        await this.worldStateService.saveSession(session);
     }
     
     /**
