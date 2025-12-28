@@ -838,6 +838,10 @@ export class RPGInteractionService {
         session.worldState = this.worldStateService.cloneWorldStateForUndo(state);
     }
 
+    hasRollbackPoint(rollbackId: string): boolean {
+        return this.rollbackPoints.has(rollbackId);
+    }
+
     dropRollbackPoint(rollbackId: string): void {
         this.rollbackPoints.delete(rollbackId);
     }

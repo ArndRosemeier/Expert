@@ -650,9 +650,20 @@ export class RPGView {
 
         // Migration: attach checkpoint snapshot IDs to assistant messages (for older sessions)
         await this.attachCheckpointsFromSnapshots(this.currentSession);
+
+        // Migration: preTurnRollbackId is in-memory only and becomes invalid after reload.
+        this.removeStaleRollbackIds(this.currentSession);
         
         // Render main RPG interface
         this.renderMainInterface();
+    }
+
+    private removeStaleRollbackIds(session: RPGGameSession): void {
+        for (const msg of session.conversationHistory) {
+            if (msg.role === 'assistant' && msg.preTurnRollbackId) {
+                delete msg.preTurnRollbackId;
+            }
+        }
     }
 
     private removeSessionBriefLore(session: RPGGameSession): void {

@@ -105,13 +105,35 @@ export class RPGConversationPanel {
         const lastIndex = this.session.conversationHistory.length - 1;
         for (let i = 0; i < this.session.conversationHistory.length; i++) {
             const message = this.session.conversationHistory[i] as RPGConversationMessage;
-            const showRetry = i === lastIndex && message.role === 'assistant' && !!message.preTurnRollbackId;
+            const showRetry = i === lastIndex && message.role === 'assistant' && this.canRetryLastTurn();
             const showRestore = message.role === 'assistant' && !!message.checkpointSnapshotId;
             this.appendMessage(message, showRetry, showRestore);
         }
         
         // Scroll to bottom
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    private canRetryLastTurn(): boolean {
+        const history = this.session.conversationHistory;
+        if (history.length < 2) return false;
+
+        const last = history[history.length - 1];
+        const prev = history[history.length - 2];
+        if (!last || !prev) return false;
+        if (last.role !== 'assistant' || prev.role !== 'user') return false;
+
+        // 1) Best case: in-memory rollback exists (only for non-reloaded sessions)
+        const rollbackId = last.preTurnRollbackId;
+        if (rollbackId && this.interactionService.hasRollbackPoint(rollbackId)) {
+            return true;
+        }
+
+        // 2) Reload-safe: we can retry by restoring the previous assistant checkpoint (turn-1)
+        if (history.length < 3) return false;
+        const beforeLastAssistant = history[history.length - 3];
+        if (!beforeLastAssistant) return false;
+        return beforeLastAssistant.role === 'assistant' && !!beforeLastAssistant.checkpointSnapshotId;
     }
     
     /**
@@ -227,30 +249,40 @@ export class RPGConversationPanel {
             return;
         }
 
-        const rollbackId = last.preTurnRollbackId;
-        if (!rollbackId) {
-            alert('Cannot retry: missing rollback point.');
-            return;
-        }
-
         const playerAction = prev.content;
 
         this.inputField.disabled = true;
         this.submitButton.disabled = true;
         this.updateStatus('Retrying (restoring state)...', 'analyzing');
 
-        this.interactionService.restoreRollbackPointIntoSession(this.session, rollbackId);
-        this.interactionService.dropRollbackPoint(rollbackId);
+        // Capture checkpoint id (if present) before any restore mutates the conversation.
+        const lastCheckpointId = last.checkpointSnapshotId;
+
+        // Prefer the in-memory rollback point when available (no extra snapshot restore needed).
+        const rollbackId = last.preTurnRollbackId;
+        if (rollbackId && this.interactionService.hasRollbackPoint(rollbackId)) {
+            this.interactionService.restoreRollbackPointIntoSession(this.session, rollbackId);
+            this.interactionService.dropRollbackPoint(rollbackId);
+        } else {
+            // Reload-safe path: restore the previous assistant checkpoint (turn-1), which is the pre-turn state.
+            if (history.length < 3) {
+                throw new Error('Cannot retry: no previous checkpoint available.');
+            }
+            const prevAssistant = history[history.length - 3];
+            if (!prevAssistant || prevAssistant.role !== 'assistant' || !prevAssistant.checkpointSnapshotId) {
+                throw new Error('Cannot retry: missing previous assistant checkpoint.');
+            }
+            await this.interactionService.restoreCheckpointIntoSession(this.session, prevAssistant.checkpointSnapshotId);
+        }
 
         // Remove checkpoint snapshot associated with this assistant message (created by analysis)
-        const checkpointId = last.checkpointSnapshotId;
-        if (checkpointId) {
-            await this.interactionService.deleteSnapshotById(checkpointId);
+        if (lastCheckpointId) {
+            await this.interactionService.deleteSnapshotById(lastCheckpointId);
             delete last.checkpointSnapshotId;
         }
 
         // Remove last user + assistant messages, then resend the same user text.
-        this.session.conversationHistory = history.slice(0, -2);
+        this.session.conversationHistory = this.session.conversationHistory.slice(0, -2);
         this.session.last2Messages = this.session.conversationHistory.slice(-2);
 
         this.onUpdate();
