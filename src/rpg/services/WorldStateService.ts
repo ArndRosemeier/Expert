@@ -103,6 +103,7 @@ export class WorldStateService {
                 name: updates.name || id,
                 description: updates.description || '',
                 state: updates.state || {},
+                createdTurn: updates.createdTurn ?? 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -113,6 +114,8 @@ export class WorldStateService {
             ...existing,
             ...updates,
             id: existing.id, // ID cannot be changed
+            createdTurn: existing.createdTurn,
+            createdAt: existing.createdAt,
             updatedAt: Date.now()
         };
         
@@ -171,6 +174,7 @@ export class WorldStateService {
                 name: updates.name || id,
                 description: updates.description || '',
                 state: updates.state || {},
+                createdTurn: updates.createdTurn ?? 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -181,6 +185,8 @@ export class WorldStateService {
             ...existing,
             ...updates,
             id: existing.id,
+            createdTurn: existing.createdTurn,
+            createdAt: existing.createdAt,
             updatedAt: Date.now()
         };
         
@@ -234,6 +240,7 @@ export class WorldStateService {
                 title: updates.title || id,
                 content: updates.content || '',
                 tags: updates.tags || [],
+                createdTurn: updates.createdTurn ?? 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -244,6 +251,8 @@ export class WorldStateService {
             ...existing,
             ...updates,
             id: existing.id,
+            createdTurn: existing.createdTurn,
+            createdAt: existing.createdAt,
             updatedAt: Date.now()
         };
         

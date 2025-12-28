@@ -8,6 +8,10 @@ export interface RPGLocation {
     name: string;
     description: string;
     state: Record<string, unknown>; // Flexible JSON for dynamic attributes (weather, time, etc.)
+    /**
+     * Conversation turn when this entity was created (0 = initial setup / intro turn).
+     */
+    createdTurn: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -20,6 +24,10 @@ export interface RPGCharacter {
     name: string;
     description: string;
     state: Record<string, unknown>; // Flexible JSON (health, mood, inventory, etc.)
+    /**
+     * Conversation turn when this entity was created (0 = initial setup / intro turn).
+     */
+    createdTurn: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -32,6 +40,10 @@ export interface RPGLore {
     title: string;
     content: string;
     tags: string[];
+    /**
+     * Conversation turn when this item was created (0 = initial setup / intro turn).
+     */
+    createdTurn: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -69,6 +81,10 @@ export interface RPGRelationshipBase<K extends RPGRelationshipKind> {
      * Optional human-readable note about the relationship (not authoritative mechanics).
      */
     note?: string | undefined;
+    /**
+     * Conversation turn when this relationship was created (0 = initial setup / intro turn).
+     */
+    createdTurn: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -108,6 +124,10 @@ export interface RPGDistance {
     toLocationId: string;
     distance: number | string; // Can be numeric value or range
     unit: string; // 'km', 'miles', 'hours', 'days', etc.
+    /**
+     * Conversation turn when this distance entry was created (0 = initial setup / intro turn).
+     */
+    createdTurn: number;
     createdAt: number;
 }
 
@@ -341,12 +361,47 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
         migratedRelationships.set(id, migrateRelationship(rel));
     }
 
+    const migratedLocations = new Map<string, RPGLocation>();
+    for (const [id, loc] of Object.entries(serialized.locations)) {
+        const anyLoc = loc as RPGLocation & { createdTurn?: number };
+        migratedLocations.set(id, {
+            ...anyLoc,
+            createdTurn: anyLoc.createdTurn ?? 0
+        });
+    }
+
+    const migratedCharacters = new Map<string, RPGCharacter>();
+    for (const [id, ch] of Object.entries(serialized.characters)) {
+        const anyCh = ch as RPGCharacter & { createdTurn?: number };
+        migratedCharacters.set(id, {
+            ...anyCh,
+            createdTurn: anyCh.createdTurn ?? 0
+        });
+    }
+
+    const migratedLore = new Map<string, RPGLore>();
+    for (const [id, lore] of Object.entries(serialized.lore)) {
+        const anyLore = lore as RPGLore & { createdTurn?: number };
+        migratedLore.set(id, {
+            ...anyLore,
+            createdTurn: anyLore.createdTurn ?? 0
+        });
+    }
+
+    const migratedDistances: RPGDistance[] = serialized.distances.map(d => {
+        const anyD = d as RPGDistance & { createdTurn?: number };
+        return {
+            ...anyD,
+            createdTurn: anyD.createdTurn ?? 0
+        };
+    });
+
     return {
-        locations: new Map(Object.entries(serialized.locations)),
-        characters: new Map(Object.entries(serialized.characters)),
-        lore: new Map(Object.entries(serialized.lore)),
+        locations: migratedLocations,
+        characters: migratedCharacters,
+        lore: migratedLore,
         relationships: migratedRelationships,
-        distances: serialized.distances,
+        distances: migratedDistances,
         recentEventsSummary: serialized.recentEventsSummary,
         currentLocationId: serialized.currentLocationId,
         playerCharacterId: serialized.playerCharacterId
@@ -355,23 +410,27 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
 
 function migrateRelationship(rel: RPGRelationship | RPGLegacyRelationshipSerialized): RPGRelationship {
     if ('kind' in rel) {
-        return rel;
+        const anyRel = rel as RPGRelationship & { createdTurn?: number };
+        return {
+            ...anyRel,
+            createdTurn: anyRel.createdTurn ?? 0
+        };
     }
 
     // Legacy shape: { type, description } -> { kind, note } (+ typed payload when possible)
     const note = rel.description;
 
     if (rel.type === 'located_at') {
-        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'located_at', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'located_at', note, createdTurn: 0, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
     }
     if (rel.type === 'describes') {
-        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'describes', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'describes', note, createdTurn: 0, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
     }
     if (rel.type === 'found_at') {
-        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'found_at', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'found_at', note, createdTurn: 0, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
     }
     if (rel.type === 'knows_name_of') {
-        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_name_of', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_name_of', note, createdTurn: 0, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
     }
 
     // Deterministic legacy mappings (explicit + visible)
@@ -384,6 +443,7 @@ function migrateRelationship(rel: RPGRelationship | RPGLegacyRelationshipSeriali
             stance: 'friendly',
             intensity: 2,
             note,
+            createdTurn: 0,
             createdAt: rel.createdAt,
             updatedAt: rel.updatedAt
         };
@@ -397,12 +457,13 @@ function migrateRelationship(rel: RPGRelationship | RPGLegacyRelationshipSeriali
             stance: 'hostile',
             intensity: -2,
             note,
+            createdTurn: 0,
             createdAt: rel.createdAt,
             updatedAt: rel.updatedAt
         };
     }
     if (rel.type === 'knows') {
-        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_about', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_about', note, createdTurn: 0, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
     }
 
     throw new Error(`Unsupported legacy relationship type '${rel.type}' (id=${rel.id}).`);

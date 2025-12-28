@@ -110,6 +110,7 @@ worldStateService.createLocation(worldState, {
     name: 'The Golden Mug',
     description: 'A cozy tavern...',
     state: { crowded: true },
+    createdTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });
@@ -120,6 +121,7 @@ worldStateService.createCharacter(worldState, {
     name: 'Adventurer',
     description: 'A brave soul...',
     state: { health: 100, gold: 50 },
+    createdTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });
@@ -129,7 +131,8 @@ worldStateService.createRelationship(worldState, {
     id: 'player_at_tavern',
     fromId: 'player',
     toId: 'tavern',
-    type: 'located_at',
+    kind: 'located_at',
+    createdTurn: 0,
     createdAt: Date.now(),
     updatedAt: Date.now()
 });

@@ -17,6 +17,10 @@ export class RPGWorldInspector {
     public debugMode: boolean = false;
     
     private contentContainer: HTMLElement | null = null;
+
+    private getCurrentTurn(): number {
+        return Math.floor(this.session.conversationHistory.length / 2);
+    }
     
     constructor(
         container: HTMLElement,
@@ -316,6 +320,28 @@ export class RPGWorldInspector {
             html += '</div>';
             html += '</div>';
         }
+
+        // Distances
+        const distances = this.worldStateService.getAllDistances(worldState);
+        if (distances.length > 0) {
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="distances">🧭 Distances (' + distances.length + ')</div>';
+            html += '<div class="rpg-tree-category-content" data-category="distances">';
+            for (const d of distances) {
+                const fromName = this.worldStateService.getLocation(worldState, d.fromLocationId)?.name || d.fromLocationId;
+                const toName = this.worldStateService.getLocation(worldState, d.toLocationId)?.name || d.toLocationId;
+                html += '<div class="rpg-entity-tree-item">';
+                html += `<div class="rpg-entity-header expanded">`;
+                html += `<span class="rpg-expand-icon">•</span> ${this.escapeHtml(fromName)} → ${this.escapeHtml(toName)} (${this.escapeHtml(String(d.distance))} ${this.escapeHtml(d.unit)})`;
+                html += '</div>';
+                html += `<div class="rpg-entity-details">`;
+                html += `<small class="rpg-muted">Created turn: ${d.createdTurn}</small>`;
+                html += '</div>';
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '</div>';
+        }
         
         html += '</div>';
         
@@ -379,6 +405,10 @@ export class RPGWorldInspector {
         return `
             <div class="rpg-entity-editor" data-entity-id="${locationId}" data-entity-type="location">
                 <div class="rpg-entity-editor-row">
+                    <label>Created turn</label>
+                    <input class="rpg-edit-input" value="${location.createdTurn}" disabled />
+                </div>
+                <div class="rpg-entity-editor-row">
                     <label>Name</label>
                     <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(location.name)}" />
                 </div>
@@ -409,6 +439,10 @@ export class RPGWorldInspector {
         return `
             <div class="rpg-entity-editor" data-entity-id="${characterId}" data-entity-type="character">
                 <div class="rpg-entity-editor-row">
+                    <label>Created turn</label>
+                    <input class="rpg-edit-input" value="${character.createdTurn}" disabled />
+                </div>
+                <div class="rpg-entity-editor-row">
                     <label>Name</label>
                     <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(character.name)}" />
                 </div>
@@ -435,6 +469,10 @@ export class RPGWorldInspector {
 
         return `
             <div class="rpg-entity-editor" data-entity-id="${loreId}" data-entity-type="lore">
+                <div class="rpg-entity-editor-row">
+                    <label>Created turn</label>
+                    <input class="rpg-edit-input" value="${lore.createdTurn}" disabled />
+                </div>
                 <div class="rpg-entity-editor-row">
                     <label>Title</label>
                     <input class="rpg-edit-input" data-field="title" value="${this.escapeHtml(lore.title)}" />
@@ -476,6 +514,7 @@ export class RPGWorldInspector {
             html += `<a class="rpg-relationship-link" data-target-id="${otherId}">${otherEntity}</a>`;
 
             html += `<div class="rpg-relationship-fields">`;
+            html += `<small class="rpg-muted">Created turn: ${rel.createdTurn}</small>`;
             html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
@@ -707,6 +746,7 @@ export class RPGWorldInspector {
             fromId,
             toId,
             kind,
+            createdTurn: this.getCurrentTurn(),
             createdAt: Date.now(),
             updatedAt: Date.now()
         };

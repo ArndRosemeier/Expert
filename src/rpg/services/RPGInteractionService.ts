@@ -460,6 +460,7 @@ export class RPGInteractionService {
         console.log('🔄 Applying state updates...');
 
         const warnedCanonicalDescription = new Set<string>();
+        const turn = Math.floor(session.conversationHistory.length / 2);
         
         // Apply location updates
         if (update.locations) {
@@ -488,34 +489,12 @@ export class RPGInteractionService {
                         name: locationUpdate.name || locationUpdate.id,
                         description: combinedDescription,
                         state: locationUpdate.state || {},
+                        createdTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
                     this.worldStateService.createLocation(worldState, location);
                     console.log(`  ✅ Created location: ${location.name}`);
-
-                    // Persist verbatim evidence as lore linked to the new location (visibility + future context)
-                    if (locationUpdate.verbatimEvidence) {
-                        const loreId = `lore_first_mention_${location.id}_${Date.now()}`;
-                        this.worldStateService.createLore(worldState, {
-                            id: loreId,
-                            title: `First mention: ${location.name}`,
-                            content: locationUpdate.verbatimEvidence,
-                            tags: ['first_mention', 'verbatim', 'location'],
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-
-                        this.worldStateService.createRelationship(worldState, {
-                            id: `rel_${loreId}_${location.id}_describes_${Date.now()}`,
-                            fromId: loreId,
-                            toId: location.id,
-                            kind: 'describes',
-                            note: 'Verbatim excerpt from GM introducing the location',
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-                    }
                 } else if (locationUpdate.action === 'update') {
                     const updates: Partial<RPGLocation> = {};
                     if (locationUpdate.name) updates.name = locationUpdate.name;
@@ -533,6 +512,7 @@ export class RPGInteractionService {
                         const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
                         updates.state = { ...(existing?.state || {}), ...locationUpdate.state };
                     }
+                    updates.createdTurn = turn;
                     
                     this.worldStateService.updateLocation(worldState, locationUpdate.id, updates);
                     console.log(`  ✅ Updated location: ${locationUpdate.id}`);
@@ -567,44 +547,12 @@ export class RPGInteractionService {
                         name: characterUpdate.name || characterUpdate.id,
                         description: combinedDescription,
                         state: characterUpdate.state || {},
+                        createdTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
                     this.worldStateService.createCharacter(worldState, character);
                     console.log(`  ✅ Created character: ${character.name}`);
-
-                    // Persist verbatim evidence as lore linked to character + current location (visibility + future context)
-                    if (characterUpdate.verbatimEvidence) {
-                        const loreId = `lore_first_appearance_${character.id}_${Date.now()}`;
-                        this.worldStateService.createLore(worldState, {
-                            id: loreId,
-                            title: `First appearance: ${character.name}`,
-                            content: characterUpdate.verbatimEvidence,
-                            tags: ['first_appearance', 'verbatim', 'character'],
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-
-                        this.worldStateService.createRelationship(worldState, {
-                            id: `rel_${loreId}_${character.id}_describes_${Date.now()}`,
-                            fromId: loreId,
-                            toId: character.id,
-                            kind: 'describes',
-                            note: 'Verbatim excerpt from GM introducing the character',
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-
-                        this.worldStateService.createRelationship(worldState, {
-                            id: `rel_${loreId}_${worldState.currentLocationId}_found_${Date.now()}`,
-                            fromId: loreId,
-                            toId: worldState.currentLocationId,
-                            kind: 'found_at',
-                            note: 'Where the character was introduced',
-                            createdAt: Date.now(),
-                            updatedAt: Date.now()
-                        });
-                    }
                 } else if (characterUpdate.action === 'update') {
                     const updates: Partial<RPGCharacter> = {};
                     if (characterUpdate.name) updates.name = characterUpdate.name;
@@ -622,6 +570,7 @@ export class RPGInteractionService {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
                         updates.state = { ...(existing?.state || {}), ...characterUpdate.state };
                     }
+                    updates.createdTurn = turn;
                     
                     this.worldStateService.updateCharacter(worldState, characterUpdate.id, updates);
                     console.log(`  ✅ Updated character: ${characterUpdate.id}`);
@@ -638,6 +587,7 @@ export class RPGInteractionService {
                         title: loreUpdate.title || loreUpdate.id,
                         content: loreUpdate.content || '',
                         tags: loreUpdate.tags || [],
+                        createdTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -648,6 +598,7 @@ export class RPGInteractionService {
                     if (loreUpdate.title) updates.title = loreUpdate.title;
                     if (loreUpdate.content) updates.content = loreUpdate.content;
                     if (loreUpdate.tags) updates.tags = loreUpdate.tags;
+                    updates.createdTurn = turn;
                     
                     this.worldStateService.updateLore(worldState, loreUpdate.id, updates);
                     console.log(`  ✅ Updated lore: ${loreUpdate.id}`);
@@ -673,6 +624,7 @@ export class RPGInteractionService {
                         id: `rel_${relationshipUpdate.fromId}_${relationshipUpdate.toId}_${Date.now()}`,
                         fromId: relationshipUpdate.fromId,
                         toId: relationshipUpdate.toId,
+                        createdTurn: turn,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
@@ -743,6 +695,7 @@ export class RPGInteractionService {
                     toLocationId: distanceUpdate.toLocationId,
                     distance: distanceUpdate.distance,
                     unit: distanceUpdate.unit,
+                    createdTurn: turn,
                     createdAt: Date.now()
                 };
                 this.worldStateService.addDistance(worldState, distance);
@@ -789,6 +742,7 @@ export class RPGInteractionService {
                     fromId: characterId,
                     toId: currentLocationId,
                     kind: 'located_at',
+                    createdTurn: turn,
                     createdAt: Date.now(),
                     updatedAt: Date.now()
                 });

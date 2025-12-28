@@ -274,6 +274,7 @@ export class RPGView {
                 name: setup.locationName,
                 description: setup.locationDescription,
                 state: {},
+                createdTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -291,6 +292,7 @@ export class RPGView {
                 name: setup.characterName,
                 description: playerDescription,
                 state: {},
+                createdTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -301,6 +303,7 @@ export class RPGView {
                 fromId: playerId,
                 toId: locationId,
                 kind: 'located_at',
+                createdTurn: 0,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -646,6 +649,8 @@ export class RPGView {
 
         // Migration: remove old "Session Brief (Initial Setup)" lore items
         this.removeSessionBriefLore(this.currentSession);
+        // Migration: remove auto-generated verbatim "first appearance/mention" lore items (redundant with canonical descriptions)
+        this.removeAutoFirstAppearanceLore(this.currentSession);
         await this.worldStateService.saveSession(this.currentSession);
 
         // Migration: attach checkpoint snapshot IDs to assistant messages (for older sessions)
@@ -670,6 +675,15 @@ export class RPGView {
         const worldState = session.worldState;
         for (const lore of this.worldStateService.listLore(worldState)) {
             if (lore.title === 'Session Brief (Initial Setup)' || lore.tags.includes('initial_setup')) {
+                this.worldStateService.deleteLore(worldState, lore.id);
+            }
+        }
+    }
+
+    private removeAutoFirstAppearanceLore(session: RPGGameSession): void {
+        const worldState = session.worldState;
+        for (const lore of this.worldStateService.listLore(worldState)) {
+            if (lore.tags.includes('first_appearance') || lore.tags.includes('first_mention')) {
                 this.worldStateService.deleteLore(worldState, lore.id);
             }
         }
