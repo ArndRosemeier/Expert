@@ -155,6 +155,15 @@ export interface RPGConversationMessage {
     checkpointSnapshotId?: string;
 }
 
+export interface RPGManualSave {
+    id: string;
+    snapshotId: string;
+    conversationTurn: number;
+    locationId: string;
+    locationName: string;
+    createdAt: number;
+}
+
 /**
  * A complete RPG game session
  */
@@ -165,6 +174,7 @@ export interface RPGGameSession {
     conversationHistory: RPGConversationMessage[]; // Full history for display
     last2Messages: RPGConversationMessage[]; // Only last 2 for LLM context
     snapshots: string[]; // Snapshot IDs
+    manualSaves: RPGManualSave[];
     narratorPurpose: string; // Model purpose for Game LLM (default: 'prose')
     parserPurpose: string; // Model purpose for State Parser LLM (default: 'editor')
     customSystemPrompt?: string; // Custom system prompt for Game LLM (includes style and rules)
@@ -288,6 +298,7 @@ export interface RPGGameSessionSerialized {
     conversationHistory: RPGConversationMessage[];
     last2Messages: RPGConversationMessage[];
     snapshots: string[];
+    manualSaves?: RPGManualSave[];
     narratorPurpose: string;
     parserPurpose: string;
     customSystemPrompt?: string;
@@ -410,6 +421,7 @@ export function serializeSession(session: RPGGameSession): RPGGameSessionSeriali
         conversationHistory: session.conversationHistory,
         last2Messages: session.last2Messages,
         snapshots: session.snapshots,
+        manualSaves: session.manualSaves,
         narratorPurpose: session.narratorPurpose,
         parserPurpose: session.parserPurpose,
         ...(session.customSystemPrompt !== undefined && { customSystemPrompt: session.customSystemPrompt }),
@@ -426,6 +438,7 @@ export function deserializeSession(serialized: RPGGameSessionSerialized): RPGGam
         conversationHistory: serialized.conversationHistory,
         last2Messages: serialized.last2Messages,
         snapshots: serialized.snapshots,
+        manualSaves: serialized.manualSaves || [],
         narratorPurpose: serialized.narratorPurpose,
         parserPurpose: serialized.parserPurpose,
         ...(serialized.customSystemPrompt !== undefined && { customSystemPrompt: serialized.customSystemPrompt }),

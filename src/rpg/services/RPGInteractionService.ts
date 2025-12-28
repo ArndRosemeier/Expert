@@ -8,7 +8,7 @@
  * 4. State updates are applied and snapshot is created
  */
 
-import { RPGGameSession, RPGConversationMessage, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance } from '../types/RPGTypes';
+import { RPGGameSession, RPGConversationMessage, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave } from '../types/RPGTypes';
 import { WorldStateService } from './WorldStateService';
 import { RPGContextBuilder } from './RPGContextBuilder';
 import { RPGStateParser } from './RPGStateParser';
@@ -351,6 +351,56 @@ export class RPGInteractionService {
 
         this.rebuildSnapshotsFromCheckpoints(session);
         await this.pruneCheckpoints(session, 10);
+        await this.worldStateService.saveSession(session);
+    }
+
+    async createManualSave(session: RPGGameSession): Promise<RPGManualSave> {
+        const turn = Math.floor(session.conversationHistory.length / 2);
+        const snapshot = await this.worldStateService.createSnapshot(session, turn);
+
+        const worldState = session.worldState;
+        const currentLocation = this.worldStateService.getLocation(worldState, worldState.currentLocationId);
+        if (!currentLocation) {
+            throw new Error(`Cannot save: current location not found (${worldState.currentLocationId}).`);
+        }
+
+        const save: RPGManualSave = {
+            id: `save_${session.id}_${Date.now()}`,
+            snapshotId: snapshot.id,
+            conversationTurn: turn,
+            locationId: currentLocation.id,
+            locationName: currentLocation.name,
+            createdAt: Date.now()
+        };
+
+        session.manualSaves.push(save);
+        session.updatedAt = Date.now();
+        await this.worldStateService.saveSession(session);
+
+        return save;
+    }
+
+    async restoreManualSaveIntoSession(session: RPGGameSession, saveId: string): Promise<void> {
+        const save = session.manualSaves.find(s => s.id === saveId);
+        if (!save) {
+            throw new Error(`Save not found: ${saveId}`);
+        }
+
+        // Reuse snapshot restore mechanics (restore world state + truncate conversation).
+        const storage = await StorageService.getInstance();
+        const serialized = await storage.loadRPGSnapshot<RPGSnapshotSerialized>(save.snapshotId);
+        if (!serialized) {
+            throw new Error(`Snapshot not found for save: ${save.snapshotId}`);
+        }
+
+        const snapshot = deserializeSnapshot(serialized);
+        session.worldState = snapshot.worldState;
+
+        const messagesToKeep = 1 + (snapshot.conversationTurn * 2);
+        session.conversationHistory = session.conversationHistory.slice(0, messagesToKeep);
+        session.last2Messages = session.conversationHistory.slice(-2);
+
+        session.updatedAt = Date.now();
         await this.worldStateService.saveSession(session);
     }
     

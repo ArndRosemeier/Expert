@@ -32,6 +32,7 @@ export class RPGView {
     
     // UI Components
     private worldInspector: RPGWorldInspector | null = null;
+    private conversationPanel: RPGConversationPanel | null = null;
     
     // Additional services needed for start setting parsing
     private openRouterClient: OpenRouterClient;
@@ -315,6 +316,7 @@ export class RPGView {
                 conversationHistory: [],
                 last2Messages: [],
                 snapshots: [],
+                manualSaves: [],
                 narratorPurpose,
                 parserPurpose,
                 ...(setup.systemPrompt && { customSystemPrompt: setup.systemPrompt }),
@@ -754,7 +756,11 @@ export class RPGView {
             <div class="rpg-main-interface">
                 <div class="rpg-header">
                     <h2>${this.currentSession.title}</h2>
-                    <button id="rpg-close-btn">Close</button>
+                    <div class="rpg-header-actions">
+                        <button id="rpg-save-game-btn" type="button">Save</button>
+                        <button id="rpg-restore-game-btn" type="button">Restore</button>
+                        <button id="rpg-close-btn" type="button">Close</button>
+                    </div>
                 </div>
                 <div class="rpg-content">
                     <div class="rpg-left-panel">
@@ -781,7 +787,7 @@ export class RPGView {
             this.worldStateService
         );
         
-        new RPGConversationPanel(
+        this.conversationPanel = new RPGConversationPanel(
             conversationContainer,
             this.currentSession,
             this.interactionService,
@@ -789,11 +795,100 @@ export class RPGView {
             () => this.onConversationUpdate()
         );
         
+        // Save/Restore buttons
+        const saveBtn = this.container.querySelector('#rpg-save-game-btn');
+        saveBtn?.addEventListener('click', () => {
+            void this.saveGame();
+        });
+
+        const restoreBtn = this.container.querySelector('#rpg-restore-game-btn');
+        restoreBtn?.addEventListener('click', () => {
+            this.showRestoreOverlay();
+        });
+
         // Close button
         const closeBtn = this.container.querySelector('#rpg-close-btn');
         closeBtn?.addEventListener('click', () => {
             this.close();
         });
+    }
+
+    private async saveGame(): Promise<void> {
+        if (!this.currentSession) return;
+        await this.interactionService.createManualSave(this.currentSession);
+        alert('Game saved.');
+    }
+
+    private showRestoreOverlay(): void {
+        if (!this.currentSession) return;
+
+        const saves = [...this.currentSession.manualSaves].sort((a, b) => b.createdAt - a.createdAt);
+        const itemsHtml = saves.length === 0
+            ? '<div class="rpg-save-empty">No saved games yet.</div>'
+            : saves.map(s => `
+                <div class="rpg-save-item">
+                    <div class="rpg-save-title">Turn ${s.conversationTurn} — ${this.escapeHtml(s.locationName)}</div>
+                    <div class="rpg-save-meta">${new Date(s.createdAt).toLocaleString()}</div>
+                    <button class="rpg-save-restore-btn" type="button" data-save-id="${s.id}">Restore</button>
+                </div>
+            `).join('');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'rpg-save-overlay';
+        overlay.innerHTML = `
+            <div class="rpg-save-modal" role="dialog" aria-modal="true">
+                <div class="rpg-save-modal-header">
+                    <h3>Restore saved game</h3>
+                    <button class="rpg-save-close-btn" type="button">Close</button>
+                </div>
+                <div class="rpg-save-list">
+                    ${itemsHtml}
+                </div>
+            </div>
+        `;
+
+        const close = () => {
+            overlay.remove();
+        };
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close();
+        });
+
+        const closeBtn = overlay.querySelector('.rpg-save-close-btn') as HTMLButtonElement | null;
+        closeBtn?.addEventListener('click', close);
+
+        const restoreButtons = overlay.querySelectorAll('.rpg-save-restore-btn');
+        restoreButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const saveId = (btn as HTMLElement).getAttribute('data-save-id');
+                if (!saveId) {
+                    throw new Error('Restore clicked but save id missing.');
+                }
+                void this.restoreSavedGame(saveId, close);
+            });
+        });
+
+        this.container.appendChild(overlay);
+    }
+
+    private async restoreSavedGame(saveId: string, onClose: () => void): Promise<void> {
+        if (!this.currentSession) return;
+        if (!confirm('Restore this saved game? Current progress after this point will be lost.')) return;
+
+        await this.interactionService.restoreManualSaveIntoSession(this.currentSession, saveId);
+        this.conversationPanel?.refresh();
+        this.worldInspector?.refresh();
+        onClose();
+    }
+
+    private escapeHtml(text: string): string {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
     
     /**
@@ -860,6 +955,7 @@ export class RPGView {
         this.container.style.display = 'none';
         this.currentSession = null;
         this.worldInspector = null;
+        this.conversationPanel = null;
     }
 }
 

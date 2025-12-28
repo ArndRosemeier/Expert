@@ -368,6 +368,107 @@
     gap: 0.5em;
 }
 
+.rpg-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.rpg-save-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 9999;
+}
+
+.rpg-save-modal {
+    width: min(48rem, 92vw);
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--node-bg, #1a1a1a);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+
+.rpg-save-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: var(--header-bg, #252525);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.rpg-save-modal-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.rpg-save-close-btn {
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.rpg-save-close-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.rpg-save-list {
+    padding: 1rem 1.25rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.rpg-save-empty {
+    opacity: 0.75;
+}
+
+.rpg-save-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 1rem;
+    padding: 0.85rem 0.9rem;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.12);
+    margin-top: 0.75rem;
+}
+
+.rpg-save-title {
+    font-weight: 600;
+}
+
+.rpg-save-meta {
+    opacity: 0.75;
+    font-size: 0.9rem;
+}
+
+.rpg-save-restore-btn {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    padding: 0.6rem 1rem;
+    border-radius: 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.rpg-save-restore-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .rpg-world-inspector .rpg-entity-editor,
 .rpg-world-inspector .rpg-add-relationship {
     margin-top: 0.75rem;
