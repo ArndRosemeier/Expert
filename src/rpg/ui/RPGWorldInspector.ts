@@ -18,6 +18,7 @@ export class RPGWorldInspector {
     private interactionService: RPGInteractionService;
     private currentView: 'scene' | 'world' = 'scene';
     public debugMode: boolean = false;
+    public autoConsolidate: boolean = true;
     
     private contentContainer: HTMLElement | null = null;
 
@@ -64,6 +65,10 @@ export class RPGWorldInspector {
                             <input type="checkbox" id="rpg-debug-mode" />
                             <span>Debug Mode</span>
                         </label>
+                        <label class="rpg-debug-checkbox">
+                            <input type="checkbox" id="rpg-auto-consolidate" checked />
+                            <span>Auto Consolidate</span>
+                        </label>
                         <div class="rpg-view-toggle">
                             <button id="rpg-scene-view-btn" class="active">Scene</button>
                             <button id="rpg-world-view-btn">World</button>
@@ -87,6 +92,12 @@ export class RPGWorldInspector {
         debugCheckbox?.addEventListener('change', () => {
             this.debugMode = debugCheckbox.checked;
             console.log(`🐛 Debug mode ${this.debugMode ? 'enabled' : 'disabled'}`);
+        });
+
+        const autoConsolidateCheckbox = this.container.querySelector('#rpg-auto-consolidate') as HTMLInputElement;
+        autoConsolidateCheckbox?.addEventListener('change', () => {
+            this.autoConsolidate = autoConsolidateCheckbox.checked;
+            this.interactionService.setAutoConsolidateEnabled(this.autoConsolidate);
         });
         
         // Attach toggle listeners

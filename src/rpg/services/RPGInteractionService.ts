@@ -33,6 +33,7 @@ export class RPGInteractionService {
     private onAnalysisComplete?: () => void;
 
     private rollbackPoints: Map<string, ReturnType<WorldStateService['cloneWorldStateForUndo']>> = new Map();
+    private autoConsolidateEnabled: boolean = true;
     
     constructor(
         worldStateService: WorldStateService,
@@ -50,6 +51,11 @@ export class RPGInteractionService {
      */
     setOnAnalysisComplete(callback: () => void): void {
         this.onAnalysisComplete = callback;
+    }
+
+    setAutoConsolidateEnabled(enabled: boolean): void {
+        this.autoConsolidateEnabled = enabled;
+        console.log(`🧽 Auto-consolidation ${enabled ? 'enabled' : 'disabled'}`);
     }
     
     /**
@@ -306,6 +312,9 @@ export class RPGInteractionService {
         } else {
             throw new Error(`Unsupported entity type for consolidation: ${entityType}`);
         }
+
+        // After a successful consolidation, clear the flag for this entity (it was addressed).
+        session.suspiciousEntities = session.suspiciousEntities.filter(f => f.entityId !== entityId);
 
         session.updatedAt = Date.now();
         await this.worldStateService.saveSession(session);
@@ -579,6 +588,17 @@ export class RPGInteractionService {
             
             // Apply state updates (state is already unlocked at this point)
             this.applyStateUpdates(session, stateUpdate);
+
+            // Automatic consolidation pass (optional, default ON)
+            if (this.autoConsolidateEnabled && session.suspiciousEntities.length > 0) {
+                console.log(`🧽 Auto-consolidating ${session.suspiciousEntities.length} flagged entities...`);
+                for (const flag of session.suspiciousEntities) {
+                    // Keep it strict + simple: only consolidate locations/characters for now.
+                    if (flag.entityType === 'location' || flag.entityType === 'character') {
+                        await this.consolidateEntity(session, flag.entityType, flag.entityId);
+                    }
+                }
+            }
             
             // Create snapshot
             const snapshot = await this.worldStateService.createSnapshot(session, turn);
