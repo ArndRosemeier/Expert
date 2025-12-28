@@ -399,6 +399,12 @@ export class RPGConversationPanel {
         } catch (error) {
             console.error('Error sending player action:', error);
             alert(`Error: ${error instanceof Error ? error.message : error}`);
+
+            // The interaction service records a stable error message into the session history.
+            // Re-render from canonical history to avoid leaving the streaming placeholder in the DOM.
+            this.renderMessages();
+            // Put the user's action back so they can edit + resend immediately if desired.
+            this.inputField.value = playerAction;
             
             // Re-enable input on error
             this.inputField.disabled = false;

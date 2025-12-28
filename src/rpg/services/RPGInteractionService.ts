@@ -77,6 +77,12 @@ export class RPGInteractionService {
             this.onAnalysisComplete = onAnalysisComplete;
         }
         
+        // We want to be able to show a stable UI state (and offer Retry) even when the narrator request fails.
+        // So we keep these diagnostics available for the error path as well.
+        let narratorPromptCharCount = 0;
+        let narratorWorldItemsSentCount = 0;
+        let narratorWorldItemsTotalCount = 0;
+
         try {
             // Build context for Game LLM
             const gameContext = this.contextBuilder.buildGameNarrationContext(session);
@@ -104,9 +110,9 @@ export class RPGInteractionService {
             messages.push({role: 'user', content: playerAction});
 
             // Diagnostics (for UI): how much we send to the narrator LLM this turn
-            const narratorPromptCharCount = messages.reduce((sum, m) => sum + m.content.length, 0);
-            const narratorWorldItemsSentCount = this.countWorldItemsSentToNarrator(session);
-            const narratorWorldItemsTotalCount = this.countWorldItemsTotal(session);
+            narratorPromptCharCount = messages.reduce((sum, m) => sum + m.content.length, 0);
+            narratorWorldItemsSentCount = this.countWorldItemsSentToNarrator(session);
+            narratorWorldItemsTotalCount = this.countWorldItemsTotal(session);
             
             console.log(`🎮 Sending player action to Game LLM (purpose: ${session.narratorPurpose})`);
             
@@ -192,6 +198,31 @@ export class RPGInteractionService {
         } catch (error) {
             this.worldStateService.unlockState();
             console.error('Error in sendPlayerAction:', error);
+
+            // Keep UI stable: record the attempted user action and a corresponding assistant error message,
+            // carrying the rollbackId so "Retry" can resubmit the same action after restoring state.
+            const errMsg = error instanceof Error ? error.message : String(error);
+            const userMessage: RPGConversationMessage = {
+                role: 'user',
+                content: playerAction,
+                timestamp: Date.now()
+            };
+            const assistantMessage: RPGConversationMessage = {
+                role: 'assistant',
+                content:
+                    `⚠️ The Game Master response failed.\n\n` +
+                    `Reason: ${errMsg}\n\n` +
+                    `You can click "Retry" to resend the same action (after automatic rollback), or edit your action and send again.`,
+                timestamp: Date.now(),
+                preTurnRollbackId: rollbackId,
+                narratorPromptCharCount,
+                narratorWorldItemsSentCount,
+                narratorWorldItemsTotalCount
+            };
+            session.conversationHistory.push(userMessage);
+            session.conversationHistory.push(assistantMessage);
+            session.last2Messages = session.conversationHistory.slice(-2);
+
             throw error;
         }
     }
