@@ -324,60 +324,7 @@ export class RPGView {
                 updatedAt: Date.now()
             };
 
-            // Persist the initial setup exhaustively as Lore so it stays visible and checkable
-            // (even if later parsing updates shorten entity descriptions).
-            const sessionBriefLoreId = `lore_session_brief_${session.id}`;
-            const sessionBriefContent =
-                `## User Adventure Description\n` +
-                `${adventureDescription}\n\n` +
-                `## Generated Session Title\n` +
-                `${setup.title}\n\n` +
-                `## Starting Location\n` +
-                `${setup.locationName}\n\n` +
-                `${setup.locationDescription}\n\n` +
-                `## Player Character\n` +
-                `${setup.characterName}\n\n` +
-                `### Verbatim (from your session description)\n` +
-                `${setup.characterVerbatimUserDetails}\n\n` +
-                `### Consolidated character profile\n` +
-                `${setup.characterDescription}\n\n` +
-                `## Initial Setting\n` +
-                `### Verbatim (from your session description)\n` +
-                `${setup.settingVerbatimUserDetails}\n\n` +
-                `### Consolidated setting description\n` +
-                `${setup.settingDescription}\n\n` +
-                `## Game Master System Prompt\n` +
-                `${setup.systemPrompt}`.trim();
-
-            this.worldStateService.createLore(worldState, {
-                id: sessionBriefLoreId,
-                title: 'Session Brief (Initial Setup)',
-                content: sessionBriefContent,
-                tags: ['session', 'initial_setup', 'setting', 'character'],
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            });
-
-            // Link the brief to the starting location + player character so it appears as relevant lore in Scene View
-            this.worldStateService.createRelationship(worldState, {
-                id: `rel_${sessionBriefLoreId}_${locationId}_describes`,
-                fromId: sessionBriefLoreId,
-                toId: locationId,
-                kind: 'describes',
-                note: 'Initial session setup / starting scene',
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            });
-
-            this.worldStateService.createRelationship(worldState, {
-                id: `rel_${sessionBriefLoreId}_${playerId}_describes`,
-                fromId: sessionBriefLoreId,
-                toId: playerId,
-                kind: 'describes',
-                note: 'Player character dossier / initial briefing',
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            });
+            // Intentionally NOT creating a dedicated "Session Brief" lore item anymore.
             
             // Parse setting description to extract additional entities
             if (setup.settingDescription) {
@@ -697,11 +644,24 @@ export class RPGView {
         
         this.currentSession = deserializeSession(serialized);
 
+        // Migration: remove old "Session Brief (Initial Setup)" lore items
+        this.removeSessionBriefLore(this.currentSession);
+        await this.worldStateService.saveSession(this.currentSession);
+
         // Migration: attach checkpoint snapshot IDs to assistant messages (for older sessions)
         await this.attachCheckpointsFromSnapshots(this.currentSession);
         
         // Render main RPG interface
         this.renderMainInterface();
+    }
+
+    private removeSessionBriefLore(session: RPGGameSession): void {
+        const worldState = session.worldState;
+        for (const lore of this.worldStateService.listLore(worldState)) {
+            if (lore.title === 'Session Brief (Initial Setup)' || lore.tags.includes('initial_setup')) {
+                this.worldStateService.deleteLore(worldState, lore.id);
+            }
+        }
     }
 
     private async attachCheckpointsFromSnapshots(session: RPGGameSession): Promise<void> {
