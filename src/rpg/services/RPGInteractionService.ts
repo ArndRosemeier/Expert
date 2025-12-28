@@ -799,6 +799,21 @@ export class RPGInteractionService {
 
         const warnedCanonicalDescription = new Set<string>();
         const turn = Math.floor(session.conversationHistory.length / 2);
+
+        const mergeJsonWithDeletions = (
+            existing: Record<string, unknown>,
+            incoming: Record<string, unknown>
+        ): Record<string, unknown> => {
+            const merged: Record<string, unknown> = { ...existing };
+            for (const [key, value] of Object.entries(incoming)) {
+                if (value === null) {
+                    delete merged[key];
+                } else {
+                    merged[key] = value;
+                }
+            }
+            return merged;
+        };
         
         // Apply location updates
         if (update.locations) {
@@ -827,6 +842,7 @@ export class RPGInteractionService {
                         name: locationUpdate.name || locationUpdate.id,
                         description: combinedDescription,
                         state: locationUpdate.state || {},
+                        sceneState: locationUpdate.sceneState || {},
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),
@@ -849,7 +865,11 @@ export class RPGInteractionService {
                     }
                     if (locationUpdate.state) {
                         const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
-                        updates.state = { ...(existing?.state || {}), ...locationUpdate.state };
+                        updates.state = mergeJsonWithDeletions(existing?.state || {}, locationUpdate.state);
+                    }
+                    if (locationUpdate.sceneState) {
+                        const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
+                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState || {}, locationUpdate.sceneState);
                     }
                     updates.createdTurn = turn;
                     
@@ -886,6 +906,7 @@ export class RPGInteractionService {
                         name: characterUpdate.name || characterUpdate.id,
                         description: combinedDescription,
                         state: characterUpdate.state || {},
+                        sceneState: characterUpdate.sceneState || {},
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),
@@ -908,7 +929,11 @@ export class RPGInteractionService {
                     }
                     if (characterUpdate.state) {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
-                        updates.state = { ...(existing?.state || {}), ...characterUpdate.state };
+                        updates.state = mergeJsonWithDeletions(existing?.state || {}, characterUpdate.state);
+                    }
+                    if (characterUpdate.sceneState) {
+                        const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
+                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState || {}, characterUpdate.sceneState);
                     }
                     updates.createdTurn = turn;
                     
@@ -1107,6 +1132,30 @@ export class RPGInteractionService {
             }
 
             console.log(`  ✅ Applied scene roster (${roster.length} ids) to location ${currentLocationId}`);
+
+            // Option 3: Scene-state clearing.
+            // - Characters not present: clear their sceneState.
+            // - Locations not current: clear their sceneState.
+            const present = new Set<string>([worldState.playerCharacterId, ...roster]);
+
+            for (const ch of worldState.characters.values()) {
+                if (!present.has(ch.id) && Object.keys(ch.sceneState).length > 0) {
+                    this.worldStateService.updateCharacter(worldState, ch.id, { sceneState: {} });
+                }
+            }
+
+            for (const loc of worldState.locations.values()) {
+                if (loc.id !== currentLocationId && Object.keys(loc.sceneState).length > 0) {
+                    this.worldStateService.updateLocation(worldState, loc.id, { sceneState: {} });
+                }
+            }
+
+            // Option 2: Ensure continuity memory shell exists for present NPCs.
+            for (const npcId of roster) {
+                if (npcId === worldState.playerCharacterId) continue;
+                if (!worldState.characters.has(npcId)) continue;
+                this.ensureNpcMemoryLore(session, npcId, worldState.playerCharacterId, turn);
+            }
         } else {
             // Loud signal when roster is missing (helps diagnose LLM failures)
             console.warn('⚠️ No <scene> roster found in state update; scene membership may be incomplete.');
@@ -1135,6 +1184,51 @@ export class RPGInteractionService {
                 `  - deleting rel '${rel.id}': fromId='${rel.fromId}' toId='${rel.toId}' (must be Character -> Location)`
             );
             this.worldStateService.deleteRelationship(worldState, rel.id);
+        }
+    }
+
+    private ensureNpcMemoryLore(
+        session: RPGGameSession,
+        npcId: string,
+        playerId: string,
+        turn: number
+    ): void {
+        const worldState = session.worldState;
+        const npc = this.worldStateService.getCharacter(worldState, npcId);
+        if (!npc) throw new Error(`Cannot ensure NPC memory lore: character not found (${npcId}).`);
+
+        const memoryId = `mem_${npcId}_about_${playerId}`;
+        const existing = this.worldStateService.getLore(worldState, memoryId);
+
+        if (!existing) {
+            // Create an empty memory shell; parser is expected to fill/update the content.
+            this.worldStateService.createLore(worldState, {
+                id: memoryId,
+                title: `Memory: ${npc.name} about you`,
+                content: '[empty memory — waiting for parser updates]',
+                tags: ['memory', 'npc_memory'],
+                createdTurn: turn,
+                lastUsedTurn: turn,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+        }
+
+        const alreadyLinked = this.worldStateService
+            .getRelationshipsForEntity(worldState, npcId)
+            .some(r => r.kind === 'knows_fact' && r.fromId === npcId && r.toId === memoryId);
+
+        if (!alreadyLinked) {
+            this.worldStateService.createRelationship(worldState, {
+                id: `rel_${npcId}_${memoryId}_knows_fact_${Date.now()}`,
+                fromId: npcId,
+                toId: memoryId,
+                kind: 'knows_fact',
+                createdTurn: turn,
+                lastUsedTurn: turn,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
         }
     }
     

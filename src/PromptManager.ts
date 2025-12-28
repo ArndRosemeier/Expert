@@ -1924,6 +1924,7 @@ You MUST respond with valid XML following this schema:
         For action="create": copy/paste the exact relevant excerpt(s) from the GM response that establish this location and its important details.
       </verbatim_evidence>
       <state>JSON object with dynamic state</state>
+      <scene_state>JSON object with ephemeral, scene-scoped state</scene_state>
     </location>
     <!-- Repeat for each location -->
   </locations>
@@ -1937,6 +1938,7 @@ You MUST respond with valid XML following this schema:
         For action="create": copy/paste the exact relevant excerpt(s) from the GM response that establish this character and their important traits/details.
       </verbatim_evidence>
       <state>JSON object with dynamic state</state>
+      <scene_state>JSON object with ephemeral, scene-scoped state</scene_state>
     </character>
     <!-- Repeat for each character -->
   </characters>
@@ -2009,6 +2011,10 @@ You MUST respond with valid XML following this schema:
 - For new entities, generate stable IDs: lowercase, underscores, descriptive (e.g., "tavern_golden_mug").
 - If no changes, return an empty tag (e.g., <locations></locations>).
 - The "state" field is flexible JSON for dynamic attributes (health, mood, inventory, etc.).
+- The "scene_state" field is flexible JSON for ephemeral, scene-scoped facts (positions, who is currently in the room, temporary intentions that only matter for this scene).
+- **State key removal (IMPORTANT)**:
+  - If a previously present state key is no longer true, remove it by setting that key to null in <state> or <scene_state>.
+  - Example: {"goal_contact_player": null} means delete that key from stored state.
 - **IMPORTANT: Descriptions are canonical**:
   - Do NOT update/overwrite the DESCRIPTION field for existing CHARACTER or LOCATION entities.
   - Instead, put new/changed facts into the STATE field (structured JSON) and/or create a new LORE ITEM (preferred for narrative/background facts) and link it via relationships.
@@ -2042,6 +2048,13 @@ You MUST respond with valid XML following this schema:
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
 
+## Continuity Memory (IMPORTANT)
+- For any present NPC that has interacted with the player before (or interacts in this turn), maintain a durable "memory" lore item summarizing their relationship/history with the player.
+  - Use lore id: mem_<npc_id>_about_<player_id>
+  - Tag it with: memory,npc_memory
+  - Keep it short but specific (what happened, how they feel, what they know, unresolved threads).
+  - Link it via: kind="knows_fact" from_id=<npc_id> to_id=<memory_lore_id>
+
 ## Diagnostics (IMPORTANT)
 - You may optionally flag suspicious entities in <diagnostics>.
 - Suspicious means: the entity's STATE appears contradictory, redundant (multiple competing fields), or contains facts that clearly belong to prior scenes/locations.
@@ -2073,6 +2086,9 @@ Extract all world state changes from the Game Master's response.
 - For any newly created character/location: include VERBATIM EVIDENCE copied from the GM response (so details are lossless).
 - Track secrets/facts as lore items + explicit knowledge relationships (kind="knows_fact") rather than hiding them in character descriptions.
 - Track attitudes as kind="attitude_towards" with stance/intensity.
+- Use <scene_state> for ephemeral, scene-scoped facts. Use <state> for durable facts.
+- If a durable/scene-scoped state key is no longer true, remove it by setting it to null in the relevant JSON.
+- Maintain per-NPC memory lore: mem_<npc_id>_about_<player_id> tagged memory,npc_memory, linked via knows_fact.
 
 Output structured XML according to the schema in your system instructions.
         `.trim(),

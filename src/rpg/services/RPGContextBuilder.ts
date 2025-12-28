@@ -114,6 +114,10 @@ export class RPGContextBuilder {
         
         let text = `**${location.name}**\n`;
         text += `${location.description}\n`;
+
+        if (Object.keys(location.sceneState).length > 0) {
+            text += `SceneState: ${JSON.stringify(location.sceneState, null, 2)}\n`;
+        }
         
         if (Object.keys(location.state).length > 0) {
             text += `State: ${JSON.stringify(location.state, null, 2)}`;
@@ -129,6 +133,10 @@ export class RPGContextBuilder {
         
         let text = `**${character.name}**\n`;
         text += `${character.description}\n`;
+
+        if (Object.keys(character.sceneState).length > 0) {
+            text += `SceneState: ${JSON.stringify(character.sceneState, null, 2)}\n`;
+        }
         
         if (Object.keys(character.state).length > 0) {
             text += `State: ${JSON.stringify(character.state, null, 2)}`;
@@ -164,6 +172,10 @@ export class RPGContextBuilder {
                 }
             }
 
+            const memoryLoreId = `mem_${character.id}_about_${playerCharacterId}`;
+            const memoryLore = this.worldStateService.getLore(worldState, memoryLoreId);
+            const memoryText = memoryLore ? memoryLore.content.trim() : '';
+
             text += `- **${character.name}**: ${character.description}`;
             text += knowsName ? ' (knows your name)' : ' (does not know your name)';
             if (attitude) {
@@ -171,6 +183,12 @@ export class RPGContextBuilder {
             }
             if (secretTitles.length > 0) {
                 text += ` (knows secrets: ${secretTitles.join(', ')})`;
+            }
+            if (memoryText) {
+                text += ` (memory about you: ${memoryText})`;
+            }
+            if (Object.keys(character.sceneState).length > 0) {
+                text += ` (SceneState: ${JSON.stringify(character.sceneState)})`;
             }
             if (Object.keys(character.state).length > 0) {
                 text += ` (State: ${JSON.stringify(character.state)})`;
@@ -243,6 +261,9 @@ export class RPGContextBuilder {
             if (Object.keys(location.state).length > 0) {
                 xml += `      <state>${this.escapeXml(JSON.stringify(location.state))}</state>\n`;
             }
+            if (Object.keys(location.sceneState).length > 0) {
+                xml += `      <scene_state>${this.escapeXml(JSON.stringify(location.sceneState))}</scene_state>\n`;
+            }
             xml += '    </location>\n';
         }
         xml += '  </locations>\n';
@@ -254,6 +275,9 @@ export class RPGContextBuilder {
             xml += `      <description>${this.escapeXml(character.description)}</description>\n`;
             if (Object.keys(character.state).length > 0) {
                 xml += `      <state>${this.escapeXml(JSON.stringify(character.state))}</state>\n`;
+            }
+            if (Object.keys(character.sceneState).length > 0) {
+                xml += `      <scene_state>${this.escapeXml(JSON.stringify(character.sceneState))}</scene_state>\n`;
             }
             xml += '    </character>\n';
         }

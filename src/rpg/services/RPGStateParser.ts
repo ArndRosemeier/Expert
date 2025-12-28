@@ -166,6 +166,15 @@ export class RPGStateParser {
                     console.warn(`Failed to parse location state JSON for ${location.id}:`, error);
                 }
             }
+
+            const sceneStateElement = element.querySelector('scene_state');
+            if (sceneStateElement?.textContent) {
+                try {
+                    location.sceneState = JSON.parse(sceneStateElement.textContent.trim());
+                } catch (error) {
+                    console.warn(`Failed to parse location scene_state JSON for ${location.id}:`, error);
+                }
+            }
             
             locations.push(location);
         }
@@ -222,6 +231,15 @@ export class RPGStateParser {
                     character.state = JSON.parse(stateElement.textContent.trim());
                 } catch (error) {
                     console.warn(`Failed to parse character state JSON for ${character.id}:`, error);
+                }
+            }
+
+            const sceneStateElement = element.querySelector('scene_state');
+            if (sceneStateElement?.textContent) {
+                try {
+                    character.sceneState = JSON.parse(sceneStateElement.textContent.trim());
+                } catch (error) {
+                    console.warn(`Failed to parse character scene_state JSON for ${character.id}:`, error);
                 }
             }
             

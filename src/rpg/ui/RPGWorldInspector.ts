@@ -511,6 +511,10 @@ export class RPGWorldInspector {
                     <label>State (JSON)</label>
                     <textarea class="rpg-edit-textarea" data-field="state" rows="6">${this.escapeHtml(JSON.stringify(location.state, null, 2))}</textarea>
                 </div>
+                <div class="rpg-entity-editor-row">
+                    <label>SceneState (JSON)</label>
+                    <textarea class="rpg-edit-textarea" data-field="sceneState" rows="6">${this.escapeHtml(JSON.stringify(location.sceneState, null, 2))}</textarea>
+                </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${locationId}" data-entity-type="location">Save</button>
                     <button type="button" data-rpg-action="consolidate-entity" data-entity-id="${locationId}" data-entity-type="location">Consolidate</button>
@@ -549,6 +553,10 @@ export class RPGWorldInspector {
                 <div class="rpg-entity-editor-row">
                     <label>State (JSON)</label>
                     <textarea class="rpg-edit-textarea" data-field="state" rows="6">${this.escapeHtml(JSON.stringify(character.state, null, 2))}</textarea>
+                </div>
+                <div class="rpg-entity-editor-row">
+                    <label>SceneState (JSON)</label>
+                    <textarea class="rpg-edit-textarea" data-field="sceneState" rows="6">${this.escapeHtml(JSON.stringify(character.sceneState, null, 2))}</textarea>
                 </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${characterId}" data-entity-type="character">Save</button>
@@ -719,14 +727,20 @@ export class RPGWorldInspector {
             const stateText = (editor.querySelector('[data-field="state"]') as HTMLTextAreaElement).value;
             const state = JSON.parse(stateText) as Record<string, unknown>;
 
-            this.worldStateService.updateLocation(worldState, entityId, { name, description, state });
+            const sceneStateText = (editor.querySelector('[data-field="sceneState"]') as HTMLTextAreaElement).value;
+            const sceneState = JSON.parse(sceneStateText) as Record<string, unknown>;
+
+            this.worldStateService.updateLocation(worldState, entityId, { name, description, state, sceneState });
         } else if (entityType === 'character') {
             const name = (editor.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
             const description = (editor.querySelector('[data-field="description"]') as HTMLTextAreaElement).value;
             const stateText = (editor.querySelector('[data-field="state"]') as HTMLTextAreaElement).value;
             const state = JSON.parse(stateText) as Record<string, unknown>;
 
-            this.worldStateService.updateCharacter(worldState, entityId, { name, description, state });
+            const sceneStateText = (editor.querySelector('[data-field="sceneState"]') as HTMLTextAreaElement).value;
+            const sceneState = JSON.parse(sceneStateText) as Record<string, unknown>;
+
+            this.worldStateService.updateCharacter(worldState, entityId, { name, description, state, sceneState });
         } else if (entityType === 'lore') {
             const title = (editor.querySelector('[data-field="title"]') as HTMLInputElement).value.trim();
             const content = (editor.querySelector('[data-field="content"]') as HTMLTextAreaElement).value;

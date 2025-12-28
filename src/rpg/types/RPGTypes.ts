@@ -9,6 +9,11 @@ export interface RPGLocation {
     description: string;
     state: Record<string, unknown>; // Flexible JSON for dynamic attributes (weather, time, etc.)
     /**
+     * Scene-scoped state. Must be treated as ephemeral and may be cleared when the player leaves the scene
+     * or when the entity is no longer present.
+     */
+    sceneState: Record<string, unknown>;
+    /**
      * Conversation turn when this entity was created (0 = initial setup / intro turn).
      */
     createdTurn: number;
@@ -28,6 +33,10 @@ export interface RPGCharacter {
     name: string;
     description: string;
     state: Record<string, unknown>; // Flexible JSON (health, mood, inventory, etc.)
+    /**
+     * Scene-scoped state. Must be treated as ephemeral and may be cleared when the character leaves the scene.
+     */
+    sceneState: Record<string, unknown>;
     /**
      * Conversation turn when this entity was created (0 = initial setup / intro turn).
      */
@@ -254,6 +263,7 @@ export interface RPGStateUpdateXML {
          */
         verbatimEvidence?: string;
         state?: Record<string, unknown>;
+        sceneState?: Record<string, unknown>;
     }>;
     characters?: Array<{
         action: 'create' | 'update';
@@ -266,6 +276,7 @@ export interface RPGStateUpdateXML {
          */
         verbatimEvidence?: string;
         state?: Record<string, unknown>;
+        sceneState?: Record<string, unknown>;
     }>;
     lore?: Array<{
         action: 'create' | 'update';
@@ -399,23 +410,25 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
 
     const migratedLocations = new Map<string, RPGLocation>();
     for (const [id, loc] of Object.entries(serialized.locations)) {
-        const anyLoc = loc as RPGLocation & { createdTurn?: number; lastUsedTurn?: number };
+        const anyLoc = loc as RPGLocation & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown> };
         const createdTurn = anyLoc.createdTurn ?? 0;
         migratedLocations.set(id, {
             ...anyLoc,
             createdTurn,
-            lastUsedTurn: anyLoc.lastUsedTurn ?? createdTurn
+            lastUsedTurn: anyLoc.lastUsedTurn ?? createdTurn,
+            sceneState: anyLoc.sceneState ?? {}
         });
     }
 
     const migratedCharacters = new Map<string, RPGCharacter>();
     for (const [id, ch] of Object.entries(serialized.characters)) {
-        const anyCh = ch as RPGCharacter & { createdTurn?: number; lastUsedTurn?: number };
+        const anyCh = ch as RPGCharacter & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown> };
         const createdTurn = anyCh.createdTurn ?? 0;
         migratedCharacters.set(id, {
             ...anyCh,
             createdTurn,
-            lastUsedTurn: anyCh.lastUsedTurn ?? createdTurn
+            lastUsedTurn: anyCh.lastUsedTurn ?? createdTurn,
+            sceneState: anyCh.sceneState ?? {}
         });
     }
 
