@@ -583,9 +583,9 @@ export class RPGView {
             const systemPrompt = expansionService.expandPrompt(systemPromptTemplate, gameContext);
             
             // Create an initial prompt for the GM
-            const initialUserPrompt = settingDescription 
-                ? `The game is starting. Set the stage by describing the initial scene and situation. Use the following setting as context:\n\n${settingDescription}`
-                : 'The game is starting. Set the stage by describing the initial scene and welcoming the player to the adventure.';
+            const initialUserPrompt = settingDescription
+                ? `The game is starting. Set the stage by describing the initial scene and situation. Use the following setting as context:\n\n${settingDescription}\n\nIMPORTANT: Address the player as "you" (do not use the player character's name in your narration or your final question). End with a question like "What do you do?"`
+                : 'The game is starting. Set the stage by describing the initial scene and welcoming the player to the adventure. IMPORTANT: Address the player as "you" (do not use the player character\'s name). End with: "What do you do?"';
             
             // Build messages
             const messages = [
