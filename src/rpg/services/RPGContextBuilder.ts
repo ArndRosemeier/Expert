@@ -37,7 +37,7 @@ export class RPGContextBuilder {
         const charactersAtLocation = characterIdsAtLocation
             .map(id => this.worldStateService.getCharacter(worldState, id))
             .filter(c => c !== undefined && c.id !== worldState.playerCharacterId) as RPGCharacter[];
-        const presentCharactersText = this.formatCharacterList(charactersAtLocation);
+        const presentCharactersText = this.formatCharacterList(worldState, worldState.playerCharacterId, charactersAtLocation);
         
         // Get related entities via graph traversal (depth 2)
         const startingEntities = [
@@ -137,14 +137,19 @@ export class RPGContextBuilder {
         return text;
     }
     
-    private formatCharacterList(characters: RPGCharacter[]): string {
+    private formatCharacterList(worldState: RPGWorldState, playerCharacterId: string, characters: RPGCharacter[]): string {
         if (characters.length === 0) {
             return '[No other characters present]';
         }
         
         let text = '';
         for (const character of characters) {
+            const knowsName = this.worldStateService
+                .getRelationshipsForEntity(worldState, character.id)
+                .some(r => r.type === 'knows_name_of' && r.toId === playerCharacterId);
+
             text += `- **${character.name}**: ${character.description}`;
+            text += knowsName ? ' (knows your name)' : ' (does not know your name)';
             if (Object.keys(character.state).length > 0) {
                 text += ` (State: ${JSON.stringify(character.state)})`;
             }

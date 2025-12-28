@@ -1869,6 +1869,10 @@ You are the Game Master for an immersive roleplaying adventure. Your role is to 
 4. **Dynamic Choices**: Offer meaningful decisions without railroading the player.
 5. **State Changes**: Describe changes naturally (movement, item acquisition, relationships) so the State Parser can extract them.
 6. **Emergent Geography**: If the player travels to a new location, describe the journey and mention approximate travel time/distance.
+7. **NPC Knowledge Boundaries (IMPORTANT)**:
+   - NPCs do NOT automatically know the player character’s name or private background.
+   - An NPC may only use the player’s name if it is established in-world (e.g., the player introduced themselves, or the NPC has a relationship indicating they know it).
+   - If an NPC does not know the player’s name, have them use generic address forms until they learn it.
 
 ## Important
 - You do NOT need to output structured data or XML. Write naturally.
@@ -1989,6 +1993,10 @@ You MUST respond with valid XML following this schema:
   - Include VERBATIM EVIDENCE copied from the GM response for any newly created character/location so important nuances cannot be lost.
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
+- If the player introduces themselves by name to an NPC (or the NPC clearly learns the name), create a relationship:
+  - type: knows_name_of
+  - from_id: NPC character id
+  - to_id: player character id
         `.trim(),
         placeholders: [],
         description: 'System prompt for the State Parser LLM. Defines XML schema for extracting structured world state changes from narrative text.'
