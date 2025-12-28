@@ -1873,6 +1873,8 @@ You are the Game Master for an immersive roleplaying adventure. Your role is to 
    - NPCs do NOT automatically know the player character’s name or private background.
    - An NPC may only use the player’s name if it is established in-world (e.g., the player introduced themselves, or the NPC has a relationship indicating they know it).
    - If an NPC does not know the player’s name, have them use generic address forms until they learn it.
+   - NPCs may only reference secrets/facts if they plausibly learned them in-world (tracked via relationships like kind="knows_fact"/"knows_about").
+   - Use attitude relationships (kind="attitude_towards") to guide tone and behavior toward the player and other NPCs.
 
 ## Important
 - You do NOT need to output structured data or XML. Write naturally.
@@ -1949,8 +1951,14 @@ You MUST respond with valid XML following this schema:
     <relationship action="create|update|delete">
       <from_id>entity_id_1</from_id>
       <to_id>entity_id_2</to_id>
-      <type>friend|enemy|knows|located_at|related_to|etc</type>
-      <description>Optional relationship description</description>
+      <kind>located_at|describes|found_at|knows_name_of|knows_about|knows_fact|attitude_towards</kind>
+      <note>Optional relationship note</note>
+      <!-- Only for kind="attitude_towards" -->
+      <attitude>
+        <stance>friendly|neutral|hostile|fearful|respectful|suspicious|romantic|disgusted</stance>
+        <intensity>-3|-2|-1|0|1|2|3</intensity>
+        <reason>Optional short reason</reason>
+      </attitude>
     </relationship>
     <!-- Repeat for each relationship -->
   </relationships>
@@ -1995,14 +2003,22 @@ You MUST respond with valid XML following this schema:
   - If a character is present in the current scene (i.e., they appear in the GM response as being here/entering/standing nearby), you MUST ensure there is a relationship:
     - from_id = that character’s id
     - to_id = the current location id
-    - type = located_at
+    - kind = located_at
   - If a character moves locations, update their located_at relationship accordingly (do not leave multiple conflicting located_at relations).
+- **Knowledge & Secrets (IMPORTANT)**:
+  - Track facts and secrets as LORE ITEMS.
+    - If something is explicitly framed as a secret (e.g., "Sarah has a secret", "only a few people know", "keep this hidden"), create/update a <lore_item> with a tag "secret".
+  - Track who knows which facts with relationships:
+    - kind="knows_fact": from_id = character who knows it, to_id = lore_item id
+  - Track who knows about other characters with:
+    - kind="knows_about": from_id = character who knows, to_id = other character id
+  - When the player introduces their name to an NPC (or the NPC clearly learns it), create:
+    - kind="knows_name_of": from_id = NPC character id, to_id = player character id
+- **Attitudes (IMPORTANT)**:
+  - Track interpersonal stance changes with:
+    - kind="attitude_towards": from_id = character, to_id = target character, with <attitude><stance>...</stance><intensity>...</intensity></attitude>
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
-- If the player introduces themselves by name to an NPC (or the NPC clearly learns the name), create a relationship:
-  - type: knows_name_of
-  - from_id: NPC character id
-  - to_id: player character id
         `.trim(),
         placeholders: [],
         description: 'System prompt for the State Parser LLM. Defines XML schema for extracting structured world state changes from narrative text.'
@@ -2028,6 +2044,8 @@ Extract all world state changes from the Game Master's response.
 - Do NOT overwrite existing location/character descriptions. Use state updates and/or lore items for new facts.
 - For action="update" on existing characters/locations: OMIT the <description> tag (use <state> and/or <lore_item>).
 - For any newly created character/location: include VERBATIM EVIDENCE copied from the GM response (so details are lossless).
+- Track secrets/facts as lore items + explicit knowledge relationships (kind="knows_fact") rather than hiding them in character descriptions.
+- Track attitudes as kind="attitude_towards" with stance/intensity.
 
 Output structured XML according to the schema in your system instructions.
         `.trim(),

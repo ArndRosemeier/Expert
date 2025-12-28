@@ -9,6 +9,8 @@ import {
     RPGWorldState, 
     RPGSnapshot, 
     RPGSnapshotSerialized,
+    RPGAttitudeStance,
+    RPGAttitudeIntensity,
     RPGLocation, 
     RPGCharacter, 
     RPGLore, 
@@ -283,21 +285,37 @@ export class WorldStateService {
         return worldState.relationships.get(id);
     }
     
-    updateRelationship(worldState: RPGWorldState, id: string, updates: Partial<RPGRelationship>): void {
+    updateRelationship(worldState: RPGWorldState, id: string, updates: { note?: string | undefined; stance?: RPGAttitudeStance; intensity?: RPGAttitudeIntensity; reason?: string | undefined }): void {
         this.assertUnlocked();
         
         const existing = worldState.relationships.get(id);
         if (!existing) {
             throw new Error(`Relationship with ID '${id}' not found`);
         }
-        
+
+        if (existing.kind === 'attitude_towards') {
+            const updated: RPGRelationship = {
+                ...existing,
+                note: updates.note !== undefined ? updates.note : existing.note,
+                stance: updates.stance !== undefined ? updates.stance : existing.stance,
+                intensity: updates.intensity !== undefined ? updates.intensity : existing.intensity,
+                reason: updates.reason !== undefined ? updates.reason : existing.reason,
+                updatedAt: Date.now()
+            };
+            worldState.relationships.set(id, updated);
+            return;
+        }
+
+        if (updates.stance !== undefined || updates.intensity !== undefined || updates.reason !== undefined) {
+            throw new Error(`Cannot apply attitude fields to non-attitude relationship '${existing.kind}' (id=${existing.id}).`);
+        }
+
         const updated: RPGRelationship = {
             ...existing,
-            ...updates,
-            id: existing.id,
+            note: updates.note !== undefined ? updates.note : existing.note,
             updatedAt: Date.now()
         };
-        
+
         worldState.relationships.set(id, updated);
     }
     
@@ -418,7 +436,7 @@ export class WorldStateService {
         const result = new Set<string>();
         
         for (const rel of worldState.relationships.values()) {
-            if (rel.type === 'located_at' && rel.toId === locationId) {
+            if (rel.kind === 'located_at' && rel.toId === locationId) {
                 result.add(rel.fromId);
             }
         }

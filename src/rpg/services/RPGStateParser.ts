@@ -4,7 +4,7 @@
  * Parses XML output from the State Parser LLM to extract world state changes.
  */
 
-import { RPGStateUpdateXML } from '../types/RPGTypes';
+import { RPGAttitudeStance, RPGStateUpdateXML } from '../types/RPGTypes';
 
 export class RPGStateParser {
     
@@ -262,9 +262,11 @@ export class RPGStateParser {
             
             const fromIdElement = element.querySelector('from_id');
             const toIdElement = element.querySelector('to_id');
-            const typeElement = element.querySelector('type');
+            const kindElement = element.querySelector('kind');
+            const legacyTypeElement = element.querySelector('type');
             
-            if (!fromIdElement?.textContent || !toIdElement?.textContent || !typeElement?.textContent) {
+            const kindText = kindElement?.textContent?.trim() || legacyTypeElement?.textContent?.trim();
+            if (!fromIdElement?.textContent || !toIdElement?.textContent || !kindText) {
                 console.warn('Relationship element missing required fields, skipping');
                 continue;
             }
@@ -273,12 +275,36 @@ export class RPGStateParser {
                 action,
                 fromId: fromIdElement.textContent.trim(),
                 toId: toIdElement.textContent.trim(),
-                type: typeElement.textContent.trim()
+                // Cast is safe here because invalid kinds will be rejected by the compiler where constructed/used.
+                kind: kindText as NonNullable<RPGStateUpdateXML['relationships']>[number]['kind']
             };
-            
-            const descriptionElement = element.querySelector('description');
-            if (descriptionElement?.textContent) {
-                relationship.description = descriptionElement.textContent.trim();
+
+            const noteElement = element.querySelector('note') || element.querySelector('description');
+            if (noteElement?.textContent) {
+                relationship.note = noteElement.textContent.trim();
+            }
+
+            if (relationship.kind === 'attitude_towards') {
+                const stanceElement = element.querySelector('attitude > stance');
+                const intensityElement = element.querySelector('attitude > intensity');
+                const reasonElement = element.querySelector('attitude > reason');
+
+                if (stanceElement?.textContent) {
+                    relationship.stance = stanceElement.textContent.trim() as RPGAttitudeStance;
+                }
+                if (intensityElement?.textContent) {
+                    const val = Number(intensityElement.textContent.trim());
+                    if (!Number.isFinite(val)) {
+                        throw new Error(`Invalid attitude intensity '${intensityElement.textContent.trim()}'`);
+                    }
+                    if (val !== -3 && val !== -2 && val !== -1 && val !== 0 && val !== 1 && val !== 2 && val !== 3) {
+                        throw new Error(`Attitude intensity must be one of -3,-2,-1,0,1,2,3 (got ${val})`);
+                    }
+                    relationship.intensity = val;
+                }
+                if (reasonElement?.textContent) {
+                    relationship.reason = reasonElement.textContent.trim();
+                }
             }
             
             relationships.push(relationship);

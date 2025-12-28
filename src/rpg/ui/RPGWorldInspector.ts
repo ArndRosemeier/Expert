@@ -341,13 +341,21 @@ export class RPGWorldInspector {
                 
                 html += '<li>';
                 if (isOutgoing) {
-                    html += `<span class="rpg-relationship-type">${rel.type}</span> → `;
+                    html += `<span class="rpg-relationship-type">${rel.kind}</span> → `;
                 } else {
-                    html += `← <span class="rpg-relationship-type">${rel.type}</span> `;
+                    html += `← <span class="rpg-relationship-type">${rel.kind}</span> `;
                 }
                 html += `<a class="rpg-relationship-link" data-target-id="${otherId}">${otherEntity}</a>`;
-                if (rel.description) {
-                    html += ` <span class="rpg-relationship-desc">(${rel.description})</span>`;
+
+                if (rel.kind === 'attitude_towards') {
+                    html += ` <span class="rpg-relationship-desc">(stance=${rel.stance}, intensity=${rel.intensity})</span>`;
+                    if (rel.reason) {
+                        html += ` <span class="rpg-relationship-desc">(${rel.reason})</span>`;
+                    }
+                }
+
+                if (rel.note) {
+                    html += ` <span class="rpg-relationship-desc">(${rel.note})</span>`;
                 }
                 html += '</li>';
             }

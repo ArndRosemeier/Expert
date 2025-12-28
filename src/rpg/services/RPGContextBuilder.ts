@@ -7,7 +7,7 @@
 
 import { PlaceholderContext } from '../../services/PromptExpansionService';
 import { RPGPlaceholderContext } from './RPGPlaceholderService';
-import { RPGGameSession, RPGLocation, RPGCharacter, RPGLore, RPGDistance, RPGWorldState } from '../types/RPGTypes';
+import { RPGGameSession, RPGLocation, RPGCharacter, RPGLore, RPGDistance, RPGRelationship, RPGWorldState } from '../types/RPGTypes';
 import { WorldStateService } from './WorldStateService';
 
 export class RPGContextBuilder {
@@ -60,7 +60,7 @@ export class RPGContextBuilder {
                 relevantLore.push(lore);
             }
         }
-        const relevantLoreText = this.formatLoreList(relevantLore);
+        const relevantLoreText = this.formatLoreList(relevantLore, worldState);
         
         // Get recent events summary
         const recentEventsText = worldState.recentEventsSummary || '[No recent events]';
@@ -144,12 +144,34 @@ export class RPGContextBuilder {
         
         let text = '';
         for (const character of characters) {
-            const knowsName = this.worldStateService
-                .getRelationshipsForEntity(worldState, character.id)
-                .some(r => r.type === 'knows_name_of' && r.toId === playerCharacterId);
+            const rels = this.worldStateService.getRelationshipsForEntity(worldState, character.id);
+            const knowsName = rels.some(r => r.kind === 'knows_name_of' && r.toId === playerCharacterId);
+
+            const attitude = rels.find(
+                (r): r is Extract<RPGRelationship, { kind: 'attitude_towards' }> =>
+                    r.kind === 'attitude_towards' && r.fromId === character.id && r.toId === playerCharacterId
+            );
+
+            const secretLoreIds = rels
+                .filter(r => r.kind === 'knows_fact' && r.fromId === character.id)
+                .map(r => r.toId);
+
+            const secretTitles: string[] = [];
+            for (const loreId of secretLoreIds) {
+                const lore = this.worldStateService.getLore(worldState, loreId);
+                if (lore && lore.tags.includes('secret')) {
+                    secretTitles.push(lore.title);
+                }
+            }
 
             text += `- **${character.name}**: ${character.description}`;
             text += knowsName ? ' (knows your name)' : ' (does not know your name)';
+            if (attitude) {
+                text += ` (attitude: ${attitude.stance} ${attitude.intensity})`;
+            }
+            if (secretTitles.length > 0) {
+                text += ` (knows secrets: ${secretTitles.join(', ')})`;
+            }
             if (Object.keys(character.state).length > 0) {
                 text += ` (State: ${JSON.stringify(character.state)})`;
             }
@@ -159,7 +181,7 @@ export class RPGContextBuilder {
         return text.trim();
     }
     
-    private formatLoreList(loreItems: RPGLore[]): string {
+    private formatLoreList(loreItems: RPGLore[], worldState: RPGWorldState): string {
         if (loreItems.length === 0) {
             return '[No relevant lore]';
         }
@@ -171,13 +193,26 @@ export class RPGContextBuilder {
             if (lore.tags.length > 0) {
                 text += `Tags: ${lore.tags.join(', ')}\n`;
             }
+
+            if (lore.tags.includes('secret')) {
+                const knowers = this.worldStateService
+                    .listRelationships(worldState)
+                    .filter(r => r.kind === 'knows_fact' && r.toId === lore.id)
+                    .map(r => this.worldStateService.getCharacter(worldState, r.fromId)?.name || r.fromId);
+
+                if (knowers.length > 0) {
+                    text += `Known by: ${knowers.join(', ')}\n`;
+                } else {
+                    text += 'Known by: [nobody tracked yet]\n';
+                }
+            }
             text += '\n';
         }
         
         return text.trim();
     }
     
-    private formatDistanceList(distances: RPGDistance[], worldState: any): string {
+    private formatDistanceList(distances: RPGDistance[], worldState: RPGWorldState): string {
         if (distances.length === 0) {
             return '[No known distances]';
         }
@@ -198,6 +233,7 @@ export class RPGContextBuilder {
      */
     private formatWorldStateAsXML(worldState: RPGWorldState): string {
         let xml = '<current_world_state>\n';
+        xml += `  <meta current_location_id="${this.escapeXml(worldState.currentLocationId)}" player_character_id="${this.escapeXml(worldState.playerCharacterId)}" />\n`;
         
         // Locations
         xml += '  <locations>\n';
@@ -234,6 +270,28 @@ export class RPGContextBuilder {
             xml += '    </lore_item>\n';
         }
         xml += '  </lore>\n';
+
+        // Relationships (knowledge, attitudes, scene membership, etc.)
+        xml += '  <relationships>\n';
+        for (const rel of worldState.relationships.values()) {
+            xml += `    <relationship id="${this.escapeXml(rel.id)}" kind="${this.escapeXml(rel.kind)}">\n`;
+            xml += `      <from_id>${this.escapeXml(rel.fromId)}</from_id>\n`;
+            xml += `      <to_id>${this.escapeXml(rel.toId)}</to_id>\n`;
+            if (rel.note) {
+                xml += `      <note>${this.escapeXml(rel.note)}</note>\n`;
+            }
+            if (rel.kind === 'attitude_towards') {
+                xml += '      <attitude>\n';
+                xml += `        <stance>${this.escapeXml(rel.stance)}</stance>\n`;
+                xml += `        <intensity>${rel.intensity}</intensity>\n`;
+                if (rel.reason) {
+                    xml += `        <reason>${this.escapeXml(rel.reason)}</reason>\n`;
+                }
+                xml += '      </attitude>\n';
+            }
+            xml += '    </relationship>\n';
+        }
+        xml += '  </relationships>\n';
         
         xml += '</current_world_state>';
         return xml;

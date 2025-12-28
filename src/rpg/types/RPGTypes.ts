@@ -39,11 +39,62 @@ export interface RPGLore {
 /**
  * Relationship between two entities (Character↔Character, Character↔Location, etc.)
  */
-export interface RPGRelationship {
+export type RPGRelationshipKind =
+    | 'located_at'
+    | 'describes'
+    | 'found_at'
+    | 'knows_name_of'
+    | 'knows_about'
+    | 'knows_fact'
+    | 'attitude_towards';
+
+export type RPGAttitudeStance =
+    | 'friendly'
+    | 'neutral'
+    | 'hostile'
+    | 'fearful'
+    | 'respectful'
+    | 'suspicious'
+    | 'romantic'
+    | 'disgusted';
+
+export type RPGAttitudeIntensity = -3 | -2 | -1 | 0 | 1 | 2 | 3;
+
+export interface RPGRelationshipBase<K extends RPGRelationshipKind> {
     id: string;
     fromId: string; // Entity ID
     toId: string;   // Entity ID
-    type: string;   // 'friend', 'enemy', 'knows', 'located_at', 'related_to', etc.
+    kind: K;
+    /**
+     * Optional human-readable note about the relationship (not authoritative mechanics).
+     */
+    note?: string | undefined;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export type RPGRelationship =
+    | RPGRelationshipBase<'located_at'>
+    | RPGRelationshipBase<'describes'>
+    | RPGRelationshipBase<'found_at'>
+    | RPGRelationshipBase<'knows_name_of'>
+    | RPGRelationshipBase<'knows_about'>
+    | RPGRelationshipBase<'knows_fact'>
+    | (RPGRelationshipBase<'attitude_towards'> & {
+        stance: RPGAttitudeStance;
+        intensity: RPGAttitudeIntensity;
+        reason?: string | undefined;
+    });
+
+/**
+ * Legacy relationship shape (pre-typed relationships).
+ * Used for explicit migration when loading old sessions.
+ */
+export interface RPGLegacyRelationshipSerialized {
+    id: string;
+    fromId: string;
+    toId: string;
+    type: string;
     description?: string | undefined;
     createdAt: number;
     updatedAt: number;
@@ -151,13 +202,25 @@ export interface RPGStateUpdateXML {
         content?: string;
         tags?: string[];
     }>;
-    relationships?: Array<{
-        action: 'create' | 'update' | 'delete';
-        fromId: string;
-        toId: string;
-        type: string;
-        description?: string;
-    }>;
+    relationships?: Array<
+        | {
+            action: 'create' | 'update' | 'delete';
+            kind: Exclude<RPGRelationshipKind, 'attitude_towards'>;
+            fromId: string;
+            toId: string;
+            note?: string;
+        }
+        | {
+            action: 'create' | 'update' | 'delete';
+            kind: 'attitude_towards';
+            fromId: string;
+            toId: string;
+            stance?: RPGAttitudeStance;
+            intensity?: RPGAttitudeIntensity;
+            reason?: string;
+            note?: string;
+        }
+    >;
     distances?: Array<{
         fromLocationId: string;
         toLocationId: string;
@@ -193,7 +256,7 @@ export interface RPGWorldStateSerialized {
     locations: Record<string, RPGLocation>;
     characters: Record<string, RPGCharacter>;
     lore: Record<string, RPGLore>;
-    relationships: Record<string, RPGRelationship>;
+    relationships: Record<string, RPGRelationship | RPGLegacyRelationshipSerialized>;
     distances: RPGDistance[];
     recentEventsSummary: string;
     currentLocationId: string;
@@ -244,16 +307,76 @@ export function serializeWorldState(state: RPGWorldState): RPGWorldStateSerializ
 }
 
 export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGWorldState {
+    const migratedRelationships = new Map<string, RPGRelationship>();
+    for (const [id, rel] of Object.entries(serialized.relationships)) {
+        migratedRelationships.set(id, migrateRelationship(rel));
+    }
+
     return {
         locations: new Map(Object.entries(serialized.locations)),
         characters: new Map(Object.entries(serialized.characters)),
         lore: new Map(Object.entries(serialized.lore)),
-        relationships: new Map(Object.entries(serialized.relationships)),
+        relationships: migratedRelationships,
         distances: serialized.distances,
         recentEventsSummary: serialized.recentEventsSummary,
         currentLocationId: serialized.currentLocationId,
         playerCharacterId: serialized.playerCharacterId
     };
+}
+
+function migrateRelationship(rel: RPGRelationship | RPGLegacyRelationshipSerialized): RPGRelationship {
+    if ('kind' in rel) {
+        return rel;
+    }
+
+    // Legacy shape: { type, description } -> { kind, note } (+ typed payload when possible)
+    const note = rel.description;
+
+    if (rel.type === 'located_at') {
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'located_at', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+    }
+    if (rel.type === 'describes') {
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'describes', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+    }
+    if (rel.type === 'found_at') {
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'found_at', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+    }
+    if (rel.type === 'knows_name_of') {
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_name_of', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+    }
+
+    // Deterministic legacy mappings (explicit + visible)
+    if (rel.type === 'friend') {
+        return {
+            id: rel.id,
+            fromId: rel.fromId,
+            toId: rel.toId,
+            kind: 'attitude_towards',
+            stance: 'friendly',
+            intensity: 2,
+            note,
+            createdAt: rel.createdAt,
+            updatedAt: rel.updatedAt
+        };
+    }
+    if (rel.type === 'enemy') {
+        return {
+            id: rel.id,
+            fromId: rel.fromId,
+            toId: rel.toId,
+            kind: 'attitude_towards',
+            stance: 'hostile',
+            intensity: -2,
+            note,
+            createdAt: rel.createdAt,
+            updatedAt: rel.updatedAt
+        };
+    }
+    if (rel.type === 'knows') {
+        return { id: rel.id, fromId: rel.fromId, toId: rel.toId, kind: 'knows_about', note, createdAt: rel.createdAt, updatedAt: rel.updatedAt };
+    }
+
+    throw new Error(`Unsupported legacy relationship type '${rel.type}' (id=${rel.id}).`);
 }
 
 export function serializeSnapshot(snapshot: RPGSnapshot): RPGSnapshotSerialized {

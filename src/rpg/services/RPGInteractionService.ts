@@ -319,8 +319,8 @@ export class RPGInteractionService {
                             id: `rel_${loreId}_${location.id}_describes_${Date.now()}`,
                             fromId: loreId,
                             toId: location.id,
-                            type: 'describes',
-                            description: 'Verbatim excerpt from GM introducing the location',
+                            kind: 'describes',
+                            note: 'Verbatim excerpt from GM introducing the location',
                             createdAt: Date.now(),
                             updatedAt: Date.now()
                         });
@@ -398,8 +398,8 @@ export class RPGInteractionService {
                             id: `rel_${loreId}_${character.id}_describes_${Date.now()}`,
                             fromId: loreId,
                             toId: character.id,
-                            type: 'describes',
-                            description: 'Verbatim excerpt from GM introducing the character',
+                            kind: 'describes',
+                            note: 'Verbatim excerpt from GM introducing the character',
                             createdAt: Date.now(),
                             updatedAt: Date.now()
                         });
@@ -408,8 +408,8 @@ export class RPGInteractionService {
                             id: `rel_${loreId}_${worldState.currentLocationId}_found_${Date.now()}`,
                             fromId: loreId,
                             toId: worldState.currentLocationId,
-                            type: 'found_at',
-                            description: 'Where the character was introduced',
+                            kind: 'found_at',
+                            note: 'Where the character was introduced',
                             createdAt: Date.now(),
                             updatedAt: Date.now()
                         });
@@ -469,40 +469,72 @@ export class RPGInteractionService {
             for (const relationshipUpdate of update.relationships) {
                 if (relationshipUpdate.action === 'create') {
                     // Enforce invariant: one active located_at per character (prevents missing/duplicate scene membership)
-                    if (relationshipUpdate.type === 'located_at') {
+                    if (relationshipUpdate.kind === 'located_at') {
                         const existingLocatedAt = this.worldStateService
                             .listRelationships(worldState)
-                            .filter(r => r.type === 'located_at' && r.fromId === relationshipUpdate.fromId);
+                            .filter(r => r.kind === 'located_at' && r.fromId === relationshipUpdate.fromId);
                         for (const rel of existingLocatedAt) {
                             this.worldStateService.deleteRelationship(worldState, rel.id);
                         }
                     }
 
-                    const relationship: RPGRelationship = {
+                    const base = {
                         id: `rel_${relationshipUpdate.fromId}_${relationshipUpdate.toId}_${Date.now()}`,
                         fromId: relationshipUpdate.fromId,
                         toId: relationshipUpdate.toId,
-                        type: relationshipUpdate.type,
-                        description: relationshipUpdate.description,
                         createdAt: Date.now(),
                         updatedAt: Date.now()
                     };
+
+                    let relationship: RPGRelationship;
+                    if (relationshipUpdate.kind === 'attitude_towards') {
+                        if (relationshipUpdate.stance === undefined) {
+                            throw new Error('Missing stance for attitude_towards relationship');
+                        }
+                        if (relationshipUpdate.intensity === undefined) {
+                            throw new Error('Missing intensity for attitude_towards relationship');
+                        }
+                        relationship = {
+                            ...base,
+                            kind: 'attitude_towards',
+                            stance: relationshipUpdate.stance,
+                            intensity: relationshipUpdate.intensity,
+                            ...(relationshipUpdate.reason !== undefined && { reason: relationshipUpdate.reason }),
+                            ...(relationshipUpdate.note !== undefined && { note: relationshipUpdate.note })
+                        };
+                    } else {
+                        relationship = {
+                            ...base,
+                            kind: relationshipUpdate.kind,
+                            ...(relationshipUpdate.note !== undefined && { note: relationshipUpdate.note })
+                        };
+                    }
+
                     this.worldStateService.createRelationship(worldState, relationship);
-                    console.log(`  ✅ Created relationship: ${relationship.fromId} -${relationship.type}-> ${relationship.toId}`);
+                    console.log(`  ✅ Created relationship: ${relationship.fromId} -${relationship.kind}-> ${relationship.toId}`);
                 } else if (relationshipUpdate.action === 'update') {
                     // For updates, we need to find the existing relationship
                     const existing = this.worldStateService.listRelationships(worldState).find(
-                        r => r.fromId === relationshipUpdate.fromId && r.toId === relationshipUpdate.toId && r.type === relationshipUpdate.type
+                        r => r.fromId === relationshipUpdate.fromId && r.toId === relationshipUpdate.toId && r.kind === relationshipUpdate.kind
                     );
                     if (existing) {
-                        const updates: Partial<RPGRelationship> = {};
-                        if (relationshipUpdate.description) updates.description = relationshipUpdate.description;
-                        this.worldStateService.updateRelationship(worldState, existing.id, updates);
+                        if (relationshipUpdate.kind === 'attitude_towards') {
+                            this.worldStateService.updateRelationship(worldState, existing.id, {
+                                ...(relationshipUpdate.note !== undefined && { note: relationshipUpdate.note }),
+                                ...(relationshipUpdate.stance !== undefined && { stance: relationshipUpdate.stance }),
+                                ...(relationshipUpdate.intensity !== undefined && { intensity: relationshipUpdate.intensity }),
+                                ...(relationshipUpdate.reason !== undefined && { reason: relationshipUpdate.reason })
+                            });
+                        } else {
+                            this.worldStateService.updateRelationship(worldState, existing.id, {
+                                ...(relationshipUpdate.note !== undefined && { note: relationshipUpdate.note })
+                            });
+                        }
                         console.log(`  ✅ Updated relationship: ${existing.id}`);
                     }
                 } else if (relationshipUpdate.action === 'delete') {
                     const existing = this.worldStateService.listRelationships(worldState).find(
-                        r => r.fromId === relationshipUpdate.fromId && r.toId === relationshipUpdate.toId && r.type === relationshipUpdate.type
+                        r => r.fromId === relationshipUpdate.fromId && r.toId === relationshipUpdate.toId && r.kind === relationshipUpdate.kind
                     );
                     if (existing) {
                         this.worldStateService.deleteRelationship(worldState, existing.id);

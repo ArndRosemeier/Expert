@@ -302,7 +302,7 @@ export class RPGView {
                 id: `rel_${playerId}_${locationId}`,
                 fromId: playerId,
                 toId: locationId,
-                type: 'located_at',
+                kind: 'located_at',
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -364,8 +364,8 @@ export class RPGView {
                 id: `rel_${sessionBriefLoreId}_${locationId}_describes`,
                 fromId: sessionBriefLoreId,
                 toId: locationId,
-                type: 'describes',
-                description: 'Initial session setup / starting scene',
+                kind: 'describes',
+                note: 'Initial session setup / starting scene',
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
@@ -374,8 +374,8 @@ export class RPGView {
                 id: `rel_${sessionBriefLoreId}_${playerId}_describes`,
                 fromId: sessionBriefLoreId,
                 toId: playerId,
-                type: 'describes',
-                description: 'Player character dossier / initial briefing',
+                kind: 'describes',
+                note: 'Player character dossier / initial briefing',
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
