@@ -468,6 +468,16 @@ export class RPGInteractionService {
         if (update.relationships) {
             for (const relationshipUpdate of update.relationships) {
                 if (relationshipUpdate.action === 'create') {
+                    // Enforce invariant: one active located_at per character (prevents missing/duplicate scene membership)
+                    if (relationshipUpdate.type === 'located_at') {
+                        const existingLocatedAt = this.worldStateService
+                            .listRelationships(worldState)
+                            .filter(r => r.type === 'located_at' && r.fromId === relationshipUpdate.fromId);
+                        for (const rel of existingLocatedAt) {
+                            this.worldStateService.deleteRelationship(worldState, rel.id);
+                        }
+                    }
+
                     const relationship: RPGRelationship = {
                         id: `rel_${relationshipUpdate.fromId}_${relationshipUpdate.toId}_${Date.now()}`,
                         fromId: relationshipUpdate.fromId,

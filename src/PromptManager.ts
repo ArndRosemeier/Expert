@@ -1991,6 +1991,12 @@ You MUST respond with valid XML following this schema:
 - **For newly created entities (action="create")**:
   - The DESCRIPTION you provide becomes canonical going forward, so it MUST be detailed and not abbreviated.
   - Include VERBATIM EVIDENCE copied from the GM response for any newly created character/location so important nuances cannot be lost.
+- **Scene placement (IMPORTANT)**:
+  - If a character is present in the current scene (i.e., they appear in the GM response as being here/entering/standing nearby), you MUST ensure there is a relationship:
+    - from_id = that character’s id
+    - to_id = the current location id
+    - type = located_at
+  - If a character moves locations, update their located_at relationship accordingly (do not leave multiple conflicting located_at relations).
 - Do NOT invent information not present in the narrative.
 - If a narrative reveals a new name for an existing location/character, UPDATE it, don't create a duplicate.
 - If the player introduces themselves by name to an NPC (or the NPC clearly learns the name), create a relationship:

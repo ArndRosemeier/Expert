@@ -415,15 +415,15 @@ export class WorldStateService {
      * Get entities at current location (characters with 'located_at' relationship)
      */
     getEntitiesAtLocation(worldState: RPGWorldState, locationId: string): string[] {
-        const result: string[] = [];
+        const result = new Set<string>();
         
         for (const rel of worldState.relationships.values()) {
             if (rel.type === 'located_at' && rel.toId === locationId) {
-                result.push(rel.fromId);
+                result.add(rel.fromId);
             }
         }
         
-        return result;
+        return [...result];
     }
     
     // ========================================
