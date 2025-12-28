@@ -329,6 +329,17 @@ export class RPGWorldInspector {
             html += '</div>';
         }
 
+        // Relationships (global list, because they count as world items)
+        const relationships = this.worldStateService.listRelationships(worldState);
+        if (relationships.length > 0) {
+            html += '<div class="rpg-tree-category">';
+            html += '<div class="rpg-tree-category-header" data-category="relationships">🔗 Relationships (' + relationships.length + ')</div>';
+            html += '<div class="rpg-tree-category-content" data-category="relationships">';
+            html += this.renderGlobalRelationships(relationships);
+            html += '</div>';
+            html += '</div>';
+        }
+
         // Distances
         const distances = this.worldStateService.getAllDistances(worldState);
         if (distances.length > 0) {
@@ -356,6 +367,50 @@ export class RPGWorldInspector {
         html += '</div>';
         
         this.contentContainer.innerHTML = html;
+    }
+
+    private renderGlobalRelationships(relationships: RPGRelationship[]): string {
+        let html = '<div class="rpg-relationships">';
+        html += '<ul>';
+
+        for (const rel of relationships) {
+            const fromName = this.getEntityName(rel.fromId);
+            const toName = this.getEntityName(rel.toId);
+            const ageClass = this.getAgeClass(rel.lastUsedTurn);
+
+            html += `<li class="rpg-relationship-editor" data-rel-id="${rel.id}">`;
+            html += `<div class="rpg-entity-header expanded ${ageClass}">`;
+            html += `<span class="rpg-expand-icon">•</span> `;
+            html += `<a class="rpg-relationship-link" data-target-id="${rel.fromId}">${this.escapeHtml(fromName)}</a>`;
+            html += ` <span class="rpg-relationship-type">${rel.kind}</span> `;
+            html += `<a class="rpg-relationship-link" data-target-id="${rel.toId}">${this.escapeHtml(toName)}</a>`;
+            html += ` <small class="rpg-muted">(last used turn: ${rel.lastUsedTurn})</small>`;
+            html += `</div>`;
+
+            html += `<div class="rpg-relationship-fields">`;
+            html += `<small class="rpg-muted">Created turn: ${rel.createdTurn}</small>`;
+            html += `<br><small class="rpg-muted">Last used turn: ${rel.lastUsedTurn}</small>`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
+
+            if (rel.kind === 'attitude_towards') {
+                html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
+                html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason || '')}" />`;
+            }
+            html += `</div>`;
+
+            html += `
+                <div class="rpg-relationship-actions">
+                    <button type="button" data-rpg-action="save-relationship" data-rel-id="${rel.id}">Save</button>
+                    <button type="button" data-rpg-action="delete-relationship" data-rel-id="${rel.id}">Delete</button>
+                </div>
+            `;
+            html += '</li>';
+        }
+
+        html += '</ul>';
+        html += '</div>';
+        return html;
     }
     
     /**
