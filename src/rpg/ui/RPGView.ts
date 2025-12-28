@@ -661,6 +661,11 @@ export class RPGView {
 
         // Migration: preTurnRollbackId is in-memory only and becomes invalid after reload.
         this.removeStaleRollbackIds(this.currentSession);
+
+        // Migration: initialize lastUsedTurn for items currently relevant to the narrator context.
+        // We cannot reconstruct historical "usage" for old turns, so we at least make the current scene reflect "used now".
+        this.interactionService.markNarratorContextAsUsed(this.currentSession);
+        await this.worldStateService.saveSession(this.currentSession);
         
         // Render main RPG interface
         this.renderMainInterface();

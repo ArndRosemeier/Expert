@@ -196,6 +196,17 @@ export class RPGInteractionService {
         }
     }
 
+    /**
+     * Mark all world items that are currently included in the narrator context as "used"
+     * for the current conversation turn. Useful after loading older sessions where we
+     * cannot reconstruct historical usage.
+     */
+    markNarratorContextAsUsed(session: RPGGameSession): void {
+        const turn = Math.floor(session.conversationHistory.length / 2);
+        const used = this.collectNarratorUsedWorldItems(session);
+        this.applyLastUsedTurn(session, turn, used);
+    }
+
     private collectNarratorUsedWorldItems(session: RPGGameSession): {
         locationIds: string[];
         characterIds: string[];
