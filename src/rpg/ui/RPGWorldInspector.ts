@@ -378,18 +378,22 @@ export class RPGWorldInspector {
             const toName = this.getEntityName(rel.toId);
             const ageClass = this.getAgeClass(rel.lastUsedTurn);
 
-            html += `<li class="rpg-relationship-editor" data-rel-id="${rel.id}">`;
-            html += `<div class="rpg-entity-header expanded ${ageClass}">`;
-            html += `<span class="rpg-expand-icon">•</span> `;
-            html += `<a class="rpg-relationship-link" data-target-id="${rel.fromId}">${this.escapeHtml(fromName)}</a>`;
-            html += ` <span class="rpg-relationship-type">${rel.kind}</span> `;
-            html += `<a class="rpg-relationship-link" data-target-id="${rel.toId}">${this.escapeHtml(toName)}</a>`;
+            html += `<li class="rpg-entity-tree-item rpg-relationship-editor" data-rel-id="${rel.id}">`;
+
+            // Collapsible header (same behavior as other world items)
+            html += `<div class="rpg-entity-header ${ageClass}" data-entity-id="${rel.id}" data-entity-type="relationship">`;
+            html += `<span class="rpg-expand-icon">▶</span> `;
+            html += `${this.escapeHtml(fromName)} <span class="rpg-relationship-type">${rel.kind}</span> ${this.escapeHtml(toName)}`;
             html += ` <small class="rpg-muted">(last used turn: ${rel.lastUsedTurn})</small>`;
             html += `</div>`;
+
+            html += `<div class="rpg-entity-details collapsed" data-entity-id="${rel.id}">`;
 
             html += `<div class="rpg-relationship-fields">`;
             html += `<small class="rpg-muted">Created turn: ${rel.createdTurn}</small>`;
             html += `<br><small class="rpg-muted">Last used turn: ${rel.lastUsedTurn}</small>`;
+            html += `<br><small class="rpg-muted">From: <a class="rpg-relationship-link" data-target-id="${rel.fromId}">${this.escapeHtml(fromName)}</a></small>`;
+            html += `<br><small class="rpg-muted">To: <a class="rpg-relationship-link" data-target-id="${rel.toId}">${this.escapeHtml(toName)}</a></small>`;
             html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
@@ -405,6 +409,8 @@ export class RPGWorldInspector {
                     <button type="button" data-rpg-action="delete-relationship" data-rel-id="${rel.id}">Delete</button>
                 </div>
             `;
+
+            html += `</div>`; // entity-details
             html += '</li>';
         }
 
