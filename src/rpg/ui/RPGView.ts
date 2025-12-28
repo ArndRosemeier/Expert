@@ -36,6 +36,13 @@ export class RPGView {
     
     // Additional services needed for start setting parsing
     private openRouterClient: OpenRouterClient;
+
+    private readonly MODEL_PURPOSES: Array<{ key: string; label: string }> = [
+        { key: 'creator', label: 'Creator' },
+        { key: 'prose', label: 'Prose' },
+        { key: 'editor', label: 'Editor' },
+        { key: 'rater', label: 'Rater' },
+    ];
     
     constructor(container: HTMLElement) {
         this.container = container;
@@ -745,12 +752,25 @@ export class RPGView {
      */
     private renderMainInterface(): void {
         if (!this.currentSession) return;
+
+        const narratorPurpose = this.currentSession.narratorPurpose;
+        const parserPurpose = this.currentSession.parserPurpose;
         
         const html = `
             <div class="rpg-main-interface">
                 <div class="rpg-header">
                     <h2>${this.currentSession.title}</h2>
                     <div class="rpg-header-actions">
+                        <select id="rpg-header-narrator-purpose" class="rpg-header-select" title="Narrator model purpose">
+                            ${this.MODEL_PURPOSES.map(p => `
+                                <option value="${p.key}" ${p.key === narratorPurpose ? 'selected' : ''}>${p.label}</option>
+                            `).join('')}
+                        </select>
+                        <select id="rpg-header-parser-purpose" class="rpg-header-select" title="Analyzer (parser) model purpose">
+                            ${this.MODEL_PURPOSES.map(p => `
+                                <option value="${p.key}" ${p.key === parserPurpose ? 'selected' : ''}>${p.label}</option>
+                            `).join('')}
+                        </select>
                         <button id="rpg-save-game-btn" type="button">Save</button>
                         <button id="rpg-restore-game-btn" type="button">Restore</button>
                         <button id="rpg-close-btn" type="button">Close</button>
@@ -791,6 +811,24 @@ export class RPGView {
         );
         
         // Save/Restore buttons
+        const narratorSelect = this.container.querySelector('#rpg-header-narrator-purpose') as HTMLSelectElement | null;
+        narratorSelect?.addEventListener('change', () => {
+            if (!this.currentSession) return;
+            this.currentSession.narratorPurpose = narratorSelect.value;
+            this.currentSession.updatedAt = Date.now();
+            void this.worldStateService.saveSession(this.currentSession);
+            console.log(`🎭 Narrator purpose set to: ${this.currentSession.narratorPurpose}`);
+        });
+
+        const parserSelect = this.container.querySelector('#rpg-header-parser-purpose') as HTMLSelectElement | null;
+        parserSelect?.addEventListener('change', () => {
+            if (!this.currentSession) return;
+            this.currentSession.parserPurpose = parserSelect.value;
+            this.currentSession.updatedAt = Date.now();
+            void this.worldStateService.saveSession(this.currentSession);
+            console.log(`🧪 Parser purpose set to: ${this.currentSession.parserPurpose}`);
+        });
+
         const saveBtn = this.container.querySelector('#rpg-save-game-btn');
         saveBtn?.addEventListener('click', () => {
             void this.saveGame();
