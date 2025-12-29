@@ -103,7 +103,17 @@ export class RPGInteractionService {
             
             // Expand prompt with context
             const expansionService = createRPGPromptExpansionService(settingsManager);
-            const systemPrompt = expansionService.expandPrompt(systemPromptTemplate, gameContext);
+            const systemPromptBase = expansionService.expandPrompt(systemPromptTemplate, gameContext);
+
+            const playerControlOverride =
+                `\n\n## Player Control (HARD RULE)\n` +
+                `- The player-controlled character is the one defined in the "Player Character" section above.\n` +
+                `- Its internal id is: ${session.worldState.playerCharacterId}\n` +
+                `- The player acts and speaks ONLY via the user's messages.\n` +
+                `- Do NOT write dialogue or decisions for the player-controlled character.\n` +
+                `- All other characters are NPCs controlled by you (the GM).\n`;
+
+            const systemPrompt = systemPromptBase + playerControlOverride;
             
             // Build messages array (last 2 messages + current action)
             const messages: Array<{role: string, content: string}> = [];

@@ -135,7 +135,7 @@ export class RPGContextBuilder {
 
         const redactedDescription = this.redactPlayerName(player.description, player.name);
 
-        let text = `**You (player)**\n`;
+        let text = `**You (player)** (player_character_id: ${player.id})\n`;
         text += `${redactedDescription}\n`;
 
         if (Object.keys(player.sceneState).length > 0) {
