@@ -798,9 +798,6 @@ export class RPGInteractionService {
         const oldPlayerId = worldState.playerCharacterId;
         worldState.playerCharacterId = newPlayerCharacterId;
 
-        // Re-anchor narrator: discard last-2-message conversational context once (it still references the old PC).
-        session.last2Messages = [];
-
         const oldPlayerName = this.worldStateService.getCharacter(worldState, oldPlayerId)?.name || oldPlayerId;
         session.pendingNarratorSystemNote =
             `PLAYER CHARACTER SWITCH:\n` +
