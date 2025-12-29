@@ -838,7 +838,19 @@ export class RPGInteractionService {
                     updatedTurn: turn
                 });
             }
-            return normalized;
+
+            // Cap goals to 3 by removing the oldest (simulates goal evolution).
+            // Oldest = smallest createdTurn, tie-break by smallest updatedTurn.
+            if (normalized.length <= 3) {
+                return normalized;
+            }
+
+            const sortedOldestFirst = [...normalized].sort((a, b) => {
+                if (a.createdTurn !== b.createdTurn) return a.createdTurn - b.createdTurn;
+                return a.updatedTurn - b.updatedTurn;
+            });
+            const keep = sortedOldestFirst.slice(sortedOldestFirst.length - 3);
+            return keep;
         };
         
         // Apply location updates
@@ -933,7 +945,7 @@ export class RPGInteractionService {
                         description: combinedDescription,
                         state: characterUpdate.state || {},
                         sceneState: characterUpdate.sceneState || {},
-                        goals: characterUpdate.goals || [],
+                        goals: normalizeGoals([], characterUpdate.goals || [], turn),
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),

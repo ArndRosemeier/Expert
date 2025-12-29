@@ -2019,6 +2019,7 @@ You MUST respond with valid XML following this schema:
 - **Goals (IMPORTANT)**:
   - Characters may have long-term goals for coherence. If you infer a goal for a character, output it in <goals_json> for that character.
   - If goals change, output the FULL goals array for that character (omit <goals_json> if unchanged).
+  - HARD LIMIT: Never output more than 3 goals for a character. If more goals exist, keep the 3 most recent and drop the oldest (goal evolution).
   - Goals JSON schema:
     - id: string (stable; reuse existing ids if present in Current World State)
     - text: string
