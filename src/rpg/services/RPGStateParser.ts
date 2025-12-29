@@ -4,7 +4,7 @@
  * Parses XML output from the State Parser LLM to extract world state changes.
  */
 
-import { RPGAttitudeStance, RPGStateUpdateXML } from '../types/RPGTypes';
+import { RPGAttitudeStance, RPGGoal, RPGGoalPriority, RPGGoalStatus, RPGStateUpdateXML } from '../types/RPGTypes';
 
 export class RPGStateParser {
     
@@ -240,6 +240,41 @@ export class RPGStateParser {
                     character.sceneState = JSON.parse(sceneStateElement.textContent.trim());
                 } catch (error) {
                     console.warn(`Failed to parse character scene_state JSON for ${character.id}:`, error);
+                }
+            }
+
+            const goalsElement = element.querySelector('goals_json');
+            if (goalsElement?.textContent) {
+                try {
+                    const parsed = JSON.parse(goalsElement.textContent.trim()) as unknown;
+                    if (!Array.isArray(parsed)) {
+                        throw new Error('goals_json must be a JSON array');
+                    }
+                    const goals: RPGGoal[] = parsed.map((g: unknown) => {
+                        if (!g || typeof g !== 'object') throw new Error('goal must be an object');
+                        const anyG = g as Record<string, unknown>;
+                        const id = anyG['id'];
+                        const text = anyG['text'];
+                        const status = anyG['status'];
+                        const priority = anyG['priority'];
+                        const createdTurn = anyG['createdTurn'];
+                        const updatedTurn = anyG['updatedTurn'];
+                        if (typeof id !== 'string') throw new Error('goal.id must be string');
+                        if (typeof text !== 'string') throw new Error('goal.text must be string');
+                        if (status !== 'active' && status !== 'completed' && status !== 'abandoned') throw new Error('goal.status invalid');
+                        if (priority !== 1 && priority !== 2 && priority !== 3 && priority !== 4 && priority !== 5) throw new Error('goal.priority invalid');
+                        return {
+                            id,
+                            text,
+                            status: status as RPGGoalStatus,
+                            priority: priority as RPGGoalPriority,
+                            createdTurn: typeof createdTurn === 'number' ? createdTurn : 0,
+                            updatedTurn: typeof updatedTurn === 'number' ? updatedTurn : 0
+                        };
+                    });
+                    character.goals = goals;
+                } catch (error) {
+                    console.warn(`Failed to parse character goals_json for ${character.id}:`, error);
                 }
             }
             

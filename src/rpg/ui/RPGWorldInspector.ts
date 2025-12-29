@@ -6,7 +6,7 @@
  * - World View: All locations, characters, lore with relationships
  */
 
-import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
+import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGGoal, RPGGoalPriority, RPGGoalStatus, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from '../services/WorldStateService';
 import { RPGInteractionService } from '../services/RPGInteractionService';
 import { getActiveProject } from '../../state';
@@ -558,6 +558,10 @@ export class RPGWorldInspector {
                     <label>SceneState (JSON)</label>
                     <textarea class="rpg-edit-textarea" data-field="sceneState" rows="6">${this.escapeHtml(JSON.stringify(character.sceneState, null, 2))}</textarea>
                 </div>
+                <div class="rpg-entity-editor-row">
+                    <label>Goals (JSON)</label>
+                    <textarea class="rpg-edit-textarea" data-field="goals" rows="6">${this.escapeHtml(JSON.stringify(character.goals, null, 2))}</textarea>
+                </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${characterId}" data-entity-type="character">Save</button>
                     <button type="button" data-rpg-action="consolidate-entity" data-entity-id="${characterId}" data-entity-type="character">Consolidate</button>
@@ -740,7 +744,40 @@ export class RPGWorldInspector {
             const sceneStateText = (editor.querySelector('[data-field="sceneState"]') as HTMLTextAreaElement).value;
             const sceneState = JSON.parse(sceneStateText) as Record<string, unknown>;
 
-            this.worldStateService.updateCharacter(worldState, entityId, { name, description, state, sceneState });
+            const goalsText = (editor.querySelector('[data-field="goals"]') as HTMLTextAreaElement).value;
+            const parsedGoals = JSON.parse(goalsText) as unknown;
+            if (!Array.isArray(parsedGoals)) {
+                throw new Error('Goals must be a JSON array.');
+            }
+
+            const goals: RPGGoal[] = parsedGoals.map((g: unknown) => {
+                if (!g || typeof g !== 'object') throw new Error('Goal must be an object.');
+                const anyG = g as Record<string, unknown>;
+                const id = anyG['id'];
+                const text = anyG['text'];
+                const status = anyG['status'];
+                const priority = anyG['priority'];
+                const createdTurn = anyG['createdTurn'];
+                const updatedTurn = anyG['updatedTurn'];
+
+                if (typeof id !== 'string') throw new Error('Goal.id must be a string.');
+                if (typeof text !== 'string') throw new Error('Goal.text must be a string.');
+                if (status !== 'active' && status !== 'completed' && status !== 'abandoned') throw new Error(`Invalid goal.status for '${id}'.`);
+                if (priority !== 1 && priority !== 2 && priority !== 3 && priority !== 4 && priority !== 5) throw new Error(`Invalid goal.priority for '${id}'.`);
+                if (typeof createdTurn !== 'number') throw new Error(`Goal.createdTurn must be a number for '${id}'.`);
+                if (typeof updatedTurn !== 'number') throw new Error(`Goal.updatedTurn must be a number for '${id}'.`);
+
+                return {
+                    id,
+                    text,
+                    status: status as RPGGoalStatus,
+                    priority: priority as RPGGoalPriority,
+                    createdTurn,
+                    updatedTurn
+                };
+            });
+
+            this.worldStateService.updateCharacter(worldState, entityId, { name, description, state, sceneState, goals });
         } else if (entityType === 'lore') {
             const title = (editor.querySelector('[data-field="title"]') as HTMLInputElement).value.trim();
             const content = (editor.querySelector('[data-field="content"]') as HTMLTextAreaElement).value;

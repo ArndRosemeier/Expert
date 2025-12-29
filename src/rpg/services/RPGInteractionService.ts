@@ -8,7 +8,7 @@
  * 4. State updates are applied and snapshot is created
  */
 
-import { RPGEntityType, RPGGameSession, RPGConversationMessage, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
+import { RPGEntityType, RPGGameSession, RPGConversationMessage, RPGGoal, RPGGoalPriority, RPGGoalStatus, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from './WorldStateService';
 import { RPGContextBuilder } from './RPGContextBuilder';
 import { RPGStateParser } from './RPGStateParser';
@@ -814,6 +814,32 @@ export class RPGInteractionService {
             }
             return merged;
         };
+
+        const normalizeGoals = (existingGoals: RPGGoal[], incomingGoals: RPGGoal[], turn: number): RPGGoal[] => {
+            const existingById = new Map<string, RPGGoal>();
+            for (const g of existingGoals) existingById.set(g.id, g);
+
+            const normalized: RPGGoal[] = [];
+            for (const g of incomingGoals) {
+                if (!g || typeof g !== 'object') throw new Error('Goal must be an object.');
+                if (typeof g.id !== 'string') throw new Error('Goal.id must be a string.');
+                if (typeof g.text !== 'string') throw new Error('Goal.text must be a string.');
+                if (g.status !== 'active' && g.status !== 'completed' && g.status !== 'abandoned') throw new Error(`Invalid goal.status for '${g.id}'.`);
+                if (g.priority !== 1 && g.priority !== 2 && g.priority !== 3 && g.priority !== 4 && g.priority !== 5) throw new Error(`Invalid goal.priority for '${g.id}'.`);
+
+                const prev = existingById.get(g.id);
+                const createdTurn = prev ? prev.createdTurn : (typeof g.createdTurn === 'number' && g.createdTurn >= 0 ? g.createdTurn : turn);
+                normalized.push({
+                    id: g.id,
+                    text: g.text,
+                    status: g.status as RPGGoalStatus,
+                    priority: g.priority as RPGGoalPriority,
+                    createdTurn,
+                    updatedTurn: turn
+                });
+            }
+            return normalized;
+        };
         
         // Apply location updates
         if (update.locations) {
@@ -907,6 +933,7 @@ export class RPGInteractionService {
                         description: combinedDescription,
                         state: characterUpdate.state || {},
                         sceneState: characterUpdate.sceneState || {},
+                        goals: characterUpdate.goals || [],
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),
@@ -934,6 +961,10 @@ export class RPGInteractionService {
                     if (characterUpdate.sceneState) {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
                         updates.sceneState = mergeJsonWithDeletions(existing?.sceneState || {}, characterUpdate.sceneState);
+                    }
+                    if (characterUpdate.goals) {
+                        const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
+                        updates.goals = normalizeGoals(existing?.goals || [], characterUpdate.goals, turn);
                     }
                     updates.createdTurn = turn;
                     

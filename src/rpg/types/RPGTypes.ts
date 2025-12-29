@@ -38,6 +38,10 @@ export interface RPGCharacter {
      */
     sceneState: Record<string, unknown>;
     /**
+     * Optional long-term goals for coherence. These are durable and should evolve over time.
+     */
+    goals: RPGGoal[];
+    /**
      * Conversation turn when this entity was created (0 = initial setup / intro turn).
      */
     createdTurn: number;
@@ -47,6 +51,18 @@ export interface RPGCharacter {
     lastUsedTurn: number;
     createdAt: number;
     updatedAt: number;
+}
+
+export type RPGGoalStatus = 'active' | 'completed' | 'abandoned';
+export type RPGGoalPriority = 1 | 2 | 3 | 4 | 5;
+
+export interface RPGGoal {
+    id: string;
+    text: string;
+    status: RPGGoalStatus;
+    priority: RPGGoalPriority;
+    createdTurn: number;
+    updatedTurn: number;
 }
 
 /**
@@ -277,6 +293,7 @@ export interface RPGStateUpdateXML {
         verbatimEvidence?: string;
         state?: Record<string, unknown>;
         sceneState?: Record<string, unknown>;
+        goals?: RPGGoal[];
     }>;
     lore?: Array<{
         action: 'create' | 'update';
@@ -422,13 +439,14 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
 
     const migratedCharacters = new Map<string, RPGCharacter>();
     for (const [id, ch] of Object.entries(serialized.characters)) {
-        const anyCh = ch as RPGCharacter & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown> };
+        const anyCh = ch as RPGCharacter & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown>; goals?: RPGGoal[] };
         const createdTurn = anyCh.createdTurn ?? 0;
         migratedCharacters.set(id, {
             ...anyCh,
             createdTurn,
             lastUsedTurn: anyCh.lastUsedTurn ?? createdTurn,
-            sceneState: anyCh.sceneState ?? {}
+            sceneState: anyCh.sceneState ?? {},
+            goals: anyCh.goals ?? []
         });
     }
 

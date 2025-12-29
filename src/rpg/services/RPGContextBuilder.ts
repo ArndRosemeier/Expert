@@ -142,6 +142,17 @@ export class RPGContextBuilder {
             text += `SceneState: ${JSON.stringify(player.sceneState, null, 2)}\n`;
         }
 
+        if (player.goals.length > 0) {
+            const goalsText = player.goals
+                .filter(g => g.status === 'active')
+                .sort((a, b) => b.priority - a.priority)
+                .map(g => `${g.text} (p${g.priority})`)
+                .join('; ');
+            if (goalsText.length > 0) {
+                text += `Goals: ${goalsText}\n`;
+            }
+        }
+
         if (Object.keys(player.state).length > 0) {
             text += `State: ${JSON.stringify(player.state, null, 2)}`;
         }
@@ -199,6 +210,16 @@ export class RPGContextBuilder {
             }
             if (memoryText) {
                 text += ` (memory about you: ${memoryText})`;
+            }
+            if (character.goals.length > 0) {
+                const goalsText = character.goals
+                    .filter(g => g.status === 'active')
+                    .sort((a, b) => b.priority - a.priority)
+                    .map(g => `${g.text} (p${g.priority})`)
+                    .join('; ');
+                if (goalsText.length > 0) {
+                    text += ` (goals: ${goalsText})`;
+                }
             }
             if (Object.keys(character.sceneState).length > 0) {
                 text += ` (SceneState: ${JSON.stringify(character.sceneState)})`;
@@ -291,6 +312,9 @@ export class RPGContextBuilder {
             }
             if (Object.keys(character.sceneState).length > 0) {
                 xml += `      <scene_state>${this.escapeXml(JSON.stringify(character.sceneState))}</scene_state>\n`;
+            }
+            if (character.goals.length > 0) {
+                xml += `      <goals_json>${this.escapeXml(JSON.stringify(character.goals))}</goals_json>\n`;
             }
             xml += '    </character>\n';
         }

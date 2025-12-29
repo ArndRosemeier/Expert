@@ -302,6 +302,7 @@ export class RPGView {
                 description: playerDescription,
                 state: {},
                 sceneState: {},
+                goals: [],
                 createdTurn: 0,
                 lastUsedTurn: 0,
                 createdAt: Date.now(),

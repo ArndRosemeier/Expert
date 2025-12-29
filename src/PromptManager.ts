@@ -1939,6 +1939,7 @@ You MUST respond with valid XML following this schema:
       </verbatim_evidence>
       <state>JSON object with dynamic state</state>
       <scene_state>JSON object with ephemeral, scene-scoped state</scene_state>
+      <goals_json>JSON array of goals for long-term coherence</goals_json>
     </character>
     <!-- Repeat for each character -->
   </characters>
@@ -2015,6 +2016,16 @@ You MUST respond with valid XML following this schema:
 - **State key removal (IMPORTANT)**:
   - If a previously present state key is no longer true, remove it by setting that key to null in <state> or <scene_state>.
   - Example: {"goal_contact_player": null} means delete that key from stored state.
+- **Goals (IMPORTANT)**:
+  - Characters may have long-term goals for coherence. If you infer a goal for a character, output it in <goals_json> for that character.
+  - If goals change, output the FULL goals array for that character (omit <goals_json> if unchanged).
+  - Goals JSON schema:
+    - id: string (stable; reuse existing ids if present in Current World State)
+    - text: string
+    - status: "active" | "completed" | "abandoned"
+    - priority: 1|2|3|4|5
+    - createdTurn: number
+    - updatedTurn: number
 - **IMPORTANT: Descriptions are canonical**:
   - Do NOT update/overwrite the DESCRIPTION field for existing CHARACTER or LOCATION entities.
   - Instead, put new/changed facts into the STATE field (structured JSON) and/or create a new LORE ITEM (preferred for narrative/background facts) and link it via relationships.
@@ -2087,6 +2098,7 @@ Extract all world state changes from the Game Master's response.
 - Track secrets/facts as lore items + explicit knowledge relationships (kind="knows_fact") rather than hiding them in character descriptions.
 - Track attitudes as kind="attitude_towards" with stance/intensity.
 - Use <scene_state> for ephemeral, scene-scoped facts. Use <state> for durable facts.
+- Use <goals_json> for long-term character goals (optional). If goals change, output the full array.
 - If a durable/scene-scoped state key is no longer true, remove it by setting it to null in the relevant JSON.
 - Maintain per-NPC memory lore: mem_<npc_id>_about_<player_id> tagged memory,npc_memory, linked via knows_fact.
 

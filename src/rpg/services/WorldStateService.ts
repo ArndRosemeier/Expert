@@ -178,6 +178,7 @@ export class WorldStateService {
                 description: updates.description || '',
                 state: updates.state || {},
                 sceneState: updates.sceneState || {},
+                goals: updates.goals || [],
                 createdTurn: updates.createdTurn ?? 0,
                 lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
