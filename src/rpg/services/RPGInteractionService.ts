@@ -765,6 +765,61 @@ export class RPGInteractionService {
         return save;
     }
 
+    async takeOverCharacter(session: RPGGameSession, newPlayerCharacterId: string): Promise<void> {
+        const worldState = session.worldState;
+
+        if (this.worldStateService.isLocked()) {
+            throw new Error(`Cannot take over character while world state is locked: ${this.worldStateService.getLockReason()}`);
+        }
+
+        const newPlayer = this.worldStateService.getCharacter(worldState, newPlayerCharacterId);
+        if (!newPlayer) {
+            throw new Error(`Take over failed: character not found (${newPlayerCharacterId}).`);
+        }
+
+        const oldPlayerId = worldState.playerCharacterId;
+        worldState.playerCharacterId = newPlayerCharacterId;
+
+        // Move the "current location" to wherever the new player character is located (if known).
+        const locatedAt = this.worldStateService
+            .listRelationships(worldState)
+            .find(r => r.kind === 'located_at' && r.fromId === newPlayerCharacterId);
+
+        if (locatedAt && worldState.locations.has(locatedAt.toId)) {
+            worldState.currentLocationId = locatedAt.toId;
+        } else {
+            // Ensure the new player character is at the current location.
+            const currentLoc = worldState.currentLocationId;
+            if (!worldState.locations.has(currentLoc)) {
+                throw new Error(`Take over failed: currentLocationId '${currentLoc}' does not exist.`);
+            }
+
+            // Delete any existing located_at edges for this character and set it to current location.
+            const existingLocatedAt = this.worldStateService
+                .listRelationships(worldState)
+                .filter(r => r.kind === 'located_at' && r.fromId === newPlayerCharacterId);
+            for (const rel of existingLocatedAt) {
+                this.worldStateService.deleteRelationship(worldState, rel.id);
+            }
+
+            this.worldStateService.createRelationship(worldState, {
+                id: `rel_${newPlayerCharacterId}_${currentLoc}_located_at_${Date.now()}`,
+                fromId: newPlayerCharacterId,
+                toId: currentLoc,
+                kind: 'located_at',
+                createdTurn: Math.floor(session.conversationHistory.length / 2),
+                lastUsedTurn: Math.floor(session.conversationHistory.length / 2),
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+        }
+
+        session.updatedAt = Date.now();
+        await this.worldStateService.saveSession(session);
+
+        console.log(`🎭 Player character switched: '${oldPlayerId}' -> '${newPlayerCharacterId}'`);
+    }
+
     async restoreManualSaveIntoSession(session: RPGGameSession, saveId: string): Promise<void> {
         const save = session.manualSaves.find(s => s.id === saveId);
         if (!save) {

@@ -190,6 +190,10 @@ export class RPGWorldInspector {
                 await this.consolidateEntity(actionEl);
                 return;
             }
+            if (action === 'take-over-character') {
+                await this.takeOverCharacter(actionEl);
+                return;
+            }
         } catch (err) {
             console.error('World Inspector action failed:', err);
             alert(err instanceof Error ? err.message : String(err));
@@ -565,6 +569,7 @@ export class RPGWorldInspector {
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${characterId}" data-entity-type="character">Save</button>
                     <button type="button" data-rpg-action="consolidate-entity" data-entity-id="${characterId}" data-entity-type="character">Consolidate</button>
+                    ${isPlayer ? '' : `<button type="button" data-rpg-action="take-over-character" data-entity-id="${characterId}">Take over</button>`}
                     ${isPlayer ? '' : `<button type="button" data-rpg-action="delete-entity" data-entity-id="${characterId}" data-entity-type="character">Delete</button>`}
                 </div>
             </div>
@@ -954,6 +959,29 @@ export class RPGWorldInspector {
 
         // This is an explicit LLM call; we keep it loud and visible in logs.
         await this.interactionService.consolidateEntity(this.session, entityType, entityId);
+        this.refresh();
+    }
+
+    private async takeOverCharacter(actionEl: HTMLElement): Promise<void> {
+        const characterId = actionEl.getAttribute('data-entity-id');
+        if (!characterId) throw new Error('Take over: missing character id.');
+
+        const worldState = this.session.worldState;
+        if (worldState.playerCharacterId === characterId) {
+            throw new Error('Take over: this character is already the player character.');
+        }
+
+        const character = this.worldStateService.getCharacter(worldState, characterId);
+        if (!character) throw new Error(`Take over: character not found (${characterId}).`);
+
+        const ok = confirm(
+            `Take over "${character.name}"?\n\n` +
+            `You will become this character. The previous player character will become an NPC.\n` +
+            `This will affect narration and world context immediately.`
+        );
+        if (!ok) return;
+
+        await this.interactionService.takeOverCharacter(this.session, characterId);
         this.refresh();
     }
 
