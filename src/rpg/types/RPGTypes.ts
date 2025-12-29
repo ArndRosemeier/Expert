@@ -260,6 +260,11 @@ export interface RPGGameSession {
     narratorPurpose: string; // Model purpose for Game LLM (default: 'prose')
     parserPurpose: string; // Model purpose for State Parser LLM (default: 'editor')
     customSystemPrompt?: string; // Custom system prompt for Game LLM (includes style and rules)
+    /**
+     * One-shot system note injected into the next narrator call only.
+     * Used for events that must immediately re-anchor narration context (e.g. player character takeover).
+     */
+    pendingNarratorSystemNote?: string;
     createdAt: number;
     updatedAt: number;
 }
@@ -399,6 +404,7 @@ export interface RPGGameSessionSerialized {
     narratorPurpose: string;
     parserPurpose: string;
     customSystemPrompt?: string;
+    pendingNarratorSystemNote?: string;
     createdAt: number;
     updatedAt: number;
 }
@@ -579,6 +585,7 @@ export function serializeSession(session: RPGGameSession): RPGGameSessionSeriali
         narratorPurpose: session.narratorPurpose,
         parserPurpose: session.parserPurpose,
         ...(session.customSystemPrompt !== undefined && { customSystemPrompt: session.customSystemPrompt }),
+        ...(session.pendingNarratorSystemNote !== undefined && { pendingNarratorSystemNote: session.pendingNarratorSystemNote }),
         createdAt: session.createdAt,
         updatedAt: session.updatedAt
     };
@@ -597,6 +604,7 @@ export function deserializeSession(serialized: RPGGameSessionSerialized): RPGGam
         narratorPurpose: serialized.narratorPurpose,
         parserPurpose: serialized.parserPurpose,
         ...(serialized.customSystemPrompt !== undefined && { customSystemPrompt: serialized.customSystemPrompt }),
+        ...(serialized.pendingNarratorSystemNote !== undefined && { pendingNarratorSystemNote: serialized.pendingNarratorSystemNote }),
         createdAt: serialized.createdAt,
         updatedAt: serialized.updatedAt
     };

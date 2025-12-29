@@ -120,6 +120,14 @@ export class RPGInteractionService {
             
             // Add system prompt
             messages.push({role: 'system', content: systemPrompt});
+
+            // One-shot re-anchoring note (e.g. after take-over). This is NOT part of the visible chat history.
+            if (session.pendingNarratorSystemNote) {
+                messages.push({ role: 'system', content: session.pendingNarratorSystemNote });
+                delete session.pendingNarratorSystemNote;
+                session.updatedAt = Date.now();
+                await this.worldStateService.saveSession(session);
+            }
             
             // Add last 2 messages from conversation history
             for (const msg of session.last2Messages) {
@@ -789,6 +797,16 @@ export class RPGInteractionService {
 
         const oldPlayerId = worldState.playerCharacterId;
         worldState.playerCharacterId = newPlayerCharacterId;
+
+        // Re-anchor narrator: discard last-2-message conversational context once (it still references the old PC).
+        session.last2Messages = [];
+
+        const oldPlayerName = this.worldStateService.getCharacter(worldState, oldPlayerId)?.name || oldPlayerId;
+        session.pendingNarratorSystemNote =
+            `PLAYER CHARACTER SWITCH:\n` +
+            `- The player used to control: ${oldPlayerName} (id=${oldPlayerId})\n` +
+            `- The player now controls: ${newPlayer.name} (id=${newPlayerCharacterId})\n` +
+            `- Treat the new player character as "you" in narration and follow the Player Control rules.\n`;
 
         // Move the "current location" to wherever the new player character is located (if known).
         const locatedAt = this.worldStateService
