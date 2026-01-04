@@ -131,35 +131,31 @@ export class RPGLiteView {
         </div>
       </div>
       <div class="rpg-lite-body">
-        <div class="rpg-lite-sidebar">
-          <div class="rpg-lite-section-title">Sessions</div>
-          <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
-          <button id="rpg-lite-new-session" class="rpg-lite-btn rpg-lite-btn-primary">New Session</button>
-        </div>
-        <div class="rpg-lite-main">
-          <div class="rpg-lite-editors">
-            <div class="rpg-lite-editor">
-              <div class="rpg-lite-section-title">Start Presets</div>
-              <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                <select id="rpg-lite-selector-preset-select" class="rpg-lite-select" style="flex: 1; min-width: 14rem;">
-                  <option value="">Select preset…</option>
-                  ${this.presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                </select>
-                <button id="rpg-lite-selector-restart" class="rpg-lite-btn">Restart</button>
-                <button id="rpg-lite-selector-edit-preset" class="rpg-lite-btn">Edit</button>
+        <div class="rpg-lite-main" style="max-width: 48rem; margin: 0 auto;">
+          ${this.editingPresetId ? this.renderPresetEditorHtml(this.editingPresetId) : `
+            <div class="rpg-lite-editors">
+              <div class="rpg-lite-editor">
+                <div class="rpg-lite-section-title">Active Sessions</div>
+                <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
+                <button id="rpg-lite-new-session-scratch" class="rpg-lite-btn rpg-lite-btn-primary" style="width: 100%;">+ New Session from Scratch</button>
               </div>
-              <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
-            </div>
-          </div>
-          <div class="rpg-lite-messages">
-            ${this.editingPresetId ? this.renderPresetEditorHtml(this.editingPresetId) : `
-              <div class="rpg-lite-message">
-                <div class="rpg-lite-message-content">
-                  Create a new session, or restart from a saved preset.
+
+              ${this.presets.length > 0 ? `
+                <div class="rpg-lite-editor" style="margin-top: 1.5rem;">
+                  <div style="text-align: center; opacity: 0.6; font-size: 0.9rem; margin: 1rem 0;">or start from template</div>
+                  <div class="rpg-lite-section-title">Saved Templates</div>
+                  <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
+                  <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
                 </div>
-              </div>
-            `}
-          </div>
+              ` : `
+                <div class="rpg-lite-editor" style="margin-top: 1.5rem;">
+                  <div class="rpg-lite-section-title">Saved Templates</div>
+                  <div style="opacity: 0.7; margin: 1rem 0; text-align: center;">No templates yet.</div>
+                  <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
+                </div>
+              `}
+            </div>
+          `}
         </div>
       </div>
     `;
@@ -169,39 +165,19 @@ export class RPGLiteView {
       this.modalEl = null;
     });
 
-    (this.container.querySelector('#rpg-lite-new-session') as HTMLButtonElement).addEventListener('click', () => {
-      void this.renderNewSessionDialog();
-    });
-
-    const selectorPresetSelect = this.container.querySelector('#rpg-lite-selector-preset-select') as HTMLSelectElement;
-    const selectorRestartBtn = this.container.querySelector('#rpg-lite-selector-restart') as HTMLButtonElement;
-    const selectorEditBtn = this.container.querySelector('#rpg-lite-selector-edit-preset') as HTMLButtonElement;
-    selectorRestartBtn.disabled = this.presets.length === 0;
-    selectorRestartBtn.addEventListener('click', () => {
-      const id = selectorPresetSelect.value;
-      if (!id) {
-        alert('Please select a start preset first.');
-        selectorPresetSelect.focus();
-        return;
-      }
-      void this.restartFromPreset(id).catch((e: unknown) => {
-        console.error('RPG Lite restart failed:', e);
-        const msg = e instanceof Error ? e.message : String(e);
-        alert(`Restart failed: ${msg}`);
+    const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement | null;
+    if (newScratchBtn) {
+      newScratchBtn.addEventListener('click', () => {
+        void this.renderNewSessionDialog(false);
       });
-    });
+    }
 
-    selectorEditBtn.disabled = this.presets.length === 0;
-    selectorEditBtn.addEventListener('click', () => {
-      const id = selectorPresetSelect.value;
-      if (!id) {
-        alert('Please select a start preset first.');
-        selectorPresetSelect.focus();
-        return;
-      }
-      this.editingPresetId = id;
-      this.renderSelector();
-    });
+    const newTemplateBtn = this.container.querySelector('#rpg-lite-new-template') as HTMLButtonElement | null;
+    if (newTemplateBtn) {
+      newTemplateBtn.addEventListener('click', () => {
+        void this.renderNewSessionDialog(true);
+      });
+    }
 
     this.renderSessionList();
     this.renderPresetList();
@@ -209,28 +185,37 @@ export class RPGLiteView {
   }
 
   private renderSessionList(): void {
-    const list = this.container.querySelector('#rpg-lite-session-list') as HTMLElement;
+    const list = this.container.querySelector('#rpg-lite-session-list') as HTMLElement | null;
+    if (!list) return;
+
+    if (this.sessions.length === 0) {
+      list.innerHTML = '<div style="opacity: 0.7; margin: 1rem 0; text-align: center;">No sessions yet.</div>';
+      return;
+    }
+
     list.innerHTML = this.sessions
       .map(
         (s) => `
-        <div class="rpg-lite-list-item" data-session-id="${s.id}">
-          <div style="min-width:0;">
+        <div class="rpg-lite-list-item" data-session-id="${s.id}" style="cursor: pointer;">
+          <div style="min-width:0; flex: 1;">
             <div class="rpg-lite-list-item-title">${s.title}</div>
             <div style="opacity:.8; font-size:.85rem;">${formatDateTime(s.updatedAt)} · ${s.conversation.length} msgs</div>
           </div>
-          <button class="rpg-lite-btn" data-delete-session-id="${s.id}" title="Delete">🗑️</button>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <button class="rpg-lite-btn rpg-lite-btn-primary" data-continue-session-id="${s.id}" title="Continue">Continue</button>
+            <button class="rpg-lite-btn" data-delete-session-id="${s.id}" title="Delete">Delete</button>
+          </div>
         </div>
       `
       )
       .join('');
 
-    list.querySelectorAll('[data-session-id]').forEach((el) => {
+    list.querySelectorAll('[data-continue-session-id]').forEach((el) => {
       el.addEventListener('click', (ev) => {
-        const target = ev.currentTarget as HTMLElement;
-        const id = target.dataset['sessionId'];
-        if (!id) throw new Error('Session list item is missing data-session-id.');
-        const btn = (ev.target as HTMLElement).closest('[data-delete-session-id]');
-        if (btn) return;
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['continueSessionId'];
+        if (!id) throw new Error('Continue session button is missing data-continue-session-id.');
         void this.openSession(id);
       });
     });
@@ -247,42 +232,53 @@ export class RPGLiteView {
   }
 
   private renderPresetList(): void {
-    const list = this.container.querySelector('#rpg-lite-preset-list') as HTMLElement;
+    const list = this.container.querySelector('#rpg-lite-preset-list') as HTMLElement | null;
+    if (!list) return;
+
+    if (this.presets.length === 0) {
+      return;
+    }
+
     list.innerHTML = this.presets
       .map(
         (p) => `
-        <div class="rpg-lite-list-item" data-preset-id="${p.id}">
-          <div style="min-width:0;">
+        <div class="rpg-lite-list-item" data-preset-id="${p.id}" style="cursor: pointer;">
+          <div style="min-width:0; flex: 1;">
             <div class="rpg-lite-list-item-title">${p.name}</div>
             <div style="opacity:.8; font-size:.85rem;">${p.title}</div>
           </div>
           <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button class="rpg-lite-btn" data-edit-preset-id="${p.id}" title="Edit">✏️</button>
-            <button class="rpg-lite-btn" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
+            <button class="rpg-lite-btn rpg-lite-btn-primary" data-start-preset-id="${p.id}" title="Start">Start</button>
+            <button class="rpg-lite-btn" data-edit-preset-id="${p.id}" title="Edit">Edit</button>
+            <button class="rpg-lite-btn" data-delete-preset-id="${p.id}" title="Delete">Delete</button>
           </div>
         </div>
       `
       )
       .join('');
 
-    list.querySelectorAll('[data-preset-id]').forEach((el) => {
+    list.querySelectorAll('[data-start-preset-id]').forEach((el) => {
       el.addEventListener('click', (ev) => {
-        const target = ev.currentTarget as HTMLElement;
-        const id = target.dataset['presetId'];
-        if (!id) throw new Error('Preset list item is missing data-preset-id.');
-        const editBtn = (ev.target as HTMLElement).closest('[data-edit-preset-id]');
-        if (editBtn) {
-          this.editingPresetId = id;
-          this.renderSelector();
-          return;
-        }
-        const btn = (ev.target as HTMLElement).closest('[data-delete-preset-id]');
-        if (btn) return;
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['startPresetId'];
+        if (!id) throw new Error('Start preset button is missing data-start-preset-id.');
         void this.restartFromPreset(id).catch((e: unknown) => {
           console.error('RPG Lite restart failed:', e);
           const msg = e instanceof Error ? e.message : String(e);
           alert(`Restart failed: ${msg}`);
         });
+      });
+    });
+
+    list.querySelectorAll('[data-edit-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['editPresetId'];
+        if (!id) throw new Error('Edit preset button is missing data-edit-preset-id.');
+        this.editingPresetId = id;
+        this.renderSelector();
       });
     });
 
@@ -471,21 +467,24 @@ export class RPGLiteView {
     await this.generateOpeningMessage();
   }
 
-  private async renderNewSessionDialog(): Promise<void> {
+  private async renderNewSessionDialog(isTemplate: boolean): Promise<void> {
     this.ensureModal();
     this.currentSession = null;
+
+    const title = isTemplate ? 'New Template' : 'New Session from Scratch';
+    const buttonText = isTemplate ? 'Create Template' : 'Analyze & Start';
 
     this.container.innerHTML = `
       <div class="rpg-lite-topbar">
         <div class="rpg-lite-topbar-left">
-          <div class="rpg-lite-title">New RPG Lite Session</div>
+          <div class="rpg-lite-title">${title}</div>
         </div>
         <div class="rpg-lite-topbar-right">
           <button id="rpg-lite-back" class="rpg-lite-btn">Back</button>
         </div>
       </div>
       <div class="rpg-lite-body">
-        <div class="rpg-lite-main">
+        <div class="rpg-lite-main" style="max-width: 48rem; margin: 0 auto;">
           <div class="rpg-lite-editors">
             <div class="rpg-lite-editor">
               <div class="rpg-lite-section-title">Adventure Prompt</div>
@@ -504,7 +503,7 @@ export class RPGLiteView {
                   <span style="opacity:.85;">Context msgs</span>
                   <input id="rpg-lite-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="10000" style="max-width: 8rem;" />
                 </label>
-                <button id="rpg-lite-analyze" class="rpg-lite-btn rpg-lite-btn-primary">Analyze & Create</button>
+                <button id="rpg-lite-analyze" class="rpg-lite-btn rpg-lite-btn-primary">${buttonText}</button>
                 <span id="rpg-lite-status" style="opacity:.85;"></span>
               </div>
             </div>
@@ -527,11 +526,11 @@ export class RPGLiteView {
     });
 
     (this.container.querySelector('#rpg-lite-analyze') as HTMLButtonElement).addEventListener('click', () => {
-      void this.createSessionFromPrompt();
+      void this.createSessionFromPrompt(isTemplate);
     });
   }
 
-  private async createSessionFromPrompt(): Promise<void> {
+  private async createSessionFromPrompt(isTemplate: boolean): Promise<void> {
     const promptEl = this.container.querySelector('#rpg-lite-adventure-prompt') as HTMLTextAreaElement;
     const purposeEl = this.container.querySelector('#rpg-lite-narrator-purpose') as HTMLSelectElement;
     const maxContextEl = this.container.querySelector('#rpg-lite-max-context') as HTMLInputElement;
@@ -552,29 +551,18 @@ export class RPGLiteView {
 
     const split = await this.promptSplitService.splitAdventurePrompt(adventurePrompt);
 
-    const presetName = prompt('Name this start preset? (Cancel to skip saving a preset)', split.title);
-    const effectiveTitle = presetName && presetName.trim().length > 0 ? presetName.trim() : split.title;
+    if (isTemplate) {
+      const templateName = prompt('Name this template:', split.title);
+      if (!templateName || templateName.trim().length === 0) {
+        btn.disabled = false;
+        statusEl.textContent = '';
+        return;
+      }
 
-    const session: RPGLiteSession = {
-      id: newId('rpg_lite_session'),
-      title: effectiveTitle,
-      createdAt: now(),
-      updatedAt: now(),
-      systemPrompt: split.systemPrompt,
-      prefixContext: split.prefixContext,
-      narratorPurpose,
-      maxContextMessages: maxContext,
-      conversation: []
-    };
-
-    const storage = await StorageService.getInstance();
-    await storage.saveRPGLiteSession(session);
-
-    if (presetName && presetName.trim().length > 0) {
       const preset: RPGLiteStartPreset = {
         id: newId('rpg_lite_preset'),
-        name: effectiveTitle,
-        title: effectiveTitle,
+        name: templateName.trim(),
+        title: split.title,
         createdAt: now(),
         updatedAt: now(),
         systemPrompt: split.systemPrompt,
@@ -582,14 +570,32 @@ export class RPGLiteView {
         narratorPurpose,
         maxContextMessages: maxContext
       };
-      await storage.saveRPGLiteStartPreset(preset);
-    }
 
-    await this.loadAll();
-    this.currentSession = session;
-    this.renderSession();
-    this.isStreaming = false;
-    await this.generateOpeningMessage();
+      const storage = await StorageService.getInstance();
+      await storage.saveRPGLiteStartPreset(preset);
+      await this.loadAll();
+      this.renderSelector();
+    } else {
+      const session: RPGLiteSession = {
+        id: newId('rpg_lite_session'),
+        title: split.title,
+        createdAt: now(),
+        updatedAt: now(),
+        systemPrompt: split.systemPrompt,
+        prefixContext: split.prefixContext,
+        narratorPurpose,
+        maxContextMessages: maxContext,
+        conversation: []
+      };
+
+      const storage = await StorageService.getInstance();
+      await storage.saveRPGLiteSession(session);
+      await this.loadAll();
+      this.currentSession = session;
+      this.renderSession();
+      this.isStreaming = false;
+      await this.generateOpeningMessage();
+    }
   }
 
   private renderSession(): void {
