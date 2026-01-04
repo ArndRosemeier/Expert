@@ -43,6 +43,12 @@ function buildContextMessages(session: RPGLiteSession): OpenRouterMessage[] {
   return messages;
 }
 
+function computeContextCharCount(session: RPGLiteSession): { promptChars: number; messageCount: number } {
+  const messages = buildContextMessages(session);
+  const promptForLogging = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
+  return { promptChars: promptForLogging.length, messageCount: messages.length };
+}
+
 export class RPGLiteView {
   private container: HTMLElement;
   private modalEl: HTMLElement | null = null;
@@ -299,7 +305,7 @@ export class RPGLiteView {
                 </label>
                 <label style="display:flex; gap:.5rem; align-items:center;">
                   <span style="opacity:.85;">Context msgs</span>
-                  <input id="rpg-lite-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="40" style="max-width: 8rem;" />
+                  <input id="rpg-lite-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="10000" style="max-width: 8rem;" />
                 </label>
                 <button id="rpg-lite-analyze" class="rpg-lite-btn rpg-lite-btn-primary">Analyze & Create</button>
                 <span id="rpg-lite-status" style="opacity:.85;"></span>
@@ -407,6 +413,10 @@ export class RPGLiteView {
               <option value="rater">Rater</option>
             </select>
           </label>
+          <label style="display:flex; align-items:center; gap:.5rem;">
+            <span style="opacity:.85;">Max msgs</span>
+            <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;" />
+          </label>
           <button id="rpg-lite-save-preset" class="rpg-lite-btn">Save Start</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
@@ -437,7 +447,10 @@ export class RPGLiteView {
           <div id="rpg-lite-messages" class="rpg-lite-messages"></div>
           <div class="rpg-lite-composer">
             <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="Your message..."></textarea>
-            <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
+            <div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">
+              <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
+              <div id="rpg-lite-context-stats" style="opacity:.85; font-size:.85rem;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -459,6 +472,14 @@ export class RPGLiteView {
       void this.saveSession();
     });
 
+    const maxContextEl = this.container.querySelector('#rpg-lite-max-context-session') as HTMLInputElement;
+    maxContextEl.value = String(session.maxContextMessages);
+    maxContextEl.addEventListener('input', () => {
+      const normalized = Math.max(2, Math.floor(Number(maxContextEl.value)));
+      session.maxContextMessages = normalized;
+      void this.saveSession().then(() => this.updateContextStats());
+    });
+
     const presetSelect = this.container.querySelector('#rpg-lite-preset-select') as HTMLSelectElement;
     (this.container.querySelector('#rpg-lite-restart') as HTMLButtonElement).addEventListener('click', () => {
       const id = presetSelect.value;
@@ -474,14 +495,14 @@ export class RPGLiteView {
     systemEl.value = session.systemPrompt;
     systemEl.addEventListener('input', () => {
       session.systemPrompt = systemEl.value;
-      void this.saveSession();
+      void this.saveSession().then(() => this.updateContextStats());
     });
 
     const prefixEl = this.container.querySelector('#rpg-lite-prefix') as HTMLTextAreaElement;
     prefixEl.value = session.prefixContext;
     prefixEl.addEventListener('input', () => {
       session.prefixContext = prefixEl.value;
-      void this.saveSession();
+      void this.saveSession().then(() => this.updateContextStats());
     });
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
@@ -499,8 +520,18 @@ export class RPGLiteView {
 
     this.renderSessionList();
     this.renderConversation();
+    this.updateContextStats();
 
     inputEl.focus();
+  }
+
+  private updateContextStats(): void {
+    if (!this.currentSession) throw new Error('No current session.');
+    const statsEl = this.container.querySelector('#rpg-lite-context-stats') as HTMLElement;
+    if (!statsEl) throw new Error('Missing #rpg-lite-context-stats element.');
+
+    const { promptChars, messageCount } = computeContextCharCount(this.currentSession);
+    statsEl.textContent = `Context: ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
   }
 
   private async saveCurrentAsPreset(): Promise<void> {
@@ -543,6 +574,7 @@ export class RPGLiteView {
     }
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    this.updateContextStats();
   }
 
   private renderMessage(msg: RPGLiteChatMessage): HTMLElement {
@@ -718,6 +750,7 @@ export class RPGLiteView {
 
     let meta: RPGLiteMessageGenerationMeta | null = null;
     const openRouterMessages = buildContextMessages(session);
+    this.updateContextStats();
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
