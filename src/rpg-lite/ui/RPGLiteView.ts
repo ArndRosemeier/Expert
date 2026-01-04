@@ -412,10 +412,11 @@ export class RPGLiteView {
     const split = await this.promptSplitService.splitAdventurePrompt(adventurePrompt);
 
     const presetName = prompt('Name this start preset? (Cancel to skip saving a preset)', split.title);
+    const effectiveTitle = presetName && presetName.trim().length > 0 ? presetName.trim() : split.title;
 
     const session: RPGLiteSession = {
       id: newId('rpg_lite_session'),
-      title: split.title,
+      title: effectiveTitle,
       createdAt: now(),
       updatedAt: now(),
       systemPrompt: split.systemPrompt,
@@ -431,8 +432,8 @@ export class RPGLiteView {
     if (presetName && presetName.trim().length > 0) {
       const preset: RPGLiteStartPreset = {
         id: newId('rpg_lite_preset'),
-        name: presetName.trim(),
-        title: split.title,
+        name: effectiveTitle,
+        title: effectiveTitle,
         createdAt: now(),
         updatedAt: now(),
         systemPrompt: split.systemPrompt,
