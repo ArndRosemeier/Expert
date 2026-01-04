@@ -124,6 +124,13 @@ export class RPGLiteView {
           <div class="rpg-lite-editors">
             <div class="rpg-lite-editor">
               <div class="rpg-lite-section-title">Start Presets</div>
+              <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                <select id="rpg-lite-selector-preset-select" class="rpg-lite-select" style="flex: 1; min-width: 14rem;">
+                  <option value="">Select preset…</option>
+                  ${this.presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                </select>
+                <button id="rpg-lite-selector-restart" class="rpg-lite-btn">Restart</button>
+              </div>
               <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
             </div>
           </div>
@@ -145,6 +152,23 @@ export class RPGLiteView {
 
     (this.container.querySelector('#rpg-lite-new-session') as HTMLButtonElement).addEventListener('click', () => {
       void this.renderNewSessionDialog();
+    });
+
+    const selectorPresetSelect = this.container.querySelector('#rpg-lite-selector-preset-select') as HTMLSelectElement;
+    const selectorRestartBtn = this.container.querySelector('#rpg-lite-selector-restart') as HTMLButtonElement;
+    selectorRestartBtn.disabled = this.presets.length === 0;
+    selectorRestartBtn.addEventListener('click', () => {
+      const id = selectorPresetSelect.value;
+      if (!id) {
+        alert('Please select a start preset first.');
+        selectorPresetSelect.focus();
+        return;
+      }
+      void this.restartFromPreset(id).catch((e: unknown) => {
+        console.error('RPG Lite restart failed:', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        alert(`Restart failed: ${msg}`);
+      });
     });
 
     this.renderSessionList();
@@ -264,6 +288,9 @@ export class RPGLiteView {
   }
 
   private async restartFromPreset(presetId: string): Promise<void> {
+    if (this.isStreaming) {
+      throw new Error('Cannot restart while a response is streaming. Please wait for the current response to finish.');
+    }
     const preset = this.presets.find((p) => p.id === presetId);
     if (!preset) throw new Error(`Start preset not found: ${presetId}`);
 
@@ -286,6 +313,7 @@ export class RPGLiteView {
     await this.loadAll();
     this.currentSession = session;
     this.renderSession();
+    this.isStreaming = false;
     await this.generateOpeningMessage();
   }
 
@@ -405,6 +433,7 @@ export class RPGLiteView {
     await this.loadAll();
     this.currentSession = session;
     this.renderSession();
+    this.isStreaming = false;
     await this.generateOpeningMessage();
   }
 
