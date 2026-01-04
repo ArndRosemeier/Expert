@@ -49,6 +49,13 @@ function computeContextCharCount(session: RPGLiteSession): { promptChars: number
   return { promptChars: promptForLogging.length, messageCount: messages.length };
 }
 
+function getOpeningInstruction(): string {
+  return (
+    `Start the roleplaying game now.\n` +
+    `Write the opening scene, establish the immediate situation, and end with a clear question to the player about what they do next.`
+  );
+}
+
 export class RPGLiteView {
   private container: HTMLElement;
   private modalEl: HTMLElement | null = null;
@@ -247,6 +254,9 @@ export class RPGLiteView {
     this.currentSession = session;
     await this.loadAll();
     this.renderSession();
+    if (this.currentSession.conversation.length === 0) {
+      await this.generateOpeningMessage();
+    }
   }
 
   private async restartFromPreset(presetId: string): Promise<void> {
@@ -272,6 +282,7 @@ export class RPGLiteView {
     await this.loadAll();
     this.currentSession = session;
     this.renderSession();
+    await this.generateOpeningMessage();
   }
 
   private async renderNewSessionDialog(): Promise<void> {
@@ -390,6 +401,7 @@ export class RPGLiteView {
     await this.loadAll();
     this.currentSession = session;
     this.renderSession();
+    await this.generateOpeningMessage();
   }
 
   private renderSession(): void {
@@ -719,7 +731,12 @@ export class RPGLiteView {
       }
     }
     if (userIdx === -1) {
-      throw new Error('Cannot retry: no preceding user message found.');
+      // Opening message retry: no preceding user message exists.
+      this.currentSession.conversation = [];
+      await this.saveSession();
+      this.renderConversation();
+      await this.generateOpeningMessage();
+      return;
     }
 
     this.currentSession.conversation = this.currentSession.conversation.slice(0, userIdx + 1);
@@ -727,6 +744,66 @@ export class RPGLiteView {
     this.renderConversation();
 
     await this.generateAssistantReply();
+  }
+
+  private async generateOpeningMessage(): Promise<void> {
+    if (!this.currentSession) throw new Error('No current session.');
+    if (this.isStreaming) return;
+
+    const session = this.currentSession;
+    const assistantMsg: RPGLiteChatMessage = {
+      id: newId('rpg_lite_msg'),
+      role: 'assistant',
+      content: '',
+      createdAt: now()
+    };
+    session.conversation.push(assistantMsg);
+    await this.saveSession();
+    this.renderConversation();
+
+    this.isStreaming = true;
+    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
+    sendBtn.disabled = true;
+
+    const openingInstruction = getOpeningInstruction();
+    let meta: RPGLiteMessageGenerationMeta | null = null;
+
+    const openRouterMessages: OpenRouterMessage[] = [
+      ...buildContextMessages(session),
+      { role: 'user', content: openingInstruction }
+    ];
+
+    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
+    const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+
+    await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
+      onStart: () => {},
+      onChunk: (chunk: string) => {
+        assistantMsg.content += chunk;
+        contentEl.textContent = assistantMsg.content;
+      },
+      onMeta: (m) => {
+        meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
+      },
+      onComplete: async () => {
+        if (meta) {
+          assistantMsg.generation = meta;
+        }
+        await this.saveSession();
+        this.isStreaming = false;
+        sendBtn.disabled = false;
+        this.renderConversation();
+        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
+        inputEl.focus();
+      },
+      onError: (error: Error) => {
+        this.isStreaming = false;
+        sendBtn.disabled = false;
+        console.error('RPG Lite narrator error:', error);
+        alert(`Narrator error: ${error.message}`);
+      }
+    });
   }
 
   private async generateAssistantReply(): Promise<void> {
