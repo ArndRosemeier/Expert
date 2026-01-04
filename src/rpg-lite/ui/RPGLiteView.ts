@@ -476,7 +476,7 @@ export class RPGLiteView {
             <span style="opacity:.85;">Max msgs</span>
             <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;" />
           </label>
-          <button id="rpg-lite-save-preset" class="rpg-lite-btn">Save Start</button>
+          <button id="rpg-lite-save-session" class="rpg-lite-btn">Save Session</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
       </div>
@@ -554,8 +554,8 @@ export class RPGLiteView {
       });
     });
 
-    (this.container.querySelector('#rpg-lite-save-preset') as HTMLButtonElement).addEventListener('click', () => {
-      void this.saveCurrentAsPreset();
+    (this.container.querySelector('#rpg-lite-save-session') as HTMLButtonElement).addEventListener('click', () => {
+      void this.saveCurrentAsSessionCopy();
     });
 
     const systemEl = this.container.querySelector('#rpg-lite-system') as HTMLTextAreaElement;
@@ -601,26 +601,41 @@ export class RPGLiteView {
     statsEl.textContent = `Context: ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
   }
 
-  private async saveCurrentAsPreset(): Promise<void> {
+  private async saveCurrentAsSessionCopy(): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
-    const name = prompt('Preset name:', this.currentSession.title);
-    if (!name || name.trim().length === 0) return;
+    this.abortStreamingIfActive();
 
-    const session = this.currentSession;
-    const preset: RPGLiteStartPreset = {
-      id: newId('rpg_lite_preset'),
-      name: name.trim(),
-      title: session.title,
+    const suggested = `${this.currentSession.title} (copy)`;
+    const title = prompt('New session name (branch):', suggested);
+    if (!title || title.trim().length === 0) return;
+
+    const base = this.currentSession;
+    const clonedConversation: RPGLiteChatMessage[] = base.conversation.map((m) => ({
+      id: newId('rpg_lite_msg'),
+      role: m.role,
+      content: m.content,
+      createdAt: m.createdAt,
+      ...(typeof m.editedAt === 'number' ? { editedAt: m.editedAt } : {}),
+      ...(m.generation ? { generation: { ...m.generation } } : {})
+    }));
+
+    const newSession: RPGLiteSession = {
+      id: newId('rpg_lite_session'),
+      title: title.trim(),
       createdAt: now(),
       updatedAt: now(),
-      systemPrompt: session.systemPrompt,
-      prefixContext: session.prefixContext,
-      narratorPurpose: session.narratorPurpose,
-      maxContextMessages: session.maxContextMessages
+      systemPrompt: base.systemPrompt,
+      prefixContext: base.prefixContext,
+      narratorPurpose: base.narratorPurpose,
+      maxContextMessages: base.maxContextMessages,
+      conversation: clonedConversation
     };
+
     const storage = await StorageService.getInstance();
-    await storage.saveRPGLiteStartPreset(preset);
+    await storage.saveRPGLiteSession(newSession);
+
     await this.loadAll();
+    this.currentSession = newSession;
     this.renderSession();
   }
 
