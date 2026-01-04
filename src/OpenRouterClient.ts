@@ -190,6 +190,14 @@ function normalizeUsage(raw: unknown): OpenRouterUsage | undefined {
   };
 }
 
+function readFirstHeader(headers: Headers, names: string[]): string | null {
+  for (const n of names) {
+    const v = headers.get(n);
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
+
 /**
  * Singleton OpenRouterClient with operation-scoped abort controllers and dynamic key/model loading.
  * This ensures consistent API key usage across the entire application and prevents key synchronization issues.
@@ -228,7 +236,12 @@ export class OpenRouterClient {
     const root = (typeof json === 'object' && json !== null) ? (json as Record<string, unknown>) : {};
     const data = (typeof root['data'] === 'object' && root['data'] !== null) ? (root['data'] as Record<string, unknown>) : root;
 
-    const totalCostUsd = readNumber(data['total_cost']) ?? readNumber(data['totalCostUsd']) ?? readNumber(data['cost']);
+    const totalCostUsd =
+      readNumber(data['total_cost']) ??
+      readNumber(data['total_cost_usd']) ??
+      readNumber(data['totalCostUsd']) ??
+      readNumber(data['cost']) ??
+      readNumber(data['price']);
     const usage = normalizeUsage(data['usage']);
 
     return {
@@ -1116,6 +1129,42 @@ export class OpenRouterClient {
       let finalUsage: OpenRouterUsage | undefined = undefined;
       let finalTotalCostUsd: number | undefined = undefined;
       let generationId: string | undefined = undefined;
+
+      // Try to capture generation/cost from headers (if exposed by CORS)
+      const headerGen = readFirstHeader(response.headers, [
+        'x-openrouter-generation',
+        'x-openrouter-id',
+        'x-request-id'
+      ]);
+      if (typeof headerGen === 'string') {
+        generationId = headerGen;
+      }
+
+      const headerCost = readFirstHeader(response.headers, [
+        'x-openrouter-total-cost',
+        'x-openrouter-cost',
+        'x-total-cost'
+      ]);
+      const headerCostNum = readNumber(headerCost);
+      if (typeof headerCostNum === 'number') {
+        finalTotalCostUsd = headerCostNum;
+      }
+
+      const headerUsage = readFirstHeader(response.headers, [
+        'x-openrouter-usage',
+        'x-usage'
+      ]);
+      if (typeof headerUsage === 'string') {
+        try {
+          const parsedUsage = JSON.parse(headerUsage) as unknown;
+          const normalized = normalizeUsage(parsedUsage);
+          if (normalized) {
+            finalUsage = normalized;
+          }
+        } catch (e) {
+          console.error('Failed to parse usage header from OpenRouter:', e);
+        }
+      }
 
       callbacks.onStart();
 
