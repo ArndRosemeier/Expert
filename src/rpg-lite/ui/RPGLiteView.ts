@@ -70,6 +70,7 @@ export class RPGLiteView {
   private isStreaming = false;
   private currentStreamingOperationId: string | null = null;
   private currentStreamingAbortRequested = false;
+  private editingPresetId: string | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -145,16 +146,19 @@ export class RPGLiteView {
                   ${this.presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
                 </select>
                 <button id="rpg-lite-selector-restart" class="rpg-lite-btn">Restart</button>
+                <button id="rpg-lite-selector-edit-preset" class="rpg-lite-btn">Edit</button>
               </div>
               <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
             </div>
           </div>
           <div class="rpg-lite-messages">
-            <div class="rpg-lite-message">
-              <div class="rpg-lite-message-content">
-                Create a new session, or restart from a saved preset.
+            ${this.editingPresetId ? this.renderPresetEditorHtml(this.editingPresetId) : `
+              <div class="rpg-lite-message">
+                <div class="rpg-lite-message-content">
+                  Create a new session, or restart from a saved preset.
+                </div>
               </div>
-            </div>
+            `}
           </div>
         </div>
       </div>
@@ -171,6 +175,7 @@ export class RPGLiteView {
 
     const selectorPresetSelect = this.container.querySelector('#rpg-lite-selector-preset-select') as HTMLSelectElement;
     const selectorRestartBtn = this.container.querySelector('#rpg-lite-selector-restart') as HTMLButtonElement;
+    const selectorEditBtn = this.container.querySelector('#rpg-lite-selector-edit-preset') as HTMLButtonElement;
     selectorRestartBtn.disabled = this.presets.length === 0;
     selectorRestartBtn.addEventListener('click', () => {
       const id = selectorPresetSelect.value;
@@ -186,8 +191,21 @@ export class RPGLiteView {
       });
     });
 
+    selectorEditBtn.disabled = this.presets.length === 0;
+    selectorEditBtn.addEventListener('click', () => {
+      const id = selectorPresetSelect.value;
+      if (!id) {
+        alert('Please select a start preset first.');
+        selectorPresetSelect.focus();
+        return;
+      }
+      this.editingPresetId = id;
+      this.renderSelector();
+    });
+
     this.renderSessionList();
     this.renderPresetList();
+    this.bindPresetEditorEvents();
   }
 
   private renderSessionList(): void {
@@ -238,7 +256,10 @@ export class RPGLiteView {
             <div class="rpg-lite-list-item-title">${p.name}</div>
             <div style="opacity:.8; font-size:.85rem;">${p.title}</div>
           </div>
-          <button class="rpg-lite-btn" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <button class="rpg-lite-btn" data-edit-preset-id="${p.id}" title="Edit">✏️</button>
+            <button class="rpg-lite-btn" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
+          </div>
         </div>
       `
       )
@@ -249,6 +270,12 @@ export class RPGLiteView {
         const target = ev.currentTarget as HTMLElement;
         const id = target.dataset['presetId'];
         if (!id) throw new Error('Preset list item is missing data-preset-id.');
+        const editBtn = (ev.target as HTMLElement).closest('[data-edit-preset-id]');
+        if (editBtn) {
+          this.editingPresetId = id;
+          this.renderSelector();
+          return;
+        }
         const btn = (ev.target as HTMLElement).closest('[data-delete-preset-id]');
         if (btn) return;
         void this.restartFromPreset(id).catch((e: unknown) => {
@@ -285,6 +312,120 @@ export class RPGLiteView {
     const storage = await StorageService.getInstance();
     await storage.deleteRPGLiteStartPreset(presetId);
     await this.loadAll();
+    if (this.editingPresetId === presetId) {
+      this.editingPresetId = null;
+    }
+    this.renderSelector();
+  }
+
+  private renderPresetEditorHtml(presetId: string): string {
+    const preset = this.presets.find((p) => p.id === presetId);
+    if (!preset) return '';
+
+    const purposes: Array<{ key: RPGLiteModelPurpose; label: string }> = [
+      { key: 'prose', label: 'Prose' },
+      { key: 'creator', label: 'Creator' },
+      { key: 'editor', label: 'Editor' },
+      { key: 'rater', label: 'Rater' }
+    ];
+
+    return `
+      <div class="rpg-lite-message">
+        <div class="rpg-lite-message-header">
+          <div class="rpg-lite-message-role">Preset Editor</div>
+          <div class="rpg-lite-message-actions">
+            <button id="rpg-lite-preset-editor-cancel" class="rpg-lite-btn">Close</button>
+            <button id="rpg-lite-preset-editor-save" class="rpg-lite-btn rpg-lite-btn-primary">Save</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <label style="display:flex; flex-direction:column; gap:0.35rem; flex: 1; min-width: 16rem;">
+            <span class="rpg-lite-section-title">Name</span>
+            <input id="rpg-lite-preset-editor-name" class="rpg-lite-input" value="${preset.name.replaceAll('"', '&quot;')}" />
+          </label>
+          <label style="display:flex; flex-direction:column; gap:0.35rem; flex: 1; min-width: 16rem;">
+            <span class="rpg-lite-section-title">Title</span>
+            <input id="rpg-lite-preset-editor-title" class="rpg-lite-input" value="${preset.title.replaceAll('"', '&quot;')}" />
+          </label>
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;">
+            <span class="rpg-lite-section-title">Narrator</span>
+            <select id="rpg-lite-preset-editor-purpose" class="rpg-lite-select">
+              ${purposes.map(p => `<option value="${p.key}" ${p.key === preset.narratorPurpose ? 'selected' : ''}>${p.label}</option>`).join('')}
+            </select>
+          </label>
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;">
+            <span class="rpg-lite-section-title">Max msgs</span>
+            <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}" />
+          </label>
+        </div>
+
+        <label style="display:flex; flex-direction:column; gap:0.35rem;">
+          <span class="rpg-lite-section-title">System Prompt</span>
+          <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea">${preset.systemPrompt}</textarea>
+        </label>
+
+        <label style="display:flex; flex-direction:column; gap:0.35rem;">
+          <span class="rpg-lite-section-title">Prefix Context</span>
+          <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea">${preset.prefixContext}</textarea>
+        </label>
+
+        <div class="rpg-lite-message-info">
+          <span>Preset id: ${preset.id}</span>
+          <span>Updated: ${formatDateTime(preset.updatedAt)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  private bindPresetEditorEvents(): void {
+    if (!this.editingPresetId) return;
+    const preset = this.presets.find((p) => p.id === this.editingPresetId);
+    if (!preset) return;
+
+    const cancelBtn = this.container.querySelector('#rpg-lite-preset-editor-cancel') as HTMLButtonElement | null;
+    const saveBtn = this.container.querySelector('#rpg-lite-preset-editor-save') as HTMLButtonElement | null;
+    if (!cancelBtn || !saveBtn) return;
+
+    cancelBtn.addEventListener('click', () => {
+      this.editingPresetId = null;
+      this.renderSelector();
+    });
+
+    saveBtn.addEventListener('click', () => {
+      void this.saveEditedPreset(preset.id);
+    });
+  }
+
+  private async saveEditedPreset(presetId: string): Promise<void> {
+    const preset = this.presets.find((p) => p.id === presetId);
+    if (!preset) throw new Error(`Start preset not found: ${presetId}`);
+
+    const nameEl = this.container.querySelector('#rpg-lite-preset-editor-name') as HTMLInputElement;
+    const titleEl = this.container.querySelector('#rpg-lite-preset-editor-title') as HTMLInputElement;
+    const purposeEl = this.container.querySelector('#rpg-lite-preset-editor-purpose') as HTMLSelectElement;
+    const maxEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
+    const systemEl = this.container.querySelector('#rpg-lite-preset-editor-system') as HTMLTextAreaElement;
+    const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement;
+
+    const name = nameEl.value.trim();
+    const title = titleEl.value.trim();
+    if (name.length === 0) throw new Error('Preset name must not be empty.');
+    if (title.length === 0) throw new Error('Preset title must not be empty.');
+
+    preset.name = name;
+    preset.title = title;
+    preset.narratorPurpose = purposeEl.value as RPGLiteModelPurpose;
+    preset.maxContextMessages = Math.max(2, Math.floor(Number(maxEl.value)));
+    preset.systemPrompt = systemEl.value;
+    preset.prefixContext = prefixEl.value;
+    preset.updatedAt = now();
+
+    const storage = await StorageService.getInstance();
+    await storage.saveRPGLiteStartPreset(preset);
+
+    await this.loadAll();
+    this.editingPresetId = presetId;
     this.renderSelector();
   }
 
