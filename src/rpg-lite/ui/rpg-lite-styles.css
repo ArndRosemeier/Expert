@@ -14,6 +14,7 @@
   flex: 1;
   background: var(--bg-color, #111);
   color: var(--text-color, #e8e8e8);
+  color-scheme: dark;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -79,6 +80,16 @@
   padding: 0.5rem 0.65rem;
   font: inherit;
   min-width: 0;
+}
+
+.rpg-lite-select {
+  color-scheme: dark;
+}
+
+/* Windows/Chromium sometimes renders <option> list with light theme colors unless explicitly set. */
+.rpg-lite-select option {
+  background: var(--bg-color, #111);
+  color: var(--text-color, #e8e8e8);
 }
 
 .rpg-lite-body {
