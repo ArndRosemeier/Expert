@@ -436,9 +436,6 @@ export class RPGLiteView {
     const preset = this.presets.find((p) => p.id === presetId);
     if (!preset) throw new Error(`Start preset not found: ${presetId}`);
 
-    const ok = confirm(`Restart "${preset.name}"? This will create a new session.`);
-    if (!ok) return;
-
     const session: RPGLiteSession = {
       id: newId('rpg_lite_session'),
       title: preset.title,
