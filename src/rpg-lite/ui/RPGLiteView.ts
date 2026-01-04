@@ -68,11 +68,26 @@ export class RPGLiteView {
   private presets: RPGLiteStartPreset[] = [];
 
   private isStreaming = false;
+  private currentStreamingOperationId: string | null = null;
+  private currentStreamingAbortRequested = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.openRouterClient = OpenRouterClient.getInstance();
     this.promptSplitService = new RPGLitePromptSplitService(this.openRouterClient);
+  }
+
+  private abortStreamingIfActive(): void {
+    if (!this.isStreaming) return;
+    if (!this.currentStreamingOperationId) throw new Error('Streaming is active but no operation id is set.');
+
+    this.currentStreamingAbortRequested = true;
+    this.openRouterClient.abortOperation(this.currentStreamingOperationId);
+    this.currentStreamingOperationId = null;
+    this.isStreaming = false;
+
+    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
+    sendBtn.disabled = false;
   }
 
   async open(): Promise<void> {
@@ -288,9 +303,7 @@ export class RPGLiteView {
   }
 
   private async restartFromPreset(presetId: string): Promise<void> {
-    if (this.isStreaming) {
-      throw new Error('Cannot restart while a response is streaming. Please wait for the current response to finish.');
-    }
+    this.abortStreamingIfActive();
     const preset = this.presets.find((p) => p.id === presetId);
     if (!preset) throw new Error(`Start preset not found: ${presetId}`);
 
@@ -752,7 +765,7 @@ export class RPGLiteView {
 
   private async retryFromAssistant(assistantMessageId: string): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
-    if (this.isStreaming) return;
+    this.abortStreamingIfActive();
 
     const idx = this.currentSession.conversation.findIndex((m) => m.id === assistantMessageId);
     if (idx === -1) throw new Error(`Message not found: ${assistantMessageId}`);
@@ -803,6 +816,8 @@ export class RPGLiteView {
     this.renderConversation();
 
     this.isStreaming = true;
+    this.currentStreamingAbortRequested = false;
+    this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     sendBtn.disabled = true;
 
@@ -818,6 +833,8 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
 
+    const opId = this.currentStreamingOperationId;
+    if (!opId) throw new Error('Missing streaming operation id.');
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {},
       onChunk: (chunk: string) => {
@@ -833,18 +850,24 @@ export class RPGLiteView {
         }
         await this.saveSession();
         this.isStreaming = false;
+        this.currentStreamingOperationId = null;
+        this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
       },
       onError: (error: Error) => {
+        const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
+        this.currentStreamingOperationId = null;
+        this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    });
+    }, opId);
   }
 
   private async generateAssistantReply(): Promise<void> {
@@ -863,6 +886,8 @@ export class RPGLiteView {
     this.renderConversation();
 
     this.isStreaming = true;
+    this.currentStreamingAbortRequested = false;
+    this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     sendBtn.disabled = true;
 
@@ -873,6 +898,8 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
 
+    const opId = this.currentStreamingOperationId;
+    if (!opId) throw new Error('Missing streaming operation id.');
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {},
       onChunk: (chunk: string) => {
@@ -888,18 +915,24 @@ export class RPGLiteView {
         }
         await this.saveSession();
         this.isStreaming = false;
+        this.currentStreamingOperationId = null;
+        this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
       },
       onError: (error: Error) => {
+        const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
+        this.currentStreamingOperationId = null;
+        this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    });
+    }, opId);
   }
 }
 
