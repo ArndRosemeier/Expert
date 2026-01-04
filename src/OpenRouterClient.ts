@@ -7,6 +7,9 @@ export interface OpenRouterRequest {
   model: string;
   messages: OpenRouterMessage[];
   stream?: boolean;
+  stream_options?: {
+    include_usage?: boolean;
+  };
   // Optional model parameters
   temperature?: number;
   top_p?: number;
@@ -56,6 +59,23 @@ export interface OpenRouterResponse {
     message: OpenRouterMessage;
     finish_reason?: string; // Add finish_reason to the interface
   }>;
+}
+
+export interface OpenRouterUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  total_cost?: number;
+}
+
+export interface OpenRouterCompletionMeta {
+  model: string;
+  provider?: string;
+  usage?: OpenRouterUsage;
+  totalCostUsd?: number;
+  promptChars: number;
+  completionChars: number;
+  durationMs: number;
 }
 
 export interface OpenRouterModelEndpoint {
@@ -127,6 +147,7 @@ export interface StreamingCallbacks {
   onStart: () => void;
   onChunk: (chunk: string) => void;
   onComplete: (fullContent: string) => void;
+  onMeta?: (meta: OpenRouterCompletionMeta) => void;
   onError: (error: Error) => void;
 }
 
@@ -909,7 +930,10 @@ export class OpenRouterClient {
       const request: OpenRouterRequest = {
         model: webSearchEnabled && !hasNativeWebSearch ? `${model}:online` : model,
         messages,
-        stream: true
+        stream: true,
+        stream_options: {
+          include_usage: true
+        }
       };
       
       // Apply per-purpose model parameters if configured
@@ -1031,6 +1055,8 @@ export class OpenRouterClient {
       let fullContent = '';
       let wasContentFiltered = false;
       let contentFilterReason = '';
+      let finalUsage: OpenRouterUsage | undefined = undefined;
+      let finalTotalCostUsd: number | undefined = undefined;
 
       callbacks.onStart();
 
@@ -1056,6 +1082,17 @@ export class OpenRouterClient {
                 const choice = parsed.choices?.[0];
                 const content = choice?.delta?.content;
                 const finishReason = choice?.finish_reason;
+
+                // Capture usage/cost if present (usually only on final chunk when include_usage is enabled)
+                if (parsed.usage) {
+                  finalUsage = parsed.usage as OpenRouterUsage;
+                  const tc = (parsed.usage as { total_cost?: number }).total_cost;
+                  if (typeof tc === 'number') {
+                    finalTotalCostUsd = tc;
+                  }
+                } else if (typeof parsed.total_cost === 'number') {
+                  finalTotalCostUsd = parsed.total_cost as number;
+                }
                 
                 // Check for content filtering
                 if (finishReason === 'content_filter') {
@@ -1130,7 +1167,22 @@ export class OpenRouterClient {
         window.dispatchEvent(new CustomEvent('ai-progress', { 
           detail: { type: 'complete', characters: fullContent.length } 
         }));
-        
+
+        const totalCostUsd =
+          typeof finalTotalCostUsd === 'number'
+            ? finalTotalCostUsd
+            : (typeof finalUsage?.total_cost === 'number' ? finalUsage.total_cost : undefined);
+
+        callbacks.onMeta?.({
+          model,
+          ...(typeof provider === 'string' ? { provider } : {}),
+          ...(finalUsage ? { usage: finalUsage } : {}),
+          ...(typeof totalCostUsd === 'number' ? { totalCostUsd } : {}),
+          promptChars: promptLength,
+          completionChars: fullContent.length,
+          durationMs: duration
+        });
+
         callbacks.onComplete(fullContent);
         
       } finally {

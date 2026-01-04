@@ -50,6 +50,17 @@ export interface IStorageService {
   loadRPGSnapshot<T>(snapshotId: string): Promise<T | null>;
   deleteRPGSnapshot(snapshotId: string): Promise<void>;
   listRPGSnapshots<T>(): Promise<T[]>;
+
+  // RPG Lite-specific operations
+  saveRPGLiteSession<T>(session: T): Promise<void>;
+  loadRPGLiteSession<T>(sessionId: string): Promise<T | null>;
+  deleteRPGLiteSession(sessionId: string): Promise<void>;
+  listRPGLiteSessions<T>(): Promise<T[]>;
+
+  saveRPGLiteStartPreset<T>(preset: T): Promise<void>;
+  loadRPGLiteStartPreset<T>(presetId: string): Promise<T | null>;
+  deleteRPGLiteStartPreset(presetId: string): Promise<void>;
+  listRPGLiteStartPresets<T>(): Promise<T[]>;
 }
 
 class IndexedDBStorageService implements IStorageService {
@@ -239,6 +250,86 @@ class IndexedDBStorageService implements IStorageService {
       throw new Error(`Failed to list RPG snapshots: ${error instanceof Error ? error.message : error}`);
     }
   }
+
+  // ========================================
+  // RPG Lite-specific methods
+  // ========================================
+
+  async saveRPGLiteSession<T>(session: T): Promise<void> {
+    try {
+      const sessionWithId = session as { id: string };
+      await this.indexedDBService.set('rpg_lite_sessions', sessionWithId.id, session);
+    } catch (error) {
+      console.error('Failed to save RPG Lite session:', error);
+      throw new Error(`Failed to save RPG Lite session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async loadRPGLiteSession<T>(sessionId: string): Promise<T | null> {
+    try {
+      const session = await this.indexedDBService.get<T>('rpg_lite_sessions', sessionId);
+      return session || null;
+    } catch (error) {
+      console.error('Failed to load RPG Lite session:', error);
+      throw new Error(`Failed to load RPG Lite session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async deleteRPGLiteSession(sessionId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('rpg_lite_sessions', sessionId);
+    } catch (error) {
+      console.error('Failed to delete RPG Lite session:', error);
+      throw new Error(`Failed to delete RPG Lite session: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async listRPGLiteSessions<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('rpg_lite_sessions');
+    } catch (error) {
+      console.error('Failed to list RPG Lite sessions:', error);
+      throw new Error(`Failed to list RPG Lite sessions: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async saveRPGLiteStartPreset<T>(preset: T): Promise<void> {
+    try {
+      const presetWithId = preset as { id: string };
+      await this.indexedDBService.set('rpg_lite_start_presets', presetWithId.id, preset);
+    } catch (error) {
+      console.error('Failed to save RPG Lite start preset:', error);
+      throw new Error(`Failed to save RPG Lite start preset: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async loadRPGLiteStartPreset<T>(presetId: string): Promise<T | null> {
+    try {
+      const preset = await this.indexedDBService.get<T>('rpg_lite_start_presets', presetId);
+      return preset || null;
+    } catch (error) {
+      console.error('Failed to load RPG Lite start preset:', error);
+      throw new Error(`Failed to load RPG Lite start preset: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async deleteRPGLiteStartPreset(presetId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('rpg_lite_start_presets', presetId);
+    } catch (error) {
+      console.error('Failed to delete RPG Lite start preset:', error);
+      throw new Error(`Failed to delete RPG Lite start preset: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async listRPGLiteStartPresets<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('rpg_lite_start_presets');
+    } catch (error) {
+      console.error('Failed to list RPG Lite start presets:', error);
+      throw new Error(`Failed to list RPG Lite start presets: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 }
 
 /**
@@ -280,7 +371,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 4, // Increment version to add RPG stores
+      version: 5, // Increment version to add RPG Lite stores
       stores: [
         {
           name: 'keyValue',
@@ -335,6 +426,30 @@ export class StorageService {
             {
               name: 'by-timestamp',
               keyPath: 'timestamp'
+            }
+          ]
+        },
+        {
+          name: 'rpg_lite_sessions',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-createdAt',
+              keyPath: 'createdAt'
+            },
+            {
+              name: 'by-updatedAt',
+              keyPath: 'updatedAt'
+            }
+          ]
+        },
+        {
+          name: 'rpg_lite_start_presets',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-createdAt',
+              keyPath: 'createdAt'
             }
           ]
         }

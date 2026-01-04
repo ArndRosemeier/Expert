@@ -101,6 +101,7 @@ export interface OrchestratorPrompts {
     
     // For RPG System
     rpg_session_setup: string;
+    rpg_lite_prompt_split: string;
     rpg_game_narration_system: string;
     rpg_state_parser_system: string;
     rpg_state_parser_user: string;
@@ -1836,6 +1837,34 @@ Respond with ONLY valid XML in this exact structure:
         `.trim(),
         placeholders: ['adventure_description'],
         description: 'Prompt for setting up a new RPG session from a simple adventure description.'
+    },
+
+    rpg_lite_prompt_split: {
+        text: `
+You are an assistant that splits a user-provided "adventure prompt" into:
+1) a SYSTEM PROMPT: stable rules + narrative style constraints that must always apply, and
+2) a PREFIX CONTEXT: concrete adventure setup/context that should always be at the top of the context window (but is not the system prompt).
+
+## User Adventure Prompt
+{{adventure_prompt}}
+
+## What goes where
+- Put in **systemPrompt**:
+  - rules of play ("never act for the main character", "no multiple choice", "ask clarifying questions only when needed", safety constraints, narrator style/tone, formatting requirements)
+  - perspective/POV and voice rules
+  - any permanent constraints that should apply throughout the entire adventure
+- Put in **prefixContext**:
+  - the actual adventure seed, setting, premise, characters, factions, world info, current situation
+  - anything that is "world/story content" rather than "how to narrate"
+
+## Output requirements
+- Respond with ONLY strict JSON (no markdown).
+- JSON keys (exactly): "title", "systemPrompt", "prefixContext"
+- "title" must be a short, catchy adventure title.
+- "systemPrompt" and "prefixContext" must be non-empty strings.
+        `.trim(),
+        placeholders: ['adventure_prompt'],
+        description: 'Splits an RPG Lite adventure prompt into system prompt vs prefix context (JSON only).'
     },
     
     rpg_game_narration_system: {

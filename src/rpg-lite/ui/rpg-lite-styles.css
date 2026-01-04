@@ -1,0 +1,251 @@
+/* RPG Lite Mode Styling */
+
+.rpg-lite-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  z-index: 2000;
+}
+
+.rpg-lite-container {
+  flex: 1;
+  background: var(--bg-color, #111);
+  color: var(--text-color, #e8e8e8);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.rpg-lite-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.12);
+}
+
+.rpg-lite-topbar-left,
+.rpg-lite-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.rpg-lite-title {
+  font-size: 1.1rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rpg-lite-btn {
+  appearance: none;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.rpg-lite-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.rpg-lite-btn-primary {
+  background: rgba(64, 140, 255, 0.22);
+  border-color: rgba(64, 140, 255, 0.5);
+}
+
+.rpg-lite-btn-primary:hover {
+  background: rgba(64, 140, 255, 0.28);
+}
+
+.rpg-lite-select,
+.rpg-lite-input,
+.rpg-lite-textarea {
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  min-width: 0;
+}
+
+.rpg-lite-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.rpg-lite-sidebar {
+  flex: 0 0 22%;
+  min-width: 14rem;
+  max-width: 26rem;
+  border-right: 0.0625rem solid rgba(255, 255, 255, 0.12);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.rpg-lite-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.rpg-lite-section-title {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.rpg-lite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.rpg-lite-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.65rem;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.rpg-lite-list-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rpg-lite-list-item-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rpg-lite-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.rpg-lite-editors {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.12);
+}
+
+.rpg-lite-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.rpg-lite-textarea {
+  resize: vertical;
+  min-height: 5rem;
+  max-height: 35vh;
+}
+
+.rpg-lite-messages {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.rpg-lite-message {
+  border: 0.0625rem solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rpg-lite-message.user {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rpg-lite-message.assistant {
+  background: rgba(64, 140, 255, 0.06);
+  border-color: rgba(64, 140, 255, 0.22);
+}
+
+.rpg-lite-message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rpg-lite-message-role {
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.rpg-lite-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rpg-lite-message-content {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.rpg-lite-message-info {
+  font-size: 0.82rem;
+  opacity: 0.85;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.rpg-lite-composer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 0.0625rem solid rgba(255, 255, 255, 0.12);
+}
+
+.rpg-lite-composer .rpg-lite-textarea {
+  flex: 1;
+  min-height: 3.5rem;
+  max-height: 30vh;
+}
+
+
