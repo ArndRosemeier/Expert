@@ -212,7 +212,11 @@ export class RPGLiteView {
         if (!id) throw new Error('Preset list item is missing data-preset-id.');
         const btn = (ev.target as HTMLElement).closest('[data-delete-preset-id]');
         if (btn) return;
-        void this.restartFromPreset(id);
+        void this.restartFromPreset(id).catch((e: unknown) => {
+          console.error('RPG Lite restart failed:', e);
+          const msg = e instanceof Error ? e.message : String(e);
+          alert(`Restart failed: ${msg}`);
+        });
       });
     });
 
@@ -495,8 +499,16 @@ export class RPGLiteView {
     const presetSelect = this.container.querySelector('#rpg-lite-preset-select') as HTMLSelectElement;
     (this.container.querySelector('#rpg-lite-restart') as HTMLButtonElement).addEventListener('click', () => {
       const id = presetSelect.value;
-      if (!id) return;
-      void this.restartFromPreset(id);
+      if (!id) {
+        alert('Please select a start preset first.');
+        presetSelect.focus();
+        return;
+      }
+      void this.restartFromPreset(id).catch((e: unknown) => {
+        console.error('RPG Lite restart failed:', e);
+        const msg = e instanceof Error ? e.message : String(e);
+        alert(`Restart failed: ${msg}`);
+      });
     });
 
     (this.container.querySelector('#rpg-lite-save-preset') as HTMLButtonElement).addEventListener('click', () => {
