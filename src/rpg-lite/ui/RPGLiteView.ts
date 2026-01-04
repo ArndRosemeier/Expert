@@ -131,29 +131,25 @@ export class RPGLiteView {
         </div>
       </div>
       <div class="rpg-lite-body">
-        <div class="rpg-lite-main" style="max-width: 48rem; margin: 0 auto;">
+        <div class="rpg-lite-sidebar">
+          <div class="rpg-lite-section-title">Active Sessions</div>
+          <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
+          <button id="rpg-lite-new-session-scratch" class="rpg-lite-btn rpg-lite-btn-primary" style="width: 100%;">+ New Session from Scratch</button>
+          
+          <div style="text-align: center; opacity: 0.5; font-size: 0.85rem; margin: 1.25rem 0 0.75rem;">or start from template</div>
+          
+          <div class="rpg-lite-section-title">Saved Templates</div>
+          <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
+          <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
+        </div>
+        <div class="rpg-lite-main">
           ${this.editingPresetId ? this.renderPresetEditorHtml(this.editingPresetId) : `
-            <div class="rpg-lite-editors">
-              <div class="rpg-lite-editor">
-                <div class="rpg-lite-section-title">Active Sessions</div>
-                <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
-                <button id="rpg-lite-new-session-scratch" class="rpg-lite-btn rpg-lite-btn-primary" style="width: 100%;">+ New Session from Scratch</button>
+            <div class="rpg-lite-messages">
+              <div class="rpg-lite-message">
+                <div class="rpg-lite-message-content">
+                  Create a new session from scratch, or start from a saved template.
+                </div>
               </div>
-
-              ${this.presets.length > 0 ? `
-                <div class="rpg-lite-editor" style="margin-top: 1.5rem;">
-                  <div style="text-align: center; opacity: 0.6; font-size: 0.9rem; margin: 1rem 0;">or start from template</div>
-                  <div class="rpg-lite-section-title">Saved Templates</div>
-                  <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
-                  <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
-                </div>
-              ` : `
-                <div class="rpg-lite-editor" style="margin-top: 1.5rem;">
-                  <div class="rpg-lite-section-title">Saved Templates</div>
-                  <div style="opacity: 0.7; margin: 1rem 0; text-align: center;">No templates yet.</div>
-                  <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
-                </div>
-              `}
             </div>
           `}
         </div>
@@ -165,19 +161,15 @@ export class RPGLiteView {
       this.modalEl = null;
     });
 
-    const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement | null;
-    if (newScratchBtn) {
-      newScratchBtn.addEventListener('click', () => {
-        void this.renderNewSessionDialog(false);
-      });
-    }
+    const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement;
+    newScratchBtn.addEventListener('click', () => {
+      void this.renderNewSessionDialog(false);
+    });
 
-    const newTemplateBtn = this.container.querySelector('#rpg-lite-new-template') as HTMLButtonElement | null;
-    if (newTemplateBtn) {
-      newTemplateBtn.addEventListener('click', () => {
-        void this.renderNewSessionDialog(true);
-      });
-    }
+    const newTemplateBtn = this.container.querySelector('#rpg-lite-new-template') as HTMLButtonElement;
+    newTemplateBtn.addEventListener('click', () => {
+      void this.renderNewSessionDialog(true);
+    });
 
     this.renderSessionList();
     this.renderPresetList();
