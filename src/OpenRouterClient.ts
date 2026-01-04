@@ -73,6 +73,7 @@ export interface OpenRouterCompletionMeta {
   provider?: string;
   usage?: OpenRouterUsage;
   totalCostUsd?: number;
+  generationId?: string;
   promptChars: number;
   completionChars: number;
   durationMs: number;
@@ -160,6 +161,35 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + '...' + key.slice(-4);
 }
 
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return undefined;
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeUsage(raw: unknown): OpenRouterUsage | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const obj = raw as Record<string, unknown>;
+  const promptTokens = readNumber(obj['prompt_tokens']);
+  const completionTokens = readNumber(obj['completion_tokens']);
+  const totalTokens = readNumber(obj['total_tokens']);
+  if (typeof promptTokens !== 'number' || typeof completionTokens !== 'number' || typeof totalTokens !== 'number') {
+    return undefined;
+  }
+  const totalCost = readNumber(obj['total_cost']);
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
+    ...(typeof totalCost === 'number' ? { total_cost: totalCost } : {})
+  };
+}
+
 /**
  * Singleton OpenRouterClient with operation-scoped abort controllers and dynamic key/model loading.
  * This ensures consistent API key usage across the entire application and prevents key synchronization issues.
@@ -177,6 +207,34 @@ export class OpenRouterClient {
 
   private constructor() {
     this.aiLogService = AILogService.getInstance();
+  }
+
+  private async fetchGenerationMeta(apiKey: string, generationId: string): Promise<{ totalCostUsd?: number; usage?: OpenRouterUsage }> {
+    const url = `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter generation API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const json = (await response.json()) as unknown;
+    const root = (typeof json === 'object' && json !== null) ? (json as Record<string, unknown>) : {};
+    const data = (typeof root['data'] === 'object' && root['data'] !== null) ? (root['data'] as Record<string, unknown>) : root;
+
+    const totalCostUsd = readNumber(data['total_cost']) ?? readNumber(data['totalCostUsd']) ?? readNumber(data['cost']);
+    const usage = normalizeUsage(data['usage']);
+
+    return {
+      ...(typeof totalCostUsd === 'number' ? { totalCostUsd } : {}),
+      ...(usage ? { usage } : {})
+    };
   }
 
   /**
@@ -1057,6 +1115,7 @@ export class OpenRouterClient {
       let contentFilterReason = '';
       let finalUsage: OpenRouterUsage | undefined = undefined;
       let finalTotalCostUsd: number | undefined = undefined;
+      let generationId: string | undefined = undefined;
 
       callbacks.onStart();
 
@@ -1085,13 +1144,20 @@ export class OpenRouterClient {
 
                 // Capture usage/cost if present (usually only on final chunk when include_usage is enabled)
                 if (parsed.usage) {
-                  finalUsage = parsed.usage as OpenRouterUsage;
-                  const tc = (parsed.usage as { total_cost?: number }).total_cost;
-                  if (typeof tc === 'number') {
-                    finalTotalCostUsd = tc;
+                  const normalized = normalizeUsage(parsed.usage);
+                  if (normalized) {
+                    finalUsage = normalized;
                   }
-                } else if (typeof parsed.total_cost === 'number') {
-                  finalTotalCostUsd = parsed.total_cost as number;
+                  const tc = readNumber((parsed.usage as { total_cost?: unknown }).total_cost);
+                  if (typeof tc === 'number') finalTotalCostUsd = tc;
+                } else {
+                  const tc = readNumber((parsed as { total_cost?: unknown }).total_cost);
+                  if (typeof tc === 'number') finalTotalCostUsd = tc;
+                }
+
+                const pid = (parsed as { id?: unknown }).id;
+                if (typeof pid === 'string' && pid.length > 0) {
+                  generationId = pid;
                 }
                 
                 // Check for content filtering
@@ -1137,6 +1203,25 @@ export class OpenRouterClient {
         
         const duration = Date.now() - startTime;
         
+        let totalCostUsd =
+          typeof finalTotalCostUsd === 'number'
+            ? finalTotalCostUsd
+            : (typeof finalUsage?.total_cost === 'number' ? finalUsage.total_cost : undefined);
+
+        if (typeof totalCostUsd !== 'number' && typeof generationId === 'string') {
+          try {
+            const meta = await this.fetchGenerationMeta(apiKey, generationId);
+            if (!finalUsage && meta.usage) {
+              finalUsage = meta.usage;
+            }
+            if (typeof meta.totalCostUsd === 'number') {
+              totalCostUsd = meta.totalCostUsd;
+            }
+          } catch (e) {
+            console.error('Failed to fetch OpenRouter generation cost/usage:', e);
+          }
+        }
+
         // Log the interaction if logging is enabled
         const settingsManager = this.getSettingsManager();
         if (settingsManager?.isAILoggingEnabled()) {
@@ -1168,16 +1253,12 @@ export class OpenRouterClient {
           detail: { type: 'complete', characters: fullContent.length } 
         }));
 
-        const totalCostUsd =
-          typeof finalTotalCostUsd === 'number'
-            ? finalTotalCostUsd
-            : (typeof finalUsage?.total_cost === 'number' ? finalUsage.total_cost : undefined);
-
         callbacks.onMeta?.({
           model,
           ...(typeof provider === 'string' ? { provider } : {}),
           ...(finalUsage ? { usage: finalUsage } : {}),
           ...(typeof totalCostUsd === 'number' ? { totalCostUsd } : {}),
+          ...(typeof generationId === 'string' ? { generationId } : {}),
           promptChars: promptLength,
           completionChars: fullContent.length,
           durationMs: duration
