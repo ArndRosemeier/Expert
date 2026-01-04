@@ -10,6 +10,9 @@ export interface OpenRouterRequest {
   stream_options?: {
     include_usage?: boolean;
   };
+  usage?: {
+    include?: boolean;
+  };
   // Optional model parameters
   temperature?: number;
   top_p?: number;
@@ -65,6 +68,7 @@ export interface OpenRouterUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  cost?: number;
   total_cost?: number;
 }
 
@@ -181,11 +185,16 @@ function normalizeUsage(raw: unknown): OpenRouterUsage | undefined {
   if (typeof promptTokens !== 'number' || typeof completionTokens !== 'number' || typeof totalTokens !== 'number') {
     return undefined;
   }
+  const cost =
+    readNumber(obj['cost']) ??
+    readNumber(obj['cost_usd']) ??
+    readNumber(obj['total_cost_usd']);
   const totalCost = readNumber(obj['total_cost']);
   return {
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
     total_tokens: totalTokens,
+    ...(typeof cost === 'number' ? { cost } : {}),
     ...(typeof totalCost === 'number' ? { total_cost: totalCost } : {})
   };
 }
@@ -1004,6 +1013,9 @@ export class OpenRouterClient {
         stream: true,
         stream_options: {
           include_usage: true
+        },
+        usage: {
+          include: true
         }
       };
       
@@ -1255,7 +1267,11 @@ export class OpenRouterClient {
         let totalCostUsd =
           typeof finalTotalCostUsd === 'number'
             ? finalTotalCostUsd
-            : (typeof finalUsage?.total_cost === 'number' ? finalUsage.total_cost : undefined);
+            : (
+              typeof finalUsage?.total_cost === 'number'
+                ? finalUsage.total_cost
+                : (typeof finalUsage?.cost === 'number' ? finalUsage.cost : undefined)
+            );
 
         if (typeof totalCostUsd !== 'number' && typeof generationId === 'string') {
           try {
