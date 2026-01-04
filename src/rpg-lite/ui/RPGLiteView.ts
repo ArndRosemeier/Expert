@@ -181,24 +181,35 @@ export class RPGLiteView {
     if (!list) return;
 
     if (this.sessions.length === 0) {
-      list.innerHTML = '<div style="opacity: 0.7; margin: 1rem 0; text-align: center;">No sessions yet.</div>';
+      list.innerHTML = `
+        <div class="rpg-lite-empty-state">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📖</div>
+          <div style="font-weight: 600;">No sessions yet</div>
+          <div style="opacity: 0.7; font-size: 0.9rem;">Create your first adventure!</div>
+        </div>
+      `;
       return;
     }
 
+    const currentId = this.currentSession?.id;
+
     list.innerHTML = this.sessions
       .map(
-        (s) => `
-        <div class="rpg-lite-list-item" data-session-id="${s.id}" style="cursor: pointer;">
+        (s) => {
+          const isActive = s.id === currentId;
+          return `
+        <div class="rpg-lite-list-item ${isActive ? 'rpg-lite-list-item-active' : ''}" data-session-id="${s.id}" style="cursor: pointer;">
           <div style="min-width:0; flex: 1;">
-            <div class="rpg-lite-list-item-title">${s.title}</div>
+            <div class="rpg-lite-list-item-title">${isActive ? '▶ ' : ''}${s.title}</div>
             <div style="opacity:.8; font-size:.85rem;">${formatDateTime(s.updatedAt)} · ${s.conversation.length} msgs</div>
           </div>
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button class="rpg-lite-btn rpg-lite-btn-primary" data-continue-session-id="${s.id}" title="Continue">Continue</button>
-            <button class="rpg-lite-btn" data-delete-session-id="${s.id}" title="Delete">Delete</button>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-continue-session-id="${s.id}" title="Continue">Continue</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-session-id="${s.id}" title="Delete">🗑️</button>
           </div>
         </div>
-      `
+      `;
+        }
       )
       .join('');
 
@@ -228,6 +239,13 @@ export class RPGLiteView {
     if (!list) return;
 
     if (this.presets.length === 0) {
+      list.innerHTML = `
+        <div class="rpg-lite-empty-state">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎭</div>
+          <div style="font-weight: 600;">No templates yet</div>
+          <div style="opacity: 0.7; font-size: 0.9rem;">Create reusable templates below</div>
+        </div>
+      `;
       return;
     }
 
@@ -239,10 +257,10 @@ export class RPGLiteView {
             <div class="rpg-lite-list-item-title">${p.name}</div>
             <div style="opacity:.8; font-size:.85rem;">${p.title}</div>
           </div>
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button class="rpg-lite-btn rpg-lite-btn-primary" data-start-preset-id="${p.id}" title="Start">Start</button>
-            <button class="rpg-lite-btn" data-edit-preset-id="${p.id}" title="Edit">Edit</button>
-            <button class="rpg-lite-btn" data-delete-preset-id="${p.id}" title="Delete">Delete</button>
+          <div style="display:flex; gap:0.35rem; align-items:center;">
+            <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
           </div>
         </div>
       `
@@ -599,6 +617,7 @@ export class RPGLiteView {
           <div class="rpg-lite-title">${session.title}</div>
         </div>
         <div class="rpg-lite-topbar-right">
+          <div id="rpg-lite-context-stats-topbar" class="rpg-lite-context-stats"></div>
           <label style="display:flex; align-items:center; gap:.5rem;">
             <span style="opacity:.85;">Narrator</span>
             <select id="rpg-lite-purpose" class="rpg-lite-select">
@@ -618,34 +637,36 @@ export class RPGLiteView {
       </div>
       <div class="rpg-lite-body">
         <div class="rpg-lite-sidebar">
-          <div class="rpg-lite-section-title">Restart from preset</div>
-          <select id="rpg-lite-preset-select" class="rpg-lite-select">
-            <option value="">Select preset…</option>
-            ${this.presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-          </select>
-          <button id="rpg-lite-restart" class="rpg-lite-btn">Restart</button>
-
-          <div class="rpg-lite-section-title" style="margin-top: .5rem;">Sessions</div>
+          <div class="rpg-lite-section-title">Active Sessions</div>
           <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
+          
+          <div style="text-align: center; opacity: 0.5; font-size: 0.85rem; margin: 0.75rem 0;">or restart from template</div>
+          
+          <div class="rpg-lite-section-title">Templates</div>
+          <div class="rpg-lite-list" id="rpg-lite-preset-list-session"></div>
         </div>
         <div class="rpg-lite-main">
-          <div class="rpg-lite-editors">
-            <div class="rpg-lite-editor">
-              <div class="rpg-lite-section-title">System Prompt (editable)</div>
-              <textarea id="rpg-lite-system" class="rpg-lite-textarea"></textarea>
+          <div class="rpg-lite-editors" id="rpg-lite-editors-panel">
+            <div class="rpg-lite-editors-header">
+              <button id="rpg-lite-toggle-editors" class="rpg-lite-btn rpg-lite-btn-sm" title="Toggle settings">
+                <span id="rpg-lite-editors-toggle-icon">▼</span> Settings
+              </button>
             </div>
-            <div class="rpg-lite-editor">
-              <div class="rpg-lite-section-title">Prefix Context (always included)</div>
-              <textarea id="rpg-lite-prefix" class="rpg-lite-textarea"></textarea>
+            <div id="rpg-lite-editors-content" class="rpg-lite-editors-content" style="display: none;">
+              <div class="rpg-lite-editor">
+                <div class="rpg-lite-section-title">System Prompt</div>
+                <textarea id="rpg-lite-system" class="rpg-lite-textarea"></textarea>
+              </div>
+              <div class="rpg-lite-editor">
+                <div class="rpg-lite-section-title">Prefix Context</div>
+                <textarea id="rpg-lite-prefix" class="rpg-lite-textarea"></textarea>
+              </div>
             </div>
           </div>
           <div id="rpg-lite-messages" class="rpg-lite-messages"></div>
           <div class="rpg-lite-composer">
             <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="Your message..."></textarea>
-            <div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">
-              <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
-              <div id="rpg-lite-context-stats" style="opacity:.85; font-size:.85rem;"></div>
-            </div>
+            <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
           </div>
         </div>
       </div>
@@ -675,23 +696,17 @@ export class RPGLiteView {
       void this.saveSession().then(() => this.updateContextStats());
     });
 
-    const presetSelect = this.container.querySelector('#rpg-lite-preset-select') as HTMLSelectElement;
-    (this.container.querySelector('#rpg-lite-restart') as HTMLButtonElement).addEventListener('click', () => {
-      const id = presetSelect.value;
-      if (!id) {
-        alert('Please select a start preset first.');
-        presetSelect.focus();
-        return;
-      }
-      void this.restartFromPreset(id).catch((e: unknown) => {
-        console.error('RPG Lite restart failed:', e);
-        const msg = e instanceof Error ? e.message : String(e);
-        alert(`Restart failed: ${msg}`);
-      });
-    });
-
     (this.container.querySelector('#rpg-lite-save-session') as HTMLButtonElement).addEventListener('click', () => {
       void this.saveCurrentAsSessionCopy();
+    });
+
+    const toggleEditorsBtn = this.container.querySelector('#rpg-lite-toggle-editors') as HTMLButtonElement;
+    const editorsContent = this.container.querySelector('#rpg-lite-editors-content') as HTMLElement;
+    const toggleIcon = this.container.querySelector('#rpg-lite-editors-toggle-icon') as HTMLElement;
+    toggleEditorsBtn.addEventListener('click', () => {
+      const isHidden = editorsContent.style.display === 'none';
+      editorsContent.style.display = isHidden ? 'flex' : 'none';
+      toggleIcon.textContent = isHidden ? '▲' : '▼';
     });
 
     const systemEl = this.container.querySelector('#rpg-lite-system') as HTMLTextAreaElement;
@@ -722,19 +737,55 @@ export class RPGLiteView {
     });
 
     this.renderSessionList();
+    this.renderPresetListInSession();
     this.renderConversation();
     this.updateContextStats();
 
     inputEl.focus();
   }
 
+  private renderPresetListInSession(): void {
+    const list = this.container.querySelector('#rpg-lite-preset-list-session') as HTMLElement | null;
+    if (!list) return;
+
+    if (this.presets.length === 0) {
+      list.innerHTML = '<div style="opacity: 0.6; padding: 0.5rem; text-align: center; font-size: 0.85rem;">No templates</div>';
+      return;
+    }
+
+    list.innerHTML = this.presets
+      .map(
+        (p) => `
+        <div class="rpg-lite-list-item-compact" data-start-preset-id="${p.id}" style="cursor: pointer;">
+          <div style="min-width:0; flex: 1;">
+            <div class="rpg-lite-list-item-title">${p.name}</div>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    list.querySelectorAll('[data-start-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        const item = ev.currentTarget as HTMLElement;
+        const id = item.dataset['startPresetId'];
+        if (!id) throw new Error('Start preset item is missing data-start-preset-id.');
+        void this.restartFromPreset(id).catch((e: unknown) => {
+          console.error('RPG Lite restart failed:', e);
+          const msg = e instanceof Error ? e.message : String(e);
+          alert(`Restart failed: ${msg}`);
+        });
+      });
+    });
+  }
+
   private updateContextStats(): void {
     if (!this.currentSession) throw new Error('No current session.');
-    const statsEl = this.container.querySelector('#rpg-lite-context-stats') as HTMLElement;
-    if (!statsEl) throw new Error('Missing #rpg-lite-context-stats element.');
+    const statsEl = this.container.querySelector('#rpg-lite-context-stats-topbar') as HTMLElement | null;
+    if (!statsEl) return;
 
     const { promptChars, messageCount } = computeContextCharCount(this.currentSession);
-    statsEl.textContent = `Context: ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
+    statsEl.textContent = `📊 ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
   }
 
   private async saveCurrentAsSessionCopy(): Promise<void> {
@@ -803,30 +854,34 @@ export class RPGLiteView {
     const roleLabel = msg.role === 'user' ? 'You' : 'GM';
 
     const infoParts: string[] = [];
-    infoParts.push(formatDateTime(msg.editedAt ?? msg.createdAt));
-    infoParts.push(`${msg.content.length} chars`);
+    infoParts.push(`🕐 ${formatDateTime(msg.editedAt ?? msg.createdAt)}`);
+    
+    const charCount = msg.content.length;
+    const charDisplay = charCount >= 1000 ? `${(charCount / 1000).toFixed(1)}k` : String(charCount);
+    infoParts.push(`📝 ${charDisplay}`);
 
     if (msg.generation) {
       const g = msg.generation;
       if (g.usage) {
-        infoParts.push(`${g.usage.prompt_tokens} prompt tok`);
-        infoParts.push(`${g.usage.completion_tokens} completion tok`);
+        infoParts.push(`🔤 ${g.usage.prompt_tokens}→${g.usage.completion_tokens}`);
       }
       if (typeof g.totalCostUsd === 'number') {
-        infoParts.push(formatUsd(g.totalCostUsd));
+        infoParts.push(`💰 ${formatUsd(g.totalCostUsd)}`);
       }
-      infoParts.push(`${Math.round(g.durationMs)} ms`);
+      const durationSec = g.durationMs / 1000;
+      const durationDisplay = durationSec >= 1 ? `${durationSec.toFixed(1)}s` : `${Math.round(g.durationMs)}ms`;
+      infoParts.push(`⏱️ ${durationDisplay}`);
     }
     if (msg.editedAt) {
-      infoParts.push('edited');
+      infoParts.push('✏️ edited');
     }
 
     el.innerHTML = `
       <div class="rpg-lite-message-header">
         <div class="rpg-lite-message-role">${roleLabel}</div>
         <div class="rpg-lite-message-actions">
-          <button class="rpg-lite-btn" data-action="edit">Edit</button>
-          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn" data-action="retry">Retry</button>` : ''}
+          <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
+          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry">Retry</button>` : ''}
         </div>
       </div>
       <div class="rpg-lite-message-content" data-role="content"></div>
@@ -972,6 +1027,7 @@ export class RPGLiteView {
     this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     sendBtn.disabled = true;
+    sendBtn.innerHTML = '⏳ Generating...';
 
     const openingInstruction = getOpeningInstruction();
     let meta: RPGLiteMessageGenerationMeta | null = null;
@@ -983,6 +1039,7 @@ export class RPGLiteView {
 
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
 
     const opId = this.currentStreamingOperationId;
@@ -1005,6 +1062,8 @@ export class RPGLiteView {
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        sendBtn.innerHTML = 'Send';
+        msgEl.classList.remove('rpg-lite-message-streaming');
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
@@ -1015,6 +1074,8 @@ export class RPGLiteView {
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        sendBtn.innerHTML = 'Send';
+        msgEl.classList.remove('rpg-lite-message-streaming');
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
@@ -1042,12 +1103,14 @@ export class RPGLiteView {
     this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     sendBtn.disabled = true;
+    sendBtn.innerHTML = '⏳ Generating...';
 
     let meta: RPGLiteMessageGenerationMeta | null = null;
     const openRouterMessages = buildContextMessages(session);
     this.updateContextStats();
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
 
     const opId = this.currentStreamingOperationId;
@@ -1070,6 +1133,8 @@ export class RPGLiteView {
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        sendBtn.innerHTML = 'Send';
+        msgEl.classList.remove('rpg-lite-message-streaming');
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
@@ -1080,6 +1145,8 @@ export class RPGLiteView {
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
+        sendBtn.innerHTML = 'Send';
+        msgEl.classList.remove('rpg-lite-message-streaming');
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
