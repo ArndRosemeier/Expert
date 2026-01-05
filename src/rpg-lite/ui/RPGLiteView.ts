@@ -71,7 +71,6 @@ export class RPGLiteView {
   private currentStreamingOperationId: string | null = null;
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
-  private streamingRenderTimerId: number | null = null;
   private editingPresetId: string | null = null;
 
   constructor(container: HTMLElement) {
@@ -88,50 +87,10 @@ export class RPGLiteView {
     this.openRouterClient.abortOperation(this.currentStreamingOperationId);
     this.currentStreamingOperationId = null;
     this.streamingMessageId = null;
-    if (this.streamingRenderTimerId !== null) {
-      window.clearInterval(this.streamingRenderTimerId);
-      this.streamingRenderTimerId = null;
-    }
     this.isStreaming = false;
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     sendBtn.disabled = false;
-  }
-
-  private startTypewriterRender(
-    messageId: string,
-    getFullText: () => string,
-    onDrained: () => void
-  ): void {
-    if (this.streamingRenderTimerId !== null) {
-      window.clearInterval(this.streamingRenderTimerId);
-      this.streamingRenderTimerId = null;
-    }
-
-    let renderedLen = 0;
-    const charsPerTick = 48;
-    const tickMs = 16;
-
-    this.streamingRenderTimerId = window.setInterval(() => {
-      const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
-      const msgEl = messagesEl.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement;
-      const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-
-      const full = getFullText();
-      if (renderedLen < full.length) {
-        renderedLen = Math.min(full.length, renderedLen + charsPerTick);
-        contentEl.textContent = full.slice(0, renderedLen);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-        return;
-      }
-
-      // Fully rendered; stop ticking and finalize.
-      if (this.streamingRenderTimerId !== null) {
-        window.clearInterval(this.streamingRenderTimerId);
-        this.streamingRenderTimerId = null;
-      }
-      onDrained();
-    }, tickMs);
   }
 
   async open(): Promise<void> {
@@ -1244,21 +1203,6 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    let streamCompleted = false;
-
-    // Always run the UI streamer; it will reveal text as it arrives, and guarantees visible progress even if
-    // the network delivers chunks in bursts. Highlighting is applied only after completion.
-    this.startTypewriterRender(
-      assistantMsg.id,
-      () => assistantMsg.content,
-      () => {
-        if (!streamCompleted) return;
-        msgEl.classList.remove('rpg-lite-message-streaming');
-        this.renderConversation();
-        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-        inputEl.focus();
-      }
-    );
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1266,7 +1210,9 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        // UI rendering is handled by the typewriter interval.
+        // Update text directly - plain text during streaming
+        contentEl.textContent = assistantMsg.content;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1276,15 +1222,17 @@ export class RPGLiteView {
           assistantMsg.generation = meta;
         }
         await this.saveSession();
-        streamCompleted = true;
         this.isStreaming = false;
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
-
-        // Finalization is handled by the typewriter drain callback.
+        msgEl.classList.remove('rpg-lite-message-streaming');
+        // Re-render with highlighting now that streaming is complete
+        this.renderConversation();
+        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
+        inputEl.focus();
       },
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
@@ -1292,10 +1240,6 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        if (this.streamingRenderTimerId !== null) {
-          window.clearInterval(this.streamingRenderTimerId);
-          this.streamingRenderTimerId = null;
-        }
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
         msgEl.classList.remove('rpg-lite-message-streaming');
@@ -1336,21 +1280,6 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    let streamCompleted = false;
-
-    // Always run the UI streamer; it will reveal text as it arrives, and guarantees visible progress even if
-    // the network delivers chunks in bursts. Highlighting is applied only after completion.
-    this.startTypewriterRender(
-      assistantMsg.id,
-      () => assistantMsg.content,
-      () => {
-        if (!streamCompleted) return;
-        msgEl.classList.remove('rpg-lite-message-streaming');
-        this.renderConversation();
-        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-        inputEl.focus();
-      }
-    );
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1358,7 +1287,9 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        // UI rendering is handled by the typewriter interval.
+        // Update text directly - plain text during streaming
+        contentEl.textContent = assistantMsg.content;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1368,15 +1299,17 @@ export class RPGLiteView {
           assistantMsg.generation = meta;
         }
         await this.saveSession();
-        streamCompleted = true;
         this.isStreaming = false;
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
-
-        // Finalization is handled by the typewriter drain callback.
+        msgEl.classList.remove('rpg-lite-message-streaming');
+        // Re-render with highlighting now that streaming is complete
+        this.renderConversation();
+        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
+        inputEl.focus();
       },
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
@@ -1384,10 +1317,6 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        if (this.streamingRenderTimerId !== null) {
-          window.clearInterval(this.streamingRenderTimerId);
-          this.streamingRenderTimerId = null;
-        }
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
         msgEl.classList.remove('rpg-lite-message-streaming');
