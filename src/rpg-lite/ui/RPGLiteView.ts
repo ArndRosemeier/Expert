@@ -56,7 +56,7 @@ function getOpeningInstruction(): string {
   );
 }
 
-const DEBUG_RPG_LITE_STREAMING: boolean = false;
+const DEBUG_RPG_LITE_STREAMING: boolean = true;
 
 export class RPGLiteView {
   private container: HTMLElement;
@@ -1239,8 +1239,14 @@ export class RPGLiteView {
 
       // If streaming already ended (or a different message started streaming), do not touch the DOM.
       // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
-      if (!this.isStreaming) return;
-      if (this.streamingMessageId !== assistantMsg.id) return;
+      if (!this.isStreaming) {
+        console.log('⏹️ [RPG Lite Opening] RAF callback skipped: streaming already ended');
+        return;
+      }
+      if (this.streamingMessageId !== assistantMsg.id) {
+        console.log('⏹️ [RPG Lite Opening] RAF callback skipped: different message');
+        return;
+      }
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1252,16 +1258,11 @@ export class RPGLiteView {
       const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
+      const before = liveContentEl.textContent?.length || 0;
       liveContentEl.textContent = assistantMsg.content;
-      // DO NOT scroll during streaming - scroll operations on overflow containers block painting
-      // We'll scroll once at the end in onComplete
-
-      if (DEBUG_RPG_LITE_STREAMING) {
-        const elapsed = Date.now() - startTime;
-        console.log(
-          `🎨 [RPG Lite Opening] DOM updated at ${elapsed}ms, displayed: ${assistantMsg.content.length} chars`
-        );
-      }
+      const after = liveContentEl.textContent?.length || 0;
+      
+      console.log(`🎨 [RPG Lite Opening] RAF fired: textContent ${before} → ${after} chars, isVisible: ${liveMsgEl.offsetHeight > 0}`);
     };
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
@@ -1399,8 +1400,14 @@ export class RPGLiteView {
 
       // If streaming already ended (or a different message started streaming), do not touch the DOM.
       // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
-      if (!this.isStreaming) return;
-      if (this.streamingMessageId !== assistantMsg.id) return;
+      if (!this.isStreaming) {
+        console.log('⏹️ [RPG Lite Reply] RAF callback skipped: streaming already ended');
+        return;
+      }
+      if (this.streamingMessageId !== assistantMsg.id) {
+        console.log('⏹️ [RPG Lite Reply] RAF callback skipped: different message');
+        return;
+      }
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1412,16 +1419,11 @@ export class RPGLiteView {
       const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
+      const before = liveContentEl.textContent?.length || 0;
       liveContentEl.textContent = assistantMsg.content;
-      // DO NOT scroll during streaming - scroll operations on overflow containers block painting
-      // We'll scroll once at the end in onComplete
-
-      if (DEBUG_RPG_LITE_STREAMING) {
-        const elapsed = Date.now() - startTime;
-        console.log(
-          `🎨 [RPG Lite Reply] DOM updated at ${elapsed}ms, displayed: ${assistantMsg.content.length} chars`
-        );
-      }
+      const after = liveContentEl.textContent?.length || 0;
+      
+      console.log(`🎨 [RPG Lite Reply] RAF fired: textContent ${before} → ${after} chars, isVisible: ${liveMsgEl.offsetHeight > 0}`);
     };
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
