@@ -70,6 +70,7 @@ export class RPGLiteView {
   private isStreaming = false;
   private currentStreamingOperationId: string | null = null;
   private currentStreamingAbortRequested = false;
+  private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
 
   constructor(container: HTMLElement) {
@@ -85,6 +86,7 @@ export class RPGLiteView {
     this.currentStreamingAbortRequested = true;
     this.openRouterClient.abortOperation(this.currentStreamingOperationId);
     this.currentStreamingOperationId = null;
+    this.streamingMessageId = null;
     this.isStreaming = false;
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
@@ -1043,8 +1045,8 @@ export class RPGLiteView {
 
     const contentEl = el.querySelector('[data-role="content"]') as HTMLElement;
     
-    // Apply syntax highlighting for assistant messages
-    if (msg.role === 'assistant') {
+    // Apply syntax highlighting for assistant messages (but not during streaming)
+    if (msg.role === 'assistant' && msg.id !== this.streamingMessageId) {
       contentEl.innerHTML = this.highlightContent(msg.content);
     } else {
       contentEl.textContent = msg.content;
@@ -1182,6 +1184,7 @@ export class RPGLiteView {
     this.renderConversation();
 
     this.isStreaming = true;
+    this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
@@ -1200,6 +1203,7 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    let rafScheduled = false;
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1207,8 +1211,13 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        contentEl.innerHTML = this.wrapTextForFadeIn(assistantMsg.content);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (rafScheduled) return;
+        rafScheduled = true;
+        requestAnimationFrame(() => {
+          rafScheduled = false;
+          contentEl.textContent = assistantMsg.content;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1219,6 +1228,7 @@ export class RPGLiteView {
         }
         await this.saveSession();
         this.isStreaming = false;
+        this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
@@ -1231,6 +1241,7 @@ export class RPGLiteView {
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
+        this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
@@ -1259,6 +1270,7 @@ export class RPGLiteView {
     this.renderConversation();
 
     this.isStreaming = true;
+    this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
@@ -1272,6 +1284,7 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    let rafScheduled = false;
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1279,8 +1292,13 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        contentEl.innerHTML = this.wrapTextForFadeIn(assistantMsg.content);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (rafScheduled) return;
+        rafScheduled = true;
+        requestAnimationFrame(() => {
+          rafScheduled = false;
+          contentEl.textContent = assistantMsg.content;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1291,6 +1309,7 @@ export class RPGLiteView {
         }
         await this.saveSession();
         this.isStreaming = false;
+        this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
@@ -1303,6 +1322,7 @@ export class RPGLiteView {
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
+        this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
         sendBtn.disabled = false;
