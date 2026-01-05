@@ -1220,7 +1220,6 @@ export class RPGLiteView {
       { role: 'user', content: openingInstruction }
     ];
 
-    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
@@ -1380,7 +1379,6 @@ export class RPGLiteView {
     let meta: RPGLiteMessageGenerationMeta | null = null;
     const openRouterMessages = buildContextMessages(session);
     this.updateContextStats();
-    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
