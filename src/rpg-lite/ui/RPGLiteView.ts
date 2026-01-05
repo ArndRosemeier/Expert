@@ -1195,10 +1195,14 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      messagesEl.scrollTop = 1_000_000_000;
     } else {
       this.renderConversation();
     }
+
+    // Force browser to paint the new message element before streaming starts
+    // This is critical for old sessions where the DOM might be busy
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     this.isStreaming = true;
     this.streamingMessageId = assistantMsg.id;
@@ -1356,10 +1360,14 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      messagesEl.scrollTop = 1_000_000_000;
     } else {
       this.renderConversation();
     }
+
+    // Force browser to paint the new message element before streaming starts
+    // This is critical for old sessions where the DOM might be busy
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     this.isStreaming = true;
     this.streamingMessageId = assistantMsg.id;
