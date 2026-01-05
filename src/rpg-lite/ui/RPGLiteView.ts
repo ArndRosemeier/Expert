@@ -1217,13 +1217,8 @@ export class RPGLiteView {
         const elapsed = Date.now() - startTime;
         console.log(`📦 [RPG Lite Opening] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
-        
-        // Force browser to render by scheduling in next paint frame
-        requestAnimationFrame(() => {
-          contentEl.textContent = assistantMsg.content;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-          console.log(`✅ [RPG Lite Opening] DOM updated, displayed length: ${contentEl.textContent.length}`);
-        });
+        contentEl.textContent = assistantMsg.content;
+        console.log(`✅ [RPG Lite Opening] DOM updated, displayed length: ${contentEl.textContent.length}`);
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1309,13 +1304,8 @@ export class RPGLiteView {
         const elapsed = Date.now() - startTime;
         console.log(`📦 [RPG Lite Reply] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
-        
-        // Force browser to render by scheduling in next paint frame
-        requestAnimationFrame(() => {
-          contentEl.textContent = assistantMsg.content;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-          console.log(`✅ [RPG Lite Reply] DOM updated, displayed length: ${contentEl.textContent.length}`);
-        });
+        contentEl.textContent = assistantMsg.content;
+        console.log(`✅ [RPG Lite Reply] DOM updated, displayed length: ${contentEl.textContent.length}`);
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
