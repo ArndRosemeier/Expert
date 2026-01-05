@@ -1205,9 +1205,7 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    contentEl.textContent = '';
-    const streamTextNode = document.createTextNode('');
-    contentEl.appendChild(streamTextNode);
+    void contentEl;
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1220,9 +1218,22 @@ export class RPGLiteView {
       onChunk: (chunk: string) => {
         chunkCount++;
         assistantMsg.content += chunk;
-        streamTextNode.appendData(chunk);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-        msgEl.scrollIntoView({ block: 'end' });
+
+        // IMPORTANT: Re-query the live DOM node each chunk.
+        // In long sessions, other UI work can re-render the message list which would invalidate captured element refs.
+        const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+        if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
+
+        const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+        if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
+
+        const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+        if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
+
+        liveContentEl.textContent = assistantMsg.content;
+        liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+        liveMsgEl.scrollIntoView({ block: 'end' });
+
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
@@ -1304,9 +1315,7 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    contentEl.textContent = '';
-    const streamTextNode = document.createTextNode('');
-    contentEl.appendChild(streamTextNode);
+    void contentEl;
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1320,8 +1329,21 @@ export class RPGLiteView {
         chunkCount++;
         assistantMsg.content += chunk;
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        streamTextNode.appendData(chunk);
-        msgEl.scrollIntoView({ block: 'end' });
+
+        // IMPORTANT: Re-query the live DOM node each chunk.
+        const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+        if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
+
+        const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+        if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
+
+        const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+        if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
+
+        liveContentEl.textContent = assistantMsg.content;
+        liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+        liveMsgEl.scrollIntoView({ block: 'end' });
+
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
