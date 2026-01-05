@@ -56,7 +56,7 @@ function getOpeningInstruction(): string {
   );
 }
 
-const DEBUG_RPG_LITE_STREAMING: boolean = false;
+const DEBUG_RPG_LITE_STREAMING: boolean = true;
 
 export class RPGLiteView {
   private container: HTMLElement;
@@ -888,6 +888,12 @@ export class RPGLiteView {
 
   private renderConversation(): void {
     if (!this.currentSession) throw new Error('No current session.');
+    
+    // Trace if called during streaming (this would explain the issue!)
+    if (this.isStreaming) {
+      console.warn('⚠️ [RPG Lite] renderConversation() called DURING STREAMING - this replaces the DOM and breaks incremental updates!', new Error().stack);
+    }
+    
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     messagesEl.innerHTML = '';
 
@@ -1328,9 +1334,8 @@ export class RPGLiteView {
       onChunk: (chunk: string) => {
         chunkCount++;
         assistantMsg.content += chunk;
-        messagesEl.scrollTop = messagesEl.scrollHeight;
 
-        // IMPORTANT: Re-query the live DOM node each chunk.
+        // IMPORTANT: Re-query the live DOM node each chunk (don't use captured refs).
         const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
         if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
 
