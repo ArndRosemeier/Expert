@@ -1189,7 +1189,16 @@ export class RPGLiteView {
     };
     session.conversation.push(assistantMsg);
     await this.saveSession();
-    this.renderConversation();
+    
+    // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
+    // Just append the new message element directly.
+    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
+    if (messagesEl) {
+      messagesEl.appendChild(this.renderMessage(assistantMsg));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else {
+      this.renderConversation();
+    }
 
     this.isStreaming = true;
     this.streamingMessageId = assistantMsg.id;
@@ -1341,7 +1350,16 @@ export class RPGLiteView {
     };
     session.conversation.push(assistantMsg);
     await this.saveSession();
-    this.renderConversation();
+    
+    // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
+    // Just append the new message element directly.
+    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
+    if (messagesEl) {
+      messagesEl.appendChild(this.renderMessage(assistantMsg));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else {
+      this.renderConversation();
+    }
 
     this.isStreaming = true;
     this.streamingMessageId = assistantMsg.id;
