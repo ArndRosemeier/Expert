@@ -905,32 +905,6 @@ export class RPGLiteView {
     this.updateContextStats();
   }
 
-  private wrapTextForFadeIn(content: string): string {
-    const escapeChar = (ch: string): string => {
-      if (ch === '&') return '&amp;';
-      if (ch === '<') return '&lt;';
-      if (ch === '>') return '&gt;';
-      if (ch === '"') return '&quot;';
-      if (ch === "'") return '&#039;';
-      return ch;
-    };
-
-    const chars = content.split('');
-
-    // Wrap each character in a span with animation delay
-    // Limit to reasonable number to avoid performance issues
-    const maxAnimatedChars = 1000;
-    const animationDelay = 0.015; // 15ms per character
-    
-    return chars.map((char, index) => {
-      if (index < maxAnimatedChars) {
-        const delay = index * animationDelay;
-        return `<span class="rpg-lite-char-fadein" style="animation-delay: ${delay}s">${escapeChar(char)}</span>`;
-      }
-      return escapeChar(char);
-    }).join('');
-  }
-
   private highlightContent(content: string): string {
     // Escape HTML to prevent injection
     const escapeHtml = (text: string): string => {
