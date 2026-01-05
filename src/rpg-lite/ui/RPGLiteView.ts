@@ -1237,8 +1237,8 @@ export class RPGLiteView {
         if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
         liveContentEl.textContent = assistantMsg.content;
+        // Simple scroll to bottom - scrollIntoView() is too expensive and blocks rendering
         liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
-        liveMsgEl.scrollIntoView({ block: 'end' });
 
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
@@ -1346,8 +1346,8 @@ export class RPGLiteView {
         if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
         liveContentEl.textContent = assistantMsg.content;
+        // Simple scroll to bottom - scrollIntoView() is too expensive and blocks rendering
         liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
-        liveMsgEl.scrollIntoView({ block: 'end' });
 
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
