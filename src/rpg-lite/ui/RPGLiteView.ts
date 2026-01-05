@@ -1195,13 +1195,14 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      // DO NOT scroll here - scroll operations block painting when overflow is present
+      // Scroll to the new message ONCE before streaming starts
+      // This ensures it's visible so the browser will paint incremental updates
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     } else {
       this.renderConversation();
     }
 
-    // Force browser to paint the new message element before streaming starts
-    // This is critical for old sessions where the DOM might be busy
+    // Force browser to paint the new message element AND the scroll position before streaming starts
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     this.isStreaming = true;
@@ -1359,13 +1360,14 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      // DO NOT scroll here - scroll operations block painting when overflow is present
+      // Scroll to the new message ONCE before streaming starts
+      // This ensures it's visible so the browser will paint incremental updates
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     } else {
       this.renderConversation();
     }
 
-    // Force browser to paint the new message element before streaming starts
-    // This is critical for old sessions where the DOM might be busy
+    // Force browser to paint the new message element AND the scroll position before streaming starts
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     this.isStreaming = true;
