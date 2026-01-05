@@ -56,6 +56,8 @@ function getOpeningInstruction(): string {
   );
 }
 
+const DEBUG_RPG_LITE_STREAMING: boolean = false;
+
 export class RPGLiteView {
   private container: HTMLElement;
   private modalEl: HTMLElement | null = null;
@@ -1203,6 +1205,9 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    contentEl.textContent = '';
+    const streamTextNode = document.createTextNode('');
+    contentEl.appendChild(streamTextNode);
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1210,23 +1215,31 @@ export class RPGLiteView {
     const startTime = Date.now();
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
-        console.log('🎬 [RPG Lite Opening] Streaming started');
+        if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Opening] Streaming started');
       },
       onChunk: (chunk: string) => {
         chunkCount++;
-        const elapsed = Date.now() - startTime;
-        console.log(`📦 [RPG Lite Opening] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
-        contentEl.textContent = assistantMsg.content;
+        streamTextNode.appendData(chunk);
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        console.log(`✅ [RPG Lite Opening] DOM updated, displayed length: ${contentEl.textContent.length}`);
+        msgEl.scrollIntoView({ block: 'end' });
+        if (DEBUG_RPG_LITE_STREAMING) {
+          const elapsed = Date.now() - startTime;
+          console.log(
+            `📦 [RPG Lite Opening] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length}`
+          );
+        }
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: async () => {
-        const elapsed = Date.now() - startTime;
-        console.log(`✨ [RPG Lite Opening] Streaming complete at ${elapsed}ms, received ${chunkCount} chunks, final length: ${assistantMsg.content.length}`);
+        if (DEBUG_RPG_LITE_STREAMING) {
+          const elapsed = Date.now() - startTime;
+          console.log(
+            `✨ [RPG Lite Opening] Streaming complete at ${elapsed}ms, received ${chunkCount} chunks, final length: ${assistantMsg.content.length}`
+          );
+        }
         if (meta) {
           assistantMsg.generation = meta;
         }
@@ -1238,7 +1251,7 @@ export class RPGLiteView {
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
         msgEl.classList.remove('rpg-lite-message-streaming');
-        console.log('🎨 [RPG Lite Opening] Re-rendering with highlighting');
+        if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Opening] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
@@ -1291,6 +1304,9 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    contentEl.textContent = '';
+    const streamTextNode = document.createTextNode('');
+    contentEl.appendChild(streamTextNode);
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -1298,23 +1314,31 @@ export class RPGLiteView {
     const startTime = Date.now();
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
-        console.log('🎬 [RPG Lite Reply] Streaming started');
+        if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Reply] Streaming started');
       },
       onChunk: (chunk: string) => {
         chunkCount++;
-        const elapsed = Date.now() - startTime;
-        console.log(`📦 [RPG Lite Reply] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
-        contentEl.textContent = assistantMsg.content;
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        console.log(`✅ [RPG Lite Reply] DOM updated, displayed length: ${contentEl.textContent.length}`);
+        streamTextNode.appendData(chunk);
+        msgEl.scrollIntoView({ block: 'end' });
+        if (DEBUG_RPG_LITE_STREAMING) {
+          const elapsed = Date.now() - startTime;
+          console.log(
+            `📦 [RPG Lite Reply] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length}`
+          );
+        }
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: async () => {
-        const elapsed = Date.now() - startTime;
-        console.log(`✨ [RPG Lite Reply] Streaming complete at ${elapsed}ms, received ${chunkCount} chunks, final length: ${assistantMsg.content.length}`);
+        if (DEBUG_RPG_LITE_STREAMING) {
+          const elapsed = Date.now() - startTime;
+          console.log(
+            `✨ [RPG Lite Reply] Streaming complete at ${elapsed}ms, received ${chunkCount} chunks, final length: ${assistantMsg.content.length}`
+          );
+        }
         if (meta) {
           assistantMsg.generation = meta;
         }
@@ -1326,7 +1350,7 @@ export class RPGLiteView {
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
         msgEl.classList.remove('rpg-lite-message-streaming');
-        console.log('🎨 [RPG Lite Reply] Re-rendering with highlighting');
+        if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Reply] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
