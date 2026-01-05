@@ -1218,6 +1218,7 @@ export class RPGLiteView {
         console.log(`📦 [RPG Lite Opening] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
         contentEl.textContent = assistantMsg.content;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
         console.log(`✅ [RPG Lite Opening] DOM updated, displayed length: ${contentEl.textContent.length}`);
       },
       onMeta: (m) => {
@@ -1305,6 +1306,7 @@ export class RPGLiteView {
         console.log(`📦 [RPG Lite Reply] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length + chunk.length}`);
         assistantMsg.content += chunk;
         contentEl.textContent = assistantMsg.content;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
         console.log(`✅ [RPG Lite Reply] DOM updated, displayed length: ${contentEl.textContent.length}`);
       },
       onMeta: (m) => {
