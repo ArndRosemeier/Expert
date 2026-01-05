@@ -104,6 +104,24 @@ export class RPGLiteView {
     this.presets.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
+  private makeUniqueSessionTitle(baseTitle: string): string {
+    const existingTitles = new Set(this.sessions.map(s => s.title));
+    
+    if (!existingTitles.has(baseTitle)) {
+      return baseTitle;
+    }
+    
+    let counter = 2;
+    let newTitle = `${baseTitle} ${counter}`;
+    
+    while (existingTitles.has(newTitle)) {
+      counter++;
+      newTitle = `${baseTitle} ${counter}`;
+    }
+    
+    return newTitle;
+  }
+
   private ensureModal(): void {
     let modal = document.getElementById('rpg-lite-view-container');
     if (!modal) {
@@ -456,7 +474,7 @@ export class RPGLiteView {
 
     const session: RPGLiteSession = {
       id: newId('rpg_lite_session'),
-      title: preset.title,
+      title: this.makeUniqueSessionTitle(preset.name),
       createdAt: now(),
       updatedAt: now(),
       systemPrompt: preset.systemPrompt,
@@ -585,7 +603,7 @@ export class RPGLiteView {
     } else {
       const session: RPGLiteSession = {
         id: newId('rpg_lite_session'),
-        title: split.title,
+        title: this.makeUniqueSessionTitle(split.title),
         createdAt: now(),
         updatedAt: now(),
         systemPrompt: split.systemPrompt,
@@ -614,7 +632,7 @@ export class RPGLiteView {
       <div class="rpg-lite-topbar">
         <div class="rpg-lite-topbar-left">
           <button id="rpg-lite-home" class="rpg-lite-btn">Home</button>
-          <div class="rpg-lite-title">${session.title}</div>
+          <div class="rpg-lite-title" id="rpg-lite-title-display" style="cursor: pointer;" title="Click to rename">${session.title}</div>
         </div>
         <div class="rpg-lite-topbar-right">
           <div id="rpg-lite-context-stats-topbar" class="rpg-lite-context-stats"></div>
@@ -679,6 +697,10 @@ export class RPGLiteView {
 
     (this.container.querySelector('#rpg-lite-home') as HTMLButtonElement).addEventListener('click', () => {
       void this.loadAll().then(() => this.renderSelector());
+    });
+
+    (this.container.querySelector('#rpg-lite-title-display') as HTMLElement).addEventListener('click', () => {
+      void this.editSessionTitle();
     });
 
     const purposeSelect = this.container.querySelector('#rpg-lite-purpose') as HTMLSelectElement;
@@ -792,7 +814,7 @@ export class RPGLiteView {
     if (!this.currentSession) throw new Error('No current session.');
     this.abortStreamingIfActive();
 
-    const suggested = `${this.currentSession.title} (copy)`;
+    const suggested = this.makeUniqueSessionTitle(`${this.currentSession.title} (copy)`);
     const title = prompt('New session name (branch):', suggested);
     if (!title || title.trim().length === 0) return;
 
@@ -806,9 +828,11 @@ export class RPGLiteView {
       ...(m.generation ? { generation: { ...m.generation } } : {})
     }));
 
+    const finalTitle = this.makeUniqueSessionTitle(title.trim());
+
     const newSession: RPGLiteSession = {
       id: newId('rpg_lite_session'),
-      title: title.trim(),
+      title: finalTitle,
       createdAt: now(),
       updatedAt: now(),
       systemPrompt: base.systemPrompt,
@@ -833,6 +857,31 @@ export class RPGLiteView {
     await storage.saveRPGLiteSession(this.currentSession);
   }
 
+  private async editSessionTitle(): Promise<void> {
+    if (!this.currentSession) throw new Error('No current session.');
+    
+    const newTitle = prompt('Rename session:', this.currentSession.title);
+    
+    if (newTitle === null || newTitle.trim().length === 0) {
+      return;
+    }
+    
+    const trimmedTitle = newTitle.trim();
+    
+    // Check if title is already in use by a different session
+    const existingSession = this.sessions.find(s => s.id !== this.currentSession!.id && s.title === trimmedTitle);
+    
+    if (existingSession) {
+      alert(`A session with the name "${trimmedTitle}" already exists. Please choose a different name.`);
+      return;
+    }
+    
+    this.currentSession.title = trimmedTitle;
+    await this.saveSession();
+    await this.loadAll();
+    this.renderSession();
+  }
+
   private renderConversation(): void {
     if (!this.currentSession) throw new Error('No current session.');
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
@@ -844,6 +893,110 @@ export class RPGLiteView {
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
     this.updateContextStats();
+  }
+
+  private wrapTextForFadeIn(content: string): string {
+    const escapeChar = (ch: string): string => {
+      if (ch === '&') return '&amp;';
+      if (ch === '<') return '&lt;';
+      if (ch === '>') return '&gt;';
+      if (ch === '"') return '&quot;';
+      if (ch === "'") return '&#039;';
+      return ch;
+    };
+
+    const chars = content.split('');
+
+    // Wrap each character in a span with animation delay
+    // Limit to reasonable number to avoid performance issues
+    const maxAnimatedChars = 1000;
+    const animationDelay = 0.015; // 15ms per character
+    
+    return chars.map((char, index) => {
+      if (index < maxAnimatedChars) {
+        const delay = index * animationDelay;
+        return `<span class="rpg-lite-char-fadein" style="animation-delay: ${delay}s">${escapeChar(char)}</span>`;
+      }
+      return escapeChar(char);
+    }).join('');
+  }
+
+  private highlightContent(content: string): string {
+    // Escape HTML to prevent injection
+    const escapeHtml = (text: string): string => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    let result = escapeHtml(content);
+
+    // Highlight complete XML elements: <tag>content</tag> or <tag attr="value">content</tag>
+    // Match opening tag, content, and closing tag as a unit
+    result = result.replace(
+      /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)([\s\S]*?)(&lt;\/\2&gt;)/g,
+      '<span class="rpg-lite-highlight-xml">$1$3$4</span>'
+    );
+
+    // Highlight self-closing XML tags: <tag />
+    result = result.replace(
+      /(&lt;[A-Za-z_][\w:\-\.]*(?:\s+[^&]*?)?\/&gt;)/g,
+      '<span class="rpg-lite-highlight-xml">$1</span>'
+    );
+
+    // Highlight JSON blocks (complete objects/arrays with content)
+    result = result.replace(
+      /(\{[\s\S]*?\}|\[[\s\S]*?\])/g,
+      (match) => {
+        // Only highlight if it looks like JSON (contains quotes/colons, reasonable structure)
+        if ((match.includes('&quot;') || match.includes(':')) && match.length > 10) {
+          return `<span class="rpg-lite-highlight-json">${match}</span>`;
+        }
+        return match;
+      }
+    );
+
+    // Highlight direct speech (quoted text)
+    // Match "text" or "text," or "text." etc.
+    result = result.replace(
+      /(&quot;[\s\S]*?&quot;[,.\?!]?)/g,
+      '<span class="rpg-lite-highlight-speech">$1</span>'
+    );
+
+    // Highlight actions/narration in asterisks *text*
+    result = result.replace(
+      /(\*[^*]+\*)/g,
+      '<span class="rpg-lite-highlight-action">$1</span>'
+    );
+
+    // Highlight dice rolls (e.g., d20, 2d6, 1d100)
+    result = result.replace(
+      /(\b\d*d\d+(?:[+-]\d+)?\b)/gi,
+      '<span class="rpg-lite-highlight-dice">$1</span>'
+    );
+
+    // Highlight emphasis markers (bold **text** or italic *text* when not already caught)
+    result = result.replace(
+      /(\*\*[^*]+\*\*)/g,
+      '<span class="rpg-lite-highlight-emphasis">$1</span>'
+    );
+
+    // Highlight thought text (text in parentheses or em-dashes)
+    result = result.replace(
+      /(\([^)]+\))/g,
+      '<span class="rpg-lite-highlight-thought">$1</span>'
+    );
+
+    // Also catch em-dash thoughts: —thought—
+    result = result.replace(
+      /(—[^—]+—)/g,
+      '<span class="rpg-lite-highlight-thought">$1</span>'
+    );
+
+    return result;
   }
 
   private renderMessage(msg: RPGLiteChatMessage): HTMLElement {
@@ -889,7 +1042,13 @@ export class RPGLiteView {
     `;
 
     const contentEl = el.querySelector('[data-role="content"]') as HTMLElement;
-    contentEl.textContent = msg.content;
+    
+    // Apply syntax highlighting for assistant messages
+    if (msg.role === 'assistant') {
+      contentEl.innerHTML = this.highlightContent(msg.content);
+    } else {
+      contentEl.textContent = msg.content;
+    }
 
     (el.querySelector('[data-action="edit"]') as HTMLButtonElement).addEventListener('click', () => {
       this.startEditMessage(msg.id);
@@ -1048,7 +1207,8 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        contentEl.textContent = assistantMsg.content;
+        contentEl.innerHTML = this.wrapTextForFadeIn(assistantMsg.content);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1119,7 +1279,8 @@ export class RPGLiteView {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        contentEl.textContent = assistantMsg.content;
+        contentEl.innerHTML = this.wrapTextForFadeIn(assistantMsg.content);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);

@@ -86,17 +86,43 @@ export class ComprehensiveExportService {
                 console.warn('Failed to export aiLogs store:', error);
             }
 
+            // Export all data from RPG Lite sessions store
+            try {
+                const rpgLiteSessionsData = await indexedDBService.getAll('rpg_lite_sessions');
+                
+                if (rpgLiteSessionsData.length > 0) {
+                    zip.file('rpg-lite-sessions-store.json', JSON.stringify(rpgLiteSessionsData, null, 2));
+                    exportedItems.push(`${rpgLiteSessionsData.length} RPG Lite sessions`);
+                }
+            } catch (error) {
+                console.warn('Failed to export RPG Lite sessions store:', error);
+            }
+
+            // Export all data from RPG Lite start presets store
+            try {
+                const rpgLitePresetsData = await indexedDBService.getAll('rpg_lite_start_presets');
+                
+                if (rpgLitePresetsData.length > 0) {
+                    zip.file('rpg-lite-presets-store.json', JSON.stringify(rpgLitePresetsData, null, 2));
+                    exportedItems.push(`${rpgLitePresetsData.length} RPG Lite templates`);
+                }
+            } catch (error) {
+                console.warn('Failed to export RPG Lite presets store:', error);
+            }
+
             // Create a manifest with export metadata
             const manifest = {
                 exportDate: new Date().toISOString(),
-                exportVersion: '2.0', // Updated version for new simplified export
+                exportVersion: '2.1', // Updated version to include RPG Lite stores
                 description: 'Complete Expert Application IndexedDB Backup',
                 approach: 'Future-proof: exports ALL data from IndexedDB stores',
                 contents: exportedItems,
                 stores: {
                     keyValue: 'General application settings, templates, buttons, configurations',
                     projects: 'All project data and metadata',
-                    aiLogs: 'AI interaction logs and debugging information'
+                    aiLogs: 'AI interaction logs and debugging information',
+                    rpgLiteSessions: 'RPG Lite game sessions',
+                    rpgLitePresets: 'RPG Lite start templates'
                 },
                 security: {
                     excluded: 'API keys and sensitive authentication data are filtered out',
@@ -276,13 +302,47 @@ export class ComprehensiveExportService {
                 });
             }
 
+            // Check RPG Lite sessions store
+            try {
+                const rpgLiteSessionsData = await indexedDBService.getAll('rpg_lite_sessions');
+                categories.push({
+                    name: 'RPG Lite Sessions',
+                    count: rpgLiteSessionsData.length,
+                    status: rpgLiteSessionsData.length > 0 ? 'available' : 'empty'
+                });
+            } catch (error) {
+                categories.push({
+                    name: 'RPG Lite Sessions',
+                    count: 0,
+                    status: 'error'
+                });
+            }
+
+            // Check RPG Lite presets store
+            try {
+                const rpgLitePresetsData = await indexedDBService.getAll('rpg_lite_start_presets');
+                categories.push({
+                    name: 'RPG Lite Templates',
+                    count: rpgLitePresetsData.length,
+                    status: rpgLitePresetsData.length > 0 ? 'available' : 'empty'
+                });
+            } catch (error) {
+                categories.push({
+                    name: 'RPG Lite Templates',
+                    count: 0,
+                    status: 'error'
+                });
+            }
+
         } catch (error) {
             console.error('Failed to get export summary:', error);
             // Return empty categories with error status
             categories.push(
                 { name: 'Application Settings & Data', count: 0, status: 'error' },
                 { name: 'Projects', count: 0, status: 'error' },
-                { name: 'AI Logs', count: 0, status: 'error' }
+                { name: 'AI Logs', count: 0, status: 'error' },
+                { name: 'RPG Lite Sessions', count: 0, status: 'error' },
+                { name: 'RPG Lite Templates', count: 0, status: 'error' }
             );
         }
 

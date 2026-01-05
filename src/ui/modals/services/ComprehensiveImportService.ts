@@ -40,6 +40,8 @@ interface ImportValidation {
         keyValueStore?: any[];
         projectsStore?: any[];
         aiLogsStore?: any[];
+        rpgLiteSessionsStore?: any[];
+        rpgLitePresetsStore?: any[];
         manifest?: any;
     };
 }
@@ -122,6 +124,32 @@ export class ComprehensiveImportService {
                 }
             }
             
+            // Import RPG Lite sessions store data
+            if (validation.files.rpgLiteSessionsStore && validation.files.rpgLiteSessionsStore.length > 0) {
+                try {
+                    await this.importRPGLiteSessionsStore(indexedDBService, validation.files.rpgLiteSessionsStore);
+                    importedItems.push(`${validation.files.rpgLiteSessionsStore.length} RPG Lite sessions`);
+                    console.log(`✅ Imported ${validation.files.rpgLiteSessionsStore.length} RPG Lite sessions`);
+                } catch (error) {
+                    const errorMsg = `Failed to import RPG Lite sessions store: ${error instanceof Error ? error.message : error}`;
+                    errors.push(errorMsg);
+                    console.error('❌', errorMsg);
+                }
+            }
+            
+            // Import RPG Lite presets store data
+            if (validation.files.rpgLitePresetsStore && validation.files.rpgLitePresetsStore.length > 0) {
+                try {
+                    await this.importRPGLitePresetsStore(indexedDBService, validation.files.rpgLitePresetsStore);
+                    importedItems.push(`${validation.files.rpgLitePresetsStore.length} RPG Lite templates`);
+                    console.log(`✅ Imported ${validation.files.rpgLitePresetsStore.length} RPG Lite templates`);
+                } catch (error) {
+                    const errorMsg = `Failed to import RPG Lite presets store: ${error instanceof Error ? error.message : error}`;
+                    errors.push(errorMsg);
+                    console.error('❌', errorMsg);
+                }
+            }
+            
             // Determine success based on whether we imported anything successfully
             const success = importedItems.length > 0;
             const message = success 
@@ -189,7 +217,7 @@ export class ComprehensiveImportService {
             const zipContent = await zip.loadAsync(file);
             
             // Check for optional data files
-            const optionalFiles = ['keyvalue-store.json', 'projects-store.json', 'ai-logs-store.json'];
+            const optionalFiles = ['keyvalue-store.json', 'projects-store.json', 'ai-logs-store.json', 'rpg-lite-sessions-store.json', 'rpg-lite-presets-store.json'];
             
             // Validate manifest exists
             if (!zipContent.files['manifest.json']) {
@@ -233,6 +261,18 @@ export class ComprehensiveImportService {
                             } else {
                                 errors.push('ai-logs-store.json must contain an array');
                             }
+                        } else if (fileName === 'rpg-lite-sessions-store.json') {
+                            if (Array.isArray(data)) {
+                                files.rpgLiteSessionsStore = data;
+                            } else {
+                                errors.push('rpg-lite-sessions-store.json must contain an array');
+                            }
+                        } else if (fileName === 'rpg-lite-presets-store.json') {
+                            if (Array.isArray(data)) {
+                                files.rpgLitePresetsStore = data;
+                            } else {
+                                errors.push('rpg-lite-presets-store.json must contain an array');
+                            }
                         }
                     } catch (error) {
                         errors.push(`Invalid ${fileName} format`);
@@ -241,7 +281,7 @@ export class ComprehensiveImportService {
             }
             
             // Check that we have at least one data file
-            if (!files.keyValueStore && !files.projectsStore && !files.aiLogsStore) {
+            if (!files.keyValueStore && !files.projectsStore && !files.aiLogsStore && !files.rpgLiteSessionsStore && !files.rpgLitePresetsStore) {
                 errors.push('No valid data files found in backup');
             }
             
@@ -275,6 +315,14 @@ export class ComprehensiveImportService {
         // Clear aiLogs store completely
         await indexedDBService.clear('aiLogs');
         console.log('✅ Cleared aiLogs store');
+        
+        // Clear RPG Lite sessions store completely
+        await indexedDBService.clear('rpg_lite_sessions');
+        console.log('✅ Cleared RPG Lite sessions store');
+        
+        // Clear RPG Lite presets store completely
+        await indexedDBService.clear('rpg_lite_start_presets');
+        console.log('✅ Cleared RPG Lite presets store');
     }
     
     /**
@@ -338,6 +386,28 @@ export class ComprehensiveImportService {
         for (const item of data) {
             if (item && typeof item === 'object' && 'id' in item) {
                 await indexedDBService.set('aiLogs', item.id, item);
+            }
+        }
+    }
+    
+    /**
+     * Import data into RPG Lite sessions store
+     */
+    private static async importRPGLiteSessionsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
+        for (const item of data) {
+            if (item && typeof item === 'object' && 'id' in item) {
+                await indexedDBService.set('rpg_lite_sessions', item.id, item);
+            }
+        }
+    }
+    
+    /**
+     * Import data into RPG Lite presets store
+     */
+    private static async importRPGLitePresetsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
+        for (const item of data) {
+            if (item && typeof item === 'object' && 'id' in item) {
+                await indexedDBService.set('rpg_lite_start_presets', item.id, item);
             }
         }
     }
@@ -456,12 +526,30 @@ export class ComprehensiveImportService {
                     status: 'available'
                 });
             }
+            
+            if (validation.files.rpgLiteSessionsStore) {
+                summary.push({
+                    name: 'RPG Lite Sessions',
+                    count: validation.files.rpgLiteSessionsStore.length,
+                    status: 'available'
+                });
+            }
+            
+            if (validation.files.rpgLitePresetsStore) {
+                summary.push({
+                    name: 'RPG Lite Templates',
+                    count: validation.files.rpgLitePresetsStore.length,
+                    status: 'available'
+                });
+            }
         } else {
             // Add error entries for invalid file
             summary.push(
                 { name: 'Application Settings & Data', count: 0, status: 'error' },
                 { name: 'Projects', count: 0, status: 'error' },
-                { name: 'AI Logs', count: 0, status: 'error' }
+                { name: 'AI Logs', count: 0, status: 'error' },
+                { name: 'RPG Lite Sessions', count: 0, status: 'error' },
+                { name: 'RPG Lite Templates', count: 0, status: 'error' }
             );
         }
         
