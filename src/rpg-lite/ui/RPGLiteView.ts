@@ -56,7 +56,7 @@ function getOpeningInstruction(): string {
   );
 }
 
-const DEBUG_RPG_LITE_STREAMING: boolean = true;
+const DEBUG_RPG_LITE_STREAMING: boolean = false;
 
 export class RPGLiteView {
   private container: HTMLElement;
@@ -1218,9 +1218,16 @@ export class RPGLiteView {
     let chunkCount = 0;
     const startTime = Date.now();
     let rafPending = false;
+    let rafHandle: number | null = null;
     
     const updateDOM = () => {
       rafPending = false;
+      rafHandle = null;
+
+      // If streaming already ended (or a different message started streaming), do not touch the DOM.
+      // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
+      if (!this.isStreaming) return;
+      if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1233,7 +1240,8 @@ export class RPGLiteView {
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
-      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+      // Avoid reading scrollHeight on every chunk (forces layout on big histories and can starve paints).
+      liveMessagesEl.scrollTop = 1_000_000_000;
 
       if (DEBUG_RPG_LITE_STREAMING) {
         const elapsed = Date.now() - startTime;
@@ -1262,13 +1270,19 @@ export class RPGLiteView {
         // This ensures browser always has time to paint between updates
         if (!rafPending) {
           rafPending = true;
-          requestAnimationFrame(updateDOM);
+          rafHandle = requestAnimationFrame(updateDOM);
         }
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: async () => {
+        if (rafHandle !== null) {
+          cancelAnimationFrame(rafHandle);
+          rafHandle = null;
+        }
+        rafPending = false;
+
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
@@ -1294,6 +1308,11 @@ export class RPGLiteView {
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Opening] Streaming error:', error);
+        if (rafHandle !== null) {
+          cancelAnimationFrame(rafHandle);
+          rafHandle = null;
+        }
+        rafPending = false;
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
         this.streamingMessageId = null;
@@ -1346,9 +1365,16 @@ export class RPGLiteView {
     let chunkCount = 0;
     const startTime = Date.now();
     let rafPending = false;
+    let rafHandle: number | null = null;
     
     const updateDOM = () => {
       rafPending = false;
+      rafHandle = null;
+
+      // If streaming already ended (or a different message started streaming), do not touch the DOM.
+      // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
+      if (!this.isStreaming) return;
+      if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1361,7 +1387,8 @@ export class RPGLiteView {
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
-      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+      // Avoid reading scrollHeight on every chunk (forces layout on big histories and can starve paints).
+      liveMessagesEl.scrollTop = 1_000_000_000;
 
       if (DEBUG_RPG_LITE_STREAMING) {
         const elapsed = Date.now() - startTime;
@@ -1390,13 +1417,19 @@ export class RPGLiteView {
         // This ensures browser always has time to paint between updates
         if (!rafPending) {
           rafPending = true;
-          requestAnimationFrame(updateDOM);
+          rafHandle = requestAnimationFrame(updateDOM);
         }
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: async () => {
+        if (rafHandle !== null) {
+          cancelAnimationFrame(rafHandle);
+          rafHandle = null;
+        }
+        rafPending = false;
+
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
@@ -1422,6 +1455,11 @@ export class RPGLiteView {
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Reply] Streaming error:', error);
+        if (rafHandle !== null) {
+          cancelAnimationFrame(rafHandle);
+          rafHandle = null;
+        }
+        rafPending = false;
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
         this.streamingMessageId = null;
