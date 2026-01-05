@@ -1195,7 +1195,7 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      messagesEl.scrollTop = 1_000_000_000;
+      // DO NOT scroll here - scroll operations block painting when overflow is present
     } else {
       this.renderConversation();
     }
@@ -1252,8 +1252,8 @@ export class RPGLiteView {
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
-      // Avoid reading scrollHeight on every chunk (forces layout on big histories and can starve paints).
-      liveMessagesEl.scrollTop = 1_000_000_000;
+      // DO NOT scroll during streaming - scroll operations on overflow containers block painting
+      // We'll scroll once at the end in onComplete
 
       if (DEBUG_RPG_LITE_STREAMING) {
         const elapsed = Date.now() - startTime;
@@ -1359,7 +1359,7 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     if (messagesEl) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
-      messagesEl.scrollTop = 1_000_000_000;
+      // DO NOT scroll here - scroll operations block painting when overflow is present
     } else {
       this.renderConversation();
     }
@@ -1411,8 +1411,8 @@ export class RPGLiteView {
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
-      // Avoid reading scrollHeight on every chunk (forces layout on big histories and can starve paints).
-      liveMessagesEl.scrollTop = 1_000_000_000;
+      // DO NOT scroll during streaming - scroll operations on overflow containers block painting
+      // We'll scroll once at the end in onComplete
 
       if (DEBUG_RPG_LITE_STREAMING) {
         const elapsed = Date.now() - startTime;
