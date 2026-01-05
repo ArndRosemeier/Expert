@@ -56,7 +56,7 @@ function getOpeningInstruction(): string {
   );
 }
 
-const DEBUG_RPG_LITE_STREAMING: boolean = true;
+const DEBUG_RPG_LITE_STREAMING: boolean = false;
 
 export class RPGLiteView {
   private container: HTMLElement;
@@ -1239,14 +1239,8 @@ export class RPGLiteView {
 
       // If streaming already ended (or a different message started streaming), do not touch the DOM.
       // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
-      if (!this.isStreaming) {
-        console.log('⏹️ [RPG Lite Opening] RAF callback skipped: streaming already ended');
-        return;
-      }
-      if (this.streamingMessageId !== assistantMsg.id) {
-        console.log('⏹️ [RPG Lite Opening] RAF callback skipped: different message');
-        return;
-      }
+      if (!this.isStreaming) return;
+      if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1258,11 +1252,9 @@ export class RPGLiteView {
       const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
-      const before = liveContentEl.textContent?.length || 0;
       liveContentEl.textContent = assistantMsg.content;
-      const after = liveContentEl.textContent?.length || 0;
-      
-      console.log(`🎨 [RPG Lite Opening] RAF fired: textContent ${before} → ${after} chars, isVisible: ${liveMsgEl.offsetHeight > 0}`);
+      // Auto-scroll to keep streaming content visible
+      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
     };
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
@@ -1400,14 +1392,8 @@ export class RPGLiteView {
 
       // If streaming already ended (or a different message started streaming), do not touch the DOM.
       // Otherwise we may overwrite the highlighted HTML that is rendered on completion.
-      if (!this.isStreaming) {
-        console.log('⏹️ [RPG Lite Reply] RAF callback skipped: streaming already ended');
-        return;
-      }
-      if (this.streamingMessageId !== assistantMsg.id) {
-        console.log('⏹️ [RPG Lite Reply] RAF callback skipped: different message');
-        return;
-      }
+      if (!this.isStreaming) return;
+      if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
       const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
@@ -1419,11 +1405,9 @@ export class RPGLiteView {
       const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
-      const before = liveContentEl.textContent?.length || 0;
       liveContentEl.textContent = assistantMsg.content;
-      const after = liveContentEl.textContent?.length || 0;
-      
-      console.log(`🎨 [RPG Lite Reply] RAF fired: textContent ${before} → ${after} chars, isVisible: ${liveMsgEl.offsetHeight > 0}`);
+      // Auto-scroll to keep streaming content visible
+      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
     };
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
