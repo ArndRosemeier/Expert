@@ -994,17 +994,7 @@ export class RPGLiteView {
       '<span class="rpg-lite-highlight-emphasis">$1</span>'
     );
 
-    // Highlight thought text (text in parentheses or em-dashes)
-    result = result.replace(
-      /(\([^)]+\))/g,
-      '<span class="rpg-lite-highlight-thought">$1</span>'
-    );
-
-    // Also catch em-dash thoughts: —thought—
-    result = result.replace(
-      /(—[^—]+—)/g,
-      '<span class="rpg-lite-highlight-thought">$1</span>'
-    );
+    // Removed thought text highlighting (parentheses and em-dashes) - too noisy
 
     return result;
   }
