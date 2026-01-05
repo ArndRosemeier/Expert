@@ -99,8 +99,7 @@ export class RPGLiteView {
   }
 
   private startTypewriterRender(
-    contentEl: HTMLElement,
-    messagesEl: HTMLElement,
+    messageId: string,
     getFullText: () => string,
     onDrained: () => void
   ): void {
@@ -110,10 +109,14 @@ export class RPGLiteView {
     }
 
     let renderedLen = 0;
-    const charsPerTick = 24;
-    const tickMs = 30;
+    const charsPerTick = 48;
+    const tickMs = 16;
 
     this.streamingRenderTimerId = window.setInterval(() => {
+      const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
+      const msgEl = messagesEl.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement;
+      const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+
       const full = getFullText();
       if (renderedLen < full.length) {
         renderedLen = Math.min(full.length, renderedLen + charsPerTick);
@@ -1243,27 +1246,27 @@ export class RPGLiteView {
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
     let streamCompleted = false;
 
+    // Always run the UI streamer; it will reveal text as it arrives, and guarantees visible progress even if
+    // the network delivers chunks in bursts. Highlighting is applied only after completion.
+    this.startTypewriterRender(
+      assistantMsg.id,
+      () => assistantMsg.content,
+      () => {
+        if (!streamCompleted) return;
+        msgEl.classList.remove('rpg-lite-message-streaming');
+        this.renderConversation();
+        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
+        inputEl.focus();
+      }
+    );
+
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        // Render incrementally regardless of whether the network delivers chunks smoothly or in a burst.
-        if (this.streamingRenderTimerId === null) {
-          this.startTypewriterRender(
-            contentEl,
-            messagesEl,
-            () => assistantMsg.content,
-            () => {
-              if (!streamCompleted) return;
-              msgEl.classList.remove('rpg-lite-message-streaming');
-              this.renderConversation();
-              const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-              inputEl.focus();
-            }
-          );
-        }
+        // UI rendering is handled by the typewriter interval.
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1281,13 +1284,7 @@ export class RPGLiteView {
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
 
-        // If no chunks arrived (edge case), finalize immediately.
-        if (this.streamingRenderTimerId === null) {
-          msgEl.classList.remove('rpg-lite-message-streaming');
-          this.renderConversation();
-          const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-          inputEl.focus();
-        }
+        // Finalization is handled by the typewriter drain callback.
       },
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
@@ -1341,27 +1338,27 @@ export class RPGLiteView {
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
     let streamCompleted = false;
 
+    // Always run the UI streamer; it will reveal text as it arrives, and guarantees visible progress even if
+    // the network delivers chunks in bursts. Highlighting is applied only after completion.
+    this.startTypewriterRender(
+      assistantMsg.id,
+      () => assistantMsg.content,
+      () => {
+        if (!streamCompleted) return;
+        msgEl.classList.remove('rpg-lite-message-streaming');
+        this.renderConversation();
+        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
+        inputEl.focus();
+      }
+    );
+
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {},
       onChunk: (chunk: string) => {
         assistantMsg.content += chunk;
-        // Render incrementally regardless of whether the network delivers chunks smoothly or in a burst.
-        if (this.streamingRenderTimerId === null) {
-          this.startTypewriterRender(
-            contentEl,
-            messagesEl,
-            () => assistantMsg.content,
-            () => {
-              if (!streamCompleted) return;
-              msgEl.classList.remove('rpg-lite-message-streaming');
-              this.renderConversation();
-              const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-              inputEl.focus();
-            }
-          );
-        }
+        // UI rendering is handled by the typewriter interval.
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -1379,13 +1376,7 @@ export class RPGLiteView {
         sendBtn.disabled = false;
         sendBtn.innerHTML = 'Send';
 
-        // If no chunks arrived (edge case), finalize immediately.
-        if (this.streamingRenderTimerId === null) {
-          msgEl.classList.remove('rpg-lite-message-streaming');
-          this.renderConversation();
-          const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-          inputEl.focus();
-        }
+        // Finalization is handled by the typewriter drain callback.
       },
       onError: (error: Error) => {
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
