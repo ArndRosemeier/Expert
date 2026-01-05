@@ -1217,6 +1217,32 @@ export class RPGLiteView {
     if (!opId) throw new Error('Missing streaming operation id.');
     let chunkCount = 0;
     const startTime = Date.now();
+    let rafPending = false;
+    
+    const updateDOM = () => {
+      rafPending = false;
+      
+      // IMPORTANT: Re-query the live DOM node each update.
+      const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+      if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
+
+      const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+      if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
+
+      const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+      if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
+
+      liveContentEl.textContent = assistantMsg.content;
+      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+
+      if (DEBUG_RPG_LITE_STREAMING) {
+        const elapsed = Date.now() - startTime;
+        console.log(
+          `🎨 [RPG Lite Opening] DOM updated at ${elapsed}ms, displayed: ${assistantMsg.content.length} chars`
+        );
+      }
+    };
+    
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Opening] Streaming started');
@@ -1225,26 +1251,18 @@ export class RPGLiteView {
         chunkCount++;
         assistantMsg.content += chunk;
 
-        // IMPORTANT: Re-query the live DOM node each chunk.
-        // In long sessions, other UI work can re-render the message list which would invalidate captured element refs.
-        const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
-        if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
-
-        const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
-        if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
-
-        const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
-        if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
-
-        liveContentEl.textContent = assistantMsg.content;
-        // Simple scroll to bottom - scrollIntoView() is too expensive and blocks rendering
-        liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
-
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
             `📦 [RPG Lite Opening] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length}`
           );
+        }
+
+        // Throttle DOM updates: only schedule ONE paint frame at a time
+        // This ensures browser always has time to paint between updates
+        if (!rafPending) {
+          rafPending = true;
+          requestAnimationFrame(updateDOM);
         }
       },
       onMeta: (m) => {
@@ -1327,6 +1345,32 @@ export class RPGLiteView {
     if (!opId) throw new Error('Missing streaming operation id.');
     let chunkCount = 0;
     const startTime = Date.now();
+    let rafPending = false;
+    
+    const updateDOM = () => {
+      rafPending = false;
+      
+      // IMPORTANT: Re-query the live DOM node each update.
+      const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+      if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
+
+      const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+      if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
+
+      const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+      if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
+
+      liveContentEl.textContent = assistantMsg.content;
+      liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
+
+      if (DEBUG_RPG_LITE_STREAMING) {
+        const elapsed = Date.now() - startTime;
+        console.log(
+          `🎨 [RPG Lite Reply] DOM updated at ${elapsed}ms, displayed: ${assistantMsg.content.length} chars`
+        );
+      }
+    };
+    
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Reply] Streaming started');
@@ -1335,25 +1379,18 @@ export class RPGLiteView {
         chunkCount++;
         assistantMsg.content += chunk;
 
-        // IMPORTANT: Re-query the live DOM node each chunk (don't use captured refs).
-        const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
-        if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
-
-        const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
-        if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
-
-        const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
-        if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
-
-        liveContentEl.textContent = assistantMsg.content;
-        // Simple scroll to bottom - scrollIntoView() is too expensive and blocks rendering
-        liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
-
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
           console.log(
             `📦 [RPG Lite Reply] Chunk #${chunkCount} at ${elapsed}ms, chunk length: ${chunk.length}, total content: ${assistantMsg.content.length}`
           );
+        }
+
+        // Throttle DOM updates: only schedule ONE paint frame at a time
+        // This ensures browser always has time to paint between updates
+        if (!rafPending) {
+          rafPending = true;
+          requestAnimationFrame(updateDOM);
         }
       },
       onMeta: (m) => {
