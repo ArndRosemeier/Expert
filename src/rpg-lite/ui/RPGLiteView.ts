@@ -1044,21 +1044,22 @@ export class RPGLiteView {
     this.renderActionButtons();
     this.renderConversation();
     this.updateContextStats();
-    this.initializeResizableLayout();
+    void this.initializeResizableLayout();
 
     inputEl.focus();
   }
 
-  private initializeResizableLayout(): void {
+  private async initializeResizableLayout(): Promise<void> {
     const body = this.container.querySelector('.rpg-lite-body') as HTMLElement;
     const leftSidebar = this.container.querySelector('#rpg-lite-sidebar') as HTMLElement;
     const rightSidebar = this.container.querySelector('#rpg-lite-right-sidebar') as HTMLElement;
     const leftHandle = this.container.querySelector('#rpg-lite-resize-left') as HTMLElement;
     const rightHandle = this.container.querySelector('#rpg-lite-resize-right') as HTMLElement;
 
-    // Load saved widths from localStorage
-    const savedLeftWidth = localStorage.getItem('rpg-lite-left-sidebar-width');
-    const savedRightWidth = localStorage.getItem('rpg-lite-right-sidebar-width');
+    // Load saved widths from StorageService
+    const storage = await StorageService.getInstance();
+    const savedLeftWidth = await storage.get<string>('rpg-lite-left-sidebar-width');
+    const savedRightWidth = await storage.get<string>('rpg-lite-right-sidebar-width');
 
     if (savedLeftWidth) {
       leftSidebar.style.flex = `0 0 ${savedLeftWidth}`;
@@ -1096,7 +1097,10 @@ export class RPGLiteView {
         document.body.style.userSelect = '';
         
         // Save the width
-        localStorage.setItem('rpg-lite-left-sidebar-width', leftSidebar.style.width);
+        void (async () => {
+          const storage = await StorageService.getInstance();
+          await storage.set('rpg-lite-left-sidebar-width', leftSidebar.style.width);
+        })();
       };
 
       document.addEventListener('mousemove', onMouseMove);
@@ -1132,7 +1136,10 @@ export class RPGLiteView {
         document.body.style.userSelect = '';
         
         // Save the width
-        localStorage.setItem('rpg-lite-right-sidebar-width', rightSidebar.style.width);
+        void (async () => {
+          const storage = await StorageService.getInstance();
+          await storage.set('rpg-lite-right-sidebar-width', rightSidebar.style.width);
+        })();
       };
 
       document.addEventListener('mousemove', onMouseMove);
