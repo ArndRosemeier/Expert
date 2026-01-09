@@ -115,11 +115,26 @@
   min-width: 0;
 }
 
+.rpg-lite-resize-handle {
+  flex: 0 0 0.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: col-resize;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.rpg-lite-resize-handle:hover {
+  background: rgba(100, 150, 255, 0.3);
+}
+
+.rpg-lite-resize-handle:active {
+  background: rgba(100, 150, 255, 0.5);
+}
+
 .rpg-lite-sidebar {
   flex: 0 0 22%;
   min-width: 14rem;
   max-width: 26rem;
-  border-right: 0.0625rem solid rgba(255, 255, 255, 0.12);
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -215,7 +230,6 @@
   flex: 0 0 16%;
   min-width: 12rem;
   max-width: 20rem;
-  border-left: 0.0625rem solid rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   overflow: hidden;

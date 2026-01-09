@@ -909,7 +909,7 @@ export class RPGLiteView {
         </div>
       </div>
       <div class="rpg-lite-body">
-        <div class="rpg-lite-sidebar">
+        <div class="rpg-lite-sidebar" id="rpg-lite-sidebar">
           <div class="rpg-lite-section-title">Active Sessions</div>
           <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
           
@@ -918,6 +918,7 @@ export class RPGLiteView {
           <div class="rpg-lite-section-title">Templates</div>
           <div class="rpg-lite-list" id="rpg-lite-preset-list-session"></div>
         </div>
+        <div class="rpg-lite-resize-handle" id="rpg-lite-resize-left" title="Drag to resize"></div>
         <div class="rpg-lite-main">
           <div class="rpg-lite-editors" id="rpg-lite-editors-panel">
             <div class="rpg-lite-editors-header">
@@ -942,7 +943,8 @@ export class RPGLiteView {
             <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
           </div>
         </div>
-        <div class="rpg-lite-right-sidebar">
+        <div class="rpg-lite-resize-handle" id="rpg-lite-resize-right" title="Drag to resize"></div>
+        <div class="rpg-lite-right-sidebar" id="rpg-lite-right-sidebar">
           <div class="rpg-lite-right-sidebar-top">
             <div class="rpg-lite-section-title">Quick Actions</div>
             <div class="rpg-lite-action-buttons-list" id="rpg-lite-action-buttons-list"></div>
@@ -1042,8 +1044,102 @@ export class RPGLiteView {
     this.renderActionButtons();
     this.renderConversation();
     this.updateContextStats();
+    this.initializeResizableLayout();
 
     inputEl.focus();
+  }
+
+  private initializeResizableLayout(): void {
+    const body = this.container.querySelector('.rpg-lite-body') as HTMLElement;
+    const leftSidebar = this.container.querySelector('#rpg-lite-sidebar') as HTMLElement;
+    const rightSidebar = this.container.querySelector('#rpg-lite-right-sidebar') as HTMLElement;
+    const leftHandle = this.container.querySelector('#rpg-lite-resize-left') as HTMLElement;
+    const rightHandle = this.container.querySelector('#rpg-lite-resize-right') as HTMLElement;
+
+    // Load saved widths from localStorage
+    const savedLeftWidth = localStorage.getItem('rpg-lite-left-sidebar-width');
+    const savedRightWidth = localStorage.getItem('rpg-lite-right-sidebar-width');
+
+    if (savedLeftWidth) {
+      leftSidebar.style.flexBasis = savedLeftWidth;
+    }
+    if (savedRightWidth) {
+      rightSidebar.style.flexBasis = savedRightWidth;
+    }
+
+    // Left sidebar resize
+    leftHandle.addEventListener('mousedown', (e: MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = leftSidebar.offsetWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent): void => {
+        const deltaX = moveEvent.clientX - startX;
+        const newWidth = startWidth + deltaX;
+        const bodyWidth = body.offsetWidth;
+        const minWidth = 200;
+        const maxWidth = Math.min(bodyWidth * 0.4, 500);
+
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+          const widthPx = `${newWidth}px`;
+          leftSidebar.style.flexBasis = widthPx;
+          leftSidebar.style.minWidth = widthPx;
+          leftSidebar.style.maxWidth = widthPx;
+        }
+      };
+
+      const onMouseUp = (): void => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // Save the width
+        localStorage.setItem('rpg-lite-left-sidebar-width', leftSidebar.style.flexBasis);
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    // Right sidebar resize
+    rightHandle.addEventListener('mousedown', (e: MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = rightSidebar.offsetWidth;
+
+      const onMouseMove = (moveEvent: MouseEvent): void => {
+        const deltaX = startX - moveEvent.clientX;
+        const newWidth = startWidth + deltaX;
+        const bodyWidth = body.offsetWidth;
+        const minWidth = 200;
+        const maxWidth = Math.min(bodyWidth * 0.4, 500);
+
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+          const widthPx = `${newWidth}px`;
+          rightSidebar.style.flexBasis = widthPx;
+          rightSidebar.style.minWidth = widthPx;
+          rightSidebar.style.maxWidth = widthPx;
+        }
+      };
+
+      const onMouseUp = (): void => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // Save the width
+        localStorage.setItem('rpg-lite-right-sidebar-width', rightSidebar.style.flexBasis);
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
   }
 
   private renderPresetListInSession(): void {
