@@ -1073,18 +1073,42 @@ export class RPGLiteView {
       rightSidebar.style.width = value;
     };
 
-    // Load saved widths (stored as percent strings like "22.00%")
+    // Load saved widths (current format: percent strings like "22.00%"; legacy format: px strings like "500px")
     const savedLeft = await storage.get<string>('rpg-lite-left-sidebar-width');
     const savedRight = await storage.get<string>('rpg-lite-right-sidebar-width');
+
+    const parseSavedWidthPercent = (saved: string): number => {
+      if (body.offsetWidth <= 0) throw new Error('Invalid layout: body width is 0.');
+
+      const trimmed = saved.trim();
+      if (trimmed.endsWith('%')) {
+        const pct = Number(trimmed.slice(0, -1));
+        if (Number.isNaN(pct)) throw new Error(`Invalid saved sidebar width: ${saved}`);
+        return pct;
+      }
+      if (trimmed.endsWith('px')) {
+        const px = Number(trimmed.slice(0, -2));
+        if (Number.isNaN(px)) throw new Error(`Invalid saved sidebar width: ${saved}`);
+        return (px / body.offsetWidth) * 100;
+      }
+      throw new Error(`Invalid saved sidebar width: ${saved}`);
+    };
+
     if (savedLeft) {
-      const pct = Number(savedLeft.replace('%', ''));
-      if (Number.isNaN(pct)) throw new Error(`Invalid saved left sidebar width: ${savedLeft}`);
+      const pct = parseSavedWidthPercent(savedLeft);
       applyLeftPercent(pct);
+      // Migrate legacy values to percent format so we never hit this path again.
+      if (!savedLeft.trim().endsWith('%')) {
+        await storage.set('rpg-lite-left-sidebar-width', leftSidebar.style.width);
+      }
     }
     if (savedRight) {
-      const pct = Number(savedRight.replace('%', ''));
-      if (Number.isNaN(pct)) throw new Error(`Invalid saved right sidebar width: ${savedRight}`);
+      const pct = parseSavedWidthPercent(savedRight);
       applyRightPercent(pct);
+      // Migrate legacy values to percent format so we never hit this path again.
+      if (!savedRight.trim().endsWith('%')) {
+        await storage.set('rpg-lite-right-sidebar-width', rightSidebar.style.width);
+      }
     }
 
     // Left handle (between left sidebar and main)
