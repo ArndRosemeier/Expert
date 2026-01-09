@@ -61,6 +61,11 @@ export interface IStorageService {
   loadRPGLiteStartPreset<T>(presetId: string): Promise<T | null>;
   deleteRPGLiteStartPreset(presetId: string): Promise<void>;
   listRPGLiteStartPresets<T>(): Promise<T[]>;
+
+  saveRPGLiteActionButton<T>(button: T): Promise<void>;
+  loadRPGLiteActionButton<T>(buttonId: string): Promise<T | null>;
+  deleteRPGLiteActionButton(buttonId: string): Promise<void>;
+  listRPGLiteActionButtons<T>(): Promise<T[]>;
 }
 
 class IndexedDBStorageService implements IStorageService {
@@ -330,6 +335,50 @@ class IndexedDBStorageService implements IStorageService {
       throw new Error(`Failed to list RPG Lite start presets: ${error instanceof Error ? error.message : error}`);
     }
   }
+
+  async saveRPGLiteActionButton<T>(button: T): Promise<void> {
+    try {
+      const buttonWithId = button as { id: string };
+      await this.indexedDBService.set('rpg_lite_action_buttons', buttonWithId.id, button);
+    } catch (error) {
+      console.error('Failed to save RPG Lite action button:', error);
+      throw new Error(`Failed to save RPG Lite action button: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async loadRPGLiteActionButton<T>(buttonId: string): Promise<T | null> {
+    try {
+      const button = await this.indexedDBService.get<T>('rpg_lite_action_buttons', buttonId);
+      return button || null;
+    } catch (error) {
+      console.error('Failed to load RPG Lite action button:', error);
+      throw new Error(`Failed to load RPG Lite action button: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async deleteRPGLiteActionButton(buttonId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('rpg_lite_action_buttons', buttonId);
+    } catch (error) {
+      console.error('Failed to delete RPG Lite action button:', error);
+      throw new Error(`Failed to delete RPG Lite action button: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async listRPGLiteActionButtons<T>(): Promise<T[]> {
+    try {
+      const buttons = await this.indexedDBService.getAll<T>('rpg_lite_action_buttons');
+      // Sort by order field if present
+      return buttons.sort((a, b) => {
+        const orderA = (a as { order?: number }).order ?? 0;
+        const orderB = (b as { order?: number }).order ?? 0;
+        return orderA - orderB;
+      });
+    } catch (error) {
+      console.error('Failed to list RPG Lite action buttons:', error);
+      throw new Error(`Failed to list RPG Lite action buttons: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 }
 
 /**
@@ -371,7 +420,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 5, // Increment version to add RPG Lite stores
+      version: 6, // Increment version to add RPG Lite action buttons
       stores: [
         {
           name: 'keyValue',
@@ -452,6 +501,16 @@ export class StorageService {
               keyPath: 'createdAt'
             }
           ]
+        },
+        {
+          name: 'rpg_lite_action_buttons',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-order',
+              keyPath: 'order'
+            }
+          ]
         }
       ]
     };
@@ -461,10 +520,30 @@ export class StorageService {
     try {
       await indexedDBService.initialize();
     } catch (initError) {
-      console.warn('IndexedDB initialization failed, attempting database reset:', initError);
+      console.error('IndexedDB initialization failed:', initError);
       
       // Close any existing connection
       indexedDBService.close();
+      
+      // Show error to user and ask what to do
+      const errorMessage = initError instanceof Error ? initError.message : String(initError);
+      const userWantsReset = confirm(
+        `Database initialization failed: ${errorMessage}\n\n` +
+        `This may be due to a database upgrade or corruption.\n\n` +
+        `Do you want to RESET the database? This will DELETE ALL your data including:\n` +
+        `- API key\n` +
+        `- Projects\n` +
+        `- RPG sessions\n` +
+        `- Settings\n\n` +
+        `Click OK to reset (data will be lost)\n` +
+        `Click Cancel to keep trying (app may not work correctly)`
+      );
+      
+      if (!userWantsReset) {
+        throw new Error('Database initialization failed and user declined reset. Application may not function correctly.');
+      }
+      
+      console.warn('User confirmed database reset. Deleting database...');
       
       // Delete the database and try again
       await StorageService.deleteDatabase(dbConfig.name);
@@ -472,6 +551,8 @@ export class StorageService {
       // Create new service and try again
       indexedDBService = new IndexedDBService(dbConfig);
       await indexedDBService.initialize();
+      
+      alert('Database has been reset. You will need to re-configure your settings.');
     }
 
             // IndexedDB initialized successfully

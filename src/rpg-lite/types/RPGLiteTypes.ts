@@ -51,6 +51,15 @@ export interface RPGLiteStartPreset {
   maxContextMessages: number;
 }
 
+export interface RPGLiteActionButton {
+  id: string;
+  label: string;
+  text: string;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export function mapCompletionMetaToGenerationMeta(
   purpose: RPGLiteModelPurpose,
   meta: OpenRouterCompletionMeta

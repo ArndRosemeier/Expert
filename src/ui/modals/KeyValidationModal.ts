@@ -2,6 +2,7 @@ import { BaseModal } from './core/BaseModal.js';
 import { KeyManager, KeyValidationResult } from '../../keys/KeyManager.js';
 import { AppKeyStorage } from '../../keys/AppKeyStorage.js';
 import { ModalConfig } from './types/ModalTypes.js';
+import { ComprehensiveImportService } from './services/ComprehensiveImportService.js';
 
 export class KeyValidationModal extends BaseModal {
     private static readonly APP_PASSWORD = 'ExperT';
@@ -52,6 +53,18 @@ export class KeyValidationModal extends BaseModal {
                     </button>
                     <button type="button" id="clear-stored-key-btn" class="btn btn-secondary">
                         🗑️ Clear Stored Key
+                    </button>
+                </div>
+                
+                <div class="key-import-section">
+                    <div class="key-import-divider">
+                        <span>OR</span>
+                    </div>
+                    <p class="key-import-description">
+                        Restore your entire application state from a backup (includes API key, projects, sessions, and settings)
+                    </p>
+                    <button type="button" id="load-backup-btn" class="btn btn-secondary" style="width: 100%;">
+                        📥 Load Backup
                     </button>
                 </div>
                 
@@ -149,7 +162,30 @@ export class KeyValidationModal extends BaseModal {
                 display: flex;
                 gap: 1rem;
                 justify-content: center;
+                margin-bottom: 1.5rem;
+            }
+            
+            .key-import-section {
                 margin-bottom: 2rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid #e5e7eb;
+            }
+            
+            .key-import-divider {
+                text-align: center;
+                position: relative;
+                margin-bottom: 1rem;
+                color: #9ca3af;
+                font-weight: 600;
+                font-size: 0.875rem;
+            }
+            
+            .key-import-description {
+                text-align: center;
+                color: #6b7280;
+                font-size: 0.875rem;
+                margin-bottom: 1rem;
+                line-height: 1.5;
             }
             
             .key-help {
@@ -206,6 +242,11 @@ export class KeyValidationModal extends BaseModal {
         const clearButton = this.element?.querySelector('#clear-stored-key-btn') as HTMLButtonElement;
         if (clearButton) {
             clearButton.addEventListener('click', () => void this.clearStoredKey());
+        }
+        
+        const loadBackupButton = this.element?.querySelector('#load-backup-btn') as HTMLButtonElement;
+        if (loadBackupButton) {
+            loadBackupButton.addEventListener('click', () => void this.handleLoadBackup());
         }
     }
 
@@ -290,5 +331,88 @@ export class KeyValidationModal extends BaseModal {
 
     public setOnValidKeyCallback(callback: (keyData: any) => void): void {
         this.onValidKeyCallback = callback;
+    }
+
+    private async handleLoadBackup(): Promise<void> {
+        try {
+            this.showStatus('info', '📂 Opening file picker...');
+            
+            // Show file picker dialog
+            const file = await ComprehensiveImportService.showFilePickerDialog();
+            if (!file) {
+                // User cancelled file selection
+                this.showStatus('info', 'Import cancelled');
+                return;
+            }
+
+            this.showStatus('info', '⏳ Analyzing backup file...');
+
+            // Get import summary to show what will be imported
+            const summary = await ComprehensiveImportService.getImportSummary(file);
+            
+            if (!summary.isValid) {
+                throw new Error(`Invalid backup file: ${summary.errors.join(', ')}`);
+            }
+
+            // Show confirmation dialog with import summary
+            const summaryText = summary.summary
+                .map(item => `${item.status === 'available' ? '✅' : '❌'} ${item.name}: ${item.count} items`)
+                .join('\n');
+
+            const confirmed = confirm(
+                `📥 Import Backup\n\n` +
+                `File: ${file.name}\n` +
+                `Export Date: ${summary.manifest?.exportDate ? new Date(summary.manifest.exportDate).toLocaleString() : 'Unknown'}\n\n` +
+                `Data to import:\n${summaryText}\n\n` +
+                `⚠️ IMPORTANT WARNING:\n` +
+                `This will completely replace ALL current application data!\n\n` +
+                `What will happen:\n` +
+                `• All current projects, settings, and templates will be deleted\n` +
+                `• Your API keys will be restored from the backup\n` +
+                `• Application will restart with the imported data\n\n` +
+                `Do you want to proceed with the import?`
+            );
+            
+            if (!confirmed) {
+                this.showStatus('info', 'Import cancelled');
+                return;
+            }
+
+            // Perform the import
+            this.showStatus('info', '⏳ Importing data from backup...');
+            
+            const result = await ComprehensiveImportService.importComprehensiveBackup(file);
+            
+            if (result.success) {
+                this.showStatus('success', 
+                    `✅ Import completed! Imported: ${result.importedItems.join(', ')}. ` +
+                    `Application will reload in 3 seconds...`
+                );
+                
+                // Check if migration is needed before reloading
+                if (result.needsMigration) {
+                    // Show migration dialog instead of reloading
+                    await ComprehensiveImportService.triggerMigrationIfNeeded(result);
+                    // Don't reload - let user work with migrated data
+                    // Close the key validation modal since data is now imported
+                    setTimeout(() => {
+                        void this.close();
+                    }, 1500);
+                } else {
+                    // Reload the page after import to refresh all data
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                }
+                
+            } else {
+                throw new Error(result.message);
+            }
+            
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.showStatus('error', `❌ Import failed: ${errorMessage}`);
+            console.error('Backup import failed:', error);
+        }
     }
 } 

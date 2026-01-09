@@ -1739,11 +1739,15 @@ export class XMLStoryModal extends SimpleModal {
         // Convert line breaks to <br>
         html = html.replace(/\n/g, '<br>');
         
-        // Bold text **text**
+        // First, normalize consecutive asterisks that are close together
+        // This prevents issues with patterns like "** text *" creating unclosed tags
+        html = html.replace(/(\*{2,})/g, '*');
+        
+        // Bold text **text** (at least 1 char between)
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         
-        // Italic text *text* (but not if it's part of **bold**)
-        html = html.replace(/(?!\*\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+        // Italic text *text* (not if preceded/followed by another *)
+        html = html.replace(/(?<!\*)(\*([^*\n]+?)\*)(?!\*)/g, '<em>$2</em>');
         
         // Inline code `text`
         html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>');

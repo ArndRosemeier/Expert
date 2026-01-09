@@ -2,6 +2,7 @@ import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { StorageService } from '../../StorageService';
 import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService';
 import {
+  RPGLiteActionButton,
   RPGLiteChatMessage,
   RPGLiteMessageGenerationMeta,
   RPGLiteModelPurpose,
@@ -68,6 +69,7 @@ export class RPGLiteView {
   private currentSession: RPGLiteSession | null = null;
   private sessions: RPGLiteSession[] = [];
   private presets: RPGLiteStartPreset[] = [];
+  private actionButtons: RPGLiteActionButton[] = [];
 
   private isStreaming = false;
   private currentStreamingOperationId: string | null = null;
@@ -106,6 +108,7 @@ export class RPGLiteView {
     this.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
     this.presets = await storage.listRPGLiteStartPresets<RPGLiteStartPreset>();
     this.presets.sort((a, b) => b.updatedAt - a.updatedAt);
+    this.actionButtons = await storage.listRPGLiteActionButtons<RPGLiteActionButton>();
   }
 
   private makeUniqueSessionTitle(baseTitle: string): string {
@@ -254,6 +257,254 @@ export class RPGLiteView {
         void this.deleteSession(id);
       });
     });
+  }
+
+  private renderActionButtons(): void {
+    const list = this.container.querySelector('#rpg-lite-action-buttons-list') as HTMLElement | null;
+    if (!list) return;
+
+    if (this.actionButtons.length === 0) {
+      list.innerHTML = `
+        <div class="rpg-lite-empty-state" style="padding: 1rem 0.5rem;">
+          <div style="font-size: 1.2rem; margin-bottom: 0.25rem;">⚡</div>
+          <div style="font-size: 0.85rem; opacity: 0.7;">No quick actions yet</div>
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = this.actionButtons
+      .map(
+        (btn) => `
+        <div class="rpg-lite-action-button-item" data-action-button-id="${btn.id}">
+          <button class="rpg-lite-action-button" data-trigger-action-id="${btn.id}" title="${btn.text}">
+            ${btn.label}
+          </button>
+          <div class="rpg-lite-action-button-controls">
+            <button class="rpg-lite-btn rpg-lite-btn-icon-sm" data-edit-action-id="${btn.id}" title="Edit">✏️</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon-sm" data-delete-action-id="${btn.id}" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    // Trigger action
+    list.querySelectorAll('[data-trigger-action-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['triggerActionId'];
+        if (!id) throw new Error('Trigger action button is missing data-trigger-action-id.');
+        this.triggerActionButton(id);
+      });
+    });
+
+    // Edit action
+    list.querySelectorAll('[data-edit-action-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['editActionId'];
+        if (!id) throw new Error('Edit action button is missing data-edit-action-id.');
+        void this.showEditActionButtonDialog(id);
+      });
+    });
+
+    // Delete action
+    list.querySelectorAll('[data-delete-action-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['deleteActionId'];
+        if (!id) throw new Error('Delete action button is missing data-delete-action-id.');
+        void this.deleteActionButton(id);
+      });
+    });
+  }
+
+  private triggerActionButton(buttonId: string): void {
+    const button = this.actionButtons.find((b) => b.id === buttonId);
+    if (!button) throw new Error(`Action button not found: ${buttonId}`);
+
+    const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement | null;
+    if (!inputEl) return;
+
+    inputEl.value = button.text;
+    inputEl.focus();
+    
+    // Automatically send the message
+    void this.sendNewUserMessage();
+  }
+
+  private async showCreateActionButtonDialog(): Promise<void> {
+    const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement | null;
+    const currentText = inputEl?.value.trim() || '';
+
+    const result = await this.showActionButtonEditorModal({
+      title: 'Create Action Button',
+      labelValue: currentText.substring(0, 20) || 'Action',
+      textValue: currentText,
+      confirmText: 'Create'
+    });
+
+    if (!result) return;
+
+    const newButton: RPGLiteActionButton = {
+      id: newId('action_btn'),
+      label: result.label,
+      text: result.text,
+      order: this.actionButtons.length,
+      createdAt: now(),
+      updatedAt: now()
+    };
+
+    const storage = await StorageService.getInstance();
+    await storage.saveRPGLiteActionButton(newButton);
+    this.actionButtons.push(newButton);
+    this.renderActionButtons();
+  }
+
+  private async showEditActionButtonDialog(buttonId: string): Promise<void> {
+    const button = this.actionButtons.find((b) => b.id === buttonId);
+    if (!button) throw new Error(`Action button not found: ${buttonId}`);
+
+    const result = await this.showActionButtonEditorModal({
+      title: 'Edit Action Button',
+      labelValue: button.label,
+      textValue: button.text,
+      confirmText: 'Save'
+    });
+
+    if (!result) return;
+
+    button.label = result.label;
+    button.text = result.text;
+    button.updatedAt = now();
+
+    const storage = await StorageService.getInstance();
+    await storage.saveRPGLiteActionButton(button);
+    this.renderActionButtons();
+  }
+
+  private showActionButtonEditorModal(options: {
+    title: string;
+    labelValue: string;
+    textValue: string;
+    confirmText: string;
+  }): Promise<{ label: string; text: string } | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'rpg-lite-action-editor-overlay';
+      overlay.innerHTML = `
+        <div class="rpg-lite-action-editor-modal">
+          <div class="rpg-lite-action-editor-header">
+            <h3>${options.title}</h3>
+            <button class="rpg-lite-action-editor-close" title="Close">✕</button>
+          </div>
+          <div class="rpg-lite-action-editor-body">
+            <div class="rpg-lite-action-editor-field">
+              <label for="action-editor-label">Button Label:</label>
+              <input 
+                type="text" 
+                id="action-editor-label" 
+                class="rpg-lite-input" 
+                placeholder="e.g., Look Around, Check Inventory" 
+                value="${options.labelValue}"
+                maxlength="50"
+              />
+            </div>
+            <div class="rpg-lite-action-editor-field">
+              <label for="action-editor-text">Action Text (multi-line instructions):</label>
+              <textarea 
+                id="action-editor-text" 
+                class="rpg-lite-textarea rpg-lite-action-editor-textarea" 
+                placeholder="Enter the detailed instruction or action text here...&#10;You can use multiple lines for complex instructions."
+              >${options.textValue}</textarea>
+            </div>
+          </div>
+          <div class="rpg-lite-action-editor-footer">
+            <button class="rpg-lite-btn rpg-lite-btn-secondary" id="action-editor-cancel">Cancel</button>
+            <button class="rpg-lite-btn rpg-lite-btn-primary" id="action-editor-confirm">${options.confirmText}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const labelInput = overlay.querySelector('#action-editor-label') as HTMLInputElement;
+      const textArea = overlay.querySelector('#action-editor-text') as HTMLTextAreaElement;
+      const confirmBtn = overlay.querySelector('#action-editor-confirm') as HTMLButtonElement;
+      const cancelBtn = overlay.querySelector('#action-editor-cancel') as HTMLButtonElement;
+      const closeBtn = overlay.querySelector('.rpg-lite-action-editor-close') as HTMLButtonElement;
+
+      const cleanup = () => {
+        overlay.remove();
+      };
+
+      const handleConfirm = () => {
+        const label = labelInput.value.trim();
+        const text = textArea.value.trim();
+
+        if (!label) {
+          alert('Please enter a button label');
+          labelInput.focus();
+          return;
+        }
+
+        if (!text) {
+          alert('Please enter action text');
+          textArea.focus();
+          return;
+        }
+
+        cleanup();
+        resolve({ label, text });
+      };
+
+      const handleCancel = () => {
+        cleanup();
+        resolve(null);
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      closeBtn.addEventListener('click', handleCancel);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) handleCancel();
+      });
+
+      // Focus label input
+      setTimeout(() => labelInput.focus(), 100);
+
+      // Handle Enter key in label input (move to textarea)
+      labelInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          textArea.focus();
+        }
+      });
+
+      // Handle Ctrl+Enter in textarea to submit
+      textArea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+          e.preventDefault();
+          handleConfirm();
+        }
+      });
+    });
+  }
+
+  private async deleteActionButton(buttonId: string): Promise<void> {
+    const button = this.actionButtons.find((b) => b.id === buttonId);
+    if (!button) throw new Error(`Action button not found: ${buttonId}`);
+
+    if (!confirm(`Delete action button "${button.label}"?`)) return;
+
+    const storage = await StorageService.getInstance();
+    await storage.deleteRPGLiteActionButton(buttonId);
+    this.actionButtons = this.actionButtons.filter((b) => b.id !== buttonId);
+    this.renderActionButtons();
   }
 
   private renderPresetList(): void {
@@ -691,6 +942,13 @@ export class RPGLiteView {
             <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
           </div>
         </div>
+        <div class="rpg-lite-right-sidebar">
+          <div class="rpg-lite-section-title">Quick Actions</div>
+          <div class="rpg-lite-action-buttons-list" id="rpg-lite-action-buttons-list"></div>
+          <button id="rpg-lite-add-action-button" class="rpg-lite-btn rpg-lite-btn-sm" style="width: 100%; margin-top: 0.5rem;">
+            + New Action
+          </button>
+        </div>
       </div>
     `;
 
@@ -762,8 +1020,14 @@ export class RPGLiteView {
       }
     });
 
+    const addActionBtn = this.container.querySelector('#rpg-lite-add-action-button') as HTMLButtonElement;
+    addActionBtn.addEventListener('click', () => {
+      void this.showCreateActionButtonDialog();
+    });
+
     this.renderSessionList();
     this.renderPresetListInSession();
+    this.renderActionButtons();
     this.renderConversation();
     this.updateContextStats();
 
@@ -905,6 +1169,27 @@ export class RPGLiteView {
     this.updateContextStats();
   }
 
+  private containsGraphicalContent(content: string): boolean {
+    // Check for box-drawing characters (strong indicator of ASCII art)
+    const hasBoxDrawing = /[─│┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬═║]/.test(content);
+    
+    // Check for repeated box-drawing or block characters (5+ in a row, not common chars)
+    const hasRepeatedGraphicChars = /([─│┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬═║▀▄█▌▐░▒▓■□▪▫●○◆◇★☆♠♣♥♦])\1{4,}/.test(content);
+    
+    // Check for ASCII art table/box structure (multiple lines with box chars)
+    const lines = content.split('\n');
+    const linesWithBoxChars = lines.filter(l => /[─│┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬═║\+\|]/.test(l)).length;
+    const hasAsciiArtStructure = linesWithBoxChars >= 3 && linesWithBoxChars / lines.length > 0.4;
+    
+    // Check for many emojis (8+ total or 5+ in short text)
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+    const emojiMatches = content.match(emojiRegex);
+    const emojiCount = emojiMatches ? emojiMatches.length : 0;
+    const hasMultipleEmojis = emojiCount >= 8 || (emojiCount >= 5 && content.length < 400);
+    
+    return hasBoxDrawing || hasRepeatedGraphicChars || hasAsciiArtStructure || hasMultipleEmojis;
+  }
+
   private highlightContent(content: string): string {
     // Escape HTML to prevent injection
     const escapeHtml = (text: string): string => {
@@ -950,9 +1235,24 @@ export class RPGLiteView {
       '<span class="rpg-lite-highlight-speech">$1</span>'
     );
 
-    // Highlight actions/narration in asterisks *text*
+    // First, normalize consecutive asterisks that are close together (treat as literal)
+    // This prevents issues with patterns like "** text *" creating unclosed tags
+    result = result.replace(/(\*{2,})/g, () => {
+      // Replace with a single asterisk to prevent formatting confusion
+      return '*';
+    });
+
+    // Highlight emphasis markers (bold **text** or italic *text*)
+    // Bold: **text** (need at least 2 chars between)
     result = result.replace(
-      /(\*[^*]+\*)/g,
+      /(\*\*[^*]{2,}?\*\*)/g,
+      '<span class="rpg-lite-highlight-emphasis">$1</span>'
+    );
+
+    // Highlight actions/narration in single asterisks *text*
+    // Only match if there's proper pairing and at least 2 chars
+    result = result.replace(
+      /(?<!\*)(\*[^*]{2,}?\*)(?!\*)/g,
       '<span class="rpg-lite-highlight-action">$1</span>'
     );
 
@@ -960,12 +1260,6 @@ export class RPGLiteView {
     result = result.replace(
       /(\b\d*d\d+(?:[+-]\d+)?\b)/gi,
       '<span class="rpg-lite-highlight-dice">$1</span>'
-    );
-
-    // Highlight emphasis markers (bold **text** or italic *text* when not already caught)
-    result = result.replace(
-      /(\*\*[^*]+\*\*)/g,
-      '<span class="rpg-lite-highlight-emphasis">$1</span>'
     );
 
     // Removed thought text highlighting (parentheses and em-dashes) - too noisy
@@ -1016,6 +1310,12 @@ export class RPGLiteView {
     `;
 
     const contentEl = el.querySelector('[data-role="content"]') as HTMLElement;
+    
+    // Check if content contains graphical elements (ASCII art, emojis)
+    const isGraphical = this.containsGraphicalContent(msg.content);
+    if (isGraphical) {
+      contentEl.classList.add('rpg-lite-message-monospace');
+    }
     
     // Apply syntax highlighting for assistant messages (but not during streaming)
     if (msg.role === 'assistant' && msg.id !== this.streamingMessageId) {

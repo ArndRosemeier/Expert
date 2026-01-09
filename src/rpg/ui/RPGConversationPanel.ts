@@ -308,11 +308,15 @@ export class RPGConversationPanel {
         // Convert newlines to <br>
         formatted = formatted.replace(/\n/g, '<br>');
         
-        // Bold: **text**
-        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // First, normalize consecutive asterisks that are close together
+        // This prevents issues with patterns like "** text *" creating unclosed tags
+        formatted = formatted.replace(/(\*{2,})/g, '*');
         
-        // Italic: *text*
-        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        // Bold: **text** (at least 1 char between, non-greedy)
+        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Italic: *text* (at least 1 char between, not preceded/followed by *)
+        formatted = formatted.replace(/(?<!\*)(\*([^*]+?)\*)(?!\*)/g, '<em>$2</em>');
         
         return formatted;
     }
