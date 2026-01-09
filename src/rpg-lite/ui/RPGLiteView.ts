@@ -1385,35 +1385,56 @@ export class RPGLiteView {
     const textarea = document.createElement('textarea');
     textarea.className = 'rpg-lite-textarea';
     textarea.value = msg.content;
+    
+    // Set height based on content (approximate: 1.5rem per line, min 10rem, max 40rem)
+    const lineCount = msg.content.split('\n').length;
+    const estimatedHeight = Math.max(10, Math.min(40, lineCount * 1.5 + 2));
+    textarea.style.minHeight = `${estimatedHeight}rem`;
 
     const controls = document.createElement('div');
     controls.style.display = 'flex';
     controls.style.gap = '0.75rem';
     controls.style.flexWrap = 'wrap';
+    controls.style.fontSize = '0.85rem';
+    controls.style.opacity = '0.7';
 
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'rpg-lite-btn rpg-lite-btn-primary';
-    saveBtn.textContent = 'Save';
+    const hint = document.createElement('span');
+    hint.textContent = 'Click outside to save, or';
 
     const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'rpg-lite-btn';
+    cancelBtn.className = 'rpg-lite-btn rpg-lite-btn-sm';
     cancelBtn.textContent = 'Cancel';
 
-    controls.appendChild(saveBtn);
+    controls.appendChild(hint);
     controls.appendChild(cancelBtn);
 
     contentEl.replaceWith(textarea);
     textarea.insertAdjacentElement('afterend', controls);
     textarea.focus();
 
+    let cancelled = false;
+
     cancelBtn.addEventListener('click', () => {
+      cancelled = true;
       this.renderConversation();
     });
 
-    saveBtn.addEventListener('click', () => {
-      msg.content = textarea.value;
-      msg.editedAt = now();
-      void this.saveSession().then(() => this.renderConversation());
+    textarea.addEventListener('blur', () => {
+      // Small delay to allow cancel button click to register
+      setTimeout(() => {
+        if (!cancelled && document.activeElement !== textarea) {
+          msg.content = textarea.value;
+          msg.editedAt = now();
+          void this.saveSession().then(() => this.renderConversation());
+        }
+      }, 150);
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        cancelled = true;
+        this.renderConversation();
+      }
     });
   }
 
