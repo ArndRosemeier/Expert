@@ -1061,10 +1061,12 @@ export class RPGLiteView {
     const savedRightWidth = localStorage.getItem('rpg-lite-right-sidebar-width');
 
     if (savedLeftWidth) {
-      leftSidebar.style.flexBasis = savedLeftWidth;
+      leftSidebar.style.flex = `0 0 ${savedLeftWidth}`;
+      leftSidebar.style.width = savedLeftWidth;
     }
     if (savedRightWidth) {
-      rightSidebar.style.flexBasis = savedRightWidth;
+      rightSidebar.style.flex = `0 0 ${savedRightWidth}`;
+      rightSidebar.style.width = savedRightWidth;
     }
 
     // Left sidebar resize
@@ -1082,9 +1084,8 @@ export class RPGLiteView {
 
         if (newWidth >= minWidth && newWidth <= maxWidth) {
           const widthPx = `${newWidth}px`;
-          leftSidebar.style.flexBasis = widthPx;
-          leftSidebar.style.minWidth = widthPx;
-          leftSidebar.style.maxWidth = widthPx;
+          leftSidebar.style.flex = `0 0 ${widthPx}`;
+          leftSidebar.style.width = widthPx;
         }
       };
 
@@ -1095,7 +1096,7 @@ export class RPGLiteView {
         document.body.style.userSelect = '';
         
         // Save the width
-        localStorage.setItem('rpg-lite-left-sidebar-width', leftSidebar.style.flexBasis);
+        localStorage.setItem('rpg-lite-left-sidebar-width', leftSidebar.style.width);
       };
 
       document.addEventListener('mousemove', onMouseMove);
@@ -1119,9 +1120,8 @@ export class RPGLiteView {
 
         if (newWidth >= minWidth && newWidth <= maxWidth) {
           const widthPx = `${newWidth}px`;
-          rightSidebar.style.flexBasis = widthPx;
-          rightSidebar.style.minWidth = widthPx;
-          rightSidebar.style.maxWidth = widthPx;
+          rightSidebar.style.flex = `0 0 ${widthPx}`;
+          rightSidebar.style.width = widthPx;
         }
       };
 
@@ -1132,7 +1132,7 @@ export class RPGLiteView {
         document.body.style.userSelect = '';
         
         // Save the width
-        localStorage.setItem('rpg-lite-right-sidebar-width', rightSidebar.style.flexBasis);
+        localStorage.setItem('rpg-lite-right-sidebar-width', rightSidebar.style.width);
       };
 
       document.addEventListener('mousemove', onMouseMove);
