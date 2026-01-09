@@ -1315,7 +1315,7 @@ export class RPGLiteView {
         <div class="rpg-lite-message-actions">
           <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry">Retry</button>` : ''}
-          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="add-to-clipboard">📋 Add to Clipboard</button>` : ''}
+          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-icon" data-action="add-to-clipboard" title="Add to Clipboard">📋</button>` : ''}
         </div>
       </div>
       <div class="rpg-lite-message-content" data-role="content"></div>
