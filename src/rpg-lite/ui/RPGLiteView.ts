@@ -1523,6 +1523,7 @@ export class RPGLiteView {
     controls.style.flexWrap = 'wrap';
     controls.style.fontSize = '0.85rem';
     controls.style.opacity = '0.7';
+    controls.style.alignItems = 'center';
 
     const hint = document.createElement('span');
     hint.textContent = 'Click outside to save, or';
@@ -1533,6 +1534,33 @@ export class RPGLiteView {
 
     controls.appendChild(hint);
     controls.appendChild(cancelBtn);
+
+    // For user messages, check if there's a next assistant message to retry
+    if (msg.role === 'user') {
+      const msgIdx = this.currentSession.conversation.findIndex((m) => m.id === messageId);
+      const nextMsg = msgIdx >= 0 && msgIdx < this.currentSession.conversation.length - 1
+        ? this.currentSession.conversation[msgIdx + 1]
+        : null;
+      
+      if (nextMsg && nextMsg.role === 'assistant') {
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'rpg-lite-btn rpg-lite-btn-sm rpg-lite-btn-primary';
+        retryBtn.textContent = 'Retry Next Response';
+        retryBtn.style.marginLeft = 'auto';
+        
+        retryBtn.addEventListener('click', () => {
+          cancelled = true;
+          msg.content = textarea.value;
+          msg.editedAt = now();
+          void this.saveSession().then(() => {
+            this.renderConversation();
+            void this.retryFromAssistant(nextMsg.id);
+          });
+        });
+        
+        controls.appendChild(retryBtn);
+      }
+    }
 
     contentEl.replaceWith(textarea);
     textarea.insertAdjacentElement('afterend', controls);
@@ -1546,7 +1574,7 @@ export class RPGLiteView {
     });
 
     textarea.addEventListener('blur', () => {
-      // Small delay to allow cancel button click to register
+      // Small delay to allow button clicks to register
       setTimeout(() => {
         if (!cancelled && document.activeElement !== textarea) {
           msg.content = textarea.value;
