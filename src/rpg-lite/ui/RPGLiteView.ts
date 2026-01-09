@@ -943,11 +943,17 @@ export class RPGLiteView {
           </div>
         </div>
         <div class="rpg-lite-right-sidebar">
-          <div class="rpg-lite-section-title">Quick Actions</div>
-          <div class="rpg-lite-action-buttons-list" id="rpg-lite-action-buttons-list"></div>
-          <button id="rpg-lite-add-action-button" class="rpg-lite-btn rpg-lite-btn-sm" style="width: 100%; margin-top: 0.5rem;">
-            + New Action
-          </button>
+          <div class="rpg-lite-right-sidebar-top">
+            <div class="rpg-lite-section-title">Quick Actions</div>
+            <div class="rpg-lite-action-buttons-list" id="rpg-lite-action-buttons-list"></div>
+            <button id="rpg-lite-add-action-button" class="rpg-lite-btn rpg-lite-btn-sm" style="width: 100%; margin-top: 0.5rem;">
+              + New Action
+            </button>
+          </div>
+          <div class="rpg-lite-right-sidebar-bottom">
+            <div class="rpg-lite-section-title">Clipboard</div>
+            <textarea id="rpg-lite-clipboard" class="rpg-lite-clipboard-textarea" placeholder="Add GM answers here for reference...">${session.clipboard ?? ''}</textarea>
+          </div>
         </div>
       </div>
     `;
@@ -1005,6 +1011,12 @@ export class RPGLiteView {
     prefixEl.addEventListener('input', () => {
       session.prefixContext = prefixEl.value;
       void this.saveSession().then(() => this.updateContextStats());
+    });
+
+    const clipboardEl = this.container.querySelector('#rpg-lite-clipboard') as HTMLTextAreaElement;
+    clipboardEl.addEventListener('input', () => {
+      session.clipboard = clipboardEl.value;
+      void this.saveSession();
     });
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
@@ -1303,6 +1315,7 @@ export class RPGLiteView {
         <div class="rpg-lite-message-actions">
           <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry">Retry</button>` : ''}
+          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="add-to-clipboard">📋 Add to Clipboard</button>` : ''}
         </div>
       </div>
       <div class="rpg-lite-message-content" data-role="content"></div>
@@ -1333,8 +1346,31 @@ export class RPGLiteView {
         void this.retryFromAssistant(msg.id);
       });
     }
+    const addToClipboardBtn = el.querySelector('[data-action="add-to-clipboard"]') as HTMLButtonElement | null;
+    if (addToClipboardBtn) {
+      addToClipboardBtn.addEventListener('click', () => {
+        this.addToClipboard(msg.content);
+      });
+    }
 
     return el;
+  }
+
+  private addToClipboard(content: string): void {
+    if (!this.currentSession) throw new Error('No current session.');
+    
+    const clipboardEl = this.container.querySelector('#rpg-lite-clipboard') as HTMLTextAreaElement | null;
+    if (!clipboardEl) return;
+    
+    // Append to clipboard with a separator if there's already content
+    const separator = this.currentSession.clipboard && this.currentSession.clipboard.trim() ? '\n\n---\n\n' : '';
+    this.currentSession.clipboard = (this.currentSession.clipboard ?? '') + separator + content;
+    
+    clipboardEl.value = this.currentSession.clipboard;
+    void this.saveSession();
+    
+    // Scroll to bottom of clipboard
+    clipboardEl.scrollTop = clipboardEl.scrollHeight;
   }
 
   private startEditMessage(messageId: string): void {

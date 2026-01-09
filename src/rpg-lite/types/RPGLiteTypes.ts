@@ -36,6 +36,7 @@ export interface RPGLiteSession {
   maxContextMessages: number;
 
   conversation: RPGLiteChatMessage[];
+  clipboard?: string;
 }
 
 export interface RPGLiteStartPreset {
