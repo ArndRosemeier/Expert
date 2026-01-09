@@ -1056,96 +1056,95 @@ export class RPGLiteView {
     const leftHandle = this.container.querySelector('#rpg-lite-resize-left') as HTMLElement;
     const rightHandle = this.container.querySelector('#rpg-lite-resize-right') as HTMLElement;
 
-    // Load saved widths from StorageService
     const storage = await StorageService.getInstance();
-    const savedLeftWidth = await storage.get<string>('rpg-lite-left-sidebar-width');
-    const savedRightWidth = await storage.get<string>('rpg-lite-right-sidebar-width');
 
-    if (savedLeftWidth) {
-      leftSidebar.style.flex = `0 0 ${savedLeftWidth}`;
-      leftSidebar.style.width = savedLeftWidth;
+    const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(max, n));
+    const toPercent = (widthPx: number): number => (widthPx / body.offsetWidth) * 100;
+    const applyLeftPercent = (pct: number): void => {
+      const clamped = clamp(pct, 12, 40);
+      const value = `${clamped.toFixed(2)}%`;
+      leftSidebar.style.flex = `0 0 ${value}`;
+      leftSidebar.style.width = value;
+    };
+    const applyRightPercent = (pct: number): void => {
+      const clamped = clamp(pct, 12, 40);
+      const value = `${clamped.toFixed(2)}%`;
+      rightSidebar.style.flex = `0 0 ${value}`;
+      rightSidebar.style.width = value;
+    };
+
+    // Load saved widths (stored as percent strings like "22.00%")
+    const savedLeft = await storage.get<string>('rpg-lite-left-sidebar-width');
+    const savedRight = await storage.get<string>('rpg-lite-right-sidebar-width');
+    if (savedLeft) {
+      const pct = Number(savedLeft.replace('%', ''));
+      if (Number.isNaN(pct)) throw new Error(`Invalid saved left sidebar width: ${savedLeft}`);
+      applyLeftPercent(pct);
     }
-    if (savedRightWidth) {
-      rightSidebar.style.flex = `0 0 ${savedRightWidth}`;
-      rightSidebar.style.width = savedRightWidth;
+    if (savedRight) {
+      const pct = Number(savedRight.replace('%', ''));
+      if (Number.isNaN(pct)) throw new Error(`Invalid saved right sidebar width: ${savedRight}`);
+      applyRightPercent(pct);
     }
 
-    // Left sidebar resize
-    leftHandle.addEventListener('mousedown', (e: MouseEvent) => {
+    // Left handle (between left sidebar and main)
+    leftHandle.addEventListener('pointerdown', (e: PointerEvent) => {
       e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = leftSidebar.offsetWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent): void => {
-        const deltaX = moveEvent.clientX - startX;
-        const newWidth = startWidth + deltaX;
-        const bodyWidth = body.offsetWidth;
-        const minWidth = 200;
-        const maxWidth = Math.min(bodyWidth * 0.4, 500);
-
-        if (newWidth >= minWidth && newWidth <= maxWidth) {
-          const widthPx = `${newWidth}px`;
-          leftSidebar.style.flex = `0 0 ${widthPx}`;
-          leftSidebar.style.width = widthPx;
-        }
-      };
-
-      const onMouseUp = (): void => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        
-        // Save the width
-        void (async () => {
-          const storage = await StorageService.getInstance();
-          await storage.set('rpg-lite-left-sidebar-width', leftSidebar.style.width);
-        })();
-      };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      leftHandle.setPointerCapture(e.pointerId);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
+
+      const startX = e.clientX;
+      const startWidthPx = leftSidebar.getBoundingClientRect().width;
+
+      const onMove = (ev: PointerEvent): void => {
+        const deltaX = ev.clientX - startX;
+        const newWidthPx = startWidthPx + deltaX;
+        applyLeftPercent(toPercent(newWidthPx));
+      };
+
+      const onUp = (): void => {
+        leftHandle.removeEventListener('pointermove', onMove);
+        leftHandle.removeEventListener('pointerup', onUp);
+        leftHandle.removeEventListener('pointercancel', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        void storage.set('rpg-lite-left-sidebar-width', leftSidebar.style.width);
+      };
+
+      leftHandle.addEventListener('pointermove', onMove);
+      leftHandle.addEventListener('pointerup', onUp);
+      leftHandle.addEventListener('pointercancel', onUp);
     });
 
-    // Right sidebar resize
-    rightHandle.addEventListener('mousedown', (e: MouseEvent) => {
+    // Right handle (between main and right sidebar)
+    rightHandle.addEventListener('pointerdown', (e: PointerEvent) => {
       e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = rightSidebar.offsetWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent): void => {
-        const deltaX = startX - moveEvent.clientX;
-        const newWidth = startWidth + deltaX;
-        const bodyWidth = body.offsetWidth;
-        const minWidth = 200;
-        const maxWidth = Math.min(bodyWidth * 0.4, 500);
-
-        if (newWidth >= minWidth && newWidth <= maxWidth) {
-          const widthPx = `${newWidth}px`;
-          rightSidebar.style.flex = `0 0 ${widthPx}`;
-          rightSidebar.style.width = widthPx;
-        }
-      };
-
-      const onMouseUp = (): void => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        
-        // Save the width
-        void (async () => {
-          const storage = await StorageService.getInstance();
-          await storage.set('rpg-lite-right-sidebar-width', rightSidebar.style.width);
-        })();
-      };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      rightHandle.setPointerCapture(e.pointerId);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
+
+      const startX = e.clientX;
+      const startWidthPx = rightSidebar.getBoundingClientRect().width;
+
+      const onMove = (ev: PointerEvent): void => {
+        const deltaX = startX - ev.clientX;
+        const newWidthPx = startWidthPx + deltaX;
+        applyRightPercent(toPercent(newWidthPx));
+      };
+
+      const onUp = (): void => {
+        rightHandle.removeEventListener('pointermove', onMove);
+        rightHandle.removeEventListener('pointerup', onUp);
+        rightHandle.removeEventListener('pointercancel', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        void storage.set('rpg-lite-right-sidebar-width', rightSidebar.style.width);
+      };
+
+      rightHandle.addEventListener('pointermove', onMove);
+      rightHandle.addEventListener('pointerup', onUp);
+      rightHandle.addEventListener('pointercancel', onUp);
     });
   }
 
