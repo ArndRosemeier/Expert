@@ -507,40 +507,24 @@ export class RPGLiteView {
     this.renderActionButtons();
   }
 
-  private renderPresetList(): void {
-    const list = this.container.querySelector('#rpg-lite-preset-list') as HTMLElement | null;
-    if (!list) return;
-
-    if (this.presets.length === 0) {
-      list.innerHTML = `
-        <div class="rpg-lite-empty-state">
-          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎭</div>
-          <div style="font-weight: 600;">No templates yet</div>
-          <div style="opacity: 0.7; font-size: 0.9rem;">Create reusable templates below</div>
+  private generatePresetListItemHtml(preset: RPGLiteStartPreset, options: { showSubtitle: boolean; itemClass: string }): string {
+    return `
+      <div class="${options.itemClass}" data-preset-id="${preset.id}">
+        <div style="min-width:0; flex: 1;">
+          <div class="rpg-lite-list-item-title">${preset.name}</div>
+          ${options.showSubtitle ? `<div style="opacity:.8; font-size:.85rem;">${preset.title}</div>` : ''}
         </div>
-      `;
-      return;
-    }
-
-    list.innerHTML = this.presets
-      .map(
-        (p) => `
-        <div class="rpg-lite-list-item" data-preset-id="${p.id}" style="cursor: pointer;">
-          <div style="min-width:0; flex: 1;">
-            <div class="rpg-lite-list-item-title">${p.name}</div>
-            <div style="opacity:.8; font-size:.85rem;">${p.title}</div>
-          </div>
-          <div style="display:flex; gap:0.2rem; align-items:center;">
-            <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${p.id}" title="Copy">📋</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
-          </div>
+        <div style="display:flex; gap:0.2rem; align-items:center;">
+          <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${preset.id}" title="Start">Start</button>
+          <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${preset.id}" title="Edit">⚙️</button>
+          <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${preset.id}" title="Copy">📋</button>
+          <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${preset.id}" title="Delete">🗑️</button>
         </div>
-      `
-      )
-      .join('');
+      </div>
+    `;
+  }
 
+  private bindPresetListEvents(list: HTMLElement): void {
     list.querySelectorAll('[data-start-preset-id]').forEach((el) => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -585,6 +569,28 @@ export class RPGLiteView {
         void this.deletePreset(id);
       });
     });
+  }
+
+  private renderPresetList(): void {
+    const list = this.container.querySelector('#rpg-lite-preset-list') as HTMLElement | null;
+    if (!list) return;
+
+    if (this.presets.length === 0) {
+      list.innerHTML = `
+        <div class="rpg-lite-empty-state">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎭</div>
+          <div style="font-weight: 600;">No templates yet</div>
+          <div style="opacity: 0.7; font-size: 0.9rem;">Create reusable templates below</div>
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = this.presets
+      .map(p => this.generatePresetListItemHtml(p, { showSubtitle: true, itemClass: 'rpg-lite-list-item' }))
+      .join('');
+
+    this.bindPresetListEvents(list);
   }
 
   private async deleteSession(sessionId: string): Promise<void> {
@@ -1239,67 +1245,10 @@ export class RPGLiteView {
     }
 
     list.innerHTML = this.presets
-      .map(
-        (p) => `
-        <div class="rpg-lite-list-item-compact" data-preset-id="${p.id}">
-          <div style="min-width:0; flex: 1;">
-            <div class="rpg-lite-list-item-title">${p.name}</div>
-          </div>
-          <div style="display:flex; gap:0.2rem; align-items:center;">
-            <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${p.id}" title="Copy">📋</button>
-            <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
-          </div>
-        </div>
-      `
-      )
+      .map(p => this.generatePresetListItemHtml(p, { showSubtitle: false, itemClass: 'rpg-lite-list-item-compact' }))
       .join('');
 
-    list.querySelectorAll('[data-start-preset-id]').forEach((el) => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const btn = ev.currentTarget as HTMLElement;
-        const id = btn.dataset['startPresetId'];
-        if (!id) throw new Error('Start preset button is missing data-start-preset-id.');
-        void this.restartFromPreset(id).catch((e: unknown) => {
-          console.error('RPG Lite restart failed:', e);
-          const msg = e instanceof Error ? e.message : String(e);
-          alert(`Restart failed: ${msg}`);
-        });
-      });
-    });
-
-    list.querySelectorAll('[data-edit-preset-id]').forEach((el) => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const btn = ev.currentTarget as HTMLElement;
-        const id = btn.dataset['editPresetId'];
-        if (!id) throw new Error('Edit preset button is missing data-edit-preset-id.');
-        this.editingPresetId = id;
-        this.renderSelector();
-      });
-    });
-
-    list.querySelectorAll('[data-copy-preset-id]').forEach((el) => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const btn = ev.currentTarget as HTMLElement;
-        const id = btn.dataset['copyPresetId'];
-        if (!id) throw new Error('Copy preset button is missing data-copy-preset-id.');
-        void this.copyPreset(id);
-      });
-    });
-
-    list.querySelectorAll('[data-delete-preset-id]').forEach((el) => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const btn = ev.currentTarget as HTMLElement;
-        const id = btn.dataset['deletePresetId'];
-        if (!id) throw new Error('Delete preset button is missing data-delete-preset-id.');
-        void this.deletePreset(id);
-      });
-    });
+    this.bindPresetListEvents(list);
   }
 
   private updateContextStats(): void {
