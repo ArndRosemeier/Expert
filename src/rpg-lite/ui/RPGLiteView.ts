@@ -1343,8 +1343,9 @@ export class RPGLiteView {
 
     // Highlight complete XML elements: <tag>content</tag> or <tag attr="value">content</tag>
     // Match opening tag, content, and closing tag as a unit
+    // Constrain to not cross paragraph boundaries to prevent runaway highlighting
     result = result.replace(
-      /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)([\s\S]*?)(&lt;\/\2&gt;)/g,
+      /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)((?:(?!\n\n)[\s\S])*?)(&lt;\/\2&gt;)/g,
       '<span class="rpg-lite-highlight-xml">$1$3$4</span>'
     );
 
@@ -1355,8 +1356,9 @@ export class RPGLiteView {
     );
 
     // Highlight JSON blocks (complete objects/arrays with content)
+    // Constrain to not cross paragraph boundaries to prevent runaway highlighting
     result = result.replace(
-      /(\{[\s\S]*?\}|\[[\s\S]*?\])/g,
+      /(\{(?:(?!\n\n)[\s\S])*?\}|\[(?:(?!\n\n)[\s\S])*?\])/g,
       (match) => {
         // Only highlight if it looks like JSON (contains quotes/colons, reasonable structure)
         if ((match.includes('&quot;') || match.includes(':')) && match.length > 10) {
@@ -1382,15 +1384,17 @@ export class RPGLiteView {
 
     // Highlight emphasis markers (bold **text** or italic *text*)
     // Bold: **text** (need at least 2 chars between)
+    // Constrain to not cross paragraph boundaries (double newlines) to prevent runaway highlighting
     result = result.replace(
-      /(\*\*[^*]{2,}?\*\*)/g,
+      /(\*\*(?:(?!\n\n)[^*]){2,}?\*\*)/g,
       '<span class="rpg-lite-highlight-emphasis">$1</span>'
     );
 
     // Highlight actions/narration in single asterisks *text*
     // Only match if there's proper pairing and at least 2 chars
+    // Constrain to not cross paragraph boundaries (double newlines) to prevent runaway highlighting
     result = result.replace(
-      /(?<!\*)(\*[^*]{2,}?\*)(?!\*)/g,
+      /(?<!\*)(\*(?:(?!\n\n)[^*]){2,}?\*)(?!\*)/g,
       '<span class="rpg-lite-highlight-action">$1</span>'
     );
 
