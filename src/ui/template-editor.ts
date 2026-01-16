@@ -31,6 +31,7 @@ export function openTemplateEditor() {
             <h2>Manage Templates</h2>
             <div class="template-controls">
                 <select id="template-select"></select>
+                <button id="copy-template-btn" class="button button-secondary">📋 Copy</button>
                 <button id="delete-template-btn" class="button button-danger">Delete</button>
                 <button id="restore-defaults-btn" class="button button-warning">🔄 Restore Defaults</button>
             </div>
@@ -103,6 +104,7 @@ function setupTemplateEditorListeners() {
 
         // Add delegated event listeners that survive DOM changes
         eventManager.addDelegatedEvent(container, 'change', '#template-select', handleTemplateSelect);
+        eventManager.addDelegatedEvent(container, 'click', '#copy-template-btn', handleCopyTemplate);
         eventManager.addDelegatedEvent(container, 'click', '#save-as-new-btn', handleSaveAsNew);
         eventManager.addDelegatedEvent(container, 'click', '#delete-template-btn', handleDelete);
         eventManager.addDelegatedEvent(container, 'click', '#restore-defaults-btn', handleRestoreDefaults);
@@ -114,6 +116,7 @@ function setupTemplateEditorListeners() {
         
         // Fallback to original direct listeners if EventManager fails
         getElementById('template-select').addEventListener('change', handleTemplateSelect);
+        getElementById('copy-template-btn').addEventListener('click', handleCopyTemplate);
         getElementById('save-as-new-btn').addEventListener('click', handleSaveAsNew);
         getElementById('delete-template-btn').addEventListener('click', handleDelete);
         getElementById('restore-defaults-btn').addEventListener('click', handleRestoreDefaults);
@@ -214,6 +217,42 @@ function handleSaveAsNew() {
     }
 }
 
+function handleCopyTemplate() {
+    const templateManager = state.getTemplateManager();
+    if (!templateManager || !currentTemplateName) return;
+
+    const template = templateManager.getTemplate(currentTemplateName);
+    if (!template) {
+        alert("Current template not found.");
+        return;
+    }
+
+    // Generate a unique name for the copy
+    let copyName = `${currentTemplateName} (Copy)`;
+    let counter = 2;
+    while (templateManager.getTemplate(copyName)) {
+        copyName = `${currentTemplateName} (Copy ${counter})`;
+        counter++;
+    }
+
+    try {
+        // Create a deep copy of the template
+        const templateCopy = JSON.parse(JSON.stringify(template));
+        templateCopy.name = copyName;
+        
+        templateManager.saveTemplate(copyName, templateCopy);
+        isDirty = false;
+        alert(`Template '${copyName}' created successfully.`);
+        
+        // Switch to the new copy
+        currentTemplateName = copyName;
+        populateTemplateSelector();
+        renderCurrentTemplateView();
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`Error copying template: ${errorMessage}`);
+    }
+}
 
 function handleDelete() {
     const templateManager = state.getTemplateManager();
