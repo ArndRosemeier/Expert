@@ -1241,9 +1241,15 @@ export class RPGLiteView {
     list.innerHTML = this.presets
       .map(
         (p) => `
-        <div class="rpg-lite-list-item-compact" data-start-preset-id="${p.id}" style="cursor: pointer;">
+        <div class="rpg-lite-list-item-compact" data-preset-id="${p.id}">
           <div style="min-width:0; flex: 1;">
             <div class="rpg-lite-list-item-title">${p.name}</div>
+          </div>
+          <div style="display:flex; gap:0.2rem; align-items:center;">
+            <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${p.id}" title="Copy">📋</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
           </div>
         </div>
       `
@@ -1252,14 +1258,46 @@ export class RPGLiteView {
 
     list.querySelectorAll('[data-start-preset-id]').forEach((el) => {
       el.addEventListener('click', (ev) => {
-        const item = ev.currentTarget as HTMLElement;
-        const id = item.dataset['startPresetId'];
-        if (!id) throw new Error('Start preset item is missing data-start-preset-id.');
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['startPresetId'];
+        if (!id) throw new Error('Start preset button is missing data-start-preset-id.');
         void this.restartFromPreset(id).catch((e: unknown) => {
           console.error('RPG Lite restart failed:', e);
           const msg = e instanceof Error ? e.message : String(e);
           alert(`Restart failed: ${msg}`);
         });
+      });
+    });
+
+    list.querySelectorAll('[data-edit-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['editPresetId'];
+        if (!id) throw new Error('Edit preset button is missing data-edit-preset-id.');
+        this.editingPresetId = id;
+        this.renderSelector();
+      });
+    });
+
+    list.querySelectorAll('[data-copy-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['copyPresetId'];
+        if (!id) throw new Error('Copy preset button is missing data-copy-preset-id.');
+        void this.copyPreset(id);
+      });
+    });
+
+    list.querySelectorAll('[data-delete-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['deletePresetId'];
+        if (!id) throw new Error('Delete preset button is missing data-delete-preset-id.');
+        void this.deletePreset(id);
       });
     });
   }
