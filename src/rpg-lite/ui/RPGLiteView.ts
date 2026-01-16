@@ -228,7 +228,7 @@ export class RPGLiteView {
             <div class="rpg-lite-list-item-title">${isActive ? '▶ ' : ''}${s.title}</div>
             <div style="opacity:.8; font-size:.85rem;">${formatDateTime(s.updatedAt)} · ${s.conversation.length} msgs</div>
           </div>
-          <div style="display:flex; gap:0.35rem; align-items:center;">
+          <div style="display:flex; gap:0.2rem; align-items:center;">
             <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-continue-session-id="${s.id}" title="Continue">Continue</button>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-session-id="${s.id}" title="Delete">🗑️</button>
           </div>
@@ -530,7 +530,7 @@ export class RPGLiteView {
             <div class="rpg-lite-list-item-title">${p.name}</div>
             <div style="opacity:.8; font-size:.85rem;">${p.title}</div>
           </div>
-          <div style="display:flex; gap:0.35rem; align-items:center;">
+          <div style="display:flex; gap:0.2rem; align-items:center;">
             <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${p.id}" title="Copy">📋</button>
