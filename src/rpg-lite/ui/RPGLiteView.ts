@@ -533,6 +533,7 @@ export class RPGLiteView {
           <div style="display:flex; gap:0.35rem; align-items:center;">
             <button class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-btn-sm" data-start-preset-id="${p.id}" title="Start">Start</button>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-edit-preset-id="${p.id}" title="Edit">⚙️</button>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-copy-preset-id="${p.id}" title="Copy">📋</button>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-delete-preset-id="${p.id}" title="Delete">🗑️</button>
           </div>
         </div>
@@ -565,6 +566,16 @@ export class RPGLiteView {
       });
     });
 
+    list.querySelectorAll('[data-copy-preset-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLElement;
+        const id = btn.dataset['copyPresetId'];
+        if (!id) throw new Error('Copy preset button is missing data-copy-preset-id.');
+        void this.copyPreset(id);
+      });
+    });
+
     list.querySelectorAll('[data-delete-preset-id]').forEach((el) => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -594,6 +605,52 @@ export class RPGLiteView {
     if (this.editingPresetId === presetId) {
       this.editingPresetId = null;
     }
+    this.renderSelector();
+  }
+
+  private makeUniquePresetName(baseName: string): string {
+    const existingNames = new Set(this.presets.map(p => p.name));
+    
+    if (!existingNames.has(baseName)) {
+      return baseName;
+    }
+    
+    let counter = 2;
+    let newName = `${baseName} ${counter}`;
+    
+    while (existingNames.has(newName)) {
+      counter++;
+      newName = `${baseName} ${counter}`;
+    }
+    
+    return newName;
+  }
+
+  private async copyPreset(presetId: string): Promise<void> {
+    const preset = this.presets.find(p => p.id === presetId);
+    if (!preset) throw new Error(`Preset not found: ${presetId}`);
+
+    const baseName = `${preset.name} (Copy)`;
+    const uniqueName = this.makeUniquePresetName(baseName);
+
+    const newPreset: RPGLiteStartPreset = {
+      id: newId('rpg_lite_preset'),
+      name: uniqueName,
+      createdAt: now(),
+      updatedAt: now(),
+      title: preset.title,
+      systemPrompt: preset.systemPrompt,
+      prefixContext: preset.prefixContext,
+      narratorPurpose: preset.narratorPurpose,
+      maxContextMessages: preset.maxContextMessages
+    };
+
+    const storage = await StorageService.getInstance();
+    await storage.saveRPGLiteStartPreset(newPreset);
+    await this.loadAll();
+    
+    // Optionally, open the new preset for editing
+    this.editingPresetId = newPreset.id;
     this.renderSelector();
   }
 
