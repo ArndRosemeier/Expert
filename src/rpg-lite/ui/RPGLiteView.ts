@@ -1,6 +1,8 @@
 import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { StorageService } from '../../StorageService';
 import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService';
+import { createPromptExpansionService } from '../../services/PromptExpansionService';
+import { SettingsManager } from '../../SettingsManager';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -27,9 +29,15 @@ function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
-function buildContextMessages(session: RPGLiteSession): OpenRouterMessage[] {
+async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouterMessage[]> {
   const messages: OpenRouterMessage[] = [];
-  messages.push({ role: 'system', content: session.systemPrompt });
+  
+  // Expand placeholders in systemPrompt on every call for fresh name inspiration
+  const settingsManager = await SettingsManager.getInstance();
+  const expansionService = createPromptExpansionService(settingsManager);
+  const expandedSystemPrompt = expansionService.expandPrompt(session.systemPrompt, {});
+  
+  messages.push({ role: 'system', content: expandedSystemPrompt });
   messages.push({
     role: 'user',
     content:
@@ -44,8 +52,8 @@ function buildContextMessages(session: RPGLiteSession): OpenRouterMessage[] {
   return messages;
 }
 
-function computeContextCharCount(session: RPGLiteSession): { promptChars: number; messageCount: number } {
-  const messages = buildContextMessages(session);
+async function computeContextCharCount(session: RPGLiteSession): Promise<{ promptChars: number; messageCount: number }> {
+  const messages = await buildContextMessages(session);
   const promptForLogging = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
   return { promptChars: promptForLogging.length, messageCount: messages.length };
 }
@@ -76,6 +84,8 @@ export class RPGLiteView {
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
+  
+  private defaultNarratorPurpose: RPGLiteModelPurpose = 'creator';
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -152,6 +162,15 @@ export class RPGLiteView {
           <div class="rpg-lite-title">RPG Lite</div>
         </div>
         <div class="rpg-lite-topbar-right">
+          <label style="display:flex; align-items:center; gap:.5rem;">
+            <span style="opacity:.85;">Default Narrator</span>
+            <select id="rpg-lite-default-narrator" class="rpg-lite-select">
+              <option value="prose">Prose</option>
+              <option value="creator">Creator</option>
+              <option value="editor">Editor</option>
+              <option value="rater">Rater</option>
+            </select>
+          </label>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
       </div>
@@ -184,6 +203,12 @@ export class RPGLiteView {
     (this.container.querySelector('#rpg-lite-close') as HTMLButtonElement).addEventListener('click', () => {
       this.modalEl?.remove();
       this.modalEl = null;
+    });
+
+    const defaultNarratorSelect = this.container.querySelector('#rpg-lite-default-narrator') as HTMLSelectElement;
+    defaultNarratorSelect.value = this.defaultNarratorPurpose;
+    defaultNarratorSelect.addEventListener('change', () => {
+      this.defaultNarratorPurpose = defaultNarratorSelect.value as RPGLiteModelPurpose;
     });
 
     const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement;
@@ -703,7 +728,12 @@ export class RPGLiteView {
         </div>
 
         <label style="display:flex; flex-direction:column; gap:0.35rem;">
-          <span class="rpg-lite-section-title">System Prompt</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <span class="rpg-lite-section-title">System Prompt</span>
+            <span style="font-size: 0.8rem; opacity: 0.7;">
+              Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
+            </span>
+          </div>
           <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea">${preset.systemPrompt}</textarea>
         </label>
 
@@ -780,9 +810,8 @@ export class RPGLiteView {
     this.currentSession = session;
     await this.loadAll();
     this.renderSession();
-    if (this.currentSession.conversation.length === 0) {
-      await this.generateOpeningMessage();
-    }
+    // Don't auto-generate opening message - let user review/change settings first
+    // User can click "Generate Opening" button or type their own message
   }
 
   private async restartFromPreset(presetId: string): Promise<void> {
@@ -807,6 +836,7 @@ export class RPGLiteView {
     this.currentSession = session;
     this.renderSession();
     this.isStreaming = false;
+    // Auto-generate opening message for template-based sessions (settings are predefined)
     await this.generateOpeningMessage();
   }
 
@@ -836,10 +866,10 @@ export class RPGLiteView {
                 <label style="display:flex; gap:.5rem; align-items:center;">
                   <span style="opacity:.85;">Narrator</span>
                   <select id="rpg-lite-narrator-purpose" class="rpg-lite-select">
-                    <option value="prose">Prose</option>
-                    <option value="creator">Creator</option>
-                    <option value="editor">Editor</option>
-                    <option value="rater">Rater</option>
+                    <option value="prose" ${this.defaultNarratorPurpose === 'prose' ? 'selected' : ''}>Prose</option>
+                    <option value="creator" ${this.defaultNarratorPurpose === 'creator' ? 'selected' : ''}>Creator</option>
+                    <option value="editor" ${this.defaultNarratorPurpose === 'editor' ? 'selected' : ''}>Editor</option>
+                    <option value="rater" ${this.defaultNarratorPurpose === 'rater' ? 'selected' : ''}>Rater</option>
                   </select>
                 </label>
                 <label style="display:flex; gap:.5rem; align-items:center;">
@@ -937,6 +967,7 @@ export class RPGLiteView {
       this.currentSession = session;
       this.renderSession();
       this.isStreaming = false;
+      // Auto-generate opening message for newly created sessions (settings are already configured)
       await this.generateOpeningMessage();
     }
   }
@@ -991,7 +1022,12 @@ export class RPGLiteView {
             </div>
             <div id="rpg-lite-editors-content" class="rpg-lite-editors-content" style="display: none;">
               <div class="rpg-lite-editor">
-                <div class="rpg-lite-section-title">System Prompt</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                  <div class="rpg-lite-section-title">System Prompt</div>
+                  <span style="font-size: 0.8rem; opacity: 0.7;">
+                    Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
+                  </span>
+                </div>
                 <textarea id="rpg-lite-system" class="rpg-lite-textarea"></textarea>
               </div>
               <div class="rpg-lite-editor">
@@ -1002,7 +1038,7 @@ export class RPGLiteView {
           </div>
           <div id="rpg-lite-messages" class="rpg-lite-messages"></div>
           <div class="rpg-lite-composer">
-            <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="Your message..."></textarea>
+            <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="${session.conversation.length === 0 ? 'Press Send to start, or type your first message...' : 'Your message...'}"></textarea>
             <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
           </div>
         </div>
@@ -1106,7 +1142,7 @@ export class RPGLiteView {
     this.renderPresetListInSession();
     this.renderActionButtons();
     this.renderConversation();
-    this.updateContextStats();
+    void this.updateContextStats();
     void this.initializeResizableLayout();
 
     inputEl.focus();
@@ -1251,12 +1287,12 @@ export class RPGLiteView {
     this.bindPresetListEvents(list);
   }
 
-  private updateContextStats(): void {
+  private async updateContextStats(): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     const statsEl = this.container.querySelector('#rpg-lite-context-stats-topbar') as HTMLElement | null;
     if (!statsEl) return;
 
-    const { promptChars, messageCount } = computeContextCharCount(this.currentSession);
+    const { promptChars, messageCount } = await computeContextCharCount(this.currentSession);
     statsEl.textContent = `📊 ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
   }
 
@@ -1348,7 +1384,7 @@ export class RPGLiteView {
     }
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    this.updateContextStats();
+    void this.updateContextStats();
   }
 
   private containsGraphicalContent(content: string): boolean {
@@ -1646,7 +1682,15 @@ export class RPGLiteView {
 
     const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
     const text = inputEl.value.trim();
-    if (text.length === 0) return;
+    
+    // If conversation is empty and user sends empty message, generate opening
+    if (text.length === 0) {
+      if (this.currentSession.conversation.length === 0) {
+        await this.generateOpeningMessage();
+      }
+      return;
+    }
+    
     inputEl.value = '';
 
     const userMsg: RPGLiteChatMessage = {
@@ -1740,7 +1784,7 @@ export class RPGLiteView {
     let meta: RPGLiteMessageGenerationMeta | null = null;
 
     const openRouterMessages: OpenRouterMessage[] = [
-      ...buildContextMessages(session),
+      ...await buildContextMessages(session),
       { role: 'user', content: openingInstruction }
     ];
 
@@ -1895,8 +1939,8 @@ export class RPGLiteView {
     sendBtn.innerHTML = '⏳ Generating...';
 
     let meta: RPGLiteMessageGenerationMeta | null = null;
-    const openRouterMessages = buildContextMessages(session);
-    this.updateContextStats();
+    const openRouterMessages = await buildContextMessages(session);
+    void this.updateContextStats();
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;

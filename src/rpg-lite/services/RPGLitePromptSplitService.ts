@@ -54,9 +54,12 @@ export class RPGLitePromptSplitService {
     assertNonEmptyString(parsed.systemPrompt, 'systemPrompt');
     assertNonEmptyString(parsed.prefixContext, 'prefixContext');
 
+    // Automatically append {{noise_names}} to systemPrompt for runtime expansion
+    const systemPromptWithPlaceholder = parsed.systemPrompt.trim() + '\n\n{{noise_names}}';
+
     return {
       title: parsed.title.trim(),
-      systemPrompt: parsed.systemPrompt,
+      systemPrompt: systemPromptWithPlaceholder,
       prefixContext: parsed.prefixContext
     };
   }
