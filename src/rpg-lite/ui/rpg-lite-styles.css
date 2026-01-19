@@ -86,6 +86,25 @@
   background: rgba(64, 140, 255, 0.28);
 }
 
+.rpg-lite-button-group-tight {
+  display: flex;
+  gap: 0.0625rem;
+  align-items: center;
+}
+
+.rpg-lite-button-group-tight .rpg-lite-btn {
+  margin: 0;
+}
+
+.rpg-lite-button-group-tight .rpg-lite-btn-sm {
+  padding: 0.3rem 0.5rem;
+}
+
+.rpg-lite-button-group-tight .rpg-lite-btn-icon {
+  padding: 0.3rem 0.35rem;
+  min-width: 1.5rem;
+}
+
 .rpg-lite-select,
 .rpg-lite-input,
 .rpg-lite-textarea {
