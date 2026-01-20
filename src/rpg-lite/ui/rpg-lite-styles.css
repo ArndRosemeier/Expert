@@ -383,6 +383,12 @@
   max-height: 35vh;
 }
 
+/* Preset editor textareas use more vertical space by default */
+.rpg-lite-preset-editor-textarea {
+  min-height: 20vh;
+  max-height: 50vh;
+}
+
 .rpg-lite-messages {
   flex: 1;
   overflow: auto;

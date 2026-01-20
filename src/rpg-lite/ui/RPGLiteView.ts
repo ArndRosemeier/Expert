@@ -736,12 +736,12 @@ export class RPGLiteView {
               Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
             </span>
           </div>
-          <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea">${preset.systemPrompt}</textarea>
+          <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.systemPrompt}</textarea>
         </label>
 
         <label style="display:flex; flex-direction:column; gap:0.35rem;">
           <span class="rpg-lite-section-title">Prefix Context</span>
-          <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea">${preset.prefixContext}</textarea>
+          <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.prefixContext}</textarea>
           <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
             <button id="rpg-lite-prefix-more-details" class="rpg-lite-btn rpg-lite-btn-sm" title="Add more details to the prefix context">More Details</button>
             <button id="rpg-lite-prefix-variation" class="rpg-lite-btn rpg-lite-btn-sm" title="Generate a variation of the prefix context">Variation</button>
