@@ -957,10 +957,10 @@ export class RPGLiteView {
 
     try {
       const systemPrompt = mode === 'more-details'
-        ? 'You are a creative writing assistant. Your task is to take an adventure prompt and expand it with more specific details, vivid descriptions, and concrete examples while preserving the core concept and tone. Make it richer and more immersive.'
-        : 'You are a creative writing assistant. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific elements like setting, characters, or plot hooks to create a fresh take on the concept.';
+        ? 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, character depth, plot hooks, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.'
+        : 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting, characters, plot hooks, or storytelling style to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.';
 
-      const userPrompt = `Original adventure prompt:\n\n${currentPrompt}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more details' : 'a creative variation'}. Return ONLY the refined prompt text, no explanation or meta-commentary.`;
+      const userPrompt = `Original text-based adventure prompt:\n\n${currentPrompt}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more narrative details' : 'a creative narrative variation'}. Remember this is for a TEXT-BASED storytelling adventure. Return ONLY the refined prompt text, no explanation or meta-commentary.`;
 
       const messages: OpenRouterMessage[] = [
         { role: 'system', content: systemPrompt },
