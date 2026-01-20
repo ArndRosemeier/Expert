@@ -783,8 +783,11 @@ class PromptExpansionService {
         while (selected.length < selectedCount && usedIndices.size < strategies.length) {
             const index = Math.floor(Math.random() * strategies.length);
             if (!usedIndices.has(index)) {
-                usedIndices.add(index);
-                selected.push(strategies[index]);
+                const strategy = strategies[index];
+                if (strategy) {
+                    usedIndices.add(index);
+                    selected.push(strategy);
+                }
             }
         }
         
