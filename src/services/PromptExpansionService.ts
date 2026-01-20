@@ -788,7 +788,10 @@ class PromptExpansionService {
             }
         }
 
-        return `Random name inspirations: ${inspirationNames.join(', ')}. Use these as creative inspiration for character, location, or item names in your story.`;
+        return `IMPORTANT - Name Creation Guidance:
+DO NOT use these exact names → ${inspirationNames.join(', ')}
+These are intentionally random/mediocre examples to show you DIFFERENT naming patterns from the usual clichés (John, Sarah, Bob, Alice, Eldoria, Avalon, etc.).
+Your task: Create your own BETTER, contextually appropriate names that fit your story's genre, culture, and tone. Use the random examples only to understand the STYLE of avoiding overused names. Invent fresh names that feel authentic to your specific narrative world.`;
     }
     
     /**
