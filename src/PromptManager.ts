@@ -102,6 +102,12 @@ export interface OrchestratorPrompts {
     // For RPG System
     rpg_session_setup: string;
     rpg_lite_prompt_split: string;
+    rpg_lite_prefix_refine_more_details_system: string;
+    rpg_lite_prefix_refine_variation_system: string;
+    rpg_lite_prefix_refine_user: string;
+    rpg_lite_prompt_refine_more_details_system: string;
+    rpg_lite_prompt_refine_variation_system: string;
+    rpg_lite_prompt_refine_user: string;
     rpg_game_narration_system: string;
     rpg_state_parser_system: string;
     rpg_state_parser_user: string;
@@ -1865,6 +1871,70 @@ You are an assistant that splits a user-provided "adventure prompt" into:
         `.trim(),
         placeholders: ['adventure_prompt'],
         description: 'Splits an RPG Lite adventure prompt into system prompt vs prefix context (JSON only).'
+    },
+
+    rpg_lite_prefix_refine_more_details_system: {
+        text: `
+You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, world-building, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.
+
+IMPORTANT: If the context contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story's genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.
+        `.trim(),
+        placeholders: [],
+        description: 'System prompt for refining RPG Lite prefix context with more details.'
+    },
+
+    rpg_lite_prefix_refine_variation_system: {
+        text: `
+You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting details, historical background, or world-building aspects to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.
+
+IMPORTANT: If the context contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story's genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.
+        `.trim(),
+        placeholders: [],
+        description: 'System prompt for creating variations of RPG Lite prefix context.'
+    },
+
+    rpg_lite_prefix_refine_user: {
+        text: `
+Original text-based prefix context:
+
+{{prefix_context}}
+
+Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the context, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined context text (without the "Random name inspirations" line), no explanation or meta-commentary.
+        `.trim(),
+        placeholders: ['prefix_context', 'refinement_mode'],
+        description: 'User prompt for refining RPG Lite prefix context. refinement_mode should be "an expanded version with more narrative details" or "a creative narrative variation".'
+    },
+
+    rpg_lite_prompt_refine_more_details_system: {
+        text: `
+You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, character depth, plot hooks, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.
+
+IMPORTANT: If the prompt contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story's genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.
+        `.trim(),
+        placeholders: [],
+        description: 'System prompt for refining RPG Lite adventure prompt with more details.'
+    },
+
+    rpg_lite_prompt_refine_variation_system: {
+        text: `
+You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting, characters, plot hooks, or storytelling style to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.
+
+IMPORTANT: If the prompt contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story's genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.
+        `.trim(),
+        placeholders: [],
+        description: 'System prompt for creating variations of RPG Lite adventure prompt.'
+    },
+
+    rpg_lite_prompt_refine_user: {
+        text: `
+Original text-based adventure prompt:
+
+{{adventure_prompt}}
+
+Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the prompt, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined prompt text (without the "Random name inspirations" line), no explanation or meta-commentary.
+        `.trim(),
+        placeholders: ['adventure_prompt', 'refinement_mode'],
+        description: 'User prompt for refining RPG Lite adventure prompt. refinement_mode should be "an expanded version with more narrative details" or "a creative narrative variation".'
     },
     
     rpg_game_narration_system: {

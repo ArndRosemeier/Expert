@@ -3,6 +3,7 @@ import { StorageService } from '../../StorageService';
 import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { SettingsManager } from '../../SettingsManager';
+import { getPromptText } from '../../PromptManager';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -1002,10 +1003,17 @@ export class RPGLiteView {
       const contextWithExamples = expansionService.expandPrompt(currentContext, {});
 
       const systemPrompt = mode === 'more-details'
-        ? 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, world-building, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.\n\nIMPORTANT: If the context contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story\'s genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.'
-        : 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting details, historical background, or world-building aspects to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.\n\nIMPORTANT: If the context contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story\'s genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.';
+        ? getPromptText('rpg_lite_prefix_refine_more_details_system')
+        : getPromptText('rpg_lite_prefix_refine_variation_system');
 
-      const userPrompt = `Original text-based prefix context:\n\n${contextWithExamples}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more narrative details' : 'a creative narrative variation'}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the context, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined context text (without the "Random name inspirations" line), no explanation or meta-commentary.`;
+      const refinementMode = mode === 'more-details' 
+        ? 'an expanded version with more narrative details' 
+        : 'a creative narrative variation';
+      
+      const userPromptTemplate = getPromptText('rpg_lite_prefix_refine_user');
+      const userPrompt = userPromptTemplate
+        .split('{{prefix_context}}').join(contextWithExamples)
+        .split('{{refinement_mode}}').join(refinementMode);
 
       const messages: OpenRouterMessage[] = [
         { role: 'system', content: systemPrompt },
@@ -1067,10 +1075,17 @@ export class RPGLiteView {
       const promptWithExamples = expansionService.expandPrompt(currentPrompt, {});
 
       const systemPrompt = mode === 'more-details'
-        ? 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, character depth, plot hooks, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.\n\nIMPORTANT: If the prompt contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story\'s genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.'
-        : 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting, characters, plot hooks, or storytelling style to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.\n\nIMPORTANT: If the prompt contains "Random name inspirations", use those unique name examples as creative inspiration for character, place, and item names. Create contextually appropriate variations of those names that fit the story\'s genre and tone. Do NOT use clichéd names like John, Sarah, Avalon, or Eldoria. The random names shown are there to help you avoid common names.';
+        ? getPromptText('rpg_lite_prompt_refine_more_details_system')
+        : getPromptText('rpg_lite_prompt_refine_variation_system');
 
-      const userPrompt = `Original text-based adventure prompt:\n\n${promptWithExamples}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more narrative details' : 'a creative narrative variation'}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the prompt, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined prompt text (without the "Random name inspirations" line), no explanation or meta-commentary.`;
+      const refinementMode = mode === 'more-details' 
+        ? 'an expanded version with more narrative details' 
+        : 'a creative narrative variation';
+      
+      const userPromptTemplate = getPromptText('rpg_lite_prompt_refine_user');
+      const userPrompt = userPromptTemplate
+        .split('{{adventure_prompt}}').join(promptWithExamples)
+        .split('{{refinement_mode}}').join(refinementMode);
 
       const messages: OpenRouterMessage[] = [
         { role: 'system', content: systemPrompt },
