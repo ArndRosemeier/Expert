@@ -968,7 +968,7 @@ export class RPGLiteView {
       ];
 
       let response = '';
-      await this.client.streamingChat('creator', messages, {
+      await this.openRouterClient.streamingChat('creator', messages, {
         onStart: () => {},
         onChunk: (chunk: string) => {
           response += chunk;
