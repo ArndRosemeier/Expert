@@ -85,6 +85,7 @@ export class RPGLiteView {
   private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
   private promptHistory: string[] = [];
+  private prefixContextHistory: string[] = [];
 
   private defaultNarratorPurpose: RPGLiteModelPurpose = 'creator';
 
@@ -741,6 +742,12 @@ export class RPGLiteView {
         <label style="display:flex; flex-direction:column; gap:0.35rem;">
           <span class="rpg-lite-section-title">Prefix Context</span>
           <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea">${preset.prefixContext}</textarea>
+          <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+            <button id="rpg-lite-prefix-more-details" class="rpg-lite-btn rpg-lite-btn-sm" title="Add more details to the prefix context">More Details</button>
+            <button id="rpg-lite-prefix-variation" class="rpg-lite-btn rpg-lite-btn-sm" title="Generate a variation of the prefix context">Variation</button>
+            <button id="rpg-lite-prefix-back" class="rpg-lite-btn rpg-lite-btn-sm" title="Restore previous version" disabled>Back to Last Version</button>
+            <span id="rpg-lite-prefix-status" style="opacity:.7; font-size:0.85rem;"></span>
+          </div>
         </label>
 
         <div class="rpg-lite-message-info">
@@ -762,12 +769,41 @@ export class RPGLiteView {
 
     cancelBtn.addEventListener('click', () => {
       this.editingPresetId = null;
+      this.prefixContextHistory = [];
       this.renderSelector();
     });
 
     saveBtn.addEventListener('click', () => {
       void this.saveEditedPreset(preset.id);
     });
+
+    // Prefix context refinement buttons
+    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prefix-more-details') as HTMLButtonElement | null;
+    const variationBtn = this.container.querySelector('#rpg-lite-prefix-variation') as HTMLButtonElement | null;
+    const backBtn = this.container.querySelector('#rpg-lite-prefix-back') as HTMLButtonElement | null;
+
+    if (moreDetailsBtn && variationBtn && backBtn) {
+      moreDetailsBtn.addEventListener('click', () => {
+        void this.refinePrefixContext('more-details');
+      });
+
+      variationBtn.addEventListener('click', () => {
+        void this.refinePrefixContext('variation');
+      });
+
+      backBtn.addEventListener('click', () => {
+        const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement | null;
+        if (!prefixEl) return;
+        
+        if (this.prefixContextHistory.length > 0) {
+          const previousContext = this.prefixContextHistory.pop();
+          if (previousContext !== undefined) {
+            prefixEl.value = previousContext;
+            backBtn.disabled = this.prefixContextHistory.length === 0;
+          }
+        }
+      });
+    }
   }
 
   private async saveEditedPreset(presetId: string): Promise<void> {
@@ -798,6 +834,7 @@ export class RPGLiteView {
     await storage.saveRPGLiteStartPreset(preset);
 
     await this.loadAll();
+    this.prefixContextHistory = [];
     this.editingPresetId = presetId;
     this.renderSelector();
   }
@@ -908,6 +945,7 @@ export class RPGLiteView {
 
     (this.container.querySelector('#rpg-lite-back') as HTMLButtonElement).addEventListener('click', () => {
       this.promptHistory = [];
+      this.prefixContextHistory = [];
       this.renderSelector();
     });
 
@@ -932,6 +970,68 @@ export class RPGLiteView {
         }
       }
     });
+  }
+
+  private async refinePrefixContext(mode: 'more-details' | 'variation'): Promise<void> {
+    const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement | null;
+    const statusEl = this.container.querySelector('#rpg-lite-prefix-status') as HTMLElement | null;
+    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prefix-more-details') as HTMLButtonElement | null;
+    const variationBtn = this.container.querySelector('#rpg-lite-prefix-variation') as HTMLButtonElement | null;
+    const backBtn = this.container.querySelector('#rpg-lite-prefix-back') as HTMLButtonElement | null;
+
+    if (!prefixEl || !statusEl || !moreDetailsBtn || !variationBtn || !backBtn) return;
+
+    const currentContext = prefixEl.value.trim();
+    if (currentContext.length === 0) {
+      alert('Please enter prefix context first.');
+      return;
+    }
+
+    // Save current context to history
+    this.prefixContextHistory.push(currentContext);
+    backBtn.disabled = false;
+
+    moreDetailsBtn.disabled = true;
+    variationBtn.disabled = true;
+    statusEl.textContent = mode === 'more-details' ? 'Adding details...' : 'Generating variation...';
+
+    try {
+      const systemPrompt = mode === 'more-details'
+        ? 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, world-building, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.'
+        : 'You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting details, historical background, or world-building aspects to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.';
+
+      const userPrompt = `Original text-based prefix context:\n\n${currentContext}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more narrative details' : 'a creative narrative variation'}. Remember this is for a TEXT-BASED storytelling adventure. Return ONLY the refined context text, no explanation or meta-commentary.`;
+
+      const messages: OpenRouterMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ];
+
+      let response = '';
+      await this.openRouterClient.streamingChat('creator', messages, {
+        onStart: () => {},
+        onChunk: (chunk: string) => {
+          response += chunk;
+        },
+        onComplete: () => {},
+        onError: () => {}
+      });
+
+      prefixEl.value = response.trim();
+      statusEl.textContent = '';
+    } catch (error) {
+      console.error('Failed to refine prefix context:', error);
+      statusEl.textContent = 'Error refining context';
+      alert('Failed to refine prefix context: ' + (error instanceof Error ? error.message : String(error)));
+      // Restore from history on error
+      if (this.prefixContextHistory.length > 0) {
+        this.prefixContextHistory.pop();
+        backBtn.disabled = this.prefixContextHistory.length === 0;
+      }
+    } finally {
+      moreDetailsBtn.disabled = false;
+      variationBtn.disabled = false;
+    }
   }
 
   private async refineAdventurePrompt(mode: 'more-details' | 'variation'): Promise<void> {
