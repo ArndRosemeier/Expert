@@ -1900,8 +1900,10 @@ Original text-based prefix context:
 {{prefix_context}}
 
 Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the context, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined context text (without the "Random name inspirations" line), no explanation or meta-commentary.
+
+{{noise_names}}
         `.trim(),
-        placeholders: ['prefix_context', 'refinement_mode'],
+        placeholders: ['prefix_context', 'refinement_mode', 'noise_names'],
         description: 'User prompt for refining RPG Lite prefix context. refinement_mode should be "an expanded version with more narrative details" or "a creative narrative variation".'
     },
 
@@ -1932,8 +1934,10 @@ Original text-based adventure prompt:
 {{adventure_prompt}}
 
 Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adventure. If you see random name inspirations in the prompt, use them creatively to generate fresh, contextually appropriate names. Return ONLY the refined prompt text (without the "Random name inspirations" line), no explanation or meta-commentary.
+
+{{noise_names}}
         `.trim(),
-        placeholders: ['adventure_prompt', 'refinement_mode'],
+        placeholders: ['adventure_prompt', 'refinement_mode', 'noise_names'],
         description: 'User prompt for refining RPG Lite adventure prompt. refinement_mode should be "an expanded version with more narrative details" or "a creative narrative variation".'
     },
     

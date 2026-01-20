@@ -997,11 +997,6 @@ export class RPGLiteView {
     statusEl.textContent = mode === 'more-details' ? 'Adding details...' : 'Generating variation...';
 
     try {
-      // Expand {{noise_names}} placeholder so the LLM sees example random names as inspiration
-      const settingsManager = await SettingsManager.getInstance();
-      const expansionService = createPromptExpansionService(settingsManager);
-      const contextWithExamples = expansionService.expandPrompt(currentContext, {});
-
       const systemPrompt = mode === 'more-details'
         ? getPromptText('rpg_lite_prefix_refine_more_details_system')
         : getPromptText('rpg_lite_prefix_refine_variation_system');
@@ -1010,10 +1005,16 @@ export class RPGLiteView {
         ? 'an expanded version with more narrative details' 
         : 'a creative narrative variation';
       
+      // Get template and replace user-provided placeholders
       const userPromptTemplate = getPromptText('rpg_lite_prefix_refine_user');
-      const userPrompt = userPromptTemplate
-        .split('{{prefix_context}}').join(contextWithExamples)
+      const userPromptWithPlaceholders = userPromptTemplate
+        .split('{{prefix_context}}').join(currentContext)
         .split('{{refinement_mode}}').join(refinementMode);
+      
+      // Now expand {{noise_names}} and any other global placeholders
+      const settingsManager = await SettingsManager.getInstance();
+      const expansionService = createPromptExpansionService(settingsManager);
+      const userPrompt = expansionService.expandPrompt(userPromptWithPlaceholders, {});
 
       const messages: OpenRouterMessage[] = [
         { role: 'system', content: systemPrompt },
@@ -1069,11 +1070,6 @@ export class RPGLiteView {
     statusEl.textContent = mode === 'more-details' ? 'Adding details...' : 'Generating variation...';
 
     try {
-      // Expand {{noise_names}} placeholder so the LLM sees example random names as inspiration
-      const settingsManager = await SettingsManager.getInstance();
-      const expansionService = createPromptExpansionService(settingsManager);
-      const promptWithExamples = expansionService.expandPrompt(currentPrompt, {});
-
       const systemPrompt = mode === 'more-details'
         ? getPromptText('rpg_lite_prompt_refine_more_details_system')
         : getPromptText('rpg_lite_prompt_refine_variation_system');
@@ -1082,10 +1078,16 @@ export class RPGLiteView {
         ? 'an expanded version with more narrative details' 
         : 'a creative narrative variation';
       
+      // Get template and replace user-provided placeholders
       const userPromptTemplate = getPromptText('rpg_lite_prompt_refine_user');
-      const userPrompt = userPromptTemplate
-        .split('{{adventure_prompt}}').join(promptWithExamples)
+      const userPromptWithPlaceholders = userPromptTemplate
+        .split('{{adventure_prompt}}').join(currentPrompt)
         .split('{{refinement_mode}}').join(refinementMode);
+      
+      // Now expand {{noise_names}} and any other global placeholders
+      const settingsManager = await SettingsManager.getInstance();
+      const expansionService = createPromptExpansionService(settingsManager);
+      const userPrompt = expansionService.expandPrompt(userPromptWithPlaceholders, {});
 
       const messages: OpenRouterMessage[] = [
         { role: 'system', content: systemPrompt },
