@@ -762,36 +762,113 @@ class PromptExpansionService {
      * Generate random pronounceable names for creative naming inspiration
      */
     private generateNoiseNames(): string {
-        // Pronounceable name patterns for inspiration
-        const nameStarts = ['Ael', 'Bry', 'Cael', 'Dor', 'Elyn', 'Fay', 'Gwen', 'Hale', 'Iven', 'Jor', 'Kel', 'Lyr', 'Mor', 'Nyx', 'Orin', 'Pex', 'Quin', 'Ren', 'Syl', 'Tav', 'Uma', 'Vex', 'Wyn', 'Xara', 'Ysel', 'Zeph'];
-        const nameEndings = ['aine', 'beth', 'core', 'drin', 'elle', 'finn', 'grim', 'haven', 'ith', 'jin', 'keth', 'lyn', 'moth', 'nes', 'ora', 'phen', 'quen', 'ros', 'seth', 'thorn', 'uri', 'vain', 'wick', 'xen', 'yth', 'zara'];
-        const singleNames = ['Arix', 'Belen', 'Caine', 'Dara', 'Eston', 'Fynn', 'Gareth', 'Haven', 'Iris', 'Jace', 'Kira', 'Loren', 'Maven', 'Nova', 'Orion', 'Phoenix', 'Quinn', 'Raven', 'Sage', 'Thane', 'Uma', 'Vale', 'Wren', 'Xander', 'Yara', 'Zara'];
-
-        // Generate 5-8 pronounceable names for inspiration
-        const inspirationNames: string[] = [];
-        const numNames = 5 + Math.floor(Math.random() * 4);
+        const strategies = [
+            this.celticNamingStrategy(),
+            this.norseNamingStrategy(),
+            this.softConsonantStrategy(),
+            this.hardConsonantStrategy(),
+            this.flowingVowelStrategy(),
+            this.genreFantasyStrategy(),
+            this.genreSciFiStrategy(),
+            this.syllablePatternStrategy(),
+            this.culturalBlendStrategy(),
+            this.uncommonRealNamesStrategy()
+        ];
         
-        for (let i = 0; i < numNames; i++) {
-            if (Math.random() < 0.4) {
-                // Use a single complete name
-                const selectedName = singleNames[Math.floor(Math.random() * singleNames.length)];
-                if (selectedName) {
-                    inspirationNames.push(selectedName);
-                }
-            } else {
-                // Combine start + ending
-                const start = nameStarts[Math.floor(Math.random() * nameStarts.length)];
-                const ending = nameEndings[Math.floor(Math.random() * nameEndings.length)];
-                if (start && ending) {
-                    inspirationNames.push(start + ending);
-                }
+        // Randomly select 1-2 strategies (30% chance for 2 strategies)
+        const selectedCount = Math.random() < 0.3 ? 2 : 1;
+        const selected: string[] = [];
+        const usedIndices = new Set<number>();
+        
+        while (selected.length < selectedCount && usedIndices.size < strategies.length) {
+            const index = Math.floor(Math.random() * strategies.length);
+            if (!usedIndices.has(index)) {
+                usedIndices.add(index);
+                selected.push(strategies[index]);
             }
         }
+        
+        return selected.join('\n\n');
+    }
 
-        return `IMPORTANT - Name Creation Guidance:
-DO NOT use these exact names → ${inspirationNames.join(', ')}
-These are intentionally random/mediocre examples to show you DIFFERENT naming patterns from the usual clichés (John, Sarah, Bob, Alice, Eldoria, Avalon, etc.).
-Your task: Create your own BETTER, contextually appropriate names that fit your story's genre, culture, and tone. Use the random examples only to understand the STYLE of avoiding overused names. Invent fresh names that feel authentic to your specific narrative world.`;
+    private celticNamingStrategy(): string {
+        const examples = ['Branwen', 'Taliesin', 'Morwen', 'Caradoc', 'Rhiannon'];
+        return `Naming Inspiration - Celtic Patterns:
+Examples: ${examples.join(', ')}
+Pattern: Use soft consonants (b, c, m, w, r) + flowing vowels + Welsh-influenced endings (-wen, -oc, -is, -on)
+Create your own names following this melodic, nature-connected style that evokes ancient Celtic traditions.`;
+    }
+
+    private norseNamingStrategy(): string {
+        const examples = ['Vigdis', 'Hrafn', 'Solveig', 'Bjorn', 'Astrid'];
+        return `Naming Inspiration - Norse Patterns:
+Examples: ${examples.join(', ')}
+Pattern: Strong consonants (v, h, b, k) + compact vowels + Nordic endings (-dis, -veig, -orn, -rid)
+Build names with this bold, winter-forged sound that echoes Viking heritage.`;
+    }
+
+    private softConsonantStrategy(): string {
+        const examples = ['Mirana', 'Loren', 'Selara', 'Nelith', 'Amaris'];
+        return `Naming Inspiration - Soft Consonant Flow:
+Examples: ${examples.join(', ')}
+Pattern: Use 2-3 syllables with gentle consonants (l, m, n, r, s) + open vowels (a, e, i)
+Craft names with this smooth, lyrical quality for elegant or mystical characters.`;
+    }
+
+    private hardConsonantStrategy(): string {
+        const examples = ['Krexon', 'Thalmor', 'Brixar', 'Voldren', 'Grath'];
+        return `Naming Inspiration - Consonant Cluster Strength:
+Examples: ${examples.join(', ')}
+Pattern: Strong opening consonant clusters (kr, th, br, v, gr) + short vowels + firm endings (-on, -or, -ar, -en)
+Create names with this bold, decisive sound for powerful or martial characters.`;
+    }
+
+    private flowingVowelStrategy(): string {
+        const examples = ['Kaela', 'Aeris', 'Liora', 'Daean', 'Eirian'];
+        return `Naming Inspiration - Flowing Vowel Harmony:
+Examples: ${examples.join(', ')}
+Pattern: Multiple vowels in sequence (ae, ea, ia, io) + soft consonants between
+Design names with this ethereal, graceful quality that feels light and otherworldly.`;
+    }
+
+    private genreFantasyStrategy(): string {
+        const examples = ['Veyra', 'Kaeth', 'Lorian', 'Sythis', 'Drenai'];
+        return `Naming Inspiration - Fantasy Adventure Style:
+Examples: ${examples.join(', ')}
+Pattern: Unique but pronounceable, 2-3 syllables, mix familiar and exotic sounds
+Invent names that feel fantasy-appropriate without being clichéd or overused.`;
+    }
+
+    private genreSciFiStrategy(): string {
+        const examples = ['Xynth', 'Kael-7', 'Vexa', 'Rion', 'Zyra'];
+        return `Naming Inspiration - Science Fiction Style:
+Examples: ${examples.join(', ')}
+Pattern: Tech-influenced sounds (x, z, k), optional numbers/hyphens, short and punchy
+Generate names that feel futuristic, alien, or technologically advanced.`;
+    }
+
+    private syllablePatternStrategy(): string {
+        const examples = ['Karador', 'Selina', 'Morath', 'Thevara', 'Balinor'];
+        return `Naming Inspiration - Syllable Structure (CVC-V-CVC):
+Examples: ${examples.join(', ')}
+Pattern: Consonant-Vowel-Consonant / Vowel / Consonant-Vowel-Consonant
+Build names using this rhythmic pattern for memorable, well-balanced sound.`;
+    }
+
+    private culturalBlendStrategy(): string {
+        const examples = ['Kaelthas', 'Amira', 'Hiraeth', 'Solenne', 'Ravian'];
+        return `Naming Inspiration - Cross-Cultural Fusion:
+Examples: ${examples.join(', ')}
+Pattern: Combine roots from different linguistic traditions (Celtic+Greek, Arabic+Latin, Welsh concepts)
+Blend cultural elements to create unique names that resonate with multiple traditions.`;
+    }
+
+    private uncommonRealNamesStrategy(): string {
+        const examples = ['Soren', 'Cassia', 'Leif', 'Thalia', 'Evren'];
+        return `Naming Inspiration - Uncommon Real Names:
+Examples: ${examples.join(', ')}
+Pattern: Lesser-known names from various cultures with clear pronunciation
+Use authentic but underutilized names for grounded, realistic characters.`;
     }
     
     /**

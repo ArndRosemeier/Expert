@@ -1877,7 +1877,7 @@ You are an assistant that splits a user-provided "adventure prompt" into:
         text: `
 You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, world-building, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.
 
-IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INSTRUCTIONS CAREFULLY. Do NOT copy those example names directly. Instead, create your own original names that fit your story's specific genre, culture, and tone. The examples are only there to show you the STYLE of avoiding overused clichéd names.
+IMPORTANT: If you see naming guidance with examples and patterns, USE THOSE AS CREATIVE INSPIRATION. The examples show the STYLE and QUALITY of names to aim for - create your own variations that fit your specific story's genre, culture, and tone. Match the phonetic patterns and creativity level of the examples while making names that feel authentic to your narrative.
         `.trim(),
         placeholders: [],
         description: 'System prompt for refining RPG Lite prefix context with more details.'
@@ -1887,7 +1887,7 @@ IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INST
         text: `
 You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take prefix context (background/setting information for a story) and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting details, historical background, or world-building aspects to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.
 
-IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INSTRUCTIONS CAREFULLY. Do NOT copy those example names directly. Instead, create your own original names that fit your story's specific genre, culture, and tone. The examples are only there to show you the STYLE of avoiding overused clichéd names.
+IMPORTANT: If you see naming guidance with examples and patterns, USE THOSE AS CREATIVE INSPIRATION. The examples show the STYLE and QUALITY of names to aim for - create your own variations that fit your specific story's genre, culture, and tone. Match the phonetic patterns and creativity level of the examples while making names that feel authentic to your narrative.
         `.trim(),
         placeholders: [],
         description: 'System prompt for creating variations of RPG Lite prefix context.'
@@ -1911,7 +1911,7 @@ Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adve
         text: `
 You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and expand it with more specific narrative details, vivid literary descriptions, and concrete storytelling examples while preserving the core concept and tone. Focus on narrative elements, character depth, plot hooks, atmosphere, and prose style. This is for text-based storytelling, not video games or visual media. Make it richer and more immersive for written narrative.
 
-IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INSTRUCTIONS CAREFULLY. Do NOT copy those example names directly. Instead, create your own original names that fit your story's specific genre, culture, and tone. The examples are only there to show you the STYLE of avoiding overused clichéd names.
+IMPORTANT: If you see naming guidance with examples and patterns, USE THOSE AS CREATIVE INSPIRATION. The examples show the STYLE and QUALITY of names to aim for - create your own variations that fit your specific story's genre, culture, and tone. Match the phonetic patterns and creativity level of the examples while making names that feel authentic to your narrative.
         `.trim(),
         placeholders: [],
         description: 'System prompt for refining RPG Lite adventure prompt with more details.'
@@ -1921,7 +1921,7 @@ IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INST
         text: `
 You are a creative writing assistant for TEXT-BASED narrative adventures. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific narrative elements like setting, characters, plot hooks, or storytelling style to create a fresh take on the concept. This is for text-based storytelling, not video games or visual media. Focus on literary and narrative elements.
 
-IMPORTANT: If you see "Name Creation Guidance" with example names, READ THE INSTRUCTIONS CAREFULLY. Do NOT copy those example names directly. Instead, create your own original names that fit your story's specific genre, culture, and tone. The examples are only there to show you the STYLE of avoiding overused clichéd names.
+IMPORTANT: If you see naming guidance with examples and patterns, USE THOSE AS CREATIVE INSPIRATION. The examples show the STYLE and QUALITY of names to aim for - create your own variations that fit your specific story's genre, culture, and tone. Match the phonetic patterns and creativity level of the examples while making names that feel authentic to your narrative.
         `.trim(),
         placeholders: [],
         description: 'System prompt for creating variations of RPG Lite adventure prompt.'
