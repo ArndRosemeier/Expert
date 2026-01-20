@@ -84,7 +84,8 @@ export class RPGLiteView {
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
-  
+  private promptHistory: string[] = [];
+
   private defaultNarratorPurpose: RPGLiteModelPurpose = 'creator';
 
   constructor(container: HTMLElement) {
@@ -862,7 +863,13 @@ export class RPGLiteView {
             <div class="rpg-lite-editor">
               <div class="rpg-lite-section-title">Adventure Prompt</div>
               <textarea id="rpg-lite-adventure-prompt" class="rpg-lite-textarea" placeholder="Describe your adventure, rules, and narrative style..."></textarea>
-              <div style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
+              <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-top:0.5rem;">
+                <button id="rpg-lite-prompt-more-details" class="rpg-lite-btn rpg-lite-btn-sm" title="Add more details to the prompt">More Details</button>
+                <button id="rpg-lite-prompt-variation" class="rpg-lite-btn rpg-lite-btn-sm" title="Generate a variation of the prompt">Variation</button>
+                <button id="rpg-lite-prompt-back" class="rpg-lite-btn rpg-lite-btn-sm" title="Restore previous version" disabled>Back to Last Version</button>
+                <span id="rpg-lite-prompt-status" style="opacity:.7; font-size:0.85rem;"></span>
+              </div>
+              <div style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; margin-top:1rem;">
                 <label style="display:flex; gap:.5rem; align-items:center;">
                   <span style="opacity:.85;">Narrator</span>
                   <select id="rpg-lite-narrator-purpose" class="rpg-lite-select">
@@ -894,13 +901,97 @@ export class RPGLiteView {
       </div>
     `;
 
+    const promptEl = this.container.querySelector('#rpg-lite-adventure-prompt') as HTMLTextAreaElement;
+    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prompt-more-details') as HTMLButtonElement;
+    const variationBtn = this.container.querySelector('#rpg-lite-prompt-variation') as HTMLButtonElement;
+    const backBtn = this.container.querySelector('#rpg-lite-prompt-back') as HTMLButtonElement;
+
     (this.container.querySelector('#rpg-lite-back') as HTMLButtonElement).addEventListener('click', () => {
+      this.promptHistory = [];
       this.renderSelector();
     });
 
     (this.container.querySelector('#rpg-lite-analyze') as HTMLButtonElement).addEventListener('click', () => {
       void this.createSessionFromPrompt(isTemplate);
     });
+
+    moreDetailsBtn.addEventListener('click', () => {
+      void this.refineAdventurePrompt('more-details');
+    });
+
+    variationBtn.addEventListener('click', () => {
+      void this.refineAdventurePrompt('variation');
+    });
+
+    backBtn.addEventListener('click', () => {
+      if (this.promptHistory.length > 0) {
+        const previousPrompt = this.promptHistory.pop();
+        if (previousPrompt !== undefined) {
+          promptEl.value = previousPrompt;
+          backBtn.disabled = this.promptHistory.length === 0;
+        }
+      }
+    });
+  }
+
+  private async refineAdventurePrompt(mode: 'more-details' | 'variation'): Promise<void> {
+    const promptEl = this.container.querySelector('#rpg-lite-adventure-prompt') as HTMLTextAreaElement;
+    const statusEl = this.container.querySelector('#rpg-lite-prompt-status') as HTMLElement;
+    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prompt-more-details') as HTMLButtonElement;
+    const variationBtn = this.container.querySelector('#rpg-lite-prompt-variation') as HTMLButtonElement;
+    const backBtn = this.container.querySelector('#rpg-lite-prompt-back') as HTMLButtonElement;
+
+    const currentPrompt = promptEl.value.trim();
+    if (currentPrompt.length === 0) {
+      alert('Please enter an adventure prompt first.');
+      return;
+    }
+
+    // Save current prompt to history
+    this.promptHistory.push(currentPrompt);
+    backBtn.disabled = false;
+
+    moreDetailsBtn.disabled = true;
+    variationBtn.disabled = true;
+    statusEl.textContent = mode === 'more-details' ? 'Adding details...' : 'Generating variation...';
+
+    try {
+      const systemPrompt = mode === 'more-details'
+        ? 'You are a creative writing assistant. Your task is to take an adventure prompt and expand it with more specific details, vivid descriptions, and concrete examples while preserving the core concept and tone. Make it richer and more immersive.'
+        : 'You are a creative writing assistant. Your task is to take an adventure prompt and create an interesting variation of it. Keep the general genre and tone but change specific elements like setting, characters, or plot hooks to create a fresh take on the concept.';
+
+      const userPrompt = `Original adventure prompt:\n\n${currentPrompt}\n\nProvide ${mode === 'more-details' ? 'an expanded version with more details' : 'a creative variation'}. Return ONLY the refined prompt text, no explanation or meta-commentary.`;
+
+      const messages: OpenRouterMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ];
+
+      let response = '';
+      await this.client.streamingChat('creator', messages, {
+        onStart: () => {},
+        onChunk: (chunk: string) => {
+          response += chunk;
+        },
+        onComplete: () => {},
+        onError: () => {}
+      });
+
+      promptEl.value = response.trim();
+      statusEl.textContent = '';
+    } catch (error) {
+      console.error('Failed to refine prompt:', error);
+      statusEl.textContent = 'Error refining prompt';
+      alert('Failed to refine prompt: ' + (error instanceof Error ? error.message : String(error)));
+      // Restore from history on error
+      if (this.promptHistory.length > 0) {
+        this.promptHistory.pop();
+        backBtn.disabled = this.promptHistory.length === 0;
+      }
+    } finally {
+      moreDetailsBtn.disabled = false;
+      variationBtn.disabled = false;
+    }
   }
 
   private async createSessionFromPrompt(isTemplate: boolean): Promise<void> {
