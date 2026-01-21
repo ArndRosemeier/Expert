@@ -486,6 +486,43 @@
   opacity: 0.95;
 }
 
+/* XML Folding Styles */
+.rpg-lite-xml-foldable {
+  display: inline;
+}
+
+.rpg-lite-xml-fold-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.rpg-lite-xml-fold-toggle:hover {
+  opacity: 0.8;
+}
+
+.rpg-lite-xml-fold-icon {
+  display: inline-block;
+  width: 0.8em;
+  font-size: 0.75em;
+  color: #90ee90;
+  transition: transform 0.15s ease;
+}
+
+.rpg-lite-xml-fold-content {
+  display: inline;
+}
+
+.rpg-lite-xml-foldable.xml-folded .rpg-lite-xml-fold-content {
+  display: none;
+}
+
+.rpg-lite-xml-foldable.xml-folded .rpg-lite-highlight-xml-tag:last-child {
+  display: none;
+}
+
 .rpg-lite-highlight-dice {
   color: #ff9999;
   font-weight: 600;

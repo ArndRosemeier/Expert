@@ -1639,12 +1639,26 @@ export class RPGLiteView {
 
     let result = escapeHtml(content);
 
-    // Highlight complete XML elements: <tag>content</tag> or <tag attr="value">content</tag>
+    // Highlight complete XML elements with folding capability
     // Match opening tag, content, and closing tag as a unit
     // Constrain to not cross paragraph boundaries to prevent runaway highlighting
+    let foldId = 0;
     result = result.replace(
       /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)((?:(?!\n\n)[\s\S])*?)(&lt;\/\2&gt;)/g,
-      '<span class="rpg-lite-highlight-xml">$1$3$4</span>'
+      (_match, openTag, tagName, content, closeTag) => {
+        const id = `xml-fold-${foldId++}`;
+        const isHidden = tagName.toLowerCase() === 'hidden';
+        const foldedClass = isHidden ? ' xml-folded' : '';
+        
+        return `<span class="rpg-lite-xml-foldable${foldedClass}" data-fold-id="${id}">` +
+          `<span class="rpg-lite-xml-fold-toggle" data-toggle-id="${id}">` +
+          `<span class="rpg-lite-xml-fold-icon">${isHidden ? '▶' : '▼'}</span>` +
+          `<span class="rpg-lite-highlight-xml-tag">${openTag}</span>` +
+          `</span>` +
+          `<span class="rpg-lite-xml-fold-content" data-content-id="${id}">${content}</span>` +
+          `<span class="rpg-lite-highlight-xml-tag">${closeTag}</span>` +
+          `</span>`;
+      }
     );
 
     // Highlight self-closing XML tags: <tag />
@@ -1761,6 +1775,8 @@ export class RPGLiteView {
     // Apply syntax highlighting for assistant messages (but not during streaming)
     if (msg.role === 'assistant' && msg.id !== this.streamingMessageId) {
       contentEl.innerHTML = this.highlightContent(msg.content);
+      // Add click handlers for XML folding
+      this.attachXmlFoldHandlers(contentEl);
     } else {
       contentEl.textContent = msg.content;
     }
@@ -1782,6 +1798,26 @@ export class RPGLiteView {
     }
 
     return el;
+  }
+
+  private attachXmlFoldHandlers(container: HTMLElement): void {
+    const toggles = container.querySelectorAll('.rpg-lite-xml-fold-toggle');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const foldId = (toggle as HTMLElement).dataset['toggleId'];
+        if (!foldId) return;
+        
+        const foldable = container.querySelector(`[data-fold-id="${foldId}"]`) as HTMLElement;
+        const icon = toggle.querySelector('.rpg-lite-xml-fold-icon');
+        
+        if (foldable && icon) {
+          foldable.classList.toggle('xml-folded');
+          const isFolded = foldable.classList.contains('xml-folded');
+          icon.textContent = isFolded ? '▶' : '▼';
+        }
+      });
+    });
   }
 
   private addToClipboard(content: string): void {
