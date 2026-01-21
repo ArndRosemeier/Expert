@@ -986,7 +986,6 @@ export class OpenRouterClient {
       const apiKey = await this.getApiKeyFromStorage();
       if (!apiKey) {
         const error = new Error('OpenRouter API key not configured. Please set it in the settings.');
-        callbacks.onError(error);
         throw error;
       }
 
@@ -1123,13 +1122,11 @@ export class OpenRouterClient {
         const errorText = await response.text();
         console.error('❌ OpenRouter API error response:', errorText);
         const error = new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
-        callbacks.onError?.(error);
         throw error;
       }
 
       if (!response.body) {
         const error = new Error('Response body is null');
-        callbacks.onError?.(error);
         throw error;
       }
 
@@ -1250,7 +1247,6 @@ export class OpenRouterClient {
         if (wasContentFiltered) {
           const error = new Error(`Content filtering detected: ${contentFilterReason}. The AI model refused to generate content due to safety restrictions. Try using a different model or rephrasing your content.`);
           error.name = 'ContentFilterError';
-          callbacks.onError(error);
           throw error;
         }
         
@@ -1258,7 +1254,6 @@ export class OpenRouterClient {
         if (fullContent.length === 0) {
           const error = new Error(`Empty response received from ${model}. This often indicates content filtering by the AI safety system. The model may have detected content that violates its usage policies. Try using a different model (like Mistral Large for best unrestricted quality) or rephrasing your content to be less explicit.`);
           error.name = 'EmptyResponseError';
-          callbacks.onError(error);
           throw error;
         }
         
@@ -1377,15 +1372,7 @@ export class OpenRouterClient {
         }
       }
       
-      // Show detailed error modal for streaming errors
-      if (error instanceof Error && error.name !== 'AbortError') {
-        const errorService = GenerationErrorService.getInstance();
-        const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
-        void errorService.showStreamingError(error, purpose, modelForError);
-      }
-      
       const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
-      callbacks.onError(actualError);
       throw actualError;
     } finally {
       this.activeOperations.delete(opId);
