@@ -1641,10 +1641,10 @@ export class RPGLiteView {
 
     // Highlight complete XML elements with folding capability
     // Match opening tag, content, and closing tag as a unit
-    // Constrain to not cross paragraph boundaries to prevent runaway highlighting
+    // Use non-greedy matching to prevent runaway highlighting
     let foldId = 0;
     result = result.replace(
-      /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)((?:(?!\n\n)[\s\S])*?)(&lt;\/\2&gt;)/g,
+      /(&lt;([A-Za-z_][\w:\-\.]*)(?:\s+[^&]*?)?&gt;)([\s\S]*?)(&lt;\/\2&gt;)/g,
       (_match, openTag, tagName, content, closeTag) => {
         const id = `xml-fold-${foldId++}`;
         const isHidden = tagName.toLowerCase() === 'hidden';
