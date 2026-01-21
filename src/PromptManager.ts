@@ -1859,6 +1859,7 @@ You are an assistant that splits a user-provided "adventure prompt" into:
   - rules of play ("never act for the main character", "no multiple choice", "ask clarifying questions only when needed", safety constraints, narrator style/tone, formatting requirements)
   - perspective/POV and voice rules
   - any permanent constraints that should apply throughout the entire adventure
+  - ALWAYS include: "You can use <hidden>...</hidden> tags to maintain internal notes, track important details, plan future events, or record information that you need to remember. The player cannot see content within <hidden> tags, so use them freely for your planning and consistency tracking."
 - Put in **prefixContext**:
   - the actual adventure seed, setting, premise, characters, factions, world info, current situation
   - anything that is "world/story content" rather than "how to narrate"
