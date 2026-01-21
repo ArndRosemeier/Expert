@@ -1653,7 +1653,8 @@ export class RPGLiteView {
         return `<span class="rpg-lite-xml-foldable${foldedClass}" data-fold-id="${id}">` +
           `<span class="rpg-lite-xml-fold-toggle" data-toggle-id="${id}">` +
           `<span class="rpg-lite-xml-fold-icon">${isHidden ? '▶' : '▼'}</span>` +
-          `<span class="rpg-lite-highlight-xml-tag">${openTag}</span>` +
+          `<span class="rpg-lite-xml-fold-tagname">${tagName}</span>` +
+          `<span class="rpg-lite-highlight-xml-tag rpg-lite-xml-fold-open-tag">${openTag}</span>` +
           `</span>` +
           `<span class="rpg-lite-xml-fold-content" data-content-id="${id}">${content}</span>` +
           `<span class="rpg-lite-highlight-xml-tag">${closeTag}</span>` +
