@@ -474,7 +474,7 @@ class PromptExpansionService {
         // Noise seed for creative naming inspiration
         this.registerGlobalPlaceholder('noise_names', () => ({
             value: this.generateNoiseNames(),
-            description: 'Random names for creative naming inspiration'
+            description: 'Random naming inspiration patterns to help avoid common/clichéd names. Use these as creative springboards for unique character names - avoid using numbers, hyphens, or apostrophes in actual names.'
         }));
         
         // Context-dependent placeholders
@@ -843,11 +843,11 @@ Invent names that feel fantasy-appropriate without being clichéd or overused.`;
     }
 
     private genreSciFiStrategy(): string {
-        const examples = ['Xynth', 'Kael-7', 'Vexa', 'Rion', 'Zyra'];
+        const examples = ['Xynth', 'Kael', 'Vexa', 'Rion', 'Zyra'];
         return `Naming Inspiration - Science Fiction Style:
 Examples: ${examples.join(', ')}
-Pattern: Tech-influenced sounds (x, z, k), optional numbers/hyphens, short and punchy
-Generate names that feel futuristic, alien, or technologically advanced.`;
+Pattern: Tech-influenced sounds (x, z, k), short and punchy (1-2 syllables), clean pronunciation
+Generate names that feel futuristic or alien while remaining pronounceable as actual names.`;
     }
 
     private syllablePatternStrategy(): string {
@@ -859,11 +859,11 @@ Build names using this rhythmic pattern for memorable, well-balanced sound.`;
     }
 
     private culturalBlendStrategy(): string {
-        const examples = ['Kaelthas', 'Amira', 'Hiraeth', 'Solenne', 'Ravian'];
+        const examples = ['Amira', 'Ravian', 'Solenne', 'Maren', 'Lysander'];
         return `Naming Inspiration - Cross-Cultural Fusion:
 Examples: ${examples.join(', ')}
-Pattern: Combine roots from different linguistic traditions (Celtic+Greek, Arabic+Latin, Welsh concepts)
-Blend cultural elements to create unique names that resonate with multiple traditions.`;
+Pattern: Blend roots from different cultures (2-3 syllables), natural flow, easy pronunciation
+Create names that feel international yet cohesive, avoiding overly complex constructions.`;
     }
 
     private uncommonRealNamesStrategy(): string {
