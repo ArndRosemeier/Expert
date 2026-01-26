@@ -12,7 +12,6 @@ import { ModelSelector } from '../../ModelSelector';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 // EventEmitter import removed - no longer used
-import { AppKeyService } from '../../keys/AppKeyService';
 import { VersionService } from '../../VersionService';
 import { DEFAULT_MAX_ITERATIONS, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS } from '../../constants';
 import { TaskModelEditor } from '../components/TaskModelEditor';
@@ -133,18 +132,10 @@ export class SettingsModal extends BaseModal {
             content: 'Settings'
         });
 
-        const keyInfo = createElement('div', {
-            classes: ['key-info'],
-            content: 'Loading key info...'
-        });
-
         const versionInfo = createElement('div', {
             classes: ['version-info'],
             content: `Version: ${VersionService.getFullVersion()}`
         });
-
-        // Load key information asynchronously
-        void this.loadKeyInfo(keyInfo);
 
         const closeButton = createElement('button', {
             classes: ['close-button'],
@@ -156,7 +147,6 @@ export class SettingsModal extends BaseModal {
         });
 
         titleContainer.appendChild(title);
-        titleContainer.appendChild(keyInfo);
         titleContainer.appendChild(versionInfo);
         header.appendChild(titleContainer);
         header.appendChild(closeButton);
@@ -205,58 +195,6 @@ export class SettingsModal extends BaseModal {
         body.appendChild(debugSection);
 
         return body;
-    }
-
-    /**
-     * Loads and displays key information
-     */
-    private async loadKeyInfo(keyInfoElement: HTMLElement): Promise<void> {
-        try {
-            const appKeyService = AppKeyService.getInstance();
-            const keyInfo = await appKeyService.getStoredKeyInfo();
-            
-            if (keyInfo.hasKey && keyInfo.expirationDate) {
-                const now = new Date();
-                const isExpired = keyInfo.expirationDate <= now;
-                const daysUntilExpiry = Math.ceil((keyInfo.expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                
-                let statusIcon = '🔑';
-                let statusText = '';
-                let statusClass = 'key-valid';
-                
-                if (isExpired) {
-                    statusIcon = '⚠️';
-                    statusText = 'Expired';
-                    statusClass = 'key-expired';
-                } else if (daysUntilExpiry <= 7) {
-                    statusIcon = '⏰';
-                    statusText = `Expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`;
-                    statusClass = 'key-expiring';
-                } else {
-                    statusText = `Valid (${daysUntilExpiry} days remaining)`;
-                }
-                
-                keyInfoElement.innerHTML = `
-                    <span class="key-status ${statusClass}">
-                        ${statusIcon} ${statusText}
-                        ${keyInfo.customString ? ` • "${keyInfo.customString}"` : ''}
-                    </span>
-                `;
-            } else {
-                keyInfoElement.innerHTML = `
-                    <span class="key-status key-missing">
-                        ⚠️ No valid key found
-                    </span>
-                `;
-            }
-        } catch (error) {
-            console.error('Failed to load key info:', error);
-            keyInfoElement.innerHTML = `
-                <span class="key-status key-error">
-                    ❌ Error loading key info
-                </span>
-            `;
-        }
     }
 
     /**

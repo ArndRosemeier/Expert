@@ -1,4 +1,3 @@
-import { AppKeyService } from './keys/AppKeyService.js';
 import { VersionService } from './VersionService.js';
 import './ui/enhanced-layout.css';
 
@@ -33,27 +32,12 @@ if (urlParams.get('clean') === 'true') {
 
 document.addEventListener('DOMContentLoaded', () => {
     void (async () => {
-        // Check for valid application key before starting the app
-    
-        
-        const appKeyService = AppKeyService.getInstance();
-        
         try {
-            // Check if we have a valid key stored in IndexedDB at keyValue/expert_app_key
-            const hasValidKey = await appKeyService.checkAppAccess();
-            
-            if (hasValidKey) {
-                // Valid key found - start the app normally
-    
-                await startApplication();
-            } else {
-                // No valid key - AppKeyService will handle showing the validation modal
-                // The modal will call startApplication() once a valid key is provided
-                console.log('⏳ Waiting for valid key validation...');
-            }
+            // Start the application directly without key validation
+            await startApplication();
         } catch (error) {
-            console.error('❌ Error during key validation:', error);
-            alert('Failed to validate application key. Please refresh the page and try again.');
+            console.error('❌ Error during application startup:', error);
+            alert('Failed to start the application. Please refresh the page and try again.');
         }
     })();
 });
@@ -136,7 +120,7 @@ async function startApplication(): Promise<void> {
         if (!LocalStorageBlocker.getConfig()) {
             // Only initialize if not already initialized
             LocalStorageBlocker.initialize({
-                allowedKeys: ['expert_generated_keys'], // Only allow app keys for security
+                allowedKeys: [], // No localStorage usage allowed, use IndexedDB instead
                 verbose: true,
                 logAttempts: true
             });
@@ -320,5 +304,5 @@ async function silentVersionUpdate(settingsManager: any, profileName: string, pr
     }
 }
 
-// Expose startApplication to global scope so AppKeyService can call it
+// Expose startApplication to global scope for debugging purposes
 (window as any).startApplication = startApplication; 
