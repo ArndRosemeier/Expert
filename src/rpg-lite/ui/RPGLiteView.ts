@@ -2078,40 +2078,54 @@ export class RPGLiteView {
     }
     if (userIdx === -1) {
       // Opening message retry: no preceding user message exists.
-      // Remove all messages after the one we're retrying
-      this.currentSession.conversation = this.currentSession.conversation.slice(0, idx);
+      // Remove all messages after the one we're retrying, keep the message to be updated
+      this.currentSession.conversation = this.currentSession.conversation.slice(0, idx + 1);
+      // Reset the message content to prepare for new generation
+      assistantMsg.content = '';
       await this.saveSession();
       this.renderConversation();
-      await this.generateOpeningMessage();
+      await this.generateOpeningMessage(assistantMsg);
       return;
     }
 
-    // Remove all messages after the one we're retrying, but keep the message itself
-    this.currentSession.conversation = this.currentSession.conversation.slice(0, idx);
+    // Remove all messages after the one we're retrying, keep the message to be updated
+    this.currentSession.conversation = this.currentSession.conversation.slice(0, idx + 1);
+    // Reset the message content to prepare for new generation
+    assistantMsg.content = '';
     await this.saveSession();
     this.renderConversation();
 
-    await this.generateAssistantReply();
+    await this.generateAssistantReply(assistantMsg);
   }
 
-  private async generateOpeningMessage(): Promise<void> {
+  private async generateOpeningMessage(existingMessage?: RPGLiteChatMessage): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     if (this.isStreaming) return;
 
     const session = this.currentSession;
-    const assistantMsg: RPGLiteChatMessage = {
-      id: newId('rpg_lite_msg'),
-      role: 'assistant',
-      content: '',
-      createdAt: now()
-    };
-    session.conversation.push(assistantMsg);
+    let assistantMsg: RPGLiteChatMessage;
+    
+    if (existingMessage) {
+      // Reuse existing message (for retry)
+      assistantMsg = existingMessage;
+      assistantMsg.content = '';
+    } else {
+      // Create new message
+      assistantMsg = {
+        id: newId('rpg_lite_msg'),
+        role: 'assistant',
+        content: '',
+        createdAt: now()
+      };
+      session.conversation.push(assistantMsg);
+    }
+    
     await this.saveSession();
     
     // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
     // Just append the new message element directly.
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
-    if (messagesEl) {
+    if (messagesEl && !existingMessage) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
       // Scroll to the new message ONCE before streaming starts
       // This ensures it's visible so the browser will paint incremental updates
@@ -2264,24 +2278,34 @@ export class RPGLiteView {
     }, opId);
   }
 
-  private async generateAssistantReply(): Promise<void> {
+  private async generateAssistantReply(existingMessage?: RPGLiteChatMessage): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     if (this.isStreaming) return;
 
     const session = this.currentSession;
-    const assistantMsg: RPGLiteChatMessage = {
-      id: newId('rpg_lite_msg'),
-      role: 'assistant',
-      content: '',
-      createdAt: now()
-    };
-    session.conversation.push(assistantMsg);
+    let assistantMsg: RPGLiteChatMessage;
+    
+    if (existingMessage) {
+      // Reuse existing message (for retry)
+      assistantMsg = existingMessage;
+      assistantMsg.content = '';
+    } else {
+      // Create new message
+      assistantMsg = {
+        id: newId('rpg_lite_msg'),
+        role: 'assistant',
+        content: '',
+        createdAt: now()
+      };
+      session.conversation.push(assistantMsg);
+    }
+    
     await this.saveSession();
     
     // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
     // Just append the new message element directly.
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
-    if (messagesEl) {
+    if (messagesEl && !existingMessage) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
       // Scroll to the new message ONCE before streaming starts
       // This ensures it's visible so the browser will paint incremental updates
