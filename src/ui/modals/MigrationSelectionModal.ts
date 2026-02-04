@@ -142,6 +142,41 @@ export class MigrationSelectionModal extends BaseModal {
 
         body.appendChild(infoSection);
 
+        // Add progress section (hidden by default)
+        const progressSection = createElement('div', {
+            classes: ['migration-progress-section'],
+            attributes: { id: 'migration-progress' }
+        });
+        progressSection.style.display = 'none';
+
+        const progressTitle = createElement('h3', {
+            content: 'Migration in Progress...',
+            classes: ['progress-title']
+        });
+
+        const progressStatus = createElement('div', {
+            classes: ['progress-status'],
+            attributes: { id: 'migration-status' }
+        });
+
+        const progressBar = createElement('div', {
+            classes: ['progress-bar-container']
+        });
+
+        const progressBarFill = createElement('div', {
+            classes: ['progress-bar-fill'],
+            attributes: { id: 'migration-progress-bar' }
+        });
+        progressBarFill.style.width = '0%';
+
+        progressBar.appendChild(progressBarFill);
+
+        progressSection.appendChild(progressTitle);
+        progressSection.appendChild(progressStatus);
+        progressSection.appendChild(progressBar);
+
+        body.appendChild(progressSection);
+
         return body;
     }
 
@@ -246,6 +281,15 @@ export class MigrationSelectionModal extends BaseModal {
                 this.buttonStateManager.setLoading(migrateButton, 'Migrating...');
             }
 
+            // Hide info section and show progress section
+            const infoSection = document.querySelector('#migration-selection-modal .info-section') as HTMLElement;
+            const progressSection = document.querySelector('#migration-progress') as HTMLElement;
+            const buttonContainer = document.querySelector('#migration-selection-modal .button-container') as HTMLElement;
+            
+            if (infoSection) infoSection.style.display = 'none';
+            if (progressSection) progressSection.style.display = 'block';
+            if (buttonContainer) buttonContainer.style.display = 'none';
+
             // Create SettingsService instance - use a default ModelSelector if none provided
             if (!this.modelSelector) {
                 throw new Error('ModelSelector is required for smart migration');
@@ -278,10 +322,21 @@ export class MigrationSelectionModal extends BaseModal {
             const versionMismatchInfo = this.settingsManager.getVersionMismatchInfo();
             console.log('🔄 Found', versionMismatchInfo.length, 'profiles needing migration:', versionMismatchInfo.map(p => p.profileName));
 
+            const statusEl = document.querySelector('#migration-status') as HTMLElement;
+            const progressBarEl = document.querySelector('#migration-progress-bar') as HTMLElement;
+            const totalProfiles = versionMismatchInfo.length;
+
             // Apply smart migration to all profiles with version mismatches
             let allSuccessful = true;
+            let completedCount = 0;
+
             for (const profileInfo of versionMismatchInfo) {
                 console.log('🔄 Migrating profile:', profileInfo.profileName);
+                
+                // Update status
+                if (statusEl) {
+                    statusEl.textContent = `Migrating profile: ${profileInfo.profileName} (${completedCount + 1}/${totalProfiles})`;
+                }
                 
                 const profileAnalysis = settingsService.analyzeMigration(profileInfo.profileName);
                 if (!profileAnalysis) {
@@ -302,6 +357,13 @@ export class MigrationSelectionModal extends BaseModal {
                 } else {
                     console.log('✅ Successfully migrated profile:', profileInfo.profileName);
                 }
+
+                // Update progress bar
+                completedCount++;
+                const progress = (completedCount / totalProfiles) * 100;
+                if (progressBarEl) {
+                    progressBarEl.style.width = `${progress}%`;
+                }
             }
 
             if (!allSuccessful) {
@@ -310,9 +372,17 @@ export class MigrationSelectionModal extends BaseModal {
 
             console.log('✅ All profiles migrated successfully');
             
+            // Show completion status
+            if (statusEl) {
+                statusEl.textContent = `✅ Migration complete! Migrated ${totalProfiles} profile${totalProfiles === 1 ? '' : 's'} successfully.`;
+            }
+            
             // Clear version mismatch flag
             this.settingsManager.clearVersionMismatchFlag();
             console.log('✅ Version mismatch flag cleared');
+
+            // Wait a moment to show the completion status
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
             // Show success message
             alert('Smart migration completed successfully! Your custom settings have been preserved while system defaults have been updated.');
@@ -328,6 +398,15 @@ export class MigrationSelectionModal extends BaseModal {
         } catch (error) {
             console.error('Failed to perform smart migration:', error);
             alert('Smart migration failed: ' + (error instanceof Error ? error.message : 'Unknown error') + '\n\nPlease try "Reset to Defaults" instead.');
+            
+            // Restore UI to initial state
+            const infoSection = document.querySelector('#migration-selection-modal .info-section') as HTMLElement;
+            const progressSection = document.querySelector('#migration-progress') as HTMLElement;
+            const buttonContainer = document.querySelector('#migration-selection-modal .button-container') as HTMLElement;
+            
+            if (infoSection) infoSection.style.display = 'block';
+            if (progressSection) progressSection.style.display = 'none';
+            if (buttonContainer) buttonContainer.style.display = 'flex';
             
             // Re-enable button
             const migrateButton = document.querySelector('#migration-selection-modal .migrate-button') as HTMLButtonElement;
@@ -439,6 +518,49 @@ export class MigrationSelectionModal extends BaseModal {
                 .reset-button:disabled {
                     background: #6c757d;
                     cursor: not-allowed;
+                }
+
+                .migration-progress-section {
+                    background: #f0f8ff;
+                    padding: 30px;
+                    border-radius: 8px;
+                    border-left: 4px solid #2196F3;
+                    text-align: center;
+                }
+
+                .progress-title {
+                    margin: 0 0 20px 0;
+                    color: #1976D2;
+                    font-size: 18px;
+                }
+
+                .progress-status {
+                    margin: 0 0 20px 0;
+                    color: #333;
+                    font-size: 14px;
+                    min-height: 20px;
+                }
+
+                .progress-bar-container {
+                    width: 100%;
+                    height: 30px;
+                    background: #e0e0e0;
+                    border-radius: 15px;
+                    overflow: hidden;
+                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .progress-bar-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, #2196F3 0%, #1976D2 100%);
+                    transition: width 0.3s ease;
+                    border-radius: 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 12px;
                 }
 
                 @media (max-width: 600px) {
