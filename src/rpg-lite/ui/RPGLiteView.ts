@@ -2048,7 +2048,7 @@ export class RPGLiteView {
       assistantMsg.versions = [{
         content: assistantMsg.content,
         createdAt: assistantMsg.createdAt,
-        generation: assistantMsg.generation
+        ...(assistantMsg.generation ? { generation: assistantMsg.generation } : {})
       }];
       assistantMsg.activeVersionIndex = 0;
     }
@@ -2058,7 +2058,7 @@ export class RPGLiteView {
     assistantMsg.versions[currentVersionIndex] = {
       content: assistantMsg.content,
       createdAt: assistantMsg.createdAt,
-      generation: assistantMsg.generation
+      ...(assistantMsg.generation ? { generation: assistantMsg.generation } : {})
     };
 
     let userIdx = -1;
@@ -2218,7 +2218,7 @@ export class RPGLiteView {
         assistantMsg.versions.push({
           content: assistantMsg.content,
           createdAt: now(),
-          generation: assistantMsg.generation
+          ...(assistantMsg.generation ? { generation: assistantMsg.generation } : {})
         });
         assistantMsg.activeVersionIndex = assistantMsg.versions.length - 1;
         
@@ -2383,7 +2383,7 @@ export class RPGLiteView {
         assistantMsg.versions.push({
           content: assistantMsg.content,
           createdAt: now(),
-          generation: assistantMsg.generation
+          ...(assistantMsg.generation ? { generation: assistantMsg.generation } : {})
         });
         assistantMsg.activeVersionIndex = assistantMsg.versions.length - 1;
         
