@@ -1753,10 +1753,20 @@ export class RPGLiteView {
       infoParts.push('✏️ edited');
     }
 
+    // Check if message has multiple versions
+    const hasMultipleVersions = msg.versions && msg.versions.length > 1;
+    const currentVersionIndex = msg.activeVersionIndex ?? 0;
+    const versionCount = msg.versions?.length ?? 1;
+    
     el.innerHTML = `
       <div class="rpg-lite-message-header">
         <div class="rpg-lite-message-role">${roleLabel}</div>
         <div class="rpg-lite-message-actions">
+          ${hasMultipleVersions ? `
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-action="prev-version" title="Previous version" ${currentVersionIndex === 0 ? 'disabled' : ''}>◀</button>
+            <span class="rpg-lite-version-indicator">${currentVersionIndex + 1}/${versionCount}</span>
+            <button class="rpg-lite-btn rpg-lite-btn-icon" data-action="next-version" title="Next version" ${currentVersionIndex === versionCount - 1 ? 'disabled' : ''}>▶</button>
+          ` : ''}
           <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry">Retry</button>` : ''}
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-icon" data-action="add-to-clipboard" title="Add to Clipboard">📋</button>` : ''}
@@ -1786,16 +1796,32 @@ export class RPGLiteView {
     (el.querySelector('[data-action="edit"]') as HTMLButtonElement).addEventListener('click', () => {
       this.startEditMessage(msg.id);
     });
+    
     const retryBtn = el.querySelector('[data-action="retry"]') as HTMLButtonElement | null;
     if (retryBtn) {
       retryBtn.addEventListener('click', () => {
         void this.retryFromAssistant(msg.id);
       });
     }
+    
     const addToClipboardBtn = el.querySelector('[data-action="add-to-clipboard"]') as HTMLButtonElement | null;
     if (addToClipboardBtn) {
       addToClipboardBtn.addEventListener('click', () => {
         this.addToClipboard(msg.content);
+      });
+    }
+    
+    const prevVersionBtn = el.querySelector('[data-action="prev-version"]') as HTMLButtonElement | null;
+    if (prevVersionBtn) {
+      prevVersionBtn.addEventListener('click', () => {
+        void this.switchToVersion(msg.id, -1);
+      });
+    }
+    
+    const nextVersionBtn = el.querySelector('[data-action="next-version"]') as HTMLButtonElement | null;
+    if (nextVersionBtn) {
+      nextVersionBtn.addEventListener('click', () => {
+        void this.switchToVersion(msg.id, 1);
       });
     }
 
@@ -1892,6 +1918,15 @@ export class RPGLiteView {
           cancelled = true;
           msg.content = textarea.value;
           msg.editedAt = now();
+          
+          // Also update the active version if versions exist
+          if (msg.versions && msg.versions.length > 0) {
+            const activeIndex = msg.activeVersionIndex ?? 0;
+            if (msg.versions[activeIndex]) {
+              msg.versions[activeIndex]!.content = textarea.value;
+            }
+          }
+          
           void this.saveSession().then(() => {
             this.renderConversation();
             void this.retryFromAssistant(nextMsg.id);
@@ -1919,6 +1954,15 @@ export class RPGLiteView {
         if (!cancelled && document.activeElement !== textarea) {
           msg.content = textarea.value;
           msg.editedAt = now();
+          
+          // Also update the active version if versions exist
+          if (msg.versions && msg.versions.length > 0) {
+            const activeIndex = msg.activeVersionIndex ?? 0;
+            if (msg.versions[activeIndex]) {
+              msg.versions[activeIndex]!.content = textarea.value;
+            }
+          }
+          
           void this.saveSession().then(() => this.renderConversation());
         }
       }, 150);
@@ -1962,6 +2006,31 @@ export class RPGLiteView {
     await this.generateAssistantReply();
   }
 
+  private async switchToVersion(messageId: string, direction: number): Promise<void> {
+    if (!this.currentSession) throw new Error('No current session.');
+    
+    const msg = this.currentSession.conversation.find((m) => m.id === messageId);
+    if (!msg) throw new Error(`Message not found: ${messageId}`);
+    if (!msg.versions || msg.versions.length <= 1) return;
+    
+    const currentIndex = msg.activeVersionIndex ?? 0;
+    const newIndex = currentIndex + direction;
+    
+    if (newIndex < 0 || newIndex >= msg.versions.length) return;
+    
+    // Switch to the new version
+    msg.activeVersionIndex = newIndex;
+    const version = msg.versions[newIndex];
+    if (!version) throw new Error(`Version not found at index ${newIndex}`);
+    
+    msg.content = version.content;
+    msg.createdAt = version.createdAt;
+    msg.generation = version.generation;
+    
+    await this.saveSession();
+    this.renderConversation();
+  }
+
   private async retryFromAssistant(assistantMessageId: string): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     this.abortStreamingIfActive();
@@ -1974,6 +2043,24 @@ export class RPGLiteView {
       throw new Error('Retry is only available for assistant messages.');
     }
 
+    // Initialize versions array if it doesn't exist (migration for old messages)
+    if (!assistantMsg.versions) {
+      assistantMsg.versions = [{
+        content: assistantMsg.content,
+        createdAt: assistantMsg.createdAt,
+        generation: assistantMsg.generation
+      }];
+      assistantMsg.activeVersionIndex = 0;
+    }
+
+    // Save current version to versions array before generating a new one
+    const currentVersionIndex = assistantMsg.activeVersionIndex ?? 0;
+    assistantMsg.versions[currentVersionIndex] = {
+      content: assistantMsg.content,
+      createdAt: assistantMsg.createdAt,
+      generation: assistantMsg.generation
+    };
+
     let userIdx = -1;
     for (let i = idx - 1; i >= 0; i--) {
       const m = this.currentSession.conversation[i];
@@ -1985,14 +2072,16 @@ export class RPGLiteView {
     }
     if (userIdx === -1) {
       // Opening message retry: no preceding user message exists.
-      this.currentSession.conversation = [];
+      // Remove all messages after the one we're retrying
+      this.currentSession.conversation = this.currentSession.conversation.slice(0, idx);
       await this.saveSession();
       this.renderConversation();
       await this.generateOpeningMessage();
       return;
     }
 
-    this.currentSession.conversation = this.currentSession.conversation.slice(0, userIdx + 1);
+    // Remove all messages after the one we're retrying, but keep the message itself
+    this.currentSession.conversation = this.currentSession.conversation.slice(0, idx);
     await this.saveSession();
     this.renderConversation();
 
@@ -2121,6 +2210,18 @@ export class RPGLiteView {
         if (meta) {
           assistantMsg.generation = meta;
         }
+        
+        // Add this response as a new version
+        if (!assistantMsg.versions) {
+          assistantMsg.versions = [];
+        }
+        assistantMsg.versions.push({
+          content: assistantMsg.content,
+          createdAt: now(),
+          generation: assistantMsg.generation
+        });
+        assistantMsg.activeVersionIndex = assistantMsg.versions.length - 1;
+        
         await this.saveSession();
         this.isStreaming = false;
         this.streamingMessageId = null;
@@ -2274,6 +2375,18 @@ export class RPGLiteView {
         if (meta) {
           assistantMsg.generation = meta;
         }
+        
+        // Add this response as a new version
+        if (!assistantMsg.versions) {
+          assistantMsg.versions = [];
+        }
+        assistantMsg.versions.push({
+          content: assistantMsg.content,
+          createdAt: now(),
+          generation: assistantMsg.generation
+        });
+        assistantMsg.activeVersionIndex = assistantMsg.versions.length - 1;
+        
         await this.saveSession();
         this.isStreaming = false;
         this.streamingMessageId = null;

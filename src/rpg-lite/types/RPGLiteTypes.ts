@@ -14,6 +14,12 @@ export interface RPGLiteMessageGenerationMeta {
   totalCostUsd?: number;
 }
 
+export interface RPGLiteMessageVersion {
+  content: string;
+  createdAt: number;
+  generation?: RPGLiteMessageGenerationMeta;
+}
+
 export interface RPGLiteChatMessage {
   id: string;
   role: RPGLiteMessageRole;
@@ -21,6 +27,9 @@ export interface RPGLiteChatMessage {
   createdAt: number;
   editedAt?: number;
   generation?: RPGLiteMessageGenerationMeta;
+  // Support for multiple versions (e.g., from retry)
+  versions?: RPGLiteMessageVersion[];
+  activeVersionIndex?: number;
 }
 
 export interface RPGLiteSession {
