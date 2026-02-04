@@ -1683,8 +1683,9 @@ export class RPGLiteView {
 
     // Highlight direct speech (quoted text)
     // Match "text" or "text," or "text." etc.
+    // Constrain to not cross paragraph boundaries to prevent hanging delimiter issues
     result = result.replace(
-      /(&quot;[\s\S]*?&quot;[,.\?!]?)/g,
+      /(&quot;(?:(?!\n\n)[\s\S])*?&quot;[,.\?!]?)/g,
       '<span class="rpg-lite-highlight-speech">$1</span>'
     );
 
