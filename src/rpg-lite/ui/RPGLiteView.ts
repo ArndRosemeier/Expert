@@ -2025,7 +2025,13 @@ export class RPGLiteView {
     
     msg.content = version.content;
     msg.createdAt = version.createdAt;
-    msg.generation = version.generation;
+    
+    // Conditionally assign generation to avoid exactOptionalPropertyTypes error
+    if (version.generation) {
+      msg.generation = version.generation;
+    } else {
+      delete msg.generation;
+    }
     
     await this.saveSession();
     this.renderConversation();
