@@ -1,6 +1,6 @@
 import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
-import { createElement } from './core/modal-utils';
+import { createElement, attachModalCloseHandlers } from './core/modal-utils';
 
 export class ManualModal extends BaseModal {
     private manualContent: string = '';
@@ -776,18 +776,7 @@ Instructions:
                 document.body.removeChild(modalOverlay);
             };
             
-            modalOverlay.addEventListener('click', (e) => {
-                if (e.target === modalOverlay) {
-                    closeModal();
-                }
-            });
-            
-            document.addEventListener('keydown', function escapeHandler(e) {
-                if (e.key === 'Escape') {
-                    closeModal();
-                    document.removeEventListener('keydown', escapeHandler);
-                }
-            });
+            attachModalCloseHandlers(modalOverlay, closeModal);
             
         } catch (error) {
             console.error('Error opening manual chat:', error);

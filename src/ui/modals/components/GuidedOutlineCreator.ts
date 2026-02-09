@@ -14,6 +14,7 @@ import { TemplateSelector } from '../../components/TemplateSelector';
 import { createPromptExpansionService } from '../../../services/PromptExpansionService';
 import { PromptContextBuilder } from '../../../services/PromptContextBuilder';
 import * as state from '../../../state';
+import { attachModalCloseHandlers } from '../core/modal-utils';
 
 export interface GuidedOutlineCreatorConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
@@ -249,18 +250,7 @@ export class GuidedOutlineCreator {
                 this.cleanup();
             };
             
-            this.modalOverlay.addEventListener('click', (e) => {
-                if (e.target === this.modalOverlay) {
-                    closeModal();
-                }
-            });
-            
-            document.addEventListener('keydown', function escapeHandler(e) {
-                if (e.key === 'Escape') {
-                    closeModal();
-                    document.removeEventListener('keydown', escapeHandler);
-                }
-            });
+            attachModalCloseHandlers(this.modalOverlay, closeModal);
             
         } catch (error) {
             console.error('Error opening guided chat:', error);

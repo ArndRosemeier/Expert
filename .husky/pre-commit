@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Run duplication check on staged TypeScript files
+STAGED_TS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep "\.ts$" || true)
+
+if [ -n "$STAGED_TS_FILES" ]; then
+  echo "🔍 Checking for code duplications in staged files..."
+  npm run duplication:check
+  if [ $? -ne 0 ]; then
+    echo "❌ Code duplication detected! Please refactor before committing."
+    exit 1
+  fi
+fi

@@ -96,6 +96,22 @@ export class RPGLiteView {
     this.promptSplitService = new RPGLitePromptSplitService(this.openRouterClient);
   }
 
+  private setComposerButtonsGenerating(): void {
+    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
+    const abortBtn = this.container.querySelector('#rpg-lite-abort') as HTMLButtonElement;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '⏳ Generating...';
+    abortBtn.style.display = 'inline-block';
+  }
+
+  private setComposerButtonsIdle(): void {
+    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
+    const abortBtn = this.container.querySelector('#rpg-lite-abort') as HTMLButtonElement;
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = 'Send';
+    abortBtn.style.display = 'none';
+  }
+
   private abortStreamingIfActive(): void {
     if (!this.isStreaming) return;
     if (!this.currentStreamingOperationId) throw new Error('Streaming is active but no operation id is set.');
@@ -106,8 +122,7 @@ export class RPGLiteView {
     this.streamingMessageId = null;
     this.isStreaming = false;
 
-    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
-    sendBtn.disabled = false;
+    this.setComposerButtonsIdle();
   }
 
   async open(): Promise<void> {
@@ -1258,6 +1273,7 @@ export class RPGLiteView {
           <div class="rpg-lite-composer">
             <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="${session.conversation.length === 0 ? 'Press Send to start, or type your first message...' : 'Your message...'}"></textarea>
             <button id="rpg-lite-send" class="rpg-lite-btn rpg-lite-btn-primary">Send</button>
+            <button id="rpg-lite-abort" class="rpg-lite-btn rpg-lite-btn-danger" style="display: none;">Abort</button>
           </div>
         </div>
         <div class="rpg-lite-resize-handle" id="rpg-lite-resize-right" title="Drag to resize"></div>
@@ -1339,11 +1355,17 @@ export class RPGLiteView {
     });
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
+    const abortBtn = this.container.querySelector('#rpg-lite-abort') as HTMLButtonElement;
     const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
 
     sendBtn.addEventListener('click', () => {
       void this.sendNewUserMessage();
     });
+    
+    abortBtn.addEventListener('click', () => {
+      this.abortStreamingIfActive();
+    });
+    
     inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -2039,7 +2061,16 @@ export class RPGLiteView {
 
   private async retryFromAssistant(assistantMessageId: string): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
+    
+    // Check if we're aborting an active stream before calling abort
+    const wasStreaming = this.isStreaming;
     this.abortStreamingIfActive();
+    
+    // Wait a bit to ensure the abort operation is fully processed before manipulating DOM
+    // This prevents streaming errors when retrying a stuck message
+    if (wasStreaming) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
 
     const idx = this.currentSession.conversation.findIndex((m) => m.id === assistantMessageId);
     if (idx === -1) throw new Error(`Message not found: ${assistantMessageId}`);
@@ -2141,9 +2172,7 @@ export class RPGLiteView {
     this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
-    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
-    sendBtn.disabled = true;
-    sendBtn.innerHTML = '⏳ Generating...';
+    this.setComposerButtonsGenerating();
 
     const openingInstruction = getOpeningInstruction();
     let meta: RPGLiteMessageGenerationMeta | null = null;
@@ -2247,8 +2276,7 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = 'Send';
+        this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Opening] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
@@ -2268,8 +2296,7 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = 'Send';
+        this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
@@ -2321,9 +2348,7 @@ export class RPGLiteView {
     this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
-    const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
-    sendBtn.disabled = true;
-    sendBtn.innerHTML = '⏳ Generating...';
+    this.setComposerButtonsGenerating();
 
     let meta: RPGLiteMessageGenerationMeta | null = null;
     const openRouterMessages = await buildContextMessages(session);
@@ -2422,8 +2447,7 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = 'Send';
+        this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Reply] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
@@ -2443,8 +2467,7 @@ export class RPGLiteView {
         this.streamingMessageId = null;
         this.currentStreamingOperationId = null;
         this.currentStreamingAbortRequested = false;
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = 'Send';
+        this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);

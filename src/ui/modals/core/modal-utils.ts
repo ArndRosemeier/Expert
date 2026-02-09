@@ -130,6 +130,53 @@ export function addEventListenerWithCleanup(
 }
 
 /**
+ * Attaches standard close handlers to a modal overlay.
+ * Handles both escape key press and clicking outside the modal.
+ * Returns a cleanup function to remove all event listeners.
+ * 
+ * @param modalOverlay - The overlay element that serves as the modal backdrop
+ * @param onClose - Callback function to execute when modal should close
+ * @returns Cleanup function to remove event listeners
+ * 
+ * @example
+ * ```typescript
+ * const cleanup = attachModalCloseHandlers(modalOverlay, () => {
+ *   document.body.removeChild(modalOverlay);
+ * });
+ * 
+ * // Later, if needed:
+ * cleanup();
+ * ```
+ */
+export function attachModalCloseHandlers(
+    modalOverlay: HTMLElement,
+    onClose: () => void
+): () => void {
+    const clickHandler = (e: MouseEvent): void => {
+        if (e.target === modalOverlay) {
+            onClose();
+        }
+    };
+    
+    const escapeHandler = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') {
+            onClose();
+            cleanup();
+        }
+    };
+    
+    modalOverlay.addEventListener('click', clickHandler);
+    document.addEventListener('keydown', escapeHandler);
+    
+    const cleanup = (): void => {
+        modalOverlay.removeEventListener('click', clickHandler);
+        document.removeEventListener('keydown', escapeHandler);
+    };
+    
+    return cleanup;
+}
+
+/**
  * Common modal styling constants
  */
 export const MODAL_STYLES = {

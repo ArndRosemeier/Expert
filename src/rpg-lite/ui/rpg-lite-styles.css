@@ -86,6 +86,15 @@
   background: rgba(64, 140, 255, 0.28);
 }
 
+.rpg-lite-btn-danger {
+  background: rgba(255, 64, 64, 0.22);
+  border-color: rgba(255, 64, 64, 0.5);
+}
+
+.rpg-lite-btn-danger:hover {
+  background: rgba(255, 64, 64, 0.28);
+}
+
 .rpg-lite-button-group-tight {
   display: flex;
   gap: 0.0625rem;

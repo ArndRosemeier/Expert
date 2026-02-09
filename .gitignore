@@ -4,6 +4,9 @@
 # Build files
 /dist
 
+# Code quality reports
+/jscpd-report
+
 # Log files
 npm-debug.log*
 yarn-debug.log*

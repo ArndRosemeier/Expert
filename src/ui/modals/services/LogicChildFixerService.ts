@@ -1,6 +1,7 @@
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode, TodoItem } from '../../../DocumentNode';
+import { BaseLogicFixerService } from './BaseLogicFixerService';
 
 export interface FixedChildResult {
     originalContent: string;
@@ -9,13 +10,9 @@ export interface FixedChildResult {
     explanation: string;
 }
 
-export class LogicChildFixerService {
-    private openRouterClient: OpenRouterClient;
-    private settingsManager: SettingsManager;
-
+export class LogicChildFixerService extends BaseLogicFixerService {
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
-        this.openRouterClient = openRouterClient;
-        this.settingsManager = settingsManager;
+        super(openRouterClient, settingsManager);
     }
 
     public async generateFixedChild(nodeToFix: DocumentNode, truthNode: DocumentNode, todos: TodoItem[]): Promise<FixedChildResult> {
@@ -38,14 +35,8 @@ export class LogicChildFixerService {
     }
 
     private buildChildFixingPrompt(nodeToFix: DocumentNode, truthNode: DocumentNode, currentContent: string, todos: TodoItem[]): string {
-        const language = this.settingsManager.getLanguage();
-        
-        // Format todo items
-        const formattedProblems = todos.map((todo, index) => {
-            return `${index + 1}. ${todo.description}`;
-        }).join('\n');
-
-        // Get context for better understanding
+        const language = this.getLanguage();
+        const formattedProblems = this.formatTodoItems(todos);
         const context = this.getNodeContext(nodeToFix);
         
         // Get the logic_child_fix prompt from settings
@@ -64,31 +55,15 @@ export class LogicChildFixerService {
             .replace(/\{\{language\}\}/g, language);
     }
 
-    private getNodeContext(_node: DocumentNode): string {
-        return ''; // Traditional context removed - using conditional context system
-    }
-
     private parseChildFixResponse(response: string, originalContent: string): FixedChildResult {
-        const cleanResponse = response.trim();
-        const jsonStart = cleanResponse.indexOf('{');
-        const jsonEnd = cleanResponse.lastIndexOf('}');
-        
-        if (jsonStart === -1 || jsonEnd === -1) {
-            throw new Error(`Invalid response format: No JSON found in AI response. Response: ${response.substring(0, 100)}...`);
-        }
-        
-        const jsonString = cleanResponse.substring(jsonStart, jsonEnd + 1);
-        const parsed = JSON.parse(jsonString);
-        
-        if (!parsed.fixedContent) {
-            throw new Error(`Invalid response format: Missing fixedContent field in AI response: ${JSON.stringify(parsed)}`);
-        }
+        const parsed = this.extractJsonFromResponse(response);
+        this.validateFixedContentField(parsed);
         
         return {
             originalContent,
-            fixedContent: parsed.fixedContent.trim(),
-            problemsSolved: parsed.problemsSolved,
-            explanation: parsed.explanation
+            fixedContent: (parsed['fixedContent'] as string).trim(),
+            problemsSolved: parsed['problemsSolved'] as string[],
+            explanation: parsed['explanation'] as string
         };
     }
 } 

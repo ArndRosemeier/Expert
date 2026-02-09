@@ -1,6 +1,7 @@
 import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { DocumentNode, TodoItem } from '../../../DocumentNode';
+import { BaseLogicFixerService } from './BaseLogicFixerService';
 
 export interface FixedOutlineResult {
     originalContent: string;
@@ -9,13 +10,9 @@ export interface FixedOutlineResult {
     explanation: string;
 }
 
-export class LogicOutlineFixerService {
-    private openRouterClient: OpenRouterClient;
-    private settingsManager: SettingsManager;
-
+export class LogicOutlineFixerService extends BaseLogicFixerService {
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager) {
-        this.openRouterClient = openRouterClient;
-        this.settingsManager = settingsManager;
+        super(openRouterClient, settingsManager);
     }
 
     public async generateFixedOutline(node: DocumentNode, todos: TodoItem[]): Promise<FixedOutlineResult> {
@@ -39,14 +36,8 @@ export class LogicOutlineFixerService {
     }
 
     private buildFixingPrompt(node: DocumentNode, currentContent: string, todos: TodoItem[]): string {
-        const language = this.settingsManager.getLanguage();
-        
-        // Format todo items without mentioning specific child node titles
-        const formattedProblems = todos.map((todo, index) => {
-            return `${index + 1}. ${todo.description}`;
-        }).join('\n');
-
-        // Get context for better understanding
+        const language = this.getLanguage();
+        const formattedProblems = this.formatTodoItems(todos);
         const context = this.getNodeContext(node);
         
         // Get the prompt template from prompt manager
@@ -63,7 +54,7 @@ export class LogicOutlineFixerService {
             .replace(/\{\{language\}\}/g, language);
     }
 
-    private getNodeContext(node: DocumentNode): string {
+    protected override getNodeContext(node: DocumentNode): string {
         const contextParts: string[] = [];
         
         // Add parent context if available
@@ -95,27 +86,14 @@ export class LogicOutlineFixerService {
 
     private parseFixResponse(response: string, originalContent: string): FixedOutlineResult {
         try {
-            // Clean the response - remove any markdown formatting or extra text
-            let cleanResponse = response.trim();
-            
-            // Find JSON content between curly braces
-            const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                cleanResponse = jsonMatch[0];
-            }
-            
-            const parsed = JSON.parse(cleanResponse);
-            
-            // Validate required fields
-            if (!parsed.fixedContent || typeof parsed.fixedContent !== 'string') {
-                throw new Error('Invalid response: missing or invalid fixedContent');
-            }
+            const parsed = this.extractJsonFromResponse(response);
+            this.validateFixedContentField(parsed);
             
             return {
                 originalContent,
-                fixedContent: parsed.fixedContent.trim(),
-                problemsSolved: Array.isArray(parsed.problemsSolved) ? parsed.problemsSolved : [],
-                explanation: parsed.explanation || 'Fixed outline to address logic inconsistencies.'
+                fixedContent: (parsed['fixedContent'] as string).trim(),
+                problemsSolved: Array.isArray(parsed['problemsSolved']) ? parsed['problemsSolved'] : [],
+                explanation: (parsed['explanation'] as string) || 'Fixed outline to address logic inconsistencies.'
             };
             
         } catch (error) {
