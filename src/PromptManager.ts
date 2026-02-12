@@ -99,6 +99,10 @@ export interface OrchestratorPrompts {
     gap_analysis_starter: string;
     collaborate_next_part_starter: string;
     
+    // For RPGLite session to outline conversion
+    rpg_session_to_outline_system: string;
+    rpg_session_to_outline_user: string;
+    
     // For RPG System
     rpg_session_setup: string;
     rpg_lite_prompt_split: string;
@@ -1843,6 +1847,166 @@ Respond with ONLY valid XML in this exact structure:
         `.trim(),
         placeholders: ['adventure_description'],
         description: 'Prompt for setting up a new RPG session from a simple adventure description.'
+    },
+
+    rpg_session_to_outline_system: {
+        text: `You are a story analysis and structuring assistant specialized in converting interactive RPG conversations into extremely detailed, comprehensive story outlines.
+
+Your task is to analyze an RPG session conversation and extract ALL narrative elements into a richly detailed story outline. The RPG session consists of interactions between a player and a narrator/game master, and your job is to capture the full story in extensive detail.
+
+ANALYSIS APPROACH:
+- Identify and document the complete plot progression and story arc from the conversation
+- Extract ALL character details, development moments, and relationship dynamics
+- Capture EVERY world-building element, setting detail, and atmospheric description
+- Document ALL story beats, conflicts, resolutions, and narrative turning points
+- Preserve specific details, descriptions, dialogue snippets, and character actions
+- Include emotional beats, character thoughts, and internal conflicts when present
+- Capture the setting and atmosphere of each scene
+- Distinguish between story elements and meta-game discussions
+
+CRITICAL EMPHASIS ON DETAIL:
+- DO NOT summarize or compress the story - expand it with rich detail
+- Include scene-by-scene progression with specific actions and descriptions
+- Preserve memorable moments, character interactions, and significant dialogue
+- Capture minor details that add flavor and depth to the story
+- Document the progression of events chronologically with specific details
+- Include sensory details (sights, sounds, smells, textures) when mentioned
+- Preserve the emotional journey and character development throughout
+
+QUALITY CRITERIA:
+- The outline should be EXTREMELY COMPREHENSIVE and DETAILED
+- Capture EVERY significant story element from the session with specificity
+- Maintain narrative coherence and logical flow while being exhaustively detailed
+- Preserve the tone, style, and atmosphere of the original session
+- Include enough detail that someone could understand the complete story experience without reading the conversation
+- Aim for maximum detail retention - if in doubt, include more rather than less
+
+Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+
+CRITICAL: You MUST follow the exact output format specified in the user prompt. Any deviation from the required format will cause a system error.`.trim(),
+        placeholders: ['language'],
+        description: 'System prompt for converting RPGLite sessions into story outlines - establishes the role and analysis approach with emphasis on comprehensive detail.'
+    },
+
+    rpg_session_to_outline_user: {
+        text: `Convert the following RPG session into an EXTREMELY DETAILED structured story outline with comprehensive context. Capture as much detail as possible from the session.
+
+Generate content in {{language}}. Any structural elements (such as section headers) must always remain in English.
+
+## RPG SESSION INFORMATION
+
+**Session Title:** {{session_title}}
+
+**System Prompt (Narrator Instructions):**
+{{system_prompt}}
+
+**Prefix Context (Adventure Setup):**
+{{prefix_context}}
+
+**Conversation ({{message_count}} messages):**
+{{conversation}}
+
+---
+
+MANDATORY OUTPUT FORMAT - You must use these exact section delimiters:
+
+===PROJECT TITLE===
+A compelling title that captures the essence of the story from the session
+
+===PROJECT OUTLINE===
+An EXTREMELY DETAILED story outline (aim for 2000-4000+ words, be as thorough as possible) that captures:
+
+CRITICAL: Be as detailed as possible. Extract and document every significant moment from the conversation.
+
+**What to Include:**
+- Complete plot progression and story arc with specific events
+- EVERY key scene documented in detail with:
+  * Setting and atmosphere descriptions
+  * Character actions, reactions, and decisions
+  * Specific dialogue or dialogue summaries when important
+  * Emotional beats and character development moments
+  * Sensory details (sights, sounds, atmosphere)
+- Character interactions and relationship dynamics as they develop
+- ALL conflicts, challenges, and their resolutions with specific details
+- Story pacing and dramatic structure with scene-by-scene progression
+- ALL subplots or secondary storylines with their own detailed progression
+- Memorable moments, surprising twists, and significant discoveries
+- Character thoughts, motivations, and internal conflicts when revealed
+- Environmental descriptions and world-building details encountered
+- Objects, items, or elements that play important roles
+- Consequences of character decisions and actions
+
+**Structure Requirements:**
+- Break the outline into clear scenes or story segments
+- Use detailed paragraph breaks for different story moments
+- Maintain chronological order with specific event sequences
+- Include transitional moments between major scenes
+- Document the narrative arc from beginning through to end
+
+**EMPHASIS:** Do NOT compress or over-summarize. Capture the richness and detail of the session. If the session had 50 messages, aim to capture something meaningful from most of them. More detail is always better than less.
+
+===BACKGROUND CONTEXT===
+EXTREMELY COMPREHENSIVE context information formatted for the conditional context system (one paragraph per item - create as many paragraphs as needed to capture all details):
+
+CRITICAL FORMAT REQUIREMENTS:
+- Use the exact delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT==="
+- Each section must be clearly separated
+- The context section must be formatted as one paragraph per context item
+- Use CONDITIONAL CONTEXT SYSTEM with trigger words:
+  * For context that should appear when specific elements are mentioned: <trigger>word1, word2</trigger>Context text...
+  * For global/persistent context (always visible): Start paragraph normally without tags OR prefix with "*"
+
+Context should include (CREATE AS MANY CONTEXT PARAGRAPHS AS NEEDED - aim for thoroughness):
+
+1. Characters (EVERY character mentioned, no matter how minor):
+   - Complete physical descriptions with specific details
+   - Comprehensive personality traits, quirks, and mannerisms
+   - Motivations, goals, fears, and internal conflicts
+   - Relationships with other characters
+   - Background information and history
+   - Character development and growth throughout the session
+   - Skills, abilities, or special traits
+   - Memorable quotes or characteristic speech patterns
+
+2. Locations and Settings (EVERY location visited or mentioned):
+   - Detailed physical descriptions with sensory elements
+   - Atmospheric qualities and mood
+   - Geographic context and relationships to other locations
+   - Notable features, landmarks, or points of interest
+   - Cultural, historical, or social context
+   - Who inhabits or frequents the location
+   - Any events or significant moments that occurred there
+
+3. World-building Elements (ALL aspects of the world encountered):
+   - Complete rules of the world (magic systems, technology, physics, etc.)
+   - Factions, organizations, and power structures with their goals
+   - Historical events, legends, or lore mentioned
+   - Cultural norms, social structures, and traditions
+   - Economic systems, trade, or resources
+   - Political landscape and conflicts
+   - Religious or philosophical beliefs
+   - Any unique or distinctive world features
+   - Items, artifacts, or objects of significance
+
+4. Additional Context Elements:
+   - Ongoing mysteries or unanswered questions
+   - Plot threads or hooks for future development
+   - Consequences of actions that may matter later
+   - Relationships between factions or groups
+   - Any other details that enrich the world
+
+**CRITICAL:** Create separate, detailed paragraphs for each distinct element. Don't combine multiple characters or locations into one paragraph. The more context items you create, the better. Aim for richness and specificity.
+
+Context Format Examples:
+<trigger>Marcus, Knight Marcus, Sir Marcus</trigger>Marcus is a grizzled veteran knight in his mid-40s with a distinctive scar across his left cheek. He serves as mentor to the protagonist and struggles with guilt over past failures. He is loyal to a fault and believes in honor above all else.
+
+<trigger>The Shadowfen, Shadowfen, dark marshes</trigger>The Shadowfen is a sprawling network of dark marshes and twisted mangroves where ancient magic still lingers. Travelers speak of strange lights and voices that lead the unwary to their doom. The local villagers avoid it entirely, especially after dark.
+
+*The world operates on a system of elemental magic tied to ancient pacts between humans and nature spirits. Breaking these pacts has severe consequences and disturbs the natural balance.
+
+WARNING: Any deviation from this exact format will cause a system error. Follow the format precisely.`.trim(),
+        placeholders: ['session_title', 'system_prompt', 'prefix_context', 'conversation', 'message_count', 'language'],
+        description: 'User prompt template for converting RPGLite sessions into outlines - provides session data and requests structured output with title, outline, and context.'
     },
 
     rpg_lite_prompt_split: {

@@ -10,11 +10,14 @@ import { ManualProjectCreator, ManualProjectCreatorConfig } from './components/M
 import { AIProjectCreator, AIProjectCreatorConfig } from './components/AIProjectCreator';
 import { OutlineFactory } from './components/OutlineFactory';
 import { GuidedOutlineCreator, GuidedOutlineCreatorConfig } from './components/GuidedOutlineCreator';
+import { RPGLiteSessionCreator, RPGLiteSessionCreatorConfig } from './components/RPGLiteSessionCreator';
 import { OutlineGenerationResult } from '../../types/OutlineFactoryTypes';
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 import { ProjectTemplate } from '../../ProjectTemplate';
 import { createElement } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
+import { StorageService } from '../../StorageService';
+import type { RPGLiteSession } from '../../rpg-lite/types/RPGLiteTypes';
 import * as state from '../../state';
 
 export interface NewProjectModalConfig extends ModalConfig {
@@ -22,7 +25,7 @@ export interface NewProjectModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
 }
 
-type TabType = 'manual' | 'ai' | 'outline' | 'guided';
+type TabType = 'manual' | 'ai' | 'outline' | 'guided' | 'rpglite';
 
 export class NewProjectModal extends BaseModal {
     private onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
@@ -31,8 +34,10 @@ export class NewProjectModal extends BaseModal {
     private aiCreator: AIProjectCreator;
     private outlineFactory: OutlineFactory;
     private guidedCreator: GuidedOutlineCreator;
+    private rpgliteCreator: RPGLiteSessionCreator | null = null;
     private currentTabContent: HTMLElement | null = null;
     private settingsManager: SettingsManager;
+    private hasRPGLiteSessions: boolean = false;
 
     constructor(config: NewProjectModalConfig) {
         super({
@@ -77,10 +82,51 @@ export class NewProjectModal extends BaseModal {
         });
     }
 
-    public render(): HTMLElement {
+    private async checkRPGLiteSessions(): Promise<void> {
+        const storage = await StorageService.getInstance();
+        const sessions = await storage.listRPGLiteSessions<RPGLiteSession>();
+        this.hasRPGLiteSessions = sessions.length > 0;
+    }
+
+    protected override async createModal(): Promise<void> {
+        // Check for RPGLite sessions before creating modal
+        await this.checkRPGLiteSessions();
+        
+        // Now call parent's createModal which will call our render()
+        await super.createModal();
+    }
+
+    public override render(): HTMLElement {
+
         const container = createElement('div', {
             classes: ['new-project-modal']
         });
+
+        // Build tab buttons dynamically based on available sessions
+        const tabButtons = `
+            <button class="tab-btn ${this.activeTab === 'manual' ? 'active' : ''}" 
+                    data-tab="manual">
+                📝 Manual Setup
+            </button>
+            <button class="tab-btn ${this.activeTab === 'ai' ? 'active' : ''}" 
+                    data-tab="ai">
+                ${AI_ASSISTANT_EMOJI} AI Creation
+            </button>
+            <button class="tab-btn ${this.activeTab === 'outline' ? 'active' : ''}" 
+                    data-tab="outline">
+                🏭 Outline Factory
+            </button>
+            <button class="tab-btn ${this.activeTab === 'guided' ? 'active' : ''}" 
+                    data-tab="guided">
+                🗣️ Guided Outline
+            </button>
+            ${this.hasRPGLiteSessions ? `
+            <button class="tab-btn ${this.activeTab === 'rpglite' ? 'active' : ''}" 
+                    data-tab="rpglite">
+                🎲 From RPGLite Session
+            </button>
+            ` : ''}
+        `;
 
         container.innerHTML = `
             <style>
@@ -256,22 +302,7 @@ export class NewProjectModal extends BaseModal {
             <div class="modal-body">
                 <div class="tab-container">
                     <div class="tab-header">
-                        <button class="tab-btn ${this.activeTab === 'manual' ? 'active' : ''}" 
-                                data-tab="manual">
-                            📝 Manual Setup
-                        </button>
-                        <button class="tab-btn ${this.activeTab === 'ai' ? 'active' : ''}" 
-                                data-tab="ai">
-                            ${AI_ASSISTANT_EMOJI} AI Creation
-                        </button>
-                        <button class="tab-btn ${this.activeTab === 'outline' ? 'active' : ''}" 
-                                data-tab="outline">
-                            🏭 Outline Factory
-                        </button>
-                        <button class="tab-btn ${this.activeTab === 'guided' ? 'active' : ''}" 
-                                data-tab="guided">
-                            🗣️ Guided Outline
-                        </button>
+                        ${tabButtons}
                     </div>
                     <div class="tab-content" id="tab-content-container">
                         <!-- Tab content will be rendered here -->
@@ -293,18 +324,18 @@ export class NewProjectModal extends BaseModal {
         const tabButtons = container.querySelectorAll('.tab-btn');
         
         tabButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            button.addEventListener('click', async (e) => {
                 const target = e.target as HTMLElement;
                 const tab = target.getAttribute('data-tab') as TabType;
                 
                 if (tab && tab !== this.activeTab) {
-                    this.switchTab(tab, container);
+                    await this.switchTab(tab, container);
                 }
             });
         });
     }
 
-    private switchTab(tab: TabType, container: HTMLElement): void {
+    private async switchTab(tab: TabType, container: HTMLElement): Promise<void> {
         // Clean up current tab
         this.cleanupCurrentTab();
         
@@ -323,10 +354,10 @@ export class NewProjectModal extends BaseModal {
         });
         
         // Render new tab content
-        this.renderTabContent(container);
+        await this.renderTabContent(container);
     }
 
-    private renderTabContent(container: HTMLElement): void {
+    private async renderTabContent(container: HTMLElement): Promise<void> {
         const contentContainer = container.querySelector('#tab-content-container') as HTMLElement;
         
         if (!contentContainer) return;
@@ -353,17 +384,31 @@ export class NewProjectModal extends BaseModal {
             
             // Set up cancel event handler
             contentContainer.addEventListener('guided-cancel', async () => this.close());
+        } else if (this.activeTab === 'rpglite') {
+            // Render RPGLiteSessionCreator component
+            const rpgliteConfig: RPGLiteSessionCreatorConfig = {
+                onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
+                    this.handleProjectCreated(title, template, aiData);
+                }
+            };
+            this.rpgliteCreator = new RPGLiteSessionCreator(rpgliteConfig);
+            const content = await this.rpgliteCreator.render();
+            contentContainer.innerHTML = content;
+            this.rpgliteCreator.setupEventListeners(contentContainer);
+            
+            // Set up cancel event handler
+            contentContainer.addEventListener('rpglite-cancel', async () => this.close());
         } else {
             // Generate content for manual/ai tabs
-        const content = this.activeTab === 'manual' 
-            ? this.manualCreator.render()
-            : this.aiCreator.render();
-        
-        contentContainer.innerHTML = content;
-        
-        // Set up event listeners for the active component
-        const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-        activeCreator.setupEventListeners(contentContainer);
+            const content = this.activeTab === 'manual' 
+                ? this.manualCreator.render()
+                : this.aiCreator.render();
+            
+            contentContainer.innerHTML = content;
+            
+            // Set up event listeners for the active component
+            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+            activeCreator.setupEventListeners(contentContainer);
             
             // Set up cancel event handlers
             contentContainer.addEventListener('manual-cancel', async () => this.close());
@@ -410,10 +455,14 @@ export class NewProjectModal extends BaseModal {
             } else if (this.activeTab === 'guided') {
                 // Cleanup guided creator
                 this.guidedCreator.cleanup();
+            } else if (this.activeTab === 'rpglite') {
+                // Cleanup RPGLite session creator
+                this.rpgliteCreator?.cleanup();
+                this.rpgliteCreator = null;
             } else {
-            // Cleanup the active component
-            const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
-            activeCreator.cleanup();
+                // Cleanup the active component
+                const activeCreator = this.activeTab === 'manual' ? this.manualCreator : this.aiCreator;
+                activeCreator.cleanup();
             }
             this.currentTabContent = null;
         }
@@ -441,6 +490,7 @@ export class NewProjectModal extends BaseModal {
         this.manualCreator.cleanup();
         this.aiCreator.cleanup();
         this.guidedCreator.cleanup();
+        this.rpgliteCreator?.cleanup();
         // OutlineFactory handles its own cleanup internally
         
         await super.close();
