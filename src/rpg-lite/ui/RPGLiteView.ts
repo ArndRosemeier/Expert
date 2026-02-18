@@ -4,6 +4,7 @@ import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { SettingsManager } from '../../SettingsManager';
 import { getPromptText } from '../../PromptManager';
+import * as state from '../../state';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -1209,6 +1210,16 @@ export class RPGLiteView {
     if (!this.currentSession) throw new Error('No current session.');
     const session = this.currentSession;
 
+    // Get the model name for the current purpose
+    const modelSelector = state.getModelSelector();
+    const selectedModels = modelSelector?.getSelectedModels() || {};
+    const modelName = selectedModels[session.narratorPurpose] || 'Not configured';
+    
+    // Initialize temperature if not set
+    if (session.temperature === undefined) {
+      session.temperature = 1.0;
+    }
+
     this.ensureModal();
     this.container.innerHTML = `
       <div class="rpg-lite-topbar">
@@ -1226,6 +1237,13 @@ export class RPGLiteView {
               <option value="editor">Editor</option>
               <option value="rater">Rater</option>
             </select>
+            <span style="opacity:.65; font-size:0.85rem;" id="rpg-lite-model-name" title="Current model for this purpose">${modelName}</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:.5rem;">
+            <span style="opacity:.85;">Temp</span>
+            <input id="rpg-lite-temperature" type="range" min="0" max="2" step="0.1" value="${session.temperature}" 
+                   style="width: 80px;" title="Temperature: ${session.temperature}" />
+            <span id="rpg-lite-temperature-value" style="opacity:.85; font-size:0.85rem; min-width:2.5rem;">${session.temperature.toFixed(1)}</span>
           </label>
           <label style="display:flex; align-items:center; gap:.5rem;">
             <span style="opacity:.85;">Max msgs</span>
@@ -1310,6 +1328,24 @@ export class RPGLiteView {
     purposeSelect.value = session.narratorPurpose;
     purposeSelect.addEventListener('change', () => {
       session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
+      // Update the model name display
+      const modelSelector = state.getModelSelector();
+      const selectedModels = modelSelector?.getSelectedModels() || {};
+      const modelName = selectedModels[session.narratorPurpose] || 'Not configured';
+      const modelNameEl = this.container.querySelector('#rpg-lite-model-name') as HTMLElement;
+      if (modelNameEl) {
+        modelNameEl.textContent = modelName;
+      }
+      void this.saveSession();
+    });
+
+    const temperatureSlider = this.container.querySelector('#rpg-lite-temperature') as HTMLInputElement;
+    const temperatureValue = this.container.querySelector('#rpg-lite-temperature-value') as HTMLElement;
+    temperatureSlider.addEventListener('input', () => {
+      const temp = parseFloat(temperatureSlider.value);
+      session.temperature = temp;
+      temperatureValue.textContent = temp.toFixed(1);
+      temperatureSlider.title = `Temperature: ${temp.toFixed(1)}`;
       void this.saveSession();
     });
 
@@ -2302,7 +2338,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId);
+    }, opId, undefined, session.temperature !== undefined ? { temperature: session.temperature } : undefined);
   }
 
   private async generateAssistantReply(existingMessage?: RPGLiteChatMessage): Promise<void> {
@@ -2473,7 +2509,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId);
+    }, opId, undefined, session.temperature !== undefined ? { temperature: session.temperature } : undefined);
   }
 }
 

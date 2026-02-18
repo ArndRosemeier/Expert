@@ -156,6 +156,10 @@ export interface StreamingCallbacks {
   onError: (error: Error) => void;
 }
 
+export interface StreamingChatOptions {
+  temperature?: number;  // Optional temperature override (0-2)
+}
+
 /**
  * Utility to mask API keys in logs (shows only first/last 4 chars)
  * WARNING: Logging API keys is dangerous in production! Only use for debugging.
@@ -967,7 +971,7 @@ export class OpenRouterClient {
    * Send a streaming chat message for a given purpose.
    * Calls onContent for each chunk and onComplete when finished.
    */
-  async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal): Promise<void> {
+  async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal, options?: StreamingChatOptions): Promise<void> {
     const opId = operationId || this.generateOperationId(purpose);
     const abortController = new AbortController();
     this.activeOperations.set(opId, abortController);
@@ -1026,6 +1030,10 @@ export class OpenRouterClient {
           const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
           if (typeof p.temperature === 'number') {
             request.temperature = Math.max(0, Math.min(2, p.temperature));
+          }
+          // Override with options temperature if provided (for RPGLite session-specific temperature)
+          if (options?.temperature !== undefined) {
+            request.temperature = Math.max(0, Math.min(2, options.temperature));
           }
           if (typeof p.top_p === 'number') {
             request.top_p = Math.max(0, Math.min(1, p.top_p));

@@ -43,6 +43,7 @@ export interface RPGLiteSession {
 
   narratorPurpose: RPGLiteModelPurpose;
   maxContextMessages: number;
+  temperature?: number;  // Optional temperature override for this session (0-2)
 
   conversation: RPGLiteChatMessage[];
   clipboard?: string;
