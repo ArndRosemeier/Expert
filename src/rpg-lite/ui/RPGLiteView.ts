@@ -1325,17 +1325,13 @@ export class RPGLiteView {
     });
 
     const purposeSelect = this.container.querySelector('#rpg-lite-purpose') as HTMLSelectElement;
+    const modelNameEl = this.container.querySelector('#rpg-lite-model-name') as HTMLElement;
     purposeSelect.value = session.narratorPurpose;
     purposeSelect.addEventListener('change', () => {
       session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
-      // Update the model name display
-      const modelSelector = state.getModelSelector();
-      const selectedModels = modelSelector?.getSelectedModels() || {};
-      const modelName = selectedModels[session.narratorPurpose] || 'Not configured';
-      const modelNameEl = this.container.querySelector('#rpg-lite-model-name') as HTMLElement;
-      if (modelNameEl) {
-        modelNameEl.textContent = modelName;
-      }
+      const ms = state.getModelSelector();
+      const models = ms?.getSelectedModels() || {};
+      modelNameEl.textContent = models[session.narratorPurpose] || 'Not configured';
       void this.saveSession();
     });
 
