@@ -113,6 +113,20 @@ export class RPGLiteView {
     abortBtn.style.display = 'none';
   }
 
+  private addWaitingIndicator(msgEl: HTMLElement): void {
+    const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    const indicator = document.createElement('div');
+    indicator.className = 'rpg-lite-waiting-indicator';
+    indicator.dataset['waitingIndicator'] = '1';
+    indicator.innerHTML = '<span></span><span></span><span></span>';
+    contentEl.appendChild(indicator);
+  }
+
+  private removeWaitingIndicator(msgEl: HTMLElement): void {
+    const indicator = msgEl.querySelector('[data-waiting-indicator="1"]');
+    indicator?.remove();
+  }
+
   private abortStreamingIfActive(): void {
     if (!this.isStreaming) return;
     if (!this.currentStreamingOperationId) throw new Error('Streaming is active but no operation id is set.');
@@ -2216,8 +2230,7 @@ export class RPGLiteView {
 
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
-    const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    void contentEl;
+    this.addWaitingIndicator(msgEl);
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -2257,6 +2270,11 @@ export class RPGLiteView {
       onChunk: (chunk: string) => {
         chunkCount++;
         assistantMsg.content += chunk;
+
+        // Remove waiting indicator on first chunk
+        if (chunkCount === 1) {
+          this.removeWaitingIndicator(msgEl);
+        }
 
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
@@ -2387,8 +2405,7 @@ export class RPGLiteView {
     void this.updateContextStats();
     const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
     msgEl.classList.add('rpg-lite-message-streaming');
-    const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
-    void contentEl;
+    this.addWaitingIndicator(msgEl);
 
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
@@ -2428,6 +2445,11 @@ export class RPGLiteView {
       onChunk: (chunk: string) => {
         chunkCount++;
         assistantMsg.content += chunk;
+
+        // Remove waiting indicator on first chunk
+        if (chunkCount === 1) {
+          this.removeWaitingIndicator(msgEl);
+        }
 
         if (DEBUG_RPG_LITE_STREAMING) {
           const elapsed = Date.now() - startTime;
