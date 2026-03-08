@@ -86,6 +86,25 @@
   background: rgba(64, 140, 255, 0.28);
 }
 
+.rpg-lite-retries-remaining {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  white-space: nowrap;
+  min-width: 3.5rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.rpg-lite-retries-exhausted {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  opacity: 1;
+}
+
 .rpg-lite-btn-danger {
   background: rgba(255, 64, 64, 0.22);
   border-color: rgba(255, 64, 64, 0.5);
@@ -642,6 +661,27 @@
 /* Preserve whitespace in fade-in text */
 .rpg-lite-message-streaming .rpg-lite-message-content {
   white-space: pre-wrap;
+}
+
+.rpg-lite-message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.rpg-lite-message-image {
+  max-width: 100%;
+  max-height: 32rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: block;
+  cursor: zoom-in;
+  object-fit: contain;
+}
+
+.rpg-lite-message-image:hover {
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .rpg-lite-message-info {

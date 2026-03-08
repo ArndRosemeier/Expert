@@ -127,6 +127,65 @@ export class RPGLiteView {
     indicator?.remove();
   }
 
+  /**
+   * Builds StreamingChatOptions for RPGLite requests.
+   * Checks model capabilities and adds image modalities when the active model supports image output.
+   */
+  private async buildStreamingOptions(session: RPGLiteSession): Promise<import('../../OpenRouterClient').StreamingChatOptions> {
+    const opts: import('../../OpenRouterClient').StreamingChatOptions = {};
+    if (session.temperature !== undefined) {
+      opts.temperature = session.temperature;
+    }
+    // Check if the selected model for this purpose supports image output
+    const modelId = state.getModelSelector()?.getSelectedModels()?.[session.narratorPurpose];
+    if (modelId) {
+      const supportsImages = await this.openRouterClient.modelSupportsImageOutput(modelId);
+      if (supportsImages) {
+        opts.modalities = ['image', 'text'];
+      }
+    }
+    return opts;
+  }
+
+  /**
+   * Appends received image URLs to a live streaming message element's images container.
+   * Creates the container on first call, subsequent calls append to it.
+   */
+  private appendImagesToMessageEl(msgEl: HTMLElement, imageUrls: string[]): void {
+    let imagesContainer = msgEl.querySelector('[data-role="images"]') as HTMLElement | null;
+    if (!imagesContainer) {
+      imagesContainer = document.createElement('div');
+      imagesContainer.dataset['role'] = 'images';
+      imagesContainer.className = 'rpg-lite-message-images';
+      msgEl.appendChild(imagesContainer);
+    }
+    for (const url of imageUrls) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'rpg-lite-message-image';
+      img.alt = 'Generated image';
+      imagesContainer.appendChild(img);
+    }
+    // Scroll to make the new images visible
+    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  private updateRetriesDisplay(): void {
+    if (!this.currentSession) return;
+    const session = this.currentSession;
+    const remainingEl = this.container.querySelector('#rpg-lite-retries-remaining') as HTMLElement | null;
+    if (!remainingEl) return;
+    const used = session.retriesUsed ?? 0;
+    // undefined means field not yet initialized; treat same as default (10).
+    // null means unlimited.
+    const limit = session.retryLimit ?? 10;
+    const unlimited = session.retryLimit === null;
+    const exhausted = !unlimited && used >= limit;
+    remainingEl.textContent = unlimited ? '∞ left' : `${Math.max(0, limit - used)} left`;
+    remainingEl.classList.toggle('rpg-lite-retries-exhausted', exhausted);
+  }
+
   private abortStreamingIfActive(): void {
     if (!this.isStreaming) return;
     if (!this.currentStreamingOperationId) throw new Error('Streaming is active but no operation id is set.');
@@ -1234,6 +1293,14 @@ export class RPGLiteView {
       session.temperature = 1.0;
     }
 
+    // Initialize retry fields if not set (default: 10 retries, 0 used)
+    if (session.retryLimit === undefined) {
+      session.retryLimit = 10;
+    }
+    if (session.retriesUsed === undefined) {
+      session.retriesUsed = 0;
+    }
+
     this.ensureModal();
     this.container.innerHTML = `
       <div class="rpg-lite-topbar">
@@ -1263,6 +1330,19 @@ export class RPGLiteView {
             <span style="opacity:.85;">Max msgs</span>
             <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;" />
           </label>
+          <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;">
+            <span style="opacity:.85;">Retries</span>
+            <input id="rpg-lite-retry-limit" class="rpg-lite-input" type="number" min="1" step="1"
+                   value="${session.retryLimit ?? 10}" style="max-width: 4.5rem;"${session.retryLimit === null ? ' disabled' : ''} />
+            <label style="display:flex; align-items:center; gap:.25rem; cursor:pointer; user-select:none;" title="Unlimited retries">
+              <input type="checkbox" id="rpg-lite-retry-unlimited"${session.retryLimit === null ? ' checked' : ''} />
+              <span style="opacity:.85;">∞</span>
+            </label>
+            <span id="rpg-lite-retries-remaining" class="rpg-lite-retries-remaining${session.retryLimit !== null && session.retriesUsed! >= session.retryLimit! ? ' rpg-lite-retries-exhausted' : ''}">
+              ${session.retryLimit === null ? '∞' : String(Math.max(0, session.retryLimit - session.retriesUsed!))} left
+            </span>
+            <button id="rpg-lite-retry-reset" class="rpg-lite-btn rpg-lite-btn-sm" title="Reset retry counter">↺</button>
+          </div>
           <button id="rpg-lite-save-session" class="rpg-lite-btn">Save Session</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
@@ -1365,6 +1445,37 @@ export class RPGLiteView {
       const normalized = Math.max(2, Math.floor(Number(maxContextEl.value)));
       session.maxContextMessages = normalized;
       void this.saveSession().then(() => this.updateContextStats());
+    });
+
+    const retryLimitInput = this.container.querySelector('#rpg-lite-retry-limit') as HTMLInputElement;
+    const retryUnlimitedCheckbox = this.container.querySelector('#rpg-lite-retry-unlimited') as HTMLInputElement;
+
+    retryUnlimitedCheckbox.addEventListener('change', () => {
+      if (retryUnlimitedCheckbox.checked) {
+        session.retryLimit = null;
+        retryLimitInput.disabled = true;
+      } else {
+        const limit = Math.max(1, Math.floor(Number(retryLimitInput.value) || 10));
+        session.retryLimit = limit;
+        retryLimitInput.disabled = false;
+      }
+      this.updateRetriesDisplay();
+      void this.saveSession();
+    });
+
+    retryLimitInput.addEventListener('input', () => {
+      if (session.retryLimit === null) return;
+      const limit = Math.max(1, Math.floor(Number(retryLimitInput.value) || 1));
+      session.retryLimit = limit;
+      this.updateRetriesDisplay();
+      void this.saveSession();
+    });
+
+    (this.container.querySelector('#rpg-lite-retry-reset') as HTMLButtonElement).addEventListener('click', () => {
+      session.retriesUsed = 0;
+      this.updateRetriesDisplay();
+      this.renderConversation();
+      void this.saveSession();
     });
 
     (this.container.querySelector('#rpg-lite-save-session') as HTMLButtonElement).addEventListener('click', () => {
@@ -1750,12 +1861,20 @@ export class RPGLiteView {
     );
 
     // Highlight direct speech (quoted text)
-    // Match "text" or "text," or "text." etc.
-    // Constrain to not cross paragraph boundaries to prevent hanging delimiter issues
-    result = result.replace(
-      /(&quot;(?:(?!\n\n)[\s\S])*?&quot;[,.\?!]?)/g,
-      '<span class="rpg-lite-highlight-speech">$1</span>'
-    );
+    // Matches straight quotes ("..."), curly double quotes ("\u201C...\u201D),
+    // curly single quotes (\u2018...\u2019) and guillemets (\u00AB...\u00BB).
+    // After escapeHtml, straight double quotes become &quot; while all unicode
+    // variants remain as literal characters, so each needs its own open/close pair.
+    // Constrain to not cross paragraph boundaries to prevent hanging delimiter issues.
+    const speechPatterns: RegExp[] = [
+      /(&quot;(?:(?!\n\n)[\s\S])*?&quot;[,.\?!]?)/g,          // "straight"
+      /(\u201C(?:(?!\n\n)[\s\S])*?\u201D[,.\?!]?)/g,           // \u201Ccurly\u201D
+      /(\u2018(?:(?!\n\n)[\s\S])*?\u2019[,.\?!]?)/g,           // \u2018single curly\u2019
+      /(\u00AB(?:(?!\n\n)[\s\S])*?\u00BB[,.\?!]?)/g,           // «guillemets»
+    ];
+    for (const pattern of speechPatterns) {
+      result = result.replace(pattern, '<span class="rpg-lite-highlight-speech">$1</span>');
+    }
 
     // First, normalize consecutive asterisks that are close together (treat as literal)
     // This prevents issues with patterns like "** text *" creating unclosed tags
@@ -1825,6 +1944,12 @@ export class RPGLiteView {
     const hasMultipleVersions = msg.versions && msg.versions.length > 1;
     const currentVersionIndex = msg.activeVersionIndex ?? 0;
     const versionCount = msg.versions?.length ?? 1;
+
+    // Determine if retries are exhausted for this session
+    const retryLimit = this.currentSession?.retryLimit ?? 10;
+    const retriesUsed = this.currentSession?.retriesUsed ?? 0;
+    const retriesExhausted = retryLimit !== null && retriesUsed >= retryLimit;
+    const retryDisabled = retriesExhausted ? ' disabled title="Retry limit reached — reset the counter in the topbar"' : '';
     
     el.innerHTML = `
       <div class="rpg-lite-message-header">
@@ -1836,11 +1961,12 @@ export class RPGLiteView {
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-action="next-version" title="Next version" ${currentVersionIndex === versionCount - 1 ? 'disabled' : ''}>▶</button>
           ` : ''}
           <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
-          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry">Retry</button>` : ''}
+          ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry"${retryDisabled}>Retry</button>` : ''}
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-icon" data-action="add-to-clipboard" title="Add to Clipboard">📋</button>` : ''}
         </div>
       </div>
       <div class="rpg-lite-message-content" data-role="content"></div>
+      ${msg.images && msg.images.length > 0 ? '<div class="rpg-lite-message-images" data-role="images"></div>' : ''}
       <div class="rpg-lite-message-info">${infoParts.map(p => `<span>${p}</span>`).join('')}</div>
     `;
 
@@ -1859,6 +1985,18 @@ export class RPGLiteView {
       this.attachXmlFoldHandlers(contentEl);
     } else {
       contentEl.textContent = msg.content;
+    }
+
+    // Render stored images
+    if (msg.images && msg.images.length > 0) {
+      const imagesContainer = el.querySelector('[data-role="images"]') as HTMLElement;
+      for (const url of msg.images) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'rpg-lite-message-image';
+        img.alt = 'Generated image';
+        imagesContainer.appendChild(img);
+      }
     }
 
     (el.querySelector('[data-action="edit"]') as HTMLButtonElement).addEventListener('click', () => {
@@ -2107,6 +2245,19 @@ export class RPGLiteView {
 
   private async retryFromAssistant(assistantMessageId: string): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
+
+    // Enforce retry limit
+    const retryLimit = this.currentSession.retryLimit ?? 10;
+    const retriesUsed = this.currentSession.retriesUsed ?? 0;
+    if (retryLimit !== null && retriesUsed >= retryLimit) {
+      alert(`Retry limit of ${retryLimit} reached. Reset the counter in the topbar to continue.`);
+      return;
+    }
+
+    // Consume one retry
+    this.currentSession.retriesUsed = retriesUsed + 1;
+    this.updateRetriesDisplay();
+    this.renderConversation(); // refresh button disabled state
     
     // Check if we're aborting an active stream before calling abort
     const wasStreaming = this.isStreaming;
@@ -2186,6 +2337,7 @@ export class RPGLiteView {
       // Reuse existing message (for retry)
       assistantMsg = existingMessage;
       assistantMsg.content = '';
+      delete assistantMsg.images;
     } else {
       // Create new message
       assistantMsg = {
@@ -2235,6 +2387,7 @@ export class RPGLiteView {
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
     let chunkCount = 0;
+    let imageCount = 0;
     const startTime = Date.now();
     let rafPending = false;
     let rafHandle: number | null = null;
@@ -2262,6 +2415,8 @@ export class RPGLiteView {
       // Auto-scroll to keep streaming content visible
       liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
     };
+
+    const streamOpts = await this.buildStreamingOptions(session);
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
@@ -2271,8 +2426,8 @@ export class RPGLiteView {
         chunkCount++;
         assistantMsg.content += chunk;
 
-        // Remove waiting indicator on first chunk
-        if (chunkCount === 1) {
+        // Remove waiting indicator on first text chunk
+        if (chunkCount === 1 && imageCount === 0) {
           this.removeWaitingIndicator(msgEl);
         }
 
@@ -2289,6 +2444,18 @@ export class RPGLiteView {
           rafPending = true;
           rafHandle = requestAnimationFrame(updateDOM);
         }
+      },
+      onImages: (imageUrls: string[]) => {
+        imageCount++;
+        // Remove waiting indicator on first image if no text arrived yet
+        if (imageCount === 1 && chunkCount === 0) {
+          this.removeWaitingIndicator(msgEl);
+        }
+        if (!assistantMsg.images) {
+          assistantMsg.images = [];
+        }
+        assistantMsg.images.push(...imageUrls);
+        this.appendImagesToMessageEl(msgEl, imageUrls);
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -2352,7 +2519,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, undefined, session.temperature !== undefined ? { temperature: session.temperature } : undefined);
+    }, opId, undefined, streamOpts);
   }
 
   private async generateAssistantReply(existingMessage?: RPGLiteChatMessage): Promise<void> {
@@ -2366,6 +2533,7 @@ export class RPGLiteView {
       // Reuse existing message (for retry)
       assistantMsg = existingMessage;
       assistantMsg.content = '';
+      delete assistantMsg.images;
     } else {
       // Create new message
       assistantMsg = {
@@ -2410,6 +2578,7 @@ export class RPGLiteView {
     const opId = this.currentStreamingOperationId;
     if (!opId) throw new Error('Missing streaming operation id.');
     let chunkCount = 0;
+    let imageCount = 0;
     const startTime = Date.now();
     let rafPending = false;
     let rafHandle: number | null = null;
@@ -2437,6 +2606,8 @@ export class RPGLiteView {
       // Auto-scroll to keep streaming content visible
       liveMessagesEl.scrollTop = liveMessagesEl.scrollHeight;
     };
+
+    const streamOpts = await this.buildStreamingOptions(session);
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
@@ -2446,8 +2617,8 @@ export class RPGLiteView {
         chunkCount++;
         assistantMsg.content += chunk;
 
-        // Remove waiting indicator on first chunk
-        if (chunkCount === 1) {
+        // Remove waiting indicator on first text chunk
+        if (chunkCount === 1 && imageCount === 0) {
           this.removeWaitingIndicator(msgEl);
         }
 
@@ -2464,6 +2635,18 @@ export class RPGLiteView {
           rafPending = true;
           rafHandle = requestAnimationFrame(updateDOM);
         }
+      },
+      onImages: (imageUrls: string[]) => {
+        imageCount++;
+        // Remove waiting indicator on first image if no text arrived yet
+        if (imageCount === 1 && chunkCount === 0) {
+          this.removeWaitingIndicator(msgEl);
+        }
+        if (!assistantMsg.images) {
+          assistantMsg.images = [];
+        }
+        assistantMsg.images.push(...imageUrls);
+        this.appendImagesToMessageEl(msgEl, imageUrls);
       },
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
@@ -2527,7 +2710,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, undefined, session.temperature !== undefined ? { temperature: session.temperature } : undefined);
+    }, opId, undefined, streamOpts);
   }
 }
 

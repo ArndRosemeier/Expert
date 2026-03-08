@@ -44,6 +44,13 @@ export interface OpenRouterRequest {
   web_search_options?: {
     search_context_size?: 'low' | 'medium' | 'high';
   };
+  /** Output modalities to request from the model. Use ["image", "text"] for models supporting image generation. */
+  modalities?: string[];
+  /** Image configuration for image-generation requests. */
+  image_config?: {
+    aspect_ratio?: string;
+    image_size?: string;
+  };
   provider?: {
     order?: string[];
     allow_fallbacks?: boolean;
@@ -151,6 +158,8 @@ import * as state from './state';
 export interface StreamingCallbacks {
   onStart: () => void;
   onChunk: (chunk: string) => void;
+  /** Called when the model returns image URLs (base64 data URLs). May be called once or multiple times. */
+  onImages?: (imageUrls: string[]) => void;
   onComplete: (fullContent: string) => void;
   onMeta?: (meta: OpenRouterCompletionMeta) => void;
   onError: (error: Error) => void;
@@ -158,6 +167,8 @@ export interface StreamingCallbacks {
 
 export interface StreamingChatOptions {
   temperature?: number;  // Optional temperature override (0-2)
+  /** Request specific output modalities. Use ["image", "text"] for image-generation capable models. */
+  modalities?: string[];
 }
 
 /**
@@ -899,6 +910,20 @@ export class OpenRouterClient {
   }
 
   /**
+   * Check whether a given model supports image output (i.e. image generation).
+   * Uses the cached fetchModels() data and checks architecture.output_modalities.
+   */
+  async modelSupportsImageOutput(modelId: string): Promise<boolean> {
+    try {
+      const models = await this.fetchModels();
+      const model = models.find(m => m.id === modelId);
+      return model?.architecture?.output_modalities?.includes('image') ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Fetch detailed provider information for a specific model
    */
   async fetchModelEndpoints(modelId: string): Promise<OpenRouterModelEndpoint[]> {
@@ -1035,6 +1060,7 @@ export class OpenRouterClient {
           if (options?.temperature !== undefined) {
             request.temperature = Math.max(0, Math.min(2, options.temperature));
           }
+          // (modalities applied unconditionally below, outside this params block)
           if (typeof p.top_p === 'number') {
             request.top_p = Math.max(0, Math.min(1, p.top_p));
           }
@@ -1101,7 +1127,21 @@ export class OpenRouterClient {
           search_context_size: 'medium' // Default to medium context
         };
       }
-      
+
+      // Apply options that must be set regardless of whether per-purpose params exist
+      if (options?.temperature !== undefined && request.temperature === undefined) {
+        // Only apply if not already set by the params block above
+        request.temperature = Math.max(0, Math.min(2, options.temperature));
+      }
+      if (options?.modalities) {
+        request.modalities = options.modalities;
+        // Remove stream_options for image requests — image models don't support it
+        // and it can interfere with the response. Streaming itself stays on.
+        if (options.modalities.includes('image')) {
+          delete (request as Partial<OpenRouterRequest>).stream_options;
+          delete (request as Partial<OpenRouterRequest>).usage;
+        }
+      }
 
 
       // Show AI interactions overlay if enabled
@@ -1141,6 +1181,7 @@ export class OpenRouterClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let receivedImages = false;
       let wasContentFiltered = false;
       let contentFilterReason = '';
       let finalUsage: OpenRouterUsage | undefined = undefined;
@@ -1186,13 +1227,21 @@ export class OpenRouterClient {
       callbacks.onStart();
 
       try {
+        // Line buffer: SSE lines can be arbitrarily large (e.g. base64 images).
+        // network read() chunks are fixed-size, so a single data: line may span
+        // many reads. We accumulate bytes here and only process complete lines.
+        let sseLineBuffer = '';
+
         while (true) {
           const { done, value } = await reader.read();
           
           if (done) break;
           
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          sseLineBuffer += decoder.decode(value, { stream: true });
+
+          // Split on newlines but keep the trailing partial line in the buffer
+          const lines = sseLineBuffer.split('\n');
+          sseLineBuffer = lines.pop() ?? '';
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -1243,8 +1292,16 @@ export class OpenRouterClient {
                     detail: { type: 'update', characters: fullContent.length } 
                   }));
                 }
+
+                // Handle image output from image-generation capable models
+                const deltaImages = choice?.delta?.images as Array<{ image_url: { url: string } }> | undefined;
+                if (deltaImages && deltaImages.length > 0) {
+                  const urls = deltaImages.map(img => img.image_url.url);
+                  receivedImages = true;
+                  callbacks.onImages?.(urls);
+                }
               } catch (parseError) {
-                // Ignore JSON parse errors for partial chunks
+                // Ignore JSON parse errors (malformed lines from the server)
                 continue;
               }
             }
@@ -1259,7 +1316,8 @@ export class OpenRouterClient {
         }
         
         // Check for empty response (another form of content filtering)
-        if (fullContent.length === 0) {
+        // Exception: image-only models return no text content, so skip this check if images were received.
+        if (fullContent.length === 0 && !receivedImages) {
           const error = new Error(`Empty response received from ${model}. This often indicates content filtering by the AI safety system. The model may have detected content that violates its usage policies. Try using a different model (like Mistral Large for best unrestricted quality) or rephrasing your content to be less explicit.`);
           error.name = 'EmptyResponseError';
           throw error;
