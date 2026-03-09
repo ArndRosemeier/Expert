@@ -764,7 +764,7 @@ export class RPGLiteView {
       title: preset.title,
       systemPrompt: preset.systemPrompt,
       prefixContext: preset.prefixContext,
-      narratorPurpose: preset.narratorPurpose,
+      ...(preset.narratorPurpose !== undefined ? { narratorPurpose: preset.narratorPurpose } : {}),
       maxContextMessages: preset.maxContextMessages
     };
 
@@ -781,12 +781,15 @@ export class RPGLiteView {
     const preset = this.presets.find((p) => p.id === presetId);
     if (!preset) return '';
 
-    const purposes: Array<{ key: RPGLiteModelPurpose; label: string }> = [
+    const purposes: Array<{ key: RPGLiteModelPurpose | ''; label: string }> = [
+      { key: '', label: 'Default' },
       { key: 'prose', label: 'Prose' },
       { key: 'creator', label: 'Creator' },
       { key: 'editor', label: 'Editor' },
       { key: 'rater', label: 'Rater' }
     ];
+
+    const selectedPurpose = preset.narratorPurpose ?? '';
 
     return `
       <div class="rpg-lite-message">
@@ -810,7 +813,7 @@ export class RPGLiteView {
           <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;">
             <span class="rpg-lite-section-title">Narrator</span>
             <select id="rpg-lite-preset-editor-purpose" class="rpg-lite-select">
-              ${purposes.map(p => `<option value="${p.key}" ${p.key === preset.narratorPurpose ? 'selected' : ''}>${p.label}</option>`).join('')}
+              ${purposes.map(p => `<option value="${p.key}" ${p.key === selectedPurpose ? 'selected' : ''}>${p.label}</option>`).join('')}
             </select>
           </label>
           <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;">
@@ -914,7 +917,11 @@ export class RPGLiteView {
 
     preset.name = name;
     preset.title = title;
-    preset.narratorPurpose = purposeEl.value as RPGLiteModelPurpose;
+    if (purposeEl.value === '') {
+      delete preset.narratorPurpose;
+    } else {
+      preset.narratorPurpose = purposeEl.value as RPGLiteModelPurpose;
+    }
     preset.maxContextMessages = Math.max(2, Math.floor(Number(maxEl.value)));
     preset.systemPrompt = systemEl.value;
     preset.prefixContext = prefixEl.value;
@@ -954,7 +961,7 @@ export class RPGLiteView {
       updatedAt: now(),
       systemPrompt: preset.systemPrompt,
       prefixContext: preset.prefixContext,
-      narratorPurpose: preset.narratorPurpose,
+      narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       conversation: []
     };
@@ -1247,7 +1254,7 @@ export class RPGLiteView {
         updatedAt: now(),
         systemPrompt: split.systemPrompt,
         prefixContext: split.prefixContext,
-        narratorPurpose,
+        // New presets use default narrator (omit property)
         maxContextMessages: maxContext
       };
 

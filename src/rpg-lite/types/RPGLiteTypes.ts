@@ -65,7 +65,7 @@ export interface RPGLiteStartPreset {
   title: string;
   systemPrompt: string;
   prefixContext: string;
-  narratorPurpose: RPGLiteModelPurpose;
+  narratorPurpose?: RPGLiteModelPurpose; // Optional: undefined means use default
   maxContextMessages: number;
 }
 
