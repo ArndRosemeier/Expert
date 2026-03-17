@@ -47,8 +47,25 @@ async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouter
       `${session.prefixContext}`
   });
 
-  const slice = session.conversation.slice(Math.max(0, session.conversation.length - session.maxContextMessages));
-  for (const m of slice) {
+  // Only include messages that have content. Empty messages are in-flight placeholders
+  // created before the model responds — including them sends a blank assistant turn to
+  // the model, which corrupts the role sequence and can cause repeated responses.
+  const completed = session.conversation.filter(m => m.content.trim().length > 0);
+
+  // Take the N most recent completed messages.
+  let startIdx = Math.max(0, completed.length - session.maxContextMessages);
+
+  // The adventure context above is injected as a 'user' message. The conversation
+  // starts with an assistant message (the opening), so the pattern is:
+  //   assistant, user, assistant, user, …
+  // If the slice cuts at an even-offset position it starts with a 'user' message,
+  // creating consecutive user roles which confuses most LLMs.
+  // Fix: step back one to include the preceding assistant message, keeping the pair intact.
+  if (startIdx > 0 && completed[startIdx]?.role === 'user') {
+    startIdx -= 1;
+  }
+
+  for (const m of completed.slice(startIdx)) {
     messages.push({ role: m.role, content: m.content });
   }
   return messages;
