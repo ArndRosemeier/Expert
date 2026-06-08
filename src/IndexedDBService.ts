@@ -114,6 +114,21 @@ export class IndexedDBService {
   }
 
   /**
+   * Get the configured object stores (name + keyPath) for this database.
+   *
+   * This is the authoritative list of every store the application manages and
+   * is what makes the comprehensive backup/restore future-proof: any store
+   * added to the database config is automatically included without further
+   * changes to the export/import services.
+   */
+  getStoreConfigs(): Array<{ name: string; keyPath: string | undefined }> {
+    return this.config.stores.map(store => ({
+      name: store.name,
+      keyPath: store.keyPath
+    }));
+  }
+
+  /**
    * Close the database connection
    */
   close(): void {

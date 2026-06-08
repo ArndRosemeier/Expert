@@ -32,18 +32,17 @@ interface ComprehensiveImportResult {
     migrationProfileName?: string | undefined;
 }
 
+interface ImportStore {
+    name: string;
+    keyPath: string;
+    records: any[];
+}
+
 interface ImportValidation {
     isValid: boolean;
     errors: string[];
     manifest?: any;
-    files: {
-        keyValueStore?: any[];
-        projectsStore?: any[];
-        aiLogsStore?: any[];
-        rpgLiteSessionsStore?: any[];
-        rpgLitePresetsStore?: any[];
-        manifest?: any;
-    };
+    stores: ImportStore[];
 }
 
 // Keys that should be preserved during import (not overwritten)
@@ -51,6 +50,29 @@ const PRESERVED_KEYS = [
     'expert_generated_keys',  // App validation keys must not be overwritten
     'openrouter_api_key',     // OpenRouter API key should be preserved
 ];
+
+// Backward-compatible mapping for legacy (pre-3.0) backup ZIPs that used fixed
+// file names and did not record a storeManifest. New backups carry their own
+// store list in the manifest and do not rely on this table.
+const LEGACY_FILE_MAP: Array<{ file: string; name: string; keyPath: string }> = [
+    { file: 'keyvalue-store.json', name: 'keyValue', keyPath: 'key' },
+    { file: 'projects-store.json', name: 'projects', keyPath: 'id' },
+    { file: 'ai-logs-store.json', name: 'aiLogs', keyPath: 'id' },
+    { file: 'rpg-lite-sessions-store.json', name: 'rpg_lite_sessions', keyPath: 'id' },
+    { file: 'rpg-lite-presets-store.json', name: 'rpg_lite_start_presets', keyPath: 'id' },
+    { file: 'rpg-lite-action-buttons-store.json', name: 'rpg_lite_action_buttons', keyPath: 'id' }
+];
+
+// Friendly titles used in the import summary UI. Unknown stores fall back to
+// the raw store name so new stores are still listed.
+const STORE_LABELS: Record<string, string> = {
+    keyValue: 'Application Settings & Data',
+    projects: 'Projects',
+    aiLogs: 'AI Logs',
+    rpg_lite_sessions: 'RPG Lite Sessions',
+    rpg_lite_start_presets: 'RPG Lite Templates',
+    rpg_lite_action_buttons: 'RPG Lite Quick Actions'
+};
 
 export class ComprehensiveImportService {
     
@@ -74,77 +96,29 @@ export class ComprehensiveImportService {
             
             console.log('✅ Backup file validation passed');
             
-            // Step 2: Clear existing data (preserving sensitive keys)
-            await this.clearExistingData();
-            console.log('✅ Existing data cleared (sensitive keys preserved)');
-            
-            // Step 3: Import data into IndexedDB stores
-            const importedItems: string[] = [];
-            const errors: string[] = [];
-            
             // Get IndexedDB service for direct store access
             const indexedDBService = await this.getIndexedDBService();
             
-            // Import keyValue store data
-            if (validation.files.keyValueStore && validation.files.keyValueStore.length > 0) {
-                try {
-                    await this.importKeyValueStore(indexedDBService, validation.files.keyValueStore);
-                    importedItems.push(`${validation.files.keyValueStore.length} keyValue entries (settings, templates, buttons)`);
-                    console.log(`✅ Imported ${validation.files.keyValueStore.length} keyValue entries`);
-                } catch (error) {
-                    const errorMsg = `Failed to import keyValue store: ${error instanceof Error ? error.message : error}`;
-                    errors.push(errorMsg);
-                    console.error('❌', errorMsg);
-                }
-            }
+            // Step 2: Clear exactly the stores present in the backup (preserving
+            // sensitive keys). Stores that are not part of the backup are left
+            // untouched so restoring a partial backup never wipes unrelated data.
+            await this.clearStores(indexedDBService, validation.stores.map(store => store.name));
+            console.log('✅ Existing data cleared for backed-up stores (sensitive keys preserved)');
             
-            // Import projects store data
-            if (validation.files.projectsStore && validation.files.projectsStore.length > 0) {
-                try {
-                    await this.importProjectsStore(indexedDBService, validation.files.projectsStore);
-                    importedItems.push(`${validation.files.projectsStore.length} projects`);
-                    console.log(`✅ Imported ${validation.files.projectsStore.length} projects`);
-                } catch (error) {
-                    const errorMsg = `Failed to import projects store: ${error instanceof Error ? error.message : error}`;
-                    errors.push(errorMsg);
-                    console.error('❌', errorMsg);
-                }
-            }
+            // Step 3: Restore every store generically using its recorded keyPath.
+            const importedItems: string[] = [];
+            const errors: string[] = [];
             
-            // Import aiLogs store data
-            if (validation.files.aiLogsStore && validation.files.aiLogsStore.length > 0) {
-                try {
-                    await this.importAILogsStore(indexedDBService, validation.files.aiLogsStore);
-                    importedItems.push(`${validation.files.aiLogsStore.length} AI log entries`);
-                    console.log(`✅ Imported ${validation.files.aiLogsStore.length} AI log entries`);
-                } catch (error) {
-                    const errorMsg = `Failed to import AI logs store: ${error instanceof Error ? error.message : error}`;
-                    errors.push(errorMsg);
-                    console.error('❌', errorMsg);
+            for (const store of validation.stores) {
+                if (store.records.length === 0) {
+                    continue;
                 }
-            }
-            
-            // Import RPG Lite sessions store data
-            if (validation.files.rpgLiteSessionsStore && validation.files.rpgLiteSessionsStore.length > 0) {
                 try {
-                    await this.importRPGLiteSessionsStore(indexedDBService, validation.files.rpgLiteSessionsStore);
-                    importedItems.push(`${validation.files.rpgLiteSessionsStore.length} RPG Lite sessions`);
-                    console.log(`✅ Imported ${validation.files.rpgLiteSessionsStore.length} RPG Lite sessions`);
+                    const written = await this.importStoreRecords(indexedDBService, store);
+                    importedItems.push(`${written} ${this.getStoreLabel(store.name)}`);
+                    console.log(`✅ Imported ${written} records into '${store.name}'`);
                 } catch (error) {
-                    const errorMsg = `Failed to import RPG Lite sessions store: ${error instanceof Error ? error.message : error}`;
-                    errors.push(errorMsg);
-                    console.error('❌', errorMsg);
-                }
-            }
-            
-            // Import RPG Lite presets store data
-            if (validation.files.rpgLitePresetsStore && validation.files.rpgLitePresetsStore.length > 0) {
-                try {
-                    await this.importRPGLitePresetsStore(indexedDBService, validation.files.rpgLitePresetsStore);
-                    importedItems.push(`${validation.files.rpgLitePresetsStore.length} RPG Lite templates`);
-                    console.log(`✅ Imported ${validation.files.rpgLitePresetsStore.length} RPG Lite templates`);
-                } catch (error) {
-                    const errorMsg = `Failed to import RPG Lite presets store: ${error instanceof Error ? error.message : error}`;
+                    const errorMsg = `Failed to import store '${store.name}': ${error instanceof Error ? error.message : error}`;
                     errors.push(errorMsg);
                     console.error('❌', errorMsg);
                 }
@@ -200,11 +174,17 @@ export class ComprehensiveImportService {
     }
     
     /**
-     * Validate the backup file structure and content
+     * Validate the backup file structure and content.
+     *
+     * Produces a single, store-agnostic list of stores to restore. New (3.0+)
+     * backups carry a `storeManifest` describing every store, keyPath and file,
+     * which makes restore fully future-proof. Older backups are still supported
+     * via the fixed LEGACY_FILE_MAP table.
      */
     private static async validateBackupFile(file: File): Promise<ImportValidation> {
         const errors: string[] = [];
-        const files: ImportValidation['files'] = {};
+        const stores: ImportStore[] = [];
+        let manifest: any;
         
         try {
             // Check file type
@@ -216,19 +196,16 @@ export class ComprehensiveImportService {
             const zip = new JSZip();
             const zipContent = await zip.loadAsync(file);
             
-            // Check for optional data files
-            const optionalFiles = ['keyvalue-store.json', 'projects-store.json', 'ai-logs-store.json', 'rpg-lite-sessions-store.json', 'rpg-lite-presets-store.json'];
-            
             // Validate manifest exists
             if (!zipContent.files['manifest.json']) {
                 errors.push('Missing manifest.json file');
             } else {
                 try {
                     const manifestContent = await zipContent.files['manifest.json'].async('string');
-                    files.manifest = JSON.parse(manifestContent);
+                    manifest = JSON.parse(manifestContent);
                     
                     // Validate manifest structure
-                    if (!files.manifest.exportDate || !files.manifest.exportVersion) {
+                    if (!manifest.exportDate || !manifest.exportVersion) {
                         errors.push('Invalid manifest format');
                     }
                 } catch (error) {
@@ -236,52 +213,37 @@ export class ComprehensiveImportService {
                 }
             }
             
-            // Load and validate optional data files
-            for (const fileName of optionalFiles) {
-                if (zipContent.files[fileName]) {
-                    try {
-                        const content = await zipContent.files[fileName].async('string');
-                        const data = JSON.parse(content);
-                        
-                        if (fileName === 'keyvalue-store.json') {
-                            if (Array.isArray(data)) {
-                                files.keyValueStore = data;
-                            } else {
-                                errors.push('keyvalue-store.json must contain an array');
-                            }
-                        } else if (fileName === 'projects-store.json') {
-                            if (Array.isArray(data)) {
-                                files.projectsStore = data;
-                            } else {
-                                errors.push('projects-store.json must contain an array');
-                            }
-                        } else if (fileName === 'ai-logs-store.json') {
-                            if (Array.isArray(data)) {
-                                files.aiLogsStore = data;
-                            } else {
-                                errors.push('ai-logs-store.json must contain an array');
-                            }
-                        } else if (fileName === 'rpg-lite-sessions-store.json') {
-                            if (Array.isArray(data)) {
-                                files.rpgLiteSessionsStore = data;
-                            } else {
-                                errors.push('rpg-lite-sessions-store.json must contain an array');
-                            }
-                        } else if (fileName === 'rpg-lite-presets-store.json') {
-                            if (Array.isArray(data)) {
-                                files.rpgLitePresetsStore = data;
-                            } else {
-                                errors.push('rpg-lite-presets-store.json must contain an array');
-                            }
-                        }
-                    } catch (error) {
-                        errors.push(`Invalid ${fileName} format`);
+            // Determine the list of stores to read. Prefer the explicit, future-proof
+            // storeManifest; fall back to the legacy fixed file names otherwise.
+            const storeManifest: Array<{ name: string; keyPath: string; file: string }> =
+                manifest && Array.isArray(manifest.storeManifest) ? manifest.storeManifest : [];
+            const entries = storeManifest.length > 0
+                ? storeManifest.map(entry => ({ file: entry.file, name: entry.name, keyPath: entry.keyPath }))
+                : LEGACY_FILE_MAP;
+            
+            for (const entry of entries) {
+                const zipFile = zipContent.files[entry.file];
+                if (!zipFile) {
+                    continue;
+                }
+                try {
+                    const data = JSON.parse(await zipFile.async('string'));
+                    if (!Array.isArray(data)) {
+                        errors.push(`${entry.file} must contain an array`);
+                        continue;
                     }
+                    if (typeof entry.name !== 'string' || typeof entry.keyPath !== 'string') {
+                        errors.push(`Invalid store descriptor for ${entry.file}`);
+                        continue;
+                    }
+                    stores.push({ name: entry.name, keyPath: entry.keyPath, records: data });
+                } catch (error) {
+                    errors.push(`Invalid ${entry.file} format`);
                 }
             }
             
             // Check that we have at least one data file
-            if (!files.keyValueStore && !files.projectsStore && !files.aiLogsStore && !files.rpgLiteSessionsStore && !files.rpgLitePresetsStore) {
+            if (stores.length === 0) {
                 errors.push('No valid data files found in backup');
             }
             
@@ -292,37 +254,26 @@ export class ComprehensiveImportService {
         return {
             isValid: errors.length === 0,
             errors,
-            manifest: files.manifest,
-            files
+            manifest,
+            stores
         };
     }
     
     /**
-     * Clear existing data from IndexedDB stores (preserving sensitive keys)
+     * Clear the given object stores before restore (preserving sensitive keys).
+     * The keyValue store keeps PRESERVED_KEYS; all other stores are cleared fully.
      */
-    private static async clearExistingData(): Promise<void> {
-        console.log('🧹 Clearing existing data...');
+    private static async clearStores(indexedDBService: IndexedDBService, storeNames: string[]): Promise<void> {
+        console.log('🧹 Clearing existing data for stores:', storeNames);
         
-        const indexedDBService = await this.getIndexedDBService();
-        
-        // Clear keyValue store but preserve sensitive keys
-        await this.clearKeyValueStoreWithPreservation(indexedDBService);
-        
-        // Clear projects store completely
-        await indexedDBService.clear('projects');
-        console.log('✅ Cleared projects store');
-        
-        // Clear aiLogs store completely
-        await indexedDBService.clear('aiLogs');
-        console.log('✅ Cleared aiLogs store');
-        
-        // Clear RPG Lite sessions store completely
-        await indexedDBService.clear('rpg_lite_sessions');
-        console.log('✅ Cleared RPG Lite sessions store');
-        
-        // Clear RPG Lite presets store completely
-        await indexedDBService.clear('rpg_lite_start_presets');
-        console.log('✅ Cleared RPG Lite presets store');
+        for (const storeName of storeNames) {
+            if (storeName === 'keyValue') {
+                await this.clearKeyValueStoreWithPreservation(indexedDBService);
+            } else {
+                await indexedDBService.clear(storeName);
+                console.log(`✅ Cleared '${storeName}' store`);
+            }
+        }
     }
     
     /**
@@ -355,61 +306,40 @@ export class ComprehensiveImportService {
     }
     
     /**
-     * Import data into keyValue store
+     * Restore one store's records generically using its keyPath. Each record is
+     * an object whose key field (keyPath) is the store key. Records that are not
+     * objects or are missing their key field are a hard error (loud, not skipped).
+     * For the keyValue store, PRESERVED_KEYS are skipped so they keep their
+     * existing (preserved) values. Returns the number of records written.
      */
-    private static async importKeyValueStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
-        for (const item of data) {
-            if (item && typeof item === 'object' && 'key' in item) {
-                // Skip sensitive keys (they should remain as preserved)
-                if (!PRESERVED_KEYS.includes(item.key)) {
-                    await indexedDBService.set('keyValue', item.key, item);
-                }
+    private static async importStoreRecords(indexedDBService: IndexedDBService, store: ImportStore): Promise<number> {
+        let written = 0;
+        for (const item of store.records) {
+            if (!item || typeof item !== 'object') {
+                throw new Error(`Record in store '${store.name}' is not an object`);
             }
+            if (!(store.keyPath in item)) {
+                throw new Error(`Record in store '${store.name}' is missing key field '${store.keyPath}'`);
+            }
+            const key = (item as Record<string, unknown>)[store.keyPath];
+            if (typeof key !== 'string') {
+                throw new Error(`Record in store '${store.name}' has a non-string key for '${store.keyPath}'`);
+            }
+            if (store.name === 'keyValue' && PRESERVED_KEYS.includes(key)) {
+                continue;
+            }
+            await indexedDBService.set(store.name, key, item);
+            written++;
         }
+        return written;
     }
-    
+
     /**
-     * Import data into projects store
+     * Friendly title for a store, used in import logs and the summary UI.
+     * Unknown stores fall back to the raw store name so new stores still appear.
      */
-    private static async importProjectsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
-        for (const item of data) {
-            if (item && typeof item === 'object' && 'id' in item) {
-                await indexedDBService.set('projects', item.id, item);
-            }
-        }
-    }
-    
-    /**
-     * Import data into aiLogs store
-     */
-    private static async importAILogsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
-        for (const item of data) {
-            if (item && typeof item === 'object' && 'id' in item) {
-                await indexedDBService.set('aiLogs', item.id, item);
-            }
-        }
-    }
-    
-    /**
-     * Import data into RPG Lite sessions store
-     */
-    private static async importRPGLiteSessionsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
-        for (const item of data) {
-            if (item && typeof item === 'object' && 'id' in item) {
-                await indexedDBService.set('rpg_lite_sessions', item.id, item);
-            }
-        }
-    }
-    
-    /**
-     * Import data into RPG Lite presets store
-     */
-    private static async importRPGLitePresetsStore(indexedDBService: IndexedDBService, data: any[]): Promise<void> {
-        for (const item of data) {
-            if (item && typeof item === 'object' && 'id' in item) {
-                await indexedDBService.set('rpg_lite_start_presets', item.id, item);
-            }
-        }
+    private static getStoreLabel(storeName: string): string {
+        return STORE_LABELS[storeName] ?? storeName;
     }
     
     /**
@@ -503,54 +433,16 @@ export class ComprehensiveImportService {
         const summary: { name: string; count: number; status: 'available' | 'error' }[] = [];
         
         if (validation.isValid) {
-            if (validation.files.keyValueStore) {
+            for (const store of validation.stores) {
                 summary.push({
-                    name: 'Application Settings & Data',
-                    count: validation.files.keyValueStore.length,
-                    status: 'available'
-                });
-            }
-            
-            if (validation.files.projectsStore) {
-                summary.push({
-                    name: 'Projects',
-                    count: validation.files.projectsStore.length,
-                    status: 'available'
-                });
-            }
-            
-            if (validation.files.aiLogsStore) {
-                summary.push({
-                    name: 'AI Logs',
-                    count: validation.files.aiLogsStore.length,
-                    status: 'available'
-                });
-            }
-            
-            if (validation.files.rpgLiteSessionsStore) {
-                summary.push({
-                    name: 'RPG Lite Sessions',
-                    count: validation.files.rpgLiteSessionsStore.length,
-                    status: 'available'
-                });
-            }
-            
-            if (validation.files.rpgLitePresetsStore) {
-                summary.push({
-                    name: 'RPG Lite Templates',
-                    count: validation.files.rpgLitePresetsStore.length,
+                    name: this.getStoreLabel(store.name),
+                    count: store.records.length,
                     status: 'available'
                 });
             }
         } else {
-            // Add error entries for invalid file
-            summary.push(
-                { name: 'Application Settings & Data', count: 0, status: 'error' },
-                { name: 'Projects', count: 0, status: 'error' },
-                { name: 'AI Logs', count: 0, status: 'error' },
-                { name: 'RPG Lite Sessions', count: 0, status: 'error' },
-                { name: 'RPG Lite Templates', count: 0, status: 'error' }
-            );
+            // Surface the failure loudly as a single error entry.
+            summary.push({ name: 'IndexedDB', count: 0, status: 'error' });
         }
         
         return {

@@ -6,10 +6,10 @@
  * This has regressed before - users expect file selector behavior, not downloads folder dumps!
  * 
  * ✅ SIMPLIFIED & FUTURE-PROOF APPROACH:
- * - Exports ALL data from IndexedDB stores
- * - Automatically includes any new data types we add
+ * - Enumerates every IndexedDB object store from the database config and exports each
+ * - Automatically includes any new store added to the database, with no edits here
+ * - Records each store's name/keyPath/file in manifest.storeManifest for generic restore
  * - Filters out only sensitive data (API keys)
- * - No need to maintain lists of what to export
  */
 
 import JSZip from 'jszip';
@@ -32,7 +32,38 @@ const SENSITIVE_KEYS = [
 ];
 
 export class ComprehensiveExportService {
-    
+
+    // Friendly nouns used in the "contents" list (e.g. "5 projects").
+    // Unknown stores fall back to "<storeName> records" so new stores still
+    // produce sensible text without requiring an entry here.
+    private static readonly STORE_NOUNS: Record<string, string> = {
+        keyValue: 'keyValue entries (settings, templates, buttons, etc.)',
+        projects: 'projects',
+        aiLogs: 'AI log entries',
+        rpg_lite_sessions: 'RPG Lite sessions',
+        rpg_lite_start_presets: 'RPG Lite templates',
+        rpg_lite_action_buttons: 'RPG Lite quick actions'
+    };
+
+    // Friendly titles used in the export summary UI. Unknown stores fall back
+    // to the raw store name so new stores are still listed.
+    private static readonly STORE_LABELS: Record<string, string> = {
+        keyValue: 'Application Settings & Data',
+        projects: 'Projects',
+        aiLogs: 'AI Logs',
+        rpg_lite_sessions: 'RPG Lite Sessions',
+        rpg_lite_start_presets: 'RPG Lite Templates',
+        rpg_lite_action_buttons: 'RPG Lite Quick Actions'
+    };
+
+    private static getStoreNoun(storeName: string): string {
+        return this.STORE_NOUNS[storeName] ?? `${storeName} records`;
+    }
+
+    private static getStoreLabel(storeName: string): string {
+        return this.STORE_LABELS[storeName] ?? storeName;
+    }
+
     /**
      * Creates a comprehensive backup of ALL application data from IndexedDB
      * This is future-proof - any new data we add will automatically be included
@@ -49,89 +80,45 @@ export class ComprehensiveExportService {
             // Get direct access to IndexedDB service for complete data export
             const indexedDBService = await this.getIndexedDBService();
             
-            // Export all data from keyValue store (settings, templates, buttons, etc.)
-            try {
-                const keyValueData = await indexedDBService.getAll('keyValue');
-                const filteredKeyValueData = this.filterSensitiveData(keyValueData);
-                
-                if (filteredKeyValueData.length > 0) {
-                    zip.file('keyvalue-store.json', JSON.stringify(filteredKeyValueData, null, 2));
-                    exportedItems.push(`${filteredKeyValueData.length} keyValue entries (settings, templates, buttons, etc.)`);
+            // Dynamically export every IndexedDB object store. The store list is
+            // read straight from the database config, so any store added to the
+            // database in the future is included automatically with no changes here.
+            const storeManifest: Array<{ name: string; keyPath: string; file: string; count: number }> = [];
+
+            for (const storeConfig of indexedDBService.getStoreConfigs()) {
+                if (storeConfig.keyPath === undefined) {
+                    throw new Error(`Cannot export store '${storeConfig.name}': stores without an inline keyPath are not supported by the comprehensive backup`);
                 }
-            } catch (error) {
-                console.warn('Failed to export keyValue store:', error);
+
+                const records = this.filterSensitiveData(await indexedDBService.getAll(storeConfig.name));
+                if (records.length === 0) {
+                    continue;
+                }
+
+                const file = `store-${storeConfig.name}.json`;
+                zip.file(file, JSON.stringify(records, null, 2));
+                storeManifest.push({ name: storeConfig.name, keyPath: storeConfig.keyPath, file, count: records.length });
+                exportedItems.push(`${records.length} ${this.getStoreNoun(storeConfig.name)}`);
             }
 
-            // Export all data from projects store
-            try {
-                const projectsData = await indexedDBService.getAll('projects');
-                
-                if (projectsData.length > 0) {
-                    zip.file('projects-store.json', JSON.stringify(projectsData, null, 2));
-                    exportedItems.push(`${projectsData.length} projects`);
-                }
-            } catch (error) {
-                console.warn('Failed to export projects store:', error);
-            }
-
-            // Export all data from aiLogs store
-            try {
-                const aiLogsData = await indexedDBService.getAll('aiLogs');
-                
-                if (aiLogsData.length > 0) {
-                    zip.file('ai-logs-store.json', JSON.stringify(aiLogsData, null, 2));
-                    exportedItems.push(`${aiLogsData.length} AI log entries`);
-                }
-            } catch (error) {
-                console.warn('Failed to export aiLogs store:', error);
-            }
-
-            // Export all data from RPG Lite sessions store
-            try {
-                const rpgLiteSessionsData = await indexedDBService.getAll('rpg_lite_sessions');
-                
-                if (rpgLiteSessionsData.length > 0) {
-                    zip.file('rpg-lite-sessions-store.json', JSON.stringify(rpgLiteSessionsData, null, 2));
-                    exportedItems.push(`${rpgLiteSessionsData.length} RPG Lite sessions`);
-                }
-            } catch (error) {
-                console.warn('Failed to export RPG Lite sessions store:', error);
-            }
-
-            // Export all data from RPG Lite start presets store
-            try {
-                const rpgLitePresetsData = await indexedDBService.getAll('rpg_lite_start_presets');
-                
-                if (rpgLitePresetsData.length > 0) {
-                    zip.file('rpg-lite-presets-store.json', JSON.stringify(rpgLitePresetsData, null, 2));
-                    exportedItems.push(`${rpgLitePresetsData.length} RPG Lite templates`);
-                }
-            } catch (error) {
-                console.warn('Failed to export RPG Lite presets store:', error);
-            }
-
-            // Create a manifest with export metadata
+            // Create a manifest with export metadata. `storeManifest` records the
+            // exact store name, keyPath and file name for each exported store so
+            // the import side can restore generically with no hardcoded knowledge.
             const manifest = {
                 exportDate: new Date().toISOString(),
-                exportVersion: '2.1', // Updated version to include RPG Lite stores
+                exportVersion: '3.0', // Dynamic, store-agnostic backup format
                 description: 'Complete Expert Application IndexedDB Backup',
-                approach: 'Future-proof: exports ALL data from IndexedDB stores',
+                approach: 'Future-proof: dynamically exports every IndexedDB object store',
                 contents: exportedItems,
-                stores: {
-                    keyValue: 'General application settings, templates, buttons, configurations',
-                    projects: 'All project data and metadata',
-                    aiLogs: 'AI interaction logs and debugging information',
-                    rpgLiteSessions: 'RPG Lite game sessions',
-                    rpgLitePresets: 'RPG Lite start templates'
-                },
+                storeManifest,
                 security: {
                     excluded: 'API keys and sensitive authentication data are filtered out',
                     filteredKeys: SENSITIVE_KEYS
                 },
                 instructions: {
-                    restore: 'Import individual store files as needed or contact support for full restoration',
+                    restore: 'Restore via the in-app Load All function, which reads storeManifest and rewrites each store',
                     compatibility: 'Compatible with Expert Application IndexedDB structure',
-                    futureProof: 'This export will automatically include any new data types added to the application'
+                    futureProof: 'This export automatically includes any new object store added to the application'
                 }
             };
             zip.file('manifest.json', JSON.stringify(manifest, null, 2));
@@ -253,97 +240,21 @@ export class ComprehensiveExportService {
         try {
             const indexedDBService = await this.getIndexedDBService();
 
-            // Check keyValue store
-            try {
-                const keyValueData = await indexedDBService.getAll('keyValue');
-                const filteredData = this.filterSensitiveData(keyValueData);
+            // Report one category per object store, derived dynamically from the
+            // database config so new stores appear here automatically.
+            for (const storeConfig of indexedDBService.getStoreConfigs()) {
+                const records = this.filterSensitiveData(await indexedDBService.getAll(storeConfig.name));
                 categories.push({
-                    name: 'Application Settings & Data',
-                    count: filteredData.length,
-                    status: filteredData.length > 0 ? 'available' : 'empty'
-                });
-            } catch (error) {
-                categories.push({
-                    name: 'Application Settings & Data',
-                    count: 0,
-                    status: 'error'
+                    name: this.getStoreLabel(storeConfig.name),
+                    count: records.length,
+                    status: records.length > 0 ? 'available' : 'empty'
                 });
             }
-
-            // Check projects store
-            try {
-                const projectsData = await indexedDBService.getAll('projects');
-                categories.push({
-                    name: 'Projects',
-                    count: projectsData.length,
-                    status: projectsData.length > 0 ? 'available' : 'empty'
-                });
-            } catch (error) {
-                categories.push({
-                    name: 'Projects',
-                    count: 0,
-                    status: 'error'
-                });
-            }
-
-            // Check aiLogs store
-            try {
-                const aiLogsData = await indexedDBService.getAll('aiLogs');
-                categories.push({
-                    name: 'AI Logs',
-                    count: aiLogsData.length,
-                    status: aiLogsData.length > 0 ? 'available' : 'empty'
-                });
-            } catch (error) {
-                categories.push({
-                    name: 'AI Logs',
-                    count: 0,
-                    status: 'error'
-                });
-            }
-
-            // Check RPG Lite sessions store
-            try {
-                const rpgLiteSessionsData = await indexedDBService.getAll('rpg_lite_sessions');
-                categories.push({
-                    name: 'RPG Lite Sessions',
-                    count: rpgLiteSessionsData.length,
-                    status: rpgLiteSessionsData.length > 0 ? 'available' : 'empty'
-                });
-            } catch (error) {
-                categories.push({
-                    name: 'RPG Lite Sessions',
-                    count: 0,
-                    status: 'error'
-                });
-            }
-
-            // Check RPG Lite presets store
-            try {
-                const rpgLitePresetsData = await indexedDBService.getAll('rpg_lite_start_presets');
-                categories.push({
-                    name: 'RPG Lite Templates',
-                    count: rpgLitePresetsData.length,
-                    status: rpgLitePresetsData.length > 0 ? 'available' : 'empty'
-                });
-            } catch (error) {
-                categories.push({
-                    name: 'RPG Lite Templates',
-                    count: 0,
-                    status: 'error'
-                });
-            }
-
         } catch (error) {
             console.error('Failed to get export summary:', error);
-            // Return empty categories with error status
-            categories.push(
-                { name: 'Application Settings & Data', count: 0, status: 'error' },
-                { name: 'Projects', count: 0, status: 'error' },
-                { name: 'AI Logs', count: 0, status: 'error' },
-                { name: 'RPG Lite Sessions', count: 0, status: 'error' },
-                { name: 'RPG Lite Templates', count: 0, status: 'error' }
-            );
+            // Surface the failure loudly as a single error category rather than
+            // pretending each individual store failed.
+            categories.push({ name: 'IndexedDB', count: 0, status: 'error' });
         }
 
         return { categories };

@@ -1889,12 +1889,18 @@ export class RPGLiteView {
     // curly single quotes (\u2018...\u2019) and guillemets (\u00AB...\u00BB).
     // After escapeHtml, straight double quotes become &quot; while all unicode
     // variants remain as literal characters, so each needs its own open/close pair.
+    // The body excludes the literal '<' character: at this point all original
+    // text has been escaped (so a real '<' is now '&lt;'), meaning the only
+    // literal '<' in the string belong to the XML/JSON highlight spans injected
+    // above. Excluding it stops a quote match from spanning across those spans,
+    // e.g. an unbalanced quote inside a folded <hidden> block must not pair with
+    // the opening quote of the real speech that follows it.
     // Constrain to not cross paragraph boundaries to prevent hanging delimiter issues.
     const speechPatterns: RegExp[] = [
-      /(&quot;(?:(?!\n\n)[\s\S])*?&quot;[,.\?!]?)/g,          // "straight"
-      /(\u201C(?:(?!\n\n)[\s\S])*?\u201D[,.\?!]?)/g,           // \u201Ccurly\u201D
-      /(\u2018(?:(?!\n\n)[\s\S])*?\u2019[,.\?!]?)/g,           // \u2018single curly\u2019
-      /(\u00AB(?:(?!\n\n)[\s\S])*?\u00BB[,.\?!]?)/g,           // «guillemets»
+      /(&quot;(?:(?!\n\n)[^<])*?&quot;[,.\?!]?)/g,          // "straight"
+      /(\u201C(?:(?!\n\n)[^<])*?\u201D[,.\?!]?)/g,           // \u201Ccurly\u201D
+      /(\u2018(?:(?!\n\n)[^<])*?\u2019[,.\?!]?)/g,           // \u2018single curly\u2019
+      /(\u00AB(?:(?!\n\n)[^<])*?\u00BB[,.\?!]?)/g,           // «guillemets»
     ];
     for (const pattern of speechPatterns) {
       result = result.replace(pattern, '<span class="rpg-lite-highlight-speech">$1</span>');
