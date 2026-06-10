@@ -66,6 +66,17 @@ export interface IStorageService {
   loadRPGLiteActionButton<T>(buttonId: string): Promise<T | null>;
   deleteRPGLiteActionButton(buttonId: string): Promise<void>;
   listRPGLiteActionButtons<T>(): Promise<T[]>;
+
+  // Persistent World RPG operations
+  saveWorldRpgWorld<T>(world: T): Promise<void>;
+  loadWorldRpgWorld<T>(worldId: string): Promise<T | null>;
+  deleteWorldRpgWorld(worldId: string): Promise<void>;
+  listWorldRpgWorlds<T>(): Promise<T[]>;
+
+  saveWorldRpgAdventure<T>(adventure: T): Promise<void>;
+  loadWorldRpgAdventure<T>(adventureId: string): Promise<T | null>;
+  deleteWorldRpgAdventure(adventureId: string): Promise<void>;
+  listWorldRpgAdventures<T>(): Promise<T[]>;
 }
 
 class IndexedDBStorageService implements IStorageService {
@@ -379,6 +390,86 @@ class IndexedDBStorageService implements IStorageService {
       throw new Error(`Failed to list RPG Lite action buttons: ${error instanceof Error ? error.message : error}`);
     }
   }
+
+  // ========================================
+  // Persistent World RPG methods
+  // ========================================
+
+  async saveWorldRpgWorld<T>(world: T): Promise<void> {
+    try {
+      const worldWithId = world as { id: string };
+      await this.indexedDBService.set('world_rpg_worlds', worldWithId.id, world);
+    } catch (error) {
+      console.error('Failed to save World RPG world:', error);
+      throw new Error(`Failed to save World RPG world: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async loadWorldRpgWorld<T>(worldId: string): Promise<T | null> {
+    try {
+      const world = await this.indexedDBService.get<T>('world_rpg_worlds', worldId);
+      return world || null;
+    } catch (error) {
+      console.error('Failed to load World RPG world:', error);
+      throw new Error(`Failed to load World RPG world: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async deleteWorldRpgWorld(worldId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('world_rpg_worlds', worldId);
+    } catch (error) {
+      console.error('Failed to delete World RPG world:', error);
+      throw new Error(`Failed to delete World RPG world: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async listWorldRpgWorlds<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('world_rpg_worlds');
+    } catch (error) {
+      console.error('Failed to list World RPG worlds:', error);
+      throw new Error(`Failed to list World RPG worlds: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async saveWorldRpgAdventure<T>(adventure: T): Promise<void> {
+    try {
+      const adventureWithId = adventure as { id: string };
+      await this.indexedDBService.set('world_rpg_adventures', adventureWithId.id, adventure);
+    } catch (error) {
+      console.error('Failed to save World RPG adventure:', error);
+      throw new Error(`Failed to save World RPG adventure: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async loadWorldRpgAdventure<T>(adventureId: string): Promise<T | null> {
+    try {
+      const adventure = await this.indexedDBService.get<T>('world_rpg_adventures', adventureId);
+      return adventure || null;
+    } catch (error) {
+      console.error('Failed to load World RPG adventure:', error);
+      throw new Error(`Failed to load World RPG adventure: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async deleteWorldRpgAdventure(adventureId: string): Promise<void> {
+    try {
+      await this.indexedDBService.delete('world_rpg_adventures', adventureId);
+    } catch (error) {
+      console.error('Failed to delete World RPG adventure:', error);
+      throw new Error(`Failed to delete World RPG adventure: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async listWorldRpgAdventures<T>(): Promise<T[]> {
+    try {
+      return await this.indexedDBService.getAll<T>('world_rpg_adventures');
+    } catch (error) {
+      console.error('Failed to list World RPG adventures:', error);
+      throw new Error(`Failed to list World RPG adventures: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 }
 
 /**
@@ -420,7 +511,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 6, // Increment version to add RPG Lite action buttons
+      version: 7, // Increment version to add Persistent World RPG stores
       stores: [
         {
           name: 'keyValue',
@@ -509,6 +600,26 @@ export class StorageService {
             {
               name: 'by-order',
               keyPath: 'order'
+            }
+          ]
+        },
+        {
+          name: 'world_rpg_worlds',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-updatedAt',
+              keyPath: 'updatedAt'
+            }
+          ]
+        },
+        {
+          name: 'world_rpg_adventures',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-updatedAt',
+              keyPath: 'updatedAt'
             }
           ]
         }

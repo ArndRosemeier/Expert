@@ -55,6 +55,20 @@ async function openRPGLiteMode(): Promise<void> {
 }
 
 /**
+ * Open the World RPG View
+ */
+async function openWorldRpgMode(): Promise<void> {
+    try {
+        const { openWorldRpgView } = await import('./world-rpg/ui/WorldRpgView');
+        await openWorldRpgView();
+        console.log('🗺️ World RPG opened');
+    } catch (error) {
+        console.error('❌ Failed to open World RPG:', error);
+        alert('Failed to open World RPG. Please try again.');
+    }
+}
+
+/**
  * Open the Idea Board in a modal or overlay
  */
 async function openIdeaBoard(): Promise<void> {
@@ -951,6 +965,11 @@ export async function initialize() {
         // RPG Lite button
         getElementById('rpg-lite-mode-btn').addEventListener('click', () => {
             void openRPGLiteMode();
+        });
+
+        // World RPG button
+        getElementById('world-rpg-mode-btn').addEventListener('click', () => {
+            void openWorldRpgMode();
         });
 
 
