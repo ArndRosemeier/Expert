@@ -151,6 +151,13 @@ export interface WorldGraph {
   characters: Record<string, WorldCharacter>;
   edges: Record<string, WorldEdge>;
   lore: Record<string, WorldLore>;
+  /**
+   * Global, always-in-context world rules and setting canon: genre/background
+   * (e.g. sci-fi, high fantasy), magic/technology systems, tone, and play rules.
+   * Unlike `lore` (retrieved on demand by relevance), this is always sent to the
+   * narrator so it is never contradicted. Free text; may be empty.
+   */
+  rules: string;
   clockConfig: WorldClockConfig;
   speeds: SpeedTable;
   /** Cached deterministic layout positions, keyed by location id. */
@@ -264,6 +271,12 @@ export interface Adventure {
   transcript: WorldRpgChatMessage[];
   /** Bounded rolling summary of distant/older events for context. */
   recentEventsSummary: string;
+  /**
+   * The scenario premise and opening directive: the starting situation and
+   * anything that should happen in the very first scene. Used once, to shape the
+   * opening narration. Free text; may be empty.
+   */
+  premise: string;
   narratorPurpose: WorldRpgModelPurpose;
   parserPurpose: WorldRpgModelPurpose;
   /** Fixed-size locality window: max number of referenced nodes per turn. */
@@ -271,6 +284,11 @@ export interface Adventure {
   temperature?: number;
   /** Free user scratchpad text. Never sent to the LLM. */
   notes: string;
+  /**
+   * When true, this save is a template: it is never played/evolved directly.
+   * Starting it spawns an independent copy so the template stays pristine.
+   */
+  isTemplate: boolean;
   ui: AdventureUiState;
   /** Most recent pre-turn snapshot, enabling retry of the last turn. */
   rollback?: AdventureRollback;

@@ -25,6 +25,14 @@ Rules:
 - Write a focused response (typically 1-4 paragraphs). End at a natural point that invites the player's next action.`;
 
 /**
+ * Instruction enabling <hidden> tags for the narrator. Injected only when the
+ * world rules do not already describe hidden tags (imported rpg-lite scenarios
+ * frequently include their own variant). Hidden blocks are folded away in the
+ * UI, so they keep continuity notes available without cluttering the prose.
+ */
+export const HIDDEN_TAGS_INSTRUCTION = `You may wrap internal, behind-the-scenes information in <hidden>...</hidden> tags: secret plans, NPC motivations and intentions, foreshadowing, or continuity notes that keep the world consistent. Write these as needed; they are collapsed in the player's view but remain part of the record. Keep everything the player should read directly outside the tags.`;
+
+/**
  * The opening-scene instruction appended as a user turn when a fresh adventure
  * begins (no prior player action yet).
  */
@@ -99,6 +107,51 @@ Hard rules:
 - The PLAYER is a character too; record the player's own goals via a character "update" using the player's id from the registry.
 - Prefer "update" with an existing id over creating a duplicate entity. The registry lists known characters even if they are not in the current scene; reuse their ids.
 - Output strictly valid JSON. No comments, no trailing commas, no text outside the JSON object.`;
+
+/**
+ * Rule-extraction prompt for importing an rpg-lite scenario. Rules/canon may be
+ * spread across the scenario's system prompt and its adventure context, so this
+ * distills the always-apply rules and setting from BOTH. Placeholders:
+ *   {{system_prompt}}  - the scenario's system prompt text
+ *   {{prefix_context}} - the scenario's adventure-context text
+ */
+export const RULE_EXTRACTION_PROMPT = `You are preparing a role-playing world for play. From the two source texts below, extract the GLOBAL RULES AND SETTING CANON that must always apply during play.
+
+Include, when present:
+- Genre and background (e.g. high fantasy, cyberpunk, historical).
+- Magic, technology, or other special systems and their limits.
+- Tone, voice, and narration style.
+- Play/GM rules and constraints (e.g. point of view; what the GM may or may not decide).
+
+Exclude:
+- The specific plot, quests, the opening scene, or the current situation.
+- Specific named characters, locations, or items (these are handled separately).
+- Directives specific to another app (e.g. hidden-tag instructions, placeholder tokens like {{...}}, or output-format rules).
+
+Write the result as concise plain prose or short bullet lines. No preamble, no headings, no JSON, no code fences. If the sources contain no general rules or setting canon, output nothing.
+
+SYSTEM PROMPT:
+{{system_prompt}}
+
+ADVENTURE CONTEXT:
+{{prefix_context}}`;
+
+/**
+ * Opening-extraction prompt for importing an rpg-lite scenario. Pulls out the
+ * scenario's starting situation and any "do this in the first scene"
+ * instructions, which the world rules deliberately exclude. Placeholders:
+ *   {{system_prompt}}  - the scenario's system prompt text
+ *   {{prefix_context}} - the scenario's adventure-context text
+ */
+export const OPENING_EXTRACTION_PROMPT = `You are preparing a role-playing adventure for play. From the two source texts below, extract the OPENING DIRECTIVE: the specific starting situation and anything that must happen in the very first scene (e.g. "the adventure begins with the player waking in a cell", "an explosion interrupts the festival", a particular character who approaches first).
+
+Write it as a short directive addressed to the Game Master describing how to begin. Include only what concerns the start; do not restate general rules, tone, or setting background. No preamble, no headings, no JSON, no code fences. If the sources specify nothing particular about the opening, output nothing.
+
+SYSTEM PROMPT:
+{{system_prompt}}
+
+ADVENTURE CONTEXT:
+{{prefix_context}}`;
 
 /**
  * World bootstrap prompt - asks the creator model for a minimal starting world

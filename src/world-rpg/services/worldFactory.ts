@@ -40,6 +40,7 @@ export function createEmptyGraph(): WorldGraph {
     characters: {},
     edges: {},
     lore: {},
+    rules: '',
     clockConfig: { ...DEFAULT_CLOCK_CONFIG },
     speeds: { ...DEFAULT_SPEEDS },
     layout: {}
@@ -104,14 +105,33 @@ export function createAdventure(opts: CreateAdventureOptions): Adventure {
     turn: 0,
     transcript: [],
     recentEventsSummary: '',
+    premise: '',
     narratorPurpose: 'prose',
     parserPurpose: 'editor',
     localityBudget: DEFAULT_LOCALITY_BUDGET,
     notes: '',
+    isTemplate: false,
     ui: defaultUiState(),
     createdAt: timestamp,
     updatedAt: timestamp
   };
+}
+
+/**
+ * Deep-copy a template adventure into a fresh, independent playable save. The
+ * full evolved state (graph, transcript, clock) is preserved, but the copy is
+ * not a template and drops transient retry/debug captures.
+ */
+export function copyAdventureForPlay(template: Adventure): Adventure {
+  const copy = structuredClone(template);
+  const timestamp = now();
+  copy.id = newId('adv');
+  copy.isTemplate = false;
+  copy.createdAt = timestamp;
+  copy.updatedAt = timestamp;
+  delete copy.rollback;
+  delete copy.lastDebug;
+  return copy;
 }
 
 /** Fork a saved world template into a fresh adventure. */

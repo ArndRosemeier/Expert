@@ -26,6 +26,7 @@ import { buildLocalityContext, LocalityResult } from './localityContext';
 import { getLocation } from './worldGraph';
 import { applyStateUpdate } from './worldMutations';
 import {
+  HIDDEN_TAGS_INSTRUCTION,
   NARRATOR_OPENING_INSTRUCTION,
   NARRATOR_SYSTEM_PROMPT,
   PARSER_PROMPT
@@ -98,7 +99,11 @@ export class WorldRpgEngine {
     this.captureRollback(adventure, null);
     adventure.turn += 1;
     const locality = this.prepareLocality(adventure);
-    const messages = this.buildNarratorMessages(adventure, locality, NARRATOR_OPENING_INSTRUCTION);
+    const premise = adventure.premise.trim();
+    const openingInstruction = premise.length > 0
+      ? `${NARRATOR_OPENING_INSTRUCTION}\n\nSCENARIO PREMISE & OPENING DIRECTIVE (honor this for the first scene):\n${premise}`
+      : NARRATOR_OPENING_INSTRUCTION;
+    const messages = this.buildNarratorMessages(adventure, locality, openingInstruction);
     const { text, meta } = await this.streamNarrator(adventure, messages, callbacks);
     this.appendAssistantMessage(adventure, text, meta);
 
@@ -163,9 +168,23 @@ export class WorldRpgEngine {
     openingInstruction?: string
   ): OpenRouterMessage[] {
     const messages: OpenRouterMessage[] = [
-      { role: 'system', content: NARRATOR_SYSTEM_PROMPT },
-      { role: 'user', content: `WORLD STATE (reference only - do not show ids to the player):\n${locality.narratorContext}` }
+      { role: 'system', content: NARRATOR_SYSTEM_PROMPT }
     ];
+    const rules = adventure.graph.rules.trim();
+    if (rules.length > 0) {
+      messages.push({
+        role: 'user',
+        content: `WORLD RULES & SETTING (always apply; never contradict):\n${rules}`
+      });
+    }
+    // Add the hidden-tags instruction unless the rules already describe them.
+    if (!/<\s*hidden/i.test(rules)) {
+      messages.push({ role: 'user', content: HIDDEN_TAGS_INSTRUCTION });
+    }
+    messages.push({
+      role: 'user',
+      content: `WORLD STATE (reference only - do not show ids to the player):\n${locality.narratorContext}`
+    });
     const recent = adventure.transcript.slice(-DEFAULT_MAX_CONTEXT_MESSAGES);
     for (const message of recent) {
       messages.push({ role: message.role, content: message.content });
@@ -205,6 +224,7 @@ export class WorldRpgEngine {
     });
 
     this.pendingImages = images;
+    callbacks.onNarratorComplete(fullText, meta);
     return { text: fullText, ...(meta ? { meta } : {}) };
   }
 

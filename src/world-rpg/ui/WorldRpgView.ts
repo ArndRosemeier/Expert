@@ -15,6 +15,7 @@ import { WorldRpgEngine, TurnCallbacks } from '../services/WorldRpgEngine';
 import { WorldMapRenderer } from '../map/WorldMapRenderer';
 import { updateLayout } from '../map/layoutEngine';
 import { DEFAULT_NOTES_HEIGHT_RATIO } from '../constants';
+import { renderWorldRpgContent, attachWorldRpgFoldHandlers } from './worldRpgTextRenderer';
 import {
   charactersAt,
   charactersIncomingTo,
@@ -32,10 +33,18 @@ import {
 } from '../services/worldMaintenance';
 import {
   createAdventure,
+  copyAdventureForPlay,
   forkWorldToAdventure,
   buildWorldFromAdventure
 } from '../services/worldFactory';
 import { bootstrapWorldGraph } from '../services/worldBootstrap';
+import {
+  extractScenarioOpening,
+  extractScenarioRules,
+  listRpgLiteScenarios,
+  scenarioToPremise
+} from '../services/rpgLiteImport';
+import { RPGLiteStartPreset } from '../../rpg-lite/types/RPGLiteTypes';
 import {
   deleteAdventure,
   listAdventures,
@@ -145,7 +154,10 @@ export class WorldRpgView {
               </label>
             </div>
           </div>
-          <button id="world-rpg-start" class="world-rpg-btn world-rpg-btn-primary">Begin adventure</button>
+          <div class="world-rpg-home-actions">
+            <button id="world-rpg-start" class="world-rpg-btn world-rpg-btn-primary">Begin adventure</button>
+            <button id="world-rpg-import" class="world-rpg-btn" title="Generate a world from a saved RPG Lite scenario">Import from RPG Lite</button>
+          </div>
           <div id="world-rpg-start-status" class="world-rpg-empty" style="margin-top:.5rem;"></div>
         </div>
       </div>
@@ -159,6 +171,9 @@ export class WorldRpgView {
 
     (this.modalEl.querySelector('#world-rpg-start') as HTMLElement).addEventListener('click', () => {
       void this.handleStart();
+    });
+    (this.modalEl.querySelector('#world-rpg-import') as HTMLElement).addEventListener('click', () => {
+      void this.openImportPicker();
     });
   }
 
@@ -187,16 +202,30 @@ export class WorldRpgView {
       const item = document.createElement('div');
       item.className = 'world-rpg-list-item';
       const when = new Date(adv.updatedAt).toLocaleString();
+      const isTemplate = adv.isTemplate === true;
+      const badge = isTemplate ? ' <span class="world-rpg-tag">template</span>' : '';
+      const primaryLabel = isTemplate ? 'Start' : 'Open';
       item.innerHTML = `
-        <span>${escapeHtml(adv.title)} <span class="world-rpg-empty">(${when})</span></span>
-        <span style="display:flex; gap:.4rem;">
-          <button class="world-rpg-btn" data-open="${adv.id}">Open</button>
+        <span>${escapeHtml(adv.title)}${badge} <span class="world-rpg-empty">(${when})</span></span>
+        <span style="display:flex; gap:.4rem; align-items:center;">
+          <label class="world-rpg-tpl-toggle" title="Templates are never evolved directly; starting one spawns a copy">
+            <input type="checkbox" data-tpl="${adv.id}"${isTemplate ? ' checked' : ''} /> Template
+          </label>
+          <button class="world-rpg-btn world-rpg-btn-primary" data-open="${adv.id}">${primaryLabel}</button>
           <button class="world-rpg-btn" data-del="${adv.id}">Delete</button>
         </span>
       `;
       list.appendChild(item);
       (item.querySelector('[data-open]') as HTMLElement).addEventListener('click', () => {
-        void this.openAdventure(adv.id);
+        if (isTemplate) {
+          void this.startFromTemplate(adv);
+        } else {
+          void this.openAdventure(adv.id);
+        }
+      });
+      (item.querySelector('[data-tpl]') as HTMLInputElement).addEventListener('change', (e) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        void this.setAdventureTemplate(adv, checked);
       });
       (item.querySelector('[data-del]') as HTMLElement).addEventListener('click', () => {
         if (window.confirm(`Delete adventure "${adv.title}"? This cannot be undone.`)) {
@@ -204,6 +233,23 @@ export class WorldRpgView {
         }
       });
     }
+  }
+
+  /** Toggle a save's template flag and re-render so its button relabels. */
+  private async setAdventureTemplate(adventure: Adventure, isTemplate: boolean): Promise<void> {
+    adventure.isTemplate = isTemplate;
+    adventure.updatedAt = Date.now();
+    await saveAdventure(adventure);
+    await this.renderHome();
+  }
+
+  /** Start a template: play an independent copy so the template stays pristine. */
+  private async startFromTemplate(template: Adventure): Promise<void> {
+    const copy = copyAdventureForPlay(template);
+    await saveAdventure(copy);
+    this.adventure = copy;
+    this.renderGame();
+    this.renderTranscript();
   }
 
   private renderWorldSelect(worlds: World[]): void {
@@ -241,20 +287,105 @@ export class WorldRpgView {
           startLocationId: bootstrap.startLocationId,
           player: { name: playerName, description: bootstrap.player.description }
         });
+        adventure.premise = premise.trim();
       }
 
-      adventure.narratorPurpose = this.newNarratorPurpose;
-      adventure.parserPurpose = this.newParserPurpose;
-
-      await saveAdventure(adventure);
-      this.adventure = adventure;
-      this.renderGame();
-
       status.textContent = '';
-      await this.runOpening();
+      await this.launchNewAdventure(adventure);
     } catch (error) {
       status.textContent = `Failed: ${error instanceof Error ? error.message : String(error)}`;
       startBtn.disabled = false;
+    }
+  }
+
+  /** Apply the chosen models, persist, switch to the game screen, and narrate. */
+  private async launchNewAdventure(adventure: Adventure): Promise<void> {
+    adventure.narratorPurpose = this.newNarratorPurpose;
+    adventure.parserPurpose = this.newParserPurpose;
+    await saveAdventure(adventure);
+    this.adventure = adventure;
+    this.renderGame();
+    await this.runOpening();
+  }
+
+  /** Show a picker of saved rpg-lite scenarios to import as a new world. */
+  private async openImportPicker(): Promise<void> {
+    const scenarios = await listRpgLiteScenarios();
+    if (scenarios.length === 0) {
+      window.alert('No RPG Lite scenarios (saved templates) were found to import.');
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'world-rpg-tools-overlay';
+    this.modalEl.appendChild(overlay);
+
+    const rows = scenarios
+      .map(p => `
+        <div class="world-rpg-list-item">
+          <span>${escapeHtml(p.name)} <span class="world-rpg-empty">${escapeHtml(p.title)}</span></span>
+          <button class="world-rpg-btn" data-import="${p.id}">Import</button>
+        </div>
+      `)
+      .join('');
+    overlay.innerHTML = `
+      <div class="world-rpg-tools">
+        <div class="world-rpg-tools-head">
+          <strong>Import scenario from RPG Lite</strong>
+          <button class="world-rpg-btn" data-close>Close</button>
+        </div>
+        <div class="world-rpg-tools-body">
+          <div class="world-rpg-empty" style="margin-bottom:.6rem;">A structured world (locations, characters, map) will be generated from the scenario's text.</div>
+          ${rows}
+        </div>
+      </div>
+    `;
+    (overlay.querySelector('[data-close]') as HTMLElement).addEventListener('click', () => {
+      overlay.remove();
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+    for (const preset of scenarios) {
+      (overlay.querySelector(`[data-import="${preset.id}"]`) as HTMLElement).addEventListener('click', () => {
+        overlay.remove();
+        void this.importFromScenario(preset);
+      });
+    }
+  }
+
+  /** Generate a world from a scenario's prose and start a new adventure. */
+  private async importFromScenario(preset: RPGLiteStartPreset): Promise<void> {
+    const playerName = (this.modalEl.querySelector('#world-rpg-player-name') as HTMLInputElement).value.trim() || 'Adventurer';
+    const status = this.modalEl.querySelector('#world-rpg-start-status') as HTMLElement;
+    const startBtn = this.modalEl.querySelector('#world-rpg-start') as HTMLButtonElement;
+    const importBtn = this.modalEl.querySelector('#world-rpg-import') as HTMLButtonElement;
+    startBtn.disabled = true;
+    importBtn.disabled = true;
+
+    try {
+      status.textContent = `Extracting rules and generating a world from "${preset.name}"...`;
+      const [rules, opening, bootstrap] = await Promise.all([
+        extractScenarioRules(this.client, preset),
+        extractScenarioOpening(this.client, preset),
+        bootstrapWorldGraph(this.client, scenarioToPremise(preset))
+      ]);
+      const adventure = createAdventure({
+        title: bootstrap.worldName,
+        graph: bootstrap.graph,
+        startLocationId: bootstrap.startLocationId,
+        player: { name: playerName, description: bootstrap.player.description }
+      });
+      adventure.graph.rules = rules;
+      adventure.premise = opening;
+      status.textContent = '';
+      await this.launchNewAdventure(adventure);
+    } catch (error) {
+      status.textContent = `Import failed: ${error instanceof Error ? error.message : String(error)}`;
+      startBtn.disabled = false;
+      importBtn.disabled = false;
     }
   }
 
@@ -288,6 +419,7 @@ export class WorldRpgView {
           <label class="world-rpg-purpose">Parser
             <select id="world-rpg-parser-purpose" class="world-rpg-select"></select>
           </label>
+          <button id="world-rpg-rules" class="world-rpg-btn">Rules</button>
           <button id="world-rpg-tools" class="world-rpg-btn">Tools</button>
           <button id="world-rpg-debug" class="world-rpg-btn">Debug</button>
           <button id="world-rpg-save-world" class="world-rpg-btn">Save world</button>
@@ -331,9 +463,18 @@ export class WorldRpgView {
     const main = this.modalEl.querySelector('#world-rpg-main') as HTMLElement;
     main.style.setProperty('--map-ratio', String(this.adventure.ui.mapPaneRatio));
 
-    // Normalize older adventures that predate the resizable notes pane.
+    // Normalize older adventures that predate newer fields.
     if (typeof this.adventure.ui.notesHeightRatio !== 'number') {
       this.adventure.ui.notesHeightRatio = DEFAULT_NOTES_HEIGHT_RATIO;
+    }
+    if (typeof this.adventure.isTemplate !== 'boolean') {
+      this.adventure.isTemplate = false;
+    }
+    if (typeof this.adventure.graph.rules !== 'string') {
+      this.adventure.graph.rules = '';
+    }
+    if (typeof this.adventure.premise !== 'string') {
+      this.adventure.premise = '';
     }
     const mapPane = this.modalEl.querySelector('#world-rpg-map-pane') as HTMLElement;
     mapPane.style.setProperty('--notes-ratio', String(this.adventure.ui.notesHeightRatio));
@@ -352,6 +493,9 @@ export class WorldRpgView {
     });
     (this.modalEl.querySelector('#world-rpg-save-world') as HTMLElement).addEventListener('click', () => {
       void this.saveCurrentWorld();
+    });
+    (this.modalEl.querySelector('#world-rpg-rules') as HTMLElement).addEventListener('click', () => {
+      this.openRulesModal();
     });
     (this.modalEl.querySelector('#world-rpg-tools') as HTMLElement).addEventListener('click', () => {
       this.openToolsModal();
@@ -531,7 +675,12 @@ export class WorldRpgView {
     for (const msg of this.adventure.transcript) {
       const el = document.createElement('div');
       el.className = `world-rpg-msg ${msg.role}`;
-      el.textContent = msg.content;
+      if (msg.role === 'assistant') {
+        el.innerHTML = renderWorldRpgContent(msg.content);
+        attachWorldRpgFoldHandlers(el);
+      } else {
+        el.textContent = msg.content;
+      }
       transcript.appendChild(el);
     }
     this.scrollTranscript();
@@ -599,7 +748,9 @@ export class WorldRpgView {
         this.scrollTranscript();
       },
       onNarratorComplete: (full) => {
-        bubble.textContent = full;
+        bubble.innerHTML = renderWorldRpgContent(full);
+        attachWorldRpgFoldHandlers(bubble);
+        this.scrollTranscript();
       },
       onStateError: (err) => { this.appendError(`State update issue: ${err.message}`); }
     };
@@ -787,6 +938,70 @@ export class WorldRpgView {
     await saveAdventure(adv);
     this.mapRenderer?.setAdventure(adv);
     this.updateHud();
+  }
+
+  // ============================ World rules ============================
+
+  /** Editable overlay for the global, always-in-context world rules/setting. */
+  private openRulesModal(): void {
+    if (!this.adventure) {
+      return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'world-rpg-tools-overlay';
+    this.modalEl.appendChild(overlay);
+    overlay.innerHTML = `
+      <div class="world-rpg-tools">
+        <div class="world-rpg-tools-head">
+          <strong>World rules &amp; opening</strong>
+          <button class="world-rpg-btn" data-close>Close</button>
+        </div>
+        <div class="world-rpg-tools-body">
+          <h3>Rules &amp; setting</h3>
+          <div class="world-rpg-empty" style="margin-bottom:.5rem;">Always sent to the narrator and never contradicted. Put genre/background, magic or tech systems, tone, and play rules here.</div>
+          <textarea class="world-rpg-textarea" id="world-rpg-rules-text" rows="12" placeholder="e.g. Setting: gritty cyberpunk megacity. Magic: none. Netrunning costs time and risks ICE. Tone: noir, second person. Never decide the player's actions."></textarea>
+          <h3>Opening directive</h3>
+          <div class="world-rpg-empty" style="margin-bottom:.5rem;">Used once, to shape the first scene. The starting situation and anything that should happen right at the start. (Editing only affects a not-yet-started adventure or a retry of the opening.)</div>
+          <textarea class="world-rpg-textarea" id="world-rpg-premise-text" rows="6" placeholder="e.g. Begin with the player waking, disoriented, in the back of a moving cargo hauler; a stranger is already watching them."></textarea>
+        </div>
+      </div>
+    `;
+    const rulesArea = overlay.querySelector('#world-rpg-rules-text') as HTMLTextAreaElement;
+    const premiseArea = overlay.querySelector('#world-rpg-premise-text') as HTMLTextAreaElement;
+    rulesArea.value = this.adventure.graph.rules;
+    premiseArea.value = this.adventure.premise;
+
+    let timer: number | null = null;
+    const scheduleSave = (): void => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(() => {
+        void saveAdventure(this.adventure!);
+      }, 600);
+    };
+    rulesArea.addEventListener('input', () => {
+      this.adventure!.graph.rules = rulesArea.value;
+      scheduleSave();
+    });
+    premiseArea.addEventListener('input', () => {
+      this.adventure!.premise = premiseArea.value;
+      scheduleSave();
+    });
+
+    const finish = (): void => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      void saveAdventure(this.adventure!);
+      overlay.remove();
+    };
+    (overlay.querySelector('[data-close]') as HTMLElement).addEventListener('click', finish);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        finish();
+      }
+    });
   }
 
   // ============================ Debug inspector ============================
