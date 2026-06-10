@@ -249,7 +249,13 @@ export class WorldRpgView {
     await saveAdventure(copy);
     this.adventure = copy;
     this.renderGame();
-    this.renderTranscript();
+    // A pristine template has no chat to copy; generate an opening. A template
+    // that was already played carries its transcript, so just show it.
+    if (copy.transcript.length === 0) {
+      await this.runOpening();
+    } else {
+      this.renderTranscript();
+    }
   }
 
   private renderWorldSelect(worlds: World[]): void {
