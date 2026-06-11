@@ -36,6 +36,12 @@ export interface TurnCallbacks {
   onNarratorStart?: () => void;
   onNarratorChunk: (chunk: string) => void;
   onNarratorComplete: (fullText: string, meta?: WorldRpgGenerationMeta) => void;
+  /**
+   * Persist the adventure now that the narration is in the transcript, before
+   * the slower parser phase runs. Guarantees the visible answer is durable even
+   * if the parser call is slow, fails, or the user navigates away mid-turn.
+   */
+  onNarratorPersist: () => Promise<void>;
   /** Called after the world store has been updated; reports minutes advanced. */
   onStateApplied?: (advancedMinutes: number) => void;
   /** Called for parser/apply errors that do not invalidate the narration. */
@@ -106,6 +112,7 @@ export class WorldRpgEngine {
     const messages = this.buildNarratorMessages(adventure, locality, openingInstruction);
     const { text, meta } = await this.streamNarrator(adventure, messages, callbacks);
     this.appendAssistantMessage(adventure, text, meta);
+    await callbacks.onNarratorPersist();
 
     const debug = this.startDebugCapture(adventure, messages);
     // The opening establishes the scene; ask the parser to record any new
@@ -136,6 +143,7 @@ export class WorldRpgEngine {
     const messages = this.buildNarratorMessages(adventure, locality);
     const { text, meta } = await this.streamNarrator(adventure, messages, callbacks);
     this.appendAssistantMessage(adventure, text, meta);
+    await callbacks.onNarratorPersist();
 
     const debug = this.startDebugCapture(adventure, messages);
     await this.runParserPhase(adventure, locality, action, text, callbacks, debug);

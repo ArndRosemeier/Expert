@@ -10,6 +10,7 @@
  */
 
 import { OpenRouterClient } from '../../OpenRouterClient';
+import * as state from '../../state';
 import { Adventure, World, WorldRpgModelPurpose } from '../types/WorldRpgTypes';
 import { WorldRpgEngine, TurnCallbacks } from '../services/WorldRpgEngine';
 import { WorldMapRenderer } from '../map/WorldMapRenderer';
@@ -34,6 +35,7 @@ import {
 import {
   createAdventure,
   copyAdventureForPlay,
+  resetAdventureToStartState,
   forkWorldToAdventure,
   buildWorldFromAdventure
 } from '../services/worldFactory';
@@ -203,14 +205,19 @@ export class WorldRpgView {
       item.className = 'world-rpg-list-item';
       const when = new Date(adv.updatedAt).toLocaleString();
       const isTemplate = adv.isTemplate === true;
+      const reroll = adv.regenerateOpeningOnStart !== false;
       const badge = isTemplate ? ' <span class="world-rpg-tag">template</span>' : '';
       const primaryLabel = isTemplate ? 'Start' : 'Open';
+      const rerollToggle = isTemplate ? `
+          <label class="world-rpg-tpl-toggle" title="Generate a fresh opening scene every time this template is started">
+            <input type="checkbox" data-reroll="${adv.id}"${reroll ? ' checked' : ''} /> Re-roll opening
+          </label>` : '';
       item.innerHTML = `
         <span>${escapeHtml(adv.title)}${badge} <span class="world-rpg-empty">(${when})</span></span>
         <span style="display:flex; gap:.4rem; align-items:center;">
           <label class="world-rpg-tpl-toggle" title="Templates are never evolved directly; starting one spawns a copy">
             <input type="checkbox" data-tpl="${adv.id}"${isTemplate ? ' checked' : ''} /> Template
-          </label>
+          </label>${rerollToggle}
           <button class="world-rpg-btn world-rpg-btn-primary" data-open="${adv.id}">${primaryLabel}</button>
           <button class="world-rpg-btn" data-del="${adv.id}">Delete</button>
         </span>
@@ -227,6 +234,14 @@ export class WorldRpgView {
         const checked = (e.target as HTMLInputElement).checked;
         void this.setAdventureTemplate(adv, checked);
       });
+      const rerollInput = item.querySelector('[data-reroll]') as HTMLInputElement | null;
+      if (rerollInput) {
+        rerollInput.addEventListener('change', (e) => {
+          adv.regenerateOpeningOnStart = (e.target as HTMLInputElement).checked;
+          adv.updatedAt = Date.now();
+          void saveAdventure(adv);
+        });
+      }
       (item.querySelector('[data-del]') as HTMLElement).addEventListener('click', () => {
         if (window.confirm(`Delete adventure "${adv.title}"? This cannot be undone.`)) {
           void deleteAdventure(adv.id).then(async () => this.renderHome());
@@ -238,6 +253,10 @@ export class WorldRpgView {
   /** Toggle a save's template flag and re-render so its button relabels. */
   private async setAdventureTemplate(adventure: Adventure, isTemplate: boolean): Promise<void> {
     adventure.isTemplate = isTemplate;
+    // Make the re-roll flag concrete so the checkbox and Start path agree.
+    if (typeof adventure.regenerateOpeningOnStart !== 'boolean') {
+      adventure.regenerateOpeningOnStart = true;
+    }
     adventure.updatedAt = Date.now();
     await saveAdventure(adventure);
     await this.renderHome();
@@ -246,11 +265,17 @@ export class WorldRpgView {
   /** Start a template: play an independent copy so the template stays pristine. */
   private async startFromTemplate(template: Adventure): Promise<void> {
     const copy = copyAdventureForPlay(template);
+    // When the template re-rolls its opening, wipe back to the pristine start so
+    // a brand-new first scene is generated below. Default on: legacy saves with
+    // no explicit value (undefined) still re-roll, matching the checkbox.
+    if (copy.regenerateOpeningOnStart !== false) {
+      resetAdventureToStartState(copy);
+    }
     await saveAdventure(copy);
     this.adventure = copy;
     this.renderGame();
-    // A pristine template has no chat to copy; generate an opening. A template
-    // that was already played carries its transcript, so just show it.
+    // No chat to show (pristine, or just reset for a re-roll): generate an
+    // opening. A played template that keeps its transcript just shows it.
     if (copy.transcript.length === 0) {
       await this.runOpening();
     } else {
@@ -476,6 +501,9 @@ export class WorldRpgView {
     if (typeof this.adventure.isTemplate !== 'boolean') {
       this.adventure.isTemplate = false;
     }
+    if (typeof this.adventure.regenerateOpeningOnStart !== 'boolean') {
+      this.adventure.regenerateOpeningOnStart = true;
+    }
     if (typeof this.adventure.graph.rules !== 'string') {
       this.adventure.graph.rules = '';
     }
@@ -526,8 +554,13 @@ export class WorldRpgView {
 
   private purposeOptionsHtml(selected: WorldRpgModelPurpose): string {
     const purposes: WorldRpgModelPurpose[] = ['prose', 'creator', 'editor', 'rater'];
+    const models = state.getModelSelector()?.getSelectedModels() ?? {};
     return purposes
-      .map(p => `<option value="${p}"${p === selected ? ' selected' : ''}>${p}</option>`)
+      .map(p => {
+        const model = models[p];
+        const label = model ? `${p} (${model})` : `${p} (no model set)`;
+        return `<option value="${p}"${p === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+      })
       .join('');
   }
 
@@ -757,6 +790,11 @@ export class WorldRpgView {
         bubble.innerHTML = renderWorldRpgContent(full);
         attachWorldRpgFoldHandlers(bubble);
         this.scrollTranscript();
+      },
+      onNarratorPersist: async () => {
+        if (this.adventure) {
+          await saveAdventure(this.adventure);
+        }
       },
       onStateError: (err) => { this.appendError(`State update issue: ${err.message}`); }
     };

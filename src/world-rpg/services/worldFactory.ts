@@ -11,6 +11,7 @@
 
 import {
   Adventure,
+  AdventureStartState,
   AdventureUiState,
   World,
   WorldCharacter,
@@ -93,6 +94,11 @@ export function createAdventure(opts: CreateAdventureOptions): Adventure {
   start.known = true;
 
   const timestamp = now();
+  const startState: AdventureStartState = {
+    graph: structuredClone(graph),
+    clockMinutes: ADVENTURE_START_CLOCK_MINUTES,
+    currentLocationId: opts.startLocationId
+  };
   return {
     id: newId('adv'),
     title: opts.title,
@@ -111,10 +117,31 @@ export function createAdventure(opts: CreateAdventureOptions): Adventure {
     localityBudget: DEFAULT_LOCALITY_BUDGET,
     notes: '',
     isTemplate: false,
+    regenerateOpeningOnStart: true,
+    startState,
     ui: defaultUiState(),
     createdAt: timestamp,
     updatedAt: timestamp
   };
+}
+
+/**
+ * Reset an adventure to its pristine pre-opening state so a fresh opening can be
+ * re-rolled. Clears the transcript, rolling summary, turn counter and transient
+ * captures, and restores the world graph/clock/location from `startState` when
+ * present (older adventures without a snapshot keep their current graph).
+ */
+export function resetAdventureToStartState(adventure: Adventure): void {
+  adventure.transcript = [];
+  adventure.recentEventsSummary = '';
+  adventure.turn = 0;
+  delete adventure.rollback;
+  delete adventure.lastDebug;
+  if (adventure.startState) {
+    adventure.graph = structuredClone(adventure.startState.graph);
+    adventure.clockMinutes = adventure.startState.clockMinutes;
+    adventure.currentLocationId = adventure.startState.currentLocationId;
+  }
 }
 
 /**

@@ -253,6 +253,17 @@ export interface AdventureRollback {
   action: string | null;
 }
 
+/**
+ * Pristine starting state captured at adventure creation, before any opening
+ * scene is generated. Used to re-roll a fresh opening for templates.
+ */
+export interface AdventureStartState {
+  /** Deep copy of the world graph as it was at creation (player placed). */
+  graph: WorldGraph;
+  clockMinutes: number;
+  currentLocationId: string;
+}
+
 /** A single playthrough that forks a world and evolves it. */
 export interface Adventure {
   id: string;
@@ -289,6 +300,13 @@ export interface Adventure {
    * Starting it spawns an independent copy so the template stays pristine.
    */
   isTemplate: boolean;
+  /**
+   * Templates only: when true, hitting Start discards the saved opening and
+   * re-rolls a fresh one from `startState`, so each playthrough begins anew.
+   */
+  regenerateOpeningOnStart: boolean;
+  /** Pristine pre-opening snapshot, used to re-roll the opening for templates. */
+  startState?: AdventureStartState;
   ui: AdventureUiState;
   /** Most recent pre-turn snapshot, enabling retry of the last turn. */
   rollback?: AdventureRollback;
