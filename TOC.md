@@ -54,13 +54,40 @@ The DocumentNode versioning system is a cornerstone of the Expert application ar
 - ✅ **DO** use `promoteToMaster()` to make versions active
 
 ### Content Generation & AI Services
-- **`src/LoopOrchestrator.ts`** - AI generation orchestration 
+- **`src/LoopOrchestrator.ts`** - AI generation orchestration (creator → rater → editor loop)
 - **`src/project/UnifiedGenerationService.ts`** - Level-based bulk generation
 - **`src/OpenRouterClient.ts`** - AI provider integration with streaming support
 - **`src/AIInteractionsService.ts`** - AI interaction tracking and analytics
 - **`src/AILogService.ts`** - AI conversation logging
 - **`src/services/TaskModelService.ts`** - AI model assignment per task type
 - **`src/services/PromptExpansionService.ts`** - Dynamic prompt variable expansion
+
+### Quality Rating System
+The quality of generated content is judged against **quality criteria**, which now come in two kinds (a discriminated union on `QualityCriterion` in `src/types.ts`):
+
+- **LLM criteria** (`kind: 'llm'`) - subjective qualities (e.g. *Prompt Adherence*, *Natural Human Voice*) scored 1-10 by the **rater** model.
+- **Metric criteria** (`kind: 'metric'`) - objective AI-ism checks (e.g. *Em-dash Restraint*, *Avoids AI Clichés*, *Human-like Naming*) evaluated **deterministically in code**, not by an LLM.
+
+Key files:
+- **`src/quality/MetricEvaluator.ts`** - splits criteria, runs metrics, maps results onto the shared `Rating` shape, builds creator guidance, defines `GATE_FAILURE_PENALTY`
+- **`src/quality/metrics/MetricRegistry.ts`** - strongly-typed registry + `withMetric` dispatcher; add a metric here plus its definition file
+- **`src/quality/metrics/MetricTypes.ts`** - `MetricDefinition`/`MetricResult` interfaces and the 1-10 scoring helpers (`scoreFromCount`, `scoreFromRatio`)
+- **`src/quality/metrics/*.ts`** - pure detectors: `emDashDensity`, `bannedPhrases`, `bannedNames`, `notXButY`, `tricolon`, `repeatedSentenceOpeners`
+- **`src/quality/historicalDefaultCriteria.ts`** - snapshots of previous default sets so unchanged profiles upgrade cleanly when `DEFAULT_CRITERIA` changes
+- **`src/SettingsManager.ts`** - holds `DEFAULT_CRITERIA`; strips default criteria on save and repopulates/upgrades them on load
+
+How an iteration is rated (in `LoopOrchestrator.runLoop`):
+1. **Split** criteria into LLM vs. enabled metric criteria once per run.
+2. **Rater pass**: the rater model scores LLM criteria only (skipped entirely if there are none).
+3. **Metric pass**: `evaluateMetrics` runs each metric's pure `detect()` locally; results use the same 1-10 scale.
+4. **Merge** into one `combinedRatings` array.
+5. **Goals**: `allGoalsMet` requires every LLM criterion to meet its goal **and** every hard-`gate` metric to pass. `soft` metric failures never block success.
+6. **Failure score**: each failing criterion adds `(goal − actual) × weight` (LLM weight = 1); a failing gate metric adds `GATE_FAILURE_PENALTY` (1000). The lowest-failure-score iteration is selected as the final output.
+7. **Creator awareness**: `formatCriteriaForCreator` injects each metric's `creatorGuidance` (e.g. the banned-names list) into the creator prompt up front, so violations are usually avoided before they happen.
+
+⚠️ **Statelessness**: metric detection is pure (text + params → score, no external state), so it runs inside the existing inner loop without affecting the stateless/resumable generation strategy (see `Stateless_Generation_Logic_Documentation.md`).
+
+⚠️ **Changing `DEFAULT_CRITERIA`**: when you edit the defaults, append the **outgoing** set to `PREVIOUS_DEFAULT_CRITERIA_SETS` in `historicalDefaultCriteria.ts` (exact name/description/goal/outline/leaf) so existing users keep upgrading instead of being frozen on stale defaults.
 
 ### Settings & Configuration
 - **`src/SettingsManager.ts`** - User profiles and settings

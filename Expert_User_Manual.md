@@ -509,22 +509,20 @@ API keys are stored in your browser's IndexedDB. Anyone with access to your brow
 ### Quality Criteria System
 Define detailed criteria for evaluating AI-generated content. Each criterion has a scoring goal (1-10) and controls when it's applied.
 
-**Default Criteria Include:**
+Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call) and are either a hard **gate** (must pass) or a **soft** signal (influences scoring only).
+
+**Default LLM Criteria:**
 - **Prompt Adherence** (Goal: 9): Stays on topic and addresses the request
-- **Clarity & Conciseness** (Goal: 7): Direct, easy to understand writing  
-- **Natural & Authentic Tone** (Goal: 7): Human-sounding, not robotic
-- **Engaging Flow** (Goal: 8): Interesting with smooth transitions
-- **Varied Sentence Structure** (Goal: 7): Avoids monotonous patterns
-- **Subtlety (Show, Don't Tell)** (Goal: 8): Implies rather than states directly
-- **Avoids AI Clichés** (Goal: 8): No common AI phrases like "delve into"
-- **Understated Language** (Goal: 8): Measured tone, not dramatic
 - **Specificity & Concrete Detail** (Goal: 8): Specific examples vs. generalities
-- **Original Phrasing** (Goal: 7): Avoids clichés and common idioms
-- **Stylistic Variation** (Goal: 8): Natural rhythm and tone shifts
-- **Emotional Subtlety** (Goal: 8): Layered emotions, not explicit
-- **Lexical Character** (Goal: 8): Distinctive word choices
-- **Human-like Naming** (Goal: 8): Realistic character names
-- **Avoids Dramatical Reframing** (Goal: 8): No artificial elevation of ordinary actions
+- **Natural Human Voice** (Goal: 8): Reads like a person wrote it — varied rhythm and distinctive word choice (merges the former tone/flow/variation/lexical criteria)
+- **Restraint & Subtlety** (Goal: 8): Implies rather than states; no melodrama or inflation of the ordinary (merges the former subtlety/understatement criteria)
+- **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
+
+**Default Metric Criteria (deterministic):**
+- **Avoids AI Clichés** (`bannedPhrases`, soft): Flags overused AI phrases like "delve into"; editable phrase/regex list
+- **Em-dash Restraint** (`emDashDensity`, gate): Hard limit on em-dash density per 1000 words
+- **No Antithesis Reframing** (`notXButY`, soft): Flags the "It wasn't X, it was Y" construction
+- **Human-like Naming** (`bannedNames`, soft): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**
 - **Name**: Descriptive title for the criterion
@@ -532,6 +530,13 @@ Define detailed criteria for evaluating AI-generated content. Each criterion has
 - **Description**: Detailed explanation of what to evaluate
 - **Outline**: Apply to outline/structural nodes
 - **Leaf**: Apply to final content nodes
+
+**Metric Criteria Settings (in addition to the above):**
+- **Metric Type**: The deterministic check to run (e.g. banned phrases, em-dash density, banned names)
+- **Enforcement**: *Gate* (must pass for success) or *Soft* (influences scoring only)
+- **Weight**: How heavily a shortfall counts toward the failure score
+- **Parameters**: Metric-specific settings such as editable word lists or numeric thresholds
+- **Enabled**: Whether the metric participates in evaluation
 
 **Criteria Management:**
 - **Add Criterion**: Create new evaluation standard
@@ -951,22 +956,20 @@ API keys are stored in your browser's IndexedDB. Anyone with access to your brow
 ### Quality Criteria System
 Define detailed criteria for evaluating AI-generated content. Each criterion has a scoring goal (1-10) and controls when it's applied.
 
-**Default Criteria Include:**
+Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call) and are either a hard **gate** (must pass) or a **soft** signal (influences scoring only).
+
+**Default LLM Criteria:**
 - **Prompt Adherence** (Goal: 9): Stays on topic and addresses the request
-- **Clarity & Conciseness** (Goal: 7): Direct, easy to understand writing  
-- **Natural & Authentic Tone** (Goal: 7): Human-sounding, not robotic
-- **Engaging Flow** (Goal: 8): Interesting with smooth transitions
-- **Varied Sentence Structure** (Goal: 7): Avoids monotonous patterns
-- **Subtlety (Show, Don't Tell)** (Goal: 8): Implies rather than states directly
-- **Avoids AI Clichés** (Goal: 8): No common AI phrases like "delve into"
-- **Understated Language** (Goal: 8): Measured tone, not dramatic
 - **Specificity & Concrete Detail** (Goal: 8): Specific examples vs. generalities
-- **Original Phrasing** (Goal: 7): Avoids clichés and common idioms
-- **Stylistic Variation** (Goal: 8): Natural rhythm and tone shifts
-- **Emotional Subtlety** (Goal: 8): Layered emotions, not explicit
-- **Lexical Character** (Goal: 8): Distinctive word choices
-- **Human-like Naming** (Goal: 8): Realistic character names
-- **Avoids Dramatical Reframing** (Goal: 8): No artificial elevation of ordinary actions
+- **Natural Human Voice** (Goal: 8): Reads like a person wrote it — varied rhythm and distinctive word choice (merges the former tone/flow/variation/lexical criteria)
+- **Restraint & Subtlety** (Goal: 8): Implies rather than states; no melodrama or inflation of the ordinary (merges the former subtlety/understatement criteria)
+- **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
+
+**Default Metric Criteria (deterministic):**
+- **Avoids AI Clichés** (`bannedPhrases`, soft): Flags overused AI phrases like "delve into"; editable phrase/regex list
+- **Em-dash Restraint** (`emDashDensity`, gate): Hard limit on em-dash density per 1000 words
+- **No Antithesis Reframing** (`notXButY`, soft): Flags the "It wasn't X, it was Y" construction
+- **Human-like Naming** (`bannedNames`, soft): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**
 - **Name**: Descriptive title for the criterion
@@ -974,6 +977,13 @@ Define detailed criteria for evaluating AI-generated content. Each criterion has
 - **Description**: Detailed explanation of what to evaluate
 - **Outline**: Apply to outline/structural nodes
 - **Leaf**: Apply to final content nodes
+
+**Metric Criteria Settings (in addition to the above):**
+- **Metric Type**: The deterministic check to run (e.g. banned phrases, em-dash density, banned names)
+- **Enforcement**: *Gate* (must pass for success) or *Soft* (influences scoring only)
+- **Weight**: How heavily a shortfall counts toward the failure score
+- **Parameters**: Metric-specific settings such as editable word lists or numeric thresholds
+- **Enabled**: Whether the metric participates in evaluation
 
 **Criteria Management:**
 - **Add Criterion**: Create new evaluation standard

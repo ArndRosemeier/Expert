@@ -590,77 +590,53 @@ Quality criteria define how AI evaluates and improves generated content. Each cr
 - **Goal Score**: Target score (1-10) for this criterion
 - **Weight**: Importance relative to other criteria
 
-**Default Criteria:**
+Criteria come in **two kinds**:
+- **LLM criteria** — subjective qualities scored 1-10 by the Rater AI.
+- **Metric criteria** — objective "AI-ism" checks evaluated automatically in code (no AI call, instant and consistent). Each metric has an **enforcement mode** — *gate* (must pass for success) or *soft* (only influences scoring) — plus editable parameters (e.g. word lists, thresholds).
+
+**Default LLM Criteria:**
 
 1. **Prompt Adherence** (Goal: 9)
    - Stays on topic and addresses the request
    - Follows given instructions accurately
    - Maintains focus throughout content
 
-2. **Clarity & Conciseness** (Goal: 7)
-   - Direct, easy to understand writing
-   - Eliminates unnecessary complexity
-   - Clear communication of ideas
-
-3. **Natural & Authentic Tone** (Goal: 7)
-   - Human-sounding, not robotic
-   - Appropriate voice for content type
-   - Engaging and relatable style
-
-4. **Engaging Flow** (Goal: 8)
-   - Interesting progression of ideas
-   - Smooth transitions between concepts
-   - Maintains reader interest
-
-5. **Varied Sentence Structure** (Goal: 7)
-   - Avoids monotonous patterns
-   - Mix of short and long sentences
-   - Dynamic rhythm and pacing
-
-6. **Subtlety (Show, Don't Tell)** (Goal: 8)
-   - Implies rather than states directly
-   - Uses descriptive scenes and actions
-   - Lets readers draw conclusions
-
-7. **Avoids AI Clichés** (Goal: 8)
-   - No common AI phrases ("delve into", "realm of")
-   - Original expression
-   - Distinctive voice
-
-8. **Understated Language** (Goal: 8)
-   - Measured tone, not overdramatic
-   - Appropriate emotional level
-   - Sophisticated restraint
-
-9. **Specificity & Concrete Detail** (Goal: 8)
+2. **Specificity & Concrete Detail** (Goal: 8)
    - Specific examples vs. generalities
    - Vivid, precise descriptions
    - Concrete rather than abstract
 
-10. **Original Phrasing** (Goal: 7)
-    - Avoids clichés and common idioms
-    - Fresh perspective and expression
-    - Creative word choices
+3. **Natural Human Voice** (Goal: 8)
+   - Reads like a specific person wrote it, not a model
+   - Varied sentence length and rhythm, no formulaic cadence
+   - Distinctive word choice; avoids stock idioms and "writerly" over-correction
+   - *(Merges the former Natural Tone, Engaging Flow, Varied Sentence Structure, Stylistic Variation, Lexical Character, and Original Phrasing criteria.)*
 
-11. **Stylistic Variation** (Goal: 8)
-    - Natural rhythm and tone shifts
-    - Varied paragraph lengths
-    - Dynamic presentation
+4. **Restraint & Subtlety** (Goal: 8)
+   - Implies emotion and meaning rather than stating it
+   - No melodrama, rhetorical heightening, or inflation of the ordinary
+   - *(Merges the former Subtlety, Emotional Subtlety, Understated Language, Dramatical Reframing, and Immediate Clarity criteria.)*
 
-12. **Emotional Subtlety** (Goal: 8)
-    - Layered emotions, not explicit
-    - Complex character psychology
-    - Nuanced emotional expression
+5. **Keep the essence of the draft intact** (Goal: 9)
+   - Creativity stays at the detail level
+   - The draft's essence is treated as the source of truth for project consistency
 
-13. **Lexical Character** (Goal: 8)
-    - Distinctive word choices
-    - Consistent voice
-    - Memorable language
+**Default Metric Criteria (deterministic):**
 
-14. **Human-like Naming** (Goal: 8)
-    - Realistic character names
-    - Culturally appropriate naming
-    - Avoiding generic or obvious names
+6. **Avoids AI Clichés** — type `bannedPhrases`, *soft*
+   - Flags overused AI phrases (e.g. "delve into", "tapestry", "testament to")
+   - Phrase and regex lists are fully editable
+
+7. **Em-dash Restraint** — type `emDashDensity`, *gate*
+   - Hard limit on em-dashes per 1000 words (a strong AI-ism tell)
+   - Failing this gate blocks success outright
+
+8. **No Antithesis Reframing** — type `notXButY`, *soft*
+   - Flags the "It wasn't X, it was Y" antithesis construction
+
+9. **Human-like Naming** — type `bannedNames`, *soft*
+   - Flags the most egregious overused fantasy/AI character names
+   - Case-sensitive, with an editable name list (varied naming is reinforced separately via prompt expansion)
 
 ### Criteria Customization
 
@@ -691,16 +667,17 @@ Different profiles can have different quality criteria:
 
 **Rating Components:**
 Each rating contains:
-- **Score**: The numerical score (1-10) assigned by the Rater AI
+- **Score**: The numerical score (1-10). LLM criteria are scored by the Rater AI; metric criteria are scored deterministically in code.
 - **Criterion**: The quality aspect being evaluated
-- **Feedback**: Written justification and suggestions for improvement
+- **Feedback**: Written justification (LLM criteria) or concrete detail such as "3 banned phrases found" (metric criteria)
 
 **Scoring Process:**
-1. Rater AI evaluates content against each criterion
-2. Assigns numerical score (1-10) based on criterion goals
-3. Provides written justification for each score
-4. Overall score calculated as weighted average
-5. Identifies areas needing improvement
+1. Criteria are split: the Rater AI scores only the **LLM criteria**, while **metric criteria** are evaluated automatically in code. (If a profile has no LLM criteria, the Rater AI is skipped entirely.)
+2. Both kinds produce 1-10 scores that are merged into a single result set.
+3. A criterion **passes** when its score is at or above its goal.
+4. An iteration is a **success** when every LLM criterion meets its goal **and** every *gate* metric passes. *Soft* metric shortfalls never block success — they only affect scoring.
+5. Each iteration receives a **failure score**: for every failing criterion, `(goal − score) × weight`, plus a large fixed penalty whenever a *gate* metric fails. The iteration with the **lowest** failure score is selected as the final output, so even an imperfect run returns its best attempt.
+6. The creator model is told about every constraint (including the deterministic metrics and their word lists) up front, so most violations are avoided before rating even happens.
 
 **Rating Display:**
 - Ratings appear in the Node Inspector for generated content
