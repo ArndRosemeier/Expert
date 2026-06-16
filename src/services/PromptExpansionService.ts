@@ -508,6 +508,21 @@ class PromptExpansionService {
             value: context.node!.isLeaf! ? 'leaf' : 'branch',
             description: 'Type of node: leaf (content) or branch (has children)'
         }));
+
+        this.registerContextPlaceholder('level_name', (context) => ({
+            value: this.getNodeLevelLabel(context),
+            description: "Name of the current node's template layer (e.g. Book, Act, Chapter), with any trailing count removed"
+        }));
+
+        this.registerContextPlaceholder('output_kind', (context) => {
+            const levelLabel = this.getNodeLevelLabel(context);
+            const isLeaf = context.node?.isLeaf === true;
+            const value = isLeaf ? 'PROSE' : `${levelLabel.toUpperCase()} OUTLINE`;
+            return {
+                value,
+                description: "What this node produces: 'PROSE' for leaf nodes, or '<LEVEL> OUTLINE' (e.g. CHAPTER OUTLINE) for branch nodes"
+            };
+        });
         
         this.registerContextPlaceholder('content_length', (context) => ({
             value: context.node!.content!.length.toString(),
@@ -1276,6 +1291,24 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                 reject(new Error(`Failed to load modal system: ${error.message}`));
             });
         });
+    }
+
+    /**
+     * Get the clean name of the current node's template layer (e.g. "Chapter"),
+     * stripping any trailing count like "Chapter 4" -> "Chapter".
+     */
+    private getNodeLevelLabel(context: PlaceholderContext): string {
+        const template = context.node?.template;
+        const level = context.node?.level;
+        if (!template || typeof level !== 'number') {
+            return 'section';
+        }
+        const raw = template[level];
+        if (!raw) {
+            return 'section';
+        }
+        const cleaned = String(raw).replace(/\s+\d+\s*$/, '').trim();
+        return cleaned.length > 0 ? cleaned : String(raw);
     }
 
     /**

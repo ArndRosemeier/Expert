@@ -355,10 +355,10 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
     content_generation_user: {
         text: `
             Generate content in {{language}}.
-            
-            You are writing the content for the node at the following path: "{{path}}".
-            The node is a "leaf" node, meaning it will not be expanded into child nodes later.
-            It is the final text that the user will see, so follow all style instructions, do your best to make it good.
+
+            You are writing PROSE: the final "{{level_name}}" text that the reader will actually see, for the node at the path "{{path}}".
+            This is a "leaf" node (the lowest level of the structure); it will NOT be expanded into child nodes later.
+            This is finished narrative text, NOT a summary, plan, or outline. Write the actual scenes, action, and dialogue in full. Follow all style instructions and do your best to make it good.
 
             Here is the context of the story so far:
             ---
@@ -369,28 +369,29 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{noise_names}}
 
-            IMPORTANT: Your response should contain ONLY the requested content text, nothing more. 
+            IMPORTANT: Your response should contain ONLY the requested prose, nothing more. 
             Coherence is king. Logical problems must be avoided at all costs.
             Do not repeat anything from the PREVIOUS CONTENT (if there is one).
             This content needs to continue the PREVIOUS CONTENT. If there is no PREVIOUS CONTENT, this content is considered a story start.
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, section headers or lists.
-            The content should be naturally flowing text. It should be definitive and not tentative.
-            Just provide the pure content that belongs in this section.
+            The content should be naturally flowing narrative prose. It should be definitive and not tentative.
+            Just provide the pure prose that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'content', 'draftorfresh', 'language'],
-        description: "The template for the user's request. This is where you define how to ask the AI to generate content for a leaf node, using context from the document. Intelligently handles existing draft content."
+        placeholders: ['path', 'level_name', 'context', 'content', 'draftorfresh', 'language'],
+        description: "The template for the user's request. This is where you define how to ask the AI to generate final prose for a leaf node, using context from the document. Intelligently handles existing draft content."
     },
 
     branch_content_generation_user: {
         text: `
-            Generate outline in {{language}}.
-            
-            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
-            This is a "branch" node, meaning it will be expanded into child nodes later. Your task is to generate the content for this branch node.
+            Generate the outline in {{language}}.
 
-            This content should be a detailed prose outline. Include rich details about key points, characters, plot developments, themes, and specific elements that will help create meaningful child nodes. 
-            Be descriptive and specific rather than brief - this detailed content will be used to generate well-defined titles and content for the child nodes later. Do NOT use lists or other structural elements, the outline has to be flowing text.
-            Ignore style contexts, they are not for outlining. Outline will never be told in first person, it is always in omniscient third person.
+            You are writing a {{output_kind}}: a structured outline for the "{{level_name}}" node at the path "{{path}}".
+            This is a "branch" node: it WILL be broken down into smaller "{{child_level_name}}" nodes later, and each of those will eventually be written as full prose.
+            Your job is to outline what happens across this whole "{{level_name}}" — the plot beats, developments, turning points, and key elements — so its child "{{child_level_name}}" nodes can be derived cleanly from it.
+
+            CRITICAL: This is an OUTLINE, NOT finished story prose. Do NOT write the actual scene text, line-by-line action, or spoken dialogue — that is written later, only at the leaf level. Summarize and plan what happens; do not narrate it moment to moment.
+            Write the outline as flowing paragraphs (no bullet points, numbered lists, or headers). Be descriptive and specific rather than brief, so well-defined child titles and content can be generated from it.
+            Ignore prose style contexts; they are for final prose, not for outlining. The outline is always in omniscient third person, never first person.
 
             Here is the context of the document so far:
             ---
@@ -402,38 +403,40 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             {{noise_names}}
 
             IMPORTANT: 
-            Your response should contain ONLY the requested outline content, nothing more.
+            Your response should contain ONLY the requested {{output_kind}}, nothing more.
             Coherence is king. Logical problems must be avoided at all costs.
             Do not repeat anything from the PREVIOUS CONTENT (if there is one).
             This content needs to continue the PREVIOUS CONTENT.
             Do not include any introductory remarks, explanations, meta-commentary, additional formatting, lists or section headers. 
-            The content should be naturally flowing text. It should be definitive and not tentative.
+            The outline should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure outline text that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
-        description: "The template for the user's request to generate content for a non-leaf (branch) node. This should ask for a summary or outline."
+        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
+        description: "The template for the user's request to generate an outline for a non-leaf (branch) node. It tells the model exactly which layer it is outlining (e.g. CHAPTER OUTLINE) and that it must not write final prose."
     },
 
     deterministic_outline_generation_user: {
         text: `
             
-            You are an expert at outlining and structuring documents. You are working on a node at the path "{{path}}".
-            This is a "branch" node that will be expanded into child nodes. Your task is to generate content for this branch node that includes clear section divisions.
+            You are writing a {{output_kind}}: a structured outline for the "{{level_name}}" node at the path "{{path}}".
+            This is a "branch" node that WILL be expanded into child "{{child_level_name}}" nodes — one per section you create here. Each child is later written as full prose.
+
+            CRITICAL: This is an OUTLINE, NOT finished story prose. Do NOT write the actual scene text, line-by-line action, or spoken dialogue — that is written later, only at the leaf level. Summarize and plan what happens across this "{{level_name}}".
 
             Create an outline that includes {{child_count}} distinct sections. Each section should be marked with section headers in the format:
             ===Section Title===
 
-            The content should be a detailed prose outline with rich details about key points, characters, plot developments, themes, and specific elements. Each section should cover a distinct aspect of the content and be substantial enough to warrant its own child node. 
+            Each section becomes one child "{{child_level_name}}", so it should cover a distinct aspect and be substantial enough to warrant its own node. Section bodies should be detailed, flowing outline paragraphs about key points, characters, plot developments, themes, and specific elements.
             If it is not feasible to create {{child_count}} sections, that is ok. Create less.
 
             Generate outline with sections and titles in {{language}}.
 
             Structure your response like this:
             ===First Section Title===
-            [Detailed prose content for this section...]
+            [Detailed outline of what happens in this section...]
 
             ===Second Section Title===
-            [Detailed prose content for this section...]
+            [Detailed outline of what happens in this section...]
 
             [Continue for all sections...]
 
@@ -450,7 +453,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             IMPORTANT: 
             - Each section must be marked with ===Title=== headers
-            - Content within sections should be flowing prose, not lists
+            - Section bodies must be flowing outline paragraphs, not bullet lists, and NOT final story narration or dialogue
             - Be descriptive and specific - this will guide child node creation
             - Coherence is king. Logical problems must be avoided at all costs.
             - Do not repeat anything from PREVIOUS CONTENT (if there is one).
@@ -458,7 +461,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             - Content should be definitive, not tentative
             - No meta-commentary or explanations outside the outline itself
         `.trim(),
-        placeholders: ['path', 'context', 'child_level_name', 'child_count', 'draftorfresh', 'language'],
+        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'child_count', 'draftorfresh', 'language'],
         description: "Generates outline content with clear section divisions (===title===) for deterministic child creation from sections."
     },
 

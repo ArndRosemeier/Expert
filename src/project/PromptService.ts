@@ -27,18 +27,14 @@ export class PromptService {
         }
         
         if (node.isLeaf) {
-            console.log(`[PromptService] Node "${node.title}" is leaf - using content_generation_user`);
             return prompts.content_generation_user;
-        } else {
-            // For non-leaf nodes, check if deterministic child creation is enabled
-            const useDeterministic = deterministicChildCreation ?? false;
-            const selectedPrompt = useDeterministic ? 'deterministic_outline_generation_user' : 'branch_content_generation_user';
-            console.log(`[PromptService] Node "${node.title}" (non-leaf): useDeterministic=${useDeterministic}, selectedPrompt=${selectedPrompt}`);
-            console.log(`[PromptService] Prompt selection call stack:`, new Error().stack);
-            return useDeterministic 
-                ? prompts.deterministic_outline_generation_user 
-                : prompts.branch_content_generation_user;
         }
+
+        // For non-leaf nodes, check if deterministic child creation is enabled
+        const useDeterministic = deterministicChildCreation ?? false;
+        return useDeterministic
+            ? prompts.deterministic_outline_generation_user
+            : prompts.branch_content_generation_user;
     }
 
     /**
@@ -58,6 +54,10 @@ export class PromptService {
         count?: number,
         languageOverride?: string | null
     ): string {
+        // Name the artifact for this node so the action line reinforces what to
+        // write: prose for leaves, a level-specific outline for branches.
+        const artifact = node.isLeaf ? 'prose' : `${this.getLevelLabel(node)} outline`;
+
         let draftOrFresh: string;
         if (node.content && node.content.trim() !== '') {
             const masterVersion = node.getMasterVersion();
@@ -67,17 +67,17 @@ export class PromptService {
 ${node.content}
 ---
 
-Please expand this draft into full, detailed content. Use the draft as a bible for what should be covered. Do not advance the plot past the draft.`;
+Please expand this draft into the full ${artifact}. Use the draft as a bible for what should be covered. Do not advance the plot past the draft.`;
             } else {
-                draftOrFresh = `You have this existing content to revise or expand:
+                draftOrFresh = `You have this existing ${artifact} to revise or expand:
 ---
 ${node.content}
 ---
 
-Please improve and expand this content.`;
+Please improve and expand this ${artifact}.`;
             }
         } else {
-            draftOrFresh = 'Now, write the full content for this node.';
+            draftOrFresh = `Now, write the ${artifact} for this node.`;
         }
 
         // Use centralized prompt expansion
@@ -228,6 +228,21 @@ Please improve and expand this content.`;
             return `exactly ${templateCount} entries`;
         }
         return 'as many entries as make logical sense based on the content';
+    }
+
+    /**
+     * Gets the clean name of a node's own template layer (e.g. "Chapter"),
+     * stripping any trailing count like "Chapter 4" -> "Chapter".
+     * @param node The node whose layer name to resolve.
+     * @returns The cleaned level name, or "section" if unavailable.
+     */
+    public getLevelLabel(node: DocumentNode): string {
+        const raw = node.template[node.level];
+        if (!raw) {
+            return 'section';
+        }
+        const cleaned = raw.replace(/\s+\d+\s*$/, '').trim();
+        return cleaned.length > 0 ? cleaned : raw;
     }
 
     /**
