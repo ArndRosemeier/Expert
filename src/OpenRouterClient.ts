@@ -19,13 +19,10 @@ export interface OpenRouterRequest {
   max_output_tokens?: number;
   // Some providers (OpenAI-compatible) expect `max_tokens` instead
   max_tokens?: number;
-  // Optional verbosity parameter for models that support it
+  // Optional verbosity parameter (top-level, per OpenRouter docs) for models that
+  // support it (OpenAI GPT-5 family; mapped to effort for Anthropic). Enum values:
+  // low | medium | high | xhigh | max.
   verbosity?: string | number;
-  // OpenAI Responses API-style nested parameters (provider-specific)
-  text?: {
-    verbosity?: string | number;
-    format?: { type: string } | string;
-  };
   // Reasoning/thinking parameters for models that support it
   thinking?: {
     type?: 'enabled' | 'disabled';
@@ -1074,21 +1071,15 @@ export class OpenRouterClient {
             }
           }
           if (typeof p.verbosity !== 'undefined') {
-            // Always prefer OpenAI Responses-style field globally; providers that don't support it should ignore it
-            const existingFormat = request.text && request.text.format;
-            request.text = {
-              ...(request.text || {}),
-              verbosity: p.verbosity,
-              // Default to structured format object { type: 'text' }
-              format: existingFormat ? existingFormat : { type: 'text' }
-            };
-            // Do not send top-level verbosity to avoid provider-specific 400s
-            if (typeof request.verbosity !== 'undefined') {
-              delete (request as any).verbosity;
-            }
-            const fmt = request.text.format as any;
-            const fmtDesc = typeof fmt === 'string' ? fmt : (fmt && fmt.type ? `{ type: "${fmt.type}" }` : 'unknown');
-            console.info(`[OpenRouterClient] Setting global text.verbosity=${String(p.verbosity)} format=${fmtDesc} for model ${model}`);
+            // OpenRouter expects `verbosity` as a TOP-LEVEL field on the chat
+            // completions request (enum: low|medium|high|xhigh|max). See
+            // https://openrouter.ai/docs/api/reference/parameters#verbosity
+            // For the OpenAI GPT-5 family it controls response length; for Anthropic
+            // it maps to output_config.effort. Do NOT nest it under `text` — that is
+            // the OpenAI Responses API shape and is ignored by OpenRouter's chat
+            // completions endpoint, which silently leaves the model fully verbose.
+            request.verbosity = p.verbosity;
+            console.info(`[OpenRouterClient] Setting verbosity=${String(p.verbosity)} for model ${model}`);
           }
           if (p.thinking && p.thinking.enabled) {
             request.thinking = {
