@@ -6,6 +6,53 @@ The Expert system uses a sophisticated **stateless target-state-based generation
 
 **Critical Design Principle**: The system processes exactly **one operation per iteration** and reassesses the complete tree state after each operation. This eliminates temporal coupling and ensures identical behavior whether generation runs continuously or is interrupted and resumed.
 
+## Context Assembly & The Future-Knowledge (Anti-Foreshadowing) Policy
+
+> **This is the most important and most fragile design decision in the whole generation system. Read this before touching `ContextService.compileNodeContext` or the `includeParentContent` logic in `UnifiedGenerationService.buildLoopInput`. Several "obvious improvements" here will silently degrade output quality.**
+
+### What a node "knows" when its content is generated
+
+When content is generated for a node (e.g. a Chapter), the context handed to the LLM (`ContextService.compileNodeContext`) is deliberately limited to:
+
+1. **Conditional/keyword context** — context items belonging to the node and its ancestors whose triggers match. Always included.
+2. **The previous node at the same template level** — the node immediately before this one in global reading order (`TreeService.getPreviousNode`, which can cross parent boundaries, e.g. the last Chapter of the previous Part). Provides backward continuity. Always included when it has content.
+3. **The node's own slice of the parent outline, as its draft** — when a parent is broken into children, each child is seeded with ONLY its own section/description as a `draft` (`"Draft: <section>"`), surfaced via the `{{draftorfresh}}` placeholder with "Do not advance the plot past the draft."
+4. **The parent's full outline — ONLY conditionally** (see below).
+
+It explicitly does **NOT** receive:
+- **The next node** (forward sibling content) — intentionally omitted.
+- **The parent's full outline**, unless the parent outline is free-form (no `===sections===`).
+
+### The conditional that controls future-knowledge
+
+```typescript
+// UnifiedGenerationService.buildLoopInput
+const parentSections = this.parseContentSections(parentNode.content);
+const parentHasSections = parentSections.length > 0;
+includeParentContent = !parentHasSections;
+```
+
+- **Parent outlined with predetermined sections (`===Title===`)** → `includeParentContent = false`. The child sees only its own section draft + the previous node. **It does NOT know what its sibling chapters contain → no future knowledge.**
+- **Parent outlined free-form (no sections)** → `includeParentContent = true`. The child receives the parent's entire outline, which describes ALL siblings → the node DOES know the future in draft form.
+
+### Why it is built this way (the decision)
+
+An LLM **can** benefit from knowing where a story is heading, but in practice full future knowledge made the model **foreshadow and plant hints toward content that belongs to later siblings**, which hurt results. Removing future knowledge produced **noticeably better prose** — but only worked well when the structure was fixed up front via **predetermined sections**, so each child still has a precise, self-contained brief in its own draft.
+
+There is no golden middle: either the model sees the future (better-informed but foreshadows) or it does not (cleaner, but each unit must be self-contained). The project deliberately chose the **no-future-knowledge** path because:
+- the results are better,
+- it costs fewer tokens (no whole-parent outline copied into every child), and
+- predetermined sections give each child enough local context to stand alone.
+
+Therefore **deterministic child creation (predetermined sections) is the default** (`deterministicChildCreationState = true` in `project-ui.ts`), and the conditional above keeps future knowledge out of the default path.
+
+### ⚠️ Guardrails for future changes
+
+- **Do NOT unconditionally include the parent's full content** in `compileNodeContext`. That re-introduces foreshadowing for the default (sectioned) flow.
+- **Do NOT add next-node / forward-sibling content** to the context. The omission in `ContextService.compileNodeContext` is intentional, not a missing feature.
+- **Do NOT make children inherit the whole parent outline as their draft.** Each child must carry only its own slice (`createChildFromSection` / `handleDraftCreation`).
+- If you want to experiment with giving the model future knowledge, do it behind the **free-form (non-deterministic) outline** path, which already supplies the full parent outline — do not change the sectioned default.
+
 ## Core Concepts
 
 ### Target State vs Current State
@@ -20,9 +67,12 @@ The system continuously compares these states and performs work to close the gap
 The system uses four key parameters that define what work should be done at each level:
 
 - **`draftLevel`**: Maximum level where children (drafts) can be created
-- **`contentLevel`**: Maximum level where content should be generated  
-- **`contextPruneLevel`**: Maximum level where context should be pruned/adjusted
+- **`contentLevel`**: Maximum level where content should be generated
 - **`coherenceLevel`**: Maximum level where coherence checks should be performed
+- **`autofixSeverity`**: Coherence autofix threshold (-1 = disabled, 1-10 = severity at/above which contradictions are auto-fixed)
+- **`deterministicChildCreation`**: When true (the default), branch outlines are written with `===Section===` headers and children are created deterministically from those sections. This is also what keeps future knowledge out of child generation (see the Context Assembly section above).
+
+> **Removed:** `contextPruneLevel` no longer exists. The old "traditional context" pruning was replaced by the conditional/keyword context system, so there is no context-pruning work item anymore. The `needsContextPruning`/`hasContextPruning` fields still exist in the code but are hard-wired to a no-op.
 
 ### Level-Based Target State Calculation
 
@@ -31,7 +81,7 @@ For each level from `startNode.level` to `maxLevel`, the system calculates:
 ```typescript
 targetStates[level] = {
     level,
-    needsContextPruning: levels.contextPruneLevel >= level && level > 0,
+    needsContextPruning: false, // vestigial: context pruning was removed
     needsContent: levels.contentLevel >= level,
     needsCoherenceCheck: (levels.coherenceLevel + 1) >= level && level > 0,
     canExpand: level < levels.draftLevel
@@ -49,7 +99,7 @@ targetStates[level] = {
 
 ### 2. Work Order Priority
 Work is performed in strict order:
-1. **Context Pruning** (if needed)
+1. **Context Pruning** (vestigial — always a no-op now; the conditional context system replaced it)
 2. **Content Generation** (if needed)  
 3. **Coherence Check** (if needed, only on last sibling)
 4. **Expansion** (if allowed and all same-level nodes ready)
@@ -64,9 +114,9 @@ A node can expand only if:
 
 ```typescript
 currentState = {
-    hasContextPruning: node.ContextIsAdjusted(),
+    hasContextPruning: false, // vestigial: was node.ContextIsAdjusted(), context pruning removed
     hasContent: node.getState() === 'Final',
-    hasCoherenceCheck: masterVersion?.tags.has('consistent_to_parent'),
+    hasCoherenceCheck: node.isConsistentToParent(), // any version tagged 'consistent_to_parent'
     hasChildren: node.children.length > 0
 };
 ```
@@ -386,12 +436,14 @@ The `+1` adjustment accounts for the parent-child relationship - children need t
 - Uses parent.children array order to determine "last"
 
 ### Context Inheritance
-- New child nodes inherit parent context during creation
-- Context pruning happens after creation, before content generation
+- New child nodes selectively inherit conditional/keyword context during creation
+- There is no context-pruning step anymore (the conditional context system replaced it)
+- What a node actually sees at generation time is governed by the **Context Assembly & Future-Knowledge Policy** near the top of this document
 
 ### Model Selection
 - Child creation uses 'creator' model
 - Content generation uses 'prose' (leaf nodes) or 'creator' (branch nodes)
+- Leaf vs branch is determined purely by the template (`node.isLeaf = level >= template.length - 1`), never by the chosen generation levels. Branch nodes always produce an outline via the 'creator' model; only leaf nodes produce final prose via the 'prose' model.
 
 ## Common Misunderstandings
 
@@ -501,4 +553,4 @@ console.log('Parent has children ready for coherence:',
 
 ---
 
-*This documentation was last updated to reflect the single-operation iteration approach and creation-order processing fixes that eliminated temporal coupling issues.* 
+*This documentation was last updated to add the Context Assembly & Future-Knowledge (Anti-Foreshadowing) Policy, to record that predetermined sections (deterministic child creation) are the default specifically to keep future knowledge out of child generation, and to remove stale references to the deleted context-pruning system (`contextPruneLevel`, `ContextIsAdjusted`). It also reflects the earlier single-operation iteration approach and creation-order processing fixes that eliminated temporal coupling issues.* 

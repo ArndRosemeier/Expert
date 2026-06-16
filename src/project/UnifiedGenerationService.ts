@@ -2008,10 +2008,21 @@ export class UnifiedGenerationService {
         // Get the raw prompt from the node
         const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node, levels.deterministicChildCreation);
 
-        // Fill the placeholders
-        // Conditional inclusion of parent content in context:
-        // - If parent has sections (===<title>===), DO NOT include parent content (it will be present via sections and extra content may confuse the AI)
-        // - Otherwise include the parent content to ensure relevant info is available
+        // Fill the placeholders.
+        //
+        // ANTI-FORESHADOWING POLICY (core, fragile — see Stateless_Generation_Logic_Documentation.md).
+        // This flag decides whether a node is allowed to see its parent's FULL outline, which
+        // describes all of its siblings, i.e. the future. We deliberately keep that future
+        // knowledge OUT in the default flow:
+        // - Parent outlined into ===sections=== (the default, deterministic child creation):
+        //     parentHasSections = true  -> includeParentContent = FALSE. The child only sees its
+        //     own section (as its draft) plus the previous node. No future knowledge.
+        // - Parent outlined free-form (no sections): includeParentContent = TRUE. The child gets
+        //     the whole parent outline and therefore knows later siblings in draft form.
+        // Full future knowledge made the model foreshadow/plant hints toward later siblings and
+        // produced worse prose; removing it (with predetermined sections supplying a self-contained
+        // brief per child) produced better results at lower token cost. Do NOT make this
+        // unconditional — that re-enables foreshadowing for the default path.
         let includeParentContent = false;
         if (node.parentId) {
             const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
@@ -2262,6 +2273,9 @@ export class UnifiedGenerationService {
                 metadata['creatorModel'] = creatorModel;
             }
 
+            // Anti-foreshadowing: the child's draft is ONLY its own section of the parent
+            // outline, never the whole parent outline. This is what lets the child be
+            // generated without seeing later siblings. Do not widen this to the full outline.
             const draftVersionId = newNode.addVersion(['generated', 'draft'], {
                 content: `Draft: ${content}`,
                 title: newNode.title

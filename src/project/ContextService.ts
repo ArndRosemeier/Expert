@@ -15,10 +15,27 @@ export class ContextService {
 
     /**
      * Gathers context for a specific node to guide content generation.
-     * Uses the new navigation approach with previous/next nodes instead of all siblings.
+     *
+     * ANTI-FORESHADOWING POLICY (core, fragile — see Stateless_Generation_Logic_Documentation.md):
+     * A node is deliberately given only BACKWARD-facing knowledge:
+     *   - matching conditional/keyword context for itself and its ancestors,
+     *   - the PREVIOUS node at its template level (continuity from what came before), and
+     *   - its parent's outline ONLY when `includeParentContent` is true.
+     * The NEXT node and (in the default sectioned flow) the full parent outline are
+     * intentionally withheld. Giving the model the parent's whole outline lets it see
+     * sibling content that hasn't happened yet, which caused the LLM to foreshadow and
+     * plant hints toward later siblings and measurably worsened output. This was removed
+     * on purpose; results without future knowledge are better, and predetermined sections
+     * (the default) give each child a self-contained brief so it doesn't need the future.
+     * `includeParentContent` is decided by the caller (UnifiedGenerationService.buildLoopInput):
+     * it is FALSE whenever the parent was outlined into `===sections===`, which is the default.
+     * Do NOT make parent content unconditional and do NOT add next-node content here.
+     *
      * @param nodeId The ID of the node to compile context for.
      * @param rootNode The root node of the tree.
-     * @param includeParentContent Whether to include parent's structural content (default: false)
+     * @param includeParentContent Whether to include parent's structural content (default: false).
+     *        Only set true for the free-form (non-sectioned) outline path, which knowingly
+     *        accepts future knowledge in exchange for a more globally-aware draft.
      * @returns A string containing the contextual information.
      */
     public compileNodeContext(nodeId: string, rootNode: DocumentNode, includeParentContent: boolean = false): string {
@@ -59,7 +76,9 @@ export class ContextService {
             contextParts.push(`PREVIOUS ${nodeLevelName.toUpperCase()} CONTENT ("${previousNode.title}"):\n---\n${previousNode.content}\n---`);
         }
 
-		// Intentionally omit NEXT node content from context; generation prompts handle it explicitly
+		// Anti-foreshadowing: the NEXT node is intentionally NEVER added to the context.
+		// A node must not know what happens after it, or the model writes hints toward
+		// future siblings. This omission is deliberate — do not "fix" it by adding next-node content.
 
         return contextParts.join('\n\n====================\n\n');
     }
