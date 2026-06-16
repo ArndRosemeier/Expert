@@ -135,6 +135,15 @@ export class DocumentNode {
     
     // --- Template and Generation Properties ---
     template: string[];
+    /**
+     * Optional fuzzy output-length targets in paragraphs, index-aligned with
+     * `template` (one entry per hierarchy layer). A value N means "aim for ~N
+     * paragraphs" for a node at that level; null means no hint. Propagated
+     * exactly like `template` (shared reference via AssertFlatTemplateCopy and
+     * inherited from the parent in TreeService.addNode). This is ONLY a hint to
+     * the LLM and is never enforced.
+     */
+    layerLengths: (number | null)[];
     generationPrompt: string | null = null;
     isPromptGenerating: boolean = false;
 
@@ -164,12 +173,13 @@ export class DocumentNode {
     // --- Conditional Context (new system, parallel to legacy `context`) ---
     private conditionalContextItems: ConditionalContextItem[] = [];
 
-    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '') {
+    constructor(level: number, initialTitle: string, parentId: string | null = null, template: string[] = [], initialContent: string = '', layerLengths: (number | null)[] = []) {
         // Always use UUID for tree node IDs - only conditional context item IDs use the simplified format
         this.id = uuidv4();
         this.level = level;
         this.parentId = parentId;
         this.template = template;
+        this.layerLengths = layerLengths;
 
         // Initialize properties to default values
         this.generationPrompt = null;
@@ -272,6 +282,7 @@ export class DocumentNode {
             parentId: this.parentId,
             children: this.children,
             template: this.template,
+            layerLengths: this.layerLengths,
             generationPrompt: this.generationPrompt,
             collapsed: this.collapsed,
             generationHistory: this.generationHistory,
@@ -300,6 +311,9 @@ export class DocumentNode {
         
         // Restore basic properties
         node.id = data.id;
+        // Older saves predate per-layer length hints; default to none. Kept
+        // aligned with `template` by AssertFlatTemplateCopy on load.
+        node.layerLengths = Array.isArray(data.layerLengths) ? data.layerLengths : [];
         node.collapsed = data.collapsed || false;
         node.generationPrompt = data.generationPrompt;
         node.isPromptGenerating = false; // Always reset transient state on load

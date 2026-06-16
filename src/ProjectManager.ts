@@ -124,7 +124,13 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Create a deep copy of the hierarchy levels for the root node
         // This allows project-wide template modifications while child nodes share the reference
         const rootNodeTemplate = [...this.template.hierarchyLevels];
-        this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate);
+        // Copy the per-layer length hints aligned to the hierarchy. Children
+        // inherit this (TreeService.addNode) / share it (AssertFlatTemplateCopy).
+        // ProjectTemplate always provides layerLengths (its constructor aligns it
+        // to the hierarchy and defaults missing entries to null).
+        const templateLayerLengths = this.template.layerLengths;
+        const rootNodeLayerLengths = rootNodeTemplate.map((_, i) => templateLayerLengths[i] ?? null);
+        this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate, '', rootNodeLayerLengths);
         
         // Root node keeps its UUID as the project identifier - only child nodes get normalized IDs
 

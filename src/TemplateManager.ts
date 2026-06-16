@@ -145,7 +145,15 @@ export class TemplateManager {
             const saved = await storage.get<Record<string, ProjectTemplate>>(TEMPLATE_STORAGE_KEY);
             
             if (saved && areValidTemplates(saved)) {
-                this.templates = saved;
+                // Rebuild as real ProjectTemplate instances so that templates
+                // persisted before per-layer length hints get `layerLengths`
+                // populated (aligned to the hierarchy) instead of undefined.
+                const normalized: Record<string, ProjectTemplate> = {};
+                for (const key of Object.keys(saved)) {
+                    const t = saved[key]!;
+                    normalized[key] = new ProjectTemplate(t.name, t.hierarchyLevels, t.layerLengths);
+                }
+                this.templates = normalized;
             } else {
                 console.warn('Invalid templates found in storage. Reverting to defaults.');
                 this.templates = { ...defaultTemplates };

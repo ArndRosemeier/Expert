@@ -58,7 +58,9 @@ export class TreeService {
         }
 
         const newLevel = parent.level + 1;
-        const newNode = new DocumentNode(newLevel, title, parent.id, parent.template);
+        // Inherit the parent's template AND per-layer length hints (shared refs,
+        // index-aligned across the whole project).
+        const newNode = new DocumentNode(newLevel, title, parent.id, parent.template, '', parent.layerLengths);
         
         // Traditional context inheritance removed - conditional context handles this automatically
         

@@ -28,6 +28,7 @@ export interface PlaceholderContext {
         draftOrFresh?: string;
         parentContent?: string;
         context?: string;
+        lengthHint?: string;
     };
     
     // Prompt-specific context
@@ -568,6 +569,13 @@ class PromptExpansionService {
         this.registerContextPlaceholder('draftorfresh', (context) => ({
             value: context.generation!.draftOrFresh!,
             description: 'Draft or fresh content instruction'
+        }));
+
+        // Optional fuzzy output-length hint. Expands to '' when no length is
+        // configured for the node's layer, so prompts can always include it.
+        this.registerContextPlaceholder('length_hint', (context) => ({
+            value: context.generation?.lengthHint ?? '',
+            description: 'Optional fuzzy output-length guideline (paragraphs) for this layer; empty when unset'
         }));
         
         this.registerContextPlaceholder('parent_content', (context) => ({

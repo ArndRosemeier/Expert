@@ -53,6 +53,7 @@ export class PromptContextBuilder {
             draftOrFresh?: string;
             parentContent?: string;
             context?: string;
+            lengthHint?: string;
         } = {}
     ): PlaceholderContext {
         const base = this.forNode(node, settingsManager);
@@ -63,7 +64,8 @@ export class PromptContextBuilder {
             ...(options.generateCount !== undefined && { generateCount: options.generateCount }),
             ...(options.draftOrFresh !== undefined && { draftOrFresh: options.draftOrFresh }),
             ...(options.parentContent !== undefined && { parentContent: options.parentContent }),
-            ...(options.context !== undefined && { context: options.context })
+            ...(options.context !== undefined && { context: options.context }),
+            ...(options.lengthHint !== undefined && { lengthHint: options.lengthHint })
         };
         return base;
     }

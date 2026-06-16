@@ -87,6 +87,7 @@ Please improve and expand this ${artifact}.`;
             childLevelName: string;
             generateCount: string;
             count?: number;
+            lengthHint?: string;
         } = {
             context: context,
             draftOrFresh: draftOrFresh,
@@ -96,6 +97,11 @@ Please improve and expand this ${artifact}.`;
         
         if (count !== undefined) {
             generationOptions.count = count;
+        }
+
+        const lengthHint = this.getLengthHintInstruction(node);
+        if (lengthHint) {
+            generationOptions.lengthHint = lengthHint;
         }
         
         const promptContext = PromptContextBuilder.forGeneration(node, this.settingsManager, path, generationOptions);
@@ -228,6 +234,34 @@ Please improve and expand this ${artifact}.`;
             return `exactly ${templateCount} entries`;
         }
         return 'as many entries as make logical sense based on the content';
+    }
+
+    /**
+     * Builds a fuzzy output-length guideline for this node from its template
+     * layer's configured paragraph target (node.layerLengths[node.level]).
+     * A target of N produces a "~(N-1)-(N+1) paragraphs" range. Returns an empty
+     * string when no length is configured for the layer.
+     *
+     * This is intentionally a soft hint only: LLMs cannot reliably hit exact
+     * lengths, so we steer with a paragraph range and state explicitly that it
+     * is not enforceable.
+     * @param node The node being generated.
+     * @returns A natural-language length guideline, or '' when unset.
+     */
+    public getLengthHintInstruction(node: DocumentNode): string {
+        const lengths = node.layerLengths;
+        if (!Array.isArray(lengths)) {
+            return '';
+        }
+        const target = lengths[node.level];
+        if (typeof target !== 'number' || !Number.isFinite(target) || target <= 0) {
+            return '';
+        }
+        const rounded = Math.round(target);
+        const low = Math.max(1, rounded - 1);
+        const high = rounded + 1;
+        const unit = node.isLeaf ? 'of prose' : 'of outline';
+        return `Target length (a soft guideline only — it cannot be strictly enforced): aim for roughly ${low}-${high} paragraphs ${unit}. Do not pad or truncate the content just to hit this; prioritize quality and coherence, but keep the overall length close to this range.`;
     }
 
     /**

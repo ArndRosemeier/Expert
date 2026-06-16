@@ -822,11 +822,14 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         
         // Create extended template hierarchy levels
         const newHierarchyLevels = [newLevelName, ...currentTemplate.hierarchyLevels];
+        // The new top layer has no length hint yet; keep lengths index-aligned.
+        const newLayerLengths: (number | null)[] = [null, ...currentTemplate.layerLengths];
         
         // Create new template
         const newTemplate = new ProjectTemplate(
             'custom',
-            newHierarchyLevels
+            newHierarchyLevels,
+            newLayerLengths
         );
 
         // Create new root node with the extended template
@@ -835,7 +838,9 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
             0,
             oldTitle,
             null,
-            newHierarchyLevels
+            newHierarchyLevels,
+            '',
+            newLayerLengths
         );
 
         // Update old root's level and parent

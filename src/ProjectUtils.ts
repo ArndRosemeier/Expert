@@ -39,10 +39,18 @@ export function AssertFlatTemplateCopy(project: ProjectManager): void {
         return;
     }
 
+    // Normalize the root's per-layer length hints so they stay index-aligned with
+    // the template (older roots may have none). All nodes then share this exact
+    // reference, mirroring how `template` is shared.
+    const existingLengths = Array.isArray(project.rootNode.layerLengths) ? project.rootNode.layerLengths : [];
+    const rootLayerLengths = rootTemplate.map((_, i) => existingLengths[i] ?? null);
+    project.rootNode.layerLengths = rootLayerLengths;
+
     // Recursively update all nodes to use the root template reference
     function updateNodeTemplate(node: DocumentNode): void {
-        // Ensure the node uses the same template reference as root
+        // Ensure the node uses the same template + length-hint references as root
         node.template = rootTemplate;
+        node.layerLengths = rootLayerLengths;
         
         // Recursively update all children
         for (const child of node.children) {

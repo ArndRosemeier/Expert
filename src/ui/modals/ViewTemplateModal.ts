@@ -7,13 +7,15 @@ import * as state from '../../state';
 /**
  * Recursively updates all nodes in the tree with the new template
  */
-function updateAllNodeTemplates(rootNode: DocumentNode, newTemplate: string[]): void {
-    // Update root node template
+function updateAllNodeTemplates(rootNode: DocumentNode, newTemplate: string[], newLayerLengths: (number | null)[]): void {
+    // Update root node template + per-layer length hints (kept index-aligned)
     rootNode.template = [...newTemplate];
+    rootNode.layerLengths = [...newLayerLengths];
     
     // Recursively update all child nodes
     function updateNodeAndChildren(node: DocumentNode): void {
         node.template = [...newTemplate];
+        node.layerLengths = [...newLayerLengths];
         for (const child of node.children) {
             updateNodeAndChildren(child);
         }
@@ -34,7 +36,8 @@ function setupViewTemplateEditor(
     // Create a copy of the template to avoid modifying the original until save
     const templateCopy = new ProjectTemplate(
         template.name,
-        [...template.hierarchyLevels]
+        [...template.hierarchyLevels],
+        [...template.layerLengths]
     );
 
     const editor = new SingleTemplateEditor({
@@ -67,10 +70,11 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
             return;
         }
 
-        // Convert template hierarchy to ProjectTemplate
+        // Convert template hierarchy to ProjectTemplate (carry length hints too)
         const template = new ProjectTemplate(
             `${rootNode.title} Template`,
-            templateHierarchy
+            templateHierarchy,
+            rootNode.layerLengths
         );
 
         let singleTemplateEditor: SingleTemplateEditor | null = null;
@@ -158,11 +162,12 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
                                     throw new Error('__KEEP_MODAL_OPEN__');
                                 }
 
-                                // Apply the updated template to the root node
+                                // Apply the updated template + length hints to the root node
                                 rootNode.template = updatedTemplate.hierarchyLevels;
+                                rootNode.layerLengths = updatedTemplate.layerLengths;
 
                                 // Update all child nodes with the new template
-                                updateAllNodeTemplates(rootNode, updatedTemplate.hierarchyLevels);
+                                updateAllNodeTemplates(rootNode, updatedTemplate.hierarchyLevels, updatedTemplate.layerLengths);
 
                                 // Save the project to persist template changes
                                 const currentProject = state.getActiveProject();

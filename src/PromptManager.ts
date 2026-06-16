@@ -367,6 +367,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
+            {{length_hint}}
+
             {{noise_names}}
 
             IMPORTANT: Your response should contain ONLY the requested prose, nothing more. 
@@ -377,7 +379,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             The content should be naturally flowing narrative prose. It should be definitive and not tentative.
             Just provide the pure prose that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'level_name', 'context', 'content', 'draftorfresh', 'language'],
+        placeholders: ['path', 'level_name', 'context', 'content', 'draftorfresh', 'length_hint', 'language'],
         description: "The template for the user's request. This is where you define how to ask the AI to generate final prose for a leaf node, using context from the document. Intelligently handles existing draft content."
     },
 
@@ -400,6 +402,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
+            {{length_hint}}
+
             {{noise_names}}
 
             IMPORTANT: 
@@ -411,7 +415,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             The outline should be naturally flowing text. It should be definitive and not tentative.
             Just provide the pure outline text that belongs in this section.
         `.trim(),
-        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'language'],
+        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'count', 'content', 'draftorfresh', 'length_hint', 'language'],
         description: "The template for the user's request to generate an outline for a non-leaf (branch) node. It tells the model exactly which layer it is outlining (e.g. CHAPTER OUTLINE) and that it must not write final prose."
     },
 
@@ -449,6 +453,8 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
             {{draftorfresh}}
 
+            {{length_hint}}
+
             {{noise_names}}
 
             IMPORTANT: 
@@ -461,7 +467,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             - Content should be definitive, not tentative
             - No meta-commentary or explanations outside the outline itself
         `.trim(),
-        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'child_count', 'draftorfresh', 'language'],
+        placeholders: ['path', 'level_name', 'output_kind', 'context', 'child_level_name', 'child_count', 'draftorfresh', 'length_hint', 'language'],
         description: "Generates outline content with clear section divisions (===title===) for deterministic child creation from sections."
     },
 
