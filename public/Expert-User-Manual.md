@@ -587,12 +587,14 @@ This section explains what the AI can change for you and how to phrase requests 
 Quality criteria define how AI evaluates and improves generated content. Each criterion has:
 - **Name**: What aspect is being evaluated
 - **Description**: Detailed explanation of the criterion
-- **Goal Score**: Target score (1-10) for this criterion
-- **Weight**: Importance relative to other criteria
+- **Goal Score**: Target score (1-10) that must be met for this criterion to pass
+- **Weight**: Used only to rank failing attempts when no iteration passes (does not affect pass/fail)
 
 Criteria come in **two kinds**:
 - **LLM criteria** — subjective qualities scored 1-10 by the Rater AI.
-- **Metric criteria** — objective "AI-ism" checks evaluated automatically in code (no AI call, instant and consistent). Each metric has an **enforcement mode** — *gate* (must pass for success) or *soft* (only influences scoring) — plus editable parameters (e.g. word lists, thresholds).
+- **Metric criteria** — objective "AI-ism" checks evaluated automatically in code (no AI call, instant and consistent), with editable parameters (e.g. word lists, thresholds).
+
+**All criteria are strict:** a generation only succeeds when *every* enabled criterion (LLM and metric alike) reaches its goal. There is no soft/gate distinction — if a check should not be able to block success, lower its goal or disable it.
 
 **Default LLM Criteria:**
 
@@ -623,18 +625,17 @@ Criteria come in **two kinds**:
 
 **Default Metric Criteria (deterministic):**
 
-6. **Avoids AI Clichés** — type `bannedPhrases`, *soft*
+6. **Avoids AI Clichés** — type `bannedPhrases`
    - Flags overused AI phrases (e.g. "delve into", "tapestry", "testament to")
    - Phrase and regex lists are fully editable
 
-7. **Em-dash Restraint** — type `emDashDensity`, *gate*
-   - Hard limit on em-dashes per 1000 words (a strong AI-ism tell)
-   - Failing this gate blocks success outright
+7. **Em-dash Restraint** — type `emDashDensity`
+   - Limits em-dashes per 1000 words (a strong AI-ism tell)
 
-8. **No Antithesis Reframing** — type `notXButY`, *soft*
+8. **No Antithesis Reframing** — type `notXButY`
    - Flags the "It wasn't X, it was Y" antithesis construction
 
-9. **Human-like Naming** — type `bannedNames`, *soft*
+9. **Human-like Naming** — type `bannedNames`
    - Flags the most egregious overused fantasy/AI character names
    - Case-sensitive, with an editable name list (varied naming is reinforced separately via prompt expansion)
 
@@ -675,9 +676,10 @@ Each rating contains:
 1. Criteria are split: the Rater AI scores only the **LLM criteria**, while **metric criteria** are evaluated automatically in code. (If a profile has no LLM criteria, the Rater AI is skipped entirely.)
 2. Both kinds produce 1-10 scores that are merged into a single result set.
 3. A criterion **passes** when its score is at or above its goal.
-4. An iteration is a **success** when every LLM criterion meets its goal **and** every *gate* metric passes. *Soft* metric shortfalls never block success — they only affect scoring.
-5. Each iteration receives a **failure score**: for every failing criterion, `(goal − score) × weight`, plus a large fixed penalty whenever a *gate* metric fails. The iteration with the **lowest** failure score is selected as the final output, so even an imperfect run returns its best attempt.
+4. An iteration is a **success** only when *every* enabled criterion — LLM and metric alike — meets its goal. There is no soft exemption: any criterion below its goal fails the iteration.
+5. Each iteration also receives a **failure score**: for every failing criterion, `(goal − score) × weight`. This score does **not** affect pass/fail; it is used only to rank attempts. **Selection is tiered**: an iteration that meets every goal always wins over one that does not; among iterations in the same tier, the **lowest** failure score is chosen (most recent breaks ties). Even when no attempt passes, the best one is still returned.
 6. The creator model is told about every constraint (including the deterministic metrics and their word lists) up front, so most violations are avoided before rating even happens.
+7. The chosen content is always committed. If it still misses any goal, the node is flagged with a `❗` marker in the tree (hover lists the failing criteria) and the Node Inspector shows a **PASSED/FAILED** verdict. The flag clears once you regenerate to a passing result or replace the content with manual edits.
 
 **Rating Display:**
 - Ratings appear in the Node Inspector for generated content

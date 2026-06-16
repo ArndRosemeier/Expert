@@ -8,13 +8,6 @@ import { Rating } from '../types/RatingTypes';
 import { withMetric } from './metrics/MetricRegistry';
 
 /**
- * Failure-score penalty added when a hard-gate metric fails. It is large enough
- * that the best-iteration selector strongly prefers any version that passes all
- * gates over one that does not, regardless of soft-criterion scores.
- */
-export const GATE_FAILURE_PENALTY = 1000;
-
-/**
  * Runs all enabled deterministic metric criteria against the given text and maps
  * each result into the shared `Rating` shape, so metric results merge seamlessly
  * with LLM ratings throughout the rest of the loop and UI.

@@ -509,7 +509,7 @@ API keys are stored in your browser's IndexedDB. Anyone with access to your brow
 ### Quality Criteria System
 Define detailed criteria for evaluating AI-generated content. Each criterion has a scoring goal (1-10) and controls when it's applied.
 
-Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call) and are either a hard **gate** (must pass) or a **soft** signal (influences scoring only).
+Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call). **All criteria are strict**: an iteration only succeeds when *every* enabled criterion reaches its goal. If a check should not be able to block success, lower its goal or disable it.
 
 **Default LLM Criteria:**
 - **Prompt Adherence** (Goal: 9): Stays on topic and addresses the request
@@ -519,10 +519,10 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
 
 **Default Metric Criteria (deterministic):**
-- **Avoids AI Clichés** (`bannedPhrases`, soft): Flags overused AI phrases like "delve into"; editable phrase/regex list
-- **Em-dash Restraint** (`emDashDensity`, gate): Hard limit on em-dash density per 1000 words
-- **No Antithesis Reframing** (`notXButY`, soft): Flags the "It wasn't X, it was Y" construction
-- **Human-like Naming** (`bannedNames`, soft): Flags overused fantasy/AI names; editable, case-sensitive list
+- **Avoids AI Clichés** (`bannedPhrases`): Flags overused AI phrases like "delve into"; editable phrase/regex list
+- **Em-dash Restraint** (`emDashDensity`): Limits em-dash density per 1000 words
+- **No Antithesis Reframing** (`notXButY`): Flags the "It wasn't X, it was Y" construction
+- **Human-like Naming** (`bannedNames`): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**
 - **Name**: Descriptive title for the criterion
@@ -533,8 +533,7 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 
 **Metric Criteria Settings (in addition to the above):**
 - **Metric Type**: The deterministic check to run (e.g. banned phrases, em-dash density, banned names)
-- **Enforcement**: *Gate* (must pass for success) or *Soft* (influences scoring only)
-- **Weight**: How heavily a shortfall counts toward the failure score
+- **Weight**: Affects ranking of failing attempts only (not pass/fail) — a higher weight makes a shortfall count more when picking the best attempt
 - **Parameters**: Metric-specific settings such as editable word lists or numeric thresholds
 - **Enabled**: Whether the metric participates in evaluation
 
@@ -543,6 +542,8 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Edit Criteria**: Modify existing criteria in-place
 - **Reset to Defaults**: Restore application defaults
 - **Copy/Paste**: Share criteria between profiles or devices
+
+**Pass/Fail and failed nodes:** A generation "passes" only when every enabled criterion meets its goal. When several attempts are made and none pass, the system keeps the best attempt (ranked by how far it fell short, with each criterion's weight applied). The chosen content is always committed, but if it still misses any goal the node is flagged with a `❗` marker in the tree (hover for the list of failing criteria), and the node inspector shows a clear **PASSED/FAILED** verdict. The flag clears automatically once you regenerate to a passing result or replace the content with manual edits.
 
 ### Generation Settings
 Control how AI content generation behaves across the application.
@@ -956,7 +957,7 @@ API keys are stored in your browser's IndexedDB. Anyone with access to your brow
 ### Quality Criteria System
 Define detailed criteria for evaluating AI-generated content. Each criterion has a scoring goal (1-10) and controls when it's applied.
 
-Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call) and are either a hard **gate** (must pass) or a **soft** signal (influences scoring only).
+Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; *metric criteria* are checked deterministically in code (no AI call). **All criteria are strict**: an iteration only succeeds when *every* enabled criterion reaches its goal. If a check should not be able to block success, lower its goal or disable it.
 
 **Default LLM Criteria:**
 - **Prompt Adherence** (Goal: 9): Stays on topic and addresses the request
@@ -966,10 +967,10 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
 
 **Default Metric Criteria (deterministic):**
-- **Avoids AI Clichés** (`bannedPhrases`, soft): Flags overused AI phrases like "delve into"; editable phrase/regex list
-- **Em-dash Restraint** (`emDashDensity`, gate): Hard limit on em-dash density per 1000 words
-- **No Antithesis Reframing** (`notXButY`, soft): Flags the "It wasn't X, it was Y" construction
-- **Human-like Naming** (`bannedNames`, soft): Flags overused fantasy/AI names; editable, case-sensitive list
+- **Avoids AI Clichés** (`bannedPhrases`): Flags overused AI phrases like "delve into"; editable phrase/regex list
+- **Em-dash Restraint** (`emDashDensity`): Limits em-dash density per 1000 words
+- **No Antithesis Reframing** (`notXButY`): Flags the "It wasn't X, it was Y" construction
+- **Human-like Naming** (`bannedNames`): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**
 - **Name**: Descriptive title for the criterion
@@ -980,8 +981,7 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 
 **Metric Criteria Settings (in addition to the above):**
 - **Metric Type**: The deterministic check to run (e.g. banned phrases, em-dash density, banned names)
-- **Enforcement**: *Gate* (must pass for success) or *Soft* (influences scoring only)
-- **Weight**: How heavily a shortfall counts toward the failure score
+- **Weight**: Affects ranking of failing attempts only (not pass/fail) — a higher weight makes a shortfall count more when picking the best attempt
 - **Parameters**: Metric-specific settings such as editable word lists or numeric thresholds
 - **Enabled**: Whether the metric participates in evaluation
 
@@ -990,6 +990,8 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Edit Criteria**: Modify existing criteria in-place
 - **Reset to Defaults**: Restore application defaults
 - **Copy/Paste**: Share criteria between profiles or devices
+
+**Pass/Fail and failed nodes:** A generation "passes" only when every enabled criterion meets its goal. When several attempts are made and none pass, the system keeps the best attempt (ranked by how far it fell short, with each criterion's weight applied). The chosen content is always committed, but if it still misses any goal the node is flagged with a `❗` marker in the tree (hover for the list of failing criteria), and the node inspector shows a clear **PASSED/FAILED** verdict. The flag clears automatically once you regenerate to a passing result or replace the content with manual edits.
 
 ### Generation Settings
 Control how AI content generation behaves across the application.

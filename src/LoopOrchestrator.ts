@@ -10,8 +10,7 @@ import { Rating } from './types/RatingTypes';
 import {
     evaluateMetrics,
     formatCriteriaForCreator,
-    splitCriteria,
-    GATE_FAILURE_PENALTY
+    splitCriteria
 } from './quality/MetricEvaluator';
 import * as state from './state';
 
@@ -243,7 +242,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const { prompt, criteria, maxIterations } = input;
         // Split criteria once: the rater only scores LLM criteria; metric
         // criteria are evaluated locally. metricByName lets us resolve a metric
-        // rating back to its weight/enforcement when scoring and gating.
+        // rating back to its weight when ranking failing attempts.
         const { llmCriteria, metricCriteria } = splitCriteria(criteria);
         const metricByName = new Map<string, MetricCriterion>(metricCriteria.map(m => [m.name, m]));
         const history: LoopHistoryItem[] = [];
@@ -423,10 +422,10 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 const metricRatings = evaluateMetrics(currentResponse, metricCriteria);
                 const combinedRatings: Rating[] = [...ratingsFromAI, ...metricRatings];
 
-                // Goal evaluation: an iteration is "all goals met" when every LLM
-                // criterion meets its goal AND every hard-gate metric passes.
-                // Soft metric failures never block success; they only influence
-                // the weighted failure score used for best-iteration selection.
+                // Goal evaluation is strict: an iteration is "all goals met" only
+                // when EVERY enabled criterion (LLM and metric alike) reaches its
+                // goal. There is no soft exemption — if a check should not be able
+                // to block, lower its goal or disable it.
                 let allGoalsMet = true;
                 const goalResults: string[] = [];
                 for (const rating of combinedRatings) {
@@ -435,14 +434,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         break;
                     }
 
-                    const metric = metricByName.get(rating.criterion);
                     const failed = rating.actual < rating.goal;
-                    const blocksSuccess = failed && (metric === undefined || metric.enforcement === 'gate');
-                    if (blocksSuccess) {
+                    if (failed) {
                         allGoalsMet = false;
                     }
-                    const status = failed ? (blocksSuccess ? 'FAILED' : 'FAILED (soft)') : 'PASSED';
-                    goalResults.push(`${rating.criterion}: ${rating.actual}/${rating.goal} (${status})`);
+                    goalResults.push(`${rating.criterion}: ${rating.actual}/${rating.goal} (${failed ? 'FAILED' : 'PASSED'})`);
                 }
 
                 if (aborted) break;
@@ -745,12 +741,12 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
      * Calculates the weighted failure score for a set of ratings.
      *
      * For each criterion that did not meet its goal, the gap (goal - score) is
-     * multiplied by the criterion's weight (LLM criteria default to weight 1).
-     * Failing a hard-gate metric additionally adds a large fixed penalty so that
-     * best-iteration selection strongly prefers any gate-passing version.
+     * multiplied by the criterion's weight (LLM criteria use weight 1). This score
+     * is used ONLY to rank failing iterations when choosing the best attempt; it
+     * never affects pass/fail, which is strict (every goal must be met).
      *
      * @param ratings Combined LLM + metric ratings for one iteration.
-     * @param metricByName Lookup of metric criteria by name to resolve weight/enforcement.
+     * @param metricByName Lookup of metric criteria by name to resolve weight.
      */
     private calculateFailureScore(ratings: Rating[], metricByName: Map<string, MetricCriterion>): number {
         let failureScore = 0;
@@ -762,28 +758,42 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             const metric = metricByName.get(rating.criterion);
             const weight = metric ? metric.weight : 1;
             failureScore += gap * weight;
-            if (metric && metric.enforcement === 'gate') {
-                failureScore += GATE_FAILURE_PENALTY;
-            }
         }
         return failureScore;
     }
 
     /**
-     * Selects the best iteration result based on the lowest failure score.
-     * If multiple iterations have the same failure score, selects the most recent one.
+     * Selects the best iteration result using a tiered comparison:
+     *
+     * 1. An iteration that met all goals (`allGoalsMet`) always beats one that
+     *    did not. This prevents a genuine success from being discarded in favour
+     *    of a goal-missing iteration that merely has a lower weighted failure
+     *    score.
+     * 2. Within the same success tier, the lower failure score wins.
+     * 3. Ties are broken by recency (the later iteration wins).
      */
     private selectBestIteration(iterationResults: IterationResult[]): IterationResult {
         if (iterationResults.length === 0) {
             throw new Error('No iteration results to select from');
         }
 
+        const isBetter = (candidate: IterationResult, current: IterationResult): boolean => {
+            // Tier 1: meeting all goals takes absolute priority.
+            if (candidate.allGoalsMet !== current.allGoalsMet) {
+                return candidate.allGoalsMet;
+            }
+            // Tier 2: within the same tier, prefer the lower failure score.
+            if (candidate.failureScore !== current.failureScore) {
+                return candidate.failureScore < current.failureScore;
+            }
+            // Tier 3: tie-break on recency.
+            return candidate.iteration > current.iteration;
+        };
+
         let bestResult = iterationResults[0]!;
         for (let i = 1; i < iterationResults.length; i++) {
             const result = iterationResults[i]!;
-            // Select if failure score is lower, or if same failure score but more recent iteration
-            if (result.failureScore < bestResult.failureScore || 
-                (result.failureScore === bestResult.failureScore && result.iteration > bestResult.iteration)) {
+            if (isBetter(result, bestResult)) {
                 bestResult = result;
             }
         }

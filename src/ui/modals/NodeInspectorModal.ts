@@ -1201,10 +1201,20 @@ export class NodeInspectorModal extends BaseModal {
                 </div>
             `;
         }).join('');
-        
+
+        const belowGoal = ratings.filter(rating => {
+            const score = rating.actual || (rating as any).score || 0;
+            const goal = rating.goal || 10;
+            return score < goal;
+        }).length;
+        const passed = belowGoal === 0;
+        const verdict = passed
+            ? `<span style="color: #28a745;">PASSED</span>`
+            : `<span style="color: #dc3545;">FAILED — ${belowGoal} below goal</span>`;
+
         return `
             <div style="padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 1rem;">
-                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #374151;">Quality Ratings</h4>
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #374151;">Quality Ratings — ${verdict}</h4>
                 <div style="font-size: 0.85rem;">
                     ${ratingsHtml}
                 </div>

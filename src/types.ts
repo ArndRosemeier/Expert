@@ -72,9 +72,6 @@ export interface MetricParamsMap {
     notXButY: NotXButYParams;
 }
 
-/** How a deterministic metric violation affects the generation loop. */
-export type MetricEnforcement = 'gate' | 'soft';
-
 /** Supported field types for auto-generated metric parameter UI controls. */
 export type MetricParamFieldType = 'number' | 'stringList';
 
@@ -103,9 +100,11 @@ interface MetricCriterionCommon {
     goal: number;
     /** Human-readable summary shown in the editor and secondary prompts. */
     description: string;
-    /** Whether a violation is a hard gate or a weighted-soft signal. */
-    enforcement: MetricEnforcement;
-    /** Relative weight applied to this criterion's contribution to scoring. */
+    /**
+     * Relative weight applied only when ranking failing iterations to choose the
+     * best attempt. It does NOT affect pass/fail: every enabled criterion must
+     * reach its goal regardless of weight.
+     */
     weight: number;
     /** Whether this metric participates in evaluation at all. */
     enabled: boolean;

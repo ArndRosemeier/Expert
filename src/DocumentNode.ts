@@ -716,6 +716,29 @@ export class DocumentNode {
     }
 
     /**
+     * Returns the quality ratings on the master version that did not reach their
+     * goal. Empty when the node has no rated generation, or when every goal was
+     * met. Used to flag nodes whose winning generation fell short of the (strict)
+     * quality criteria so the user can revisit them.
+     */
+    getFailingRatings(): Rating[] {
+        const masterVersion = this.getMasterVersion();
+        if (!masterVersion || !masterVersion.ratings) {
+            return [];
+        }
+        return masterVersion.ratings.filter(rating => rating.actual < rating.goal);
+    }
+
+    /**
+     * True when the master version came from a generation that did not meet all
+     * quality goals. Clears automatically once the node is regenerated to a
+     * passing result or the master is replaced by manual (unrated) content.
+     */
+    hasFailedGeneration(): boolean {
+        return this.getFailingRatings().length > 0;
+    }
+
+    /**
      * Gets versions with a specific tag.
      */
     getVersionsWithTag(tag: string): ContentVersion[] {

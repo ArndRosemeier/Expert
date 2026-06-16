@@ -181,10 +181,11 @@ function getLanguageFlag(language: string): string {
  * Gets the appropriate status icons for a node based on its state
  * Returns an object with separate status, todo, and language icons for proper horizontal layout
  */
-function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon: string; languageIcon: string } {
+function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon: string; languageIcon: string; qualityIcon: string } {
     let statusIcon = '';
     let todoIcon = '';
     let languageIcon = '';
+    let qualityIcon = '';
     
     // Root nodes have no status icon - they're distinguished by typography
     if (node.level === 0 || node.parentId === null) {
@@ -222,6 +223,11 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
     if (nodesWithTodoIndicators.has(node.id)) {
         todoIcon = '⚠️';
     }
+
+    // Flag nodes whose winning generation did not meet all quality goals.
+    if ((node.level !== 0 && node.parentId !== null) && node.hasFailedGeneration()) {
+        qualityIcon = '❗';
+    }
     
     // Add language flag for project root nodes that have a project-specific language
     if (node.level === 0 || node.parentId === null) {
@@ -236,7 +242,7 @@ function getNodeStatusIcons(node: DocumentNode): { statusIcon: string; todoIcon:
         }
     }
     
-    return { statusIcon, todoIcon, languageIcon };
+    return { statusIcon, todoIcon, languageIcon, qualityIcon };
 }
 
 /**
@@ -3153,13 +3159,19 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     }
     
     // Status icons (separate elements for horizontal layout)
-    const { statusIcon, todoIcon, languageIcon } = getNodeStatusIcons(node);
+    const { statusIcon, todoIcon, languageIcon, qualityIcon } = getNodeStatusIcons(node);
     html += `<span class="node-status-icon">${statusIcon}</span>`;
     if (todoIcon) {
         // Determine if this node has direct todos or just descendant todos
         const hasDirectTodos = nodesWithDirectTodos.has(node.id);
         const todoClass = hasDirectTodos ? 'node-todo-icon' : 'node-todo-icon-small';
         html += `<span class="${todoClass}">${todoIcon}</span>`;
+    }
+    if (qualityIcon) {
+        const failing = node.getFailingRatings();
+        const summary = failing.map(r => `${r.criterion} ${r.actual}/${r.goal}`).join(', ');
+        const qualityTooltip = `Generation below quality goals: ${summary}`;
+        html += `<span class="node-quality-icon" title="${qualityTooltip}">${qualityIcon}</span>`;
     }
     if (languageIcon && isProjectRoot) {
         // Get the project to show the actual language in tooltip

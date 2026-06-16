@@ -69,7 +69,7 @@ The quality of generated content is judged against **quality criteria**, which n
 - **Metric criteria** (`kind: 'metric'`) - objective AI-ism checks (e.g. *Em-dash Restraint*, *Avoids AI Clichés*, *Human-like Naming*) evaluated **deterministically in code**, not by an LLM.
 
 Key files:
-- **`src/quality/MetricEvaluator.ts`** - splits criteria, runs metrics, maps results onto the shared `Rating` shape, builds creator guidance, defines `GATE_FAILURE_PENALTY`
+- **`src/quality/MetricEvaluator.ts`** - splits criteria, runs metrics, maps results onto the shared `Rating` shape, builds creator guidance
 - **`src/quality/metrics/MetricRegistry.ts`** - strongly-typed registry + `withMetric` dispatcher; add a metric here plus its definition file
 - **`src/quality/metrics/MetricTypes.ts`** - `MetricDefinition`/`MetricResult` interfaces and the 1-10 scoring helpers (`scoreFromCount`, `scoreFromRatio`)
 - **`src/quality/metrics/*.ts`** - pure detectors: `emDashDensity`, `bannedPhrases`, `bannedNames`, `notXButY`, `tricolon`, `repeatedSentenceOpeners`
@@ -81,9 +81,10 @@ How an iteration is rated (in `LoopOrchestrator.runLoop`):
 2. **Rater pass**: the rater model scores LLM criteria only (skipped entirely if there are none).
 3. **Metric pass**: `evaluateMetrics` runs each metric's pure `detect()` locally; results use the same 1-10 scale.
 4. **Merge** into one `combinedRatings` array.
-5. **Goals**: `allGoalsMet` requires every LLM criterion to meet its goal **and** every hard-`gate` metric to pass. `soft` metric failures never block success.
-6. **Failure score**: each failing criterion adds `(goal − actual) × weight` (LLM weight = 1); a failing gate metric adds `GATE_FAILURE_PENALTY` (1000). The lowest-failure-score iteration is selected as the final output.
+5. **Goals (strict)**: `allGoalsMet` requires **every enabled criterion** — LLM *and* metric alike — to reach its goal. There is no soft/gate distinction: if a check should not be able to block, lower its goal or disable it.
+6. **Failure score (ranking only)**: each failing criterion adds `(goal − actual) × weight` (LLM weight = 1). This score never affects pass/fail; it is used **only** to choose the best attempt when no iteration passes. **Best-iteration selection is tiered**: an iteration that met all goals (`allGoalsMet`) always beats one that did not; within a tier the lowest failure score wins, with recency breaking ties.
 7. **Creator awareness**: `formatCriteriaForCreator` injects each metric's `creatorGuidance` (e.g. the banned-names list) into the creator prompt up front, so violations are usually avoided before they happen.
+8. **Failed-node flag**: if the committed master version still has any rating below goal, the tree shows a `❗` marker (tooltip lists the failing criteria) and the node inspector shows a PASSED/FAILED verdict. The flag clears once the node is regenerated to a passing result or replaced by manual (unrated) content.
 
 ⚠️ **Statelessness**: metric detection is pure (text + params → score, no external state), so it runs inside the existing inner loop without affecting the stateless/resumable generation strategy (see `Stateless_Generation_Logic_Documentation.md`).
 

@@ -858,6 +858,22 @@ label[for] {
     opacity: 1;
 }
 
+/* Quality Icon Styling - Generation below quality goals */
+.node-quality-icon {
+    font-size: 0.9rem;
+    width: 16px;
+    text-align: center;
+    display: inline-block;
+    transition: transform 0.15s ease;
+    margin-right: 6px; /* Space before node title */
+    flex-shrink: 0;
+    vertical-align: baseline;
+}
+
+.tree-item:hover .node-quality-icon {
+    transform: scale(1.1);
+}
+
 /* Language Icon Styling - Project language flag */
 .node-language-icon {
     font-size: 0.8rem;

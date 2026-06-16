@@ -100,7 +100,6 @@ export class CriteriaEditor {
             name: definition.label,
             metricType,
             params,
-            enforcement: 'soft',
             weight: 2,
             enabled: true,
             description: definition.label,
@@ -449,29 +448,14 @@ export class CriteriaEditor {
             typeSelect.appendChild(option);
         }
 
-        const enforcementSelect = createElement('select', {
-            classes: ['metric-enforcement'],
-            attributes: { title: 'Gate (must pass) or soft (weighted)' }
-        }) as HTMLSelectElement;
-        for (const value of ['gate', 'soft']) {
-            const option = createElement('option', {
-                content: value === 'gate' ? 'Gate' : 'Soft',
-                attributes: { value }
-            }) as HTMLOptionElement;
-            if (value === criterion.enforcement) {
-                option.selected = true;
-            }
-            enforcementSelect.appendChild(option);
-        }
-
         const goalInput = createElement('input', {
             classes: ['metric-goal'],
-            attributes: { type: 'number', min: '1', max: '10', value: criterion.goal.toString(), title: 'Goal (1-10)' }
+            attributes: { type: 'number', min: '1', max: '10', value: criterion.goal.toString(), title: 'Goal (1-10) — must be met to pass' }
         }) as HTMLInputElement;
 
         const weightInput = createElement('input', {
             classes: ['metric-weight'],
-            attributes: { type: 'number', min: '0', step: '0.5', value: criterion.weight.toString(), title: 'Weight (soft scoring)' }
+            attributes: { type: 'number', min: '0', step: '0.5', value: criterion.weight.toString(), title: 'Weight — only ranks failing attempts, not pass/fail' }
         }) as HTMLInputElement;
 
         const enabledCheckbox = createElement('input', {
@@ -500,7 +484,6 @@ export class CriteriaEditor {
 
         header.appendChild(nameInput);
         header.appendChild(typeSelect);
-        header.appendChild(enforcementSelect);
         header.appendChild(goalInput);
         header.appendChild(weightInput);
         header.appendChild(enabledCheckbox);
@@ -579,14 +562,13 @@ export class CriteriaEditor {
     private extractMetricCriterion(div: HTMLElement): MetricCriterion | null {
         const nameInput = div.querySelector<HTMLInputElement>('.metric-name');
         const typeSelect = div.querySelector<HTMLSelectElement>('.metric-type');
-        const enforcementSelect = div.querySelector<HTMLSelectElement>('.metric-enforcement');
         const goalInput = div.querySelector<HTMLInputElement>('.metric-goal');
         const weightInput = div.querySelector<HTMLInputElement>('.metric-weight');
         const enabledCheckbox = div.querySelector<HTMLInputElement>('.metric-enabled');
         const outlineCheckbox = div.querySelector<HTMLInputElement>('.outline-checkbox');
         const leafCheckbox = div.querySelector<HTMLInputElement>('.leaf-checkbox');
 
-        if (!nameInput || !typeSelect || !enforcementSelect || !goalInput || !weightInput || !enabledCheckbox || !outlineCheckbox || !leafCheckbox) {
+        if (!nameInput || !typeSelect || !goalInput || !weightInput || !enabledCheckbox || !outlineCheckbox || !leafCheckbox) {
             return null;
         }
 
@@ -618,7 +600,6 @@ export class CriteriaEditor {
             name: nameInput.value,
             metricType,
             params,
-            enforcement: enforcementSelect.value === 'gate' ? 'gate' : 'soft',
             weight: isNaN(weight) ? 1 : weight,
             enabled: enabledCheckbox.checked,
             description: div.getAttribute('data-description') || nameInput.value,
@@ -640,7 +621,7 @@ export class CriteriaEditor {
             const div = el as HTMLElement;
 
             // Metric rows are reconstructed from their dedicated controls so their
-            // metricType/params/enforcement/weight are preserved across edits.
+            // metricType/params/weight are preserved across edits.
             if (div.classList.contains('metric-criterion')) {
                 const metric = this.extractMetricCriterion(div);
                 if (metric) {

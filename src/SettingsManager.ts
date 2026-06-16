@@ -75,7 +75,6 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
             regexes: [],
             maxOccurrences: 0
         },
-        enforcement: 'soft',
         weight: 2,
         enabled: true,
         description: "Flags overused AI cliché phrases. Edit the phrase/regex list to customize.",
@@ -88,10 +87,9 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "Em-dash Restraint",
         metricType: 'emDashDensity',
         params: { maxPer1000Words: 4 },
-        enforcement: 'gate',
         weight: 2,
         enabled: true,
-        description: "Hard gate against em-dash overuse, a strong AI-ism tell.",
+        description: "Limits em-dash density, a strong AI-ism tell.",
         goal: 8,
         outline: false,
         leaf: true
@@ -101,7 +99,6 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         name: "No Antithesis Reframing",
         metricType: 'notXButY',
         params: { maxOccurrences: 0 },
-        enforcement: 'soft',
         weight: 2,
         enabled: true,
         description: "Flags the \"It wasn't X, it was Y\" antithesis construction.",
@@ -121,7 +118,6 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
             ],
             maxOccurrences: 0
         },
-        enforcement: 'soft',
         weight: 2,
         enabled: true,
         description: "Flags the most egregious overused fantasy/AI names. Case-sensitive; edit the list to customize.",
