@@ -687,8 +687,8 @@ function showActionsDropdown(node: DocumentNode): void {
 
     // Create the dropdown instance
     actionsDropdownInstance = new Dropdown(actionsButton, dropdownContent, {
-        minWidth: '280px',
-        maxWidth: '320px',
+        minWidth: '34rem',
+        maxWidth: '40rem',
         className: 'actions-dropdown',
         closeOnInsideClick: false, // We'll handle this ourselves to allow action execution
         position: 'bottom-left'
@@ -1097,8 +1097,8 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
 
     // Create the dropdown instance
     actionsDropdownInstance = new Dropdown(triggerElement, dropdownContent, {
-        minWidth: '280px',
-        maxWidth: '320px',
+        minWidth: '34rem',
+        maxWidth: '40rem',
         className: 'actions-dropdown context-menu',
         closeOnInsideClick: false, // We'll handle this ourselves to allow action execution
         position: 'bottom-left'
@@ -1227,6 +1227,7 @@ function hasLeafNodes(node: DocumentNode): boolean {
 function createActionsDropdownContent(node: DocumentNode): string {
     return `
         <div class="actions-dropdown-content">
+            <div class="actions-dropdown-column">
             <!-- Structure Section -->
             <div class="action-section">
                 <div class="section-title">Structure</div>
@@ -1263,6 +1264,20 @@ function createActionsDropdownContent(node: DocumentNode): string {
                 </div>
             </div>
 
+            ${node.level === 0 ? `
+                <!-- Project Settings Section -->
+                <div class="action-section">
+                    <div class="section-title">Project Settings</div>
+                    <div class="action-buttons">
+                        <button class="action-btn" data-action="set-project-language">
+                            🌐 Set Project Language
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
+            </div>
+
+            <div class="actions-dropdown-column">
             <!-- Data Section -->
             <div class="action-section">
                 <div class="section-title">Data</div>
@@ -1329,18 +1344,7 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                 </div>
             </div>
-            
-            ${node.level === 0 ? `
-                <!-- Project Settings Section -->
-                <div class="action-section">
-                    <div class="section-title">Project Settings</div>
-                    <div class="action-buttons">
-                        <button class="action-btn" data-action="set-project-language">
-                            🌐 Set Project Language
-                        </button>
-                    </div>
-                </div>
-            ` : ''}
+            </div>
         </div>
     `;
 }
@@ -1357,8 +1361,17 @@ function ensureActionsDropdownStyles(): void {
         
         .actions-dropdown-content {
             display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        
+        .actions-dropdown-column {
+            display: flex;
             flex-direction: column;
             gap: 1rem;
+            flex: 1;
+            min-width: 0;
         }
         
         .actions-dropdown .action-section {
@@ -1382,7 +1395,7 @@ function ensureActionsDropdownStyles(): void {
         .actions-dropdown .action-buttons {
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
+            gap: 0;
         }
         
         .actions-dropdown .action-btn {
@@ -1392,7 +1405,8 @@ function ensureActionsDropdownStyles(): void {
             padding: 0.5rem 0.75rem;
             background: white;
             border: 1px solid #d1d5db;
-            border-radius: 4px;
+            border-radius: 0;
+            margin-top: -1px;
             cursor: pointer;
             font-size: 0.8rem;
             color: #374151;
@@ -1401,10 +1415,22 @@ function ensureActionsDropdownStyles(): void {
             width: 100%;
         }
         
+        .actions-dropdown .action-btn:first-child {
+            margin-top: 0;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        
+        .actions-dropdown .action-btn:last-child {
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+        
         .actions-dropdown .action-btn:hover:not(:disabled) {
             background: #f3f4f6;
             border-color: #9ca3af;
-            transform: translateY(-1px);
+            position: relative;
+            z-index: 1;
         }
         
         .actions-dropdown .action-btn:disabled {

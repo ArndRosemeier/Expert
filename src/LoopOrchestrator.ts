@@ -3,10 +3,16 @@ import { PromptContextBuilder } from './services/PromptContextBuilder.js';
 import { formatCriteriaAsJson } from './ProjectUtils';
 import { SettingsManager } from './SettingsManager';
 import { createPromptExpansionService } from './services/PromptExpansionService.js';
-import { CreatorPayload, EditorPayload, QualityCriterion } from './types';
+import { CreatorPayload, EditorPayload, QualityCriterion, MetricCriterion } from './types';
 import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { Rating } from './types/RatingTypes';
+import {
+    evaluateMetrics,
+    formatCriteriaForCreator,
+    splitCriteria,
+    GATE_FAILURE_PENALTY
+} from './quality/MetricEvaluator';
 import * as state from './state';
 
 export interface LoopInput {
@@ -179,33 +185,44 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         let ratingsFromAI: Rating[] | null = null;
         let lastRatingResponse = '';
 
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-            if (this.stopRequested) {
-                throw new Error('Rating aborted by user');
-            }
+        // Split criteria: LLM criteria are scored by the rater model, metric
+        // criteria are evaluated locally and deterministically.
+        const { llmCriteria, metricCriteria } = splitCriteria(criteria);
 
-            const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, content, criteria);
-            try {
-                lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
-                ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
-
-                if (ratingsFromAI) {
-                    break; // Success
+        // The rater is only invoked when there are LLM criteria to score.
+        if (llmCriteria.length === 0) {
+            ratingsFromAI = [];
+        } else {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                if (this.stopRequested) {
+                    throw new Error('Rating aborted by user');
                 }
-                console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
 
-            } catch(e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
-                console.error(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, errorMessage);
+                const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, content, llmCriteria);
+                try {
+                    lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
+                    ratingsFromAI = this.parseAllRatings(lastRatingResponse, llmCriteria);
+
+                    if (ratingsFromAI) {
+                        break; // Success
+                    }
+                    console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
+
+                } catch(e: unknown) {
+                    const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
+                    console.error(`Rater API call failed on attempt ${attempt + 1}. Retrying...`, errorMessage);
+                }
+            }
+
+            if (!ratingsFromAI) {
+                throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.\n\nLast AI Response:\n"${lastRatingResponse}"`);
             }
         }
 
-        if (!ratingsFromAI) {
-            throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.\n\nLast AI Response:\n"${lastRatingResponse}"`);
-        }
+        const metricRatings = evaluateMetrics(content, metricCriteria);
 
         this.abortController = null;
-        return ratingsFromAI;
+        return [...ratingsFromAI, ...metricRatings];
     }
 
     public async runLoop(input: LoopInput): Promise<LoopResult> {
@@ -224,6 +241,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         this.emit('started', input);
         
         const { prompt, criteria, maxIterations } = input;
+        // Split criteria once: the rater only scores LLM criteria; metric
+        // criteria are evaluated locally. metricByName lets us resolve a metric
+        // rating back to its weight/enforcement when scoring and gating.
+        const { llmCriteria, metricCriteria } = splitCriteria(criteria);
+        const metricByName = new Map<string, MetricCriterion>(metricCriteria.map(m => [m.name, m]));
         const history: LoopHistoryItem[] = [];
         let currentResponse = '';
         let success = false;
@@ -276,7 +298,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     { getLanguage: () => this.language, getCriteria: () => [] } as any,
                     {
                         prompt: input.prompt,
-                        criteria: formatCriteriaAsJson(input.criteria),
+                        // Include metric guidance so the creator is aware of the
+                        // deterministic constraints up front, not just LLM criteria.
+                        criteria: formatCriteriaForCreator(input.criteria),
                         language: this.language
                     }
                 );
@@ -349,37 +373,43 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 let lastRatingResponse = '';
                 const maxRetries = 3;
 
-                for (let attempt = 0; attempt < maxRetries; attempt++) {
-                    if (this.stopRequested) {
-                        aborted = true;
-                        break;
-                    }
-
-                    const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, criteria);
-                    
-                    // Add progress update to show rater is working (like creation and editing phases)
-                    this.emit('progress', { 
-                        iteration: i, 
-                        maxIterations: maxIterations, 
-                        phase: 'rate', 
-                        payload: { criterion: 'AI is analyzing content...', rating: { criterion: 'AI is analyzing content...', goal: 0, actual: 0, passed: false}}, 
-                        progress: 0,
-                        failureScore: 0
-                    });
-                    
-                    try {
-                        lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
-                        ratingsFromAI = this.parseAllRatings(lastRatingResponse, criteria);
-
-                        if (ratingsFromAI) {
-                            break; // Success
+                // The rater model is only invoked when there are LLM criteria.
+                // With metric-only criteria the rater is skipped entirely.
+                if (llmCriteria.length === 0) {
+                    ratingsFromAI = [];
+                } else {
+                    for (let attempt = 0; attempt < maxRetries; attempt++) {
+                        if (this.stopRequested) {
+                            aborted = true;
+                            break;
                         }
-                        console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
 
-                    } catch(e: unknown) {
-                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
-                        console.error('Rating failed:', errorMessage);
-                        throw new Error(`Rating failed: ${errorMessage}`);
+                        const raterPrompt = this.createAllCriteriaRaterPrompt(prompt, currentResponse, llmCriteria);
+                        
+                        // Add progress update to show rater is working (like creation and editing phases)
+                        this.emit('progress', { 
+                            iteration: i, 
+                            maxIterations: maxIterations, 
+                            phase: 'rate', 
+                            payload: { criterion: 'AI is analyzing content...', rating: { criterion: 'AI is analyzing content...', goal: 0, actual: 0, passed: false}}, 
+                            progress: 0,
+                            failureScore: 0
+                        });
+                        
+                        try {
+                            lastRatingResponse = await this.client.chat('rater', raterPrompt, undefined, this.abortController.signal);
+                            ratingsFromAI = this.parseAllRatings(lastRatingResponse, llmCriteria);
+
+                            if (ratingsFromAI) {
+                                break; // Success
+                            }
+                            console.warn(`Rater response parsing failed on attempt ${attempt + 1}. Retrying...`);
+
+                        } catch(e: unknown) {
+                            const errorMessage = e instanceof Error ? e.message : 'Unknown error during rating';
+                            console.error('Rating failed:', errorMessage);
+                            throw new Error(`Rating failed: ${errorMessage}`);
+                        }
                     }
                 }
 
@@ -389,21 +419,30 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     throw new Error(`The AI Rater failed to provide a valid response after ${maxRetries} retries.\n\nLast AI Response:\n"${lastRatingResponse}"`);
                 }
 
+                // Evaluate deterministic metrics locally and merge with LLM ratings.
+                const metricRatings = evaluateMetrics(currentResponse, metricCriteria);
+                const combinedRatings: Rating[] = [...ratingsFromAI, ...metricRatings];
+
+                // Goal evaluation: an iteration is "all goals met" when every LLM
+                // criterion meets its goal AND every hard-gate metric passes.
+                // Soft metric failures never block success; they only influence
+                // the weighted failure score used for best-iteration selection.
                 let allGoalsMet = true;
                 const goalResults: string[] = [];
-                for (const rating of ratingsFromAI) {
+                for (const rating of combinedRatings) {
                     if (this.stopRequested) {
                         aborted = true;
                         break;
                     }
 
-                    const originalCriterion = criteria.find(c => c.name === rating.criterion);
-                    if (originalCriterion && rating.actual < originalCriterion.goal) {
+                    const metric = metricByName.get(rating.criterion);
+                    const failed = rating.actual < rating.goal;
+                    const blocksSuccess = failed && (metric === undefined || metric.enforcement === 'gate');
+                    if (blocksSuccess) {
                         allGoalsMet = false;
-                        goalResults.push(`${rating.criterion}: ${rating.actual}/${originalCriterion.goal} (FAILED)`);
-                    } else if (originalCriterion) {
-                        goalResults.push(`${rating.criterion}: ${rating.actual}/${originalCriterion.goal} (PASSED)`);
                     }
+                    const status = failed ? (blocksSuccess ? 'FAILED' : 'FAILED (soft)') : 'PASSED';
+                    goalResults.push(`${rating.criterion}: ${rating.actual}/${rating.goal} (${status})`);
                 }
 
                 if (aborted) break;
@@ -413,18 +452,18 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     iteration: i, 
                     maxIterations: maxIterations, 
                     phase: 'rate', 
-                    payload: { ratings: ratingsFromAI, goalResults },
-                    ratings: ratingsFromAI,
-                    failureScore: this.calculateFailureScore(ratingsFromAI),
+                    payload: { ratings: combinedRatings, goalResults },
+                    ratings: combinedRatings,
+                    failureScore: this.calculateFailureScore(combinedRatings, metricByName),
                     progress: 0
                 });
 
                 // Store this iteration's result for best attempt selection
-                const failureScore = this.calculateFailureScore(ratingsFromAI);
+                const failureScore = this.calculateFailureScore(combinedRatings, metricByName);
                 const iterationResult: IterationResult = {
                     iteration: i,
                     response: currentResponse,
-                    ratings: ratingsFromAI,
+                    ratings: combinedRatings,
                     failureScore: failureScore,
                     allGoalsMet: allGoalsMet
                 };
@@ -434,9 +473,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     // Emit systematic phase start event for editing
                     this.emit('phase-started', 'edit', i);
                     
-                    // 2. If not success, call Editor
-                    const failedRatings = ratingsFromAI.filter(r => r.actual < r.goal);
-                    const editorPrompt = this.createEditorPrompt(currentResponse, failedRatings);
+                    // 2. If not success, call Editor. Includes failed metric
+                    // ratings, whose concrete detail (e.g. "14 em-dashes") yields
+                    // precise, actionable advice for the next creator pass.
+                    const failedRatings = combinedRatings.filter(r => r.actual < r.goal);
+                    const editorPrompt = this.createEditorPrompt(prompt, currentResponse, failedRatings);
                     let editorAdvice: string;
                     
                     // Emit progress BEFORE starting the editor API call to show model working state
@@ -579,7 +620,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
 
     private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        const criteriaJson = formatCriteriaAsJson(criteria);
+        // Creator/prose model sees LLM criteria plus deterministic metric
+        // guidance so it can satisfy every constraint up front.
+        const criteriaJson = formatCriteriaForCreator(criteria);
 
         if (!history) {
             const context = PromptContextBuilder.fromLegacyParams(
@@ -685,10 +728,11 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         }
     }
 
-    private createEditorPrompt(response: string, ratings: Rating[]): string {
+    private createEditorPrompt(originalPrompt: string, response: string, ratings: Rating[]): string {
         const context = PromptContextBuilder.fromLegacyParams(
             { getLanguage: () => this.language, getCriteria: () => [] } as any,
             {
+                originalPrompt: originalPrompt,
                 response: response,
                 ratings: JSON.stringify(ratings, null, 2),
                 language: this.language
@@ -698,15 +742,28 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     }
 
     /**
-     * Calculates the failure score for a set of ratings.
-     * Failure score = sum of (goal - score) for all criteria that didn't meet their goal.
-     * Criteria that met their goal contribute 0 to the failure score.
+     * Calculates the weighted failure score for a set of ratings.
+     *
+     * For each criterion that did not meet its goal, the gap (goal - score) is
+     * multiplied by the criterion's weight (LLM criteria default to weight 1).
+     * Failing a hard-gate metric additionally adds a large fixed penalty so that
+     * best-iteration selection strongly prefers any gate-passing version.
+     *
+     * @param ratings Combined LLM + metric ratings for one iteration.
+     * @param metricByName Lookup of metric criteria by name to resolve weight/enforcement.
      */
-    private calculateFailureScore(ratings: Rating[]): number {
+    private calculateFailureScore(ratings: Rating[], metricByName: Map<string, MetricCriterion>): number {
         let failureScore = 0;
         for (const rating of ratings) {
-            if (rating.actual < rating.goal) {
-                failureScore += (rating.goal - rating.actual);
+            if (rating.actual >= rating.goal) {
+                continue;
+            }
+            const gap = rating.goal - rating.actual;
+            const metric = metricByName.get(rating.criterion);
+            const weight = metric ? metric.weight : 1;
+            failureScore += gap * weight;
+            if (metric && metric.enforcement === 'gate') {
+                failureScore += GATE_FAILURE_PENALTY;
             }
         }
         return failureScore;

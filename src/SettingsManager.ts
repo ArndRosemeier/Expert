@@ -1,5 +1,6 @@
 import { OrchestratorPrompts, defaultPrompts, PROMPT_STORAGE_KEY } from "./PromptManager";
 import { QualityCriterion } from "./types";
+import { PREVIOUS_DEFAULT_CRITERIA_SETS } from "./quality/historicalDefaultCriteria";
 import { StorageService, IStorageService } from './StorageService';
 import { VersionService } from './VersionService';
 import { 
@@ -18,6 +19,7 @@ const DEBUG_GENERATION_ENABLED_KEY = STORAGE_KEYS.DEBUG_GENERATION_ENABLED;
 
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
+        kind: 'llm',
         name: "Prompt Adherence",
         description: "The response directly addresses the given prompt and stays on topic throughout. It fulfills the specific request without wandering off into tangential areas.",
         goal: 9,
@@ -25,118 +27,108 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         leaf: true
     },
     {
-        name: "Clarity & Conciseness",
-        description: "The writing is direct, easy to understand, and avoids unnecessary words or filler phrases.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Natural & Authentic Tone",
-        description: "The language sounds human and authentic. It avoids being overly formal, academic, or robotic.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Engaging Flow",
-        description: "The text is interesting and holds the reader's attention. Sentences and paragraphs transition smoothly.",
-        goal: 8,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Varied Sentence Structure",
-        description: "The length and structure of sentences are varied to create a pleasing rhythm, avoiding monotony.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Subtlety (Show, Don't Tell)",
-        description: "The writing implies emotions and ideas through description and action rather than stating them directly. It avoids being on-the-nose.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Avoids AI Clichés",
-        description: "The text avoids common AI phrases like 'In conclusion,' 'It's important to note,' 'delve into,' 'tapestry of,' 'testament to,' 'in the realm of,' 'navigate the landscape,' 'meticulous examination of,' 'crucial,' 'pivotal,' 'essential,' 'underscores,' 'harness,' 'illuminate,' 'transformative,' 'fostering,' 'utilize,' 'thus,' 'furthermore,' or 'ostensibly'",
-        goal: 8,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Understated Language",
-        description: "The prose avoids overly dramatic, sensational, or grandiose language. The tone is measured and appropriate.",
-        goal: 8,
-        outline: false,
-        leaf: true
-    },
-    {
+        kind: 'llm',
         name: "Specificity & Concrete Detail",
-        description: "The writing uses specific, concrete details and examples rather than vague generalities.",
+        description: "The writing uses specific, concrete details and examples rather than vague generalities or abstract summary.",
         goal: 8,
         outline: false,
         leaf: true
     },
     {
-        name: "Original Phrasing",
-        description: "The text avoids common idioms and clichés, opting for more original ways to express ideas.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Stylistic Variation",
-        description: "Natural shifts in rhythm, tone, and phrasing that reflect a human voice.",
+        kind: 'llm',
+        name: "Natural Human Voice",
+        description: "The prose reads like a specific person wrote it, not a model. Sentence length and structure vary naturally, creating rhythm without monotony or a formulaic cadence. Word choices are distinctive and occasionally idiosyncratic rather than generic, and phrasing avoids stock idioms and predictable constructions. Flow is smooth but never mechanical or self-consciously 'writerly'.",
         goal: 8,
         outline: false,
         leaf: true
     },
     {
-        name: "Emotional Subtlety",
-        description: "Emotions are implied or layered rather than explicitly stated.",
-        goal: 7,
-        outline: false,
-        leaf: true
-    },
-    {
-        name: "Lexical Character",
-        description: "Word choices feel personal, distinctive, or slightly idiosyncratic without being distracting.",
+        kind: 'llm',
+        name: "Restraint & Subtlety",
+        description: "The writing trusts the reader. It implies emotion and meaning through concrete action and detail rather than naming them, and never inflates ordinary events into something grand, symbolic, or transformative. Tone stays measured — no melodrama, no rhetorical heightening, no telling the reader how to feel.",
         goal: 8,
         outline: false,
         leaf: true
     },
     {
-        name: 'Human-like Naming',
-        goal: 8,
-        description: "Avoid overused fantasy/AI-generated names when introducing a new name. Names like Elara, Lyra, Aris, Thorne, Lyria, Chen, Stormrider, Dawnwalker, Shadowblade, Emberheart, Snowsong, Park, Johnson, Thorne, Vance, Kieran, Nova, Soren, Sylas, Astrid, Calix, Xander, Draven, Isolde, Aerin, Kael, Thalia, or Dorian are overused. Instead, use more natural, varied names that feel authentic and less predictable. Do not change names that are already established. If a name that matches the name list exactly is introduced, that is a major flaw.",
-        outline: true,
-        leaf: true
-    },
-    {
-        name: "Avoids Dramatical Reframing",
-        description: "The text avoids artificially elevating the significance of ordinary actions, objects, or perceptions through dramatic recontextualization. This includes explicit patterns like \"It wasn't X. It was Y.\" as well as subtler forms of rhetorical inflation — where minor events are presented as symbolically profound, emotionally transformative, or mythically significant without narrative justification.\n\nExamples to avoid:\n• \"It wasn't just food. It was fuel.\"\n• \"He wasn't waiting. He was strategizing.\"\n• \"Fixing the cart wasn't a simple repair; it was the beginning of an unlikely alliance.\"\n\nStrong writing presents events and choices with clarity and restraint, allowing significance to emerge organically rather than through overt authorial framing.",
-        goal: 8,
-        outline: true,
-        leaf: true
-    },
-    {
-        name: "Immediate clarity",
-        description: "Prose won't tell how things are not only to immediately tell how they are. Constructs like \"He was not x, he was y\" are way overused and should be severely limited.",
-        goal: 8,
-        outline: false,
-        leaf: true
-    },
-    {
+        kind: 'llm',
         name: "Keep the essence of the draft intact",
         description: "Creativity can only be on the details level. The essence of the draft is the ultimate truth, if that gets violated, other contents created for the same project will get inconsistent.",
         goal: 9,
         outline: true,
         leaf: true
+    },
+    {
+        kind: 'metric',
+        name: "Avoids AI Clichés",
+        metricType: 'bannedPhrases',
+        params: {
+            phrases: [
+                'in conclusion', "it's important to note", 'it is important to note', 'delve into', 'delve',
+                'tapestry', 'a testament to', 'testament to', 'in the realm of', 'navigate the landscape',
+                'meticulous examination', 'underscores', 'underscore', 'harness', 'illuminate', 'transformative',
+                'fostering', 'utilize', 'furthermore', 'moreover', 'ostensibly', 'boasts', 'nestled', 'myriad',
+                'plethora', 'seamless', 'robust', 'leverage', 'vibrant', 'ever-evolving', 'game-changer',
+                'unlock', 'unleash', 'elevate', 'when it comes to', "it's worth noting", 'plays a crucial role',
+                'stands as a testament', 'serves as a testament', 'in the world of'
+            ],
+            regexes: [],
+            maxOccurrences: 0
+        },
+        enforcement: 'soft',
+        weight: 2,
+        enabled: true,
+        description: "Flags overused AI cliché phrases. Edit the phrase/regex list to customize.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        kind: 'metric',
+        name: "Em-dash Restraint",
+        metricType: 'emDashDensity',
+        params: { maxPer1000Words: 4 },
+        enforcement: 'gate',
+        weight: 2,
+        enabled: true,
+        description: "Hard gate against em-dash overuse, a strong AI-ism tell.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        kind: 'metric',
+        name: "No Antithesis Reframing",
+        metricType: 'notXButY',
+        params: { maxOccurrences: 0 },
+        enforcement: 'soft',
+        weight: 2,
+        enabled: true,
+        description: "Flags the \"It wasn't X, it was Y\" antithesis construction.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        kind: 'metric',
+        name: "Human-like Naming",
+        metricType: 'bannedNames',
+        params: {
+            names: [
+                'Elara', 'Lyra', 'Lyria', 'Thorne', 'Stormrider', 'Dawnwalker', 'Shadowblade',
+                'Emberheart', 'Snowsong', 'Kieran', 'Soren', 'Sylas', 'Astrid', 'Calix', 'Xander',
+                'Draven', 'Isolde', 'Aerin', 'Kael', 'Thalia', 'Dorian'
+            ],
+            maxOccurrences: 0
+        },
+        enforcement: 'soft',
+        weight: 2,
+        enabled: true,
+        description: "Flags the most egregious overused fantasy/AI names. Case-sensitive; edit the list to customize.",
+        goal: 8,
+        outline: true,
+        leaf: true
     }
-
 ];
 
 export interface SettingsProfile {
@@ -297,8 +289,12 @@ export class SettingsManager {
                         if (!profile.criteria) {
                             // Missing criteria is expected after cleanup - just populate with defaults
                             profile.criteria = DEFAULT_CRITERIA;
-                        } else if (this.areDefaultCriteria(profile.criteria)) {
-                            // Found explicitly stored default criteria - needs cleanup
+                        } else if (this.isKnownDefaultCriteria(profile.criteria)) {
+                            // Stored criteria match the current OR a previous default set, which
+                            // means the user never customized them. Adopt the current defaults
+                            // (upgrading any outdated default set) and let save strip them so
+                            // future default changes keep propagating automatically.
+                            profile.criteria = DEFAULT_CRITERIA;
                             hasDefaultCriteria = true;
                         }
                         
@@ -527,25 +523,47 @@ export class SettingsManager {
     }
 
     /**
-     * Check if criteria array is identical to defaults
+     * Check whether a criteria array is content-identical to a given target set.
+     * The `kind` discriminant is intentionally ignored so legacy sets (saved
+     * before the discriminant existed) still match.
      */
-    private areDefaultCriteria(criteria: QualityCriterion[]): boolean {
-        if (criteria.length !== DEFAULT_CRITERIA.length) {
+    private criteriaMatch(criteria: QualityCriterion[], target: QualityCriterion[]): boolean {
+        if (criteria.length !== target.length) {
             return false;
         }
 
         return criteria.every((criterion, index) => {
-            const defaultCriterion = DEFAULT_CRITERIA[index];
-            if (!defaultCriterion) return false;
-            
+            const targetCriterion = target[index];
+            if (!targetCriterion) return false;
+
             return (
-                criterion.name === defaultCriterion.name &&
-                criterion.description === defaultCriterion.description &&
-                criterion.goal === defaultCriterion.goal &&
-                criterion.outline === defaultCriterion.outline &&
-                criterion.leaf === defaultCriterion.leaf
+                criterion.name === targetCriterion.name &&
+                criterion.description === targetCriterion.description &&
+                criterion.goal === targetCriterion.goal &&
+                criterion.outline === targetCriterion.outline &&
+                criterion.leaf === targetCriterion.leaf
             );
         });
+    }
+
+    /**
+     * Check if criteria array is identical to the CURRENT defaults.
+     * Used by save to decide whether criteria can be stripped from storage.
+     */
+    private areDefaultCriteria(criteria: QualityCriterion[]): boolean {
+        return this.criteriaMatch(criteria, DEFAULT_CRITERIA);
+    }
+
+    /**
+     * Check if criteria array matches the current defaults OR any previously
+     * released default set. A match means the user never customized the
+     * criteria, so the stored set is safe to upgrade to the current defaults.
+     */
+    private isKnownDefaultCriteria(criteria: QualityCriterion[]): boolean {
+        if (this.areDefaultCriteria(criteria)) {
+            return true;
+        }
+        return PREVIOUS_DEFAULT_CRITERIA_SETS.some(set => this.criteriaMatch(criteria, set));
     }
 
     /**

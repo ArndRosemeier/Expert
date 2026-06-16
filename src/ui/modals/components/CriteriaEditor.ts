@@ -2,8 +2,9 @@
  * Component for editing quality criteria
  */
 
-import { QualityCriterion } from '../../../types';
+import { QualityCriterion, LLMCriterion, MetricCriterion, MetricType, isMetricCriterion } from '../../../types';
 import { DEFAULT_CRITERIA } from '../../../SettingsManager';
+import { getAllMetricDefinitions, getMetricDefinition } from '../../../quality/metrics/MetricRegistry';
 import { createElement, autoResizeTextarea } from '../core/modal-utils';
 
 export interface CriteriaChangeEvent {
@@ -40,8 +41,9 @@ export class CriteriaEditor {
     /**
      * Adds a new criterion
      */
-    public addCriterion(criterion?: Partial<QualityCriterion>): void {
-        const newCriterion: QualityCriterion = {
+    public addCriterion(criterion?: Partial<LLMCriterion>): void {
+        const newCriterion: LLMCriterion = {
+            kind: 'llm',
             name: "New Criterion...",
             goal: 8,
             description: "",
@@ -67,6 +69,46 @@ export class CriteriaEditor {
         }
 
         this.emitChange();
+    }
+
+    /**
+     * Adds a new deterministic metric criterion, defaulting to the first
+     * registered metric type with its default parameters.
+     */
+    public addMetric(): void {
+        const definitions = getAllMetricDefinitions();
+        const first = definitions[0];
+        if (!first) {
+            throw new Error('No metric definitions are registered.');
+        }
+        const newMetric = this.buildDefaultMetric(first.type);
+
+        const criteriaList = this.container.querySelector('.criteria-list') as HTMLElement;
+        criteriaList.appendChild(this.createMetricCriterionElement(newMetric));
+        this.emitChange();
+    }
+
+    /**
+     * Builds a metric criterion populated with the registry defaults for the
+     * given metric type.
+     */
+    private buildDefaultMetric(metricType: MetricType): MetricCriterion {
+        const definition = getMetricDefinition(metricType);
+        const params = JSON.parse(JSON.stringify(definition.defaultParams));
+        const metric = {
+            kind: 'metric',
+            name: definition.label,
+            metricType,
+            params,
+            enforcement: 'soft',
+            weight: 2,
+            enabled: true,
+            description: definition.label,
+            goal: 8,
+            outline: true,
+            leaf: true
+        } as MetricCriterion;
+        return metric;
     }
 
     /**
@@ -190,6 +232,12 @@ export class CriteriaEditor {
         });
         addButton.addEventListener('click', () => this.addCriterion());
 
+        const addMetricButton = createElement('button', {
+            classes: ['btn-primary'],
+            content: 'Add Metric'
+        });
+        addMetricButton.addEventListener('click', () => this.addMetric());
+
         const defaultsButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Reset to Defaults'
@@ -209,6 +257,7 @@ export class CriteriaEditor {
         pasteButton.addEventListener('click', async () => this.pasteCriteria());
 
         actionsBar.appendChild(addButton);
+        actionsBar.appendChild(addMetricButton);
         actionsBar.appendChild(defaultsButton);
         actionsBar.appendChild(copyButton);
         actionsBar.appendChild(pasteButton);
@@ -240,6 +289,10 @@ export class CriteriaEditor {
 
         // Render existing criteria
         this.criteria.forEach(criterion => {
+            if (isMetricCriterion(criterion)) {
+                criteriaList.appendChild(this.createMetricCriterionElement(criterion));
+                return;
+            }
             const element = this.createCriterionElement(criterion);
             criteriaList.appendChild(element);
             const textarea = element.querySelector('textarea');
@@ -366,6 +419,217 @@ export class CriteriaEditor {
     }
 
     /**
+     * Creates a DOM element for editing a deterministic metric criterion. The
+     * parameter controls are generated from the metric definition's paramSchema
+     * so new metrics are editable without changing this component.
+     */
+    private createMetricCriterionElement(criterion: MetricCriterion): HTMLElement {
+        const div = createElement('div', { classes: ['criterion', 'metric-criterion'] });
+        div.setAttribute('data-description', criterion.description);
+
+        const header = createElement('div', { classes: ['metric-header'] });
+
+        const nameInput = createElement('input', {
+            classes: ['metric-name'],
+            attributes: { type: 'text', value: criterion.name, placeholder: 'Metric name', title: 'Display name' }
+        }) as HTMLInputElement;
+
+        const typeSelect = createElement('select', {
+            classes: ['metric-type'],
+            attributes: { title: 'Metric type' }
+        }) as HTMLSelectElement;
+        for (const definition of getAllMetricDefinitions()) {
+            const option = createElement('option', {
+                content: definition.label,
+                attributes: { value: definition.type }
+            }) as HTMLOptionElement;
+            if (definition.type === criterion.metricType) {
+                option.selected = true;
+            }
+            typeSelect.appendChild(option);
+        }
+
+        const enforcementSelect = createElement('select', {
+            classes: ['metric-enforcement'],
+            attributes: { title: 'Gate (must pass) or soft (weighted)' }
+        }) as HTMLSelectElement;
+        for (const value of ['gate', 'soft']) {
+            const option = createElement('option', {
+                content: value === 'gate' ? 'Gate' : 'Soft',
+                attributes: { value }
+            }) as HTMLOptionElement;
+            if (value === criterion.enforcement) {
+                option.selected = true;
+            }
+            enforcementSelect.appendChild(option);
+        }
+
+        const goalInput = createElement('input', {
+            classes: ['metric-goal'],
+            attributes: { type: 'number', min: '1', max: '10', value: criterion.goal.toString(), title: 'Goal (1-10)' }
+        }) as HTMLInputElement;
+
+        const weightInput = createElement('input', {
+            classes: ['metric-weight'],
+            attributes: { type: 'number', min: '0', step: '0.5', value: criterion.weight.toString(), title: 'Weight (soft scoring)' }
+        }) as HTMLInputElement;
+
+        const enabledCheckbox = createElement('input', {
+            classes: ['metric-enabled'],
+            attributes: { type: 'checkbox', title: 'Enabled' }
+        }) as HTMLInputElement;
+        enabledCheckbox.checked = criterion.enabled;
+
+        const outlineCheckbox = createElement('input', {
+            classes: ['outline-checkbox'],
+            attributes: { type: 'checkbox', title: 'Use for outline/branch nodes' }
+        }) as HTMLInputElement;
+        outlineCheckbox.checked = criterion.outline !== false;
+
+        const leafCheckbox = createElement('input', {
+            classes: ['leaf-checkbox'],
+            attributes: { type: 'checkbox', title: 'Use for leaf nodes' }
+        }) as HTMLInputElement;
+        leafCheckbox.checked = criterion.leaf !== false;
+
+        const removeBtn = createElement('button', {
+            classes: ['remove-criterion-btn'],
+            innerHTML: '&times;',
+            attributes: { title: 'Remove criterion' }
+        });
+
+        header.appendChild(nameInput);
+        header.appendChild(typeSelect);
+        header.appendChild(enforcementSelect);
+        header.appendChild(goalInput);
+        header.appendChild(weightInput);
+        header.appendChild(enabledCheckbox);
+        header.appendChild(outlineCheckbox);
+        header.appendChild(leafCheckbox);
+        header.appendChild(removeBtn);
+
+        const paramsContainer = createElement('div', { classes: ['metric-params'] });
+        this.renderMetricParams(paramsContainer, criterion.metricType, criterion.params);
+
+        // Switching the metric type regenerates the parameter controls using the
+        // newly selected metric's schema and defaults.
+        typeSelect.addEventListener('change', () => {
+            const newType = typeSelect.value as MetricType;
+            const definition = getMetricDefinition(newType);
+            this.renderMetricParams(paramsContainer, newType, definition.defaultParams);
+            this.emitChange();
+        });
+
+        div.appendChild(header);
+        div.appendChild(paramsContainer);
+        return div;
+    }
+
+    /**
+     * Renders the parameter controls for a metric into the given container,
+     * driven by the metric definition's paramSchema.
+     */
+    private renderMetricParams(container: HTMLElement, metricType: MetricType, params: unknown): void {
+        container.innerHTML = '';
+        const definition = getMetricDefinition(metricType);
+        const paramRecord = params as Record<string, unknown>;
+
+        for (const field of definition.paramSchema) {
+            const fieldWrapper = createElement('div', { classes: ['metric-param-field'] });
+            const label = createElement('label', { classes: ['metric-param-label'], content: field.label });
+            fieldWrapper.appendChild(label);
+
+            if (field.type === 'number') {
+                const value = typeof paramRecord[field.key] === 'number' ? String(paramRecord[field.key]) : '0';
+                const input = createElement('input', {
+                    classes: ['metric-param-control'],
+                    attributes: {
+                        type: 'number',
+                        value,
+                        'data-param-key': field.key,
+                        'data-param-type': 'number'
+                    }
+                }) as HTMLInputElement;
+                if (field.min !== undefined) input.min = String(field.min);
+                if (field.max !== undefined) input.max = String(field.max);
+                if (field.step !== undefined) input.step = String(field.step);
+                fieldWrapper.appendChild(input);
+            } else {
+                const list = Array.isArray(paramRecord[field.key]) ? (paramRecord[field.key] as string[]) : [];
+                const textarea = createElement('textarea', {
+                    classes: ['metric-param-control'],
+                    attributes: {
+                        'data-param-key': field.key,
+                        'data-param-type': 'stringList',
+                        value: list.join('\n')
+                    }
+                }) as HTMLTextAreaElement;
+                textarea.value = list.join('\n');
+                fieldWrapper.appendChild(textarea);
+            }
+
+            container.appendChild(fieldWrapper);
+        }
+    }
+
+    /**
+     * Reconstructs a metric criterion from a metric row's controls, preserving
+     * the strongly-typed params shape defined by the metric registry.
+     */
+    private extractMetricCriterion(div: HTMLElement): MetricCriterion | null {
+        const nameInput = div.querySelector<HTMLInputElement>('.metric-name');
+        const typeSelect = div.querySelector<HTMLSelectElement>('.metric-type');
+        const enforcementSelect = div.querySelector<HTMLSelectElement>('.metric-enforcement');
+        const goalInput = div.querySelector<HTMLInputElement>('.metric-goal');
+        const weightInput = div.querySelector<HTMLInputElement>('.metric-weight');
+        const enabledCheckbox = div.querySelector<HTMLInputElement>('.metric-enabled');
+        const outlineCheckbox = div.querySelector<HTMLInputElement>('.outline-checkbox');
+        const leafCheckbox = div.querySelector<HTMLInputElement>('.leaf-checkbox');
+
+        if (!nameInput || !typeSelect || !enforcementSelect || !goalInput || !weightInput || !enabledCheckbox || !outlineCheckbox || !leafCheckbox) {
+            return null;
+        }
+
+        const metricType = typeSelect.value as MetricType;
+        const definition = getMetricDefinition(metricType);
+        const params: Record<string, unknown> = JSON.parse(JSON.stringify(definition.defaultParams));
+
+        const controls = div.querySelectorAll<HTMLElement>('.metric-param-control');
+        controls.forEach(control => {
+            const key = control.getAttribute('data-param-key');
+            const paramType = control.getAttribute('data-param-type');
+            if (!key) return;
+            if (paramType === 'number') {
+                params[key] = parseFloat((control as HTMLInputElement).value);
+            } else {
+                params[key] = (control as HTMLTextAreaElement).value
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+            }
+        });
+
+        const goal = parseInt(goalInput.value, 10);
+        const weight = parseFloat(weightInput.value);
+        // params is built dynamically from the metric's paramSchema, so it is a
+        // generic record here; the schema guarantees it matches the metric type.
+        const metric = {
+            kind: 'metric',
+            name: nameInput.value,
+            metricType,
+            params,
+            enforcement: enforcementSelect.value === 'gate' ? 'gate' : 'soft',
+            weight: isNaN(weight) ? 1 : weight,
+            enabled: enabledCheckbox.checked,
+            description: div.getAttribute('data-description') || nameInput.value,
+            goal: isNaN(goal) ? 8 : goal,
+            outline: outlineCheckbox.checked,
+            leaf: leafCheckbox.checked
+        } as unknown as MetricCriterion;
+        return metric;
+    }
+
+    /**
      * Extracts criteria from the UI
      */
     private extractCriteriaFromUI(): QualityCriterion[] {
@@ -374,6 +638,17 @@ export class CriteriaEditor {
         
         criterionElements.forEach(el => {
             const div = el as HTMLElement;
+
+            // Metric rows are reconstructed from their dedicated controls so their
+            // metricType/params/enforcement/weight are preserved across edits.
+            if (div.classList.contains('metric-criterion')) {
+                const metric = this.extractMetricCriterion(div);
+                if (metric) {
+                    criteria.push(metric);
+                }
+                return;
+            }
+
             const textarea = el.querySelector<HTMLTextAreaElement>('textarea');
             const goalInput = el.querySelector<HTMLInputElement>('input[type="number"]');
             const outlineCheckbox = el.querySelector<HTMLInputElement>('.outline-checkbox');
@@ -402,7 +677,7 @@ export class CriteriaEditor {
                         description = undefined;
                     }
                     
-                    const criterion: QualityCriterion = { name, goal, outline, leaf };
+                    const criterion: QualityCriterion = { kind: 'llm', name, goal, outline, leaf };
                     if (description) {
                         criterion.description = description;
                     }
@@ -435,20 +710,33 @@ export class CriteriaEditor {
     /**
      * Migrates criteria format for compatibility
      */
-    private migrateCriteriaFormat(criteria: any[]): QualityCriterion[] {
+    private migrateCriteriaFormat(criteria: QualityCriterion[]): QualityCriterion[] {
         return criteria.map(criterion => {
-            // Remove weight property if it exists and add outline/leaf defaults if missing
+            // Metric criteria are preserved verbatim (their metricType/params must
+            // never be stripped), only filling in outline/leaf/enabled defaults.
+            if (isMetricCriterion(criterion)) {
+                // Spreading a discriminated union widens the discriminant, so we
+                // re-assert the concrete MetricCriterion type after filling defaults.
+                return {
+                    ...criterion,
+                    outline: criterion.outline !== undefined ? criterion.outline : true,
+                    leaf: criterion.leaf !== undefined ? criterion.leaf : true,
+                    enabled: criterion.enabled !== undefined ? criterion.enabled : true
+                } as MetricCriterion;
+            }
+
             const migrated: QualityCriterion = {
+                kind: 'llm',
                 name: criterion.name,
                 goal: criterion.goal,
                 outline: criterion.outline !== undefined ? criterion.outline : true,
                 leaf: criterion.leaf !== undefined ? criterion.leaf : true
             };
-            
+
             if (criterion.description) {
                 migrated.description = criterion.description;
             }
-            
+
             return migrated;
         });
     }
@@ -634,6 +922,88 @@ export class CriteriaEditor {
                 
                 .remove-criterion-btn:hover {
                     background-color: #dc2626;
+                }
+
+                .criterion.metric-criterion {
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 0.5rem;
+                    background-color: #eef2ff;
+                    border-color: #c7d2fe;
+                }
+
+                .metric-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                }
+
+                .metric-header .metric-name {
+                    flex: 1 1 10rem;
+                    min-width: 8rem;
+                    height: 32px;
+                    padding: 0.25rem 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 0.9rem;
+                    box-sizing: border-box;
+                }
+
+                .metric-header select {
+                    height: 32px;
+                    padding: 0.25rem 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 0.85rem;
+                    background: white;
+                }
+
+                .metric-header .metric-goal,
+                .metric-header .metric-weight {
+                    width: 56px;
+                    height: 32px;
+                    padding: 0.25rem 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    text-align: center;
+                    font-size: 0.9rem;
+                    box-sizing: border-box;
+                }
+
+                .metric-params {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    padding-left: 0.25rem;
+                }
+
+                .metric-param-field {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                }
+
+                .metric-param-label {
+                    font-size: 0.8rem;
+                    font-weight: 500;
+                    color: #4b5563;
+                }
+
+                .metric-param-control {
+                    width: 100%;
+                    padding: 0.4rem 0.5rem;
+                    border: 1px solid #d1d5db;
+                    border-radius: 4px;
+                    font-size: 0.85rem;
+                    font-family: inherit;
+                    box-sizing: border-box;
+                }
+
+                textarea.metric-param-control {
+                    min-height: 4rem;
+                    resize: vertical;
+                    line-height: 1.4;
                 }
             `
         });

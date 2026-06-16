@@ -193,14 +193,16 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
         text: `
             Provide advice in {{language}}. Any structural elements (such as section headers) must always remain in English.
             
+            The original task prompt was: "{{originalPrompt}}".
+
             A response was generated: "{{response}}"
-            It was rated against several criteria:
+            It was rated against several criteria (failing criteria include concrete details where available):
             {{ratings}}
 
             Please provide concise, actionable advice for the Creator LLM on how to improve the response to better meet the rating goals.
-            Focus on what needs to change.
+            Focus on what needs to change, and address every failing criterion specifically.
         `.trim(),
-        placeholders: ['response', 'ratings', 'language'],
+        placeholders: ['originalPrompt', 'response', 'ratings', 'language'],
         description: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings."
     },
 
