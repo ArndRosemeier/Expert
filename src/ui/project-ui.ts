@@ -724,6 +724,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'node-edit-chat': 'xml-story-creation-btn',
+                            'guided-review': 'guided-review-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1176,6 +1177,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'import': 'import-node-btn',
                             'chat': 'chat-node-btn',
                             'node-edit-chat': 'xml-story-creation-btn',
+                            'guided-review': 'guided-review-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1313,6 +1315,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="node-edit-chat">
                         🗨️ Edit Chat
+                    </button>
+                    <button class="action-btn" data-action="guided-review">
+                        🔎 Guided Review
                     </button>
                     <button class="action-btn" data-action="polish-text">
                         🎨 Polish Text
@@ -3790,6 +3795,15 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'guided-review-btn':
+            {
+                const handler = buttonHandlers['guided-review-btn'];
+                if (handler) {
+                    handler(new Event('click'));
+                }
+            }
+            break;
+
         case 'polish-text-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
@@ -5806,6 +5820,25 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }).catch((error: unknown) => {
             console.error('❌ Failed to open XML Story Creation modal:', error);
             alert('Failed to open XML Story Creator. Please try again.');
+        });
+    },
+
+    'guided-review-btn': (_e: Event) => {
+        if (!projectManager || !selectedNodeId) {
+            alert('Select a node first to start a guided review.');
+            return;
+        }
+        const node = projectManager.findNodeById(selectedNodeId);
+        if (!node) {
+            console.warn('Selected node not found:', selectedNodeId);
+            return;
+        }
+        const pm = projectManager;
+        void import('./modals/ModalFactory').then(({ openGuidedReviewModal }) => {
+            void openGuidedReviewModal(node, pm);
+        }).catch((error: unknown) => {
+            console.error('❌ Failed to open Guided Reviewer modal:', error);
+            alert('Failed to open Guided Reviewer. Please try again.');
         });
     },
 

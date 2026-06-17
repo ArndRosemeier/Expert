@@ -43,6 +43,14 @@ export const STORAGE_KEYS = {
     GLOBAL_LANGUAGE: 'expert_app_global_language'
 } as const;
 
+/**
+ * Key prefix for ephemeral Guided Reviewer staged sessions in IndexedDB.
+ * A full key is `${REVIEW_STAGE_PREFIX}${projectRootId}:${reviewRootId}`.
+ * These entries exist only to recover an in-progress review after a crash and
+ * are cleared once the review is committed or discarded.
+ */
+export const REVIEW_STAGE_PREFIX = 'expert_app_reviewer_stage:';
+
 // === Default Content ===
 export const DEFAULT_CONTEXT_EXTRACTION_PROMPT = `You are an expert at analyzing text and extracting specific information. Your task is to analyze the following content and extract information about: {{extraction_request}}
 

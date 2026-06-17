@@ -8,6 +8,7 @@ import { ComprehensiveExportModal, ComprehensiveExportModalConfig } from './Comp
 import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal';
 import { ConversationalGenerationModal, ConversationalGenerationModalConfig } from './ConversationalGenerationModal';
 import { XMLStoryModal, XMLStoryModalConfig } from './XMLStoryModal';
+import { GuidedReviewModal, GuidedReviewModalConfig } from './GuidedReviewModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
@@ -338,6 +339,27 @@ export class ModalFactory {
     }
 
     /**
+     * Creates and opens the Guided Reviewer modal for a node and its subtree.
+     */
+    public async createGuidedReviewModal(sourceNode: DocumentNode, projectManager: ProjectManager): Promise<GuidedReviewModal> {
+        const { OpenRouterClient } = await import('../../OpenRouterClient');
+        const openRouterClient = OpenRouterClient.getInstance();
+        openRouterClient.setSettingsManager(this.dependencies.settingsManager);
+
+        const config: GuidedReviewModalConfig = {
+            id: 'guided-review-modal',
+            settingsManager: this.dependencies.settingsManager,
+            openRouterClient,
+            projectManager,
+            sourceNode
+        };
+
+        const modal = new GuidedReviewModal(config);
+        void modal.open();
+        return modal;
+    }
+
+    /**
      * Creates a generic content modal
      */
     public createGenericModal(
@@ -641,4 +663,12 @@ export async function openXMLStoryModal(initializationData?: {title: string, con
     const modal = await factory.createXMLStoryModal({ autoOpen: true, ...(initializationData && { initializationData }) });
     
     return modal;
+}
+
+/**
+ * Convenience function to open the Guided Reviewer modal using the default factory.
+ */
+export async function openGuidedReviewModal(sourceNode: DocumentNode, projectManager: ProjectManager): Promise<GuidedReviewModal> {
+    const factory = getDefaultModalFactory();
+    return factory.createGuidedReviewModal(sourceNode, projectManager);
 } 
