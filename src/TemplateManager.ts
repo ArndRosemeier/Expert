@@ -9,111 +9,132 @@ const defaultTemplates: Record<string, ProjectTemplate> = {
     // === NOVEL TEMPLATES ===
     "Standard Novel": new ProjectTemplate(
         "Standard Novel",
-        ['Book', 'Act 3', 'Chapter', 'Scene']
+        ['Book', 'Act 3', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Hero's Journey Novel": new ProjectTemplate(
         "Hero's Journey Novel",
-        ['Book', 'Journey Stage 17', 'Chapter', 'Scene']
+        ['Book', 'Journey Stage 17', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Save the Cat Novel": new ProjectTemplate(
         "Save the Cat Novel",
-        ['Book', 'Beat Sheet 15', 'Chapter', 'Scene']
+        ['Book', 'Beat Sheet 15', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Three-Act Novel": new ProjectTemplate(
         "Three-Act Novel",
-        ['Book', 'Act 3', 'Chapter', 'Scene']
+        ['Book', 'Act 3', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Romance Novel": new ProjectTemplate(
         "Romance Novel",
-        ['Book', 'Relationship Arc 8', 'Chapter', 'Scene']
+        ['Book', 'Relationship Arc 8', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Mystery Novel": new ProjectTemplate(
         "Mystery Novel",
-        ['Book', 'Investigation Phase 6', 'Chapter', 'Scene']
+        ['Book', 'Investigation Phase 6', 'Chapter', 'Scene'],
+        [null, null, null, 5]
     ),
 
     "Epic": new ProjectTemplate(
         "Epic",
-        ['Series', 'Book 3', 'Act 3', 'Chapter', 'Scene']
+        ['Series', 'Book 3', 'Act 3', 'Chapter', 'Scene'],
+        [null, null, null, null, 5]
     ),
 
     // === SHORT PROSE TEMPLATES ===
     "Short Story": new ProjectTemplate(
         "Short Story",
-        ['Story', 'Chapter', 'Scene']
+        ['Story', 'Chapter', 'Scene'],
+        [null, null, 5]
     ),
 
     "Personal Essay": new ProjectTemplate(
         "Personal Essay",
-        ['Essay', 'Section 4', 'Point']
+        ['Essay', 'Section 4', 'Point'],
+        [null, null, 5]
     ),
 
     // === NON-FICTION TEMPLATES ===
     "Technical Manual": new ProjectTemplate(
         "Technical Manual",
-        ['Manual', 'Section', 'Topic', 'Procedure']
+        ['Manual', 'Section', 'Topic', 'Procedure'],
+        [null, null, null, 5]
     ),
 
     "Business Presentation": new ProjectTemplate(
         "Business Presentation",
-        ['Presentation', 'Section', 'Slide']
+        ['Presentation', 'Section', 'Slide'],
+        [null, null, 5]
     ),
 
     "Academic Paper": new ProjectTemplate(
         "Academic Paper",
-        ['Paper', 'Chapter', 'Section', 'Subsection']
+        ['Paper', 'Chapter', 'Section', 'Subsection'],
+        [null, null, null, 5]
     ),
 
     "Research Report": new ProjectTemplate(
         "Research Report",
-        ['Report', 'Phase', 'Finding', 'Detail']
+        ['Report', 'Phase', 'Finding', 'Detail'],
+        [null, null, null, 5]
     ),
 
     "User Guide": new ProjectTemplate(
         "User Guide",
-        ['Guide', 'Section', 'Task', 'Step']
+        ['Guide', 'Section', 'Task', 'Step'],
+        [null, null, null, 5]
     ),
 
     "Training Manual": new ProjectTemplate(
         "Training Manual",
-        ['Manual', 'Module', 'Lesson', 'Exercise']
+        ['Manual', 'Module', 'Lesson', 'Exercise'],
+        [null, null, null, 5]
     ),
 
     "White Paper": new ProjectTemplate(
         "White Paper",
-        ['Paper', 'Section', 'Topic', 'Point']
+        ['Paper', 'Section', 'Topic', 'Point'],
+        [null, null, null, 5]
     ),
 
     "Marketing Plan": new ProjectTemplate(
         "Marketing Plan",
-        ['Plan', 'Quarter 4', 'Campaign', 'Activity']
+        ['Plan', 'Quarter 4', 'Campaign', 'Activity'],
+        [null, null, null, 5]
     ),
 
     // === EDUCATIONAL TEMPLATES ===
     "Thesis": new ProjectTemplate(
         "Thesis",
-        ['Thesis', 'Chapter', 'Section', 'Subsection']
+        ['Thesis', 'Chapter', 'Section', 'Subsection'],
+        [null, null, null, 5]
     ),
 
     // === CREATIVE TEMPLATES ===
     "Poetry Collection": new ProjectTemplate(
         "Poetry Collection",
-        ['Collection', 'Section', 'Poem']
+        ['Collection', 'Section', 'Poem'],
+        [null, null, 5]
     ),
 
     "Game Design Document": new ProjectTemplate(
         "Game Design Document",
-        ['Game', 'System', 'Feature', 'Detail']
+        ['Game', 'System', 'Feature', 'Detail'],
+        [null, null, null, 5]
     ),
 
     "Cookbook": new ProjectTemplate(
         "Cookbook",
-        ['Cookbook', 'Category', 'Recipe', 'Step']
+        ['Cookbook', 'Category', 'Recipe', 'Step'],
+        [null, null, null, 5]
     )
 };
 
