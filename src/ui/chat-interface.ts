@@ -26,6 +26,13 @@ export class ChatInterface {
     private customSystemPrompt: string | null = null;
     private chatTitle: string = 'AI Chat';
     private nodeStructure: DocumentNode | null = null; // Store the actual node structure for roleplay
+
+    /**
+     * Optional listener invoked whenever the conversation changes in a way worth
+     * persisting (an assistant reply finished, or messages were cleared/rewound).
+     * Consumers (e.g. the guided outline creator) use this to snapshot the chat.
+     */
+    public onConversationUpdated: (() => void) | null = null;
     
     // DOM elements
     private chatContainer: HTMLElement | null = null;
@@ -775,6 +782,7 @@ export class ChatInterface {
                 this.currentStreamingMessageId = null;
                 this.toggleButtons(false);
                 this.updateSendButtonState();
+                this.notifyConversationUpdated();
             },
             onError: (error: Error) => {
                 console.error('Chat streaming error:', error);
@@ -937,6 +945,34 @@ export class ChatInterface {
         if (this.messagesContainer) {
             this.messagesContainer.innerHTML = '';
         }
+        this.notifyConversationUpdated();
+    }
+
+    /**
+     * Notify the optional conversation listener that the message list changed.
+     */
+    private notifyConversationUpdated(): void {
+        if (this.onConversationUpdated) {
+            this.onConversationUpdated();
+        }
+    }
+
+    /**
+     * Replace the current conversation with the given messages and re-render them.
+     * Used to restore a previously saved chat. Must be called after initialize()
+     * so the messages container exists.
+     */
+    public restoreMessages(messages: ChatMessage[]): void {
+        this.messages = messages.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            // Persisted timestamps may come back as strings depending on the
+            // storage round-trip; normalize to a Date for formatTimestamp().
+            timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp),
+            isStreaming: false
+        }));
+        this.displayAllMessages();
     }
 
     /**
@@ -1118,6 +1154,7 @@ For each suggestion, provide clear justification for why the change would improv
         
         // Re-render the messages
         this.displayAllMessages();
+        this.notifyConversationUpdated();
         
         // Show feedback
         if (this.messages.length === 0) {
