@@ -780,10 +780,14 @@ Story|Act 3|Scene = exactly 3 acts
 Course|Module 8|Lesson = exactly 8 modules
 Novel|Part 4|Chapter|Scene = exactly 4 parts
 
-CONCEPT APPROACH:
-- The concept should be a guideline for the construction of an outline, not the outline itself
-- Avoid numbered lists, structured sections, or detailed breakdowns
-- Focus on the flow of events and details
+OUTLINE APPROACH:
+- Produce a structured outline divided into top-level sections that correspond to the SECOND level of your Hierarchy (the direct children of the top level). For "Book|Chapter|Scene" the sections are Chapters; for "Story|Act 3|Scene" the sections are Acts.
+- If that second level encodes a fixed number (e.g. "Act 3" = 3, "Part 4" = 4), produce EXACTLY that many sections. Otherwise produce a sensible number of major divisions.
+- Mark every section with a whole-line header in this exact format:
+  ===Section Title===
+  [Flowing outline prose describing what happens in this section, in order...]
+- Each section header must be on its own line. The "Section Title" is in {{language}} (it becomes a node title). Do NOT number the sections; give each a meaningful title.
+- Within a section, focus on the flow of events and details; avoid numbered lists and bullet breakdowns.
 
 RESPONSE FORMAT:
 You must structure your response with exactly these four sections in this order:
@@ -800,7 +804,7 @@ Section: Context
 [All relevant contextual information using the conditional context system. Each paragraph is a separate context item. Use <trigger>word1, word2</trigger> at the start of paragraphs that should only appear when specific elements are mentioned. Global context items (always visible) should start normally without trigger tags. Separate each context item with double newlines.]
 
 Section: Concept
-[A Concept - NOT an outline. Write what happens in what order. Structuring that is a later step.]
+[A structured outline of the whole story, divided into ===Section Title=== headers as described in OUTLINE APPROACH above. One section per direct child of the top hierarchy level; if that level has a fixed count, produce exactly that many sections. Each section header on its own line, titles in {{language}}, followed by flowing outline prose for that section.]
 
 {{noise_names}}
 
@@ -1359,12 +1363,17 @@ A compelling, genre-appropriate title
 
 ===PROJECT OUTLINE===
 A detailed story outline (500-800 words) that incorporates all specified elements. Include plot structure, character roles, key scenes, and story progression.
+Divide the outline into several major sections, each one a distinct division of the story that will become a top-level part of the project. Mark every section with a whole-line header in this exact format:
+===Section Title===
+[Flowing outline prose for this section...]
+Each section header must be on its own line. The "Section Title" is the name of that part and must be written in {{language}} (it becomes a node title). Do NOT number the sections; give each a meaningful title.
 
 ===BACKGROUND CONTEXT===
 Setting, premise, and world details (300-500 words) formatted for the conditional context system.
 
 CRITICAL FORMAT REQUIREMENTS:
-- Use the exact delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT==="
+- Use the exact wrapper delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT===" (these three stay in English)
+- Inside ===PROJECT OUTLINE===, split the outline into ===Section Title=== headers (one per major division); these section titles are in {{language}}
 - Each section must be clearly separated
 - The context section must be formatted as one paragraph per context item
 - Use CONDITIONAL CONTEXT SYSTEM with trigger words:
@@ -1765,7 +1774,7 @@ Each section should have a clear, descriptive title, and the existing content sh
 
             The result of this process is:
             1. A header line like this: ===<title>=== where <title> is the title of the story.
-            2. An outline in the agreed upon format
+            2. An outline in the agreed upon format. The outline MUST be divided into major sections, each one a distinct division of the story that will become a top-level part of the project. Mark every section with its own whole-line header in this exact format: ===Section Title=== followed by the flowing outline prose for that section. Each section header must be on its own line, the "Section Title" is in {{language}} (it becomes a node title), and the sections must NOT be numbered.
             3. A seperator to introduce context, exactly this: ===context===
             4. An exhaustive number of context items (exactly one paragraph each, prefix with "Trigger: <triggerWord>." if the context is not global and only needed for a part of the story. The trigger word is usually a name) for:
                a) characters
@@ -2009,8 +2018,11 @@ CRITICAL: Be as detailed as possible. Extract and document every significant mom
 - Consequences of character decisions and actions
 
 **Structure Requirements:**
-- Break the outline into clear scenes or story segments
-- Use detailed paragraph breaks for different story moments
+- Break the outline into major sections, each one a distinct division of the story that will become a top-level part of the project. Mark every section with a whole-line header in this exact format:
+  ===Section Title===
+  [Detailed outline prose for this section...]
+  Each section header must be on its own line. The "Section Title" is the name of that part and must be written in {{language}} (it becomes a node title). Do NOT number the sections; give each a meaningful title.
+- Within each section, use detailed paragraph breaks for different story moments
 - Maintain chronological order with specific event sequences
 - Include transitional moments between major scenes
 - Document the narrative arc from beginning through to end
@@ -2021,7 +2033,8 @@ CRITICAL: Be as detailed as possible. Extract and document every significant mom
 EXTREMELY COMPREHENSIVE context information formatted for the conditional context system (one paragraph per item - create as many paragraphs as needed to capture all details):
 
 CRITICAL FORMAT REQUIREMENTS:
-- Use the exact delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT==="
+- Use the exact wrapper delimiters: "===PROJECT TITLE===", "===PROJECT OUTLINE===", "===BACKGROUND CONTEXT===" (these three stay in English)
+- Inside ===PROJECT OUTLINE===, split the outline into ===Section Title=== headers (one per major division); these section titles are in {{language}}
 - Each section must be clearly separated
 - The context section must be formatted as one paragraph per context item
 - Use CONDITIONAL CONTEXT SYSTEM with trigger words:

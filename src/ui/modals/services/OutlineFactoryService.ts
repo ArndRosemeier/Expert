@@ -194,20 +194,22 @@ export class OutlineFactoryService {
     let projectContent = '';
     let projectContext = '';
     
-    // Extract PROJECT TITLE - simple format: "===PROJECT TITLE==="
-    const titleMatch = content.match(/===PROJECT TITLE===([\s\S]*?)(?====|$)/);
+    // Extract PROJECT TITLE. The outline body may contain internal ===Section Title===
+    // headers, so terminate ONLY at the next known top-level wrapper delimiter (or end),
+    // never at any "===". Otherwise internal section headers would truncate the body.
+    const titleMatch = content.match(/===PROJECT TITLE===([\s\S]*?)(?=\n===PROJECT OUTLINE===|\n===BACKGROUND CONTEXT===|$)/);
     if (titleMatch && titleMatch[1]) {
       title = titleMatch[1].trim().replace(/^["']|["']$/g, ''); // Remove quotes
     }
     
-    // Extract PROJECT OUTLINE - simple format: "===PROJECT OUTLINE==="
-    const outlineMatch = content.match(/===PROJECT OUTLINE===([\s\S]*?)(?====|$)/);
+    // Extract PROJECT OUTLINE (keeps any internal ===Section Title=== headers intact).
+    const outlineMatch = content.match(/===PROJECT OUTLINE===([\s\S]*?)(?=\n===BACKGROUND CONTEXT===|$)/);
     if (outlineMatch && outlineMatch[1]) {
       projectContent = outlineMatch[1].trim();
     }
     
-    // Extract BACKGROUND CONTEXT - simple format: "===BACKGROUND CONTEXT==="
-    const contextMatch = content.match(/===BACKGROUND CONTEXT===([\s\S]*?)(?====|$)/);
+    // Extract BACKGROUND CONTEXT - everything after its delimiter to the end.
+    const contextMatch = content.match(/===BACKGROUND CONTEXT===([\s\S]*?)$/);
     if (contextMatch && contextMatch[1]) {
       projectContext = contextMatch[1].trim();
     }

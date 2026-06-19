@@ -119,8 +119,11 @@ export class SessionToOutlineService {
   }
 
   private parseOutlineResponse(response: string): SessionToOutlineResult {
-    const titleMatch = response.match(/===PROJECT TITLE===\s*\n([\s\S]*?)(?=\n===|$)/);
-    const contentMatch = response.match(/===PROJECT OUTLINE===\s*\n([\s\S]*?)(?=\n===|$)/);
+    // The outline body may contain internal ===Section Title=== headers, so terminate
+    // ONLY at the next known top-level wrapper delimiter (or end), never at any "\n===".
+    // Otherwise an internal section header would truncate the extracted body.
+    const titleMatch = response.match(/===PROJECT TITLE===\s*\n([\s\S]*?)(?=\n===PROJECT OUTLINE===|\n===BACKGROUND CONTEXT===|$)/);
+    const contentMatch = response.match(/===PROJECT OUTLINE===\s*\n([\s\S]*?)(?=\n===BACKGROUND CONTEXT===|$)/);
     const contextMatch = response.match(/===BACKGROUND CONTEXT===\s*\n([\s\S]*?)$/);
 
     if (!titleMatch || !contentMatch || !contextMatch) {
