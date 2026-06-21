@@ -162,39 +162,51 @@ export class SettingsModal extends BaseModal {
             classes: ['modal-body']
         });
 
-        // Profile Management Section
+        // --- Primary settings (always visible) ---
+        // Only the essentials live here: named profiles, the OpenRouter key, and
+        // the per-purpose model selection (both rendered by the ModelSelector).
+
+        // Profile Management Section (named settings)
         const profileSection = this.createProfileSection();
         body.appendChild(profileSection);
 
-        // Models Section
+        // Models Section (OpenRouter API key + models per purpose)
         const modelsSection = this.createModelsSection();
         body.appendChild(modelsSection);
 
-        // Task Model Configuration Section
-        const taskModelSection = this.createTaskModelSection();
-        body.appendChild(taskModelSection);
+        // --- Advanced settings (collapsed behind a disclosure fold) ---
+        const advanced = this.createAdvancedContainer();
 
-        // Criteria Section
-        const criteriaSection = this.createCriteriaSection();
-        body.appendChild(criteriaSection);
+        advanced.appendChild(this.createTaskModelSection());
+        advanced.appendChild(this.createCriteriaSection());
+        advanced.appendChild(this.createIterationsSection());
+        advanced.appendChild(this.createPromptsSection());
+        advanced.appendChild(this.createLoggingSection());
+        advanced.appendChild(this.createDebugSection());
 
-        // Max Iterations Section
-        const iterationsSection = this.createIterationsSection();
-        body.appendChild(iterationsSection);
-
-        // Prompts Section
-        const promptsSection = this.createPromptsSection();
-        body.appendChild(promptsSection);
-
-        // AI Logging Section
-        const loggingSection = this.createLoggingSection();
-        body.appendChild(loggingSection);
-
-        // Debug Generation Section  
-        const debugSection = this.createDebugSection();
-        body.appendChild(debugSection);
+        body.appendChild(advanced);
 
         return body;
+    }
+
+    /**
+     * Creates the collapsible "Advanced" disclosure that holds every
+     * non-essential settings section. Children stay in the DOM while collapsed,
+     * so component initialization (which queries by class/id) keeps working.
+     */
+    private createAdvancedContainer(): HTMLElement {
+        const details = createElement('details', {
+            classes: ['settings-advanced']
+        });
+
+        const summary = createElement('summary', {
+            classes: ['settings-advanced-summary'],
+            content: 'Advanced'
+        });
+
+        details.appendChild(summary);
+
+        return details;
     }
 
     /**
@@ -1061,6 +1073,52 @@ export class SettingsModal extends BaseModal {
                     border: 1px solid #e5e7eb;
                     border-radius: 12px;
                     padding: 1.5rem;
+                }
+                
+                .settings-modal-container .settings-advanced {
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    background-color: #ffffff;
+                }
+                
+                .settings-modal-container .settings-advanced[open] {
+                    padding-bottom: 1.5rem;
+                }
+                
+                .settings-modal-container .settings-advanced-summary {
+                    cursor: pointer;
+                    list-style: none;
+                    padding: 1rem 1.5rem;
+                    font-size: 1.125rem;
+                    font-weight: 600;
+                    color: #111827;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    user-select: none;
+                }
+                
+                .settings-modal-container .settings-advanced-summary::-webkit-details-marker {
+                    display: none;
+                }
+                
+                .settings-modal-container .settings-advanced-summary::before {
+                    content: "▸";
+                    font-size: 0.9em;
+                    color: #6b7280;
+                    transition: transform 0.15s ease;
+                }
+                
+                .settings-modal-container .settings-advanced[open] .settings-advanced-summary::before {
+                    transform: rotate(90deg);
+                }
+                
+                .settings-modal-container .settings-advanced .settings-section {
+                    margin: 0 1.5rem 1.5rem 1.5rem;
+                }
+                
+                .settings-modal-container .settings-advanced .settings-section:last-child {
+                    margin-bottom: 0;
                 }
                 
                 .settings-modal-container .settings-section h3 {
