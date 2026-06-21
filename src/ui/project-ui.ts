@@ -392,7 +392,7 @@ let draftLevelState: number = -1;
 let contentLevelState: number = -1;
 // contextPruneLevelState removed - using conditional context system
 let coherenceLevelState: number = -1;
-let autofixSeverityState: number = -1; // -1 = none, 1-10 = autofix threshold
+let autofixSeverityState: number = 5; // -1 = none, 1-10 = autofix threshold. Defaults to 5 on first run.
 let deterministicChildCreationState: boolean = true;
 
 // Export for use by DocumentNode
@@ -551,7 +551,7 @@ async function loadLevelStates() {
             contentLevelState = saved.contentLevel ?? -1;
             // contextPruneLevelState removed with traditional context system
             coherenceLevelState = saved.coherenceLevel ?? -1;
-            autofixSeverityState = saved.autofixSeverity ?? -1;
+            autofixSeverityState = saved.autofixSeverity ?? 5;
             deterministicChildCreationState = saved.deterministicChildCreation ?? true;
             (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
             // pruneScopeState removed - prune scope UI removed
@@ -2011,6 +2011,71 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 gap: 0.5rem 0.75rem;
             }
             
+            .level-primary-row {
+                display: flex;
+                align-items: flex-end;
+                gap: 0.75rem;
+            }
+            
+            .generation-advanced-btn {
+                flex-shrink: 0;
+                white-space: nowrap;
+                font-size: 0.8rem;
+                padding: 0.4rem 0.7rem;
+            }
+            
+            .generation-advanced-popup {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+            
+            .generation-advanced-popup-content {
+                width: 90%;
+                max-width: 32rem;
+                max-height: 85%;
+                overflow-y: auto;
+                background: #fff;
+                border-radius: 8px;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+                padding: 1.25rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .generation-advanced-popup-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 1rem;
+                font-weight: 600;
+                color: #111827;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 0.5rem;
+            }
+            
+            .generation-advanced-close {
+                background: none;
+                border: none;
+                font-size: 1.4rem;
+                line-height: 1;
+                cursor: pointer;
+                color: #6b7280;
+                padding: 0 0.25rem;
+            }
+            
+            .generation-advanced-close:hover {
+                color: #111827;
+            }
+            
             .level-selector {
                 display: flex;
                 flex-direction: column;
@@ -2368,7 +2433,34 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 <div class="generation-controls-compact">
                     <!-- Level-Based Generation Controls -->
                     <div class="level-controls">
-                        <div class="level-controls-grid">
+                        <!-- Primary: single level selector + advanced opener -->
+                        <div class="level-primary-row">
+                            <div class="level-selector" style="flex: 1; min-width: 0;">
+                                <label for="unified-level-selector" title="Generate drafts, content, and coherence down to this level">
+                                    <span class="level-icon">🎚️</span>
+                                    Level:
+                                </label>
+                                <select id="unified-level-selector" class="level-dropdown">
+                                    ${node.template.slice(node.level).map((levelName, index) => {
+                                        const actualLevel = node.level + index;
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        return `<option value="${actualLevel}" ${draftLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            <button id="generation-advanced-btn" type="button" class="button button-secondary generation-advanced-btn" title="Advanced generation settings">
+                                ⚙️ Advanced
+                            </button>
+                        </div>
+
+                        <!-- Advanced popup overlay (hidden by default) -->
+                        <div id="generation-advanced-popup" class="generation-advanced-popup" style="display: none;">
+                          <div class="generation-advanced-popup-content">
+                            <div class="generation-advanced-popup-header">
+                                <span>Advanced Generation Settings</span>
+                                <button id="generation-advanced-close" type="button" class="generation-advanced-close" title="Close">&times;</button>
+                            </div>
+                            <div class="level-controls-grid">
                             <!-- Draft Level -->
                             <div class="level-selector">
                                 <label for="draft-level-selector" title="Deepest level for which children (drafts) are created">
@@ -2449,11 +2541,14 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                             <!-- Prune Scope removed - prune scope UI removed -->
                 </div>
                 
-                        <!-- Validation Messages -->
-                        <div id="level-validation-message" class="level-validation-message" style="display: none;">
-                            <span class="validation-icon">⚠️</span>
-                            <span id="validation-text"></span>
+                            <!-- Validation Messages -->
+                            <div id="level-validation-message" class="level-validation-message" style="display: none;">
+                                <span class="validation-icon">⚠️</span>
+                                <span id="validation-text"></span>
+                            </div>
+                          </div>
                         </div>
+                        <!-- /Advanced popup overlay -->
                     </div>
                             
                     ${node.isLeaf ? `
@@ -2770,19 +2865,78 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         return isValid;
     };
     
-    // Add validation event listeners
-    const levelSelectors = [draftLevelSelector, contentLevelSelector, coherenceLevelSelector];
-    
-    levelSelectors.forEach(selector => {
+    // --- Unified single-level control + Advanced popup ---
+    const unifiedLevelSelector = getElementById('unified-level-selector') as HTMLSelectElement;
+    const advancedBtn = getElementById('generation-advanced-btn') as HTMLButtonElement;
+    const advancedPopup = getElementById('generation-advanced-popup') as HTMLDivElement;
+    const advancedCloseBtn = getElementById('generation-advanced-close') as HTMLButtonElement;
+
+    // Coherence targets a parent level whose children are checked, so it can never
+    // reach the leaf level; this is its deepest valid value.
+    const maxCoherenceLevel = node.template.length - 2;
+
+    // Keep the single Level dropdown showing the current draft depth.
+    const syncUnifiedFromAdvanced = () => {
+        if (unifiedLevelSelector && draftLevelSelector) {
+            unifiedLevelSelector.value = draftLevelSelector.value;
+        }
+    };
+
+    // Advanced selectors: capture every dropdown value into state, then persist.
+    const advancedSelectors = [draftLevelSelector, contentLevelSelector, coherenceLevelSelector, autofixSeveritySelector];
+    advancedSelectors.forEach(selector => {
         if (selector) {
             selector.addEventListener('change', () => {
+                captureCurrentDropdownValues();
                 validateLevels();
-                // Save level states to storage
+                syncUnifiedFromAdvanced();
                 void saveLevelStates();
             });
         }
     });
-    
+
+    // The single Level dropdown sets draft, content, and coherence to the chosen
+    // level in one step. Autofix severity is intentionally left untouched - it is
+    // an advanced-only setting.
+    if (unifiedLevelSelector) {
+        unifiedLevelSelector.addEventListener('change', () => {
+            const level = parseInt(unifiedLevelSelector.value);
+            const coherence = Math.min(level, maxCoherenceLevel);
+
+            draftLevelState = level;
+            contentLevelState = level;
+            coherenceLevelState = coherence;
+
+            if (draftLevelSelector) draftLevelSelector.value = level.toString();
+            if (contentLevelSelector) contentLevelSelector.value = level.toString();
+            if (coherenceLevelSelector) coherenceLevelSelector.value = coherence.toString();
+
+            validateLevels();
+            void saveLevelStates();
+        });
+        // Reflect the restored/initial draft depth on first render.
+        syncUnifiedFromAdvanced();
+    }
+
+    // Advanced popup open/close
+    if (advancedBtn && advancedPopup) {
+        advancedBtn.addEventListener('click', () => {
+            advancedPopup.style.display = 'flex';
+        });
+    }
+    const closeAdvancedPopup = () => {
+        if (advancedPopup) advancedPopup.style.display = 'none';
+    };
+    if (advancedCloseBtn) {
+        advancedCloseBtn.addEventListener('click', closeAdvancedPopup);
+    }
+    if (advancedPopup) {
+        // Clicking the dimmed backdrop (outside the content) closes the popup.
+        advancedPopup.addEventListener('click', (e) => {
+            if (e.target === advancedPopup) closeAdvancedPopup();
+        });
+    }
+
     // Initial validation
     validateLevels();
 
