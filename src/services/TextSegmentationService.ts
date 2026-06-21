@@ -18,6 +18,12 @@ export interface SegmentationOptions {
   targetCount?: number; // optional hint (e.g., 3 acts)
   language?: string; // for prompt wording; does not affect JSON keys
   purpose?: 'creator' | 'rater' | 'editor' | 'prose'; // reuse existing purposes only
+  /**
+   * Optional scope label for the split prompt (e.g. the user's template level
+   * name in their own language). When provided it replaces the generic English
+   * scope word so the prompt stays language-aware rather than English-locked.
+   */
+  customScope?: string;
 }
 
 export interface SegmentationResultSection {
@@ -34,6 +40,16 @@ interface LlmSectionRaw {
   start: string; // "pN"
   title: string;
 }
+
+// Token-bounding constants for the skeleton+windowed fallback. They keep the
+// per-call input size bounded regardless of total document length so very large
+// slices never overflow the model context. All values are structural (counts /
+// char budgets) and carry no language assumptions.
+const APPROX_CHARS_PER_TOKEN = 4;
+const MAX_FULL_INPUT_TOKENS = 6000; // above this, switch to skeleton+windowed mode
+const WINDOW_PARAGRAPHS = 120; // paragraphs analysed per LLM call in skeleton mode
+const WINDOW_OVERLAP = 8; // paragraph overlap between consecutive windows
+const PREVIEW_CHARS = 120; // characters of preview kept per paragraph in skeleton mode
 
 export class TextSegmentationService {
   private static instance: TextSegmentationService | null = null;
@@ -65,7 +81,7 @@ export class TextSegmentationService {
     const paragraphs = this.computeParagraphs(originalText);
     const curated = this.buildCuratedText(paragraphs);
 
-    const reqArgs: { language: string; granularity: SegmentationGranularity; purpose: 'creator' | 'rater' | 'editor' | 'prose'; targetCount?: number } = {
+    const reqArgs: { language: string; granularity: SegmentationGranularity; purpose: 'creator' | 'rater' | 'editor' | 'prose'; targetCount?: number; customScope?: string } = {
       language,
       granularity,
       purpose,
@@ -73,6 +89,22 @@ export class TextSegmentationService {
     if (typeof options.targetCount === 'number') {
       reqArgs.targetCount = options.targetCount;
     }
+    if (typeof options.customScope === 'string' && options.customScope.trim().length > 0) {
+      reqArgs.customScope = options.customScope.trim();
+    }
+
+    // Token guard: when the full curated text is too large, segment using the
+    // skeleton+windowed strategy (paragraph previews processed in overlapping
+    // windows) so each LLM call stays within a bounded input size.
+    const approxTokens = Math.ceil(curated.length / APPROX_CHARS_PER_TOKEN);
+    if (approxTokens > MAX_FULL_INPUT_TOKENS) {
+      const windowedSections = await this.segmentSkeletonWindowed(paragraphs, reqArgs);
+      if (windowedSections.length === 0) {
+        throw new Error('TextSegmentationService: Skeleton segmentation returned no sections.');
+      }
+      return { sections: windowedSections, paragraphs };
+    }
+
     const sectionsRaw = await this.requestSectionsWithTitles(curated, reqArgs);
 
     if (!sectionsRaw || sectionsRaw.length === 0) {
@@ -139,8 +171,83 @@ export class TextSegmentationService {
     return paragraphs.map((p) => `==${p.id}==\n${p.text}`.trimEnd()).join('\n\n');
   }
 
-  private buildSplitScope(granularity: SegmentationGranularity, targetCount?: number): string {
-    const core = granularity === 'custom' ? 'parts' : granularity;
+  /**
+   * Segment a large paragraph list using bounded skeleton windows.
+   *
+   * Instead of sending full prose, each paragraph is reduced to a short preview.
+   * Paragraphs are processed in overlapping windows with locally re-based ids
+   * (p1..pK per window) so the existing prompt contract ("first section starts
+   * at p1") holds inside every window; local ids are mapped back to global
+   * paragraph indices afterwards. Boundaries detected in overlap regions by two
+   * windows are de-duplicated. Token use per call is bounded by WINDOW_PARAGRAPHS
+   * and PREVIEW_CHARS, independent of total document size.
+   */
+  private async segmentSkeletonWindowed(
+    paragraphs: ParagraphInfo[],
+    args: { language: string; granularity: SegmentationGranularity; targetCount?: number; purpose: 'creator' | 'rater' | 'editor' | 'prose'; customScope?: string }
+  ): Promise<SegmentationResultSection[]> {
+    const total = paragraphs.length;
+    const boundaries = new Map<number, string>(); // global 1-based index -> title
+
+    let windowStart = 0; // 0-based paragraph offset
+    while (windowStart < total) {
+      const windowEnd = Math.min(total, windowStart + WINDOW_PARAGRAPHS);
+      const windowParagraphs = paragraphs.slice(windowStart, windowEnd);
+      const curated = this.buildSkeletonText(windowParagraphs);
+
+      const raw = await this.requestSectionsWithTitles(curated, args);
+      for (const r of raw) {
+        const localIndex = this.parseParagraphId(r.start);
+        if (!Number.isInteger(localIndex) || localIndex < 1 || localIndex > windowParagraphs.length) {
+          continue;
+        }
+        const globalIndex = windowStart + localIndex; // local p1 -> global (windowStart + 1)
+        const title = (r.title || '').trim();
+        const existing = boundaries.get(globalIndex);
+        if (existing === undefined || (existing.length === 0 && title.length > 0)) {
+          boundaries.set(globalIndex, title);
+        }
+      }
+
+      if (windowEnd >= total) {
+        break;
+      }
+      windowStart = Math.max(0, windowEnd - WINDOW_OVERLAP);
+    }
+
+    // The first document section must always start at p1.
+    if (!boundaries.has(1)) {
+      boundaries.set(1, '');
+    }
+
+    return Array.from(boundaries.entries())
+      .filter(([index]) => index >= 1 && index <= total)
+      .map(([index, title]) => ({ startParagraphIndex: index, title }))
+      .sort((a, b) => a.startParagraphIndex - b.startParagraphIndex);
+  }
+
+  /**
+   * Build curated skeleton text for a window: re-based local ids (p1..pK) plus a
+   * short, language-neutral preview of each paragraph.
+   */
+  private buildSkeletonText(paragraphs: ParagraphInfo[]): string {
+    return paragraphs
+      .map((p, i) => `==p${i + 1}==\n${this.previewOf(p.text)}`)
+      .join('\n\n');
+  }
+
+  private previewOf(text: string): string {
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (clean.length <= PREVIEW_CHARS) {
+      return clean;
+    }
+    return `${clean.slice(0, PREVIEW_CHARS).trim()}…`;
+  }
+
+  private buildSplitScope(granularity: SegmentationGranularity, targetCount?: number, customScope?: string): string {
+    const core = customScope && customScope.length > 0
+      ? customScope
+      : (granularity === 'custom' ? 'parts' : granularity);
     if (targetCount && targetCount > 0) {
       return `${core} (aim for about ${targetCount} boundaries)`;
     }
@@ -156,9 +263,9 @@ export class TextSegmentationService {
 
   private async requestSectionsWithTitles(
     curatedText: string,
-    args: { language: string; granularity: SegmentationGranularity; targetCount?: number; purpose: 'creator' | 'rater' | 'editor' | 'prose' }
+    args: { language: string; granularity: SegmentationGranularity; targetCount?: number; purpose: 'creator' | 'rater' | 'editor' | 'prose'; customScope?: string }
   ): Promise<LlmSectionRaw[]> {
-    const splitScope = this.buildSplitScope(args.granularity, args.targetCount);
+    const splitScope = this.buildSplitScope(args.granularity, args.targetCount, args.customScope);
 
     // Expand prompts via centralized manager
     const systemTemplate = getPromptText('text_segmentation_system');

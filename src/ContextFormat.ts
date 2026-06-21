@@ -2,6 +2,51 @@
  * Context formatting utilities for managing context items
  */
 
+// Type-only import: erased at compile time, so this does NOT create a runtime
+// import cycle with DocumentNode (which imports getContextItems from here).
+import type { DocumentNode } from './DocumentNode';
+
+/**
+ * Applies AI-generated context to a node as conditional context items.
+ *
+ * The context string is a list of paragraph items (separated by blank lines).
+ * A paragraph may optionally start with a trigger prefix of the form
+ * `<trigger>word1, word2</trigger>` to make it a keyword-gated item; paragraphs
+ * without that prefix become always-visible (global) items.
+ *
+ * This is the single shared implementation used by every import/creation path
+ * (AI creator, concept import, full-text import) so context handling stays
+ * consistent. It uses only the node's public API.
+ */
+export function applyConditionalContextItems(rootNode: DocumentNode, aiContext: string): void {
+    if (!aiContext || !aiContext.trim()) {
+        return;
+    }
+
+    const items = getContextItems(aiContext);
+    for (const itemText of items) {
+        const trimmed = itemText.trim();
+        if (!trimmed) {
+            continue;
+        }
+
+        const triggerMatch = trimmed.match(/^<trigger>(.*?)<\/trigger>(.*)/s);
+        if (triggerMatch && triggerMatch[1] && triggerMatch[2]) {
+            const keywords = triggerMatch[1]
+                .split(',')
+                .map(word => word.trim())
+                .filter(word => word.length > 0);
+            const contextText = triggerMatch[2].trim();
+            const id = rootNode.addConditionalContextItem(contextText, [], 'OR');
+            if (keywords.length > 0) {
+                rootNode.updateConditionalContextItem(id, { keywords });
+            }
+        } else {
+            rootNode.addConditionalContextItem(trimmed, [], 'OR');
+        }
+    }
+}
+
 /**
  * Splits context into an array of paragraphs (context items)
  * Each paragraph is considered a separate context item

@@ -18,12 +18,8 @@ import { TemplateManager } from './TemplateManager';
 import { STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
-import { generateNewContextID } from './ContextIDGenerator';
-import { getContextItems } from './ContextFormat';
+import { applyConditionalContextItems } from './ContextFormat';
 import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
-
-
-import * as pdfjsLib from 'pdfjs-dist';
 
 /**
  * Open the RPG View
@@ -273,39 +269,6 @@ function closeProgressModal(modalElement: HTMLElement): void {
     }
 }
 
-/**
- * Extract text content from a PDF file
- */
-async function extractTextFromPDF(file: File): Promise<string> {
-    try {
-        // Configure PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-        
-        // Load the PDF
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-        
-        let fullText = '';
-        
-        // Extract text from each page
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items
-                .filter((item: any): item is { str: string } => item && typeof item === 'object' && 'str' in item)
-                .map((item: any) => item.str)
-                .join(' ');
-            fullText += pageText + '\n\n';
-        }
-        
-        return fullText.trim();
-    } catch (error) {
-        console.error('PDF text extraction failed:', error);
-        throw new Error('Failed to extract text from PDF. The file may be corrupted or contain only images.');
-    }
-}
-
-
 async function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) {
     const modelSelector = state.getModelSelector();
     if (!modelSelector) {
@@ -366,58 +329,20 @@ interface AIGeneratedData {
 }
 
 // Removed generateSimpleId - using centralized ContextIDGenerator instead
+// AI conditional context creation now lives in the shared applyConditionalContextItems
+// helper (ContextFormat.ts) so every import/creation path behaves identically.
 
 /**
- * Parses AI-generated conditional context with trigger tags and creates conditional context items
+ * Uniform finalize step for an already-built imported project: register it,
+ * make it active, reconfigure services for it, persist, and open its UI.
+ * Shared by every text/PDF import path so they all end identically.
  */
-function parseAIConditionalContext(rootNode: DocumentNode, aiContext: string): void {
-    if (!aiContext || typeof aiContext !== 'string' || !aiContext.trim()) {
-        return;
-    }
-
-    // Split into paragraphs (each paragraph is a context item)
-    const contextItems = getContextItems(aiContext);
-    
-    for (const itemText of contextItems) {
-        const trimmedText = itemText.trim();
-        if (!trimmedText) continue;
-
-        // Check if this item has trigger tags
-        const triggerMatch = trimmedText.match(/^<trigger>(.*?)<\/trigger>(.*)/s);
-        
-        if (triggerMatch && triggerMatch[1] && triggerMatch[2]) {
-            // This is a triggered context item
-            const triggerWordsString = triggerMatch[1];
-            const contextText = triggerMatch[2].trim();
-            
-            // Parse trigger words (comma-separated)
-            const keywords = triggerWordsString
-                .split(',')
-                .map(word => word.trim())
-                .filter(word => word.length > 0);
-            
-            // Add conditional context item with trigger words as keywords
-            // We'll have to manually access the conditionalContextItems for now since addConditionalContextItem doesn't support keywords
-            const conditionalItem = {
-                id: generateNewContextID(rootNode),
-                text: contextText,
-                conditions: [],
-                logic: 'OR' as const,
-                keywords: keywords
-            };
-            
-            // Directly add to the node's conditional context items array
-            (rootNode as any).conditionalContextItems.push(conditionalItem);
-            
-            console.log(`✅ Added triggered context item with keywords: [${keywords.join(', ')}]`);
-        } else {
-            // This is a global context item (no trigger tags)
-            rootNode.addConditionalContextItem(trimmedText, [], 'OR');
-            console.log(`✅ Added global context item`);
-        }
-    }
-    
-    console.log(`✅ Parsed ${contextItems.length} AI conditional context items`);
+async function finalizeImportedProject(project: ProjectManager): Promise<void> {
+    state.addProject(project);
+    state.setActiveProject(project.rootNode.id);
+    recreateAndReconfigureServices();
+    await project.saveToStorage();
+    await initializeProjectUI(project);
 }
 
 function handleCreateProject(title: string, template: ProjectTemplate, aiData?: unknown) {
@@ -461,7 +386,7 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
         if (typedAiData.context !== undefined) {
             // Parse AI-generated conditional context with trigger tags
             console.log('🔄 Parsing AI-generated conditional context items');
-            parseAIConditionalContext(rootNode, typedAiData.context);
+            applyConditionalContextItems(rootNode, typedAiData.context);
             console.log('✅ Applied AI conditional context to root node, length:', typedAiData.context.length);
         }
         
@@ -982,9 +907,15 @@ export async function initialize() {
             let dropdown = document.getElementById('import-dropdown') as HTMLDivElement;
             
             if (dropdown) {
-                // Toggle visibility
+                // Toggle visibility; always reset to the top-level menu when showing
+                // (a previous interaction may have left the submenu rendered).
                 const isVisible = dropdown.style.display === 'block';
-                dropdown.style.display = isVisible ? 'none' : 'block';
+                if (isVisible) {
+                    dropdown.style.display = 'none';
+                } else {
+                    renderTopLevelImportMenu(dropdown);
+                    dropdown.style.display = 'block';
+                }
                 return;
             }
             
@@ -1004,68 +935,7 @@ export async function initialize() {
                 display: block;
             `;
             
-            dropdown.innerHTML = `
-                <button class="import-option" data-action="expert-project" style="
-                    width: 100%;
-                    padding: 12px 16px;
-                    border: none;
-                    background: white;
-                    text-align: left;
-                    cursor: pointer;
-                    border-radius: 8px 8px 0 0;
-                    font-size: 14px;
-                    color: var(--text-primary);
-                ">
-                    📁 Import Expert Project
-                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
-                        Load complete Expert project files (JSON)
-                    </div>
-                </button>
-                <button class="import-option" data-action="import-concept" style="
-                    width: 100%;
-                    padding: 12px 16px;
-                    border: none;
-                    background: white;
-                    text-align: left;
-                    cursor: pointer;
-                    border-top: 1px solid var(--secondary-200);
-                    font-size: 14px;
-                    color: var(--text-primary);
-                ">
-                    🧠 Import Concept
-                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
-                        AI analysis of text/PDF files for concepts
-                    </div>
-                </button>
-                <button class="import-option" data-action="hierarchical-document" style="
-                    width: 100%;
-                    padding: 12px 16px;
-                    border: none;
-                    background: white;
-                    text-align: left;
-                    cursor: pointer;
-                    border-top: 1px solid var(--secondary-200);
-                    border-radius: 0 0 8px 8px;
-                    font-size: 14px;
-                    color: var(--text-primary);
-                ">
-                    📄 Import Hierarchical Document
-                    <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
-                        Pattern-based hierarchy detection (MD, TXT, PDF)
-                    </div>
-                </button>
-            `;
-            
-            // Add hover effects
-            const options = dropdown.querySelectorAll('.import-option');
-            options.forEach(option => {
-                option.addEventListener('mouseenter', () => {
-                    (option as HTMLElement).style.backgroundColor = 'var(--secondary-50)';
-                });
-                option.addEventListener('mouseleave', () => {
-                    (option as HTMLElement).style.backgroundColor = 'white';
-                });
-            });
+            renderTopLevelImportMenu(dropdown);
             
                          // Position dropdown relative to button
              const button = getElementById('importProjectBtn');
@@ -1089,18 +959,26 @@ export async function initialize() {
                  
                  if (actionButton) {
                      const action = actionButton.dataset['action'];
+
+                     // 'import-text' opens a second-level Concepts-only / Full-text
+                     // choice in the same dropdown rather than dispatching immediately.
+                     if (action === 'import-text') {
+                         renderTextImportSubmenu(dropdown);
+                         return;
+                     }
+
                      dropdown.style.display = 'none';
-                     
+
                      try {
                          switch (action) {
                              case 'expert-project':
                                  await handleExpertProjectImport();
                                  break;
-                             case 'import-concept':
-                                 await handleConceptImport();
+                             case 'text-concepts':
+                                 await handleTextImport('concept');
                                  break;
-                             case 'hierarchical-document':
-                                 await handleHierarchicalDocumentImport();
+                             case 'text-fulltext':
+                                 await handleTextImport('fulltext');
                                  break;
                          }
                      } catch (error) {
@@ -1207,173 +1085,168 @@ export async function initialize() {
         document.body.removeChild(fileInput);
     }
 
-    async function handleConceptImport(): Promise<void> {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.txt,.pdf';
-        fileInput.style.display = 'none';
-        
-        fileInput.addEventListener('change', async (e) => {
-            const target = e.target as HTMLInputElement;
-            const file = target.files?.[0];
-            if (!file) return;
-            
-            try {
-                const fileName = file.name.toLowerCase();
-                const isPdfFile = fileName.endsWith('.pdf');
-                
-                if (isPdfFile) {
-                    // Handle PDF file - extract text then analyze with AI
-                    const progressModal = showProgressModal('Extracting text from PDF...');
-                    
-                    try {
-                        const textContent = await extractTextFromPDF(file);
-                        closeProgressModal(progressModal);
-                        
-                        if (!textContent.trim()) {
-                            throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
-                        }
-                        
-                        // Pass extracted text to text import handler
-                        await handleTextImportWithAI(textContent, file.name);
-                        
-                    } catch (error) {
-                        closeProgressModal(progressModal);
-                        throw error;
-                    }
-                    
-                } else {
-                    // Handle text file - analyze with AI
-                    const reader = new FileReader();
-                    reader.onload = async (event) => {
-                        try {
-                            const content = event.target?.result as string;
-                            await handleTextImportWithAI(content, file.name);
-                        } catch (error) {
-                            console.error('Text import failed:', error);
-                            alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                        }
-                    };
-                    
-                    reader.onerror = () => {
-                        alert('Failed to read text file. Please try again.');
-                    };
-                    
-                    reader.readAsText(file);
-                }
-                
-            } catch (error) {
-                console.error('Concept import failed:', error);
-                alert('Concept import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-            }
-        });
-        
-        // Trigger file selection
-        document.body.appendChild(fileInput);
-        fileInput.click();
-        document.body.removeChild(fileInput);
+    // Render the top-level import menu (Expert project + Import Text/PDF).
+    function renderTopLevelImportMenu(dropdown: HTMLElement): void {
+        dropdown.innerHTML = `
+            <button class="import-option" data-action="expert-project" style="
+                width: 100%;
+                padding: 12px 16px;
+                border: none;
+                background: white;
+                text-align: left;
+                cursor: pointer;
+                border-radius: 8px 8px 0 0;
+                font-size: 14px;
+                color: var(--text-primary);
+            ">
+                📁 Import Expert Project
+                <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                    Load complete Expert project files (JSON)
+                </div>
+            </button>
+            <button class="import-option" data-action="import-text" style="
+                width: 100%;
+                padding: 12px 16px;
+                border: none;
+                background: white;
+                text-align: left;
+                cursor: pointer;
+                border-top: 1px solid var(--secondary-200);
+                border-radius: 0 0 8px 8px;
+                font-size: 14px;
+                color: var(--text-primary);
+            ">
+                📄 Import Text/PDF
+                <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                    Concepts only, or full text (MD, TXT, PDF)
+                </div>
+            </button>
+        `;
+        attachImportOptionHover(dropdown);
     }
 
-    async function handleHierarchicalDocumentImport(): Promise<void> {
+    function attachImportOptionHover(dropdown: HTMLElement): void {
+        dropdown.querySelectorAll('.import-option').forEach(option => {
+            option.addEventListener('mouseenter', () => {
+                (option as HTMLElement).style.backgroundColor = 'var(--secondary-50)';
+            });
+            option.addEventListener('mouseleave', () => {
+                (option as HTMLElement).style.backgroundColor = 'white';
+            });
+        });
+    }
+
+    // Render the second-level Concepts-only / Full-text choice into the import
+    // dropdown. Keeps the dropdown open; dispatch happens on the sub-option click.
+    function renderTextImportSubmenu(dropdown: HTMLElement): void {
+        dropdown.innerHTML = `
+            <button class="import-option" data-action="text-concepts" style="
+                width: 100%;
+                padding: 12px 16px;
+                border: none;
+                background: white;
+                text-align: left;
+                cursor: pointer;
+                border-radius: 8px 8px 0 0;
+                font-size: 14px;
+                color: var(--text-primary);
+            ">
+                🧠 Concepts only
+                <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                    AI extracts a titled outline + context
+                </div>
+            </button>
+            <button class="import-option" data-action="text-fulltext" style="
+                width: 100%;
+                padding: 12px 16px;
+                border: none;
+                background: white;
+                text-align: left;
+                cursor: pointer;
+                border-top: 1px solid var(--secondary-200);
+                border-radius: 0 0 8px 8px;
+                font-size: 14px;
+                color: var(--text-primary);
+            ">
+                📄 Full text
+                <div style="font-size: 12px; color: var(--secondary-600); margin-top: 4px;">
+                    Preserve the source and segment into a hierarchy
+                </div>
+            </button>
+        `;
+        attachImportOptionHover(dropdown);
+    }
+
+    // Unified text/PDF import: 'concept' reuses the AI creator pipeline,
+    // 'fulltext' segments the source into a template hierarchy. Both produce
+    // conditional context items and finalize through the shared path.
+    async function handleTextImport(mode: 'concept' | 'fulltext'): Promise<void> {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.md,.txt,.pdf';
         fileInput.style.display = 'none';
-        
+
         fileInput.addEventListener('change', async (e) => {
             const target = e.target as HTMLInputElement;
             const file = target.files?.[0];
             if (!file) return;
-            
+
+            const orchestrator = state.getOrchestrator();
+            const settingsManager = state.getSettingsManager();
+            const client = state.getOpenRouterClient();
+            if (!orchestrator || !settingsManager || !client) {
+                alert('Core services not initialized. Cannot import.');
+                return;
+            }
+
+            const { TextImportService } = await import('./services/TextImportService');
+            const service = new TextImportService(orchestrator, settingsManager, client);
+
+            const progressModal = showProgressModal('Reading file...');
             try {
-                const progressModal = showProgressModal('Preparing import...');
-                
-                let textContent: string;
-                const fileName = file.name.toLowerCase();
-                const isPdfFile = fileName.endsWith('.pdf');
-                
-                try {
-                    if (isPdfFile) {
-                        // Extract text from PDF
-                        progressSetMessage(progressModal, 'Extracting text from PDF...');
-                        textContent = await extractTextFromPDF(file);
-                        if (!textContent.trim()) {
-                            throw new Error('No text content found in PDF. The PDF may contain only images or be empty.');
-                        }
-                    } else {
-                        // Read text file
-                        progressSetMessage(progressModal, 'Reading text file...');
-                        textContent = await new Promise<string>((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                                resolve(event.target?.result as string);
-                            };
-                            reader.onerror = () => {
-                                reject(new Error('Failed to read file'));
-                            };
-                            reader.readAsText(file);
-                        });
-                    }
-                    
-                    // Ask user to pick a template
+                const text = await TextImportService.acquireText(file);
+                if (!text.trim()) {
+                    throw new Error('The file contained no readable text.');
+                }
+
+                if (mode === 'concept') {
+                    progressSetMessage(progressModal, 'Analyzing concept with AI...');
+                    const project = await service.buildConceptProject(text, file.name);
+                    closeProgressModal(progressModal);
+                    await finalizeImportedProject(project);
+                } else {
+                    // Full text: choose a template first, then segment + build.
                     closeProgressModal(progressModal);
                     const template = await showTemplateSelector();
                     if (!template) return;
 
-                    // Run hierarchical segmentation using the selected template
-                    const openRouterClient = state.getOpenRouterClient()!;
-                    const settingsManager = state.getSettingsManager()!;
-                    const { HierarchicalImportService } = await import('./services/HierarchicalImportService');
-                    const importer = new HierarchicalImportService(openRouterClient, settingsManager);
-
                     const runModal = showProgressModal('Segmenting document by template...');
                     try {
-                        progressLog(runModal, `Finding ${(template.hierarchyLevels[1] || 'parts').toLowerCase()} in ${file.name}...`);
-                        const spans = await importer.segmentByTemplate(textContent, template, {
+                        const project = await service.buildFullTextProject(text, file.name, template, {
+                            status: (m) => progressSetMessage(runModal, m),
                             splitStart: (level, parentTitle) => progressLog(runModal, `Finding ${level.toLowerCase()} in "${parentTitle}"...`),
-                            splitDone: (level, parentTitle, count) => progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`)
+                            splitDone: (level, parentTitle, count) => progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`),
+                            summarizeStart: (title, n) => progressLog(runModal, `Summarizing ${title} from ${n} children...`),
+                            summarizeDone: (title) => progressLog(runModal, `Summarized ${title}.`)
                         });
-                        progressLog(runModal, `Found ${spans.length} ${(template.hierarchyLevels[1] || 'parts').toLowerCase()} at top level.`);
-                        progressSetMessage(runModal, 'Building project...');
-
-                        // Build the project: create tree, assign scene contents, summarize chapters and root
-                        const projectTitle = file.name.replace(/\.[^/.]+$/, '');
-                        const project = await buildProjectFromSpans(projectTitle, template, textContent, spans, {
-                            summarizeStart: (title: string, n: number) => progressLog(runModal, `Summarizing ${title} from ${n} children...`),
-                            summarizeDone: (title: string) => progressLog(runModal, `Summarized ${title}.`)
-                        }, importer);
                         closeProgressModal(runModal);
-
-                        // Add to state and initialize UI
-                        state.addProject(project);
-                        state.setActiveProject(project.rootNode.id);
-                        recreateAndReconfigureServices();
-                        await project.saveToStorage();
-                        await initializeProjectUI(project);
+                        await finalizeImportedProject(project);
                     } catch (err) {
                         closeProgressModal(runModal);
                         throw err;
                     }
-                    
-                } catch (error) {
-                    // Always close progress modal on any error
-                    closeProgressModal(progressModal);
-                    throw error; // Re-throw to be caught by outer catch
                 }
-                
             } catch (error) {
-                console.error('Hierarchical import failed:', error);
-                alert('Hierarchical import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                closeProgressModal(progressModal);
+                console.error('Text import failed:', error);
+                alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
             }
         });
-        
-        // Trigger file selection
+
         document.body.appendChild(fileInput);
         fileInput.click();
         document.body.removeChild(fileInput);
     }
-
-    // (legacy createHierarchicalProject removed)
 
     async function showTemplateSelector(): Promise<ProjectTemplate | null> {
                     const stateModule = await import('./state');
@@ -1385,14 +1258,18 @@ export async function initialize() {
             backdrop.style.cssText = `position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;`;
 
             const dialog = document.createElement('div');
-            dialog.style.cssText = `background: white; border-radius: 12px; padding: 1rem; width: min(90vw, 520px); max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);`;
+            // Explicit colors (with hex fallbacks) so the popup is readable
+            // regardless of inherited/theme text color.
+            dialog.style.cssText = `background: var(--secondary-50, #f8fafc); color: var(--secondary-900, #0f172a); border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 12px; padding: 1rem; width: min(92vw, 560px); max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);`;
+            const templateButtonStyle = `text-align: left; padding: 0.4rem 0.6rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-900, #0f172a); cursor: pointer; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+            const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             dialog.innerHTML = `
-                <h3 style="margin: 0 0 0.75rem 0;">Select Template</h3>
-                <div style="display: grid; gap: 0.5rem;">
-                    ${names.map(name => `<button data-name="${name}" style="text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; cursor: pointer;">${name}</button>`).join('')}
+                <h3 style="margin: 0 0 0.6rem 0; color: var(--secondary-900, #0f172a); font-size: 1rem;">Select Template</h3>
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem;">
+                    ${names.map(name => `<button data-name="${escapeAttr(name)}" title="${escapeAttr(name)}" style="${templateButtonStyle}">${escapeAttr(name)}</button>`).join('')}
                 </div>
                 <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
-                    <button id="tpl-cancel" style="padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer;">Cancel</button>
+                    <button id="tpl-cancel" style="padding: 0.4rem 0.75rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-700, #334155); cursor: pointer; font-size: 0.85rem;">Cancel</button>
                 </div>
             `;
 
@@ -1408,8 +1285,11 @@ export async function initialize() {
             };
 
             dialog.querySelectorAll('button[data-name]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const name = (btn as HTMLButtonElement).dataset['name']!;
+                const el = btn as HTMLButtonElement;
+                el.addEventListener('mouseenter', () => { el.style.background = 'var(--secondary-100, #f1f5f9)'; el.style.borderColor = 'var(--primary-500, #475569)'; });
+                el.addEventListener('mouseleave', () => { el.style.background = '#ffffff'; el.style.borderColor = 'var(--secondary-300, #cbd5e1)'; });
+                el.addEventListener('click', () => {
+                    const name = el.dataset['name']!;
                     const tpl = tm?.getTemplate(name) || null;
                     cleanup();
                     resolve(tpl);
@@ -1418,128 +1298,6 @@ export async function initialize() {
             dialog.querySelector('#tpl-cancel')?.addEventListener('click', onCancel);
             backdrop.addEventListener('click', (e) => { if (e.target === backdrop) onCancel(); });
         });
-    }
-
-    async function buildProjectFromSpans(
-        projectTitle: string,
-        template: ProjectTemplate,
-        fullText: string,
-        spans: any[],
-        hooks: { summarizeStart?: (title: string, n: number) => void; summarizeDone?: (title: string) => void } | undefined,
-        importer: { summarizeChildrenToParent: (childrenTexts: string[]) => Promise<string> }
-    ): Promise<ProjectManager> {
-        const orchestrator = state.getOrchestrator()!;
-        const settingsManager = state.getSettingsManager()!;
-        const client = state.getOpenRouterClient()!;
-        const project = new ProjectManager(projectTitle, template, orchestrator, settingsManager, client);
-        AssertFlatTemplateCopy(project);
-
-        const root = project.rootNode;
-        root.setTitle(projectTitle, 'master');
-
-        // Recursively build nodes from spans (handles any depth)
-        async function buildChildren(parentId: string, nodeSpans: Array<{ title: string; startChar: number; endChar: number; children?: any[] }>): Promise<string[]> {
-            const contents: string[] = [];
-            for (let i = 0; i < nodeSpans.length; i++) {
-                const span = nodeSpans[i]!;
-                const node = project.addNode(span.title, parentId);
-
-                let nodeContent = '';
-                if (span.children && span.children.length > 0) {
-                    // Build grandchildren first, then summarize
-                    const childContents = await buildChildren(node.id, span.children);
-                    if (childContents.length > 0) {
-                        hooks?.summarizeStart?.(span.title, childContents.length);
-                        nodeContent = await importer.summarizeChildrenToParent(childContents);
-                        node.setContent(nodeContent, 'master');
-                        hooks?.summarizeDone?.(span.title);
-                    } else {
-                        // Fallback to original text slice
-                        nodeContent = fullText.slice(span.startChar, span.endChar).trim();
-                        node.setContent(nodeContent, 'master');
-                    }
-                } else {
-                    // Leaf: assign exact text slice
-                    nodeContent = fullText.slice(span.startChar, span.endChar).trim();
-                    node.setContent(nodeContent, 'master');
-                }
-                contents.push(nodeContent);
-            }
-            return contents;
-        }
-
-        const topContents = await buildChildren(root.id, spans);
-
-        // Summarize root from immediate children contents
-        if (topContents.length > 0) {
-            hooks?.summarizeStart?.(projectTitle, topContents.length);
-            const rootContent = await importer.summarizeChildrenToParent(topContents);
-            root.setContent(rootContent, 'master');
-            hooks?.summarizeDone?.(projectTitle);
-        }
-
-        return project;
-    }
-
-    // (legacy createNodesFromHierarchy removed)
-
-    // Helper function to handle text import with AI analysis (extracted from original function)
-    async function handleTextImportWithAI(textContent: string, fileName: string): Promise<void> {
-        const settingsManager = state.getSettingsManager();
-        const openRouterClient = state.getOpenRouterClient();
-        
-        if (!settingsManager || !openRouterClient) {
-            throw new Error('Core services not initialized. Cannot analyze text file.');
-        }
-        
-        // Show progress indicator
-        const progressModal = showProgressModal('Analyzing text content...');
-        
-        try {
-            // Create analysis prompt using PromptManager
-            const prompts = settingsManager.getPrompts();
-            const analysisPrompt = prompts.text_import_analysis
-                .replace(/\{\{file_name\}\}/g, fileName)
-                .replace(/\{\{text_content\}\}/g, textContent)
-                .replace(/\{\{language\}\}/g, settingsManager.getLanguage());
-            
-            // Use creator model for analysis
-            const response = await openRouterClient.chat('creator', analysisPrompt);
-            
-            // Parse the AI response using the same parser as AI project generation
-            const { SmartContentParser } = await import('./project/SmartContentParser');
-            const parsedContent = SmartContentParser.parseGenerationResponse(response, 'project');
-            
-            if (!parsedContent.hasStructuredData || !parsedContent.template) {
-                throw new Error('Failed to extract project structure from text. The AI could not identify clear project elements.');
-            }
-            
-            // Create template from parsed data
-            const template = new ProjectTemplate(
-                parsedContent.template.name,
-                parsedContent.template.hierarchyLevels
-            );
-            
-            // Create import data in the same format as JSON import
-            const importData = {
-                title: parsedContent.metadata['title'] || fileName.replace(/\.[^/.]+$/, ''), // Remove file extension
-                content: parsedContent.content,
-                context: parsedContent.context,
-                template: parsedContent.template,
-                isTextImport: true,
-                originalFileName: fileName
-            };
-            
-            // Hide progress modal
-            closeProgressModal(progressModal);
-            
-            // Import the analyzed project
-            handleImportProject(importData.title, template, importData);
-            
-        } catch (error) {
-            closeProgressModal(progressModal);
-            throw error;
-        }
     }
 
     // (legacy extractHierarchyLevels removed)

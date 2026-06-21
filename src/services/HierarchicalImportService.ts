@@ -1,5 +1,6 @@
 import { ProjectTemplate } from '../ProjectTemplate';
 import { TextSegmentationService } from './TextSegmentationService';
+import { StructuralMarkerDetector } from './StructuralMarkerDetector';
 import { OpenRouterClient, OpenRouterMessage } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
 
@@ -17,6 +18,7 @@ export interface ImportProgressHooks {
 
 export class HierarchicalImportService {
   private readonly segmentation: TextSegmentationService;
+  private readonly markerDetector: StructuralMarkerDetector;
   private readonly client: OpenRouterClient;
   private readonly settings: SettingsManager;
 
@@ -24,6 +26,7 @@ export class HierarchicalImportService {
     this.client = client;
     this.settings = settings;
     this.segmentation = TextSegmentationService.getInstance();
+    this.markerDetector = new StructuralMarkerDetector();
   }
 
   /**
@@ -41,23 +44,21 @@ export class HierarchicalImportService {
     // Start from level 1 as level 0 is the root name
     const topLevelName = levels[1] || 'Part';
     const topTarget = this.parseFixedCount(topLevelName);
-    const topGranularity = this.normalizeSplitScope(topLevelName);
 
-    const topSections = await this.splitOneLevel(text, topGranularity, topTarget, (index) => this.defaultTitleForLevel(topLevelName, index));
+    const topSections = await this.splitOneLevel(text, topLevelName, topTarget);
 
     // Iteratively split deeper levels, maintaining nested structure without overwriting
     let frontier: SegmentedSpan[] = topSections;
     for (let levelIndex = 2; levelIndex < levels.length; levelIndex++) {
       const levelName = levels[levelIndex] || `Level ${levelIndex + 1}`;
       const target = this.parseFixedCount(levelName);
-      const granularity = this.normalizeSplitScope(levelName);
 
       const nextFrontier: SegmentedSpan[] = [];
 
       for (const parent of frontier) {
         const childText = text.slice(parent.startChar, parent.endChar);
         hooks?.splitStart?.(levelName, parent.title);
-        const children = await this.splitOneLevel(childText, granularity, target, (i) => this.defaultTitleForLevel(levelName, i));
+        const children = await this.splitOneLevel(childText, levelName, target);
         const offsetChildren = children.map((c) => ({
           ...c,
           startChar: parent.startChar + c.startChar,
@@ -96,17 +97,41 @@ export class HierarchicalImportService {
     return full.trim();
   }
 
+  /**
+   * Split a single text slice into child spans for one template level.
+   *
+   * Strategy (markers-first):
+   *  1. Try language-agnostic structural marker detection on the slice. If it
+   *     finds a reliable structure (>= 2 sections), use those char spans and the
+   *     detected titles directly - no LLM call for structure.
+   *  2. Otherwise fall back to LLM paragraph segmentation. For large slices the
+   *     segmentation service automatically switches to its bounded
+   *     skeleton+windowed mode so token use stays bounded.
+   *
+   * Titles default to the user's own template level name (already in their
+   * language) plus an index when no structural/LLM title is available.
+   */
   private async splitOneLevel(
     text: string,
-    splitScope: string,
-    targetCount: number | null,
-    defaultTitler: (index1Based: number) => string
+    levelName: string,
+    targetCount: number | null
   ): Promise<SegmentedSpan[]> {
-    // Use paragraph-based segmentation and map back to character spans
+    // 1. Markers-first: deterministic, language-agnostic structural detection.
+    const detected = this.markerDetector.detectChildSections(text);
+    if (detected && detected.length >= 2) {
+      return detected.map((s, i) => ({
+        title: s.title.trim().length > 0 ? s.title.trim() : this.defaultTitleForLevel(levelName, i + 1),
+        startChar: s.startChar,
+        endChar: s.endChar,
+      }));
+    }
+
+    // 2. LLM fallback (paragraph segmentation; bounded windowed mode for big slices).
     const segOptions: Parameters<TextSegmentationService['segmentByParagraphMarkers']>[1] = {
       granularity: 'custom',
       language: this.settings.getGlobalLanguage(),
-      purpose: 'editor'
+      purpose: 'editor',
+      customScope: this.cleanLevelName(levelName)
     };
     if (targetCount !== null) {
       segOptions.targetCount = targetCount;
@@ -119,13 +144,14 @@ export class HierarchicalImportService {
       // Fallback: single section covering whole text
       return [
         {
-          title: defaultTitler(1),
+          title: this.defaultTitleForLevel(levelName, 1),
           startChar: 0,
           endChar: text.length,
         },
       ];
     }
 
+    const fixedCount = this.isFixedCountScope(levelName);
     const spans: SegmentedSpan[] = [];
     for (let i = 0; i < sections.length; i++) {
       const s = sections[i]!;
@@ -135,7 +161,7 @@ export class HierarchicalImportService {
       const startChar = paragraphs[startParagraph - 1]!.startChar;
       const endChar = endParagraphExclusive === paragraphs.length + 1 ? text.length : paragraphs[endParagraphExclusive - 1]!.startChar;
 
-      const title = this.isFixedCountScope(splitScope) ? defaultTitler(i + 1) : s.title || defaultTitler(i + 1);
+      const title = fixedCount ? this.defaultTitleForLevel(levelName, i + 1) : (s.title || this.defaultTitleForLevel(levelName, i + 1));
 
       spans.push({ title, startChar, endChar });
     }
@@ -154,24 +180,20 @@ export class HierarchicalImportService {
     return /\b\d+\b/.test(levelName);
   }
 
-  private normalizeSplitScope(levelName: string): string {
-    // Return a simple scope keyword (acts, chapters, scenes...) or generic 'parts'
-    const base = levelName.replace(/\b\d+\b/g, '').trim().toLowerCase();
-    if (/chapter/.test(base)) return 'chapters';
-    if (/scene/.test(base)) return 'scenes';
-    if (/act/.test(base)) return 'acts';
-    if (/part/.test(base)) return 'parts';
-    return 'parts';
+  /**
+   * Strip a trailing/embedded entity count from a level name, leaving the bare
+   * (user-language) label. No English keywords are involved.
+   */
+  private cleanLevelName(levelName: string): string {
+    return levelName.replace(/\d+/g, '').trim() || levelName.trim() || 'Section';
   }
 
+  /**
+   * Default title for a node when no detected/LLM title exists. Uses the user's
+   * own template level name (already in their language) plus an index.
+   */
   private defaultTitleForLevel(levelName: string, index1: number): string {
-    const base = levelName.replace(/\b\d+\b/g, '').trim();
-    // Standardize common names like Chapter/Scene
-    if (/chapter/i.test(base)) return `Chapter ${index1}`;
-    if (/scene/i.test(base)) return `Scene ${index1}`;
-    if (/act/i.test(base)) return `Act ${index1}`;
-    if (/part/i.test(base)) return `Part ${index1}`;
-    return `${base || 'Section'} ${index1}`;
+    return `${this.cleanLevelName(levelName)} ${index1}`;
   }
 }
 

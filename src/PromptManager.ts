@@ -22,6 +22,9 @@ export interface OrchestratorPrompts {
     
     // For context extraction
     context_extraction_user: string;
+
+    // For extracting conditional context items from an imported document digest/summary
+    context_extraction: string;
     
     // For text expansion (generic)
     expand_text_user: string;
@@ -559,6 +562,35 @@ IMPORTANT: Your response should contain ONLY the extracted context items formatt
         description: "Analyzes node content to extract specific types of information (characters, places, themes, etc.) formatted as context items with one paragraph per distinct piece of information."
     },
 
+    context_extraction: {
+        text: `
+            Write all context text in {{language}}. Only the literal tags <trigger> and </trigger> must stay exactly as written.
+
+            You are extracting reusable background context from a digest of an imported document. The digest below summarizes the whole work. Identify the durable facts that a writer would need to stay consistent: characters, places, organizations, world/setting rules, recurring objects, timeline anchors, and the overall style/tone.
+
+DIGEST:
+---
+{{digest}}
+---
+
+OUTPUT RULES:
+- Output ONLY context items. No headings, no preamble, no commentary.
+- Each context item is a single paragraph. Separate items with a blank line (double newline).
+- Most items should be KEYWORD-GATED so they only load when relevant. Prefix such an item with its trigger words like this:
+  <trigger>word1, word2</trigger>The context text describing that entity.
+  Choose trigger words that are the names/aliases most likely to appear verbatim in the text (e.g. a character's name and nickname).
+- Use a FEW always-on items (no <trigger> prefix) ONLY for project-wide facts: the overall setting, style/tone, and global rules that apply everywhere.
+- Base everything strictly on the digest. Do not invent details that are not implied by it.
+
+EXAMPLE:
+<trigger>Marcus, Chen</trigger>Marcus Chen is a 28-year-old software engineer with social anxiety who dreams of opening a restaurant.
+
+The story is set in modern-day Seattle and is told in a wry, close third-person voice.
+        `.trim(),
+        placeholders: ['digest', 'language'],
+        description: "Extracts reusable conditional context items (keyword-gated and a few global) from a bounded document digest/summary, in the <trigger>word</trigger>text convention used by the import pipeline."
+    },
+
     expand_text_user: {
         text: `
             Generate expanded text in {{language}}. Any structural elements (such as section headers) must always remain in English.
@@ -882,7 +914,7 @@ Section: Concept
 
 CRITICAL: Use exactly the section headers shown above. Base everything on the actual text content provided, not creative interpretations.`.trim(),
         placeholders: ['file_name', 'text_content', 'language'],
-        description: "System prompt for analyzing text files and extracting project structure. Creates project templates and context from existing text content rather than generating new creative content."
+        description: "DEPRECATED (no longer used by the import pipeline). Concept import now reuses the AI creator pipeline (ai_project_generation) and full-text import uses segmentation + context_extraction. Kept only for backward compatibility with stored prompt overrides."
     },
 
     coherence_analysis: {
