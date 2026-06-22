@@ -3,7 +3,7 @@ import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, openOnboardingWizard, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
-import { DocumentNode, GenerationSession, ContentVersion, ConditionLogicOperator, ConditionalContextCondition } from './DocumentNode';
+import { DocumentNode, GenerationSession, ContentVersion, ChildScope } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
 import type { InferredTemplate } from './services/TemplateInferenceService';
 import { initializeProjectUI } from './ui/project-ui';
@@ -19,7 +19,7 @@ import { TemplateManager } from './TemplateManager';
 import { STORAGE_KEYS } from './constants';
 import { NewProjectModal } from './ui/modals/NewProjectModal';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
-import { applyConditionalContextItems } from './ContextFormat';
+import { applyConditionalContextItems, restoreConditionalContextItems } from './ContextFormat';
 import { GenerationErrorService } from './ui/modals/services/GenerationErrorService';
 
 /**
@@ -432,9 +432,9 @@ interface ImportNodeData {
     conditionalContextItems?: Array<{
         id: string;
         text: string;
-        logic: ConditionLogicOperator;
-        conditions: ConditionalContextCondition[];
         keywords?: string[];
+        childScope?: ChildScope;
+        leavesOnly?: boolean;
     }>;
     // Legacy fields for backward compatibility
     template?: any; // Project template for text imports (different usage)
@@ -508,18 +508,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             }
 
             // Restore conditional context items (node-level)
-            if (Array.isArray(importData.conditionalContextItems)) {
-                const existing = rootNode.getConditionalContextItems();
-                for (const item of existing) {
-                    rootNode.removeConditionalContextItem(item.id);
-                }
-                for (const raw of importData.conditionalContextItems) {
-                    const newId = rootNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                    if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                        rootNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                    }
-                }
-            }
+            restoreConditionalContextItems(rootNode, importData.conditionalContextItems);
         }
 
         // Import children recursively if they exist
@@ -623,18 +612,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
             newNode.collapsed = childData.collapsed;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(childData.conditionalContextItems)) {
-            const existing = newNode.getConditionalContextItems();
-            for (const item of existing) {
-                newNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of childData.conditionalContextItems) {
-                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(newNode, childData.conditionalContextItems);
         
     } else {
         console.log(`🔄 Importing project child with legacy format (no version data)`);
@@ -655,18 +633,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
             newNode.generationPrompt = childData.generationPrompt;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(childData.conditionalContextItems)) {
-            const existing = newNode.getConditionalContextItems();
-            for (const item of existing) {
-                newNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of childData.conditionalContextItems) {
-                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(newNode, childData.conditionalContextItems);
     }
 
     // Recursively import children

@@ -82,7 +82,7 @@ export class ReviewCommitService {
 
         for (const after of edit.contextAfter) {
             if (after.id === null) {
-                const newId = node.addConditionalContextItem(after.text, [], 'AND');
+                const newId = node.addConditionalContextItem(after.text);
                 if (after.trigger) {
                     node.updateConditionalContextItem(newId, { keywords: [after.trigger] });
                 }

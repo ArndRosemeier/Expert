@@ -4,7 +4,7 @@
 
 // Type-only import: erased at compile time, so this does NOT create a runtime
 // import cycle with DocumentNode (which imports getContextItems from here).
-import type { DocumentNode } from './DocumentNode';
+import type { DocumentNode, ChildScope } from './DocumentNode';
 
 /**
  * Applies AI-generated context to a node as conditional context items.
@@ -37,13 +37,113 @@ export function applyConditionalContextItems(rootNode: DocumentNode, aiContext: 
                 .map(word => word.trim())
                 .filter(word => word.length > 0);
             const contextText = triggerMatch[2].trim();
-            const id = rootNode.addConditionalContextItem(contextText, [], 'OR');
+            const id = rootNode.addConditionalContextItem(contextText);
             if (keywords.length > 0) {
                 rootNode.updateConditionalContextItem(id, { keywords });
             }
         } else {
-            rootNode.addConditionalContextItem(trimmed, [], 'OR');
+            rootNode.addConditionalContextItem(trimmed);
         }
+    }
+}
+
+/**
+ * Parse content that is structured with `===<title>===` section headers into an
+ * array of `{ title, content }` sections. This is the single shared
+ * implementation used both by deterministic child creation and by the
+ * conditional-context editor (to offer a node's prospective direct children
+ * before they have been generated).
+ */
+export function parseContentSections(content: string): Array<{ title: string; content: string }> {
+    if (!content || !content.trim()) {
+        return [];
+    }
+
+    const lines = content.split('\n');
+    const sections: Array<{ title: string; content: string }> = [];
+    let currentSection: { title: string; content: string[] } | null = null;
+
+    for (const line of lines) {
+        const sectionMatch = line.match(/^===(.+?)===\s*$/);
+
+        if (sectionMatch) {
+            if (currentSection) {
+                sections.push({
+                    title: currentSection.title,
+                    content: currentSection.content.join('\n').trim()
+                });
+            }
+            const title = sectionMatch[1];
+            if (title) {
+                currentSection = { title: title.trim(), content: [] };
+            }
+        } else if (currentSection) {
+            currentSection.content.push(line);
+        }
+        // Ignore lines before the first section header
+    }
+
+    if (currentSection) {
+        sections.push({
+            title: currentSection.title,
+            content: currentSection.content.join('\n').trim()
+        });
+    }
+
+    return sections.filter(section => section.title.length > 0);
+}
+
+/**
+ * Convenience wrapper returning only the section titles in document order.
+ */
+export function parseSectionTitles(content: string): string[] {
+    return parseContentSections(content).map(s => s.title);
+}
+
+/**
+ * Restore conditional context items from raw export/import JSON onto a node.
+ *
+ * This is the single shared restore path used by every partial-import flow.
+ * It clears the node's existing items and rebuilds them from the new-shape
+ * fields (`text`, `keywords`, `childScope`, `leavesOnly`). Legacy `conditions`
+ * / `logic` fields on old exports are intentionally ignored.
+ */
+export function restoreConditionalContextItems(node: DocumentNode, rawItems: unknown): void {
+    if (!Array.isArray(rawItems)) {
+        return;
+    }
+
+    for (const existing of node.getConditionalContextItems()) {
+        node.removeConditionalContextItem(existing.id);
+    }
+
+    for (const raw of rawItems) {
+        if (!raw || typeof raw !== 'object' || typeof (raw as { text?: unknown }).text !== 'string') {
+            throw new Error('restoreConditionalContextItems: each item must be an object with a string text field');
+        }
+        const item = raw as {
+            text: string;
+            keywords?: unknown;
+            childScope?: { mode?: unknown; titles?: unknown };
+            leavesOnly?: unknown;
+        };
+        const newId = node.addConditionalContextItem(item.text);
+        const keywords = Array.isArray(item.keywords)
+            ? item.keywords.filter((k): k is string => typeof k === 'string')
+            : [];
+        const mode = item.childScope?.mode;
+        const rawTitles = item.childScope?.titles;
+        const titles = Array.isArray(rawTitles)
+            ? rawTitles.filter((t): t is string => typeof t === 'string')
+            : [];
+        const childScope: ChildScope = (mode === 'include' || mode === 'exclude')
+            ? { mode, titles }
+            : { mode: 'all', titles: [] };
+        node.updateConditionalContextItem(newId, {
+            keywords,
+            childScope,
+            leavesOnly: item.leavesOnly === true
+        });
     }
 }
 

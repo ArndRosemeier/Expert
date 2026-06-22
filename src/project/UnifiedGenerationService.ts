@@ -18,6 +18,7 @@ import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
 import { DEBUG_STATELESS_GENERATION } from '../constants';
 import { findProjectByRootNode } from '../state';
+import { parseContentSections } from '../ContextFormat';
 
 /**
  * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
@@ -2070,51 +2071,9 @@ export class UnifiedGenerationService {
      * Returns array of sections with title and content
      */
     private parseContentSections(content: string): Array<{title: string, content: string}> {
-        if (!content || !content.trim()) {
-            return [];
-        }
-
-        const lines = content.split('\n');
-        const sections: Array<{title: string, content: string}> = [];
-        let currentSection: {title: string, content: string[]} | null = null;
-
-        for (const line of lines) {
-            // Check if line matches ===<title>=== pattern
-            const sectionMatch = line.match(/^===(.+?)===\s*$/);
-            
-            if (sectionMatch) {
-                // Save previous section if it exists
-                if (currentSection) {
-                    sections.push({
-                        title: currentSection.title,
-                        content: currentSection.content.join('\n').trim()
-                    });
-                }
-                
-                // Start new section
-                const title = sectionMatch[1];
-                if (title) {
-                    currentSection = {
-                        title: title.trim(),
-                        content: []
-                    };
-                }
-            } else if (currentSection) {
-                // Add line to current section content
-                currentSection.content.push(line);
-            }
-            // Ignore lines before the first section
-        }
-
-        // Save the last section if it exists
-        if (currentSection) {
-            sections.push({
-                title: currentSection.title,
-                content: currentSection.content.join('\n').trim()
-            });
-        }
-
-        return sections.filter(section => section.title.length > 0);
+        // Single shared implementation lives in ContextFormat so the editor's
+        // prospective-children list and deterministic child creation never drift.
+        return parseContentSections(content);
     }
 
     /**

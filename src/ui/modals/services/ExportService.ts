@@ -225,9 +225,9 @@ export class ExportService implements IExportService {
             exportObject.conditionalContextItems = ccItems.map(i => ({
                 id: i.id,
                 text: i.text,
-                logic: i.logic,
-                conditions: i.conditions,
-                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined
+                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined,
+                childScope: i.childScope ? { mode: i.childScope.mode, titles: i.childScope.titles.slice() } : undefined,
+                leavesOnly: i.leavesOnly === true
             }));
         }
 
@@ -336,9 +336,9 @@ export class ExportService implements IExportService {
             (data as any).conditionalContextItems = ccItems.map(i => ({
                 id: i.id,
                 text: i.text,
-                logic: i.logic,
-                conditions: i.conditions,
-                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined
+                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined,
+                childScope: i.childScope ? { mode: i.childScope.mode, titles: i.childScope.titles.slice() } : undefined,
+                leavesOnly: i.leavesOnly === true
             }));
         }
 

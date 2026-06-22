@@ -12,6 +12,7 @@ import { CoherenceModal } from './modals/CoherenceModal';
 // ContextAdjusterModal removed - using conditional context system
 
 import { AssertFlatTemplateCopy } from '../ProjectUtils';
+import { restoreConditionalContextItems } from '../ContextFormat';
 import { LanguageSelector } from './components/LanguageSelector';
 import { AIInteractionsService } from '../AIInteractionsService';
 import { UniversalTextEditor } from './components/UniversalTextEditor';
@@ -1042,10 +1043,12 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
     // Copy conditional context items using public API
     const items = sourceNode.getConditionalContextItems();
     for (const item of items) {
-        const newId = newNode.addConditionalContextItem(item.text, item.conditions, item.logic);
-        if (item.keywords && item.keywords.length > 0) {
-            newNode.updateConditionalContextItem(newId, { keywords: item.keywords.slice() });
-        }
+        const newId = newNode.addConditionalContextItem(item.text);
+        newNode.updateConditionalContextItem(newId, {
+            keywords: item.keywords ? item.keywords.slice() : [],
+            childScope: item.childScope ? { mode: item.childScope.mode, titles: item.childScope.titles.slice() } : { mode: 'all', titles: [] },
+            leavesOnly: item.leavesOnly === true
+        });
     }
 
     // Versions include metadata; no extra handling needed here
@@ -5316,18 +5319,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
             importedNode.collapsed = importData.collapsed;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(importData.conditionalContextItems)) {
-            const existing = importedNode.getConditionalContextItems();
-            for (const item of existing) {
-                importedNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of importData.conditionalContextItems) {
-                const newId = importedNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    importedNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(importedNode, importData.conditionalContextItems);
         
     } else {
         // Importing with legacy format
@@ -5365,18 +5357,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
             importedNode.generationSessions = importData.generationSessions;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(importData.conditionalContextItems)) {
-            const existing = importedNode.getConditionalContextItems();
-            for (const item of existing) {
-                importedNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of importData.conditionalContextItems) {
-                const newId = importedNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    importedNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(importedNode, importData.conditionalContextItems);
     }
 
     // Import children recursively
@@ -5458,18 +5439,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
             newNode.collapsed = childData.collapsed;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(childData.conditionalContextItems)) {
-            const existing = newNode.getConditionalContextItems();
-            for (const item of existing) {
-                newNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of childData.conditionalContextItems) {
-                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(newNode, childData.conditionalContextItems);
         
     } else {
                     // Importing child with legacy format
@@ -5507,18 +5477,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
             newNode.generationSessions = childData.generationSessions;
         }
         // Restore conditional context items (node-level)
-        if (Array.isArray(childData.conditionalContextItems)) {
-            const existing = newNode.getConditionalContextItems();
-            for (const item of existing) {
-                newNode.removeConditionalContextItem(item.id);
-            }
-            for (const raw of childData.conditionalContextItems) {
-                const newId = newNode.addConditionalContextItem(raw.text, raw.conditions, raw.logic);
-                if (raw.keywords && Array.isArray(raw.keywords) && raw.keywords.length > 0) {
-                    newNode.updateConditionalContextItem(newId, { keywords: raw.keywords.slice() });
-                }
-            }
-        }
+        restoreConditionalContextItems(newNode, childData.conditionalContextItems);
     }
 
     // Recursively import children

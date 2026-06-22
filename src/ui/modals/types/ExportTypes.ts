@@ -2,7 +2,7 @@
  * Type definitions for export functionality
  */
 
-import { DocumentNode, ConditionLogicOperator, ConditionalContextCondition } from '../../../DocumentNode';
+import { DocumentNode, ChildScope } from '../../../DocumentNode';
 import { FileDownloadResult } from '../../../utils/FileDownloadService';
 
 /**
@@ -85,9 +85,9 @@ export interface NodeExportData {
     conditionalContextItems?: Array<{
         id: string;
         text: string;
-        logic: ConditionLogicOperator;
-        conditions: ConditionalContextCondition[];
         keywords?: string[];
+        childScope?: ChildScope;
+        leavesOnly?: boolean;
     }>;
     // Generation metadata
     creatorModel?: string;

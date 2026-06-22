@@ -1,50 +1,48 @@
 import { LoopHistoryItem } from './LoopOrchestrator';
 import { Rating } from './types/RatingTypes';
 import { v4 as uuidv4 } from 'uuid';
-import { getContextItems } from './ContextFormat';
+import { getContextItems, parseSectionTitles } from './ContextFormat';
 import { generateNewContextID } from './ContextIDGenerator';
 import { findProjectByNode } from './state';
 
-// ---------------- Conditional Context System (parallel to legacy context) ----------------
+// ---------------- Conditional Context System ----------------
+//
+// Conditional context items are facts/instructions attached to a node (usually
+// the root for project-wide knowledge). They are inherited downward: when a
+// node N generates, the engine walks root -> N and includes every ancestor's
+// items that pass this item's gates for N.
+//
+// Scoping is STRUCTURAL and deterministic, expressed against the OWNING node's
+// DIRECT CHILDREN (whose titles are known up front from the deterministic
+// `===Section===` outline). There is intentionally no text-condition system:
+//   - childScope: which of the owner's direct-child subtrees the item reaches
+//   - leavesOnly: restrict the reach to leaf-layer (prose) nodes
+//   - keywords:   optional content gate (trigger words), unchanged
+// "Going deeper" than direct children is the SAME operation performed on a
+// deeper node, not a special feature.
 
-export type ConditionLogicOperator = 'AND' | 'OR';
+/**
+ * How a conditional context item is scoped to its OWNER node's direct children.
+ * - 'all':     applies to the owner and its entire subtree (the default; "global").
+ * - 'include': applies only within the subtrees of the listed direct children.
+ * - 'exclude': applies everywhere in the subtree EXCEPT the listed direct
+ *              children (so newly created children stay in scope).
+ * `titles` are matched against the owner's direct-child titles and ignored when
+ * mode === 'all'.
+ */
+export type ChildScopeMode = 'all' | 'include' | 'exclude';
 
-export enum ConditionalScope {
-    ThisContent = 'this_content',
-    ThisAndPreviousSameLayer = 'this_and_previous_same_layer',
-    Path = 'path'
+export interface ChildScope {
+    mode: ChildScopeMode;
+    titles: string[];
 }
-
-interface ContainsCondition {
-    type: 'contains';
-    scope: ConditionalScope;
-    term: string;
-    wordwise: boolean;
-    caseSensitive: boolean;
-}
-
-interface NotContainsCondition {
-    type: 'contains_not';
-    scope: ConditionalScope;
-    term: string;
-    wordwise: boolean;
-    caseSensitive: boolean;
-}
-
-interface LayerComparisonCondition {
-    type: 'layer_comparison';
-    comparator: '>' | '<' | '=';
-    layerName: string; // Must match an entry in template[] exactly
-}
-
-export type ConditionalContextCondition = ContainsCondition | NotContainsCondition | LayerComparisonCondition;
 
 interface ConditionalContextItem {
     id: string;
     text: string;
-    conditions: ConditionalContextCondition[];
-    logic: ConditionLogicOperator; // How to combine conditions within this item
-    keywords?: string[]; // New: explicit keywords for simplified LLM interface
+    keywords?: string[];     // trigger words (content gate)
+    childScope?: ChildScope; // structural scope; undefined === { mode: 'all', titles: [] }
+    leavesOnly?: boolean;    // reach: only leaf-layer (prose) nodes
 }
 
 /**
@@ -346,9 +344,9 @@ export class DocumentNode {
                     node.conditionalContextItems = contextItems.map(text => ({
                         id: uuidv4(),
                         text: text.trim(),
-                        conditions: [], // No conditions = always applies
-                        logic: 'OR' as ConditionLogicOperator,
-                        keywords: []
+                        keywords: [],
+                        childScope: { mode: 'all' as ChildScopeMode, titles: [] },
+                        leavesOnly: false
                     }));
                     legacyContextMigrated = true;
                     console.log(`✅ Migrated ${contextItems.length} legacy context items to conditional context`);
@@ -484,74 +482,20 @@ export class DocumentNode {
                 if (typeof raw.text !== 'string') {
                     throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} missing text`);
                 }
-                if (raw.logic !== 'AND' && raw.logic !== 'OR') {
-                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} has invalid logic: ${raw.logic}`);
-                }
-                if (!Array.isArray(raw.conditions)) {
-                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} conditions must be an array`);
-                }
                 if (raw.keywords !== undefined) {
                     if (!Array.isArray(raw.keywords) || !raw.keywords.every((k: any) => typeof k === 'string')) {
                         throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} keywords must be an array of strings`);
                     }
                 }
 
-                const conditions: ConditionalContextCondition[] = raw.conditions.map((c: any) => {
-                    if (!c || typeof c !== 'object' || typeof c.type !== 'string') {
-                        throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} has invalid condition`);
-                    }
-                    if (c.type === 'contains' || c.type === 'contains_not') {
-                        if (!Object.values(ConditionalScope).includes(c.scope)) {
-                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition has invalid scope: ${c.scope}`);
-                        }
-                        if (typeof c.term !== 'string' || c.term.trim() === '') {
-                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition requires non-empty term`);
-                        }
-                        if (typeof c.wordwise !== 'boolean' || typeof c.caseSensitive !== 'boolean') {
-                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} contains-condition wordwise/caseSensitive must be boolean`);
-                        }
-                        if (c.type === 'contains') {
-                            const cond: ContainsCondition = {
-                                type: 'contains',
-                                scope: c.scope,
-                                term: c.term,
-                                wordwise: c.wordwise,
-                                caseSensitive: c.caseSensitive
-                            };
-                            return cond;
-                        } else {
-                            const cond: NotContainsCondition = {
-                                type: 'contains_not',
-                                scope: c.scope,
-                                term: c.term,
-                                wordwise: c.wordwise,
-                                caseSensitive: c.caseSensitive
-                            };
-                            return cond;
-                        }
-                    } else if (c.type === 'layer_comparison') {
-                        if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
-                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} layer-comparison has invalid comparator: ${c.comparator}`);
-                        }
-                        if (typeof c.layerName !== 'string' || c.layerName.trim() === '') {
-                            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} layer-comparison requires layerName`);
-                        }
-                        const cond: LayerComparisonCondition = {
-                            type: 'layer_comparison',
-                            comparator: c.comparator,
-                            layerName: c.layerName
-                        };
-                        return cond;
-                    }
-                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${raw.id} has unknown condition type: ${c.type}`);
-                });
-
+                // Old saves carried `conditions`/`logic` (a since-removed text-condition
+                // system); those fields are intentionally ignored on load.
                 const item: ConditionalContextItem = {
                     id: raw.id,
                     text: raw.text,
-                    logic: raw.logic,
-                    conditions,
-                    keywords: Array.isArray(raw.keywords) ? raw.keywords.slice() : []
+                    keywords: Array.isArray(raw.keywords) ? raw.keywords.slice() : [],
+                    childScope: DocumentNode.parseChildScope(raw.childScope, raw.id),
+                    leavesOnly: raw.leavesOnly === true
                 };
                 return item;
             });
@@ -1270,55 +1214,38 @@ export class DocumentNode {
         return this.conditionalContextItems.map(item => ({
             id: item.id,
             text: item.text,
-            logic: item.logic,
-            conditions: item.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[],
-            keywords: Array.isArray(item.keywords) ? item.keywords.slice() : []
+            keywords: Array.isArray(item.keywords) ? item.keywords.slice() : [],
+            childScope: { mode: item.childScope?.mode ?? 'all', titles: (item.childScope?.titles ?? []).slice() },
+            leavesOnly: item.leavesOnly === true
         }));
     }
 
-    public addConditionalContextItem(text: string, conditions: ConditionalContextCondition[], logic: ConditionLogicOperator): string {
-        if (!text || typeof text !== 'string') {
-            throw new Error('Conditional context item requires non-empty text');
+    /**
+     * Create a new conditional context item. New items default to the broadest
+     * scope (all children, every layer, no keyword gate); callers narrow them
+     * via updateConditionalContextItem. This is the single creation entry point.
+     */
+    public addConditionalContextItem(text: string): string {
+        if (typeof text !== 'string') {
+            throw new Error('Conditional context item requires text');
         }
-        if (!Array.isArray(conditions)) {
-            throw new Error('Conditional context item requires conditions array');
-        }
-        if (logic !== 'AND' && logic !== 'OR') {
-            throw new Error(`Invalid logic: ${logic}`);
-        }
-
-        // Validate conditions
-        conditions.forEach((c, idx) => {
-            if (c.type === 'contains' || c.type === 'contains_not') {
-                if (!Object.values(ConditionalScope).includes(c.scope)) {
-                    throw new Error(`Invalid contains-condition scope at index ${idx}`);
-                }
-                if (c.term.trim() === '') {
-                    throw new Error(`Contains-condition term cannot be empty (index ${idx})`);
-                }
-            } else if (c.type === 'layer_comparison') {
-                if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
-                    throw new Error(`Invalid layer comparator at index ${idx}`);
-                }
-                if (!c.layerName || c.layerName.trim() === '') {
-                    throw new Error(`Layer comparison requires layerName at index ${idx}`);
-                }
-            } else {
-                const neverType: never = c;
-                throw new Error(`Unknown condition type: ${(neverType as any).type}`);
-            }
-        });
 
         // Generate simplified context ID for this conditional context item
         const project = findProjectByNode(this);
         const rootNode = project ? project.rootNode : this; // fallback to this node if project not found
         const id = generateNewContextID(rootNode);
-        const item: ConditionalContextItem = { id, text, conditions, logic, keywords: [] };
+        const item: ConditionalContextItem = {
+            id,
+            text,
+            keywords: [],
+            childScope: { mode: 'all', titles: [] },
+            leavesOnly: false
+        };
         this.conditionalContextItems.push(item);
         return id;
     }
 
-    public updateConditionalContextItem(id: string, updates: Partial<Pick<ConditionalContextItem, 'text' | 'logic' | 'conditions' | 'keywords'>>): void {
+    public updateConditionalContextItem(id: string, updates: Partial<Pick<ConditionalContextItem, 'text' | 'keywords' | 'childScope' | 'leavesOnly'>>): void {
         const item = this.conditionalContextItems.find(i => i.id === id);
         if (!item) {
             throw new Error(`Conditional context item not found: ${id}`);
@@ -1330,25 +1257,20 @@ export class DocumentNode {
             // Allow empty text during live editing; consumers may validate on save if needed
             item.text = updates.text;
         }
-        if (updates.logic !== undefined) {
-            if (updates.logic !== 'AND' && updates.logic !== 'OR') {
-                throw new Error(`Invalid logic: ${updates.logic}`);
-            }
-            item.logic = updates.logic;
-        }
-        if (updates.conditions !== undefined) {
-            if (!Array.isArray(updates.conditions)) {
-                throw new Error('Conditions update must be an array');
-            }
-            // Reuse validator
-            this.validateConditions(updates.conditions);
-            item.conditions = updates.conditions;
-        }
         if (updates.keywords !== undefined) {
             if (!Array.isArray(updates.keywords) || !updates.keywords.every(k => typeof k === 'string')) {
                 throw new Error('Keywords update must be an array of strings');
             }
             item.keywords = updates.keywords.slice();
+        }
+        if (updates.childScope !== undefined) {
+            item.childScope = DocumentNode.parseChildScope(updates.childScope, id);
+        }
+        if (updates.leavesOnly !== undefined) {
+            if (typeof updates.leavesOnly !== 'boolean') {
+                throw new Error('leavesOnly update must be a boolean');
+            }
+            item.leavesOnly = updates.leavesOnly;
         }
     }
 
@@ -1404,15 +1326,20 @@ export class DocumentNode {
      * Collect matching conditional context items from this node and ancestors (root-first order).
      */
     public collectMatchingConditionalContextItems(triggeringNode: DocumentNode, root: DocumentNode): ConditionalContextItem[] {
-        // Build ancestor chain from root to this node
+        // Build the chain root -> ... -> this node. Each entry owns context items
+        // whose structural scope is evaluated relative to its own direct children.
         const chain = DocumentNode.findPathFromRoot(root, this.id);
         if (!chain || chain.length === 0) {
             throw new Error(`Cannot assemble conditional context: node ${this.id} not found under provided root`);
         }
         const results: ConditionalContextItem[] = [];
-        for (const ancestor of chain) {
-            for (const item of ancestor.conditionalContextItems) {
-                if (this.evaluateConditionalContextItem(item, triggeringNode, root)) {
+        for (let i = 0; i < chain.length; i++) {
+            const owner = chain[i]!;
+            // The owner's direct child that lies on the path toward the target
+            // node (null when the owner IS the target node).
+            const childOnPath = i + 1 < chain.length ? chain[i + 1]! : null;
+            for (const item of owner.conditionalContextItems) {
+                if (this.evaluateConditionalContextItem(item, childOnPath, triggeringNode, root)) {
                     results.push(item);
                 }
             }
@@ -1422,34 +1349,42 @@ export class DocumentNode {
 
     // ---------------- Internal helpers for conditional context ----------------
 
-    private validateConditions(conditions: ConditionalContextCondition[]): void {
-        conditions.forEach((c, idx) => {
-            if (c.type === 'contains' || c.type === 'contains_not') {
-                if (!Object.values(ConditionalScope).includes(c.scope)) {
-                    throw new Error(`Invalid contains-condition scope at index ${idx}`);
-                }
-                if (c.term.trim() === '') {
-                    throw new Error(`Contains-condition term cannot be empty (index ${idx})`);
-                }
-            } else if (c.type === 'layer_comparison') {
-                if (c.comparator !== '>' && c.comparator !== '<' && c.comparator !== '=') {
-                    throw new Error(`Invalid layer comparator at index ${idx}`);
-                }
-                if (!c.layerName || c.layerName.trim() === '') {
-                    throw new Error(`Layer comparison requires layerName at index ${idx}`);
-                }
-            } else {
-                const neverType: never = c;
-                throw new Error(`Unknown condition type: ${(neverType as any).type}`);
+    /**
+     * Evaluate whether an item owned by some ancestor applies to the target
+     * (triggering) node. Three independent gates, all of which must pass:
+     *  1. childScope - is the target within the allowed direct-child subtrees?
+     *  2. leavesOnly - if set, the target must be a leaf-layer (prose) node.
+     *  3. keywords   - if set, at least one keyword must appear in the target's
+     *                  content (this node + previous same-layer siblings).
+     * @param childOnPath the owner's direct child on the path to the target, or
+     *        null when the owner itself is the target.
+     */
+    private evaluateConditionalContextItem(item: ConditionalContextItem, childOnPath: DocumentNode | null, triggeringNode: DocumentNode, root: DocumentNode): boolean {
+        // 1) Structural child scope (relative to the OWNER's direct children).
+        const scope = item.childScope;
+        if (scope && scope.mode !== 'all') {
+            // Child-targeted items never apply to the owner's own generation.
+            if (!childOnPath) {
+                return false;
             }
-        });
-    }
+            const inList = scope.titles.includes(childOnPath.title);
+            if (scope.mode === 'include' && !inList) {
+                return false;
+            }
+            if (scope.mode === 'exclude' && inList) {
+                return false;
+            }
+        }
 
-    private evaluateConditionalContextItem(item: ConditionalContextItem, triggeringNode: DocumentNode, root: DocumentNode): boolean {
-        // 1) Keyword gate: if keywords are defined, require at least one keyword to appear
-        //    in the combined content of this node and all previous siblings at the same layer
+        // 2) Reach: leaves only.
+        if (item.leavesOnly === true && !triggeringNode.isLeaf) {
+            return false;
+        }
+
+        // 3) Keyword gate: at least one keyword must appear in the target's
+        //    content (this node + previous siblings at the same layer).
         if (Array.isArray(item.keywords) && item.keywords.length > 0) {
-            const haystack = this.getContentForScope(ConditionalScope.ThisAndPreviousSameLayer, triggeringNode, root);
+            const haystack = this.getKeywordHaystack(triggeringNode, root);
             const keywordMatched = item.keywords.some((kw) =>
                 DocumentNode.containsMatch(haystack, kw, /*wordwise*/ true, /*caseSensitive*/ false)
             );
@@ -1458,60 +1393,21 @@ export class DocumentNode {
             }
         }
 
-        const evaluator = (cond: ConditionalContextCondition): boolean => {
-            if (cond.type === 'contains' || cond.type === 'contains_not') {
-                const haystack = this.getContentForScope(cond.scope, triggeringNode, root);
-                const match = DocumentNode.containsMatch(haystack, cond.term, cond.wordwise, cond.caseSensitive);
-                return cond.type === 'contains' ? match : !match;
-            }
-            if (cond.type === 'layer_comparison') {
-                const layerIndexOfTrigger = triggeringNode.level;
-                const targetIndex = DocumentNode.mapLayerNameToIndex(triggeringNode.template, cond.layerName);
-                if (targetIndex === -1) {
-                    throw new Error(`Layer name not found in template: ${cond.layerName}`);
-                }
-                switch (cond.comparator) {
-                    case '>': return layerIndexOfTrigger > targetIndex;
-                    case '<': return layerIndexOfTrigger < targetIndex;
-                    case '=': return layerIndexOfTrigger === targetIndex;
-                }
-            }
-            const neverType: never = cond;
-            throw new Error(`Unsupported condition type: ${(neverType as any).type}`);
-        };
-
-        // 2) Unconditional (after keyword gate): no conditions means include
-        if (!item.conditions || item.conditions.length === 0) {
-            return true;
-        }
-
-        if (item.logic === 'AND') {
-            return item.conditions.every(evaluator);
-        } else if (item.logic === 'OR') {
-            return item.conditions.some(evaluator);
-        }
-        throw new Error(`Invalid item.logic: ${item.logic}`);
+        return true;
     }
 
-    private getContentForScope(scope: ConditionalScope, triggeringNode: DocumentNode, root: DocumentNode): string {
-        if (scope === ConditionalScope.ThisContent) {
+    /**
+     * Content used for the keyword gate: the triggering node plus its previous
+     * siblings at the same layer, joined.
+     */
+    private getKeywordHaystack(triggeringNode: DocumentNode, root: DocumentNode): string {
+        const parentInfo = DocumentNode.findParentAndIndex(root, triggeringNode.id);
+        if (!parentInfo) {
             return triggeringNode.content || '';
         }
-        if (scope === ConditionalScope.ThisAndPreviousSameLayer) {
-            const parentInfo = DocumentNode.findParentAndIndex(root, triggeringNode.id);
-            if (!parentInfo) {
-                // No parent → only this node
-                return triggeringNode.content || '';
-            }
-            const { parent, indexInParent } = parentInfo;
-            const slice = parent.children.slice(0, indexInParent + 1);
-            return slice.map(n => n.content || '').filter(s => s && s.length > 0).join('\n\n');
-        }
-        if (scope === ConditionalScope.Path) {
-            return triggeringNode.getPath(root);
-        }
-        const neverScope: never = scope;
-        throw new Error(`Unsupported scope: ${neverScope as any}`);
+        const { parent, indexInParent } = parentInfo;
+        const slice = parent.children.slice(0, indexInParent + 1);
+        return slice.map(n => n.content || '').filter(s => s && s.length > 0).join('\n\n');
     }
 
     private static containsMatch(haystack: string, needle: string, wordwise: boolean, caseSensitive: boolean): boolean {
@@ -1522,8 +1418,47 @@ export class DocumentNode {
         return regex.test(haystack);
     }
 
-    private static mapLayerNameToIndex(template: string[], layerName: string): number {
-        return template.findIndex(name => name === layerName);
+    /**
+     * Titles of this node's direct children. When children have not been
+     * generated yet, the deterministic `===Section===` headers in this node's
+     * own outline are used as the prospective child titles, so a scope can be
+     * authored at the top before anything below exists.
+     */
+    public getDirectChildTitles(): string[] {
+        if (this.children.length > 0) {
+            return this.children.map(c => c.title);
+        }
+        return parseSectionTitles(this.content || '');
+    }
+
+    /**
+     * Given a set of childScope titles, return those that match neither a
+     * current direct child nor a prospective child parsed from the outline.
+     * Used by the editor to flag orphaned scope selections.
+     */
+    public findOrphanScopeTitles(titles: string[]): string[] {
+        const known = new Set(this.getDirectChildTitles());
+        return titles.filter(t => !known.has(t));
+    }
+
+    /**
+     * Validate/normalize a ChildScope coming from JSON or an update call.
+     */
+    private static parseChildScope(raw: any, itemId: string): ChildScope {
+        if (raw === undefined || raw === null) {
+            return { mode: 'all', titles: [] };
+        }
+        if (typeof raw !== 'object') {
+            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope must be an object`);
+        }
+        if (raw.mode !== 'all' && raw.mode !== 'include' && raw.mode !== 'exclude') {
+            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope has invalid mode: ${raw.mode}`);
+        }
+        const titles = raw.titles === undefined ? [] : raw.titles;
+        if (!Array.isArray(titles) || !titles.every((t: any) => typeof t === 'string')) {
+            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope.titles must be an array of strings`);
+        }
+        return { mode: raw.mode, titles: titles.slice() };
     }
 
     private static findPathFromRoot(root: DocumentNode, targetId: string): DocumentNode[] {

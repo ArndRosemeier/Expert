@@ -449,17 +449,11 @@ export class ContextExtractionService {
      * @param extractionPrompt The original extraction prompt (used for labeling)
      */
     private async addExtractedContextToNode(node: DocumentNode, extractedText: string, extractionPrompt: string): Promise<void> {
-        const { getContextItems } = await import('../ContextFormat');
-        
-        // Parse the extracted text into context items
-        const contextItems = getContextItems(extractedText);
-        
-        // Add each context item as a conditional context item (no conditions = always applies)
-        contextItems.forEach(text => {
-            const itemId = node.addConditionalContextItem(text.trim(), [], 'OR');
-            console.log(`Added conditional context item: ${itemId}`);
-        });
-        
-        console.log(`✅ Added ${contextItems.length} conditional context items from extraction: "${extractionPrompt}"`);
+        // Route through the single shared parser so trigger-word prefixes and
+        // item splitting are handled identically to every other import path.
+        const { applyConditionalContextItems, getContextItems } = await import('../ContextFormat');
+        applyConditionalContextItems(node, extractedText);
+        const count = getContextItems(extractedText).length;
+        console.log(`✅ Added ${count} conditional context items from extraction: "${extractionPrompt}"`);
     }
 } 

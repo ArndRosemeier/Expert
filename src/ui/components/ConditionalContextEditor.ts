@@ -1,21 +1,36 @@
 import { createElement, addEventListenerWithCleanup, truncateText } from '../modals/core/modal-utils';
 import { UniversalTextEditor } from './UniversalTextEditor';
-import { DocumentNode, ConditionalContextCondition, ConditionalScope, ConditionLogicOperator } from '../../DocumentNode';
+import { DocumentNode, ChildScopeMode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 
 export interface ConditionalContextEditorConfig {
     node: DocumentNode;
     projectManager: ProjectManager;
-    showPreview?: boolean; // show matched items/node content/assembled context
-    onNavigateToNodeId?: (nodeId: string) => void; // optional callback for ancestor source link behavior
+    showPreview?: boolean; // show whether the selected item applies to this node + assembled text
+    onNavigateToNodeId?: (nodeId: string) => void; // optional callback for inherited-source link behavior
     showInheritedByDefault?: boolean; // if true, inherited items are shown initially
-    // allowLegacyImport removed - traditional context system removed
 }
 
 /**
  * ConditionalContextEditor
- * Mountable editor that manages conditional context items for a node.
- * Can be embedded inside any container (panel) or used inside a modal wrapper.
+ *
+ * The single editor for a node's conditional context items. Scope is purely
+ * structural: each item targets the OWNER node's direct children (by title) and
+ * can be restricted to leaf-layer (prose) nodes, plus the optional trigger-word
+ * (keyword) content gate. There is no text-condition builder.
+ *
+ * Layout is a single vertical list. Selecting an item expands its editor INLINE,
+ * directly underneath the clicked row, so the controls always appear at the spot
+ * the user clicked (no separate side column that could scroll out of view).
+ *
+ * Embeddable in any container (side panel, modal, inspector). Persists changes
+ * to storage through the ProjectManager (debounced).
+ *
+ * NOTE on editor lifecycle: UniversalTextEditor self-destroys when its container
+ * leaves the DOM (MutationObserver). Therefore the inline editors are created
+ * fresh for the selected row and explicitly destroyed before the list is rebuilt.
+ * To preserve typing focus, in-place field edits update only the affected row's
+ * summary text instead of rebuilding the whole list.
  */
 export class ConditionalContextEditor {
     private node: DocumentNode;
@@ -23,384 +38,123 @@ export class ConditionalContextEditor {
     private showPreview: boolean;
     private onNavigateToNodeId: ((nodeId: string) => void) | undefined;
     private showInherited: boolean;
-    // allowLegacyImport removed - traditional context system removed
 
     private container: HTMLElement | null = null;
     private cleanupHandlers: Array<() => void> = [];
     private persistTimer: number | null = null;
 
-    // UI refs
-    private itemsList!: HTMLElement;
-    private editorContainer!: HTMLElement;
-    private conditionsContainer!: HTMLElement;
-    private logicSelect!: HTMLSelectElement;
-    private addConditionButton!: HTMLButtonElement;
-    private addItemButton!: HTMLButtonElement;
-    private toggleAllButton!: HTMLButtonElement;
-    // importItemsButton removed - traditional context system removed
-    private removeItemButton!: HTMLButtonElement;
-    private previewAsSelect!: HTMLSelectElement;
-    private evaluateButton!: HTMLButtonElement;
-    private previewMatches!: HTMLElement;
-    private previewText!: HTMLElement;
-    private previewTabs!: HTMLElement;
-    private assembledTabBtn!: HTMLButtonElement;
-    private contentTabBtn!: HTMLButtonElement;
-    private editor!: UniversalTextEditor;
+    // Top-level structural refs (built once in mount)
+    private itemsList: HTMLElement | null = null;
+    private inheritedSection: HTMLElement | null = null;
+
+    // Refs for the currently expanded inline detail panel (rebuilt on selection)
+    private childChecklist: HTMLElement | null = null;
+    private scopeModeSelect: HTMLSelectElement | null = null;
+    private previewBox: HTMLElement | null = null;
+    private editor: UniversalTextEditor | null = null;
     private triggerEditor: UniversalTextEditor | null = null;
+
+    // Per-row summary refs for in-place updates (avoids destroying the open editor)
+    private rowSummaryRefs: Map<string, { title: HTMLElement; meta: HTMLElement }> = new Map();
 
     // State
     private selectedItemId: string | null = null;
     private selectedIds: Set<string> = new Set();
-    private activePreviewTab: 'assembled' | 'content' = 'content';
 
     constructor(config: ConditionalContextEditorConfig) {
         this.node = config.node;
         this.projectManager = config.projectManager;
-        this.showPreview = config.showPreview !== undefined ? config.showPreview : true;
+        this.showPreview = config.showPreview ?? true;
         this.onNavigateToNodeId = config.onNavigateToNodeId;
-        this.showInherited = !!config.showInheritedByDefault;
-        // allowLegacyImport initialization removed - traditional context system removed
+        this.showInherited = config.showInheritedByDefault === true;
     }
 
     public mount(container: HTMLElement): void {
         this.container = container;
-        this.container.innerHTML = '';
-        this.container.style.cssText = `
+        container.innerHTML = '';
+        // Own the layout explicitly so a host's CSS (e.g. .story-elements with
+        // flex-direction: column) cannot reflow the component unexpectedly.
+        container.style.cssText = `
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
             width: 100%;
             height: 100%;
+            min-height: 0;
             box-sizing: border-box;
         `;
 
-        // Main split (top)
-        const mainSplit = createElement('div');
-        mainSplit.style.cssText = `
-            display: flex;
-            gap: 1rem;
-            width: 100%;
-            flex: 1 1 auto;
-            min-height: 0;
-        `;
+        const header = createElement('div', { content: 'Conditional Context Items' });
+        header.style.cssText = 'font-weight: 600;';
 
-        // Left pane
-        const leftPane = createElement('div');
-        leftPane.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            flex: 0 0 35%;
-            max-width: 45%;
-            min-width: 12rem;
-        `;
+        const buttonsRow = createElement('div');
+        buttonsRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;';
 
-        const leftHeader = createElement('div', { content: 'Conditional Context Items' });
-        leftHeader.style.cssText = `font-weight: 600;`;
+        const addBtn = createElement('button', { content: 'Add Item' });
+        addBtn.style.cssText = this.buttonStyle('#f9fafb');
+        addEventListenerWithCleanup(addBtn, 'click', () => { this.handleAddItem(); }, this.cleanupHandlers);
 
-        // Action row for item buttons
-        const itemButtonsRow = createElement('div');
-        itemButtonsRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
+        const toggleAllBtn = createElement('button', { content: 'Toggle all' });
+        toggleAllBtn.style.cssText = this.buttonStyle('#eef2ff');
+        addEventListenerWithCleanup(toggleAllBtn, 'click', () => { this.handleToggleAll(); }, this.cleanupHandlers);
 
-        this.addItemButton = createElement('button', { content: 'Add Item' });
-        this.addItemButton.style.cssText = `
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #f9fafb;
-            cursor: pointer;
-        `;
+        const removeBtn = createElement('button', { content: 'Remove checked' });
+        removeBtn.style.cssText = this.buttonStyle('#fef2f2');
+        addEventListenerWithCleanup(removeBtn, 'click', () => { this.handleRemoveChecked(); }, this.cleanupHandlers);
 
-        // Import items button removed - traditional context system removed
-
-        this.toggleAllButton = createElement('button', { content: 'Toggle all' });
-        this.toggleAllButton.title = 'Toggle selection of all items';
-        this.toggleAllButton.style.cssText = `
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #eef2ff;
-            cursor: pointer;
-        `;
-
-        this.removeItemButton = createElement('button', { content: 'Remove checked' });
-        this.removeItemButton.title = 'Remove all checked items';
-        this.removeItemButton.style.cssText = `
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #fee2e2;
-            cursor: pointer;
-        `;
-
-        itemButtonsRow.appendChild(this.addItemButton);
-        itemButtonsRow.appendChild(this.toggleAllButton);
-        // Import items button removed - traditional context system removed
-        itemButtonsRow.appendChild(this.removeItemButton);
-
-        // Show inherited toggle
-        const inheritedToggleWrap = createElement('label');
-        inheritedToggleWrap.style.cssText = 'margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem; color: #374151;';
-        const inheritedCheckbox = createElement('input') as HTMLInputElement;
-        inheritedCheckbox.type = 'checkbox';
-        inheritedCheckbox.checked = this.showInherited;
-        inheritedCheckbox.addEventListener('change', () => {
-            this.showInherited = inheritedCheckbox.checked;
-            this.refreshItemsList();
-        });
-        const inheritedLbl = createElement('span', { content: 'Show inherited' });
-        inheritedToggleWrap.appendChild(inheritedCheckbox);
-        inheritedToggleWrap.appendChild(inheritedLbl);
-        itemButtonsRow.appendChild(inheritedToggleWrap);
+        buttonsRow.appendChild(addBtn);
+        buttonsRow.appendChild(toggleAllBtn);
+        buttonsRow.appendChild(removeBtn);
 
         this.itemsList = createElement('div');
         this.itemsList.style.cssText = `
-            overflow: auto;
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            padding: 0.5rem;
-            min-height: 6rem;
-            max-height: 50vh;
-        `;
-
-        leftPane.appendChild(leftHeader);
-        leftPane.appendChild(itemButtonsRow);
-        leftPane.appendChild(this.itemsList);
-
-        // Right pane
-        const rightPane = createElement('div');
-        rightPane.style.cssText = `
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
-            flex: 1 1 65%;
-            min-width: 0;
-        `;
-
-        const editorHeader = createElement('div', { content: 'Item Editor' });
-        editorHeader.style.cssText = `font-weight: 600;`;
-
-        // Editor area
-        this.editorContainer = createElement('div');
-        this.editorContainer.style.cssText = `
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            padding: 0.5rem;
+            gap: 0.35rem;
+            overflow: auto;
             flex: 1 1 auto;
-            min-height: 8rem;
-            display: flex;
-            align-items: stretch;
-        `;
-
-        // Instantiate UniversalTextEditor after DOM is attached
-        setTimeout(() => {
-            this.editor = new UniversalTextEditor(this.editorContainer, { mode: 'enhanced', autoResize: false }, {
-                onTextChange: (text) => {
-                    if (!this.selectedItemId) return;
-                    this.node.updateConditionalContextItem(this.selectedItemId, { text });
-                    this.refreshItemsList();
-                    this.schedulePersist();
-                }
-            });
-            try {
-                const edEl = this.editor.getHTMLElement();
-                edEl.style.width = '100%';
-                edEl.style.height = '100%';
-                (edEl.style as any).flex = '1 1 auto';
-                edEl.style.minHeight = '0';
-                edEl.style.boxSizing = 'border-box';
-            } catch {}
-            this.applySelectionToUI();
-        }, 0);
-
-        // Trigger words editor (above logic)
-        const triggerRow = createElement('div');
-        triggerRow.style.cssText = 'display:flex; flex-direction:column; gap:0.25rem;';
-        const triggerLabel = createElement('div', { content: 'Trigger words (comma-separated, optional):' });
-        triggerLabel.style.cssText = 'font-weight:600;';
-        const triggerInputWrap = createElement('div');
-        triggerInputWrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
-        this.triggerEditor = new UniversalTextEditor(triggerInputWrap, { mode: 'enhanced', autoResize: false }, {
-            onBlur: () => {
-                if (!this.selectedItemId) return;
-                const raw = this.triggerEditor ? this.triggerEditor.getText().trim() : '';
-                const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
-                const dedup = Array.from(new Set(parts));
-                this.node.updateConditionalContextItem(this.selectedItemId, { keywords: dedup });
-                this.refreshItemsList();
-                this.schedulePersist();
-            }
-        });
-        triggerRow.appendChild(triggerLabel);
-        triggerRow.appendChild(triggerInputWrap);
-
-        // Logic selector
-        const logicRow = createElement('div');
-        logicRow.style.cssText = `display: flex; gap: 0.5rem; align-items: center;`;
-        const logicLabel = createElement('label', { content: 'Conditions logic:' });
-        this.logicSelect = createElement('select') as HTMLSelectElement;
-        ['AND', 'OR'].forEach(v => {
-            const opt = createElement('option', { content: v }) as HTMLOptionElement;
-            opt.value = v;
-            this.logicSelect.appendChild(opt);
-        });
-        this.logicSelect.addEventListener('change', () => {
-            if (!this.selectedItemId) return;
-            this.node.updateConditionalContextItem(this.selectedItemId, { logic: this.logicSelect.value as ConditionLogicOperator });
-            this.refreshItemsList();
-            this.schedulePersist();
-        });
-        logicRow.appendChild(logicLabel);
-        logicRow.appendChild(this.logicSelect);
-
-        // Conditions list
-        this.conditionsContainer = createElement('div');
-        this.conditionsContainer.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            border: 1px dashed #e5e7eb;
+            min-height: 6rem;
+            border: 1px solid #e5e7eb;
             border-radius: 0.5rem;
-            padding: 0.5rem;
-            max-height: 40vh;
-            overflow: auto;
+            padding: 0.35rem;
         `;
 
-        this.addConditionButton = createElement('button', { content: 'Add Condition' }) as HTMLButtonElement;
-        this.addConditionButton.style.cssText = `
-            align-self: flex-start;
-            padding: 0.4rem 0.8rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #f9fafb;
-            cursor: pointer;
-        `;
+        // Inherited items (read-only)
+        const inheritedRow = createElement('label');
+        inheritedRow.style.cssText = 'display: flex; gap: 0.4rem; align-items: center; font-size: 0.875rem; color: #374151;';
+        const inheritedToggle = createElement('input');
+        inheritedToggle.type = 'checkbox';
+        inheritedToggle.checked = this.showInherited;
+        addEventListenerWithCleanup(inheritedToggle, 'change', () => {
+            this.showInherited = inheritedToggle.checked;
+            this.renderInherited();
+        }, this.cleanupHandlers);
+        inheritedRow.appendChild(inheritedToggle);
+        inheritedRow.appendChild(createElement('span', { content: 'Show inherited (from ancestors, read-only)' }));
 
-        // Bulk apply actions
-        const bulkRow = createElement('div');
-        bulkRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
-        const bulkHint = createElement('span', { content: 'Bulk actions on checked items:' });
-        bulkHint.style.cssText = 'color: #6b7280; font-size: 0.875rem;';
-        const applyToSelectedBtn = createElement('button', { content: 'Apply current conditions' }) as HTMLButtonElement;
-        applyToSelectedBtn.title = 'Set logic and conditions of the selected editor item to all checked items';
-        applyToSelectedBtn.style.cssText = `
-            padding: 0.4rem 0.8rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #e5f6ff;
-            cursor: pointer;
-        `;
-        addEventListenerWithCleanup(applyToSelectedBtn, 'click', () => this.handleApplyToSelected(), this.cleanupHandlers);
-        bulkRow.appendChild(bulkHint);
-        bulkRow.appendChild(applyToSelectedBtn);
+        this.inheritedSection = createElement('div');
+        this.inheritedSection.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 0 0 auto;';
 
-        rightPane.appendChild(editorHeader);
-        rightPane.appendChild(this.editorContainer);
-        rightPane.appendChild(triggerRow);
-        rightPane.appendChild(logicRow);
-        rightPane.appendChild(this.conditionsContainer);
-        rightPane.appendChild(this.addConditionButton);
-        rightPane.appendChild(bulkRow);
+        container.appendChild(header);
+        container.appendChild(buttonsRow);
+        container.appendChild(this.itemsList);
+        container.appendChild(inheritedRow);
+        container.appendChild(this.inheritedSection);
 
-        mainSplit.appendChild(leftPane);
-        mainSplit.appendChild(rightPane);
+        this.refresh();
+    }
 
-        // Assemble top
-        this.container.appendChild(mainSplit);
-
-        // Bottom preview (optional)
-        if (this.showPreview) {
-            const previewBar = createElement('div');
-            previewBar.style.cssText = `
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-                width: 100%;
-                min-height: 10rem;
-            `;
-
-            const previewControls = createElement('div');
-            previewControls.style.cssText = `display: flex; gap: 0.5rem; align-items: center;`;
-            const previewLabel = createElement('label', { content: 'Evaluate as:' });
-            this.previewAsSelect = createElement('select') as HTMLSelectElement;
-            this.populateTriggeringNodeOptions();
-            this.evaluateButton = createElement('button', { content: 'Evaluate' }) as HTMLButtonElement;
-            this.evaluateButton.style.cssText = `
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                cursor: pointer;
-            `;
-            previewControls.appendChild(previewLabel);
-            previewControls.appendChild(this.previewAsSelect);
-            previewControls.appendChild(this.evaluateButton);
-
-            const previewSplit = createElement('div');
-            previewSplit.style.cssText = `display: flex; gap: 1rem; min-height: 8rem;`;
-
-            // Left: Matched items (with label)
-            const matchesCol = createElement('div');
-            matchesCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 0 0 40%; min-width: 0;';
-            const matchesLabel = createElement('div', { content: 'Matched items' });
-            matchesLabel.style.cssText = 'font-weight: 600; color: #374151;';
-            this.previewMatches = createElement('div');
-            this.previewMatches.style.cssText = `
-                border: 1px solid #e5e7eb;
-                border-radius: 0.5rem;
-                padding: 0.5rem;
-                overflow: auto;
-                min-height: 6rem;
-            `;
-            matchesCol.appendChild(matchesLabel);
-            matchesCol.appendChild(this.previewMatches);
-
-            // Right: Assembled context with tabs
-            const assembledCol = createElement('div');
-            assembledCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 60%; min-width: 0;';
-            // Tabs
-            this.previewTabs = createElement('div');
-            this.previewTabs.style.cssText = `
-                display: flex; gap: 0.5rem; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem;
-            `;
-            this.contentTabBtn = createElement('button', { content: 'Node content' }) as HTMLButtonElement;
-            this.assembledTabBtn = createElement('button', { content: 'Assembled context' }) as HTMLButtonElement;
-            const baseTabCss = `
-                padding: 0.4rem 0.75rem; border: 1px solid transparent; border-radius: 0.5rem; background: transparent; cursor: pointer;
-            `;
-            this.assembledTabBtn.style.cssText = baseTabCss;
-            this.contentTabBtn.style.cssText = baseTabCss;
-            this.previewTabs.appendChild(this.contentTabBtn);
-            this.previewTabs.appendChild(this.assembledTabBtn);
-            this.previewText = createElement('div');
-            this.previewText.style.cssText = `
-                border: 1px solid #e5e7eb;
-                border-radius: 0.5rem;
-                padding: 0.5rem;
-                overflow: auto;
-                white-space: pre-wrap;
-                min-height: 6rem;
-            `;
-            assembledCol.appendChild(this.previewTabs);
-            assembledCol.appendChild(this.previewText);
-
-            previewSplit.appendChild(matchesCol);
-            previewSplit.appendChild(assembledCol);
-            previewBar.appendChild(previewControls);
-            previewBar.appendChild(previewSplit);
-
-            this.container.appendChild(previewBar);
+    /**
+     * Re-read the node's items and re-render everything. Safe to call after the
+     * node's items are changed externally (e.g. by AI commands in XMLStoryModal).
+     */
+    public refresh(): void {
+        // Drop a stale selection if the item no longer exists.
+        if (this.selectedItemId && !this.node.getConditionalContextItems().some(i => i.id === this.selectedItemId)) {
+            this.selectedItemId = null;
         }
-
-        // Wire events and initial render
-        this.wireEvents();
-        this.refreshItemsList();
-        this.selectFirstItem();
-        if (this.showPreview) {
-            this.updatePreviewTabsUI();
-            this.evaluatePreview();
-        }
+        this.renderItemsList();
+        this.renderInherited();
     }
 
     public destroy(): void {
@@ -409,601 +163,516 @@ export class ConditionalContextEditor {
             this.persistTimer = null;
             void this.persistNow();
         }
-        this.cleanupHandlers.forEach(fn => fn());
+        this.destroyInlineEditors();
+        this.cleanupHandlers.forEach(fn => { fn(); });
         this.cleanupHandlers = [];
-        try { if (this.editor) this.editor.destroy(); } catch {}
         if (this.container) {
             this.container.innerHTML = '';
         }
-        this.container = null;
     }
 
-    // === Internal UI logic (ported from modal) ===
-    private wireEvents(): void {
-        addEventListenerWithCleanup(this.addItemButton, 'click', () => this.handleAddItem(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.addConditionButton, 'click', () => this.handleAddCondition(), this.cleanupHandlers);
-        addEventListenerWithCleanup(this.toggleAllButton, 'click', () => this.handleToggleAll(), this.cleanupHandlers);
-        // Import items button event listener removed - traditional context system removed
-        addEventListenerWithCleanup(this.removeItemButton, 'click', () => { void this.handleRemoveChecked(); }, this.cleanupHandlers);
-        if (this.showPreview) {
-            addEventListenerWithCleanup(this.evaluateButton, 'click', () => this.evaluatePreview(), this.cleanupHandlers);
-            addEventListenerWithCleanup(this.assembledTabBtn, 'click', () => { this.activePreviewTab = 'assembled'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
-            addEventListenerWithCleanup(this.contentTabBtn, 'click', () => { this.activePreviewTab = 'content'; this.updatePreviewTabsUI(); this.evaluatePreview(); }, this.cleanupHandlers);
-        }
-    }
+    // ---------------- Rendering ----------------
 
-    private refreshItemsList(): void {
-        this.itemsList.innerHTML = '';
+    /**
+     * Rebuild the item list. The currently selected item gets an inline detail
+     * panel rendered directly beneath its row. Inline editors are destroyed first
+     * because the DOM wipe below would otherwise auto-destroy them out of order.
+     */
+    private renderItemsList(): void {
+        const itemsList = this.itemsList;
+        if (!itemsList) return;
+
+        // Preserve scroll position: rebuilding the list resets scrollTop to 0,
+        // which would otherwise yank the view away from the item just clicked.
+        const prevScrollTop = itemsList.scrollTop;
+
+        this.destroyInlineEditors();
+        itemsList.innerHTML = '';
+        this.rowSummaryRefs.clear();
+        let selectedWrapper: HTMLElement | null = null;
+
         const items = this.node.getConditionalContextItems();
-        // Compute applicability for this node once
-        const root = this.projectManager.rootNode;
-        const matchingNow = this.node.getApplicableConditionalContextItems(root);
-        const matchingIdsNow = new Set<string>(matchingNow.map(m => m.id));
+        const applicableIds = new Set(this.node.getApplicableConditionalContextItems(this.projectManager.rootNode).map(i => i.id));
+
         if (items.length === 0) {
-            const empty = createElement('div', { content: 'No items yet.' });
-            empty.style.cssText = 'color: #6b7280;';
-            this.itemsList.appendChild(empty);
-            // Do not return; still show inherited items even if none locally
+            const empty = createElement('div', { content: 'No items on this node.' });
+            empty.style.cssText = 'color: #9ca3af; padding: 0.25rem;';
+            itemsList.appendChild(empty);
+            return;
         }
-        items.forEach(item => {
-            const applies = matchingIdsNow.has(item.id);
-            const row = createElement('div');
-            row.style.cssText = `
+
+        for (const item of items) {
+            const isSelected = item.id === this.selectedItemId;
+
+            const wrapper = createElement('div');
+            wrapper.style.cssText = `
                 display: flex;
-                flex-direction: row;
+                flex-direction: column;
+                border-radius: 0.4rem;
+                background: ${isSelected ? '#eef2ff' : 'transparent'};
+                ${isSelected ? 'box-shadow: 0 0 0 1px #c7d2fe inset;' : ''}
+            `;
+
+            const headerLine = createElement('div');
+            headerLine.style.cssText = `
+                display: flex;
                 gap: 0.5rem;
-                border: 1px solid #e5e7eb;
-                border-radius: 0.5rem;
-                padding: 0.5rem;
+                align-items: flex-start;
+                padding: 0.35rem;
                 cursor: pointer;
-                background: ${this.selectedItemId === item.id ? '#eff6ff' : 'transparent'};
             `;
-            // Status dot
-            const dot = createElement('span');
-            dot.style.cssText = `
-                display: inline-block;
-                width: 0.5rem;
-                height: 0.5rem;
-                border-radius: 50%;
-                margin-top: 0.375rem;
-                background: ${applies ? '#16a34a' : '#dc2626'};
-                flex: 0 0 auto;
-            `;
-            const checkbox = createElement('input') as HTMLInputElement;
+
+            const checkbox = createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = this.selectedIds.has(item.id);
-            checkbox.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if ((e.currentTarget as HTMLInputElement).checked) {
-                    this.selectedIds.add(item.id);
-                } else {
-                    this.selectedIds.delete(item.id);
-                }
-            });
-            const infoCol = createElement('div');
-            infoCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 auto; min-width: 0;';
-            const title = createElement('div', { content: truncateText((item.text || '').split('\n')[0] || '', 80) || '(empty text)' });
-            title.style.cssText = 'font-weight: 500;';
-            const meta = createElement('div', { content: `${item.logic} • ${item.conditions.length} condition(s)` });
-            meta.style.cssText = 'color: #6b7280; font-size: 0.875rem;';
-            infoCol.appendChild(title);
-            infoCol.appendChild(meta);
-            row.appendChild(dot);
-            row.appendChild(checkbox);
-            row.appendChild(infoCol);
-            row.addEventListener('click', () => {
-                this.selectItem(item.id);
-            });
-            this.itemsList.appendChild(row);
-        });
+            addEventListenerWithCleanup(checkbox, 'change', () => {
+                if (checkbox.checked) this.selectedIds.add(item.id); else this.selectedIds.delete(item.id);
+            }, this.cleanupHandlers);
 
-        // Inherited items from ancestors (read-only)
-        if (this.showInherited) {
-            const inherited = this.buildInheritedItems();
-            if (inherited.length > 0) {
-            // Header
-            const header = createElement('div', { content: 'Inherited items from ancestors' });
-            header.style.cssText = 'margin-top: 0.5rem; font-weight: 600; color: #374151;';
-            this.itemsList.appendChild(header);
+            const dot = createElement('span');
+            const applies = applicableIds.has(item.id);
+            dot.title = applies ? 'Applies to the current node' : 'Does not apply to the current node';
+            dot.style.cssText = `
+                margin-top: 0.3rem;
+                flex: 0 0 auto;
+                width: 0.6rem;
+                height: 0.6rem;
+                border-radius: 50%;
+                background: ${applies ? '#10b981' : '#d1d5db'};
+            `;
 
-            // Compute applicability set (reuse computed above)
-            const matchingIds = matchingIdsNow;
+            const textCol = createElement('div');
+            textCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1 1 auto;';
+            const title = createElement('div', { content: this.itemTitle(item.text) });
+            title.style.cssText = 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+            const meta = createElement('div', { content: this.scopeSummary(item.childScope, item.leavesOnly, item.keywords) });
+            meta.style.cssText = 'color: #6b7280; font-size: 0.8rem;';
+            textCol.appendChild(title);
+            textCol.appendChild(meta);
+            this.rowSummaryRefs.set(item.id, { title, meta });
 
-            inherited.forEach(({ sourceNode, item }) => {
-                const applies = matchingIds.has(item.id);
-                const row = createElement('div');
-                row.style.cssText = `
-                    display: flex;
-                    flex-direction: row;
-                    gap: 0.5rem;
-                    border: 1px dashed #e5e7eb;
-                    border-radius: 0.5rem;
-                    padding: 0.5rem;
-                    background: #f9fafb;
-                    opacity: 0.9;
-                `;
+            // Clicking the row toggles selection (collapse if already open).
+            addEventListenerWithCleanup(textCol, 'click', () => { this.toggleSelectItem(item.id); }, this.cleanupHandlers);
+            addEventListenerWithCleanup(dot, 'click', () => { this.toggleSelectItem(item.id); }, this.cleanupHandlers);
 
-                // Status dot
-                const dot = createElement('span');
-                dot.style.cssText = `
-                    display: inline-block;
-                    width: 0.5rem;
-                    height: 0.5rem;
-                    border-radius: 50%;
-                    margin-top: 0.375rem;
-                    background: ${applies ? '#16a34a' : '#dc2626'};
-                    flex: 0 0 auto;
-                `;
+            headerLine.appendChild(checkbox);
+            headerLine.appendChild(dot);
+            headerLine.appendChild(textCol);
+            wrapper.appendChild(headerLine);
 
-                const infoCol = createElement('div');
-                infoCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 auto; min-width: 0;';
-                const title = createElement('div', { content: truncateText((item.text || '').split('\n')[0] || '', 80) || '(empty text)' });
-                title.style.cssText = 'font-weight: 500; color: #4b5563;';
+            if (isSelected) {
+                wrapper.appendChild(this.buildInlineDetail(item.id));
+                selectedWrapper = wrapper;
+            }
 
-                // Conditions line with source info (use established formatting)
-                const conditionsDiv = createElement('div');
-                const conditionsText = (item.conditions && item.conditions.length > 0)
-                    ? this.formatConditionsForDisplay(item.conditions as any, item.logic as any)
-                    : '<em>Unconditional</em>';
-                
-                // Create source link for conditions line
-                const sourceLink = createElement('a', { content: sourceNode.title || 'Untitled' }) as HTMLAnchorElement;
-                sourceLink.href = '#';
-                sourceLink.style.cssText = 'color: #2563eb; text-decoration: none; cursor: pointer; margin-left: 0.5rem;';
-                sourceLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (this.onNavigateToNodeId) {
-                        this.onNavigateToNodeId(sourceNode.id);
-                    } else {
-                        const event = new CustomEvent<{ nodeId: string }>('cc-select-node', { detail: { nodeId: sourceNode.id } });
-                        window.dispatchEvent(event);
-                    }
-                });
-                
-                conditionsDiv.innerHTML = conditionsText + ' <span style="color: #6b7280;">from</span> ';
-                conditionsDiv.appendChild(sourceLink);
-                conditionsDiv.style.cssText = 'font-size: 0.75rem; color: #7c2d12;';
+            itemsList.appendChild(wrapper);
+        }
 
-                const meta = createElement('div');
-                meta.style.cssText = 'color: #6b7280; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;';
-                const logicSpan = createElement('span', { content: `${item.logic} • ${item.conditions.length} condition(s)` });
-                meta.appendChild(logicSpan);
-
-                infoCol.appendChild(title);
-                infoCol.appendChild(conditionsDiv);
-                infoCol.appendChild(meta);
-
-                row.appendChild(dot);
-                row.appendChild(infoCol);
-                this.itemsList.appendChild(row);
-            });
+        // Restore the prior scroll position, then nudge the expanded panel into
+        // view if it ended up outside the visible region.
+        itemsList.scrollTop = prevScrollTop;
+        if (selectedWrapper) {
+            const wrapperEl = selectedWrapper;
+            const listTop = itemsList.scrollTop;
+            const listBottom = listTop + itemsList.clientHeight;
+            const wrapTop = wrapperEl.offsetTop;
+            const wrapBottom = wrapTop + wrapperEl.offsetHeight;
+            if (wrapTop < listTop || wrapBottom > listBottom) {
+                wrapperEl.scrollIntoView({ block: 'nearest' });
             }
         }
-    }
-
-    private buildInheritedItems(): Array<{ sourceNode: DocumentNode; item: ReturnType<DocumentNode['getConditionalContextItems']>[number] }> {
-        const root = this.projectManager.rootNode;
-        let path: DocumentNode[] = [];
-        try {
-            path = DocumentNode.getPathFromRoot(root, this.node.id);
-        } catch {
-            return [];
-        }
-        const ancestors = path.slice(0, -1); // Exclude current node
-        const results: Array<{ sourceNode: DocumentNode; item: ReturnType<DocumentNode['getConditionalContextItems']>[number] }> = [];
-        for (const ancestor of ancestors) {
-            const items = ancestor.getConditionalContextItems();
-            for (const it of items) {
-                results.push({ sourceNode: ancestor, item: it });
-            }
-        }
-        return results;
     }
 
     /**
-     * Turn conditional context conditions into a human-readable string (established formatting)
+     * Build the inline detail/edit panel for a selected item and create its rich
+     * editors. The panel is inserted directly under the item's row.
      */
-    private formatConditionsForDisplay(conditions: ConditionalContextCondition[], logic: ConditionLogicOperator): string {
-        const parts = conditions.map((c) => {
-            if (!c || typeof c !== 'object') return '(invalid)';
-            if ((c as any).type === 'contains' || (c as any).type === 'contains_not') {
-                const cc = c as any;
-                const scopeLabel = cc.scope === 'this_content' ? 'this' : (cc.scope === 'this_and_previous_same_layer' ? 'this + previous (same layer)' : (cc.scope === 'path' ? 'path' : String(cc.scope)));
-                const mode = cc.type === 'contains' ? 'contains' : 'does not contain';
-                const flags = `${cc.wordwise ? 'wordwise' : 'substring'}, ${cc.caseSensitive ? 'case-sensitive' : 'case-insensitive'}`;
-                return `[${scopeLabel}] ${mode} "${(cc.term || '').replace(/"/g, '\"')}" (${flags})`;
-            }
-            if ((c as any).type === 'layer_comparison') {
-                const lc = c as any;
-                return `layer ${lc.comparator} ${lc.layerName}`;
-            }
-            return '(unknown condition)';
-        });
-        return parts.join(` ${logic} `);
-    }
-
-    private selectFirstItem(): void {
-        const items = this.node.getConditionalContextItems();
-        if (items.length > 0) {
-            const first = items[0];
-            if (first) {
-                this.selectItem(first.id);
-            } else {
-                this.clearEditor();
-            }
-        } else {
-            this.clearEditor();
-        }
-    }
-
-    private selectItem(id: string): void {
-        const item = this.node.getConditionalContextItems().find(i => i.id === id);
-        if (!item) return;
-        this.selectedItemId = id;
-        this.applySelectionToUI();
-        this.refreshItemsList();
-    }
-
-    private clearEditor(): void {
-        this.selectedItemId = null;
-        if (this.editor) this.editor.setText('');
-        if (this.logicSelect) this.logicSelect.value = 'OR';
-        if (this.conditionsContainer) this.conditionsContainer.innerHTML = '';
-    }
-
-    private applySelectionToUI(): void {
-        if (!this.selectedItemId) {
-            this.clearEditor();
-            return;
-        }
-        const item = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
+    private buildInlineDetail(itemId: string): HTMLElement {
+        const item = this.node.getConditionalContextItems().find(i => i.id === itemId);
         if (!item) {
-            this.clearEditor();
+            throw new Error(`ConditionalContextEditor: selected item not found: ${itemId}`);
+        }
+
+        const panel = createElement('div');
+        panel.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 0.5rem 0.5rem 0.6rem 0.5rem;
+            margin: 0 0.25rem 0.25rem 0.25rem;
+            border-top: 1px dashed #c7d2fe;
+        `;
+
+        // Text editor
+        const textLabel = createElement('div', { content: 'Context text:' });
+        textLabel.style.cssText = 'font-weight: 600;';
+        const editorContainer = createElement('div');
+        editorContainer.style.cssText = `
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            min-height: 7rem;
+            background: #ffffff;
+        `;
+
+        // Trigger words
+        const triggerLabel = createElement('div', { content: 'Trigger words (comma-separated, optional):' });
+        triggerLabel.style.cssText = 'font-weight: 600;';
+        const triggerContainer = createElement('div');
+        triggerContainer.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.25rem; background: #ffffff;';
+
+        // Structural scope
+        const scopeLabel = createElement('div', { content: 'Applies to children:' });
+        scopeLabel.style.cssText = 'font-weight: 600;';
+        const scopeModeSelect = createElement('select');
+        scopeModeSelect.style.cssText = 'padding: 0.4rem; border: 1px solid #d1d5db; border-radius: 0.5rem;';
+        const scopeOptions: Array<[ChildScopeMode, string]> = [
+            ['all', 'All children'],
+            ['include', 'Only these children'],
+            ['exclude', 'All except these children']
+        ];
+        for (const [val, label] of scopeOptions) {
+            const opt = createElement('option', { content: label });
+            opt.value = val;
+            scopeModeSelect.appendChild(opt);
+        }
+        scopeModeSelect.value = item.childScope?.mode ?? 'all';
+        addEventListenerWithCleanup(scopeModeSelect, 'change', () => { this.handleScopeModeChange(); }, this.cleanupHandlers);
+        this.scopeModeSelect = scopeModeSelect;
+
+        const childChecklist = createElement('div');
+        childChecklist.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            border: 1px dashed #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            max-height: 30vh;
+            overflow: auto;
+        `;
+        this.childChecklist = childChecklist;
+
+        // Leaves only
+        const leavesRow = createElement('label');
+        leavesRow.style.cssText = 'display: flex; gap: 0.4rem; align-items: center;';
+        const leavesOnlyCheckbox = createElement('input');
+        leavesOnlyCheckbox.type = 'checkbox';
+        leavesOnlyCheckbox.checked = item.leavesOnly === true;
+        addEventListenerWithCleanup(leavesOnlyCheckbox, 'change', () => {
+            if (!this.selectedItemId) return;
+            this.node.updateConditionalContextItem(this.selectedItemId, { leavesOnly: leavesOnlyCheckbox.checked });
+            this.updateRowSummary(this.selectedItemId);
+            this.renderPreview();
+            this.schedulePersist();
+        }, this.cleanupHandlers);
+        leavesRow.appendChild(leavesOnlyCheckbox);
+        leavesRow.appendChild(createElement('span', { content: 'Leaves only (reach only leaf / prose nodes)' }));
+
+        panel.appendChild(textLabel);
+        panel.appendChild(editorContainer);
+        panel.appendChild(triggerLabel);
+        panel.appendChild(triggerContainer);
+        panel.appendChild(scopeLabel);
+        panel.appendChild(scopeModeSelect);
+        panel.appendChild(childChecklist);
+        panel.appendChild(leavesRow);
+
+        if (this.showPreview) {
+            const previewBox = createElement('div');
+            previewBox.style.cssText = `
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 0.5rem;
+                background: #f9fafb;
+                font-size: 0.875rem;
+                white-space: pre-wrap;
+            `;
+            this.previewBox = previewBox;
+            panel.appendChild(previewBox);
+        }
+
+        // Create rich editors now that their containers exist in this panel.
+        this.editor = new UniversalTextEditor(editorContainer, { mode: 'enhanced', autoResize: false }, {
+            onTextChange: (text) => {
+                if (!this.selectedItemId) return;
+                this.node.updateConditionalContextItem(this.selectedItemId, { text });
+                this.updateRowSummary(this.selectedItemId);
+                this.renderPreview();
+                this.schedulePersist();
+            }
+        });
+        const edEl = this.editor.getHTMLElement();
+        edEl.style.width = '100%';
+        edEl.style.minHeight = '6rem';
+        edEl.style.boxSizing = 'border-box';
+        this.editor.setText(item.text);
+
+        this.triggerEditor = new UniversalTextEditor(triggerContainer, { mode: 'enhanced', autoResize: false }, {
+            onBlur: () => {
+                const triggerEditor = this.triggerEditor;
+                if (!this.selectedItemId || !triggerEditor) return;
+                const raw = triggerEditor.getText().trim();
+                const parts = raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                const dedup = Array.from(new Set(parts));
+                this.node.updateConditionalContextItem(this.selectedItemId, { keywords: dedup });
+                this.updateRowSummary(this.selectedItemId);
+                this.renderPreview();
+                this.schedulePersist();
+            }
+        });
+        this.triggerEditor.setText((item.keywords ?? []).join(', '));
+
+        this.renderChildChecklist();
+        this.renderPreview();
+
+        return panel;
+    }
+
+    private renderInherited(): void {
+        const inheritedSection = this.inheritedSection;
+        if (!inheritedSection) return;
+        inheritedSection.innerHTML = '';
+        if (!this.showInherited) return;
+
+        const root = this.projectManager.rootNode;
+        const chain = DocumentNode.getPathFromRoot(root, this.node.id);
+        const ancestors = chain.slice(0, -1); // exclude this node
+        const applicableIds = new Set(this.node.getApplicableConditionalContextItems(root).map(i => i.id));
+
+        let any = false;
+        for (const ancestor of ancestors) {
+            const items = ancestor.getConditionalContextItems();
+            for (const item of items) {
+                any = true;
+                const row = createElement('div');
+                row.style.cssText = 'display: flex; gap: 0.4rem; align-items: center; font-size: 0.8rem; color: #4b5563;';
+                const dot = createElement('span');
+                const applies = applicableIds.has(item.id);
+                dot.style.cssText = `flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: ${applies ? '#10b981' : '#d1d5db'};`;
+                const label = createElement('span', { content: this.itemTitle(item.text, 60) });
+                const src = createElement('a', { content: ` — ${truncateText(ancestor.title, 24)}` });
+                src.style.cssText = 'color: #2563eb; cursor: pointer; text-decoration: underline;';
+                addEventListenerWithCleanup(src, 'click', () => { this.navigateTo(ancestor.id); }, this.cleanupHandlers);
+                row.appendChild(dot);
+                row.appendChild(label);
+                row.appendChild(src);
+                inheritedSection.appendChild(row);
+            }
+        }
+        if (!any) {
+            const none = createElement('div', { content: 'No inherited items.' });
+            none.style.cssText = 'color: #9ca3af; font-size: 0.8rem;';
+            inheritedSection.appendChild(none);
+        }
+    }
+
+    private renderChildChecklist(): void {
+        const childChecklist = this.childChecklist;
+        if (!childChecklist) return;
+        childChecklist.innerHTML = '';
+        const item = this.selectedItemId
+            ? this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId)
+            : undefined;
+        if (!item) return;
+
+        const mode = item.childScope?.mode ?? 'all';
+        if (mode === 'all') {
+            childChecklist.style.display = 'none';
             return;
         }
-        if (this.editor) this.editor.setText(item.text || '');
-        // Set trigger editor text
-        try {
-            const triggersVal = Array.isArray(item.keywords) ? item.keywords.join(', ') : '';
-            this.triggerEditor?.setText(triggersVal);
-        } catch {}
-        this.logicSelect.value = item.logic;
-        this.renderConditions();
-    }
+        childChecklist.style.display = 'flex';
 
-    private renderConditions(): void {
-        this.conditionsContainer.innerHTML = '';
-        if (!this.selectedItemId) return;
-        const item = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
-        if (!item) return;
-        item.conditions.forEach((cond, index) => this.conditionsContainer.appendChild(this.renderConditionRow(cond, index, item.conditions)));
-    }
+        const selected = new Set(item.childScope?.titles ?? []);
+        const childTitles = this.node.getDirectChildTitles();
+        const hasGenerated = this.node.children.length > 0;
 
-    private renderConditionRow(cond: ConditionalContextCondition, index: number, allConditions: ConditionalContextCondition[]): HTMLElement {
-        const row = createElement('div');
-        row.style.cssText = `display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;`;
-
-        const getLiveConditions = (): ConditionalContextCondition[] => {
-            if (!this.selectedItemId) return [...allConditions];
-            const liveItem = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
-            return liveItem ? (liveItem.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[]) : [...allConditions];
-        };
-
-        // Type selector
-        const typeSelect = createElement('select') as HTMLSelectElement;
-        ['contains', 'contains_not', 'layer_comparison'].forEach(t => {
-            const opt = createElement('option', { content: t }) as HTMLOptionElement;
-            opt.value = t;
-            typeSelect.appendChild(opt);
-        });
-        typeSelect.value = cond.type;
-        typeSelect.addEventListener('change', () => {
-            if (!this.selectedItemId) return;
-            const updated = getLiveConditions();
-            if (typeSelect.value === 'contains') {
-                updated[index] = { type: 'contains', scope: ConditionalScope.ThisAndPreviousSameLayer, term: 'term', wordwise: true, caseSensitive: false };
-            } else if (typeSelect.value === 'contains_not') {
-                updated[index] = { type: 'contains_not', scope: ConditionalScope.ThisAndPreviousSameLayer, term: 'term', wordwise: true, caseSensitive: false } as any;
-            } else {
-                updated[index] = { type: 'layer_comparison', comparator: '=', layerName: this.node.template[this.node.level] || (this.node.template[0] ?? '') };
-            }
-            this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-            this.renderConditions();
-            this.refreshItemsList();
-            this.schedulePersist();
-        });
-        row.appendChild(typeSelect);
-
-        // Dynamic fields
-        if (cond.type === 'contains' || cond.type === 'contains_not') {
-            // Scope
-            const scopeSelect = createElement('select') as HTMLSelectElement;
-            const scopes: Array<{ value: ConditionalScope; label: string }> = [
-                { value: ConditionalScope.ThisContent, label: 'this content' },
-                { value: ConditionalScope.ThisAndPreviousSameLayer, label: 'this + previous (same layer)' },
-                { value: ConditionalScope.Path, label: 'path' }
-            ];
-            scopes.forEach(s => {
-                const opt = createElement('option', { content: s.label }) as HTMLOptionElement;
-                opt.value = s.value;
-                scopeSelect.appendChild(opt);
-            });
-            scopeSelect.value = cond.scope;
-            scopeSelect.addEventListener('change', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], scope: scopeSelect.value as ConditionalScope };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-                this.schedulePersist();
-            });
-            row.appendChild(scopeSelect);
-
-            // Term
-            const termInput = createElement('input') as HTMLInputElement;
-            termInput.type = 'text';
-            termInput.placeholder = 'term...';
-            termInput.value = cond.term;
-            termInput.addEventListener('input', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], term: termInput.value };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-                this.schedulePersist();
-            });
-            termInput.style.cssText = 'flex: 1 1 30%; min-width: 10rem;';
-            row.appendChild(termInput);
-
-            // Wordwise
-            const wordwiseLabel = createElement('label', { content: 'Wordwise' });
-            const wordwiseCheckbox = createElement('input') as HTMLInputElement;
-            wordwiseCheckbox.type = 'checkbox';
-            wordwiseCheckbox.checked = cond.wordwise;
-            wordwiseCheckbox.addEventListener('change', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], wordwise: wordwiseCheckbox.checked };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-                this.schedulePersist();
-            });
-            row.appendChild(wordwiseLabel);
-            row.appendChild(wordwiseCheckbox);
-
-            // Case sensitive
-            const csLabel = createElement('label', { content: 'Case sensitive' });
-            const csCheckbox = createElement('input') as HTMLInputElement;
-            csCheckbox.type = 'checkbox';
-            csCheckbox.checked = cond.caseSensitive;
-            csCheckbox.addEventListener('change', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], caseSensitive: csCheckbox.checked };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-                this.schedulePersist();
-            });
-            row.appendChild(csLabel);
-            row.appendChild(csCheckbox);
+        if (childTitles.length === 0) {
+            const hint = createElement('div', { content: 'No direct children or outline sections found yet. Add ===Section=== headers to the outline first.' });
+            hint.style.cssText = 'color: #9ca3af;';
+            childChecklist.appendChild(hint);
         } else {
-            // Comparator
-            const cmpSelect = createElement('select') as HTMLSelectElement;
-            ['>', '<', '='].forEach(c => {
-                const opt = createElement('option', { content: c }) as HTMLOptionElement;
-                opt.value = c;
-                cmpSelect.appendChild(opt);
-            });
-            cmpSelect.value = cond.comparator;
-            cmpSelect.addEventListener('change', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], comparator: cmpSelect.value as any };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-                this.schedulePersist();
-            });
-            row.appendChild(cmpSelect);
-
-            // Layer name
-            const layerSelect = createElement('select') as HTMLSelectElement;
-            this.node.template.forEach(name => {
-                const opt = createElement('option', { content: name }) as HTMLOptionElement;
-                opt.value = name;
-                layerSelect.appendChild(opt);
-            });
-            layerSelect.value = cond.layerName;
-            layerSelect.addEventListener('change', () => {
-                if (!this.selectedItemId) return;
-                const updated = getLiveConditions();
-                (updated[index] as any) = { ...updated[index], layerName: layerSelect.value };
-                this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-            });
-            layerSelect.style.cssText = 'min-width: 8rem;';
-            row.appendChild(layerSelect);
+            if (!hasGenerated) {
+                const hint = createElement('div', { content: 'Prospective children (from outline headers):' });
+                hint.style.cssText = 'color: #6b7280; font-size: 0.8rem;';
+                childChecklist.appendChild(hint);
+            }
+            for (const titleText of childTitles) {
+                const row = createElement('label');
+                row.style.cssText = 'display: flex; gap: 0.4rem; align-items: center;';
+                const cb = createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = selected.has(titleText);
+                addEventListenerWithCleanup(cb, 'change', () => { this.toggleChildTitle(titleText, cb.checked); }, this.cleanupHandlers);
+                row.appendChild(cb);
+                row.appendChild(createElement('span', { content: titleText }));
+                childChecklist.appendChild(row);
+            }
         }
 
-        const removeBtn = createElement('button', { content: 'Remove' });
-        removeBtn.style.cssText = `
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-            background: #fff;
-            cursor: pointer;
-        `;
-        removeBtn.addEventListener('click', () => {
-            if (!this.selectedItemId) return;
-            const updated = getLiveConditions().filter((_, i) => i !== index);
-            this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-            this.renderConditions();
-            this.refreshItemsList();
-            this.schedulePersist();
-        });
-        row.appendChild(removeBtn);
-
-        return row;
+        // Orphaned selections (a selected title that matches no current/prospective child)
+        const orphans = this.node.findOrphanScopeTitles(item.childScope?.titles ?? []);
+        for (const orphan of orphans) {
+            const row = createElement('div');
+            row.style.cssText = 'display: flex; gap: 0.4rem; align-items: center; color: #b91c1c;';
+            const warn = createElement('span', { content: `⚠ "${orphan}" — no matching child` });
+            const rm = createElement('button', { content: 'remove' });
+            rm.style.cssText = 'padding: 0.1rem 0.4rem; border: 1px solid #fecaca; background: #fef2f2; border-radius: 0.3rem; cursor: pointer; color: #b91c1c;';
+            addEventListenerWithCleanup(rm, 'click', () => { this.toggleChildTitle(orphan, false); }, this.cleanupHandlers);
+            row.appendChild(warn);
+            row.appendChild(rm);
+            childChecklist.appendChild(row);
+        }
     }
+
+    private renderPreview(): void {
+        const previewBox = this.previewBox;
+        if (!previewBox) return;
+        const item = this.selectedItemId
+            ? this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId)
+            : undefined;
+        if (!item) {
+            previewBox.textContent = '';
+            return;
+        }
+        const root = this.projectManager.rootNode;
+        const applies = this.node.getApplicableConditionalContextItems(root).some(i => i.id === item.id);
+        const assembled = this.node.assembleApplicableConditionalContext(root);
+        previewBox.textContent =
+            `Applies to this node (${truncateText(this.node.title, 30)}): ${applies ? 'YES' : 'no'}\n\n` +
+            `Assembled context for this node:\n${assembled.length > 0 ? assembled : '(none)'}`;
+    }
+
+    /**
+     * Update only the summary (title + meta) line of a single row in place. Used
+     * after field edits so the open inline editor keeps focus (a full list rebuild
+     * would destroy and recreate the editor).
+     */
+    private updateRowSummary(itemId: string): void {
+        const refs = this.rowSummaryRefs.get(itemId);
+        if (!refs) return;
+        const item = this.node.getConditionalContextItems().find(i => i.id === itemId);
+        if (!item) return;
+        refs.title.textContent = this.itemTitle(item.text);
+        refs.meta.textContent = this.scopeSummary(item.childScope, item.leavesOnly, item.keywords);
+    }
+
+    // ---------------- Handlers ----------------
 
     private handleAddItem(): void {
-        const id = this.node.addConditionalContextItem('New conditional context', [], 'OR');
-        this.refreshItemsList();
-        this.selectItem(id);
+        const id = this.node.addConditionalContextItem('New conditional context');
+        this.schedulePersist();
+        this.selectedItemId = id;
+        this.renderItemsList();
+    }
+
+    private handleRemoveChecked(): void {
+        if (this.selectedIds.size === 0) return;
+        for (const id of Array.from(this.selectedIds)) {
+            this.node.removeConditionalContextItem(id);
+            if (this.selectedItemId === id) this.selectedItemId = null;
+        }
+        this.selectedIds.clear();
+        this.schedulePersist();
+        this.refresh();
     }
 
     private handleToggleAll(): void {
         const items = this.node.getConditionalContextItems();
-        if (items.length === 0) return;
-        const nextSelected = new Set<string>();
-        for (const item of items) {
-            if (!this.selectedIds.has(item.id)) {
-                nextSelected.add(item.id);
-            }
+        const allSelected = items.length > 0 && items.every(i => this.selectedIds.has(i.id));
+        this.selectedIds.clear();
+        if (!allSelected) {
+            for (const i of items) this.selectedIds.add(i.id);
         }
-        this.selectedIds = nextSelected;
-        this.refreshItemsList();
+        this.renderItemsList();
     }
 
-    private handleAddCondition(): void {
+    private toggleSelectItem(id: string): void {
+        this.selectedItemId = this.selectedItemId === id ? null : id;
+        this.renderItemsList();
+    }
+
+    private handleScopeModeChange(): void {
+        if (!this.selectedItemId || !this.scopeModeSelect) return;
+        const item = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
+        const mode = this.scopeModeSelect.value as ChildScopeMode;
+        const titles = item?.childScope?.titles ?? [];
+        this.node.updateConditionalContextItem(this.selectedItemId, { childScope: { mode, titles } });
+        this.updateRowSummary(this.selectedItemId);
+        this.renderChildChecklist();
+        this.renderPreview();
+        this.schedulePersist();
+    }
+
+    private toggleChildTitle(titleText: string, checked: boolean): void {
         if (!this.selectedItemId) return;
         const item = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
         if (!item) return;
-        const updated = [...item.conditions, {
-            type: 'contains',
-            scope: ConditionalScope.ThisAndPreviousSameLayer,
-            term: 'term',
-            wordwise: true,
-            caseSensitive: false
-        } as ConditionalContextCondition];
-        this.node.updateConditionalContextItem(this.selectedItemId, { conditions: updated });
-        this.renderConditions();
-        this.refreshItemsList();
+        const mode = item.childScope?.mode ?? 'include';
+        const titles = new Set(item.childScope?.titles ?? []);
+        if (checked) titles.add(titleText); else titles.delete(titleText);
+        const effectiveMode: ChildScopeMode = mode === 'all' ? 'include' : mode;
+        this.node.updateConditionalContextItem(this.selectedItemId, { childScope: { mode: effectiveMode, titles: Array.from(titles) } });
+        this.updateRowSummary(this.selectedItemId);
+        this.renderChildChecklist();
+        this.renderPreview();
+        this.schedulePersist();
     }
 
-    // Legacy context import methods removed - traditional context system removed
-
-    private async handleRemoveChecked(): Promise<void> {
-        const items = this.node.getConditionalContextItems();
-        if (items.length === 0 || this.selectedIds.size === 0) return;
-        const toRemove = items.filter(i => this.selectedIds.has(i.id)).map(i => i.id);
-        const confirmed = confirm(`Delete ${toRemove.length} checked item${toRemove.length === 1 ? '' : 's'}?`);
-        if (!confirmed) return;
-        let removed = 0;
-        for (const id of toRemove) {
-            if (this.node.removeConditionalContextItem(id)) {
-                removed++;
-                if (this.selectedItemId === id) {
-                    this.selectedItemId = null;
-                }
-            }
+    private navigateTo(nodeId: string): void {
+        if (this.onNavigateToNodeId) {
+            this.onNavigateToNodeId(nodeId);
+            return;
         }
-        this.selectedIds.clear();
-        this.refreshItemsList();
-        this.selectFirstItem();
-        this.evaluatePreview();
-        if (removed > 0) {
-            this.schedulePersist();
-        }
+        const event = new CustomEvent<{ nodeId: string }>('cc-select-node', { detail: { nodeId } });
+        window.dispatchEvent(event);
     }
 
-    private populateTriggeringNodeOptions(): void {
-        if (!this.showPreview) return;
-        const root = this.projectManager.rootNode;
-        const options: Array<{ id: string; label: string; level: number }> = [];
-        const bfs = (n: DocumentNode) => {
-            options.push({ id: n.id, label: `${' '.repeat(n.level * 2)}${n.title || 'Untitled'}`, level: n.level });
-            n.children.forEach(c => bfs(c));
-        };
-        bfs(root);
-        this.previewAsSelect.innerHTML = '';
-        options.forEach(o => {
-            const opt = createElement('option', { content: o.label }) as HTMLOptionElement;
-            opt.value = o.id;
-            this.previewAsSelect.appendChild(opt);
-        });
-        this.previewAsSelect.value = this.node.id;
+    // ---------------- Helpers ----------------
+
+    private destroyInlineEditors(): void {
+        this.editor?.destroy();
+        this.editor = null;
+        this.triggerEditor?.destroy();
+        this.triggerEditor = null;
+        this.childChecklist = null;
+        this.scopeModeSelect = null;
+        this.previewBox = null;
     }
 
-    private evaluatePreview(): void {
-        if (!this.showPreview) return;
-        const root = this.projectManager.rootNode;
-        const triggerId = this.previewAsSelect.value || this.node.id;
-        const triggeringNode = this.findById(root, triggerId) || this.node;
-        const items = triggeringNode.getApplicableConditionalContextItems(root);
-        const text = triggeringNode.assembleApplicableConditionalContext(root);
-        this.previewMatches.innerHTML = '';
-        if (items.length === 0) {
-            this.previewMatches.textContent = 'No matching items.';
-        } else {
-            const ul = createElement('ul');
-            ul.style.cssText = 'padding-left: 1rem;';
-            items.forEach(i => {
-                const firstLine = (i.text || '').split('\n')[0] || '';
-                const li = createElement('li', { content: truncateText(firstLine, 80) || '(empty)' });
-                ul.appendChild(li);
-            });
-            this.previewMatches.appendChild(ul);
-        }
-        if (this.activePreviewTab === 'assembled') {
-            this.previewText.textContent = text || '';
-        } else {
-            this.previewText.textContent = triggeringNode.content || '';
-        }
+    private itemTitle(text: string, max = 80): string {
+        const firstLine = (text.split('\n')[0] ?? '').trim();
+        return firstLine.length > 0 ? truncateText(firstLine, max) : '(empty text)';
     }
 
-    private updatePreviewTabsUI(): void {
-        if (!this.showPreview) return;
-        const activate = (btn: HTMLButtonElement, active: boolean) => {
-            btn.style.background = active ? '#eef2ff' : 'transparent';
-            btn.style.borderColor = active ? '#c7d2fe' : 'transparent';
-            btn.style.color = active ? '#1f2937' : '#374151';
-        };
-        activate(this.assembledTabBtn, this.activePreviewTab === 'assembled');
-        activate(this.contentTabBtn, this.activePreviewTab === 'content');
+    private scopeSummary(childScope: { mode: ChildScopeMode; titles: string[] } | undefined, leavesOnly: boolean | undefined, keywords: string[] | undefined): string {
+        const parts: string[] = [];
+        const mode = childScope?.mode ?? 'all';
+        const titles = childScope?.titles ?? [];
+        const titlesLabel = titles.length > 0 ? titles.join(', ') : '(none)';
+        if (mode === 'all') parts.push('all children');
+        else if (mode === 'include') parts.push(`only: ${titlesLabel}`);
+        else parts.push(`except: ${titlesLabel}`);
+        if (leavesOnly === true) parts.push('leaves only');
+        if (keywords && keywords.length > 0) parts.push(`triggers: ${keywords.join(', ')}`);
+        return parts.join(' • ');
     }
 
-    private handleApplyToSelected(): void {
-        if (!this.selectedItemId) return;
-        const source = this.node.getConditionalContextItems().find(i => i.id === this.selectedItemId);
-        if (!source) return;
-        const all = this.node.getConditionalContextItems();
-        let updatedCount = 0;
-        for (const target of all) {
-            if (!this.selectedIds.has(target.id)) continue;
-            if (target.id === source.id) continue;
-            try {
-                this.node.updateConditionalContextItem(target.id, {
-                    logic: source.logic,
-                    conditions: source.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[]
-                });
-                updatedCount++;
-            } catch (e) {
-                console.error('Failed to apply conditions to item', target.id, e);
-            }
-        }
-        if (updatedCount > 0) {
-            this.schedulePersist();
-            this.refreshItemsList();
-            this.evaluatePreview();
-        }
+    private buttonStyle(bg: string): string {
+        return `padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #d1d5db; background: ${bg}; cursor: pointer;`;
     }
+
+    // ---------------- Persistence ----------------
 
     private schedulePersist(): void {
         if (this.persistTimer !== null) {
             clearTimeout(this.persistTimer);
             this.persistTimer = null;
         }
-        this.persistTimer = window.setTimeout(() => {
-            void this.persistNow();
-        }, 500);
+        this.persistTimer = window.setTimeout(() => { void this.persistNow(); }, 400);
     }
 
     private async persistNow(): Promise<void> {
         await this.projectManager.saveToStorage();
     }
-
-    private findById(node: DocumentNode, id: string): DocumentNode | null {
-        if (node.id === id) return node;
-        for (const c of node.children) {
-            const found = this.findById(c, id);
-            if (found) return found;
-        }
-        return null;
-    }
 }
-
-

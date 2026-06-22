@@ -18,12 +18,12 @@ import { OpenRouterClient } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { XMLStoryEvent } from '../../xml-story-creation';
 import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
-import { generateElementId } from '../../xml-story-creation/services/ElementIDGenerator';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
-import { DocumentNode, ConditionalContextCondition, ConditionLogicOperator } from '../../DocumentNode';
+import { DocumentNode, ChildScope, ChildScopeMode } from '../../DocumentNode';
+import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { 
     findProjectByNode
 } from '../../state';
@@ -99,55 +99,10 @@ export class XMLStoryModal extends SimpleModal {
     private outlineHistory: Array<{content: string, timestamp: Date, source: 'user' | 'ai'}> = [];
     private currentOutlineVersion = -1;
 
-    // New state for inline conditional context UI
-    private selectedConditionalItemId: string | null = null;
-    private showInheritedConditional: boolean = true;
-    private stagedConditionalItems: Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }> | null = null;
+    // Embedded canonical conditional-context editor (single source of truth).
+    // Edits are live (written straight to the node), not staged.
+    private ccEditor: ConditionalContextEditor | null = null;
 
-    private getStagedItems(): Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }> {
-        if (!this.stagedConditionalItems) {
-            if (!this.sourceNode) throw new Error('No source node for staging');
-            const fromNode = this.sourceNode.getConditionalContextItems();
-            this.stagedConditionalItems = fromNode.map(i => ({ id: i.id, text: i.text, logic: i.logic, conditions: i.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[], keywords: Array.isArray((i as any).keywords) ? (i as any).keywords.slice() : [] }));
-        }
-        return this.stagedConditionalItems as Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }>;
-    }
-
-    private stagedUpdateItem(id: string, updates: Partial<{ text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords: string[] }>): void {
-        const items = this.getStagedItems();
-        const idx = items.findIndex(i => i.id === id);
-
-        if (idx === -1) {
-            throw new Error(`Context item with id "${id}" not found in staged items. Available IDs: ${items.map(i => i.id).join(', ')}`);
-        }
-        const current = items[idx]!;
-        items[idx] = {
-            id: current.id,
-            text: updates.text !== undefined ? updates.text : current.text,
-            logic: updates.logic !== undefined ? updates.logic : current.logic,
-            conditions: updates.conditions !== undefined ? updates.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[] : current.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[],
-            keywords: updates.keywords !== undefined ? updates.keywords.slice() : (Array.isArray(current.keywords) ? current.keywords.slice() : [])
-        };
-    }
-
-    private stagedRemoveItem(id: string): void {
-        const items = this.getStagedItems();
-        const idx = items.findIndex(i => i.id === id);
-        if (idx === -1) {
-            throw new Error(`Context item with id "${id}" not found for removal. Available IDs: ${items.map(i => i.id).join(', ')}`);
-        }
-        items.splice(idx, 1);
-    }
-
-    private stagedAddItem(newItem: { id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }): void {
-        const items = this.getStagedItems();
-        const exists = items.find(i => i.id === newItem.id);
-        if (exists) {
-            this.stagedUpdateItem(newItem.id, newItem);
-        } else {
-            items.push({ id: newItem.id, text: newItem.text, logic: newItem.logic, conditions: newItem.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[], keywords: Array.isArray(newItem.keywords) ? newItem.keywords.slice() : [] });
-        }
-    }
     private async handleCloseWithSaveChoices(): Promise<void> {
         const hasChanges = this.hasUnsavedChanges();
         if (!hasChanges) {
@@ -1481,47 +1436,43 @@ export class XMLStoryModal extends SimpleModal {
                     }
                 }
 
-                // Intercept staged context commands and mark executed
+                // Apply context commands directly to the node (canonical API).
+                // Edits are live; the embedded editor is refreshed afterwards.
+                let contextChanged = false;
                 for (const command of parseResult.systemCommands) {
                     if (command.type === 'context_add') {
-                        const text = command.parameters?.['text'] || '';
-                        const keyword = (command.parameters?.['trigger'] || command.parameters?.['keyword'] || '') as string;
+                        const text = command.parameters?.['text'] ?? '';
                         if (text.trim().length === 0) continue;
-                        const tempId = generateElementId('context');
-                        this.stagedAddItem({
-                            id: tempId,
-                            text,
-                            logic: 'OR',
-                            conditions: [],
-                            keywords: keyword ? [keyword] : []
-                        });
+                        const newId = this.sourceNode!.addConditionalContextItem(text);
+                        // Apply trigger words / structural scope / leaves-only when provided.
+                        this.applyContextCommandFields(newId, command.parameters ?? {}, false);
+                        contextChanged = true;
                         (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_edit') {
                         if (!command.parameters) {
                             throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
                         }
                         const id = command.parameters['id'];
-                        const text = command.parameters['text'];
-                        const keyword = command.parameters['trigger'] || command.parameters['keyword'];
                         if (!id) {
                             throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
                         }
-                        if (text !== undefined) {
-                            this.stagedUpdateItem(id, { text });
-                        }
-                        if (keyword !== undefined) {
-                            this.stagedUpdateItem(id, { keywords: keyword ? [keyword] : [] });
-                        }
+                        // Only the supplied facets are updated, leaving the rest intact.
+                        this.applyContextCommandFields(id, command.parameters, true);
+                        contextChanged = true;
                         (command as any).executedRaw = (command as any).rawXml || '';
                     } else if (command.type === 'context_remove') {
                         const id = command.parameters?.['id'];
                         if (!id) continue;
-                        this.stagedRemoveItem(id);
+                        this.sourceNode!.removeConditionalContextItem(id);
+                        contextChanged = true;
                         (command as any).executedRaw = (command as any).rawXml || '';
                     }
                 }
 
-                // Re-render inline list to reflect staged changes
+                // Persist and refresh the embedded editor to reflect changes
+                if (contextChanged) {
+                    this.persistProject();
+                }
                 this.renderInlineConditionalContext();
 
                 // Check for failed commands and offer AI correction
@@ -1830,70 +1781,24 @@ export class XMLStoryModal extends SimpleModal {
                 </div>
             `;
 
-        // Inline Conditional Context list (compact, room-efficient)
+        // Conditional Context: host for the embedded canonical editor
             html += `
                 <div class="story-section">
-                    <div class="story-section-header" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-                        <span style="flex:0 0 auto;">Conditional Context</span>
-                        <label style="display:inline-flex;align-items:center;gap:0.35rem;font-weight:normal;color:#374151;flex:0 0 auto;">
-                            <input type="checkbox" id="toggle-inherited-conditional" ${this.showInheritedConditional ? 'checked' : ''}/> Show inherited
-                        </label>
-                        <div style="display:inline-flex; gap:0.75rem; align-items:center; margin-left:auto; flex:0 0 auto; white-space: nowrap;">
-                            <button id="btn-add-context" class="outline-control-btn" style="padding:0.35rem 0.6rem; height:auto; width:auto; font-size:0.9rem;" title="Add a new context item">Add context</button>
-                            <button id="btn-discard-staged" class="outline-control-btn" style="padding:0.35rem 0.6rem; height:auto; width:auto; font-size:0.9rem;" title="Discard staged edits">Discard staged</button>
+                    <div class="story-section-header">
+                        <span>Conditional Context</span>
                     </div>
-                </div>
-                    <div class="story-elements" id="conditional-context-inline-list"></div>
+                    <div class="story-elements" id="conditional-context-host" style="height:55vh; min-height:18rem;"></div>
                 </div>
             `;
-
-        // Removed redundant read-only preview of applicable conditional context to avoid duplicate display
 
         this.whiteboardContainer.innerHTML = html;
 
         // Initialize the unified outline editor
         this.initializeUnifiedOutlineEditor();
-        
-        // Render inline conditional items
-        this.renderInlineConditionalContext();
-        const toggle = this.whiteboardContainer.querySelector('#toggle-inherited-conditional') as HTMLInputElement | null;
-        if (toggle) {
-            toggle.addEventListener('change', () => {
-                this.showInheritedConditional = toggle.checked;
-                this.renderInlineConditionalContext();
-            });
-        }
-        const applyBtn = this.whiteboardContainer.querySelector('#btn-apply-staged') as HTMLButtonElement | null;
-        const discardBtn = this.whiteboardContainer.querySelector('#btn-discard-staged') as HTMLButtonElement | null;
-        const addContextBtn = this.whiteboardContainer.querySelector('#btn-add-context') as HTMLButtonElement | null;
-        if (applyBtn) {
-            applyBtn.addEventListener('click', () => { void this.applyStagedToNode(); });
-        }
-        if (discardBtn) {
-            discardBtn.addEventListener('click', () => { this.stagedConditionalItems = null; this.renderInlineConditionalContext(); });
-        }
-        if (addContextBtn) {
-            addContextBtn.addEventListener('click', () => {
-                const newId = generateElementId('context');
-                this.stagedAddItem({ id: newId, text: '', logic: 'OR', conditions: [], keywords: [] });
-                this.selectedConditionalItemId = newId;
-                this.renderInlineConditionalContext();
-                // Scroll newly added row into view and focus its text editor
-                setTimeout(() => {
-                    const list = this.whiteboardContainer?.querySelector('#conditional-context-inline-list') as HTMLElement | null;
-                    const row = list?.querySelector(`[data-item-id="${newId}"]`) as HTMLElement | null;
-                    if (row) {
-                        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        const focusEl = row.querySelector('.text-editor-with-highlighting') as HTMLElement | null
-                            || row.querySelector('textarea') as HTMLElement | null;
-                        if (focusEl) {
-                            (focusEl as HTMLElement).focus();
-                        }
-                    }
-                }, 0);
-            });
-        }
-        
+
+        // Mount the canonical conditional-context editor (single source of truth)
+        this.mountConditionalContextEditor();
+
         // Add event listeners for outline controls only (legacy context add/reset removed)
         this.addOutlineControlListeners();
 
@@ -1909,279 +1814,33 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
-     * Render inline conditional context list (locals always visible; inherited optional, read-only)
+     * Mount the canonical ConditionalContextEditor into the whiteboard host.
+     * This replaces the previous bespoke staged builder; edits are now live.
      */
-    private renderInlineConditionalContext(): void {
+    private mountConditionalContextEditor(): void {
         if (!this.whiteboardContainer || !this.sourceNode) return;
-        const list = this.whiteboardContainer.querySelector('#conditional-context-inline-list') as HTMLElement | null;
-        if (!list) return;
+        const host = this.whiteboardContainer.querySelector('#conditional-context-host') as HTMLElement | null;
+        if (!host) return;
 
         const project = findProjectByNode(this.sourceNode);
-        const root = project?.rootNode ?? this.sourceNode;
+        if (!project) throw new Error('XMLStoryModal: source node is not part of a known project');
 
-        // Local items
-        const localItems: Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }> = (this.stagedConditionalItems
-            ? this.getStagedItems().map(i => ({ id: i.id, text: i.text, logic: i.logic, conditions: i.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[], keywords: Array.isArray(i.keywords) ? i.keywords.slice() : [] }))
-            : this.sourceNode.getConditionalContextItems().map(i => ({ id: i.id, text: i.text, logic: i.logic, conditions: i.conditions.map(c => ({ ...(c as any) })) as ConditionalContextCondition[], keywords: Array.isArray((i as any).keywords) ? (i as any).keywords.slice() : [] })));
+        try { this.ccEditor?.destroy(); } catch { /* ignore */ }
+        this.ccEditor = new ConditionalContextEditor({
+            node: this.sourceNode,
+            projectManager: project,
+            showPreview: false,
+            showInheritedByDefault: true
+        });
+        this.ccEditor.mount(host);
+    }
 
-        // Inherited items (all ancestors)
-        const inherited: Array<{ from: DocumentNode; id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[] }>= [];
-        if (this.showInheritedConditional) {
-            // Build ancestor chain
-            const path = DocumentNode.getPathFromRoot(root, this.sourceNode.id);
-            const ancestors = path.slice(0, -1);
-            ancestors.forEach(a => {
-                a.getConditionalContextItems().forEach(i => inherited.push({ from: a, id: i.id, text: i.text, logic: i.logic, conditions: i.conditions }));
-            });
-        }
-
-        const appliesNow = new Set(this.sourceNode.getApplicableConditionalContextItems(root).map(i => i.id));
-
-        const renderConditionsCompact = (conds: ConditionalContextCondition[], logic: ConditionLogicOperator): string => {
-            const parts = conds.map((c) => {
-                if ((c as any).type === 'contains' || (c as any).type === 'contains_not') {
-                    const cc = c as any;
-                    const scope = cc.scope === 'this_content' ? 'this' : (cc.scope === 'this_and_previous_same_layer' ? 'this+prev' : 'path');
-                    const mode = cc.type === 'contains' ? 'contains' : 'not contains';
-                    const flags = `${cc.wordwise ? 'wordwise' : 'substring'}, ${cc.caseSensitive ? 'case' : 'nocase'}`;
-                    return `[${scope}] ${mode} "${(cc.term || '').replace(/"/g,'\"')}" (${flags})`;
-                }
-                const lc = c as any;
-                return `layer ${lc.comparator} ${lc.layerName}`;
-            });
-            return parts.length > 0 ? parts.join(` ${logic} `) : '<em>Unconditional</em>';
-        };
-
-        const renderEditableConditions = (itemId: string, conds: ConditionalContextCondition[], logic: ConditionLogicOperator): HTMLElement => {
-            const wrap = document.createElement('div');
-            wrap.className = 'editable-conditions';
-            wrap.style.cssText = 'display:flex; flex-direction:column; gap:0.5rem; padding:0.5rem; border:1px dashed #e5e7eb; border-radius:0.5rem;';
-
-            // Text editor for item text
-            const item = this.getStagedItems().find(i => i.id === itemId);
-            const textLabel = document.createElement('div'); textLabel.textContent = 'Text:'; textLabel.style.cssText='font-weight:600;';
-            const textContainer = document.createElement('div'); textContainer.style.cssText='border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
-            wrap.appendChild(textLabel);
-            wrap.appendChild(textContainer);
-            try {
-                const textEditor = new UniversalTextEditor(textContainer, { mode: 'enhanced', autoResize: false }, {
-                    onTextChange: (txt) => {
-                        this.stagedUpdateItem(itemId, { text: txt });
-                    }
-                });
-                textEditor.setText(item?.text || '');
-            } catch {}
-
-            // Keywords editor (comma-separated)
-            const kwRow = document.createElement('div'); kwRow.style.cssText='display:flex; flex-direction:column; gap:0.25rem;';
-            const kwLabel = document.createElement('div'); kwLabel.textContent='Trigger words (comma-separated, optional):'; kwLabel.style.cssText='font-weight:600;';
-            const kwContainer = document.createElement('div'); kwContainer.style.cssText='border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
-            kwRow.appendChild(kwLabel); kwRow.appendChild(kwContainer); wrap.appendChild(kwRow);
-            const currentStageItem = this.getStagedItems().find(i => i.id === itemId);
-            const currentKeyword = Array.isArray(currentStageItem?.keywords) && currentStageItem!.keywords!.length > 0 ? (currentStageItem!.keywords!.join(', ')) : '';
-            try {
-                const kwEditor = new UniversalTextEditor(kwContainer, { mode: 'enhanced', autoResize: false }, {
-                    onBlur: () => {
-                        const val = kwEditor.getText();
-                        const raw = (val || '').trim();
-                        const parts = raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                        const deduped = Array.from(new Set(parts));
-                        const items = this.getStagedItems();
-                        const idx = items.findIndex(i => i.id === itemId);
-                        if (idx !== -1) {
-                            this.stagedUpdateItem(itemId, { keywords: deduped });
-                            this.renderInlineConditionalContext();
-                        }
-                    }
-                });
-                kwEditor.setText(currentKeyword);
-            } catch {}
-
-            // Logic selector
-            const logicRow = document.createElement('div');
-            logicRow.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
-            const logicLabel = document.createElement('span');
-            logicLabel.textContent = 'Logic:';
-            const logicSelect = document.createElement('select');
-            ['AND','OR'].forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; logicSelect.appendChild(o); });
-            logicSelect.value = logic;
-            logicSelect.addEventListener('change', () => {
-                this.stagedUpdateItem(itemId, { logic: logicSelect.value as ConditionLogicOperator });
-                this.renderInlineConditionalContext();
-            });
-            logicRow.appendChild(logicLabel);
-            logicRow.appendChild(logicSelect);
-            wrap.appendChild(logicRow);
-
-            // Conditions list
-            const listEl = document.createElement('div');
-            listEl.style.cssText = 'display:flex; flex-direction:column; gap:0.5rem;';
-            const live = () => (this.getStagedItems().find(i => i.id === itemId)?.conditions || []).map(c => ({...(c as any)})) as ConditionalContextCondition[];
-
-            const addRow = (c: ConditionalContextCondition, idx: number) => {
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;';
-                // type
-                const typeSel = document.createElement('select');
-                ['contains','contains_not','layer_comparison'].forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=t; typeSel.appendChild(o); });
-                typeSel.value = (c as any).type;
-                typeSel.addEventListener('change', () => {
-                    const arr = live();
-                    if (typeSel.value === 'layer_comparison') arr[idx] = { type:'layer_comparison', comparator:'=', layerName: this.sourceNode!.template[this.sourceNode!.level] || (this.sourceNode!.template[0] ?? '') } as any;
-                    else arr[idx] = { type: typeSel.value as any, scope: 'this_and_previous_same_layer' as any, term:'term', wordwise:true, caseSensitive:false } as any;
-                    this.stagedUpdateItem(itemId, { conditions: arr });
-                    this.renderInlineConditionalContext();
-                });
-                row.appendChild(typeSel);
-                if ((c as any).type === 'contains' || (c as any).type === 'contains_not') {
-                    const scopeSel = document.createElement('select');
-                    ([['this_content','this'],['this_and_previous_same_layer','this+prev'],['path','path']] as Array<[string,string]>).forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; scopeSel.appendChild(o);});
-                    scopeSel.value = (c as any).scope;
-                    scopeSel.addEventListener('change', ()=>{ const arr=live(); (arr[idx] as any).scope = scopeSel.value; this.stagedUpdateItem(itemId,{conditions:arr}); });
-                    row.appendChild(scopeSel);
-                    const termWrap = document.createElement('div'); termWrap.style.cssText='min-width:12rem; flex:1 1 40%; border:1px solid #e5e7eb; border-radius:0.5rem; padding:0.25rem;';
-                    row.appendChild(termWrap);
-                    try {
-                    const termEditor = new UniversalTextEditor(termWrap, { mode: 'enhanced', autoResize: false }, {
-                            onTextChange: (txt) => { const arr=live(); (arr[idx] as any).term = txt; this.stagedUpdateItem(itemId,{conditions:arr}); }
-                        });
-                        termEditor.setText((((c as any).term ?? '') as string));
-                    } catch {}
-                    const wLabel = document.createElement('label'); wLabel.textContent='wordwise';
-                    const w = document.createElement('input'); w.type='checkbox'; w.checked=(c as any).wordwise; w.addEventListener('change',()=>{ const arr=live(); (arr[idx] as any).wordwise = w.checked; this.stagedUpdateItem(itemId,{conditions:arr}); });
-                    row.appendChild(wLabel); row.appendChild(w);
-                    const csLabel = document.createElement('label'); csLabel.textContent='case';
-                    const cs = document.createElement('input'); cs.type='checkbox'; cs.checked=(c as any).caseSensitive; cs.addEventListener('change',()=>{ const arr=live(); (arr[idx] as any).caseSensitive = cs.checked; this.stagedUpdateItem(itemId,{conditions:arr}); });
-                    row.appendChild(csLabel); row.appendChild(cs);
-                } else {
-                    const cmp = document.createElement('select'); ['>','<','='].forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; cmp.appendChild(o);});
-                    cmp.value = (c as any).comparator;
-                    cmp.addEventListener('change',()=>{ const arr=live(); (arr[idx] as any).comparator = cmp.value as any; this.stagedUpdateItem(itemId,{conditions:arr}); });
-                    row.appendChild(cmp);
-                    const lay = document.createElement('select'); this.sourceNode!.template.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; lay.appendChild(o);});
-                    lay.value = (c as any).layerName;
-                    lay.addEventListener('change',()=>{ const arr=live(); (arr[idx] as any).layerName = lay.value; this.stagedUpdateItem(itemId,{conditions:arr}); });
-                    row.appendChild(lay);
-                }
-                const rm = document.createElement('button'); rm.textContent='Remove'; rm.addEventListener('click',()=>{ const arr=live().filter((_,i)=>i!==idx); this.stagedUpdateItem(itemId,{conditions:arr}); this.renderInlineConditionalContext(); });
-                row.appendChild(rm);
-                listEl.appendChild(row);
-            };
-
-            conds.forEach((c, idx)=>addRow(c, idx));
-            const addBtn = document.createElement('button'); addBtn.textContent='Add condition'; addBtn.addEventListener('click',()=>{ const arr=live(); arr.push({ type:'contains', scope:'this_and_previous_same_layer' as any, term:'term', wordwise:true, caseSensitive:false } as any); this.stagedUpdateItem(itemId,{conditions:arr}); this.renderInlineConditionalContext(); });
-            listEl.appendChild(addBtn);
-            wrap.appendChild(listEl);
-            return wrap;
-        };
-
-        const rows: HTMLElement[] = [];
-        const makeRow = (id: string, text: string, logic: ConditionLogicOperator, conditions: ConditionalContextCondition[], inheritedFrom?: DocumentNode, keywords?: string[]): HTMLElement => {
-            const row = document.createElement('div');
-            row.style.cssText = 'border:1px solid #e5e7eb; border-radius:8px; padding:8px; margin-bottom:8px; background:#fff;';
-            (row as any).dataset.itemId = id;
-            if (inheritedFrom) { row.style.borderStyle = 'dashed'; row.style.background = '#f9fafb'; }
-            const header = document.createElement('div'); header.style.cssText='display:flex; align-items:center; justify-content:space-between; gap:0.5rem;';
-            const isSelected = this.selectedConditionalItemId === id;
-            const title = document.createElement('div');
-            title.style.cssText='font-weight:600; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-            let displayText = isSelected ? 'Editing' : ((text || '') || '(empty)');
-            const maxLength = 200; // Character limit for title display
-            
-            if (!isSelected && (text || '').includes('\n')) {
-                // Multi-line content - show first line with indicator
-                const lines = (text || '').split('\n');
-                const firstLine = lines[0] || '';
-                const lineCount = lines.length;
-                displayText = firstLine + ` (+${lineCount - 1} more line${lineCount > 2 ? 's' : ''})`;
-            }
-            
-            if (displayText.length > maxLength && !isSelected) {
-                title.textContent = displayText.substring(0, maxLength) + '...';
-            } else {
-                title.textContent = displayText;
-            }
-            
-            // Always set full text as tooltip for hover
-            if (!isSelected && text && text.length > 0) {
-                title.title = text;
-            }
-            const right = document.createElement('div'); right.style.cssText='display:flex; align-items:center; gap:0.5rem;';
-            const applies = appliesNow.has(id);
-            const dot = document.createElement('span'); dot.style.cssText='display:inline-block;width:8px;height:8px;border-radius:50%;'; dot.style.background = applies ? '#16a34a' : '#dc2626';
-            right.appendChild(dot);
-            if (inheritedFrom) {
-                const from = document.createElement('span'); from.style.cssText='font-size:0.8rem; color:#6b7280;'; from.textContent = `from ${inheritedFrom.title}`;
-                right.appendChild(from);
-            } else {
-                // Local item controls
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.title = 'Remove this context entry';
-                removeBtn.textContent = '×';
-                removeBtn.style.cssText = 'border:1px solid #e5e7eb;border-radius:6px;width:22px;height:22px;line-height:20px;text-align:center;background:#fff;color:#6b7280;cursor:pointer;';
-                removeBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.stagedRemoveItem(id);
-                    this.renderInlineConditionalContext();
-                });
-                right.appendChild(removeBtn);
-            }
-            // Render keyword chips ABOVE the header/text
-            if (Array.isArray(keywords) && keywords.length > 0) {
-                const kwRow = document.createElement('div');
-                kwRow.style.cssText = 'margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;';
-                keywords.forEach(k => {
-                    const chip = document.createElement('span');
-                    chip.style.cssText = 'font-size:0.75rem; color:#374151; background:#eef2ff; border:1px solid #c7d2fe; padding:0 6px; border-radius:10px;';
-                    chip.textContent = k;
-                    kwRow.appendChild(chip);
-                });
-                row.appendChild(kwRow);
-            }
-            header.appendChild(title); header.appendChild(right); row.appendChild(header);
-
-            const condCompact = document.createElement('div'); condCompact.style.cssText='font-size:0.85rem; color:#374151; margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
-            const condText = document.createElement('span');
-            if (Array.isArray(keywords) && keywords.length > 0) {
-                condText.textContent = `keyworded entry`;
-            } else {
-                condText.innerHTML = renderConditionsCompact(conditions, logic);
-            }
-            const idBadge = document.createElement('span');
-            idBadge.style.cssText = 'font-size:0.85rem; color:#6b7280;';
-            idBadge.textContent = `(id: ${id})`;
-            condCompact.appendChild(condText);
-            condCompact.appendChild(idBadge);
-            if (!isSelected) {
-                row.appendChild(condCompact);
-            }
-
-            if (!inheritedFrom) {
-                row.addEventListener('click', (e) => {
-                    const target = e.target as HTMLElement | null;
-                    if (target && target.closest('.editable-conditions')) return; // do not toggle when clicking inside editor
-                    if (this.selectedConditionalItemId !== id) {
-                        this.selectedConditionalItemId = id;
-                        this.renderInlineConditionalContext();
-                    }
-                });
-                if (isSelected) {
-                    const ed = renderEditableConditions(id, conditions, logic);
-                    row.appendChild(ed);
-                }
-            }
-            return row;
-        };
-
-        localItems.forEach(i => rows.push(makeRow(i.id, i.text, i.logic, i.conditions, undefined, Array.isArray((i as any).keywords)? (i as any).keywords: [])));
-        if (this.showInheritedConditional) {
-            inherited.forEach(i => rows.push(makeRow(i.id, i.text, i.logic, i.conditions, i.from, [])));
-        }
-
-        list.innerHTML = '';
-        rows.forEach(r => list.appendChild(r));
+    /**
+     * Refresh the embedded conditional-context editor. Kept under the old name
+     * so all existing callers (e.g. AI command handling) stay valid.
+     */
+    private renderInlineConditionalContext(): void {
+        this.ccEditor?.refresh();
     }
 
     private persistProject(): void {
@@ -2193,29 +1852,6 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
-    private async applyStagedToNode(): Promise<void> {
-        if (!this.stagedConditionalItems || !this.sourceNode) return;
-        // Replace node's local items with staged
-        // Remove all existing local items
-        const existing = this.sourceNode.getConditionalContextItems();
-        for (const item of existing) {
-            this.sourceNode.removeConditionalContextItem(item.id);
-        }
-        // Add staged as new items
-        for (const s of this.stagedConditionalItems) {
-            const newId = this.sourceNode.addConditionalContextItem(s.text, s.conditions, s.logic);
-            if (Array.isArray(s.keywords) && s.keywords.length > 0) {
-                this.sourceNode.updateConditionalContextItem(newId, { keywords: s.keywords });
-            }
-        }
-        // Clear staging and persist
-        this.stagedConditionalItems = null;
-        this.persistProject();
-        this.renderInlineConditionalContext();
-    }
-
-
-
     // Legacy element editor and actions removed
 
 
@@ -2225,81 +1861,140 @@ export class XMLStoryModal extends SimpleModal {
     // Legacy helper retained for reference. Not used anymore.
 
     /**
-     * Build simplified context list for the LLM: Global vs Keyworded, without exposing conditions
+     * Build the context list for the LLM, exposing each item's full structural state
+     * (trigger words, child scope, leaves-only) so the model can edit any facet precisely.
      */
     private formatKeywordContextForAI(): string {
-        const stagedItems = this.getStagedItems();
-
-        const globals: Array<{ id: string; text: string }> = [];
-        const keyworded: Array<{ id: string; keyword: string; text: string }> = [];
-        
-        for (const item of stagedItems) {
-            const kws = Array.isArray(item.keywords) ? item.keywords : [];
-            if (kws.length === 0) {
-                globals.push({ id: item.id, text: item.text || '' });
-            } else {
-                // use first keyword for display; support multiple keywords later
-                keyworded.push({ id: item.id, keyword: kws[0]!, text: item.text || '' });
-            }
-        }
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to read conditional context');
+        const nodeItems = this.sourceNode.getConditionalContextItems();
 
         const lines: string[] = [];
-        lines.push('CURRENT CONTEXT ITEMS (with IDs for editing):');
+        lines.push('CURRENT CONTEXT ITEMS (with IDs and current scope for editing):');
         lines.push('');
-        
-        if (globals.length === 0 && keyworded.length === 0) {
+
+        if (nodeItems.length === 0) {
             lines.push('(no context items)');
-        } else {
-            if (globals.length > 0) {
-                lines.push('Global context:');
-                globals.forEach(g => {
-                    lines.push(`<context_item id="${g.id}" type="global">`);
-                    lines.push(g.text);
-                    lines.push('</context_item>');
-                    lines.push('');
-                });
-            }
-            
-            if (keyworded.length > 0) {
-                lines.push('Triggered context (by trigger word):');
-                keyworded.forEach(k => {
-                    lines.push(`<context_item id="${k.id}" type="triggered" trigger="${k.keyword}">`);
-                    lines.push(k.text);
-                    lines.push('</context_item>');
-                    lines.push('');
-                });
-            }
+            return lines.join('\n');
         }
-        
+
+        for (const item of nodeItems) {
+            const attrs: string[] = [`id="${item.id}"`];
+            const kws = Array.isArray(item.keywords) ? item.keywords : [];
+            if (kws.length > 0) {
+                attrs.push(`trigger="${kws.join(', ')}"`);
+            }
+            const scope = item.childScope;
+            if (scope && scope.mode !== 'all') {
+                attrs.push(`scope="${scope.mode}"`);
+                if (scope.titles.length > 0) {
+                    attrs.push(`children="${scope.titles.join('; ')}"`);
+                }
+            }
+            if (item.leavesOnly === true) {
+                attrs.push('leaves="true"');
+            }
+            lines.push(`<context_item ${attrs.join(' ')}>`);
+            lines.push(item.text || '');
+            lines.push('</context_item>');
+            lines.push('');
+        }
+
         return lines.join('\n');
     }
 
     /**
-     * System rules for the LLM about keyword context editing (no conditions mentioned)
+     * System rules for the LLM describing the full conditional-context capabilities:
+     * trigger words (content gate), structural child scope (by direct child title),
+     * and leaves-only reach. Also lists this node's direct children as valid scope targets.
      */
     private getKeywordContextRulesForAI(): string {
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to describe conditional context');
+        const childTitles = this.sourceNode.getDirectChildTitles();
+        const childList = childTitles.length > 0
+            ? childTitles.map(t => `  • ${t}`).join('\n')
+            : '  (this node currently has no direct child sections)';
+
         return [
-            'CONTEXT RULES (Trigger words)',
+            'CONTEXT RULES',
             '',
-            '- When adding or editing a context entry, decide if it is global or has a trigger word.',
-            '- Global: omit trigger.',
-            '- Triggered: include a short, specific trigger word (often a character or entity name) using trigger="…".',
-            '- Do not emit any conditions or scopes; only use the trigger attribute to indicate triggered entries.',
+            'Context items attached to this node are injected when its descendants are generated.',
+            'You control WHERE and WHEN each item applies with these optional attributes:',
+            '',
+            '1. trigger="word1, word2" (optional content gate)',
+            '   - Comma-separated trigger words. The item only applies to a node whose content',
+            '     mentions one of these words. Omit trigger to make the item always apply.',
+            '',
+            '2. scope + children (optional structural scope, by DIRECT child title)',
+            '   - scope="all"      → applies under every direct child (default; omit children).',
+            '   - scope="include"  → applies ONLY under the direct children listed in children="…".',
+            '   - scope="exclude"  → applies under every direct child EXCEPT those in children="…".',
+            '   - children="Title A; Title B" → semicolon-separated; must match direct child titles EXACTLY.',
+            '',
+            '3. leaves="true" (optional reach)',
+            '   - Restricts the item to leaf nodes only (the lowest prose layer), e.g. prose-only',
+            '     style guidance that should not reach intermediate outline layers. Default false.',
+            '',
+            'Direct child sections of THIS node (valid values for children="…"):',
+            childList,
             '',
             'Allowed context commands:',
-            '- <context add text="…" [trigger="…"] />',
-            '- <context edit id="…" text="…" [trigger="…"] />',
+            '- <context add text="…" [trigger="…"] [scope="all|include|exclude"] [children="…"] [leaves="true"] />',
+            '- <context edit id="…" [text="…"] [trigger="…"] [scope="…"] [children="…"] [leaves="…"] />',
             '- <context remove id="…" />',
             '',
-            'ID Format Examples:',
-            '- For context item c_001: <context edit id="c_001" text="..." />',
-            '- For context item c_042: <context edit id="c_042" text="..." />',
-            '- Use the exact ID shown in the context list (like c_001, c_042, etc.)',
+            'Editing notes:',
+            '- Use the exact ID shown in the context list (like c_001, c_042).',
+            '- On edit, only the attributes you include are changed; omitted attributes stay as-is.',
+            '- To clear triggers send trigger="". To reset scope send scope="all". To disable leaves send leaves="false".',
+            '- children titles must exactly match the direct child sections listed above, or the scope matches nothing.',
             '',
-            'Important:',
-            '- If editing an existing entry that already has conditions internally, do not attempt to rewrite or mention them. Only include a trigger when you want it to be triggered.',
-            '- Do not emit any other context control tags or custom condition logic.'
+            'Examples:',
+            '- Always-on note:             <context add text="The story is set in 1920s Paris." />',
+            '- Character note (triggered):  <context add text="Marie is secretly a spy." trigger="Marie" />',
+            '- Only under two chapters:     <context add text="Flashback tone." scope="include" children="Chapter 1; Chapter 3" />',
+            '- Everywhere except prologue:  <context add text="Use present tense." scope="exclude" children="Prologue" />',
+            '- Prose-only style guide:      <context add text="Keep paragraphs short." leaves="true" />',
+            '- Retarget an existing item:   <context edit id="c_003" scope="include" children="Chapter 2" />'
         ].join('\n');
+    }
+
+    /**
+     * Apply the optional facets of a context add/edit command (trigger words,
+     * structural child scope, leaves-only) to a conditional context item. Only the
+     * facets present in `params` are changed; on add `includeText` is false because
+     * the text was already set when the item was created.
+     */
+    private applyContextCommandFields(itemId: string, params: Record<string, string>, includeText: boolean): void {
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to edit conditional context');
+        const updates: Partial<{ text: string; keywords: string[]; childScope: ChildScope; leavesOnly: boolean }> = {};
+
+        if (includeText && params['text'] !== undefined) {
+            updates.text = params['text'];
+        }
+        if (params['trigger'] !== undefined) {
+            updates.keywords = params['trigger'].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }
+        if (params['scope'] !== undefined || params['children'] !== undefined) {
+            const titles = (params['children'] ?? '').split(';').map(s => s.trim()).filter(s => s.length > 0);
+            updates.childScope = { mode: this.normalizeChildScopeMode(params['scope'], titles.length > 0), titles };
+        }
+        if (params['leaves'] !== undefined) {
+            updates.leavesOnly = params['leaves'].trim().toLowerCase() === 'true';
+        }
+
+        this.sourceNode.updateConditionalContextItem(itemId, updates);
+    }
+
+    /**
+     * Map the model-facing scope attribute to a ChildScopeMode. Falls back to
+     * 'include' when titles are present but no explicit mode was given, else 'all'.
+     */
+    private normalizeChildScopeMode(scope: string | undefined, hasTitles: boolean): ChildScopeMode {
+        const v = (scope ?? '').trim().toLowerCase();
+        if (v === 'exclude' || v === 'except') return 'exclude';
+        if (v === 'include' || v === 'only') return 'include';
+        if (v === 'all') return 'all';
+        return hasTitles ? 'include' : 'all';
     }
 
     /**
@@ -2402,18 +2097,14 @@ export class XMLStoryModal extends SimpleModal {
                 return `</delete id="${(command.parameters as any)?.id || 'unknown'}">`;
             case 'context_add': {
                 const p = (command.parameters as Record<string, unknown>) || {};
-                const trigVal = typeof p['trigger'] === 'string' && (p['trigger'] as string).length > 0 ? (p['trigger'] as string) : '';
-                const kw = trigVal ? ` trigger="${trigVal}"` : '';
                 const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
-                return `<context text="${text}"${kw} />`;
+                return `<context text="${text}"${this.reconstructContextScopeAttrs(p)} />`;
             }
             case 'context_edit': {
                 const p = (command.parameters as Record<string, unknown>) || {};
-                const trigVal = typeof p['trigger'] === 'string' && (p['trigger'] as string).length > 0 ? (p['trigger'] as string) : '';
-                const kw = trigVal ? ` trigger="${trigVal}"` : '';
                 const id = typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : 'unknown';
-                const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
-                return `<context id="${id}" text="${text}"${kw} />`;
+                const text = typeof p['text'] === 'string' ? ` text="${p['text'] as string}"` : '';
+                return `<context id="${id}"${text}${this.reconstructContextScopeAttrs(p)} />`;
             }
             case 'context_remove': {
                 const p = (command.parameters as Record<string, unknown>) || {};
@@ -2424,7 +2115,20 @@ export class XMLStoryModal extends SimpleModal {
                 return `<${command.type}>${command.content || ''}</${command.type}>`;
         }
     }
-    
+
+    /**
+     * Reconstruct the optional scope attributes (trigger/scope/children/leaves) for a
+     * failed context command echo, including only the attributes that were supplied.
+     */
+    private reconstructContextScopeAttrs(p: Record<string, unknown>): string {
+        let attrs = '';
+        if (typeof p['trigger'] === 'string' && p['trigger'].length > 0) attrs += ` trigger="${p['trigger']}"`;
+        if (typeof p['scope'] === 'string' && p['scope'].length > 0) attrs += ` scope="${p['scope']}"`;
+        if (typeof p['children'] === 'string' && p['children'].length > 0) attrs += ` children="${p['children']}"`;
+        if (typeof p['leaves'] === 'string' && p['leaves'].length > 0) attrs += ` leaves="${p['leaves']}"`;
+        return attrs;
+    }
+
     /**
      * Offer AI correction for failed commands
      */
@@ -2840,8 +2544,7 @@ export class XMLStoryModal extends SimpleModal {
             // Get unified outline content
             const outlineContent = this.getCurrentOutlineSafe();
 
-            // Apply staged conditional context to the node before saving
-            await this.applyStagedToNode();
+            // Conditional context is edited live via the embedded editor; nothing to stage here.
 
             // Legacy normal-context is ignored; conditional context is stored on the node
             // contextContent removed - using conditional context system
@@ -3010,82 +2713,10 @@ export class XMLStoryModal extends SimpleModal {
         }
     }
 
-    // --- Conditional-context change detection helpers ---
-    private normalizeConditionalItemsForCompare(
-        items: Array<{ id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[] }>
-    ): string[] {
-        const safeItems = items.map((item) => {
-            const normalizedConditions = item.conditions
-                .map((c) => {
-                    if (c.type === 'contains' || c.type === 'contains_not') {
-                        return {
-                            type: c.type,
-                            scope: c.scope,
-                            term: c.term,
-                            wordwise: c.wordwise,
-                            caseSensitive: c.caseSensitive
-                        } as const;
-                    }
-                    // layer_comparison
-                    return {
-                        type: 'layer_comparison' as const,
-                        comparator: c.comparator,
-                        layerName: c.layerName
-                    };
-                })
-                .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-
-            const normalizedKeywords = Array.isArray(item.keywords)
-                ? [...item.keywords].sort((a, b) => a.localeCompare(b))
-                : [];
-
-            return JSON.stringify({
-                // Exclude id from comparison on purpose
-                text: item.text,
-                logic: item.logic,
-                conditions: normalizedConditions,
-                keywords: normalizedKeywords
-            });
-        });
-
-        return safeItems.sort((a, b) => a.localeCompare(b));
-    }
-
-    private getCurrentNodeConditionalItemsSnapshot(): Array<{
-        id: string; text: string; logic: ConditionLogicOperator; conditions: ConditionalContextCondition[]; keywords?: string[];
-    }> {
-        if (!this.sourceNode) {
-            throw new Error('XMLStoryModal: sourceNode is required to read conditional context');
-        }
-        return this.sourceNode.getConditionalContextItems().map((i) => ({
-            id: i.id,
-            text: i.text,
-            logic: i.logic,
-            conditions: i.conditions.map((c) => ({ ...(c as any) })) as ConditionalContextCondition[],
-            keywords: Array.isArray((i as any).keywords) ? (i as any).keywords.slice() : []
-        }));
-    }
-
-    private haveStagedConditionalChanges(): boolean {
-        // If user never staged anything, no pending conditional-context changes
-        if (!this.stagedConditionalItems) return false;
-
-        // Ensure staging is initialized (copies current node items when first used)
-        const staged = this.getStagedItems();
-        const current = this.getCurrentNodeConditionalItemsSnapshot();
-
-        const a = this.normalizeConditionalItemsForCompare(staged);
-        const b = this.normalizeConditionalItemsForCompare(current);
-
-        if (a.length !== b.length) return true;
-        for (let i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return true;
-        }
-        return false;
-    }
-
     /**
-     * Check if there are unsaved changes by comparing current content with source node
+     * Check if there are unsaved changes by comparing current content with source node.
+     * Conditional-context edits are applied live (persisted immediately), so only
+     * the outline can have pending changes here.
      */
     private hasUnsavedChanges(): boolean {
         if (!this.sourceNode) {
@@ -3100,12 +2731,7 @@ export class XMLStoryModal extends SimpleModal {
             // Compare with source node's current content
             const sourceOutlineContent = this.sourceNode.content || '';
 
-            const outlineChanged = (currentOutlineContent || '') !== sourceOutlineContent;
-            const conditionalChanged = this.haveStagedConditionalChanges();
-
-
-
-            return outlineChanged || conditionalChanged;
+            return (currentOutlineContent || '') !== sourceOutlineContent;
         } catch (error) {
             console.error('Error checking for unsaved changes:', error);
             // If we can't determine during initialization, there are no changes yet
@@ -3831,6 +3457,10 @@ export class XMLStoryModal extends SimpleModal {
             this.outlineEditor.destroy();
             this.outlineEditor = null;
         }
+
+        // Clean up embedded conditional-context editor
+        try { this.ccEditor?.destroy(); } catch { /* ignore */ }
+        this.ccEditor = null;
         
         // Clean up persistent highlights
         this.clearPersistentHighlight();
@@ -3852,6 +3482,10 @@ export class XMLStoryModal extends SimpleModal {
             this.outlineEditor.destroy();
             this.outlineEditor = null;
         }
+
+        // Clean up embedded conditional-context editor
+        try { this.ccEditor?.destroy(); } catch { /* ignore */ }
+        this.ccEditor = null;
         
         // Clean up persistent highlights
         this.clearPersistentHighlight();

@@ -296,18 +296,18 @@ export class XMLStoryParser {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             // Support boolean-style flags like "remove" without a value
             const hasRemoveFlag = /(?:^|\s)remove(?:\s|=|$)/i.test(parametersText || '');
-            if (params['id'] && (params['text'] || params['description'])) {
-                // Treat as edit by id
-                const text = (params['text'] || params['description'] || '').toString();
-                const trigger = (params['trigger'] || params['keyword'] || '').toString();
-                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId, rawXml: full });
-            } else if (params['text'] || params['description']) {
+            const hasId = Boolean(params['id']);
+            const hasText = params['text'] !== undefined || params['description'] !== undefined;
+            const hasRemove = params['remove'] === 'true' || hasRemoveFlag;
+            if (hasId && hasRemove) {
+                commands.push({ type: 'context_remove', parameters: { id: params['id'] ?? '' }, timestamp: new Date(), markerId, rawXml: full });
+            } else if (hasId) {
+                // Edit by id: forward only the fields the model actually supplied,
+                // so scope/trigger/leaves can be changed without touching the text.
+                commands.push({ type: 'context_edit', parameters: this.buildContextCommandParameters(params, true), timestamp: new Date(), markerId, rawXml: full });
+            } else if (hasText) {
                 // Add without explicit id (id will be client-assigned)
-                const text = (params['text'] || params['description'] || '').toString();
-                const trigger = (params['trigger'] || params['keyword'] || '').toString();
-                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId, rawXml: full });
-            } else if (params['id'] && (params['remove'] === 'true' || hasRemoveFlag)) {
-                commands.push({ type: 'context_remove', parameters: { id: params['id'] }, timestamp: new Date(), markerId, rawXml: full });
+                commands.push({ type: 'context_add', parameters: this.buildContextCommandParameters(params, false), timestamp: new Date(), markerId, rawXml: full });
             }
             return markerId;
         });
@@ -317,13 +317,13 @@ export class XMLStoryParser {
         textWithMarkers = textWithMarkers.replace(contextContentRegex, (full, commandType, parametersText, content) => {
             const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
-            const text = content.trim();
-            const trigger = (params['trigger'] || params['keyword'] || '').toString();
-            
+            const built = this.buildContextCommandParameters(params, commandType === 'edit');
+            built['text'] = content.trim();
+
             if (commandType === 'add') {
-                commands.push({ type: 'context_add', parameters: { text, trigger }, timestamp: new Date(), markerId, rawXml: full });
+                commands.push({ type: 'context_add', parameters: built, timestamp: new Date(), markerId, rawXml: full });
             } else if (commandType === 'edit' && params['id']) {
-                commands.push({ type: 'context_edit', parameters: { id: params['id'], text, trigger }, timestamp: new Date(), markerId, rawXml: full });
+                commands.push({ type: 'context_edit', parameters: built, timestamp: new Date(), markerId, rawXml: full });
             }
             return markerId;
         });
@@ -654,6 +654,32 @@ export class XMLStoryParser {
         }
 
         return parameters;
+    }
+
+    /**
+     * Build the parameter set for a context_add / context_edit command, forwarding
+     * only the attributes the model actually supplied. This lets the model change
+     * a single facet (e.g. just the structural scope or the leaves-only flag)
+     * without clobbering the others.
+     *
+     * Recognized attributes:
+     * - text / description: the context text (for add; for edit only when present)
+     * - trigger / keyword: comma-separated trigger words
+     * - scope: 'all' | 'include' | 'exclude' structural child scope
+     * - children: separator-list of direct-child titles the scope targets
+     * - leaves: 'true' | 'false' to restrict reach to leaf (prose) nodes
+     */
+    private buildContextCommandParameters(params: Record<string, string>, isEdit: boolean): Record<string, string> {
+        const out: Record<string, string> = {};
+        if (isEdit && params['id'] !== undefined) out['id'] = params['id'];
+        const text = params['text'] ?? params['description'];
+        if (text !== undefined) out['text'] = text;
+        const trigger = params['trigger'] ?? params['keyword'];
+        if (trigger !== undefined) out['trigger'] = trigger;
+        if (params['scope'] !== undefined) out['scope'] = params['scope'];
+        if (params['children'] !== undefined) out['children'] = params['children'];
+        if (params['leaves'] !== undefined) out['leaves'] = params['leaves'];
+        return out;
     }
     
 
