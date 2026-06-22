@@ -85,11 +85,8 @@ export class ModalFactory {
         
         // Override close method to include cleanup
         modal.close = async () => {
-            console.log(`🧹 ModalFactory cleanup: About to close and unregister modal ${modal.id}`);
             await originalClose();
-            console.log(`🧹 ModalFactory cleanup: Unregistering modal ${modal.id}`);
             this.registry.unregister(modal.id);
-            console.log(`🧹 ModalFactory cleanup: Modal ${modal.id} unregistered`);
         };
         
         return modal;
