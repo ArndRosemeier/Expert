@@ -28,8 +28,6 @@ interface ComprehensiveImportResult {
     message: string;
     importedItems: string[];
     errors: string[];
-    needsMigration?: boolean;
-    migrationProfileName?: string | undefined;
 }
 
 interface ImportStore {
@@ -132,34 +130,13 @@ export class ComprehensiveImportService {
             
             console.log(success ? '🎉 Import completed successfully' : '❌ Import failed');
             
-            // Step 4: Check if migration is needed after import
-            let needsMigration = false;
-            let migrationProfileName: string | undefined;
-            
-            if (success) {
-                try {
-                    const migrationCheck = await this.checkForMigrationNeeds();
-                    needsMigration = migrationCheck.needsMigration;
-                    migrationProfileName = migrationCheck.profileName;
-                    
-                    if (needsMigration) {
-                        console.log(`⚠️ Import completed but migration needed for profile: ${migrationProfileName}`);
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Could not check migration needs after import:', error);
-                    // Don't fail the import just because migration check failed
-                }
-            }
-            
+            // Imported settings are self-healed and version-stamped on the next
+            // load, so there is no post-import migration step.
             return {
                 success,
-                message: needsMigration 
-                    ? `${message} Settings migration will be required to update to current version.`
-                    : message,
+                message,
                 importedItems,
-                errors,
-                needsMigration,
-                migrationProfileName
+                errors
             };
             
         } catch (error) {
@@ -451,109 +428,5 @@ export class ComprehensiveImportService {
             errors: validation.errors,
             manifest: validation.manifest
         };
-    }
-
-    /**
-     * Check if imported data needs migration to current app version
-     */
-    private static async checkForMigrationNeeds(): Promise<{
-        needsMigration: boolean;
-        profileName?: string;
-    }> {
-        try {
-            // Get current app state to check for version mismatches
-            const state = await import('../../../state');
-            const settingsManager = state.getSettingsManager();
-            
-            if (!settingsManager) {
-                console.warn('⚠️ SettingsManager not available for migration check');
-                return { needsMigration: false };
-            }
-
-            // Check if there are version mismatches detected
-            if (settingsManager.hasVersionMismatchDetected && settingsManager.hasVersionMismatchDetected()) {
-                const lastUsedProfileName = settingsManager.getLastUsedProfileName() || 'default';
-                const profile = settingsManager.getProfile(lastUsedProfileName);
-                
-                if (profile) {
-                    // Import the VersionService to check versions
-                    const { VersionService } = await import('../../../VersionService');
-                    const currentVersion = VersionService.getBuildNumber();
-                    
-                    // Check if profile version differs from current version
-                    if (profile.version !== currentVersion) {
-                        console.log(`🔄 Profile "${lastUsedProfileName}" version mismatch: ${profile.version} vs ${currentVersion}`);
-                        return { 
-                            needsMigration: true, 
-                            profileName: lastUsedProfileName 
-                        };
-                    }
-                }
-            }
-
-            return { needsMigration: false };
-            
-        } catch (error) {
-            console.error('❌ Error checking migration needs:', error);
-            // Return false to not block the import process
-            return { needsMigration: false };
-        }
-    }
-
-    /**
-     * Trigger the migration process for imported settings
-     */
-    public static async triggerMigrationIfNeeded(result: ComprehensiveImportResult): Promise<void> {
-        if (!result.needsMigration || !result.migrationProfileName) {
-            return;
-        }
-
-        try {
-            console.log(`🔄 Triggering migration for profile: ${result.migrationProfileName}`);
-            
-            // Import the migration modal
-            const { MigrationSelectionModal } = await import('../MigrationSelectionModal');
-            const { getModalRegistry } = await import('../core/ModalRegistry');
-            const { VersionService } = await import('../../../VersionService');
-            const state = await import('../../../state');
-            
-            const settingsManager = state.getSettingsManager();
-            const modelSelector = state.getModelSelector();
-            const currentVersion = VersionService.getBuildNumber();
-            const profile = settingsManager?.getProfile(result.migrationProfileName);
-            
-            if (!settingsManager || !profile) {
-                console.warn('⚠️ Cannot trigger migration - missing SettingsManager or profile');
-                return;
-            }
-
-            const analysis = {
-                profileName: result.migrationProfileName,
-                savedVersion: profile.version,
-                currentVersion: currentVersion,
-                hasChanges: true
-            };
-
-            // Create migration selection modal
-            const modal = new MigrationSelectionModal({
-                id: 'post-import-migration-modal',
-                settingsManager: settingsManager,
-                ...(modelSelector && { modelSelector }),
-                analysis,
-                onMigrationComplete: () => {
-                    console.log('✅ Post-import migration completed');
-                    // Don't reload page - let user continue working
-                }
-            });
-
-            // Register and open modal
-            const registry = getModalRegistry();
-            registry.register(modal);
-            await modal.open();
-            
-        } catch (error) {
-            console.error('❌ Failed to trigger migration:', error);
-            // Don't throw - migration failure shouldn't block the user
-        }
     }
 } 

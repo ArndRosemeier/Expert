@@ -389,21 +389,11 @@ export class KeyValidationModal extends BaseModal {
                     `Application will reload in 3 seconds...`
                 );
                 
-                // Check if migration is needed before reloading
-                if (result.needsMigration) {
-                    // Show migration dialog instead of reloading
-                    await ComprehensiveImportService.triggerMigrationIfNeeded(result);
-                    // Don't reload - let user work with migrated data
-                    // Close the key validation modal since data is now imported
-                    setTimeout(() => {
-                        void this.close();
-                    }, 1500);
-                } else {
-                    // Reload the page after import to refresh all data
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                }
+                // Reload the page after import to refresh all data. Imported
+                // settings are self-healed and version-stamped on the next load.
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
                 
             } else {
                 throw new Error(result.message);

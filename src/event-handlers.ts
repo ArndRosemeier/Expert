@@ -1481,11 +1481,19 @@ export async function initialize() {
         if (e.target === newProjectModalContainer()) closeNewProjectModal();
     });
 
-    if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
-        // First-run: guide the user through the focused onboarding wizard instead of
-        // dropping them into the dense Settings modal. After finishing, we leave the
-        // user on the empty workspace so they can decide what to do next (the visible
-        // "New Project" button is right there) rather than forcing a modal on them.
+    if (!modelSelector.getApiKey()) {
+        // Genuine first run only (no API key yet): guide the user through the
+        // focused onboarding wizard instead of dropping them into the dense
+        // Settings modal. After finishing, we leave the user on the empty
+        // workspace so they can decide what to do next (the visible "New Project"
+        // button is right there) rather than forcing a modal on them.
+        //
+        // NOTE: We deliberately key this purely on the API key, NOT on whether
+        // every model role is selected. A returning user (key already present)
+        // whose profile predates a newer role - or who simply left one role
+        // unset - must never be force-fed the wizard, because its "apply one
+        // model to all roles" step would silently overwrite their per-role model
+        // choices. Missing roles are surfaced loudly at generation time instead.
         openOnboardingWizard();
     } else if (!state.getActiveProject()) {
         const settingsManager = state.getSettingsManager();

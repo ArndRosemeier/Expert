@@ -434,14 +434,6 @@
       "count": 3
     }
   },
-  "src/ui/modals/MigrationSelectionModal.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
-    }
-  },
   "src/ui/modals/ModalFactory.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -509,17 +501,6 @@
     },
     "@typescript-eslint/require-await": {
       "count": 1
-    }
-  },
-  "src/ui/modals/VersionMismatchModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
     }
   },
   "src/ui/modals/ViewTemplateModal.ts": {

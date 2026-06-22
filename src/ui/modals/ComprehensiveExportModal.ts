@@ -375,10 +375,7 @@ export class ComprehensiveExportModal extends BaseModal {
                         <h3>✅ Import Completed Successfully!</h3>
                         <p><strong>Imported:</strong> ${result.importedItems.join(', ')}</p>
                         ${result.errors.length > 0 ? `<p><strong>Warnings:</strong> ${result.errors.join(', ')}</p>` : ''}
-                        ${result.needsMigration 
-                            ? `<p><strong>⚠️ Migration Required:</strong> Settings migration dialog will open to update imported data to current version.</p>`
-                            : `<p>The application will refresh to load the imported data.</p>`
-                        }
+                        <p>The application will refresh to load the imported data.</p>
                     </div>
                 `;
                 
@@ -386,17 +383,11 @@ export class ComprehensiveExportModal extends BaseModal {
                     this.summaryContainer.innerHTML = successHTML;
                 }
                 
-                // Check if migration is needed before reloading
-                if (result.needsMigration) {
-                    // Show migration dialog instead of reloading
-                    await ComprehensiveImportService.triggerMigrationIfNeeded(result);
-                    // Don't reload - let user work with migrated data
-                } else {
-                    // Reload the page after import to refresh all data
-                    void void setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                }
+                // Reload the page after import to refresh all data. Imported
+                // settings are self-healed and version-stamped on the next load.
+                void setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
                 
             } else {
                 throw new Error(result.message);

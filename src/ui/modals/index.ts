@@ -14,9 +14,8 @@ export { showGenericModal, GenericModal } from './GenericModal';
 export { AILogModal } from './AILogModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
 export { KeyValidationModal } from './KeyValidationModal';
-export { VersionMismatchModal } from './VersionMismatchModal';
 // ContextInfoModal removed - using conditional context system
-export { MigrationSelectionModal } from './MigrationSelectionModal';
+// Version-mismatch/migration modals removed - settings are self-healed on load
 export { NewProjectModal } from './NewProjectModal';
 export type { NewProjectModalConfig } from './NewProjectModal';
 export { showViewTemplateModal } from './ViewTemplateModal';

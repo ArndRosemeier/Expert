@@ -189,7 +189,6 @@ export class SettingsManager {
     private storageService: Promise<IStorageService>;
     private aiLoggingEnabled: boolean = false;
     private debugGenerationEnabled: boolean = false;
-    private hasVersionMismatch: boolean = false;
     private initialized: boolean = false;
     private globalLanguage: string = 'English'; // Global language setting
 
@@ -264,22 +263,20 @@ export class SettingsManager {
             
             if (saved && areValidSettingsProfiles(saved)) {
                 this.profiles = saved;
-                let hasVersionMismatch = false;
                 const currentVersion = VersionService.getBuildNumber();
-                
-                // Check for version mismatches and update legacy profiles
-        
+
+                // Self-healing load: profiles are backfilled with any missing
+                // fields and silently stamped to the current version. There is no
+                // user-facing migration - settings carry no cross-version state
+                // that needs reconciling, so any structurally valid profile is
+                // simply brought up to date here.
                 let hasDefaultCriteria = false;
                 
                 Object.keys(this.profiles).forEach(profileName => {
                     const profile = this.profiles[profileName];
                     if (profile) {
-                        // Check for version mismatch
-                        if (!profile.version || profile.version !== currentVersion) {
-                            hasVersionMismatch = true;
-                        } else {
-        
-                        }
+                        // Always bring the profile up to the current version.
+                        profile.version = currentVersion;
                         
                         // Handle criteria - add defaults if missing, detect if existing are default
                         if (!profile.criteria) {
@@ -335,11 +332,6 @@ export class SettingsManager {
 
                     }
                 });
-                
-                // Store version mismatch status for UI to check
-                if (hasVersionMismatch) {
-                    this.hasVersionMismatch = true;
-                }
                 
                 // Clean up default criteria immediately to prevent old defaults from overriding new system criteria
                 if (hasDefaultCriteria) {
@@ -1047,41 +1039,6 @@ export class SettingsManager {
     }
 
     /**
-     * Check if there are version mismatches in loaded profiles
-     */
-    public hasVersionMismatchDetected(): boolean {
-        return this.hasVersionMismatch;
-    }
-
-    /**
-     * Clear the version mismatch flag (typically called after user has been notified)
-     */
-    public clearVersionMismatchFlag(): void {
-        this.hasVersionMismatch = false;
-    }
-
-    /**
-     * Get detailed version mismatch information for all profiles
-     */
-    public getVersionMismatchInfo(): Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> {
-        const currentVersion = VersionService.getBuildNumber();
-        const mismatches: Array<{ profileName: string; profileVersion: string | undefined; currentVersion: string }> = [];
-        
-        Object.keys(this.profiles).forEach(profileName => {
-            const profile = this.profiles[profileName];
-            if (profile && (!profile.version || profile.version !== currentVersion)) {
-                mismatches.push({
-                    profileName,
-                    profileVersion: profile.version,
-                    currentVersion
-                });
-            }
-        });
-        
-        return mismatches;
-    }
-
-    /**
      * Reset all profiles to defaults with current version
      */
     public async resetToDefaults(preserveModels?: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> }): Promise<void> {
@@ -1139,8 +1096,5 @@ export class SettingsManager {
         // Save everything
         await this.saveProfiles();
         await this.savePrompts(this.prompts);
-        
-        // Clear version mismatch flag
-        this.hasVersionMismatch = false;
     }
 } 
