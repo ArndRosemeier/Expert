@@ -3,6 +3,16 @@ import { DocumentNode } from '../../../DocumentNode';
 import { ExportConfig, ExportScope } from '../types/ExportTypes';
 import { ProjectManager } from '../../../ProjectManager';
 
+/** One spine document (a navigable chapter) in the generated EPUB. */
+interface EpubChapter {
+    id: string;
+    title: string;
+    /** Pre-formatted XHTML body (paragraphs already escaped). */
+    body: string;
+    /** Source node, used to build the nested table of contents. Null for placeholders. */
+    node: DocumentNode | null;
+}
+
 export class WorkingEpubGenerator {
     private zip: JSZip;
     private uuid: string;
@@ -67,82 +77,99 @@ export class WorkingEpubGenerator {
         return simpleFormatted;
     }
 
-    private collectAllNodes(node: DocumentNode): DocumentNode[] {
-        const nodes = [node];
-        if (node.children) {
-            for (const child of node.children) {
-                nodes.push(...this.collectAllNodes(child));
-            }
-        }
-        return nodes;
+    private hasText(node: DocumentNode): boolean {
+        return node.content.trim() !== '';
     }
 
     /**
-     * Find all leaf nodes (nodes with no children) in the tree
+     * Build the list of EPUB chapters (each becomes its own spine document, so
+     * e-readers show real, navigable chapters). A chapter is the lowest
+     * structural node (a node that has leaf children, e.g. a "Chapter"); its leaf
+     * children (the scenes) flow together inside it, so it reads like a novel.
+     * Pure grouping levels (e.g. "Part") become headings in the table of contents
+     * but are not their own body documents. Outline text on structural nodes is
+     * intentionally excluded - only the leaves' prose is emitted.
      */
-    private findLeafNodes(node: DocumentNode): DocumentNode[] {
-        if (node.children.length === 0) {
-            return [node];
+    private buildChapters(root: DocumentNode, scope: ExportScope): EpubChapter[] {
+        const chapters: EpubChapter[] = [];
+
+        if (scope === ExportScope.Single) {
+            if (this.hasText(root)) {
+                chapters.push({ id: 'chapter0', title: root.title, body: this.extractContentFromNode(root), node: root });
+            }
+            return chapters;
         }
-        
-        const leafNodes: DocumentNode[] = [];
+
+        this.collectChapters(root, chapters);
+
+        // Shallow tree (e.g. Book -> Scene): the only structural node is the root,
+        // which would collapse the whole book into one chapter again. Split each
+        // leaf into its own chapter instead.
+        if (chapters.length === 1 && chapters[0]!.node) {
+            const source = chapters[0]!.node!;
+            const leaves = source.children.filter(c => c.isLeaf && this.hasText(c));
+            if (leaves.length > 1) {
+                chapters.length = 0;
+                leaves.forEach((leaf, index) => {
+                    chapters.push({ id: `chapter${index}`, title: leaf.title, body: this.extractContentFromNode(leaf), node: leaf });
+                });
+            }
+        }
+
+        // The exported node is itself a lone leaf with prose: emit it directly.
+        if (chapters.length === 0 && this.hasText(root)) {
+            chapters.push({ id: 'chapter0', title: root.title, body: this.extractContentFromNode(root), node: root });
+        }
+
+        return chapters;
+    }
+
+    /** Depth-first: emit a chapter for every node that has leaf children. */
+    private collectChapters(node: DocumentNode, chapters: EpubChapter[]): void {
+        const leafChildren = node.children.filter(c => c.isLeaf && this.hasText(c));
+        if (leafChildren.length > 0) {
+            const id = `chapter${chapters.length}`;
+            chapters.push({ id, title: node.title, body: this.chapterBodyFromLeaves(leafChildren), node });
+        }
         for (const child of node.children) {
-            leafNodes.push(...this.findLeafNodes(child));
+            if (!child.isLeaf) {
+                this.collectChapters(child, chapters);
+            }
         }
-        return leafNodes;
+    }
+
+    /** Concatenate the scenes' prose with a subtle scene break between them. */
+    private chapterBodyFromLeaves(leaves: DocumentNode[]): string {
+        return leaves
+            .map(leaf => this.extractContentFromNode(leaf))
+            .join('\n    <p class="scene-break">* * *</p>\n    ');
     }
 
     async generate(node: DocumentNode, config: ExportConfig, _projectManager?: ProjectManager): Promise<Blob> {
         console.log('[WorkingEpubGenerator] Starting EPUB generation for:', node.title);
         console.log('[WorkingEpubGenerator] Scope:', config.scope);
-        
-        // Collect nodes to export based on scope
-        let nodesToExport: DocumentNode[];
-        switch (config.scope) {
-            case ExportScope.Single:
-                nodesToExport = [node];
-                console.log('[WorkingEpubGenerator] Single node export');
-                break;
-            case ExportScope.Leaves:
-                nodesToExport = this.findLeafNodes(node);
-                console.log('[WorkingEpubGenerator] Leaf nodes export:', nodesToExport.length, 'leaf nodes found');
-                break;
-            case ExportScope.Hierarchy:
-            default:
-                nodesToExport = this.collectAllNodes(node);
-                console.log('[WorkingEpubGenerator] Hierarchical export:', nodesToExport.length, 'total nodes found');
-                break;
-        }
-        
-        // Filter nodes with actual content
-        const contentNodes = nodesToExport.filter(n => n.content && n.content.trim() !== '');
-        console.log('[WorkingEpubGenerator] Found', contentNodes.length, 'nodes with content from', nodesToExport.length, 'total nodes');
-        
-        // Debug: Log details about each content node
-        contentNodes.forEach((node, index) => {
-            console.log(`[WorkingEpubGenerator] Content node ${index + 1}:`, node.title, 'content length:', node.content?.length || 0);
-        });
-        
-        // If no content nodes found, create a minimal placeholder
-        if (contentNodes.length === 0) {
-            console.log('[WorkingEpubGenerator] No content nodes found, creating placeholder');
-            const placeholderNode = {
+
+        const chapters = this.buildChapters(node, config.scope);
+        console.log('[WorkingEpubGenerator] Built', chapters.length, 'chapter(s)');
+
+        // If nothing was found, create a minimal placeholder so the file is valid.
+        if (chapters.length === 0) {
+            chapters.push({
+                id: 'chapter0',
                 title: 'No Content Available',
-                content: 'No content was found for the selected scope. Please check that your nodes contain content.'
-            } as DocumentNode;
-            contentNodes.push(placeholderNode);
+                body: '<p>No content was found for the selected scope. Please check that your nodes contain content.</p>',
+                node: null
+            });
         }
-        
+
         // Add required files to ZIP
         this.addMimeType();
         this.addContainerXml();
-        this.addPackageOpf(node.title, contentNodes, config.author || 'Expert Application');
-        this.addNavXhtml(node.title, contentNodes);
+        this.addPackageOpf(node.title, chapters, config.author || 'Expert Application');
+        this.addNavXhtml(node, chapters);
         this.addStyles();
-        
-        // Add chapters - combine all content into a single chapter to avoid page breaks
-        this.addCombinedChapter(node.title, contentNodes);
-        
+        this.addChapterFiles(chapters);
+
         // Generate and return blob
         const blob = await this.zip.generateAsync({ type: 'blob' });
         console.log('[WorkingEpubGenerator] EPUB generation complete, size:', blob.size);
@@ -163,10 +190,15 @@ export class WorkingEpubGenerator {
         this.zip.file('META-INF/container.xml', containerXml);
     }
 
-    private addPackageOpf(bookTitle: string, _contentNodes: DocumentNode[], author: string = 'Expert Application'): void {
-        // Single chapter file instead of multiple files to avoid page breaks
-        const manifestItems = `        <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>`;
-        const spineItems = `        <itemref idref="chapter1"/>`;
+    private addPackageOpf(bookTitle: string, chapters: EpubChapter[], author: string = 'Expert Application'): void {
+        // One manifest item and one spine entry per chapter, so e-readers render
+        // each chapter as its own navigable page.
+        const manifestItems = chapters
+            .map(c => `        <item id="${c.id}" href="${c.id}.xhtml" media-type="application/xhtml+xml"/>`)
+            .join('\n');
+        const spineItems = chapters
+            .map(c => `        <itemref idref="${c.id}"/>`)
+            .join('\n');
 
         const packageOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
@@ -190,12 +222,32 @@ ${spineItems}
         this.zip.file('OEBPS/content.opf', packageOpf);
     }
 
-    private addNavXhtml(_bookTitle: string, contentNodes: DocumentNode[]): void {
-        // Create navigation items that link to sections within the single chapter
-        const navItems = contentNodes.map((node, index) => {
-            const sectionId = `section-${index}`;
-            return `                <li><a href="chapter1.xhtml#${sectionId}">${this.escapeHtml(node.title)}</a></li>`;
-        }).join('\n');
+    private addNavXhtml(root: DocumentNode, chapters: EpubChapter[]): void {
+        // Build a (possibly nested) table of contents that mirrors the structural
+        // hierarchy: grouping levels (e.g. "Part") become headers containing their
+        // chapters. Falls back to a flat list when the structure does not map.
+        const idByNodeId = new Map<string, string>();
+        for (const chapter of chapters) {
+            if (chapter.node) {
+                idByNodeId.set(chapter.node.id, chapter.id);
+            }
+        }
+
+        let navItems: string;
+        if (idByNodeId.has(root.id)) {
+            navItems = this.navForNode(root, idByNodeId, 4);
+        } else {
+            navItems = root.children
+                .filter(c => !c.isLeaf)
+                .map(c => this.navForNode(c, idByNodeId, 4))
+                .join('');
+        }
+
+        if (navItems.trim().length === 0) {
+            navItems = chapters
+                .map(c => `                <li><a href="${c.id}.xhtml">${this.escapeHtml(c.title)}</a></li>`)
+                .join('\n');
+        }
 
         const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -214,6 +266,30 @@ ${navItems}
 </body>
 </html>`;
         this.zip.file('OEBPS/nav.xhtml', navXhtml);
+    }
+
+    /**
+     * Render one TOC entry for a node. Chapter nodes become links to their spine
+     * document; pure grouping nodes become a label wrapping their nested entries.
+     * Returns an empty string for grouping nodes that contain no chapters.
+     */
+    private navForNode(node: DocumentNode, idByNodeId: Map<string, string>, indent: number): string {
+        const pad = ' '.repeat(indent * 4);
+        const nested = node.children
+            .filter(c => !c.isLeaf)
+            .map(c => this.navForNode(c, idByNodeId, indent + 1))
+            .join('');
+
+        const chapterId = idByNodeId.get(node.id);
+        if (chapterId) {
+            const inner = nested ? `\n${pad}    <ol>\n${nested}${pad}    </ol>\n${pad}` : '';
+            return `${pad}<li><a href="${chapterId}.xhtml">${this.escapeHtml(node.title)}</a>${inner}</li>\n`;
+        }
+
+        if (nested.length === 0) {
+            return '';
+        }
+        return `${pad}<li><span>${this.escapeHtml(node.title)}</span>\n${pad}    <ol>\n${nested}${pad}    </ol>\n${pad}</li>\n`;
     }
 
     private addStyles(): void {
@@ -244,6 +320,13 @@ h1 {
 p {
     margin-bottom: 1.5em;
     text-align: justify;
+}
+
+.scene-break {
+    text-align: center;
+    margin: 1.5em 0;
+    letter-spacing: 0.5em;
+    color: #7f8c8d;
 }
 
 .node-section {
@@ -279,40 +362,26 @@ nav a:hover {
         this.zip.file('OEBPS/styles.css', styles);
     }
 
-    private addCombinedChapter(bookTitle: string, contentNodes: DocumentNode[]): void {
-        // Combine all content into a single chapter to avoid page breaks between nodes
-        let combinedContent = '';
-        
-        contentNodes.forEach((node, index) => {
-            const nodeContent = this.extractContentFromNode(node);
-            const sectionId = `section-${index}`;
-            
-            // Add section heading for each node (except the first if it matches the book title)
-            if (index > 0 || node.title !== bookTitle) {
-                combinedContent += `\n    <h2 id="${sectionId}">${this.escapeHtml(node.title)}</h2>\n`;
-            } else {
-                // For the first section that matches book title, add an invisible anchor
-                combinedContent += `\n    <a id="${sectionId}"></a>\n`;
-            }
-            
-            combinedContent += `    <div class="node-section">\n        ${nodeContent}\n    </div>\n`;
-        });
-        
-        const chapterHtml = `<?xml version="1.0" encoding="UTF-8"?>
+    private addChapterFiles(chapters: EpubChapter[]): void {
+        // One XHTML document per chapter, each its own spine entry, so e-readers
+        // page-break between chapters and show them in the navigation.
+        for (const chapter of chapters) {
+            const chapterHtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <title>${this.escapeHtml(bookTitle)}</title>
+    <title>${this.escapeHtml(chapter.title)}</title>
     <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-    <h1>${this.escapeHtml(bookTitle)}</h1>
+    <h1>${this.escapeHtml(chapter.title)}</h1>
     <div class="content">
-${combinedContent}
+    ${chapter.body}
     </div>
 </body>
 </html>`;
-        this.zip.file('OEBPS/chapter1.xhtml', chapterHtml);
+            this.zip.file(`OEBPS/${chapter.id}.xhtml`, chapterHtml);
+        }
     }
 
 
