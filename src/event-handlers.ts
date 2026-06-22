@@ -5,6 +5,7 @@ import * as state from './state';
 import { ProjectManager } from './ProjectManager';
 import { DocumentNode, GenerationSession, ContentVersion, ConditionLogicOperator, ConditionalContextCondition } from './DocumentNode';
 import { ProjectTemplate } from './ProjectTemplate';
+import type { InferredTemplate } from './services/TemplateInferenceService';
 import { initializeProjectUI } from './ui/project-ui';
 import { LoopHistoryItem } from './LoopOrchestrator';
 
@@ -958,6 +959,12 @@ export async function initialize() {
                  const actionButton = target.closest('[data-action]') as HTMLElement;
                  
                  if (actionButton) {
+                     // Keep this click from reaching the document-level outside-close
+                     // handler. Rendering a submenu replaces the dropdown's innerHTML,
+                     // which detaches the clicked node; the outside-close handler would
+                     // then mistake it for an outside click and hide the dropdown.
+                     e.stopPropagation();
+
                      const action = actionButton.dataset['action'];
 
                      // 'import-text' opens a second-level Concepts-only / Full-text
@@ -1215,20 +1222,26 @@ export async function initialize() {
                     closeProgressModal(progressModal);
                     await finalizeImportedProject(project);
                 } else {
-                    // Full text: choose a template first, then segment + build.
+                    // Full text: infer a fitting template from the document, let
+                    // the user review/edit it, then segment + build.
+                    progressSetMessage(progressModal, 'Analyzing document structure...');
+                    const { TemplateInferenceService } = await import('./services/TemplateInferenceService');
+                    const inference = new TemplateInferenceService(client, settingsManager);
+                    const proposed = await inference.inferTemplate(text, file.name.replace(/\.[^/.]+$/, ''));
                     closeProgressModal(progressModal);
-                    const template = await showTemplateSelector();
-                    if (!template) return;
+
+                    const reviewed = await showTemplateReviewDialog(proposed);
+                    if (!reviewed) return;
 
                     const runModal = showProgressModal('Segmenting document by template...');
                     try {
-                        const project = await service.buildFullTextProject(text, file.name, template, {
+                        const project = await service.buildFullTextProject(text, file.name, reviewed.template, {
                             status: (m) => progressSetMessage(runModal, m),
                             splitStart: (level, parentTitle) => progressLog(runModal, `Finding ${level.toLowerCase()} in "${parentTitle}"...`),
                             splitDone: (level, parentTitle, count) => progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`),
                             summarizeStart: (title, n) => progressLog(runModal, `Summarizing ${title} from ${n} children...`),
                             summarizeDone: (title) => progressLog(runModal, `Summarized ${title}.`)
-                        });
+                        }, reviewed.groupAboveCount);
                         closeProgressModal(runModal);
                         await finalizeImportedProject(project);
                     } catch (err) {
@@ -1248,54 +1261,148 @@ export async function initialize() {
         document.body.removeChild(fileInput);
     }
 
-    async function showTemplateSelector(): Promise<ProjectTemplate | null> {
-                    const stateModule = await import('./state');
-                    const tm = stateModule.getTemplateManager();
-                    const names = tm ? tm.getTemplateNames().sort() : [];
+    /**
+     * Show the auto-inferred template for review/editing before the import runs.
+     * The user can rename the project and each level, and add/remove levels.
+     * Resolves to the edited ProjectTemplate, or null on cancel.
+     */
+    async function showTemplateReviewDialog(proposed: InferredTemplate): Promise<InferredTemplate | null> {
+        return new Promise<InferredTemplate | null>((resolve) => {
+            // Working state: index 0 is the project/root label, the rest are child levels.
+            const labels: string[] = [...proposed.template.hierarchyLevels];
+            if (labels.length < 2) {
+                labels.push('Chapter');
+            }
+            // How many leading child levels are realized by upward grouping. Kept in
+            // sync as the user removes levels so it always points at real grouping
+            // rows; clamped to leave at least one non-grouping child level.
+            let groupAboveCount = proposed.groupAboveCount;
 
-        return new Promise<ProjectTemplate | null>((resolve) => {
             const backdrop = document.createElement('div');
             backdrop.style.cssText = `position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;`;
 
             const dialog = document.createElement('div');
-            // Explicit colors (with hex fallbacks) so the popup is readable
-            // regardless of inherited/theme text color.
             dialog.style.cssText = `background: var(--secondary-50, #f8fafc); color: var(--secondary-900, #0f172a); border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 12px; padding: 1rem; width: min(92vw, 560px); max-height: 80vh; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);`;
-            const templateButtonStyle = `text-align: left; padding: 0.4rem 0.6rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-900, #0f172a); cursor: pointer; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
-            const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            dialog.innerHTML = `
-                <h3 style="margin: 0 0 0.6rem 0; color: var(--secondary-900, #0f172a); font-size: 1rem;">Select Template</h3>
-                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem;">
-                    ${names.map(name => `<button data-name="${escapeAttr(name)}" title="${escapeAttr(name)}" style="${templateButtonStyle}">${escapeAttr(name)}</button>`).join('')}
-                </div>
-                <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
-                    <button id="tpl-cancel" style="padding: 0.4rem 0.75rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-700, #334155); cursor: pointer; font-size: 0.85rem;">Cancel</button>
-                </div>
+
+            const inputStyle = `flex: 1 1 auto; min-width: 0; padding: 0.4rem 0.6rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-900, #0f172a); font-size: 0.85rem;`;
+            const smallBtnStyle = `padding: 0.35rem 0.6rem; border: 1px solid var(--secondary-300, #cbd5e1); border-radius: 8px; background: #ffffff; color: var(--secondary-700, #334155); cursor: pointer; font-size: 0.85rem;`;
+            const primaryBtnStyle = `padding: 0.4rem 0.85rem; border: none; border-radius: 8px; background: var(--primary-500, #2563eb); color: #ffffff; cursor: pointer; font-size: 0.85rem; font-weight: 600;`;
+
+            const head = document.createElement('div');
+            head.innerHTML = `
+                <h3 style="margin: 0 0 0.3rem 0; color: var(--secondary-900, #0f172a); font-size: 1rem;">Review import template</h3>
+                <p style="margin: 0 0 0.6rem 0; color: var(--secondary-700, #334155); font-size: 0.8rem;">This template was inferred from the document. Adjust the project name and the hierarchy levels (outermost first), then import.</p>
             `;
+            dialog.appendChild(head);
+
+            const rootRow = document.createElement('div');
+            rootRow.style.cssText = 'display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;';
+            rootRow.innerHTML = `<label style="width:5.5rem; flex:0 0 auto; font-size:0.8rem; color:var(--secondary-700,#334155);">Project</label>`;
+            const rootInput = document.createElement('input');
+            rootInput.type = 'text';
+            rootInput.value = labels[0] ?? '';
+            rootInput.style.cssText = inputStyle;
+            rootInput.addEventListener('input', () => { labels[0] = rootInput.value; });
+            rootRow.appendChild(rootInput);
+            dialog.appendChild(rootRow);
+
+            const levelsContainer = document.createElement('div');
+            levelsContainer.style.cssText = 'display:flex; flex-direction:column; gap:0.4rem;';
+            dialog.appendChild(levelsContainer);
+
+            const renderLevels = (): void => {
+                levelsContainer.innerHTML = '';
+                for (let i = 1; i < labels.length; i++) {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
+
+                    const tag = document.createElement('label');
+                    tag.style.cssText = 'width:5.5rem; flex:0 0 auto; font-size:0.8rem; color:var(--secondary-700,#334155);';
+                    tag.textContent = i === labels.length - 1 ? `Level ${i} (leaf)` : `Level ${i}`;
+                    row.appendChild(tag);
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = labels[i] ?? '';
+                    input.style.cssText = inputStyle;
+                    input.addEventListener('input', () => { labels[i] = input.value; });
+                    row.appendChild(input);
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.style.cssText = smallBtnStyle;
+                    removeBtn.disabled = labels.length <= 2; // keep at least one child level
+                    if (removeBtn.disabled) { removeBtn.style.opacity = '0.5'; removeBtn.style.cursor = 'default'; }
+                    removeBtn.addEventListener('click', () => {
+                        if (labels.length > 2) {
+                            // Removing a grouping row shrinks the grouping region.
+                            if (i <= groupAboveCount) {
+                                groupAboveCount = Math.max(0, groupAboveCount - 1);
+                            }
+                            labels.splice(i, 1);
+                            renderLevels();
+                        }
+                    });
+                    row.appendChild(removeBtn);
+
+                    levelsContainer.appendChild(row);
+                }
+            };
+            renderLevels();
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-top:0.85rem;';
+
+            const addBtn = document.createElement('button');
+            addBtn.textContent = '+ Add level';
+            addBtn.style.cssText = smallBtnStyle;
+            addBtn.addEventListener('click', () => {
+                labels.push(`Level ${labels.length}`);
+                renderLevels();
+            });
+
+            const rightActions = document.createElement('div');
+            rightActions.style.cssText = 'display:flex; gap:0.5rem;';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.cssText = smallBtnStyle;
+            const useBtn = document.createElement('button');
+            useBtn.textContent = 'Import';
+            useBtn.style.cssText = primaryBtnStyle;
+            rightActions.appendChild(cancelBtn);
+            rightActions.appendChild(useBtn);
+
+            actions.appendChild(addBtn);
+            actions.appendChild(rightActions);
+            dialog.appendChild(actions);
 
             backdrop.appendChild(dialog);
             document.body.appendChild(backdrop);
 
-            const onCancel = () => {
+            const cleanup = () => { document.body.removeChild(backdrop); };
+            const onCancel = () => { cleanup(); resolve(null); };
+            const onUse = () => {
+                const cleaned = labels.map(l => l.trim());
+                const rootLabel = cleaned[0] && cleaned[0].length > 0 ? cleaned[0]! : 'Project';
+                const childLevels = cleaned.slice(1).filter(l => l.length > 0);
+                if (childLevels.length === 0) {
+                    childLevels.push('Chapter');
+                }
+                // Grouping can only apply to leading levels and must leave at least
+                // one non-grouping child level beneath it.
+                const finalGroupAbove = Math.max(0, Math.min(groupAboveCount, childLevels.length - 1));
+                const hierarchy = [rootLabel, ...childLevels];
+                const layerLengths: (number | null)[] = hierarchy.map(() => null);
+                layerLengths[layerLengths.length - 1] = proposed.template.layerLengths[proposed.template.layerLengths.length - 1] ?? null;
                 cleanup();
-                resolve(null);
-            };
-            const cleanup = () => {
-                document.body.removeChild(backdrop);
+                resolve({
+                    template: new ProjectTemplate(rootLabel, hierarchy, layerLengths),
+                    groupAboveCount: finalGroupAbove
+                });
             };
 
-            dialog.querySelectorAll('button[data-name]').forEach(btn => {
-                const el = btn as HTMLButtonElement;
-                el.addEventListener('mouseenter', () => { el.style.background = 'var(--secondary-100, #f1f5f9)'; el.style.borderColor = 'var(--primary-500, #475569)'; });
-                el.addEventListener('mouseleave', () => { el.style.background = '#ffffff'; el.style.borderColor = 'var(--secondary-300, #cbd5e1)'; });
-                el.addEventListener('click', () => {
-                    const name = el.dataset['name']!;
-                    const tpl = tm?.getTemplate(name) || null;
-                    cleanup();
-                    resolve(tpl);
-                });
-            });
-            dialog.querySelector('#tpl-cancel')?.addEventListener('click', onCancel);
+            cancelBtn.addEventListener('click', onCancel);
+            useBtn.addEventListener('click', onUse);
             backdrop.addEventListener('click', (e) => { if (e.target === backdrop) onCancel(); });
         });
     }

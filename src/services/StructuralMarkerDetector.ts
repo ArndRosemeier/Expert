@@ -12,6 +12,13 @@
  *   - Thematic breaks/separators: ***, ---, ___ (same-level dividers, no title)
  *   - Isolated short lines:       a short line surrounded by blank lines (weak heading)
  *
+ * The isolated-short-line signal is the weakest and the easiest to fool on messy
+ * input (OCR/PDF exports of novels, etc.): page numbers sit on their own line and
+ * hard-wrapped prose leaves stray short lines bracketed by spurious blank lines.
+ * It therefore rejects anything that looks like a page number or a prose fragment
+ * and bails out entirely when "headings" are so dense they must be the document's
+ * prevailing format rather than real section breaks.
+ *
  * The detector is used per text slice. It returns the contiguous sections at the
  * SHALLOWEST heading depth present (so the orchestrator's recursive descent maps
  * naturally: the first split corresponds to the first template sub-level, the
@@ -194,14 +201,15 @@ export class StructuralMarkerDetector {
 
   private sectionsFromShortLines(text: string, lines: LineInfo[]): DetectedSection[] | null {
     const candidates: HeadingMarker[] = [];
+    let nonBlankLineCount = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
       const trimmed = line.text.trim();
-      if (trimmed.length === 0 || trimmed.length > MAX_SHORTLINE_HEADING_LENGTH) {
+      if (trimmed.length === 0) {
         continue;
       }
-      // Must not end like a sentence/clause (structural heading heuristic).
-      if (/[.!?:,;]$/.test(trimmed)) {
+      nonBlankLineCount += 1;
+      if (trimmed.length > MAX_SHORTLINE_HEADING_LENGTH || !this.looksLikeShortLineHeading(trimmed)) {
         continue;
       }
       const prev = lines[i - 1];
@@ -217,7 +225,44 @@ export class StructuralMarkerDetector {
       return null;
     }
 
+    // Density guard: when isolated short lines are this frequent they are the
+    // document's prevailing layout (poetry, screenplay, OCR noise), not section
+    // headings. Decline so the caller falls back to LLM segmentation rather than
+    // splitting the text into hundreds of bogus sections.
+    const densityCap = Math.max(4, Math.floor(nonBlankLineCount / 8));
+    if (candidates.length > densityCap) {
+      return null;
+    }
+
     return this.buildContiguousSections(text, candidates.map(c => ({ startChar: c.startChar, title: c.title })));
+  }
+
+  /**
+   * Decide whether an isolated short line plausibly is a section heading rather
+   * than a page number or a stray hard-wrapped prose fragment. Language-agnostic:
+   * it keys only on numeric form and punctuation, never on words.
+   */
+  private looksLikeShortLineHeading(trimmed: string): boolean {
+    // Page numbers and roman-numeral artifacts are never headings.
+    if (/^[0-9]+$/.test(trimmed)) {
+      return false;
+    }
+    if (/^[ivxlcdmIVXLCDM]+$/.test(trimmed)) {
+      return false;
+    }
+    // Ends like a sentence -> prose.
+    if (/[.!?…]$/.test(trimmed)) {
+      return false;
+    }
+    // Ends with a hyphen/dash -> a hard-wrapped (hyphenated) prose line.
+    if (/[-\u00ad\u2013\u2014]$/.test(trimmed)) {
+      return false;
+    }
+    // Quotation marks or clause punctuation anywhere -> prose fragment.
+    if (/[«»„“”‹›";:,]/.test(trimmed)) {
+      return false;
+    }
+    return true;
   }
 
   /**

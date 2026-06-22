@@ -1,8 +1,9 @@
 import { ProjectTemplate } from '../ProjectTemplate';
 import { TextSegmentationService } from './TextSegmentationService';
 import { StructuralMarkerDetector } from './StructuralMarkerDetector';
-import { OpenRouterClient, OpenRouterMessage } from '../OpenRouterClient';
+import { OpenRouterClient } from '../OpenRouterClient';
 import { SettingsManager } from '../SettingsManager';
+import { getPromptText } from '../PromptManager';
 
 export interface SegmentedSpan {
   title: string;
@@ -14,6 +15,12 @@ export interface SegmentedSpan {
 export interface ImportProgressHooks {
   splitStart?: (levelName: string, parentTitle: string) => void;
   splitDone?: (levelName: string, parentTitle: string, count: number) => void;
+}
+
+/** A child node's title and (already-built) content, used to outline its parent. */
+export interface ImportChildInfo {
+  title: string;
+  content: string;
 }
 
 export class HierarchicalImportService {
@@ -77,24 +84,106 @@ export class HierarchicalImportService {
   }
 
   /**
-   * Summarize an array of child texts into a parent content using the summarize prompt
+   * Produce one concise outline description per child section, in order, so the
+   * caller can assemble a `===Title===` sectioned outline as the parent's content
+   * (the same deterministic format normal projects use). Returns null when the
+   * model response is malformed or its length does not match the child count, so
+   * the caller can fall back without inventing mismatched sections.
    */
-  public async summarizeChildrenToParent(childrenTexts: string[]): Promise<string> {
-    const prompts = this.settings.getPrompts();
-    const system = prompts.summarize_system
-      .replace(/\{\{content\}\}/g, childrenTexts.join('\n\n'))
+  public async outlineChildren(children: ImportChildInfo[]): Promise<string[]> {
+    if (children.length === 0) {
+      return [];
+    }
+
+    const descriptions = await this.requestOutline(children);
+    if (!descriptions) {
+      // No silent, mangled fallback: a broken outline is worse than a failed
+      // import. Fail loudly so the user can retry.
+      throw new Error(
+        `Outline generation failed: the model did not return ${children.length} well-formed section descriptions. Please retry the import.`
+      );
+    }
+    return descriptions;
+  }
+
+  /**
+   * One outline-pass call for a set of children. Returns one description per child
+   * (in order), or null when the model response cannot be parsed into exactly the
+   * expected number of sections. The full child content is sent (no truncation):
+   * outlines are allowed to be large.
+   */
+  private async requestOutline(children: ImportChildInfo[]): Promise<string[] | null> {
+    const sections = children
+      .map((c, i) => `--- Input section ${i + 1}: ${c.title} ---\n${this.flattenSection(c.content)}`)
+      .join('\n\n');
+    const system = getPromptText('import_outline_sections')
+      .replace(/\{\{sections\}\}/g, sections)
       .replace(/\{\{language\}\}/g, this.settings.getGlobalLanguage());
 
-    let full = '';
-    await this.client.streamingChat('editor', [{ role: 'system', content: system } as OpenRouterMessage], {
-      onStart: () => {},
-      onChunk: (c) => (full += c),
-      onComplete: () => {},
-      onError: (e) => {
-        throw e;
-      },
-    });
-    return full.trim();
+    const raw = await this.client.chat('editor', system);
+    return this.parseDescriptions(raw, children.length);
+  }
+
+  /**
+   * Flatten a child's `===Title===` outline markers to plain text before it is fed
+   * to the outline pass, so the model summarizes the section instead of echoing its
+   * sub-headings (which would otherwise leak `===...===` into the parent body). The
+   * content is NOT truncated.
+   */
+  private flattenSection(content: string): string {
+    return content.replace(/===\s*(.+?)\s*===/g, '$1').trim();
+  }
+
+  /**
+   * Extract descriptions from `<outline_section index="n">...</outline_section>`
+   * blocks. Matching by explicit index (not order/count of free-form delimiters)
+   * is robust to arbitrarily long, multi-paragraph, quote-heavy text. Returns one
+   * description per child, or null when a required index is missing/empty.
+   *
+   * The single-child case is forgiving: the entire reply describes that one child,
+   * so any tags are stripped and the whole answer is used (the model sometimes
+   * over-tags when the lone child itself has sub-parts).
+   */
+  private parseDescriptions(raw: string, expectedCount: number): string[] | null {
+    if (expectedCount === 1) {
+      const whole = this.sanitizeDescription(raw);
+      return whole.length > 0 ? [whole] : null;
+    }
+
+    const byIndex = new Map<number, string>();
+    const re = /<outline_section\s+index="(\d+)"\s*>([\s\S]*?)<\/outline_section>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(raw)) !== null) {
+      const idx = parseInt(match[1]!, 10);
+      const body = this.sanitizeDescription(match[2]!);
+      if (!byIndex.has(idx) && body.length > 0) {
+        byIndex.set(idx, body);
+      }
+    }
+
+    const descriptions: string[] = [];
+    for (let i = 1; i <= expectedCount; i++) {
+      const body = byIndex.get(i);
+      if (body === undefined) {
+        return null;
+      }
+      descriptions.push(body);
+    }
+    return descriptions;
+  }
+
+  /**
+   * Tidy a description: drop any `===...===` markers (which would create spurious
+   * section boundaries in the parent outline) and any stray outline_section tags,
+   * then collapse leftover whitespace.
+   */
+  private sanitizeDescription(text: string): string {
+    return text
+      .replace(/<\/?outline_section[^>]*>/gi, ' ')
+      .replace(/===.+?===/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   /**

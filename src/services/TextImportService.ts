@@ -26,7 +26,8 @@ import { AssertFlatTemplateCopy } from '../ProjectUtils';
 import { applyConditionalContextItems } from '../ContextFormat';
 import { getPromptText } from '../PromptManager';
 import { ProjectGenerationService } from '../ui/modals/services/ProjectGenerationService';
-import { HierarchicalImportService, SegmentedSpan } from './HierarchicalImportService';
+import { HierarchicalImportService, SegmentedSpan, ImportChildInfo } from './HierarchicalImportService';
+import { SpanGroupingService } from './SpanGroupingService';
 
 export interface FullTextImportHooks {
   status?: (message: string) => void;
@@ -97,20 +98,57 @@ export class TextImportService {
     text: string,
     fileName: string,
     template: ProjectTemplate,
-    hooks?: FullTextImportHooks
+    hooks?: FullTextImportHooks,
+    groupAboveCount: number = 0
   ): Promise<ProjectManager> {
     const importer = new HierarchicalImportService(this.client, this.settings);
 
-    const topLevelLabel = (template.hierarchyLevels[1] || 'parts').toLowerCase();
-    hooks?.status?.(`Finding ${topLevelLabel} in ${fileName}...`);
-    const spans = await importer.segmentByTemplate(text, template, {
+    // The top `groupAboveCount` child levels are realized by upward grouping after
+    // segmentation; the segmenter only handles the marker-anchored level and the
+    // finer (leaf) levels beneath it.
+    const childLevels = template.hierarchyLevels.slice(1);
+    const groupingNames = childLevels.slice(0, groupAboveCount); // outermost -> innermost
+    const segmentationChildLevels = childLevels.slice(groupAboveCount);
+    const rootLabel = template.hierarchyLevels[0] || template.name;
+    const segmentationTemplate = new ProjectTemplate(rootLabel, [rootLabel, ...segmentationChildLevels]);
+
+    const segTopLabel = (segmentationChildLevels[0] || 'parts').toLowerCase();
+    hooks?.status?.(`Finding ${segTopLabel} in ${fileName}...`);
+    const spans = await importer.segmentByTemplate(text, segmentationTemplate, {
       splitStart: (level, parentTitle) => hooks?.splitStart?.(level, parentTitle),
       splitDone: (level, parentTitle, count) => hooks?.splitDone?.(level, parentTitle, count)
     });
-    hooks?.status?.(`Found ${spans.length} ${topLevelLabel} at top level. Building project...`);
+
+    // Drop spans that carry only a heading/title and no actual body text, so
+    // segmentation can never produce title-only scenes with empty content.
+    let topSpans = this.pruneEmptySpans(text, spans);
+    hooks?.status?.(`Found ${topSpans.length} ${segTopLabel}. Building project...`);
+
+    // Realize the coarser grouping layers from innermost outward. Each successful
+    // grouping adds one parent layer; if the model cannot produce a valid grouping
+    // we stop (no bogus single-group layers) and the final template is trimmed to
+    // match what was actually built.
+    const realizedGroupNames: string[] = [];
+    const grouper = new SpanGroupingService(this.client, this.settings);
+    for (let k = groupingNames.length - 1; k >= 0; k--) {
+      const name = groupingNames[k]!;
+      hooks?.status?.(`Grouping ${topSpans.length} into ${name.toLowerCase()}...`);
+      const grouped = await grouper.groupTopSpans(text, topSpans, name);
+      if (!grouped) {
+        break;
+      }
+      topSpans = grouped;
+      realizedGroupNames.unshift(name);
+    }
+
+    const finalChildLevels = [...realizedGroupNames, ...segmentationChildLevels];
+    const finalLevels = [rootLabel, ...finalChildLevels];
+    const finalLayerLengths: (number | null)[] = finalLevels.map(() => null);
+    finalLayerLengths[finalLayerLengths.length - 1] = template.layerLengths[template.layerLengths.length - 1] ?? null;
+    const finalTemplate = new ProjectTemplate(template.name, finalLevels, finalLayerLengths);
 
     const projectTitle = this.baseName(fileName);
-    const project = await this.buildTreeFromSpans(projectTitle, template, text, spans, importer, hooks);
+    const project = await this.buildTreeFromSpans(projectTitle, finalTemplate, text, topSpans, importer, hooks);
     project.setLanguage(this.settings.getLanguage());
 
     // Extract conditional context from the bounded root summary (never the whole
@@ -124,6 +162,79 @@ export class TextImportService {
     }
 
     return project;
+  }
+
+  /**
+   * Recursively remove spans that contain no real body text (only a heading or
+   * the title line, or pure whitespace). A parent that loses all of its children
+   * is kept only if its own verbatim slice still has body text (becoming a leaf);
+   * otherwise it is dropped too. This prevents title-only scenes from being
+   * imported when two structural markers sit back-to-back with nothing between.
+   */
+  private pruneEmptySpans(fullText: string, spans: SegmentedSpan[]): SegmentedSpan[] {
+    const result: SegmentedSpan[] = [];
+    for (const span of spans) {
+      if (span.children && span.children.length > 0) {
+        const prunedChildren = this.pruneEmptySpans(fullText, span.children);
+        if (prunedChildren.length > 0) {
+          result.push({ ...span, children: prunedChildren });
+        } else if (this.spanHasBodyText(fullText, span)) {
+          // All children were empty; keep this span as a verbatim leaf instead.
+          result.push({ title: span.title, startChar: span.startChar, endChar: span.endChar });
+        }
+      } else if (this.spanHasBodyText(fullText, span)) {
+        result.push({ title: span.title, startChar: span.startChar, endChar: span.endChar });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * True when a span's source slice has narrative text beyond its leading
+   * heading/title line. The leading heading line (and any setext underline) is
+   * ignored because it merely repeats the node title.
+   */
+  private spanHasBodyText(fullText: string, span: SegmentedSpan): boolean {
+    const raw = fullText.slice(span.startChar, span.endChar);
+    const lines = raw.split(/\r?\n/);
+
+    let i = 0;
+    while (i < lines.length && lines[i]!.trim().length === 0) {
+      i++;
+    }
+    if (i < lines.length && this.isHeadingOrTitleLine(lines[i]!.trim(), span.title)) {
+      i++;
+      if (i < lines.length && /^(=+|-{3,})$/.test(lines[i]!.trim())) {
+        i++;
+      }
+    }
+
+    return lines.slice(i).join('\n').trim().length > 0;
+  }
+
+  /**
+   * Heuristic match for a structural heading line or a line that simply repeats
+   * the span's title. Kept in sync with StructuralMarkerDetector's signals
+   * (ATX / numbered / thematic-break) plus exact title equality.
+   */
+  private isHeadingOrTitleLine(lineTrim: string, title: string): boolean {
+    if (lineTrim.length === 0) {
+      return false;
+    }
+    const titleTrim = title.trim();
+    if (titleTrim.length > 0 && lineTrim.toLowerCase() === titleTrim.toLowerCase()) {
+      return true;
+    }
+    if (/^#{1,6}\s+/.test(lineTrim)) {
+      return true;
+    }
+    if (/^\d+(?:\.\d+)*[.)]?\s+/.test(lineTrim)) {
+      return true;
+    }
+    if (/^([*_-])(?:\s*\1){2,}$/.test(lineTrim)) {
+      return true;
+    }
+    return false;
   }
 
   private async buildTreeFromSpans(
@@ -140,17 +251,21 @@ export class TextImportService {
     const root = project.rootNode;
     root.setTitle(projectTitle, 'master');
 
-    const buildChildren = async (parentId: string, nodeSpans: SegmentedSpan[]): Promise<string[]> => {
-      const contents: string[] = [];
+    // Build the subtree for a parent, returning each child's title + final content
+    // so the parent can be written as a ===Title=== sectioned outline (the same
+    // deterministic format a normal project uses, so the import is editable like
+    // one: adding a part, regenerating a branch, etc.).
+    const buildChildren = async (parentId: string, nodeSpans: SegmentedSpan[]): Promise<ImportChildInfo[]> => {
+      const infos: ImportChildInfo[] = [];
       for (const span of nodeSpans) {
         const node = project.addNode(span.title, parentId);
 
         let nodeContent: string;
         if (span.children && span.children.length > 0) {
-          const childContents = await buildChildren(node.id, span.children);
-          if (childContents.length > 0) {
-            hooks?.summarizeStart?.(span.title, childContents.length);
-            nodeContent = await importer.summarizeChildrenToParent(childContents);
+          const childInfos = await buildChildren(node.id, span.children);
+          if (childInfos.length > 0) {
+            hooks?.summarizeStart?.(span.title, childInfos.length);
+            nodeContent = await this.outlineFromChildren(importer, childInfos);
             hooks?.summarizeDone?.(span.title);
           } else {
             // No usable children: fall back to the verbatim source slice.
@@ -161,21 +276,35 @@ export class TextImportService {
           nodeContent = fullText.slice(span.startChar, span.endChar).trim();
         }
         node.setContent(nodeContent, 'master');
-        contents.push(nodeContent);
+        infos.push({ title: span.title, content: nodeContent });
       }
-      return contents;
+      return infos;
     };
 
-    const topContents = await buildChildren(root.id, spans);
+    const topInfos = await buildChildren(root.id, spans);
 
-    if (topContents.length > 0) {
-      hooks?.summarizeStart?.(projectTitle, topContents.length);
-      const rootContent = await importer.summarizeChildrenToParent(topContents);
+    if (topInfos.length > 0) {
+      hooks?.summarizeStart?.(projectTitle, topInfos.length);
+      const rootContent = await this.outlineFromChildren(importer, topInfos);
       root.setContent(rootContent, 'master');
       hooks?.summarizeDone?.(projectTitle);
     }
 
     return project;
+  }
+
+  /**
+   * Assemble a parent's content as a `===Title===` sectioned outline, one section
+   * per child, using LLM-written outline descriptions as the bodies. The section
+   * titles are exactly the child titles so deterministic child creation matches
+   * them. Falls back to a short verbatim excerpt per child when the model fails to
+   * return a well-formed, count-matching description list.
+   */
+  private async outlineFromChildren(importer: HierarchicalImportService, children: ImportChildInfo[]): Promise<string> {
+    const bodies = await importer.outlineChildren(children);
+    return children
+      .map((child, i) => `===${child.title}===\n${bodies[i] ?? ''}`)
+      .join('\n\n');
   }
 
   private async extractContextFromDigest(digest: string): Promise<string> {

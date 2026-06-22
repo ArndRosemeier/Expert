@@ -25,6 +25,13 @@ export interface OrchestratorPrompts {
 
     // For extracting conditional context items from an imported document digest/summary
     context_extraction: string;
+
+    // For designing the full hierarchy (names + extra grouping/leaf levels) when auto-building an import template
+    import_template_design: string;
+    // For grouping a flat list of top-level imported sections into coarser parent layers (e.g. chapters -> acts)
+    import_grouping: string;
+    // For turning a structural node's children into ===Title===-style outline section bodies during import
+    import_outline_sections: string;
     
     // For text expansion (generic)
     expand_text_user: string;
@@ -589,6 +596,105 @@ The story is set in modern-day Seattle and is told in a wry, close third-person 
         `.trim(),
         placeholders: ['digest', 'language'],
         description: "Extracts reusable conditional context items (keyword-gated and a few global) from a bounded document digest/summary, in the <trigger>word</trigger>text convention used by the import pipeline."
+    },
+
+    import_template_design: {
+        text: `
+You are designing the editing hierarchy (a tree of abstraction levels) for an imported document so it reads like a normal authored project.
+
+Below is a structural skeleton of the document: the document opening, plus how many sections were physically DETECTED at each nesting level, a few sample titles per level, and size statistics. The deepest detected level's sections are the smallest pieces the document explicitly marks.
+
+SKELETON:
+---
+{{skeleton}}
+---
+
+The document physically marks {{marker_depth}} nesting level(s) (the "detected" levels above). You must KEEP those detected levels, but you may ADD extra levels:
+- ABOVE them (coarser grouping layers, e.g. grouping many chapters into Acts or Parts) when the top detected level has many sibling sections that naturally fall into a few larger groups.
+- BELOW them (finer leaf layers, e.g. splitting long chapters into Scenes) when the smallest detected sections are too large to be good leaves.
+
+A good LEAF (innermost level) is scene-sized: a handful of paragraphs, not a whole chapter. Use the size statistics: if the smallest detected sections average many paragraphs, add a finer leaf level (typically one). Prefer a conventional, SHALLOW hierarchy (usually 2-4 levels total); do not invent layers without a clear reason.
+
+OUTPUT FORMAT — follow EXACTLY:
+<template>
+<projectType>short name for the whole work</projectType>
+<levelsAboveMarkers>0</levelsAboveMarkers>
+<levelsBelowMarkers>0</levelsBelowMarkers>
+<level>outermost</level>
+<level>...</level>
+<level>innermost</level>
+</template>
+
+RULES:
+- Emit one <level> per hierarchy level, ordered OUTERMOST (largest) to INNERMOST (smallest), including the detected ones.
+- <levelsAboveMarkers> = how many leading <level> entries are the NEW coarser grouping layers you added above the detected levels.
+- <levelsBelowMarkers> = how many trailing <level> entries are the NEW finer leaf layers you added below the detected levels.
+- It MUST hold that: levelsAboveMarkers + {{marker_depth}} + levelsBelowMarkers === number of <level> entries.
+- Each level name is a short, singular noun label (e.g. Part, Act, Chapter, Scene, Section). No numbers, counts, or punctuation.
+- <projectType> is a short label for the whole work (e.g. Novel, Report, Manual, Screenplay).
+- Write all names in {{language}}.
+- Output the <template> block only. No markdown fences, no commentary.
+        `.trim(),
+        placeholders: ['skeleton', 'marker_depth', 'language'],
+        description: "Designs the full import hierarchy (project type, ordered level names, and how many extra grouping/leaf levels sit above/below the detected markers), returning strict JSON."
+    },
+
+    import_grouping: {
+        text: `
+You are grouping a flat, ordered list of consecutive sections into a smaller number of coarser parent units called "{{parent_level}}".
+
+The sections are given in reading order. Group CONSECUTIVE sections into contiguous {{parent_level}} units that follow the work's natural large-scale structure (look for cues in the titles and opening text, e.g. a new book/part/act beginning). Every section must belong to exactly one group; groups must be contiguous, in order, with no gaps or overlaps.
+
+SECTIONS:
+---
+{{children}}
+---
+
+OUTPUT FORMAT — follow EXACTLY. Emit one tag per group, nothing else:
+
+<group first="1" last="3">name for this {{parent_level}}</group>
+<group first="4" last="9">name for the next {{parent_level}}</group>
+
+RULES:
+- "first"/"last" are 1-based indices into the SECTIONS list above, inclusive.
+- Groups MUST be contiguous and cover every section exactly once: the first group starts at 1, each next group starts right after the previous one ends, and the last group ends at the final section.
+- Produce at least 2 groups (otherwise grouping is pointless).
+- The tag body is a short, descriptive label in {{language}}.
+- Output the <group> tags only. No markdown fences, no commentary.
+        `.trim(),
+        placeholders: ['parent_level', 'children', 'language'],
+        description: "Groups a flat ordered list of imported sections into contiguous coarser parent units (e.g. chapters into acts), returning strict JSON with 1-based inclusive ranges."
+    },
+
+    import_outline_sections: {
+        text: `
+You are converting an existing document into an editing outline. You are given the ordered child SECTIONS of one parent node. For EACH section, write an OUTLINE description: the kind of planning summary an author writes BEFORE drafting that section — the key events, characters, developments, and purpose — stated definitively (not tentatively). Be as long and detailed as the material warrants; do not artificially shorten.
+
+This is an OUTLINE, not prose. Do NOT copy the text, and do NOT write narration or dialogue. Summarize what happens so the section could be regenerated from your description alone WITHOUT losing information.
+
+If a section's text is itself an outline made of smaller sub-parts, write ONE unified, higher-level summary of the whole section. Do NOT list, label, or reproduce its sub-parts, and NEVER use the "===" marker anywhere in your output.
+
+SECTIONS:
+---
+{{sections}}
+---
+
+OUTPUT FORMAT — follow EXACTLY. Wrap EACH section's description in a numbered tag:
+
+<outline_section index="1">
+description for section 1 (may span multiple paragraphs)
+</outline_section>
+<outline_section index="2">
+description for section 2
+</outline_section>
+
+- Output exactly one block per input section, with index running 1..N (N = the number of input sections).
+- Put nothing before the first tag and no commentary after the last. Do not use markdown fences.
+
+Write every description in {{language}}.
+        `.trim(),
+        placeholders: ['sections', 'language'],
+        description: "Produces one concise outline description per child section of an imported parent node, returned as a strict JSON array of strings (used to build ===Title=== sectioned outline content)."
     },
 
     expand_text_user: {
