@@ -725,6 +725,7 @@ function showActionsDropdown(node: DocumentNode): void {
                             'chat': 'chat-node-btn',
                             'node-edit-chat': 'xml-story-creation-btn',
                             'guided-review': 'guided-review-btn',
+                            'node-statistics': 'node-statistics-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1178,6 +1179,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                             'chat': 'chat-node-btn',
                             'node-edit-chat': 'xml-story-creation-btn',
                             'guided-review': 'guided-review-btn',
+                            'node-statistics': 'node-statistics-btn',
                             'polish-text': 'polish-text-btn',
                             'edit-context': 'edit-context-btn',
                             'copy-to-new-project': 'copy-to-new-project-btn',
@@ -1318,6 +1320,9 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     </button>
                     <button class="action-btn" data-action="guided-review">
                         🔎 Guided Review
+                    </button>
+                    <button class="action-btn" data-action="node-statistics">
+                        📊 Statistics
                     </button>
                     <button class="action-btn" data-action="polish-text">
                         🎨 Polish Text
@@ -3958,6 +3963,19 @@ This action cannot be undone.`;
             }
             break;
 
+        case 'node-statistics-btn':
+            {
+                const node = projectManager.findNodeById(selectedNodeId);
+                if (!node) return;
+                void import('./modals/NodeStatisticsModal').then(({ openNodeStatisticsModal }) => {
+                    openNodeStatisticsModal(node);
+                }).catch((error: unknown) => {
+                    console.error('Failed to open Statistics modal:', error);
+                    alert('Failed to open Statistics. Please try again.');
+                });
+            }
+            break;
+
         case 'polish-text-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
@@ -4750,9 +4768,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
             <!-- Actions Group -->
             <div class="top-bar-group actions-group">
 
-                <button id="generation-levels-help-btn" class="help-button" title="Smart Generation Assistant" style="width: 2rem; height: 2rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;">
-                    ${AI_ASSISTANT_EMOJI}
-                </button>
                 <div id="deterministic-child-creation-container" style="display: none; align-items: center; margin-right: 0.5rem;">
                     <input type="checkbox" id="deterministic-child-creation-checkbox" ${deterministicChildCreationState ? 'checked' : ''} style="margin-right: 0.5rem; cursor: pointer;" />
                     <label for="deterministic-child-creation-checkbox" style="font-size: 0.9rem; color: #374151; cursor: pointer; user-select: none; white-space: nowrap;">Deterministic child creation</label>
@@ -5934,19 +5949,6 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         window.open('./creation-loop.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
     },
     
-    'generation-levels-help-btn': (_e: Event) => {
-        if (!projectManager || !selectedNodeId) return;
-        const node = projectManager.findNodeById(selectedNodeId);
-        if (!node) return;
-        
-        void import('./modals/ModalFactory').then(({ openConversationalGenerationModal }) => {
-            void openConversationalGenerationModal(node);
-        }).catch((error: unknown) => {
-            console.error('Failed to open Smart Generation modal:', error);
-            alert('Failed to open Smart Generation dialog. Please try again.');
-        });
-    },
-
     'xml-story-creation-btn': (_e: Event) => {
         // XML Story Creation button clicked - initialize with current node data
         if (!projectManager || !selectedNodeId) {
