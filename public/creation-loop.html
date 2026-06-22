@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expert - How Generation Works</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #3b82f6;
+            --background-color: #ffffff;
+            --surface-color: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --creator-color: #6366f1;
+            --prose-color: #8b5cf6;
+            --rater-color: #0ea5e9;
+            --editor-color: #f59e0b;
+            --radius: 0.5rem;
+            --radius-lg: 0.75rem;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--surface-color);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            padding: 1.75rem 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+        .header-content { max-width: 1100px; margin: 0 auto; }
+        .header h1 { font-size: 1.6rem; font-weight: 600; display: flex; align-items: center; gap: 0.6rem; }
+        .header p { margin-top: 0.4rem; opacity: 0.9; font-size: 1rem; max-width: 70ch; }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+        .lead {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            max-width: 75ch;
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1rem;
+            color: var(--text-primary);
+        }
+
+        /* Role cards */
+        .roles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        .role-card {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-top: 4px solid var(--c, var(--primary-color));
+            border-radius: var(--radius-lg);
+            padding: 1.1rem 1.2rem;
+            box-shadow: var(--shadow);
+        }
+        .role-card .role-head { display: flex; align-items: center; gap: 0.6rem; }
+        .role-card .role-emoji { font-size: 1.6rem; }
+        .role-card .role-name { font-weight: 600; font-size: 1.05rem; }
+        .role-card .role-tag {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--c, var(--primary-color)); font-weight: 700; margin-top: 0.1rem;
+        }
+        .role-card p { color: var(--text-secondary); font-size: 0.92rem; margin-top: 0.6rem; }
+        .role-creator { --c: var(--creator-color); }
+        .role-prose   { --c: var(--prose-color); }
+        .role-rater   { --c: var(--rater-color); }
+        .role-editor  { --c: var(--editor-color); }
+
+        /* Stage layout */
+        .stage {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1.5rem;
+            align-items: start;
+            margin-top: 1rem;
+        }
+        @media (max-width: 820px) { .stage { grid-template-columns: 1fr; } }
+
+        .flow { display: flex; flex-direction: column; align-items: center; }
+
+        .node {
+            width: 100%;
+            max-width: 460px;
+            background: var(--background-color);
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 0.9rem 1.1rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+            opacity: 0.55;
+            position: relative;
+        }
+        .node .node-title { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+        .node .node-sub { color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.2rem; }
+        .node .pill {
+            font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            padding: 0.1rem 0.45rem; border-radius: 999px; color: white; background: var(--secondary-color);
+        }
+        .node.active {
+            opacity: 1;
+            border-color: var(--accent-color);
+            transform: scale(1.03);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), var(--shadow-lg);
+        }
+        .node.done { opacity: 0.85; border-color: var(--success-color); }
+
+        .node.n-create.active { border-color: var(--creator-color); box-shadow: 0 0 0 4px rgba(99,102,241,0.18), var(--shadow-lg); }
+        .node.n-rate.active   { border-color: var(--rater-color);   box-shadow: 0 0 0 4px rgba(14,165,233,0.18), var(--shadow-lg); }
+        .node.n-edit.active   { border-color: var(--editor-color);  box-shadow: 0 0 0 4px rgba(245,158,11,0.18), var(--shadow-lg); }
+        .node.n-revise.active { border-color: var(--prose-color);   box-shadow: 0 0 0 4px rgba(139,92,246,0.18), var(--shadow-lg); }
+
+        .connector {
+            width: 2px;
+            height: 28px;
+            background: var(--border-color);
+            position: relative;
+            transition: background 0.3s ease;
+        }
+        .connector.active { background: var(--accent-color); }
+        .connector::after {
+            content: "";
+            position: absolute;
+            bottom: -1px; left: 50%; transform: translateX(-50%);
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 7px solid var(--border-color);
+            transition: border-top-color 0.3s ease;
+        }
+        .connector.active::after { border-top-color: var(--accent-color); }
+        .connector.loop {
+            border-left: 2px dashed var(--border-color);
+            background: transparent;
+            width: auto;
+            align-self: stretch;
+        }
+
+        .decision {
+            width: 100%; max-width: 460px;
+            text-align: center;
+            background: #fffbeb;
+            border: 2px dashed var(--warning-color);
+            border-radius: var(--radius-lg);
+            padding: 0.7rem 1rem;
+            font-weight: 600;
+            color: #92400e;
+            opacity: 0.55;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .decision.active { opacity: 1; transform: scale(1.02); }
+
+        .branches { display: flex; gap: 1rem; width: 100%; max-width: 460px; }
+        .branch { flex: 1; display: flex; flex-direction: column; align-items: center; }
+        .branch-label {
+            font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--text-muted); margin-bottom: 0.3rem;
+        }
+        .branch.yes .branch-label { color: var(--success-color); }
+        .branch.no  .branch-label { color: var(--editor-color); }
+
+        .repeat-note {
+            font-size: 0.78rem; color: var(--text-muted); font-style: italic;
+            margin-top: 0.3rem; text-align: center;
+        }
+
+        /* Side panel */
+        .panel {
+            position: sticky; top: 1rem;
+            display: flex; flex-direction: column; gap: 1rem;
+        }
+        .narration {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.1rem;
+            box-shadow: var(--shadow);
+            min-height: 140px;
+        }
+        .narration .round-badge {
+            display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--primary-color); background: #eff6ff;
+            padding: 0.15rem 0.55rem; border-radius: 999px; margin-bottom: 0.6rem;
+        }
+        .narration .narration-text { font-size: 1rem; color: var(--text-primary); }
+
+        .scoreboard {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.1rem;
+            box-shadow: var(--shadow);
+        }
+        .scoreboard h3 { font-size: 0.95rem; margin-bottom: 0.7rem; }
+        .score-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.4rem 0; border-bottom: 1px solid var(--border-color);
+        }
+        .score-row:last-child { border-bottom: none; }
+        .score-name { font-size: 0.85rem; }
+        .score-name .metric-tag {
+            font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .score-val { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; }
+        .score-mark { width: 1.1rem; text-align: center; }
+        .score-row.pass .score-val { color: var(--success-color); }
+        .score-row.fail .score-val { color: var(--error-color); }
+
+        /* Controls */
+        .controls {
+            display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .ctrl-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: var(--background-color);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        .ctrl-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .ctrl-btn.primary { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .ctrl-btn.primary:hover { background: var(--accent-color); }
+        .ctrl-btn:disabled { opacity: 0.45; cursor: default; }
+        .progress-text { color: var(--text-muted); font-size: 0.85rem; margin-left: auto; }
+
+        .footer {
+            margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
+            color: var(--text-secondary); font-size: 0.9rem;
+        }
+        .footer a { color: var(--primary-color); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .node, .connector, .decision, .connector::after { transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>⚡ How Generation Works</h1>
+            <p>What happens behind the scenes when you press the Generate button.</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <p class="lead">
+            Expert does not just ask an AI to write once and hand you the result. Instead, it runs a small team of
+            specialised AI roles in a short loop: one writes, one grades the writing against your quality criteria,
+            and one suggests fixes. The loop repeats until the writing is good enough, or until it runs out of attempts
+            and keeps the best version. Each role is a separate "purpose" and can even be a different AI model.
+        </p>
+
+        <div class="section-title">The four roles (purposes)</div>
+        <div class="roles">
+            <div class="role-card role-creator">
+                <div class="role-head">
+                    <span class="role-emoji">✍️</span>
+                    <div>
+                        <div class="role-name">Creator</div>
+                        <div class="role-tag">writes structure</div>
+                    </div>
+                </div>
+                <p>Writes the draft for structural nodes (an outline, a chapter broken into sections). Also does the rewrites between rounds.</p>
+            </div>
+            <div class="role-card role-prose">
+                <div class="role-head">
+                    <span class="role-emoji">📖</span>
+                    <div>
+                        <div class="role-name">Prose</div>
+                        <div class="role-tag">writes the scene</div>
+                    </div>
+                </div>
+                <p>The writer for the finished, lowest-level text (a leaf scene). Used instead of the Creator when the node is a leaf.</p>
+            </div>
+            <div class="role-card role-rater">
+                <div class="role-head">
+                    <span class="role-emoji">🎯</span>
+                    <div>
+                        <div class="role-name">Rater</div>
+                        <div class="role-tag">grades the draft</div>
+                    </div>
+                </div>
+                <p>Scores the draft against each of your quality criteria, giving every one a mark from 1 to 10.</p>
+            </div>
+            <div class="role-card role-editor">
+                <div class="role-head">
+                    <span class="role-emoji">🛠️</span>
+                    <div>
+                        <div class="role-name">Editor</div>
+                        <div class="role-tag">writes fix notes</div>
+                    </div>
+                </div>
+                <p>Looks at whatever failed its goal and turns those scores into concrete, actionable notes for the next rewrite.</p>
+            </div>
+        </div>
+
+        <div class="section-title">The loop, step by step</div>
+        <div class="stage">
+            <div class="flow">
+                <div class="node n-start" id="n-start">
+                    <div class="node-title">🟢 You press Generate</div>
+                    <div class="node-sub">On the node you selected.</div>
+                </div>
+                <div class="connector" id="c-start"></div>
+
+                <div class="node n-create" id="n-create">
+                    <div class="node-title">✍️ Write a draft <span class="pill" id="writer-pill">Creator</span></div>
+                    <div class="node-sub">A leaf scene is written by <strong>Prose</strong>; a structural node by <strong>Creator</strong>.</div>
+                </div>
+                <div class="connector" id="c-create"></div>
+
+                <div class="node n-rate" id="n-rate">
+                    <div class="node-title">🎯 Rate the draft <span class="pill" style="background: var(--rater-color)">Rater</span></div>
+                    <div class="node-sub">Score every criterion 1-10, then add automatic metric checks.</div>
+                </div>
+                <div class="connector" id="c-rate"></div>
+
+                <div class="decision" id="n-decide">Did every criterion reach its goal?</div>
+
+                <div class="branches" style="margin-top: 0.5rem;">
+                    <div class="branch yes">
+                        <div class="branch-label">Yes</div>
+                        <div class="node n-winner" id="n-winner">
+                            <div class="node-title">✅ Saved as content</div>
+                            <div class="node-sub">This draft becomes the node's text.</div>
+                        </div>
+                    </div>
+                    <div class="branch no">
+                        <div class="branch-label">No, attempts left</div>
+                        <div class="node n-edit" id="n-edit">
+                            <div class="node-title">🛠️ Fix notes <span class="pill" style="background: var(--editor-color)">Editor</span></div>
+                            <div class="node-sub">Turn the failing scores into clear instructions.</div>
+                        </div>
+                        <div class="connector" id="c-edit"></div>
+                        <div class="node n-revise" id="n-revise">
+                            <div class="node-title">♻️ Rewrite <span class="pill" id="reviser-pill">Creator</span></div>
+                            <div class="node-sub">Rewrite the draft using the Editor's notes.</div>
+                        </div>
+                        <div class="repeat-note">↑ goes back to the Rater for another round</div>
+                    </div>
+                </div>
+
+                <div class="node n-best" id="n-best" style="margin-top: 1.5rem;">
+                    <div class="node-title">🏆 Out of attempts?</div>
+                    <div class="node-sub">After the last round (3 by default), if nothing fully passed, the best-scoring attempt is kept automatically.</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="narration">
+                    <span class="round-badge" id="round-badge">Ready</span>
+                    <div class="narration-text" id="narration-text">Press Play to watch a single Generate click unfold.</div>
+                </div>
+                <div class="scoreboard">
+                    <h3>Quality scoreboard</h3>
+                    <div id="score-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="ctrl-btn primary" id="btn-play">▶ Play</button>
+            <button class="ctrl-btn" id="btn-prev">◀ Prev</button>
+            <button class="ctrl-btn" id="btn-next">Next ▶</button>
+            <button class="ctrl-btn" id="btn-replay">↻ Replay</button>
+            <span class="progress-text" id="progress-text"></span>
+        </div>
+
+        <div class="footer">
+            <p>
+                This is the loop for a single node. Generating a whole project simply repeats this loop, one node at a time,
+                across the tree. For everything else, see the
+                <a href="./manual.html">User Manual</a>.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Quality criteria used for the illustrative scoreboard.
+        // actual[] holds the score the Rater gives in round 1, 2, 3.
+        const CRITERIA = [
+            { name: "Vivid imagery", goal: 8, metric: false, actual: [6, 7, 8] },
+            { name: "Natural dialogue", goal: 7, metric: false, actual: [7, 7, 8] },
+            { name: "Em-dash limit", goal: 9, metric: true, actual: [5, 8, 9] }
+        ];
+
+        // The animation script: an ordered list of steps the controller walks through.
+        // active: the diagram element to highlight. round: 1-based round, or null.
+        // scoreRound: which round's scores to show (1..3), or 0 to clear.
+        const STEPS = [
+            { active: "n-start",  conn: "c-start",  round: null, scoreRound: 0, branch: null,
+              badge: "Start", text: "You select a node and press Generate. Expert prepares your quality criteria and the writing brief." },
+            { active: "n-create", conn: "c-create", round: 1, scoreRound: 0, branch: null,
+              badge: "Round 1", text: "The Creator writes the first draft. If this node is a finished scene (a leaf), the Prose model writes it instead." },
+            { active: "n-rate",   conn: "c-rate",   round: 1, scoreRound: 1, branch: null,
+              badge: "Round 1", text: "The Rater grades the draft. Every criterion gets a mark from 1 to 10, and automatic metrics (like an em-dash limit) are checked too." },
+            { active: "n-decide", conn: null,       round: 1, scoreRound: 1, branch: "no",
+              badge: "Round 1", text: "A goal is strict: the score must reach it. Some criteria fell short and there are attempts left, so the loop continues." },
+            { active: "n-edit",   conn: "c-edit",   round: 1, scoreRound: 1, branch: "no",
+              badge: "Round 1", text: "The Editor reads the failing scores and turns them into concrete, actionable fix-it notes." },
+            { active: "n-revise", conn: null,       round: 1, scoreRound: 1, branch: "no",
+              badge: "Round 1", text: "The Creator (or Prose) rewrites the draft, guided by the Editor's notes. The new draft goes back to the Rater." },
+            { active: "n-rate",   conn: "c-rate",   round: 2, scoreRound: 2, branch: null,
+              badge: "Round 2", text: "The Rater grades the rewritten draft. Scores improved, but not everything has reached its goal yet." },
+            { active: "n-edit",   conn: "c-edit",   round: 2, scoreRound: 2, branch: "no",
+              badge: "Round 2", text: "Still short on one criterion, so the Editor writes another round of focused fix-it notes." },
+            { active: "n-revise", conn: null,       round: 2, scoreRound: 2, branch: "no",
+              badge: "Round 2", text: "Another rewrite addresses the remaining issue, then heads back to the Rater one more time." },
+            { active: "n-rate",   conn: "c-rate",   round: 3, scoreRound: 3, branch: null,
+              badge: "Round 3", text: "The Rater grades again. This time every criterion has reached its goal." },
+            { active: "n-decide", conn: null,       round: 3, scoreRound: 3, branch: "yes",
+              badge: "Round 3", text: "All goals are met. The loop ends successfully." },
+            { active: "n-winner", conn: null,       round: 3, scoreRound: 3, branch: "yes",
+              badge: "Done", text: "This draft is promoted to the node's content. You can still review every attempt in the node's history." },
+            { active: "n-best",   conn: null,       round: null, scoreRound: 0, branch: null,
+              badge: "Good to know", text: "If the attempts run out (3 by default) without a full pass, Expert keeps the best-scoring attempt automatically, so you always get a result." }
+        ];
+
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const STEP_MS = 2600;
+
+        let index = 0;
+        let timer = null;
+        let playing = false;
+
+        const scoreListEl = document.getElementById("score-list");
+        const roundBadgeEl = document.getElementById("round-badge");
+        const narrationEl = document.getElementById("narration-text");
+        const progressEl = document.getElementById("progress-text");
+        const btnPlay = document.getElementById("btn-play");
+        const btnPrev = document.getElementById("btn-prev");
+        const btnNext = document.getElementById("btn-next");
+        const btnReplay = document.getElementById("btn-replay");
+
+        const ALL_NODES = ["n-start", "n-create", "n-rate", "n-decide", "n-winner", "n-edit", "n-revise", "n-best"];
+        const ALL_CONNS = ["c-start", "c-create", "c-rate", "c-edit"];
+
+        function renderScores(round) {
+            scoreListEl.innerHTML = "";
+            CRITERIA.forEach(function (c) {
+                const row = document.createElement("div");
+                row.className = "score-row";
+                if (round >= 1) {
+                    const actual = c.actual[round - 1];
+                    const pass = actual >= c.goal;
+                    row.classList.add(pass ? "pass" : "fail");
+                    row.innerHTML =
+                        '<span class="score-name">' + c.name +
+                        (c.metric ? ' <span class="metric-tag">(metric)</span>' : '') + '</span>' +
+                        '<span class="score-val"><span>' + actual + ' / ' + c.goal + '</span>' +
+                        '<span class="score-mark">' + (pass ? '✓' : '✗') + '</span></span>';
+                } else {
+                    row.innerHTML =
+                        '<span class="score-name">' + c.name +
+                        (c.metric ? ' <span class="metric-tag">(metric)</span>' : '') + '</span>' +
+                        '<span class="score-val"><span style="color:var(--text-muted)">goal ' + c.goal + '</span>' +
+                        '<span class="score-mark">–</span></span>';
+                }
+                scoreListEl.appendChild(row);
+            });
+        }
+
+        function applyStep(i) {
+            const step = STEPS[i];
+
+            ALL_NODES.forEach(function (id) {
+                const el = document.getElementById(id);
+                el.classList.remove("active");
+                el.classList.remove("done");
+            });
+            ALL_CONNS.forEach(function (id) {
+                document.getElementById(id).classList.remove("active");
+            });
+
+            // Mark nodes visited so far as "done" for a sense of progress.
+            for (let s = 0; s < i; s++) {
+                const el = document.getElementById(STEPS[s].active);
+                if (el && STEPS[s].active !== step.active) el.classList.add("done");
+            }
+            const activeEl = document.getElementById(step.active);
+            activeEl.classList.remove("done");
+            activeEl.classList.add("active");
+
+            if (step.conn) document.getElementById(step.conn).classList.add("active");
+
+            roundBadgeEl.textContent = step.badge;
+            narrationEl.textContent = step.text;
+            renderScores(step.scoreRound);
+
+            progressEl.textContent = "Step " + (i + 1) + " of " + STEPS.length;
+            btnPrev.disabled = (i === 0);
+            btnNext.disabled = (i === STEPS.length - 1);
+        }
+
+        function setPlaying(on) {
+            playing = on;
+            btnPlay.textContent = on ? "⏸ Pause" : "▶ Play";
+            btnPlay.classList.toggle("primary", !on);
+            if (on) {
+                timer = setInterval(function () {
+                    if (index >= STEPS.length - 1) { setPlaying(false); return; }
+                    index++;
+                    applyStep(index);
+                }, STEP_MS);
+            } else if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+        }
+
+        function goTo(i) {
+            index = Math.max(0, Math.min(STEPS.length - 1, i));
+            applyStep(index);
+        }
+
+        btnPlay.addEventListener("click", function () {
+            if (index >= STEPS.length - 1) { goTo(0); }
+            setPlaying(!playing);
+        });
+        btnPrev.addEventListener("click", function () { setPlaying(false); goTo(index - 1); });
+        btnNext.addEventListener("click", function () { setPlaying(false); goTo(index + 1); });
+        btnReplay.addEventListener("click", function () { setPlaying(false); goTo(0); });
+
+        // Reduced-motion users never auto-play; the manual Prev/Next controls still work.
+        void reduceMotion;
+
+        goTo(0);
+    </script>
+</body>
+</html>

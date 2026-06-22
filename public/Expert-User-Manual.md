@@ -274,6 +274,8 @@ Every generated node goes through:
 3. **Editing**: Iterative improvement suggestions
 4. **Refinement**: Multiple cycles until quality goals met
 
+> **See it in motion:** For a simple, animated walkthrough of exactly what happens when you press the Generate button (the create → rate → edit → rewrite loop and the four AI roles), open [How Generation Works](./creation-loop.html). It is also reachable from the small **i** button next to the Generate button.
+
 ---
 
 ## AI-Powered Content Creation

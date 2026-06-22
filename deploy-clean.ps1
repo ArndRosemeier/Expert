@@ -33,7 +33,8 @@ try {
             "dist/.htaccess", 
             "dist/pdf.worker.min.mjs",
             "dist/keys.html",
-            "dist/manual.html"
+            "dist/manual.html",
+            "dist/creation-loop.html"
         )
         
         foreach ($file in $criticalFiles) {

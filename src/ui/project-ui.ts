@@ -4757,8 +4757,11 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                     <input type="checkbox" id="deterministic-child-creation-checkbox" ${deterministicChildCreationState ? 'checked' : ''} style="margin-right: 0.5rem; cursor: pointer;" />
                     <label for="deterministic-child-creation-checkbox" style="font-size: 0.9rem; color: #374151; cursor: pointer; user-select: none; white-space: nowrap;">Deterministic child creation</label>
                 </div>
-                <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">
+                <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 0.4rem;">
                     ⚡ Generate
+                </button>
+                <button id="generation-explainer-btn" class="help-button top-bar-element" title="How generation works" style="width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.8rem; font-style: italic; font-weight: 700; font-family: Georgia, 'Times New Roman', serif; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 1rem;">
+                    i
                 </button>
                 <button id="open-reader-btn" class="button button-primary top-bar-element" style="margin-right: 1rem;">📖 Reader View</button>
             </div>
@@ -5925,6 +5928,10 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         void handleUnifiedGeneration(node);
+    },
+
+    'generation-explainer-btn': (_e: Event) => {
+        window.open('./creation-loop.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
     },
     
     'generation-levels-help-btn': (_e: Event) => {
