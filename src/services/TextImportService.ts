@@ -81,7 +81,7 @@ export class TextImportService {
     AssertFlatTemplateCopy(project);
 
     const root = project.rootNode;
-    root.setTitle(title, 'master');
+    root.setTitleWithTags(title, ['master', 'imported']);
     root.setContent(result.content, 'master');
     applyConditionalContextItems(root, result.context);
 
@@ -249,7 +249,10 @@ export class TextImportService {
     AssertFlatTemplateCopy(project);
 
     const root = project.rootNode;
-    root.setTitle(projectTitle, 'master');
+    // The root has no parent, so it gets only the 'imported' marker (no
+    // consistent_to_parent). Set unconditionally so the marker is present even
+    // when the root title already matches the project title.
+    root.setTitleWithTags(projectTitle, ['master', 'imported']);
 
     // Build the subtree for a parent, returning each child's title + final content
     // so the parent can be written as a ===Title=== sectioned outline (the same
@@ -275,7 +278,11 @@ export class TextImportService {
           // Leaf: keep the exact source slice verbatim.
           nodeContent = fullText.slice(span.startChar, span.endChar).trim();
         }
-        node.setContent(nodeContent, 'master');
+        // Imported nodes are consistent with their parent by construction (the
+        // parent's outline is generated from these children), so we pre-apply the
+        // consistent_to_parent tag the coherence check would otherwise add, plus
+        // an 'imported' marker.
+        node.setContentWithTags(nodeContent, ['master', 'imported', 'consistent_to_parent']);
         infos.push({ title: span.title, content: nodeContent });
       }
       return infos;

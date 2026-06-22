@@ -23,6 +23,17 @@ export interface ImportChildInfo {
   content: string;
 }
 
+/**
+ * How many times the batched outline call (all children in one request) is
+ * retried before falling back to per-child outlining. A malformed batch reply is
+ * usually a transient model hiccup, so retrying it is far cheaper than failing
+ * the whole import.
+ */
+const OUTLINE_BATCH_ATTEMPTS = 3;
+
+/** How many times each per-child outline call is retried before giving up. */
+const OUTLINE_CHILD_ATTEMPTS = 2;
+
 export class HierarchicalImportService {
   private readonly segmentation: TextSegmentationService;
   private readonly markerDetector: StructuralMarkerDetector;
@@ -95,13 +106,35 @@ export class HierarchicalImportService {
       return [];
     }
 
-    const descriptions = await this.requestOutline(children);
-    if (!descriptions) {
-      // No silent, mangled fallback: a broken outline is worse than a failed
-      // import. Fail loudly so the user can retry.
-      throw new Error(
-        `Outline generation failed: the model did not return ${children.length} well-formed section descriptions. Please retry the import.`
-      );
+    // 1. Retry the batched request a few times: a malformed reply is usually
+    //    transient bad luck, so we recover automatically instead of aborting the
+    //    whole import.
+    for (let attempt = 1; attempt <= OUTLINE_BATCH_ATTEMPTS; attempt++) {
+      const descriptions = await this.requestOutline(children);
+      if (descriptions) {
+        return descriptions;
+      }
+    }
+
+    // 2. The batch keeps coming back malformed (often one bad section breaks the
+    //    whole parse). Outline each child on its own instead. The single-child
+    //    pass is forgiving - the entire reply describes that one child - so this
+    //    yields real, fully usable descriptions, never a mangled excerpt.
+    const descriptions: string[] = [];
+    for (const child of children) {
+      let one: string[] | null = null;
+      for (let attempt = 1; attempt <= OUTLINE_CHILD_ATTEMPTS && !one; attempt++) {
+        one = await this.requestOutline([child]);
+      }
+      if (!one) {
+        // Only a child the model could not describe at all (empty reply) fails
+        // the import. A broken outline is worse than a failed import, so we stay
+        // loud rather than inventing content.
+        throw new Error(
+          `Outline generation failed for section "${child.title}" after ${OUTLINE_BATCH_ATTEMPTS} batch and ${OUTLINE_CHILD_ATTEMPTS} single attempts. Please retry the import.`
+        );
+      }
+      descriptions.push(one[0]!);
     }
     return descriptions;
   }
