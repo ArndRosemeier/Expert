@@ -66,6 +66,9 @@ Expert is a sophisticated AI-powered hierarchical document generation system des
 
 ### OpenRouter Configuration
 
+**First-Run Wizard (new users):**
+On first launch, a short two-step onboarding wizard appears instead of the full Settings panel. Step 1 asks for your OpenRouter API key (with a link to create one); step 2 lets you pick a single model that is applied to all four roles so you can start immediately. The wizard prefers OpenRouter's "latest" model aliases (which always track the newest version), falling back to the full catalog if none are available. Once finished, it takes you straight to creating your first project. You can later assign a different model per role in Settings (see below).
+
 **Setup Process:**
 1. Obtain an API key from [OpenRouter.ai](https://openrouter.ai)
 2. In Expert Settings → AI Model Configuration

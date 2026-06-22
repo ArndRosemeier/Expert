@@ -9,6 +9,7 @@ import { AddChildNodeModal, AddChildNodeModalConfig } from './AddChildNodeModal'
 import { ConversationalGenerationModal, ConversationalGenerationModalConfig } from './ConversationalGenerationModal';
 import { XMLStoryModal, XMLStoryModalConfig } from './XMLStoryModal';
 import { GuidedReviewModal, GuidedReviewModalConfig } from './GuidedReviewModal';
+import { OnboardingWizardModal } from './OnboardingWizardModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
 import { IModal } from './types/ModalTypes';
@@ -125,6 +126,16 @@ export class ModalFactory {
             void modal.open();
         }
 
+        return modal;
+    }
+
+    /**
+     * Creates and opens the first-run onboarding wizard.
+     * @param onComplete invoked after the user finishes the wizard (e.g. to open New Project)
+     */
+    public createOnboardingWizard(onComplete?: () => void | Promise<void>): OnboardingWizardModal {
+        const modal = new OnboardingWizardModal(this.dependencies.modelSelector, onComplete);
+        void modal.open();
         return modal;
     }
 
@@ -600,6 +611,13 @@ export function getDefaultModalFactory(): ModalFactory {
  */
 export function openSettingsModal(): SettingsModal {
     return getDefaultModalFactory().createSettingsModal();
+}
+
+/**
+ * Convenience function to open the first-run onboarding wizard using the default factory
+ */
+export function openOnboardingWizard(onComplete?: () => void | Promise<void>): OnboardingWizardModal {
+    return getDefaultModalFactory().createOnboardingWizard(onComplete);
 }
 
 /**

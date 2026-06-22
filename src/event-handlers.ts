@@ -1,6 +1,6 @@
 import { getElementById, newProjectModalContainer, testModalContainer, validateDOMElements } from './ui/dom-elements';
 import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
-import { openSettingsModal, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
+import { openSettingsModal, openOnboardingWizard, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
 import { DocumentNode, GenerationSession, ContentVersion, ConditionLogicOperator, ConditionalContextCondition } from './DocumentNode';
@@ -1482,7 +1482,11 @@ export async function initialize() {
     });
 
     if (!modelSelector.getApiKey() || !modelSelector.areAllModelsSelected()) {
-        openSettingsModal();
+        // First-run: guide the user through the focused onboarding wizard instead of
+        // dropping them into the dense Settings modal. After finishing, we leave the
+        // user on the empty workspace so they can decide what to do next (the visible
+        // "New Project" button is right there) rather than forcing a modal on them.
+        openOnboardingWizard();
     } else if (!state.getActiveProject()) {
         const settingsManager = state.getSettingsManager();
         if (settingsManager) {

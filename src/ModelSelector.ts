@@ -123,6 +123,16 @@ export class ModelSelector {
         
         // Update button states after successful save
         this.updateButtonStates();
+
+        // Automatically (re)load the catalog whenever a well-formed key is entered,
+        // so the manual "Fetch Models" step is no longer required.
+        if (isApiKeyFormatValid(this.apiKey)) {
+          try {
+            await this.fetchModels();
+          } catch {
+            // fetchModels already surfaces the failure in the UI via update()
+          }
+        }
       } catch (error) {
         console.error('❌ CRITICAL: Failed to save OpenRouter API key:', error);
         // Show user-visible error
@@ -1525,6 +1535,36 @@ export class ModelSelector {
 
   public getApiKey(): string {
     return this.apiKey;
+  }
+
+  /**
+   * Programmatically set and persist the OpenRouter API key, then automatically
+   * fetch the model catalog so the selector is immediately usable (no manual
+   * "Fetch Models" step). Used by the onboarding wizard and any other code that
+   * changes the key outside the rendered selector UI.
+   *
+   * Throws if the key is well-formed but the catalog fetch fails, so callers can
+   * surface a clear validation error.
+   */
+  public async setApiKey(key: string): Promise<void> {
+    this.apiKey = key;
+    const storage = await this.storageService;
+    await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
+    if (isApiKeyFormatValid(this.apiKey)) {
+      await this.fetchModels();
+    } else {
+      this.fetched = false;
+      if (this.root) {
+        this.update();
+      }
+    }
+  }
+
+  /**
+   * Returns the currently loaded model catalog (empty until a successful fetch).
+   */
+  public getModels(): OpenRouterModel[] {
+    return this.models;
   }
 
   /**
