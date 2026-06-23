@@ -3227,10 +3227,15 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Single-knob: a ladder rung sets draft, content, and coherence in one step.
     // Autofix severity is intentionally untouched - it is an advanced-only setting.
     const setDepth = (level: number) => {
-        const coherence = Math.min(level, maxCoherenceLevel);
-
         draftLevelState = level;
         contentLevelState = level;
+        // Coherence dropdown stores the PARENT level whose children are checked
+        // (see coherence-level-selector options and UnifiedGenerationService). When
+        // expanding below this node, target the parent of the deepest draft level.
+        const coherence = level > node.level
+            ? Math.min(level - 1, maxCoherenceLevel)
+            : -1;
+
         coherenceLevelState = coherence;
 
         if (draftLevelSelector) draftLevelSelector.value = level.toString();
