@@ -85,6 +85,11 @@
             color: var(--c, var(--primary-color)); font-weight: 700; margin-top: 0.1rem;
         }
         .role-card p { color: var(--text-secondary); font-size: 0.92rem; margin-top: 0.6rem; }
+        .role-card .role-model {
+            font-size: 0.85rem; margin-top: 0.7rem; padding-top: 0.6rem;
+            border-top: 1px dashed var(--border-color);
+        }
+        .role-card .role-model strong { color: var(--c, var(--primary-color)); }
         .role-creator { --c: var(--creator-color); }
         .role-prose   { --c: var(--prose-color); }
         .role-rater   { --c: var(--rater-color); }
@@ -131,7 +136,6 @@
         .node.n-create.active { border-color: var(--creator-color); box-shadow: 0 0 0 4px rgba(99,102,241,0.18), var(--shadow-lg); }
         .node.n-rate.active   { border-color: var(--rater-color);   box-shadow: 0 0 0 4px rgba(14,165,233,0.18), var(--shadow-lg); }
         .node.n-edit.active   { border-color: var(--editor-color);  box-shadow: 0 0 0 4px rgba(245,158,11,0.18), var(--shadow-lg); }
-        .node.n-revise.active { border-color: var(--prose-color);   box-shadow: 0 0 0 4px rgba(139,92,246,0.18), var(--shadow-lg); }
 
         .connector {
             width: 2px;
@@ -228,34 +232,25 @@
         .score-row.pass .score-val { color: var(--success-color); }
         .score-row.fail .score-val { color: var(--error-color); }
 
-        /* Controls */
-        .controls {
-            display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
-            margin: 1.5rem 0 0.5rem;
-        }
-        .ctrl-btn {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            background: var(--background-color);
-            color: var(--text-primary);
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: all 0.15s ease;
-        }
-        .ctrl-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
-        .ctrl-btn.primary { background: var(--primary-color); color: white; border-color: var(--primary-color); }
-        .ctrl-btn.primary:hover { background: var(--accent-color); }
-        .ctrl-btn:disabled { opacity: 0.45; cursor: default; }
-        .progress-text { color: var(--text-muted); font-size: 0.85rem; margin-left: auto; }
-
         .footer {
             margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
             color: var(--text-secondary); font-size: 0.9rem;
         }
         .footer a { color: var(--primary-color); text-decoration: none; }
         .footer a:hover { text-decoration: underline; }
+
+        .model-note {
+            margin-top: 1.25rem;
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-color);
+            border-radius: var(--radius);
+            padding: 0.9rem 1.1rem;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+        }
+        .model-note strong { color: var(--text-primary); }
+        .model-note p + p { margin-top: 0.55rem; }
 
         @media (prefers-reduced-motion: reduce) {
             .node, .connector, .decision, .connector::after { transition: none !important; }
@@ -274,8 +269,9 @@
         <p class="lead">
             Expert does not just ask an AI to write once and hand you the result. Instead, it runs a small team of
             specialised AI roles in a short loop: one writes, one grades the writing against your quality criteria,
-            and one suggests fixes. The loop repeats until the writing is good enough, or until it runs out of attempts
-            and keeps the best version. Each role is a separate "purpose" and can even be a different AI model.
+            and one revises the text directly to fix whatever fell short. The loop repeats until the writing is good
+            enough, or until it runs out of attempts and keeps the best version. Each role is a separate "purpose" and
+            can even be a different AI model.
         </p>
 
         <div class="section-title">The four roles (purposes)</div>
@@ -288,7 +284,8 @@
                         <div class="role-tag">writes structure</div>
                     </div>
                 </div>
-                <p>Writes the draft for structural nodes (an outline, a chapter broken into sections). Also does the rewrites between rounds.</p>
+                <p>Writes the first draft for structural nodes (an outline, a chapter broken into sections).</p>
+                <p class="role-model"><strong>Model:</strong> capable and logical. It does most of the structural thinking, so reasoning matters more than writing flair.</p>
             </div>
             <div class="role-card role-prose">
                 <div class="role-head">
@@ -299,6 +296,7 @@
                     </div>
                 </div>
                 <p>The writer for the finished, lowest-level text (a leaf scene). Used instead of the Creator when the node is a leaf.</p>
+                <p class="role-model"><strong>Model:</strong> a natural, human tone and strong writing skills. Logic still helps, but the heavy reasoning was already done by the Creator.</p>
             </div>
             <div class="role-card role-rater">
                 <div class="role-head">
@@ -309,17 +307,24 @@
                     </div>
                 </div>
                 <p>Scores the draft against each of your quality criteria, giving every one a mark from 1 to 10.</p>
+                <p class="role-model"><strong>Model:</strong> can be smaller and cheaper. Grading against clear criteria is less demanding than writing, so it need not be as smart as the others.</p>
             </div>
             <div class="role-card role-editor">
                 <div class="role-head">
                     <span class="role-emoji">🛠️</span>
                     <div>
                         <div class="role-name">Editor</div>
-                        <div class="role-tag">writes fix notes</div>
+                        <div class="role-tag">edits the text</div>
                     </div>
                 </div>
-                <p>Looks at whatever failed its goal and turns those scores into concrete, actionable notes for the next rewrite.</p>
+                <p>Directly revises the draft to fix whatever fell short of its goal, while preserving the parts that already pass. It returns the full corrected text — there is no separate rewrite step.</p>
+                <p class="role-model"><strong>Model:</strong> capabilities close to the Creator/Prose, since it rewrites real text — but it need not be creative. It fixes against the criteria rather than inventing.</p>
             </div>
+        </div>
+
+        <div class="model-note">
+            <p><strong>Mixing models vs. one model for everything.</strong> A single high-end, all-purpose model can fill every role, and that is the simplest setup. But it can be slower and more expensive than you need, and is often overkill — especially for the Rater. Pairing a strong Creator, Prose, and Editor with a lighter Rater often saves time and cost without hurting quality.</p>
+            <p><strong>Why no specific recommendations?</strong> Model strengths shift with every new release, so any concrete list would go stale quickly. Judge each model against the needs above rather than a fixed name.</p>
         </div>
 
         <div class="section-title">The loop, step by step</div>
@@ -356,15 +361,10 @@
                     <div class="branch no">
                         <div class="branch-label">No, attempts left</div>
                         <div class="node n-edit" id="n-edit">
-                            <div class="node-title">🛠️ Fix notes <span class="pill" style="background: var(--editor-color)">Editor</span></div>
-                            <div class="node-sub">Turn the failing scores into clear instructions.</div>
+                            <div class="node-title">🛠️ Edit the text <span class="pill" style="background: var(--editor-color)">Editor</span></div>
+                            <div class="node-sub">The Editor revises the draft directly to fix the failing criteria, keeping what already works.</div>
                         </div>
-                        <div class="connector" id="c-edit"></div>
-                        <div class="node n-revise" id="n-revise">
-                            <div class="node-title">♻️ Rewrite <span class="pill" id="reviser-pill">Creator</span></div>
-                            <div class="node-sub">Rewrite the draft using the Editor's notes.</div>
-                        </div>
-                        <div class="repeat-note">↑ goes back to the Rater for another round</div>
+                        <div class="repeat-note">↑ the edited text goes back to the Rater for another round</div>
                     </div>
                 </div>
 
@@ -384,14 +384,6 @@
                     <div id="score-list"></div>
                 </div>
             </div>
-        </div>
-
-        <div class="controls">
-            <button class="ctrl-btn primary" id="btn-play">▶ Play</button>
-            <button class="ctrl-btn" id="btn-prev">◀ Prev</button>
-            <button class="ctrl-btn" id="btn-next">Next ▶</button>
-            <button class="ctrl-btn" id="btn-replay">↻ Replay</button>
-            <span class="progress-text" id="progress-text"></span>
         </div>
 
         <div class="footer">
@@ -424,16 +416,12 @@
               badge: "Round 1", text: "The Rater grades the draft. Every criterion gets a mark from 1 to 10, and automatic metrics (like an em-dash limit) are checked too." },
             { active: "n-decide", conn: null,       round: 1, scoreRound: 1, branch: "no",
               badge: "Round 1", text: "A goal is strict: the score must reach it. Some criteria fell short and there are attempts left, so the loop continues." },
-            { active: "n-edit",   conn: "c-edit",   round: 1, scoreRound: 1, branch: "no",
-              badge: "Round 1", text: "The Editor reads the failing scores and turns them into concrete, actionable fix-it notes." },
-            { active: "n-revise", conn: null,       round: 1, scoreRound: 1, branch: "no",
-              badge: "Round 1", text: "The Creator (or Prose) rewrites the draft, guided by the Editor's notes. The new draft goes back to the Rater." },
+            { active: "n-edit",   conn: null,       round: 1, scoreRound: 1, branch: "no",
+              badge: "Round 1", text: "The Editor revises the draft directly, fixing the failing criteria while preserving what already passes. The edited text goes straight back to the Rater." },
             { active: "n-rate",   conn: "c-rate",   round: 2, scoreRound: 2, branch: null,
-              badge: "Round 2", text: "The Rater grades the rewritten draft. Scores improved, but not everything has reached its goal yet." },
-            { active: "n-edit",   conn: "c-edit",   round: 2, scoreRound: 2, branch: "no",
-              badge: "Round 2", text: "Still short on one criterion, so the Editor writes another round of focused fix-it notes." },
-            { active: "n-revise", conn: null,       round: 2, scoreRound: 2, branch: "no",
-              badge: "Round 2", text: "Another rewrite addresses the remaining issue, then heads back to the Rater one more time." },
+              badge: "Round 2", text: "The Rater grades the Editor's revision. Scores improved, but not everything has reached its goal yet." },
+            { active: "n-edit",   conn: null,       round: 2, scoreRound: 2, branch: "no",
+              badge: "Round 2", text: "Still short on one criterion, so the Editor makes another targeted pass over the text, then it heads back to the Rater." },
             { active: "n-rate",   conn: "c-rate",   round: 3, scoreRound: 3, branch: null,
               badge: "Round 3", text: "The Rater grades again. This time every criterion has reached its goal." },
             { active: "n-decide", conn: null,       round: 3, scoreRound: 3, branch: "yes",
@@ -444,24 +432,16 @@
               badge: "Good to know", text: "If the attempts run out (3 by default) without a full pass, Expert keeps the best-scoring attempt automatically, so you always get a result." }
         ];
 
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const STEP_MS = 2600;
 
         let index = 0;
-        let timer = null;
-        let playing = false;
 
         const scoreListEl = document.getElementById("score-list");
         const roundBadgeEl = document.getElementById("round-badge");
         const narrationEl = document.getElementById("narration-text");
-        const progressEl = document.getElementById("progress-text");
-        const btnPlay = document.getElementById("btn-play");
-        const btnPrev = document.getElementById("btn-prev");
-        const btnNext = document.getElementById("btn-next");
-        const btnReplay = document.getElementById("btn-replay");
 
-        const ALL_NODES = ["n-start", "n-create", "n-rate", "n-decide", "n-winner", "n-edit", "n-revise", "n-best"];
-        const ALL_CONNS = ["c-start", "c-create", "c-rate", "c-edit"];
+        const ALL_NODES = ["n-start", "n-create", "n-rate", "n-decide", "n-winner", "n-edit", "n-best"];
+        const ALL_CONNS = ["c-start", "c-create", "c-rate"];
 
         function renderScores(round) {
             scoreListEl.innerHTML = "";
@@ -514,45 +494,15 @@
             roundBadgeEl.textContent = step.badge;
             narrationEl.textContent = step.text;
             renderScores(step.scoreRound);
-
-            progressEl.textContent = "Step " + (i + 1) + " of " + STEPS.length;
-            btnPrev.disabled = (i === 0);
-            btnNext.disabled = (i === STEPS.length - 1);
         }
 
-        function setPlaying(on) {
-            playing = on;
-            btnPlay.textContent = on ? "⏸ Pause" : "▶ Play";
-            btnPlay.classList.toggle("primary", !on);
-            if (on) {
-                timer = setInterval(function () {
-                    if (index >= STEPS.length - 1) { setPlaying(false); return; }
-                    index++;
-                    applyStep(index);
-                }, STEP_MS);
-            } else if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
-        }
-
-        function goTo(i) {
-            index = Math.max(0, Math.min(STEPS.length - 1, i));
+        // Run continuously: advance one step every STEP_MS and wrap back to the
+        // start after the final step, so the explainer plays in an endless loop.
+        applyStep(index);
+        setInterval(function () {
+            index = (index + 1) % STEPS.length;
             applyStep(index);
-        }
-
-        btnPlay.addEventListener("click", function () {
-            if (index >= STEPS.length - 1) { goTo(0); }
-            setPlaying(!playing);
-        });
-        btnPrev.addEventListener("click", function () { setPlaying(false); goTo(index - 1); });
-        btnNext.addEventListener("click", function () { setPlaying(false); goTo(index + 1); });
-        btnReplay.addEventListener("click", function () { setPlaying(false); goTo(0); });
-
-        // Reduced-motion users never auto-play; the manual Prev/Next controls still work.
-        void reduceMotion;
-
-        goTo(0);
+        }, STEP_MS);
     </script>
 </body>
 </html>

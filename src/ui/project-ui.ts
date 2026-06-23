@@ -618,6 +618,127 @@ function getCurrentLevelName(node: DocumentNode): string {
     return match && match[1] ? match[1] : rawLevelName;
 }
 
+/**
+ * Cleans a single raw template level name like "Chapter 1" into its base "Chapter".
+ */
+function cleanLevelName(rawLevelName: string): string {
+    const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
+    return match && match[1] ? match[1] : rawLevelName;
+}
+
+/**
+ * Pluralizes a level name using simple English rules sufficient for template labels
+ * (e.g. "Chapter" -> "Chapters", "Story" -> "Stories", "Branch" -> "Branches").
+ */
+function pluralizeLevel(name: string): string {
+    if (/[^aeiou]y$/i.test(name)) {
+        return name.slice(0, -1) + 'ies';
+    }
+    if (/(s|x|z|ch|sh)$/i.test(name)) {
+        return name + 'es';
+    }
+    return name + 's';
+}
+
+/**
+ * Joins a list of words with commas and a trailing "and" (e.g. ["a","b","c"] -> "a, b and c").
+ */
+function joinWithAnd(items: string[]): string {
+    const last = items.slice(-1).join('');
+    const head = items.slice(0, -1).join(', ');
+    return head ? `${head} and ${last}` : last;
+}
+
+/**
+ * Returns the cleaned template level name at an index, throwing loudly if the index
+ * is out of range so depth/template mismatches surface immediately rather than silently.
+ */
+function templateLevelName(template: string[], index: number): string {
+    const raw = template[index];
+    if (raw === undefined) {
+        throw new Error(`Template has no level at index ${index} (template length ${template.length})`);
+    }
+    return cleanLevelName(raw);
+}
+
+/**
+ * Builds the idle label for the top-bar Generate button from the current depth state,
+ * e.g. "⚡ Generate down to Scene" or "⚡ Generate this Book" (depth == own level).
+ */
+function computeGenerateLabel(node: DocumentNode): string {
+    const template = node.template;
+    const ownLevel = node.level;
+    const lastIndex = template.length - 1;
+    const depth = Math.min(Math.max(draftLevelState, ownLevel), lastIndex);
+    if (depth <= ownLevel) {
+        return `⚡ Generate this ${templateLevelName(template, ownLevel)}`;
+    }
+    return `⚡ Generate down to ${templateLevelName(template, depth)}`;
+}
+
+/**
+ * Produces a plain-language sentence describing what Generate will do for this node,
+ * derived from the node's template and the current draft/content/coherence depth state.
+ *
+ * Mirrors the engine's prose/outline split: only nodes at the deepest template level
+ * (leaves) get prose; every level above a leaf gets outline content. This matches the
+ * prose-vs-creator model selection (DocumentNode.isLeaf -> 'prose').
+ */
+function buildGenerationPreview(node: DocumentNode): string {
+    const template = node.template;
+    const ownLevel = node.level;
+    const leafLevel = template.length - 1;
+    const draft = Math.min(Math.max(draftLevelState, ownLevel), leafLevel);
+    const content = contentLevelState;
+    const coherence = coherenceLevelState;
+    const ownName = templateLevelName(template, ownLevel);
+
+    // No new sub-structure: work stays on this node itself.
+    if (draft <= ownLevel) {
+        if (content === -1) {
+            return 'Builds nothing new — pick a deeper level, or enable content in Advanced.';
+        }
+        const ownKind = ownLevel >= leafLevel ? 'prose' : 'outline';
+        return `Writes this ${ownName}'s ${ownKind} (no sub-structure).`;
+    }
+
+    // Names of the child levels that will be created (ownLevel+1 .. draft), pluralized.
+    const createdNames: string[] = [];
+    for (let lvl = ownLevel + 1; lvl <= draft; lvl++) {
+        createdNames.push(pluralizeLevel(templateLevelName(template, lvl)));
+    }
+
+    let sentence = `Creates ${joinWithAnd(createdNames)} under this ${ownName}`;
+
+    if (content === -1) {
+        sentence += ' (structure only)';
+    } else {
+        // Deepest level that actually receives written content.
+        const contentDepth = Math.min(content, draft);
+        const reachesProse = contentDepth >= leafLevel;
+        const hasOutlineLevels = contentDepth - 1 >= ownLevel + 1;
+
+        if (contentDepth < draft) {
+            // Decoupled in Advanced: structure is built deeper than content is written.
+            // Anything above a leaf is outline, so a shallower content depth is always outline.
+            sentence += ` and writes outline down to ${templateLevelName(template, contentDepth)}`;
+        } else if (reachesProse && hasOutlineLevels) {
+            const leafPlural = pluralizeLevel(templateLevelName(template, leafLevel));
+            sentence += ` and writes their outline, plus prose for the ${leafPlural}`;
+        } else if (reachesProse) {
+            sentence += ' and writes their prose';
+        } else {
+            sentence += ' and writes their outline';
+        }
+    }
+
+    if (coherence !== -1) {
+        sentence += ', checking coherence';
+    }
+
+    return sentence + '.';
+}
+
 
 
 // REMOVED: collectNodesAtRelativeLevel - replaced with centralized TreeService.getNodesAtTemplateLevel()
@@ -1954,7 +2075,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 margin-bottom: 0;
                 border: 1px solid #e9ecef;
                 display: grid;
-                grid-template-columns: 1fr auto;
+                grid-template-columns: minmax(14rem, 22rem) 1fr;
                 gap: 1.5rem;
                 align-items: start;
             }
@@ -1995,16 +2116,17 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             .header-right {
                 display: flex;
                 flex-direction: column;
-                align-items: flex-end;
+                align-items: stretch;
                 gap: 0.75rem;
+                width: 100%;
+                min-width: 0;
             }
             .generation-controls-compact {
                 background-color: #fff;
                 border: 1px solid #e9ecef;
                 border-radius: 6px;
                 padding: 0.75rem;
-                width: fit-content;
-                max-width: 600px;
+                width: 100%;
             }
             
             .level-controls {
@@ -2023,6 +2145,164 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 display: flex;
                 align-items: flex-end;
                 gap: 0.75rem;
+            }
+            
+            /* --- Generation plan card (level ladder + live preview) --- */
+            .gen-plan-card {
+                display: flex;
+                flex-direction: column;
+                gap: 0.6rem;
+            }
+            
+            .gen-plan-header {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: #374151;
+            }
+            
+            .gen-plan-title {
+                flex: 1;
+            }
+            
+            .gen-plan-help {
+                flex-shrink: 0;
+                width: 1.25rem;
+                height: 1.25rem;
+                border-radius: 50%;
+                border: 1px solid #cbd5e1;
+                background: #f8fafc;
+                color: #475569;
+                font-size: 0.7rem;
+                font-weight: 700;
+                line-height: 1;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            }
+            
+            .gen-plan-help:hover {
+                border-color: #3b82f6;
+                color: #2563eb;
+            }
+            
+            .level-ladder {
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.2rem 0.35rem;
+            }
+            
+            .ladder-rung {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding: 0.25rem 0.5rem;
+                border: none;
+                background: none;
+                text-align: left;
+                border-radius: 999px;
+                cursor: pointer;
+                position: relative;
+                font-size: 0.85rem;
+                color: #9ca3af;
+                white-space: nowrap;
+                transition: background 0.15s ease, color 0.15s ease;
+            }
+            
+            .ladder-rung:hover {
+                background: #f1f5f9;
+            }
+            
+            .rung-dot {
+                position: relative;
+                z-index: 1;
+                width: 0.7rem;
+                height: 0.7rem;
+                border-radius: 50%;
+                border: 2px solid #cbd5e1;
+                background: #fff;
+                flex-shrink: 0;
+                transition: all 0.15s ease;
+            }
+            
+            .ladder-arrow {
+                color: #cbd5e1;
+                font-size: 0.85rem;
+                line-height: 1;
+                user-select: none;
+                align-self: center;
+                transition: color 0.15s ease;
+            }
+            
+            .ladder-arrow.in-scope {
+                color: #2563eb;
+            }
+            
+            .ladder-rung.in-scope {
+                color: #1f2937;
+            }
+            
+            .ladder-rung.in-scope .rung-dot {
+                border-color: #2563eb;
+                background: #2563eb;
+            }
+            
+            .ladder-rung.target {
+                font-weight: 700;
+                background: #eff6ff;
+            }
+            
+            .ladder-rung.target .rung-dot {
+                box-shadow: 0 0 0 3px rgba(37, 130, 246, 0.2);
+            }
+            
+            .rung-name {
+                flex-shrink: 0;
+            }
+            
+            .gen-plan-bottom {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.6rem;
+            }
+            
+            .generation-preview {
+                flex: 1 1 16rem;
+                min-width: 0;
+                font-size: 0.8rem;
+                line-height: 1.4;
+                color: #475569;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                padding: 0.5rem 0.6rem;
+                min-height: 2.4rem;
+                display: flex;
+                align-items: center;
+            }
+            
+            .gen-plan-actions {
+                flex: 0 0 auto;
+                display: flex;
+                align-items: stretch;
+                gap: 0.5rem;
+            }
+            
+            .gen-plan-actions #node-generate-btn {
+                flex: 0 0 auto;
+                min-width: 9rem;
+                max-width: 18rem;
+            }
+            
+            .gen-plan-actions .generation-advanced-btn {
+                flex-shrink: 0;
             }
             
             .generation-advanced-btn {
@@ -2441,24 +2721,38 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 <div class="generation-controls-compact">
                     <!-- Level-Based Generation Controls -->
                     <div class="level-controls">
-                        <!-- Primary: single level selector + advanced opener -->
-                        <div class="level-primary-row">
-                            <div class="level-selector" style="flex: 1; min-width: 0;">
-                                <label for="unified-level-selector" title="Generate drafts, content, and coherence down to this level">
-                                    <span class="level-icon">🎚️</span>
-                                    Level:
-                                </label>
-                                <select id="unified-level-selector" class="level-dropdown">
-                                    ${node.template.slice(node.level).map((levelName, index) => {
-                                        const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
-                                        return `<option value="${actualLevel}" ${draftLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
-                                    }).join('')}
-                                </select>
+                        <!-- Primary: self-describing generation plan (level ladder + live preview) -->
+                        <div class="gen-plan-card">
+                            <div class="gen-plan-header">
+                                <span class="level-icon">🎚️</span>
+                                <span class="gen-plan-title">Generation plan</span>
+                                <button id="generation-levels-help-btn" type="button" class="gen-plan-help" title="How generation levels work" aria-label="How generation levels work">?</button>
                             </div>
-                            <button id="generation-advanced-btn" type="button" class="button button-secondary generation-advanced-btn" title="Advanced generation settings">
-                                ⚙️ Advanced
-                            </button>
+                            <div id="level-ladder" class="level-ladder" role="radiogroup" aria-label="Generation depth">
+                                ${node.template.slice(node.level).map((levelName, index, levels) => {
+                                    const actualLevel = node.level + index;
+                                    const clean = cleanLevelName(levelName);
+                                    const isOwn = index === 0;
+                                    const isLast = index === levels.length - 1;
+                                    const rung = `<button type="button" class="ladder-rung${isOwn ? ' is-own' : ''}" data-level="${actualLevel}" role="radio" aria-checked="false"${isOwn ? ' title="This node"' : ''}>
+                                        <span class="rung-dot"></span>
+                                        <span class="rung-name">${clean}</span>
+                                    </button>`;
+                                    const arrow = isLast ? '' : `<span class="ladder-arrow" data-after="${actualLevel}" aria-hidden="true">&rarr;</span>`;
+                                    return rung + arrow;
+                                }).join('')}
+                            </div>
+                            <div class="gen-plan-bottom">
+                                <div id="generation-preview" class="generation-preview"></div>
+                                <div class="gen-plan-actions">
+                                    <button id="node-generate-btn" class="button button-primary">
+                                        ⚡ Generate
+                                    </button>
+                                    <button id="generation-advanced-btn" type="button" class="button button-secondary generation-advanced-btn" title="Advanced generation settings">
+                                        ⚙️ Advanced
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Advanced popup overlay (hidden by default) -->
@@ -2736,9 +3030,12 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             );
         });
     } else {
+        // Idle: the Generate button describes its target depth (e.g. "Generate down to Scene").
+        const idleLabel = computeGenerateLabel(node);
+        generateBtn.dataset['idleLabel'] = idleLabel;
         void import('./event-manager').then(({ eventManager }) => {
             eventManager.updateButtonContent('node-generate-btn', 
-                BUTTON_LABELS.GENERATE,
+                idleLabel,
                 { disabled: false, className: 'button button-primary' }
             );
         });
@@ -2873,8 +3170,10 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         return isValid;
     };
     
-    // --- Unified single-level control + Advanced popup ---
-    const unifiedLevelSelector = getElementById('unified-level-selector') as HTMLSelectElement;
+    // --- Primary level ladder + live preview + Advanced popup ---
+    const levelLadder = getElementById('level-ladder') as HTMLDivElement;
+    const generationPreview = getElementById('generation-preview') as HTMLDivElement;
+    const levelsHelpBtn = getElementById('generation-levels-help-btn') as HTMLButtonElement;
     const advancedBtn = getElementById('generation-advanced-btn') as HTMLButtonElement;
     const advancedPopup = getElementById('generation-advanced-popup') as HTMLDivElement;
     const advancedCloseBtn = getElementById('generation-advanced-close') as HTMLButtonElement;
@@ -2883,48 +3182,98 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // reach the leaf level; this is its deepest valid value.
     const maxCoherenceLevel = node.template.length - 2;
 
-    // Keep the single Level dropdown showing the current draft depth.
-    const syncUnifiedFromAdvanced = () => {
-        if (unifiedLevelSelector && draftLevelSelector) {
-            unifiedLevelSelector.value = draftLevelSelector.value;
+    // Highlight ladder rungs from the node's own level through the current draft depth.
+    const renderLadderState = () => {
+        const effectiveDraft = Math.min(Math.max(draftLevelState, node.level), node.template.length - 1);
+        levelLadder.querySelectorAll('.ladder-rung').forEach(rung => {
+            const level = parseInt((rung as HTMLElement).dataset['level'] as string);
+            rung.classList.toggle('in-scope', level <= effectiveDraft);
+            rung.classList.toggle('target', level === effectiveDraft);
+            rung.setAttribute('aria-checked', level === effectiveDraft ? 'true' : 'false');
+        });
+        // Color the connector arrows that fall inside the built range (the arrow after
+        // level N is in scope when level N+1 is in scope, i.e. N < effectiveDraft).
+        levelLadder.querySelectorAll('.ladder-arrow').forEach(arrow => {
+            const after = parseInt((arrow as HTMLElement).dataset['after'] as string);
+            arrow.classList.toggle('in-scope', after < effectiveDraft);
+        });
+    };
+
+    // Refresh the plain-language preview sentence under the ladder.
+    const renderPreview = () => {
+        generationPreview.textContent = buildGenerationPreview(node);
+    };
+
+    // Keep the idle Generate button label in sync with the current depth.
+    const refreshGenerateLabel = () => {
+        const idleLabel = computeGenerateLabel(node);
+        const btn = document.getElementById('node-generate-btn') as HTMLButtonElement | null;
+        if (btn) {
+            btn.dataset['idleLabel'] = idleLabel;
+            // Only rewrite the visible label while idle; never clobber a spinner/busy state.
+            if (!btn.disabled) {
+                btn.innerHTML = idleLabel;
+            }
         }
     };
 
+    // Re-derive ladder highlight + preview + button label from current state.
+    const syncLadderFromAdvanced = () => {
+        renderLadderState();
+        renderPreview();
+        refreshGenerateLabel();
+    };
+
+    // Single-knob: a ladder rung sets draft, content, and coherence in one step.
+    // Autofix severity is intentionally untouched - it is an advanced-only setting.
+    const setDepth = (level: number) => {
+        const coherence = Math.min(level, maxCoherenceLevel);
+
+        draftLevelState = level;
+        contentLevelState = level;
+        coherenceLevelState = coherence;
+
+        if (draftLevelSelector) draftLevelSelector.value = level.toString();
+        if (contentLevelSelector) contentLevelSelector.value = level.toString();
+        if (coherenceLevelSelector) coherenceLevelSelector.value = coherence.toString();
+
+        validateLevels();
+        syncLadderFromAdvanced();
+        void saveLevelStates();
+    };
+
     // Advanced selectors: capture every dropdown value into state, then persist.
+    // The ladder + preview re-derive from the (possibly decoupled) Advanced values.
     const advancedSelectors = [draftLevelSelector, contentLevelSelector, coherenceLevelSelector, autofixSeveritySelector];
     advancedSelectors.forEach(selector => {
         if (selector) {
             selector.addEventListener('change', () => {
                 captureCurrentDropdownValues();
                 validateLevels();
-                syncUnifiedFromAdvanced();
+                syncLadderFromAdvanced();
                 void saveLevelStates();
             });
         }
     });
 
-    // The single Level dropdown sets draft, content, and coherence to the chosen
-    // level in one step. Autofix severity is intentionally left untouched - it is
-    // an advanced-only setting.
-    if (unifiedLevelSelector) {
-        unifiedLevelSelector.addEventListener('change', () => {
-            const level = parseInt(unifiedLevelSelector.value);
-            const coherence = Math.min(level, maxCoherenceLevel);
-
-            draftLevelState = level;
-            contentLevelState = level;
-            coherenceLevelState = coherence;
-
-            if (draftLevelSelector) draftLevelSelector.value = level.toString();
-            if (contentLevelSelector) contentLevelSelector.value = level.toString();
-            if (coherenceLevelSelector) coherenceLevelSelector.value = coherence.toString();
-
-            validateLevels();
-            void saveLevelStates();
+    // Clicking a rung selects the target depth.
+    levelLadder.querySelectorAll('.ladder-rung').forEach(rung => {
+        rung.addEventListener('click', () => {
+            const level = parseInt((rung as HTMLElement).dataset['level'] as string);
+            setDepth(level);
         });
-        // Reflect the restored/initial draft depth on first render.
-        syncUnifiedFromAdvanced();
-    }
+    });
+
+    // "How this works" help affordance.
+    levelsHelpBtn.addEventListener('click', () => {
+        void import('./modals/GenerationLevelsHelpModal').then(({ GenerationLevelsHelpModal }) => {
+            const modal = new GenerationLevelsHelpModal();
+            void modal.open();
+        });
+    });
+
+    // Reflect the restored/initial depth on first render.
+    syncLadderFromAdvanced();
 
     // Advanced popup open/close
     if (advancedBtn && advancedPopup) {
@@ -4775,9 +5124,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
                     <input type="checkbox" id="deterministic-child-creation-checkbox" ${deterministicChildCreationState ? 'checked' : ''} style="margin-right: 0.5rem; cursor: pointer;" />
                     <label for="deterministic-child-creation-checkbox" style="font-size: 0.9rem; color: #374151; cursor: pointer; user-select: none; white-space: nowrap;">Deterministic child creation</label>
                 </div>
-                <button id="node-generate-btn" class="button button-primary top-bar-element" style="margin-right: 0.4rem;">
-                    ⚡ Generate
-                </button>
                 <button id="generation-explainer-btn" class="help-button top-bar-element" title="How generation works" style="width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid #6c757d; background: #f8f9fa; color: #6c757d; font-size: 0.8rem; font-style: italic; font-weight: 700; font-family: Georgia, 'Times New Roman', serif; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 1rem;">
                     i
                 </button>

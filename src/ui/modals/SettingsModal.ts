@@ -244,15 +244,38 @@ export class SettingsModal extends BaseModal {
             classes: ['settings-section']
         });
 
+        const titleRow = createElement('div', {
+            attributes: { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;' }
+        });
+
         const title = createElement('h3', {
             content: 'AI Models'
         });
+
+        // Each purpose below (Creator, Prose, Rater, Editor) is a role in the
+        // generation loop. Link to the animated explainer so users can see how
+        // these roles work together before configuring them.
+        const explainerButton = createElement('button', {
+            classes: ['ctrl-btn'],
+            content: '⚡ How generation works',
+            attributes: {
+                type: 'button',
+                title: 'Open an animated explanation of the generation loop and the role each model plays',
+                style: 'cursor: pointer; font-size: 0.85rem; padding: 0.35rem 0.7rem; border: 1px solid #6c757d; border-radius: 0.4rem; background: #f8f9fa; color: #495057; white-space: nowrap;'
+            }
+        });
+        explainerButton.addEventListener('click', () => {
+            window.open('./creation-loop.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        });
+
+        titleRow.appendChild(title);
+        titleRow.appendChild(explainerButton);
 
         const modelsContainer = createElement('div', {
             attributes: { id: 'settings-models-container' }
         });
 
-        section.appendChild(title);
+        section.appendChild(titleRow);
         section.appendChild(modelsContainer);
 
         return section;

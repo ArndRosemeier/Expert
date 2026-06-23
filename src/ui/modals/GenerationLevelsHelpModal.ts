@@ -24,136 +24,64 @@ export class GenerationLevelsHelpModal extends BaseModal {
     private renderModalContent(): string {
         return `
             <div class="modal-header">
-                <h2>🎯 Generation Levels Guide</h2>
+                <h2>🎚️ Generation Plan</h2>
             </div>
             
             <div class="modal-body">
                 <div class="help-intro">
-                    <p>The <strong>Generation Levels</strong> control how the AI processes your project hierarchy. Think of them as different "passes" that work together:</p>
+                    <p>Generation works with <strong>one main knob</strong>: pick how deep to build. Expert reads your project's template (the ordered level names like Book → Act → Chapter → Scene) and builds everything from this node down to the level you choose.</p>
                 </div>
 
                 <div class="levels-grid-explanation">
-                    <h3>📊 The Four Control Levels</h3>
-                    
+                    <h3>🪜 The level ladder</h3>
                     <div class="level-card draft-card">
                         <div class="level-header">
-                            <span class="level-icon">📝</span>
-                            <h4>Draft Level</h4>
-                            <span class="level-badge primary">Structure Creator</span>
+                            <span class="level-icon">🎚️</span>
+                            <h4>Pick a target depth</h4>
+                            <span class="level-badge primary">One knob</span>
                         </div>
-                        <p><strong>What it does:</strong> Creates child nodes (outline structure) down to this level.</p>
-                        <p><strong>Example:</strong> Set to "Chapter" → AI creates chapter titles under your book</p>
-                        <div class="tip">💡 This is usually your deepest level - it defines how detailed your structure gets.</div>
+                        <p><strong>What it does:</strong> The ladder shows the level names from this node down to the deepest level your template allows. Click a rung to set the target. Expert creates the structure down to that rung and writes its content — <em>outline</em> for the intermediate levels and <em>prose</em> for the deepest (leaf) level — checking coherence as it goes.</p>
+                        <p><strong>Example:</strong> On a Book, pick <strong>Scene</strong> → Expert creates the Acts, Chapters and Scenes, writing outline for the Acts and Chapters and full prose for the Scenes.</p>
+                        <div class="tip">💡 Depth is dynamic. A short story may only offer Chapter → Scene; an epic may offer Book → Act → Chapter → Scene. The ladder always matches the current node's template.</div>
                     </div>
 
                     <div class="level-card content-card">
                         <div class="level-header">
-                            <span class="level-icon">✍️</span>
-                            <h4>Content Level</h4>
-                            <span class="level-badge secondary">Content Writer</span>
+                            <span class="level-icon">👁️</span>
+                            <h4>Live preview</h4>
+                            <span class="level-badge secondary">Plain language</span>
                         </div>
-                        <p><strong>What it does:</strong> Generates actual written content for nodes at or above this level.</p>
-                        <p><strong>Example:</strong> Set to "Scene" → AI writes full content for scenes and everything above</p>
-                        <div class="tip">💡 Must be ≤ Draft Level. Lower numbers = more content gets written.</div>
-                    </div>
-
-                    <div class="level-card context-card">
-                        <div class="level-header">
-                            <span class="level-icon">🔧</span>
-                            <h4>Context Prune Level</h4>
-                            <span class="level-badge tertiary">Context Cleaner</span>
-                        </div>
-                        <p><strong>What it does:</strong> Automatically cleans up inherited context to remove irrelevant information.</p>
-                        <p><strong>Example:</strong> Removes context about other chapters when working on a specific scene</p>
-                        <div class="tip">💡 Helps prevent context overload and keeps AI focused on relevant information.</div>
-                    </div>
-
-                    <div class="level-card coherence-card">
-                        <div class="level-header">
-                            <span class="level-icon">🔍</span>
-                            <h4>Coherence Level</h4>
-                            <span class="level-badge quaternary">Quality Checker</span>
-                        </div>
-                        <p><strong>What it does:</strong> Checks for contradictions between outline and expanded content.</p>
-                        <p><strong>Example:</strong> Ensures chapter content actually matches the chapter's outline description</p>
-                        <div class="tip">💡 Can be ≤ Draft Level. Triggers after all children of a level are completed.</div>
-                    </div>
-                </div>
-
-                <div class="workflow-explanation">
-                    <h3>🔄 How They Work Together</h3>
-                    <div class="workflow-steps">
-                        <div class="workflow-step">
-                            <span class="step-number">1</span>
-                            <div class="step-content">
-                                <strong>Draft Creation:</strong> AI creates child nodes down to Draft Level
-                            </div>
-                        </div>
-                        <div class="workflow-step">
-                            <span class="step-number">2</span>
-                            <div class="step-content">
-                                <strong>Context Pruning:</strong> AI cleans inherited context for better focus
-                            </div>
-                        </div>
-                        <div class="workflow-step">
-                            <span class="step-number">3</span>
-                            <div class="step-content">
-                                <strong>Content Generation:</strong> AI writes actual content for specified levels
-                            </div>
-                        </div>
-                        <div class="workflow-step">
-                            <span class="step-number">4</span>
-                            <div class="step-content">
-                                <strong>Coherence Check:</strong> AI verifies consistency between outline and content
-                            </div>
-                        </div>
+                        <p><strong>What it does:</strong> The sentence under the ladder spells out exactly what Generate will do, and the Generate button mirrors it (e.g. "Generate down to Scene"). No guessing.</p>
+                        <div class="tip">💡 If the target is this node's own level, Expert just writes this node's content — no sub-structure.</div>
                     </div>
                 </div>
 
                 <div class="examples-section">
-                    <h3>💡 Common Configurations</h3>
-                    
+                    <h3>⚙️ Advanced — the rare exceptions</h3>
+                    <p>Almost everyone only needs the single depth knob. <strong>Advanced</strong> is there for the uncommon cases:</p>
+
                     <div class="example-config">
-                        <h4>📚 Quick Structure + Content</h4>
-                        <div class="config-grid">
-                            <span>Draft Level: <strong>2 (Chapter)</strong></span>
-                            <span>Content Level: <strong>1 (Part)</strong></span>
-                            <span>Context Prune: <strong>2 (Chapter)</strong></span>
-                            <span>Coherence: <strong>0 (Book)</strong></span>
-                        </div>
-                        <p><em>Creates chapters, writes content for parts and book, cleans chapter context, checks book coherence.</em></p>
+                        <h4>Decoupled depths</h4>
+                        <p><em>Build the structure deeper than the prose — e.g. create Scenes everywhere but only write prose down to Chapter. Set Draft, Content and Coherence levels independently. The preview updates honestly to reflect the split.</em></p>
                     </div>
 
                     <div class="example-config">
-                        <h4>🎬 Detailed Scene Work</h4>
-                        <div class="config-grid">
-                            <span>Draft Level: <strong>3 (Scene)</strong></span>
-                            <span>Content Level: <strong>3 (Scene)</strong></span>
-                            <span>Context Prune: <strong>3 (Scene)</strong></span>
-                            <span>Coherence: <strong>2 (Chapter)</strong></span>
-                        </div>
-                        <p><em>Creates detailed structure down to scenes, writes all content, cleans all context, checks chapter coherence.</em></p>
+                        <h4>Autofix severity</h4>
+                        <p><em>Choose which contradiction severities are auto-fixed during generation. Usually left on and rarely changed.</em></p>
                     </div>
 
                     <div class="example-config">
-                        <h4>🏗️ Structure Only</h4>
-                        <div class="config-grid">
-                            <span>Draft Level: <strong>3 (Scene)</strong></span>
-                            <span>Content Level: <strong>None</strong></span>
-                            <span>Context Prune: <strong>None</strong></span>
-                            <span>Coherence: <strong>None</strong></span>
-                        </div>
-                        <p><em>Just creates the outline structure - no content generation, context cleaning, or coherence checking.</em></p>
+                        <h4>Deterministic children</h4>
+                        <p><em>Create child nodes deterministically instead of letting the model decide how many — useful when you want a fixed structure.</em></p>
                     </div>
                 </div>
 
                 <div class="important-rules">
-                    <h3>⚠️ Important Rules</h3>
+                    <h3>⚠️ Good to know</h3>
                     <ul>
-                        <li><strong>Content Level ≤ Draft Level:</strong> You can't write content for levels that don't exist yet</li>
-                        <li><strong>Coherence Level ≤ Draft Level:</strong> Coherence checks the parent of completed levels</li>
-                        <li><strong>"None" option:</strong> Use this to skip any step completely</li>
-                        <li><strong>Lower numbers = higher in hierarchy:</strong> 0 is the root, 1 is first level down, etc.</li>
+                        <li><strong>Content can't go deeper than structure:</strong> you can't write prose for levels that haven't been created.</li>
+                        <li><strong>Coherence stops one level above the leaf:</strong> it checks a parent against its completed children.</li>
+                        <li><strong>The depth knob keeps these in sync</strong> automatically; only Advanced lets them diverge.</li>
                     </ul>
                 </div>
             </div>
