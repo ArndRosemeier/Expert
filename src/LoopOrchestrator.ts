@@ -1,9 +1,9 @@
 import { EventEmitter } from './EventEmitter';
 import { PromptContextBuilder } from './services/PromptContextBuilder.js';
-import { formatCriteriaAsJson } from './ProjectUtils';
+import { formatCriteriaForRater } from './ProjectUtils';
 import { SettingsManager } from './SettingsManager';
 import { createPromptExpansionService } from './services/PromptExpansionService.js';
-import { CreatorPayload, EditorPayload, QualityCriterion, MetricCriterion } from './types';
+import { CreatorPayload, EditorPayload, QualityCriterion, MetricCriterion, isLLMCriterion } from './types';
 import { OrchestratorPrompts, defaultPrompts } from './PromptManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { Rating } from './types/RatingTypes';
@@ -469,32 +469,32 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     // Emit systematic phase start event for editing
                     this.emit('phase-started', 'edit', i);
                     
-                    // 2. If not success, call Editor. Includes failed metric
-                    // ratings, whose concrete detail (e.g. "14 em-dashes") yields
-                    // precise, actionable advice for the next creator pass.
-                    const failedRatings = combinedRatings.filter(r => r.actual < r.goal);
-                    const editorPrompt = this.createEditorPrompt(prompt, currentResponse, failedRatings);
-                    let editorAdvice: string;
+                    // The editor now performs the edit directly. It sees every
+                    // rating (failed ones emphasized), preserves the core, and
+                    // returns the full revised text. There is no separate creator
+                    // regeneration step anymore.
+                    const editorPrompt = this.createEditorPrompt(prompt, currentResponse, combinedRatings, criteria, generationModel === 'prose');
+                    let revisedText: string;
                     
                     // Emit progress BEFORE starting the editor API call to show model working state
                     this.emit('progress', { 
                         iteration: i, 
                         maxIterations: maxIterations, 
                         phase: 'edit', 
-                        payload: { prompt: editorPrompt, advice: `${editorModelName} is generating recommendations...` }, 
+                        payload: { prompt: editorPrompt, revisedText: `${editorModelName} is editing...` }, 
                         progress: 0,
                         failureScore: 0
                     });
                     
                     try {
-                        editorAdvice = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
+                        revisedText = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
                     } catch(e: unknown) {
                         const errorMessage = e instanceof Error ? e.message : 'Unknown error during editing';
                         console.error('Editing failed:', errorMessage);
                         throw new Error(`Content editing failed: ${errorMessage}`);
                     }
                     
-                    const editorPayload: EditorPayload = { prompt: editorPrompt, advice: editorAdvice };
+                    const editorPayload: EditorPayload = { prompt: editorPrompt, revisedText: revisedText };
                     history.push({ iteration: i, type: 'editor', payload: editorPayload });
 
                     // Emit progress AFTER getting the response to show final result
@@ -512,42 +512,23 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         break;
                     }
 
-                    // 3. Call the appropriate model again to get the improved response
-                    // Increment creator iteration counter and emit iteration started before creator revision
+                    // The editor's revised text becomes the candidate for the next
+                    // rating pass. We surface it as a new "create" iteration so the
+                    // existing persistence path (which captures content from the
+                    // 'create' phase) snapshots it for best-iteration selection.
+                    currentResponse = revisedText;
                     creatorIteration++;
                     this.emit('iteration-started', creatorIteration, maxIterations);
-                    
-                    // Emit systematic phase start event for creation
                     this.emit('phase-started', 'create', creatorIteration);
-                    
-                    const creatorPrompt = this.createCreatorPrompt(prompt, criteria, history);
-                    
-                    // Emit progress BEFORE starting the API call to show model working state
+
+                    const revisedPayload: CreatorPayload = { prompt: editorPrompt, response: currentResponse };
+                    history.push({ iteration: creatorIteration, type: 'creator', payload: revisedPayload });
+
                     this.emit('progress', { 
                         iteration: creatorIteration, 
                         maxIterations: maxIterations, 
                         phase: 'create', 
-                        payload: { prompt: creatorPrompt, response: `${creatorModelName} is working on revision...` }, 
-                        progress: 0,
-                        failureScore: 0
-                    });
-                    
-                    try {
-                        currentResponse = await this.client.chat(generationModel, creatorPrompt, undefined, this.abortController.signal);
-                    } catch(e: unknown) {
-                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during revision';
-                        console.error('Revision failed:', errorMessage);
-                        throw new Error(`Content revision failed: ${errorMessage}`);
-                    }
-                    const creatorPayload: CreatorPayload = { prompt: creatorPrompt, response: currentResponse };
-                    history.push({ iteration: creatorIteration, type: 'creator', payload: creatorPayload });
-                    
-                    // Emit progress AFTER getting the response to show final result
-                    this.emit('progress', { 
-                        iteration: creatorIteration, 
-                        maxIterations: maxIterations, 
-                        phase: 'create', 
-                        payload: creatorPayload, 
+                        payload: revisedPayload, 
                         progress: 0,
                         failureScore: 0
                     });
@@ -615,44 +596,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
 
 
-    private createCreatorPrompt(originalPrompt: string, criteria: QualityCriterion[], history?: LoopHistoryItem[]): string {
-        // Creator/prose model sees LLM criteria plus deterministic metric
-        // guidance so it can satisfy every constraint up front.
-        const criteriaJson = formatCriteriaForCreator(criteria);
-
-        if (!history) {
-            const context = PromptContextBuilder.fromLegacyParams(
-                { getLanguage: () => this.language, getCriteria: () => [] } as any,
-                {
-                    prompt: originalPrompt,
-                    criteria: criteriaJson,
-                    language: this.language
-                }
-            );
-            return this.expansionService.expandPrompt(this.prompts.content_generation_initial, context, this.language);
-        }
-        
-        const lastEditorAdviceItem = history.filter(h => h.type === 'editor').pop();
-        const lastCreatorResponseItem = history.filter(h => h.type === 'creator').pop();
-        
-        const lastEditorAdvice = (lastEditorAdviceItem?.payload as EditorPayload)?.advice || 'No advice was given.';
-        const lastResponse = (lastCreatorResponseItem?.payload as CreatorPayload)?.response;
-
-        const context = PromptContextBuilder.fromLegacyParams(
-            { getLanguage: () => this.language, getCriteria: () => [] } as any,
-            {
-                prompt: originalPrompt,
-                lastResponse: lastResponse || '',
-                editorAdvice: lastEditorAdvice,
-                criteria: criteriaJson,
-                language: this.language
-            }
-        );
-        return this.expansionService.expandPrompt(this.prompts.content_generation_iterative, context, this.language);
-    }
-
     private createAllCriteriaRaterPrompt(prompt: string, response: string, criteria: QualityCriterion[]): string {
-        const criteriaJson = formatCriteriaAsJson(criteria);
+        const criteriaJson = formatCriteriaForRater(criteria);
         
 
         
@@ -693,12 +638,21 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     for (const item of parsed) {
                         const originalCriterion = criteriaMap.get(item.criterion);  // Fix: Use item.criterion
                         if (originalCriterion && typeof item.score === 'number' && typeof item.justification === 'string') {
+                            const isBinary = isLLMCriterion(originalCriterion) && originalCriterion.binary === true;
+                            // For binary constraints, store the actual constraint instruction
+                            // as the criterion label rather than the opaque internal name
+                            // ("Constraint 1"). The rater still echoes the internal name,
+                            // which we already used (item.criterion) to resolve originalCriterion.
+                            const criterionLabel = isBinary && isLLMCriterion(originalCriterion) && originalCriterion.description
+                                ? originalCriterion.description
+                                : item.criterion;
                             ratings.push({
-                                criterion: item.criterion,  // Fix: Use item.criterion
+                                criterion: criterionLabel,
                                 goal: originalCriterion.goal,
                                 actual: item.score,
                                 passed: item.score >= originalCriterion.goal,
-                                description: item.justification
+                                description: item.justification,
+                                binary: isBinary
                             });
                         } else {
                             console.warn('Parsed rating item is invalid or does not match an original criterion.', { item });
@@ -724,13 +678,36 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         }
     }
 
-    private createEditorPrompt(originalPrompt: string, response: string, ratings: Rating[]): string {
+    private createEditorPrompt(originalPrompt: string, response: string, ratings: Rating[], criteria: QualityCriterion[], isLeafNode: boolean): string {
+        // The editor sees every criterion so it does not break passing ones while
+        // fixing the failures. Failed criteria are clearly marked for emphasis.
+        const ratingsBlock = ratings.map(r => {
+            const failed = r.actual < r.goal;
+            const marker = failed ? '[FAILED]' : '[ok]';
+            const detail = r.description ? ` - ${r.description}` : '';
+            return `${marker} ${r.criterion}: ${r.actual}/${r.goal}${detail}`;
+        }).join('\n');
+
+        // Binary constraints are stripped from the passive context, so spell out
+        // their instruction here; otherwise the editor only sees the opaque name.
+        const binaryConstraints = criteria.filter(c => isLLMCriterion(c) && c.binary === true);
+        const constraintsBlock = binaryConstraints.length > 0
+            ? `\nThese binary constraints MUST be fully satisfied (each is a hard pass/fail):\n`
+                + binaryConstraints.map(c => `- ${c.name}: ${c.description ?? c.name}`).join('\n') + '\n'
+            : '';
+
+        const nodeKind = isLeafNode
+            ? 'final prose for the reader (not a summary or outline)'
+            : 'a structured outline (not finished prose)';
+
         const context = PromptContextBuilder.fromLegacyParams(
             { getLanguage: () => this.language, getCriteria: () => [] } as any,
             {
                 originalPrompt: originalPrompt,
                 response: response,
-                ratings: JSON.stringify(ratings, null, 2),
+                ratings: ratingsBlock,
+                constraints: constraintsBlock,
+                nodeKind: nodeKind,
                 language: this.language
             }
         );
@@ -765,26 +742,38 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     /**
      * Selects the best iteration result using a tiered comparison:
      *
-     * 1. An iteration that met all goals (`allGoalsMet`) always beats one that
-     *    did not. This prevents a genuine success from being discarded in favour
-     *    of a goal-missing iteration that merely has a lower weighted failure
-     *    score.
-     * 2. Within the same success tier, the lower failure score wins.
-     * 3. Ties are broken by recency (the later iteration wins).
+     * 1. Fewest violations wins: the iteration with the smallest number of
+     *    criteria below their goal. A fully passing iteration (zero violations)
+     *    therefore always beats any iteration that still misses a goal.
+     * 2. On an equal number of violations, the highest total score wins (the sum
+     *    of every criterion's actual value). This prevents a later edit that
+     *    needlessly lowered an already-passing criterion from beating an earlier
+     *    iteration that scored higher overall.
+     * 3. Remaining ties are broken by recency (the later iteration wins).
      */
     private selectBestIteration(iterationResults: IterationResult[]): IterationResult {
         if (iterationResults.length === 0) {
             throw new Error('No iteration results to select from');
         }
 
+        const violationCount = (result: IterationResult): number =>
+            result.ratings.filter(rating => rating.actual < rating.goal).length;
+
+        const scoreSum = (result: IterationResult): number =>
+            result.ratings.reduce((sum, rating) => sum + rating.actual, 0);
+
         const isBetter = (candidate: IterationResult, current: IterationResult): boolean => {
-            // Tier 1: meeting all goals takes absolute priority.
-            if (candidate.allGoalsMet !== current.allGoalsMet) {
-                return candidate.allGoalsMet;
+            // Tier 1: fewer unmet criteria wins.
+            const candidateViolations = violationCount(candidate);
+            const currentViolations = violationCount(current);
+            if (candidateViolations !== currentViolations) {
+                return candidateViolations < currentViolations;
             }
-            // Tier 2: within the same tier, prefer the lower failure score.
-            if (candidate.failureScore !== current.failureScore) {
-                return candidate.failureScore < current.failureScore;
+            // Tier 2: equal violations -> prefer the higher total score.
+            const candidateScore = scoreSum(candidate);
+            const currentScore = scoreSum(current);
+            if (candidateScore !== currentScore) {
+                return candidateScore > currentScore;
             }
             // Tier 3: tie-break on recency.
             return candidate.iteration > current.iteration;

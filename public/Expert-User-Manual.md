@@ -489,6 +489,14 @@ This section explains what the AI can change for you and how to phrase requests 
   - "Update Sarah’s context item to include her new backstory."
   - "Add a triggered context item for 'Neo-Singapore' that describes the skyline and tech vibe."
 
+#### Verifiable constraints (`=>`)
+- Start a context item's text with `=>` to turn it into a binary (pass/fail) verifiable constraint instead of passive background information.
+- A constraint is checked by the rater for every node it applies to: the text either fully satisfies it (Pass) or it does not (Fail). There is no partial score.
+- The generating model is told about the constraint up front, the rater scores it Pass/Fail, and the editor must satisfy it before the node is accepted.
+- Unlike a normal context item, the `=>` text is not added to the passive context block; it only appears as a constraint.
+- Express graded goals in binary form: state the bar as something that is either met or not (e.g., `=> the chapter must end on a cliffhanger`).
+- Example: `=> the text must be written in a noir style`.
+
 #### Limitations
 - The AI can set or change the single trigger keyword for a context item.
 - More complex activation conditions (beyond a single trigger keyword) must be edited manually.
@@ -624,21 +632,22 @@ Criteria come in **two kinds**:
    - No melodrama, rhetorical heightening, or inflation of the ordinary
    - *(Merges the former Subtlety, Emotional Subtlety, Understated Language, Dramatical Reframing, and Immediate Clarity criteria.)*
 
-5. **Keep the essence of the draft intact** (Goal: 9)
+5. **No Antithesis Reframing** (Goal: 8)
+   - Avoids inflating ordinary events through dramatic recontextualization such as "It wasn't X. It was Y." and subtler rhetorical inflation
+   - LLM-judged, so it works in any language (formerly a deterministic, English-only metric)
+
+6. **Keep the essence of the draft intact** (Goal: 9)
    - Creativity stays at the detail level
    - The draft's essence is treated as the source of truth for project consistency
 
 **Default Metric Criteria (deterministic):**
 
-6. **Avoids AI Clichés** — type `bannedPhrases`
+7. **Avoids AI Clichés** — type `bannedPhrases`
    - Flags overused AI phrases (e.g. "delve into", "tapestry", "testament to")
    - Phrase and regex lists are fully editable
 
-7. **Em-dash Restraint** — type `emDashDensity`
+8. **Em-dash Restraint** — type `emDashDensity`
    - Limits em-dashes per 1000 words (a strong AI-ism tell)
-
-8. **No Antithesis Reframing** — type `notXButY`
-   - Flags the "It wasn't X, it was Y" antithesis construction
 
 9. **Human-like Naming** — type `bannedNames`
    - Flags the most egregious overused fantasy/AI character names

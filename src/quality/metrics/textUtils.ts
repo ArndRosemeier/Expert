@@ -21,12 +21,6 @@ export function splitSentences(text: string): string[] {
         .filter(s => s.length > 0);
 }
 
-/** Returns the lower-cased first word of a sentence, stripped of punctuation. */
-export function firstWord(sentence: string): string {
-    const match = sentence.match(/[A-Za-z']+/);
-    return match ? match[0].toLowerCase() : '';
-}
-
 /**
  * Escapes a literal string for safe inclusion inside a regular expression.
  */

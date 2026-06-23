@@ -445,6 +445,7 @@ The application provides multiple generation levels for iterative improvement:
 - **Extract Context Button**: Generate context information for AI
 - **Contextual Awareness**: AI considers existing content structure
 - **Recursive Processing**: Apply context through document hierarchy
+- **Verifiable Constraints (`=>`)**: Start a context item's text with `=>` to make it a binary pass/fail constraint that the rater checks for each applicable node (instead of passive context). The generator is told about it, the rater scores it Pass/Fail, and the editor must satisfy it. Example: `=> the text must be written in a noir style`.
 
 ### Generation Controls
 - **Generate Button**: Start single generation cycle
@@ -516,12 +517,12 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Specificity & Concrete Detail** (Goal: 8): Specific examples vs. generalities
 - **Natural Human Voice** (Goal: 8): Reads like a person wrote it — varied rhythm and distinctive word choice (merges the former tone/flow/variation/lexical criteria)
 - **Restraint & Subtlety** (Goal: 8): Implies rather than states; no melodrama or inflation of the ordinary (merges the former subtlety/understatement criteria)
+- **No Antithesis Reframing** (Goal: 8): Avoids dramatic reframing like "It wasn't X. It was Y."; LLM-judged so it works in any language
 - **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
 
 **Default Metric Criteria (deterministic):**
 - **Avoids AI Clichés** (`bannedPhrases`): Flags overused AI phrases like "delve into"; editable phrase/regex list
 - **Em-dash Restraint** (`emDashDensity`): Limits em-dash density per 1000 words
-- **No Antithesis Reframing** (`notXButY`): Flags the "It wasn't X, it was Y" construction
 - **Human-like Naming** (`bannedNames`): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**
@@ -893,6 +894,7 @@ The application provides multiple generation levels for iterative improvement:
 - **Extract Context Button**: Generate context information for AI
 - **Contextual Awareness**: AI considers existing content structure
 - **Recursive Processing**: Apply context through document hierarchy
+- **Verifiable Constraints (`=>`)**: Start a context item's text with `=>` to make it a binary pass/fail constraint that the rater checks for each applicable node (instead of passive context). The generator is told about it, the rater scores it Pass/Fail, and the editor must satisfy it. Example: `=> the text must be written in a noir style`.
 
 ### Generation Controls
 - **Generate Button**: Start single generation cycle
@@ -964,12 +966,12 @@ Criteria come in **two kinds**: *LLM criteria* are scored 1-10 by the Rater AI; 
 - **Specificity & Concrete Detail** (Goal: 8): Specific examples vs. generalities
 - **Natural Human Voice** (Goal: 8): Reads like a person wrote it — varied rhythm and distinctive word choice (merges the former tone/flow/variation/lexical criteria)
 - **Restraint & Subtlety** (Goal: 8): Implies rather than states; no melodrama or inflation of the ordinary (merges the former subtlety/understatement criteria)
+- **No Antithesis Reframing** (Goal: 8): Avoids dramatic reframing like "It wasn't X. It was Y."; LLM-judged so it works in any language
 - **Keep the essence of the draft intact** (Goal: 9): Creativity stays at the detail level; preserves the draft's essence
 
 **Default Metric Criteria (deterministic):**
 - **Avoids AI Clichés** (`bannedPhrases`): Flags overused AI phrases like "delve into"; editable phrase/regex list
 - **Em-dash Restraint** (`emDashDensity`): Limits em-dash density per 1000 words
-- **No Antithesis Reframing** (`notXButY`): Flags the "It wasn't X, it was Y" construction
 - **Human-like Naming** (`bannedNames`): Flags overused fantasy/AI names; editable, case-sensitive list
 
 **Criteria Settings:**

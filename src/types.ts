@@ -4,8 +4,8 @@ export interface CreatorPayload {
     response: string;
 }
 export interface EditorPayload {
-    prompt:string;
-    advice: string;
+    prompt: string;
+    revisedText: string;
 } 
 
 /**
@@ -15,10 +15,7 @@ export interface EditorPayload {
 export type MetricType =
     | 'emDashDensity'
     | 'bannedPhrases'
-    | 'bannedNames'
-    | 'tricolon'
-    | 'repeatedSentenceOpeners'
-    | 'notXButY';
+    | 'bannedNames';
 
 /** Parameters for the em-dash density metric. */
 export interface EmDashDensityParams {
@@ -44,32 +41,11 @@ export interface BannedNamesParams {
     maxOccurrences: number;
 }
 
-/** Parameters for the tricolon ("rule of three") metric. */
-export interface TricolonParams {
-    /** Maximum number of "X, Y, and Z" enumerations per 1000 words. */
-    maxPer1000Words: number;
-}
-
-/** Parameters for the repeated sentence openers metric. */
-export interface RepeatedSentenceOpenersParams {
-    /** Maximum number of sentences that may share the same opening word. */
-    maxRepeats: number;
-}
-
-/** Parameters for the "It wasn't X, it was Y" antithesis metric. */
-export interface NotXButYParams {
-    /** Number of antithesis constructions tolerated before failing. */
-    maxOccurrences: number;
-}
-
 /** Maps each metric type to its strongly-typed parameter object. */
 export interface MetricParamsMap {
     emDashDensity: EmDashDensityParams;
     bannedPhrases: BannedPhrasesParams;
     bannedNames: BannedNamesParams;
-    tricolon: TricolonParams;
-    repeatedSentenceOpeners: RepeatedSentenceOpenersParams;
-    notXButY: NotXButYParams;
 }
 
 /** Supported field types for auto-generated metric parameter UI controls. */
@@ -131,6 +107,12 @@ export interface LLMCriterion {
     description?: string;
     outline?: boolean;
     leaf?: boolean;
+    /**
+     * When true, this is a binary (pass/fail) verifiable constraint: the rater
+     * answers 1 (fully satisfied) or 0 (not), and `goal` is 1. Used for per-node
+     * constraints sourced from conditional context items prefixed with "=>".
+     */
+    binary?: boolean;
 }
 
 /** A quality criterion is either an LLM-scored or a deterministic metric criterion. */

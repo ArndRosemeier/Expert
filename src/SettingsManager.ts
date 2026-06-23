@@ -1,5 +1,6 @@
 import { OrchestratorPrompts, defaultPrompts, PROMPT_STORAGE_KEY } from "./PromptManager";
-import { QualityCriterion } from "./types";
+import { QualityCriterion, isMetricCriterion } from "./types";
+import { isRegisteredMetricType } from "./quality/metrics/MetricRegistry";
 import { PREVIOUS_DEFAULT_CRITERIA_SETS } from "./quality/historicalDefaultCriteria";
 import { StorageService, IStorageService } from './StorageService';
 import { VersionService } from './VersionService';
@@ -52,6 +53,14 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
     },
     {
         kind: 'llm',
+        name: "No Antithesis Reframing",
+        description: "The text avoids artificially elevating the significance of ordinary actions, objects, or perceptions through dramatic recontextualization. This includes explicit patterns like \"It wasn't X. It was Y.\" as well as subtler rhetorical inflation, where minor events are framed as symbolically profound or transformative without narrative justification. Significance should emerge organically rather than through overt authorial framing. (Applies in the text's own language.)",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        kind: 'llm',
         name: "Keep the essence of the draft intact",
         description: "Creativity can only be on the details level. The essence of the draft is the ultimate truth, if that gets violated, other contents created for the same project will get inconsistent.",
         goal: 9,
@@ -90,18 +99,6 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         weight: 2,
         enabled: true,
         description: "Limits em-dash density, a strong AI-ism tell.",
-        goal: 8,
-        outline: false,
-        leaf: true
-    },
-    {
-        kind: 'metric',
-        name: "No Antithesis Reframing",
-        metricType: 'notXButY',
-        params: { maxOccurrences: 0 },
-        weight: 2,
-        enabled: true,
-        description: "Flags the \"It wasn't X, it was Y\" antithesis construction.",
         goal: 8,
         outline: false,
         leaf: true
@@ -289,6 +286,11 @@ export class SettingsManager {
                             // future default changes keep propagating automatically.
                             profile.criteria = DEFAULT_CRITERIA;
                             hasDefaultCriteria = true;
+                        } else {
+                            // Customized criteria are kept as-is, but drop any metric
+                            // criterion whose metric type was retired so evaluation
+                            // never hits an unregistered type.
+                            profile.criteria = this.sanitizeCriteria(profile.criteria);
                         }
                         
                         // Add default context extraction prompt and web search preferences to existing profiles that don't have them
@@ -515,6 +517,22 @@ export class SettingsManager {
      * The `kind` discriminant is intentionally ignored so legacy sets (saved
      * before the discriminant existed) still match.
      */
+    /**
+     * Removes metric criteria that reference a metric type which is no longer
+     * registered (e.g. a retired deterministic metric). This is a one-time data
+     * migration, not a silent fallback: every dropped criterion is logged so the
+     * change is visible.
+     */
+    private sanitizeCriteria(criteria: QualityCriterion[]): QualityCriterion[] {
+        return criteria.filter(criterion => {
+            if (isMetricCriterion(criterion) && !isRegisteredMetricType(criterion.metricType)) {
+                console.warn(`Dropping criterion "${criterion.name}": metric type "${criterion.metricType}" is no longer supported.`);
+                return false;
+            }
+            return true;
+        });
+    }
+
     private criteriaMatch(criteria: QualityCriterion[], target: QualityCriterion[]): boolean {
         if (criteria.length !== target.length) {
             return false;

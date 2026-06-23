@@ -5,6 +5,13 @@ import { getContextItems, parseSectionTitles } from './ContextFormat';
 import { generateNewContextID } from './ContextIDGenerator';
 import { findProjectByNode } from './state';
 
+/**
+ * Prefix that turns a conditional context item into a per-node binary
+ * verifiable constraint. Such items are removed from the passive context block
+ * and instead surfaced as binary (pass/fail) criteria checked by the rater.
+ */
+export const CONSTRAINT_PREFIX = '=>';
+
 // ---------------- Conditional Context System ----------------
 //
 // Conditional context items are facts/instructions attached to a node (usually
@@ -1289,8 +1296,31 @@ export class DocumentNode {
      * Items are concatenated separated by two newlines, in order from root → ... → this.
      */
     public assembleConditionalContext(triggeringNode: DocumentNode, root: DocumentNode): string {
-        const items = this.collectMatchingConditionalContextItems(triggeringNode, root);
+        // Constraint items (prefixed with CONSTRAINT_PREFIX) are surfaced as
+        // verifiable criteria, not as passive context, so they are excluded here.
+        const items = this.collectMatchingConditionalContextItems(triggeringNode, root)
+            .filter(i => !DocumentNode.isConstraintText(i.text));
         return items.map(i => i.text).join('\n\n');
+    }
+
+    /** True when a context item's text declares a binary verifiable constraint. */
+    public static isConstraintText(text: string): boolean {
+        return text.trimStart().startsWith(CONSTRAINT_PREFIX);
+    }
+
+    /** Remove the constraint prefix and surrounding whitespace from an item's text. */
+    public static stripConstraintPrefix(text: string): string {
+        return text.trimStart().slice(CONSTRAINT_PREFIX.length).trim();
+    }
+
+    /**
+     * Applicable binary constraints for THIS node (this node as the trigger),
+     * returned as the instruction texts with the constraint prefix stripped.
+     */
+    public getApplicableConstraints(root: DocumentNode): string[] {
+        return this.collectMatchingConditionalContextItems(this, root)
+            .filter(i => DocumentNode.isConstraintText(i.text))
+            .map(i => DocumentNode.stripConstraintPrefix(i.text));
     }
 
     /**

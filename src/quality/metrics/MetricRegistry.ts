@@ -3,9 +3,6 @@ import { MetricDefinition } from './MetricTypes';
 import { emDashDensityMetric } from './emDashDensity';
 import { bannedPhrasesMetric } from './bannedPhrases';
 import { bannedNamesMetric } from './bannedNames';
-import { tricolonMetric } from './tricolon';
-import { repeatedSentenceOpenersMetric } from './repeatedSentenceOpeners';
-import { notXButYMetric } from './notXButY';
 
 /**
  * Strongly-typed registry of every built-in metric definition, keyed by metric
@@ -19,10 +16,7 @@ export type MetricRegistry = {
 const METRIC_REGISTRY: MetricRegistry = {
     emDashDensity: emDashDensityMetric,
     bannedPhrases: bannedPhrasesMetric,
-    bannedNames: bannedNamesMetric,
-    tricolon: tricolonMetric,
-    repeatedSentenceOpeners: repeatedSentenceOpenersMetric,
-    notXButY: notXButYMetric
+    bannedNames: bannedNamesMetric
 };
 
 /**
@@ -40,6 +34,14 @@ export function getMetricDefinition<K extends MetricType>(type: K): MetricDefini
 /** Returns all registered metric definitions (for building UI option lists). */
 export function getAllMetricDefinitions(): MetricDefinition<MetricType>[] {
     return Object.values(METRIC_REGISTRY) as MetricDefinition<MetricType>[];
+}
+
+/**
+ * True if the given string is a currently-registered metric type. Used to
+ * migrate away persisted criteria that reference metrics which no longer exist.
+ */
+export function isRegisteredMetricType(type: string): boolean {
+    return type in METRIC_REGISTRY;
 }
 
 /** Compile-time exhaustiveness guard that fails loudly at runtime if reached. */
@@ -64,12 +66,6 @@ export function withMetric<R>(
             return callback(getMetricDefinition('bannedPhrases'), criterion.params);
         case 'bannedNames':
             return callback(getMetricDefinition('bannedNames'), criterion.params);
-        case 'tricolon':
-            return callback(getMetricDefinition('tricolon'), criterion.params);
-        case 'repeatedSentenceOpeners':
-            return callback(getMetricDefinition('repeatedSentenceOpeners'), criterion.params);
-        case 'notXButY':
-            return callback(getMetricDefinition('notXButY'), criterion.params);
         default:
             return assertNever(criterion);
     }

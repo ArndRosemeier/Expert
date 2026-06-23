@@ -182,7 +182,10 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             {{response}}
             ---
             
-            Please rate this response objectively against all of the following criteria. Use your best judgment to assess the quality on a scale of 1-10.
+            Please rate this response objectively against all of the following criteria. Use your best judgment.
+            Each criterion carries a "scoring" field telling you how to score it:
+            - "scale 1-10": assess quality on a scale of 1 to 10.
+            - "BINARY: score exactly 1 if fully satisfied, otherwise 0": these are hard pass/fail constraints. Score exactly 1 when the constraint is fully satisfied, or exactly 0 when it is not. Never use any other number for a BINARY criterion.
             Do not aim to please, be just!
             
             Criteria to evaluate:
@@ -190,13 +193,14 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             
             Provide your response as a JSON array of objects. Each object must have three keys:
             - "criterion": The exact name of the criterion being rated (use the full original name).
-            - "score": A number from 1 to 10 based on your objective assessment.
+            - "score": For "scale 1-10" criteria, a number from 1 to 10. For BINARY criteria, exactly 1 or 0.
             - "justification": A brief explanation for your score, written in the tone of a critique.
 
             Example:
             [
                 { "criterion": "Clarity & Conciseness", "score": 8, "justification": "The response is clear and well-structured." },
-                { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." }
+                { "criterion": "Engaging Flow", "score": 7, "justification": "The text is interesting but could have smoother transitions." },
+                { "criterion": "Constraint 1", "score": 0, "justification": "The text is not written in the required noir style." }
             ]
         `.trim(),
         placeholders: ['originalPrompt', 'response', 'criteria', 'language'],
@@ -205,19 +209,30 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
     editor: {
         text: `
-            Provide advice in {{language}}. Any structural elements (such as section headers) must always remain in English.
-            
-            The original task prompt was: "{{originalPrompt}}".
+            You are a precise editor. Work in {{language}}. Any structural elements (such as section headers) must always remain in English.
 
-            A response was generated: "{{response}}"
-            It was rated against several criteria (failing criteria include concrete details where available):
+            The original task was: "{{originalPrompt}}".
+
+            Here is the current text, which is {{nodeKind}}:
+            ---
+            {{response}}
+            ---
+
+            It was rated against these criteria (lines marked [FAILED] did not reach their goal):
             {{ratings}}
+            {{constraints}}
+            Your job is to edit the text so that EVERY criterion reaches its goal, paying special attention to the [FAILED] ones. Do not break criteria that already pass.
 
-            Please provide concise, actionable advice for the Creator LLM on how to improve the response to better meet the rating goals.
-            Focus on what needs to change, and address every failing criterion specifically.
+            Editing rules:
+            - Preserve the core: keep the substance, intent, voice, characters, plot, and overall structure intact.
+            - Change as little as possible, but as much as necessary. Make targeted, localized edits; do not rewrite from scratch.
+            - Keep the same kind of content ({{nodeKind}}). Preserve the existing formatting, including any "===Section===" headers, exactly.
+            - Do not introduce new ideas or content beyond what is needed to satisfy the failing criteria.
+
+            Output ONLY the full, revised text and nothing else. No commentary, no explanations, no preamble, no markup or labels around it. If the text already satisfies every criterion, return it unchanged.
         `.trim(),
-        placeholders: ['originalPrompt', 'response', 'ratings', 'language'],
-        description: "The system prompt for the 'Editor' AI, which provides feedback to the 'Creator' AI based on all ratings."
+        placeholders: ['originalPrompt', 'response', 'ratings', 'constraints', 'nodeKind', 'language'],
+        description: "The system prompt for the 'Editor' AI. It directly rewrites the text to satisfy all ratings (with special attention to failed ones), preserving the core and format, and returns the full revised text."
     },
 
     summarize_system: {
@@ -1727,6 +1742,10 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
   - <context edit id="existing_id">Updated context text here</context> (edit to global context)
   - <context edit id="existing_id" trigger="keyword">Updated context text here</context> (edit to triggered context)
   - <context remove id="existing_id" />
+- VERIFIABLE CONSTRAINTS: A context item whose text begins with "=>" is NOT passive background — it is a binary (pass/fail) constraint that the rater explicitly checks for every node it applies to. The text after "=>" is the requirement (e.g. "=> the text must be written in a noir style"). Unlike normal context items, "=>" items are hidden from the passive context block and instead surfaced as a hard pass/fail criterion the generated text must satisfy.
+  - To create one, simply start the context text with "=>": <context add>=> the chapter must end on a cliffhanger</context> (combine with trigger="keyword" to scope it like any other item).
+  - Express graded goals in binary form: state the bar as something that is either met or not. Use a constraint only when the requirement is objectively verifiable; use a normal context item for soft guidance.
+  - When you read existing context items, treat any "=>"-prefixed text as such a constraint and preserve the "=>" prefix when editing it.
 - IDs are INTERNAL ONLY for system use. When referencing context items in conversation, refer to their content, not their IDs. Use IDs strictly inside XML commands; never mention IDs in natural language responses.
 - The "Triggered context" list provided to you is the complete and authoritative set of trigger-word entries for this step. When asked to reference or list items with trigger words, use ONLY that list. Do not infer or invent additional triggered entries.
 

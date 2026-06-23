@@ -287,8 +287,82 @@ const WITH_METRICS_DEFAULT_CRITERIA: QualityCriterion[] = [
     }
 ];
 
+/**
+ * The streamlined default set (5 LLM + 4 metric) that shipped before the
+ * antithesis guard was converted from a deterministic metric into an LLM
+ * criterion. Represented in LLM-shaped form because criteriaMatch only compares
+ * name/description/goal/outline/leaf. Descriptions mirror exactly what was
+ * stored for users so unchanged profiles upgrade cleanly.
+ */
+const ANTITHESIS_METRIC_DEFAULT_CRITERIA: QualityCriterion[] = [
+    {
+        name: "Prompt Adherence",
+        description: "The response directly addresses the given prompt and stays on topic throughout. It fulfills the specific request without wandering off into tangential areas.",
+        goal: 9,
+        outline: true,
+        leaf: true
+    },
+    {
+        name: "Specificity & Concrete Detail",
+        description: "The writing uses specific, concrete details and examples rather than vague generalities or abstract summary.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Natural Human Voice",
+        description: "The prose reads like a specific person wrote it, not a model. Sentence length and structure vary naturally, creating rhythm without monotony or a formulaic cadence. Word choices are distinctive and occasionally idiosyncratic rather than generic, and phrasing avoids stock idioms and predictable constructions. Flow is smooth but never mechanical or self-consciously 'writerly'.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Restraint & Subtlety",
+        description: "The writing trusts the reader. It implies emotion and meaning through concrete action and detail rather than naming them, and never inflates ordinary events into something grand, symbolic, or transformative. Tone stays measured — no melodrama, no rhetorical heightening, no telling the reader how to feel.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Keep the essence of the draft intact",
+        description: "Creativity can only be on the details level. The essence of the draft is the ultimate truth, if that gets violated, other contents created for the same project will get inconsistent.",
+        goal: 9,
+        outline: true,
+        leaf: true
+    },
+    {
+        name: "Avoids AI Clichés",
+        description: "Flags overused AI cliché phrases. Edit the phrase/regex list to customize.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Em-dash Restraint",
+        description: "Limits em-dash density, a strong AI-ism tell.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "No Antithesis Reframing",
+        description: "Flags the \"It wasn't X, it was Y\" antithesis construction.",
+        goal: 8,
+        outline: false,
+        leaf: true
+    },
+    {
+        name: "Human-like Naming",
+        description: "Flags the most egregious overused fantasy/AI names. Case-sensitive; edit the list to customize.",
+        goal: 8,
+        outline: true,
+        leaf: true
+    }
+];
+
 /** All previously-released default criteria sets, newest first. */
 export const PREVIOUS_DEFAULT_CRITERIA_SETS: QualityCriterion[][] = [
+    ANTITHESIS_METRIC_DEFAULT_CRITERIA,
     WITH_METRICS_DEFAULT_CRITERIA,
     PRE_METRICS_DEFAULT_CRITERIA
 ];

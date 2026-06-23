@@ -30,9 +30,16 @@ export class RatingsRenderer {
             return this.renderNoRatings(title, compact);
         }
 
-        const maxScore = Math.max(...ratings.map(r => Math.max(r.actual, r.goal)), 10);
+        // Group scalar (1-10) criteria first and binary (pass/fail) constraints
+        // last, so the user reads all comparably-scored criteria together. The
+        // sort is stable, preserving the original order within each group.
+        const orderedRatings = [...ratings].sort(
+            (a, b) => Number(a.binary === true) - Number(b.binary === true)
+        );
+
+        const maxScore = Math.max(...orderedRatings.map(r => Math.max(r.actual, r.goal)), 10);
         
-        const ratingsHtml = ratings.map(rating => 
+        const ratingsHtml = orderedRatings.map(rating => 
             this.renderRatingItem(rating, maxScore, { 
                 compact, 
                 showGoalLine, 
@@ -67,7 +74,28 @@ export class RatingsRenderer {
         
         const barHeight = compact ? '16px' : '24px';
         const itemMargin = compact ? '0.5rem' : '1rem';
-        
+
+        // Binary (pass/fail) constraints read as a Pass/Fail pill rather than an
+        // x/10 progress bar, which would be misleading for a 0/1 score.
+        if (rating.binary === true) {
+            const label = metGoal ? 'Pass' : 'Fail';
+            return `
+            <div class="rating-item" style="margin-bottom: ${itemMargin};">
+                <div class="rating-header" style="gap: 0.5rem;">
+                    <div class="rating-criterion" title="${this.escapeHtml(rating.criterion)}" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(rating.criterion)}</div>
+                    <div class="rating-score-display" style="flex: none;">
+                        <span class="rating-status-pill" style="background-color: ${statusColor}; color: white; font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.85rem; white-space: nowrap;">${statusIcon} ${label}</span>
+                    </div>
+                </div>
+                ${showJustification && rating.justification ? `
+                    <div class="rating-justification">
+                        "${this.escapeHtml(rating.justification)}"
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        }
+
         return `
             <div class="rating-item" style="margin-bottom: ${itemMargin};">
                 <div class="rating-header">

@@ -21,6 +21,9 @@ export interface Rating {
     
     /** Optional additional description */
     description?: string;
+
+    /** When true, this rating is a binary (pass/fail) constraint (goal 1, actual 0 or 1). */
+    binary?: boolean;
 }
 
  

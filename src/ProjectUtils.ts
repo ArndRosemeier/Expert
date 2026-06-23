@@ -1,6 +1,6 @@
 import { ProjectManager } from './ProjectManager';
 import { DocumentNode } from './DocumentNode';
-import { QualityCriterion } from './types';
+import { QualityCriterion, isLLMCriterion } from './types';
 
 /**
  * Interface for tag analysis results
@@ -89,6 +89,35 @@ export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
         };
     });
     
+    return JSON.stringify(formattedCriteria, null, 2);
+}
+
+/**
+ * Formats criteria for the rater LLM. Identical to {@link formatCriteriaAsJson}
+ * but adds a `scoring` field so the rater knows how to score each criterion:
+ * binary constraints must be scored exactly 1 (satisfied) or 0 (not), while all
+ * other criteria use the regular 1-10 scale.
+ *
+ * @param criteria Array of quality criteria to format
+ * @returns JSON string representation of criteria with scoring guidance
+ */
+export function formatCriteriaForRater(criteria: QualityCriterion[]): string {
+    if (!criteria || criteria.length === 0) {
+        return 'No criteria defined';
+    }
+
+    const formattedCriteria = criteria.map(c => {
+        const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
+        const isBinary = isLLMCriterion(c) && c.binary === true;
+        return {
+            name: shortName,
+            description: c.description || shortName,
+            scoring: isBinary
+                ? 'BINARY: score exactly 1 if fully satisfied, otherwise 0'
+                : 'scale 1-10'
+        };
+    });
+
     return JSON.stringify(formattedCriteria, null, 2);
 }
 

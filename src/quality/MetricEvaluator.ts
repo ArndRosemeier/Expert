@@ -56,7 +56,11 @@ export function formatCriteriaForCreator(criteria: QualityCriterion[]): string {
         const shortName = criterion.name.indexOf('.') > 0
             ? criterion.name.substring(0, criterion.name.indexOf('.'))
             : criterion.name;
-        return { name: shortName, description: criterion.description || shortName };
+        const baseDescription = criterion.description || shortName;
+        const description = criterion.binary === true
+            ? `MANDATORY (binary pass/fail): ${baseDescription}`
+            : baseDescription;
+        return { name: shortName, description };
     }).filter((entry): entry is { name: string; description: string } => entry !== null);
 
     return JSON.stringify(formatted, null, 2);

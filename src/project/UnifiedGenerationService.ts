@@ -12,7 +12,7 @@ import { createPromptExpansionService } from '../services/PromptExpansionService
 import { CoherenceService } from '../ui/modals/services/CoherenceService';
 import { GenerationErrorService } from '../ui/modals/services/GenerationErrorService';
 import { GenerationCoordinator } from './GenerationCoordinator';
-import { QualityCriterion, CreatorPayload } from '../types';
+import { QualityCriterion, CreatorPayload, LLMCriterion } from '../types';
 import { LoopProgress } from '../LoopOrchestrator';
 import { Rating } from '../types/RatingTypes';
 import { TaskModelService } from '../services/TaskModelService';
@@ -598,8 +598,13 @@ export class UnifiedGenerationService {
         for (let level = minLevel; level <= maxLevel; level++) {
             if (level <= maxGenerationLevel) {
                 // Within generation parameters - apply normal rules
-                // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed
-                const needsCoherenceCheck = (levels.coherenceLevel + 1) >= level && level > 0;
+                // UI shows child level but stores parent level, so add 1 to check if this level should be analyzed.
+                // Coherence (and its intentional layer/sibling coupling) is only
+                // meaningful when an autofix is configured. With autofix off (-1)
+                // a coherence check cannot change anything, so it must not be
+                // required nor block expansion / drilling deeper.
+                const autofixConfigured = levels.autofixSeverity !== -1;
+                const needsCoherenceCheck = autofixConfigured && (levels.coherenceLevel + 1) >= level && level > 0;
                 
                 targetStates[level] = {
                     level,
@@ -2048,10 +2053,25 @@ export class UnifiedGenerationService {
         const isLeafNode = node.isLeaf;
         const filteredCriteria = this.filterCriteriaForNodeType(profile.criteria, isLeafNode);
 
+        // Per-node binary verifiable constraints sourced from conditional context
+        // items prefixed with "=>". Scope/leaf gating already happened in the
+        // context layer, so these are appended after filterCriteriaForNodeType.
+        const constraintTexts = node.getApplicableConstraints(this.deps.rootNode);
+        const constraintCriteria: LLMCriterion[] = constraintTexts.map((text, i) => ({
+            kind: 'llm',
+            name: `Constraint ${i + 1}`,
+            description: text,
+            goal: 1,
+            binary: true,
+            outline: true,
+            leaf: true,
+        }));
+        const criteria = [...filteredCriteria, ...constraintCriteria];
+
         // Create loop input
         const loopInput: LoopInput = {
             prompt: filledPrompt,
-            criteria: filteredCriteria,
+            criteria: criteria,
             maxIterations: profile.maxIterations || 3,
             response: '', // Initial response is empty
             isLeafNode: isLeafNode,

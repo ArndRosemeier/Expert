@@ -266,7 +266,8 @@ class ContentViewer extends UIComponent {
                     goal: rating.goal || 10,
                     criterion: rating.criterion || 'Unknown',
                     justification: rating.justification,
-                    passed: rating.passed
+                    passed: rating.passed,
+                    binary: rating.binary
                 };
             });
             
@@ -1178,15 +1179,38 @@ export class NodeInspectorModal extends BaseModal {
     }
 
     private renderVersionRatings(ratings: Rating[]): string {
+        // Group scalar (1-10) criteria first and binary (pass/fail) constraints
+        // last, so comparably-scored criteria read together. Stable sort keeps
+        // the original order within each group.
+        const orderedRatings = [...ratings].sort(
+            (a, b) => Number(a.binary === true) - Number(b.binary === true)
+        );
+
         // Use 3-column layout with visual progress bars (0-10 scale)
-        const ratingsHtml = ratings.map(rating => {
+        const ratingsHtml = orderedRatings.map(rating => {
             const score = rating.actual || (rating as any).score || 0; // Support both old and new formats
             const goal = rating.goal || 10;
+            const criterionName = rating.criterion || 'Unknown';
+
+            // Binary (pass/fail) constraints read as a Pass/Fail pill rather than a
+            // 0-10 bar, which would be misleading for a 0/1 score.
+            if (rating.binary === true) {
+                const met = score >= goal;
+                const pillColor = met ? '#28a745' : '#dc3545';
+                const label = met ? '✓ Pass' : '✗ Fail';
+                // Binary rows have no 0-10 bar, so the constraint text gets the
+                // freed-up width (abbreviated with an ellipsis; full text on hover).
+                return `
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; padding: 0.125rem 0;">
+                    <span title="${this.escapeHtml(criterionName)}" style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;">${this.escapeHtml(criterionName)}</span>
+                    <span style="font-weight: 600; font-size: 0.75rem; color: white; background: ${pillColor}; padding: 0.1rem 0.5rem; border-radius: 999px; min-width: 3rem; text-align: center; white-space: nowrap;">${label}</span>
+                </div>
+                `;
+            }
+
             const scorePercentage = Math.min((score / 10) * 100, 100); // Always scale to 10
             const goalPercentage = Math.min((goal / 10) * 100, 100); // Goal indicator position
-            
-            const criterionName = rating.criterion || 'Unknown';
-            
+
             const barColor = score >= goal ? '#28a745' : (score >= goal * 0.7 ? '#ffc107' : '#dc3545');
             const textColor = score >= goal ? '#28a745' : '#dc3545';
             
