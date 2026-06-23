@@ -922,7 +922,7 @@ export class DocumentNode {
     /**
      * Sets content during generation process (does NOT promote to master automatically).
      */
-    setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number): void {
+    setContentFromGeneration(newContent: string, model?: string, iterationIndex?: number, modelTag?: string): void {
         // Get current master version for title preservation
         const currentMaster = this.getMasterVersion();
         if (!currentMaster) {
@@ -933,6 +933,11 @@ export class DocumentNode {
         const tags = ['generated']; // Do NOT include master tag automatically
         if (iterationIndex !== undefined) {
             tags.push(`iteration${iterationIndex}`);
+        }
+        // Tag the version with the friendly model name so users can see at a
+        // glance which model produced each generated version.
+        if (modelTag) {
+            tags.push(modelTag);
         }
         
         const metadata: { [key: string]: any } = {};

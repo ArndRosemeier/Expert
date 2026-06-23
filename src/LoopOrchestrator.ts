@@ -48,6 +48,8 @@ interface LoopResult {
     iterations: number;
     success: boolean;
     aborted: boolean;
+    /** Friendly display name of the model used to generate this content. */
+    generationModelName: string;
 }
 
 // New interface to track each iteration's performance
@@ -259,10 +261,15 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         const generationModel = input.isLeafNode ? 'prose' : 'creator';
         // const contentType = input.isLeafNode ? 'prose' : 'outline';
 
+        // Friendly name of the generating model, hoisted so it can be returned
+        // in the LoopResult regardless of which exit path is taken.
+        let generationModelName = '';
+
         try {
             
             // Get model names for progress messaging
-            const creatorModelName = await this.getModelNameForPurpose(generationModel);
+            generationModelName = await this.getModelNameForPurpose(generationModel);
+            const creatorModelName = generationModelName;
             // const raterModelName = await this.getModelNameForPurpose('rater');
             const editorModelName = await this.getModelNameForPurpose('editor');
             
@@ -551,7 +558,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 history: [],
                 iterations: 0,
                 success: false,
-                aborted: false
+                aborted: false,
+                generationModelName: generationModelName
             };
         } finally {
             this.isRunning = false;
@@ -590,7 +598,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             history,
             iterations: history.filter(h => h.type === 'creator').length,
             success: finalSuccess,
-            aborted
+            aborted,
+            generationModelName: generationModelName
         };
     }
 

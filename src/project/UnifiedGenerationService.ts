@@ -1754,12 +1754,18 @@ export class UnifiedGenerationService {
                 
                 // End the generation session with the final result
                 node.endGenerationSession(result.success, result.finalResponse);
+
+                // Friendly model-name tag (e.g. "GPT 5.5", "Claude Opus 4.8")
+                // attached to each generated version so users can see which
+                // model produced the text. The orchestrator already resolved
+                // the display name, so we just strip the provider prefix.
+                const modelTag = this.formatModelTag(result.generationModelName);
                 
                 // Create generation versions from the completed session iterations
                 const latestSession = node.getLatestGenerationSession();
                 if (latestSession && latestSession.iterations.length > 0) {
                     latestSession.iterations.forEach((iteration) => {
-                        node.setContentFromGeneration(iteration.content, modelName, iteration.iteration);
+                        node.setContentFromGeneration(iteration.content, modelName, iteration.iteration, modelTag);
                     });
                 }
                 
@@ -1774,7 +1780,11 @@ export class UnifiedGenerationService {
                     node.promoteToMaster(finalVersion.id, ['generatedWinner']);
                 } else {
                     // Fallback: create a new version for the final content and promote it
-                    const newVersionId = node.addVersion(['generated', 'finalResult'], {
+                    const fallbackTags = ['generated', 'finalResult'];
+                    if (modelTag) {
+                        fallbackTags.push(modelTag);
+                    }
+                    const newVersionId = node.addVersion(fallbackTags, {
                         content: result.finalResponse
                     });
                     if (newVersionId) {
@@ -1848,6 +1858,26 @@ export class UnifiedGenerationService {
             // Note: Individual content generation does not manage isGenerating flag
             // Only the main unified generation process manages this flag
         }
+    }
+
+    /**
+     * Turns a model display name into a concise tag for version labelling.
+     * The orchestrator returns catalog names like "OpenAI: GPT-5.5" or
+     * "Anthropic: Claude Opus 4.8"; we strip the leading "Provider: " prefix so
+     * the tag reads as the bare model name (e.g. "GPT-5.5", "Claude Opus 4.8").
+     * @param displayName Friendly model name resolved by the loop orchestrator.
+     * @returns The cleaned model tag, or an empty string when no name is known.
+     */
+    private formatModelTag(displayName: string): string {
+        const trimmed = displayName.trim();
+        if (trimmed === '') {
+            return '';
+        }
+        const separatorIndex = trimmed.indexOf(': ');
+        if (separatorIndex !== -1) {
+            return trimmed.slice(separatorIndex + 2).trim();
+        }
+        return trimmed;
     }
 
     /**
