@@ -17,6 +17,17 @@ import { XML_TAG_DEFINITIONS } from '../types/XMLStoryTypes';
 
 
 /**
+ * Regex fragment matching a run of tag attributes while treating quoted values
+ * as opaque. Plain `[^>]` attribute scanning breaks the instant a value contains
+ * a literal `>` — which every verifiable-constraint context item does because it
+ * begins with the `=>` prefix (e.g. `text="=> must end on a cliffhanger"`).
+ * By consuming whole "..."/'...' strings as units, embedded `>` characters no
+ * longer terminate the tag prematurely.
+ */
+const TAG_ATTRS = `(?:"[^"]*"|'[^']*'|[^>])*?`;
+
+
+/**
  * Main XML parser for story creation system
  */
 export class XMLStoryParser {
@@ -289,8 +300,10 @@ export class XMLStoryParser {
         });
 
         // Legacy change_context_scope removed
-        // Handle context add/edit/remove (self-closing) with optional keyword
-        const contextAddRegex = /<context\s+([^>]*?)\s*\/>/gi;
+        // Handle context add/edit/remove (self-closing) with optional keyword.
+        // Quoted values may contain '>' (e.g. the "=>" constraint prefix), so the
+        // attribute run is scanned with quote-aware TAG_ATTRS instead of [^>].
+        const contextAddRegex = new RegExp(`<context\\s+(${TAG_ATTRS})\\s*\\/>`, 'gi');
         textWithMarkers = textWithMarkers.replace(contextAddRegex, (full, parametersText) => {
             const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
@@ -313,7 +326,7 @@ export class XMLStoryParser {
         });
 
         // Handle context add/edit commands with content between tags
-        const contextContentRegex = /<context\s+(add|edit)(\s+[^>]*?)?\s*>\s*([\s\S]*?)\s*<\/context>/gi;
+        const contextContentRegex = new RegExp(`<context\\s+(add|edit)(\\s+${TAG_ATTRS})?\\s*>\\s*([\\s\\S]*?)\\s*<\\/context>`, 'gi');
         textWithMarkers = textWithMarkers.replace(contextContentRegex, (full, commandType, parametersText, content) => {
             const params = this.parseCommandParameters(parametersText || '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
@@ -345,10 +358,12 @@ export class XMLStoryParser {
         const errors: ParseError[] = [];
         let cleanedText = text;
 
-        // Find all XML-like tags in the text (both self-closing and with content)
-        // FIXED: Self-closing regex now requires "/" before ">" to avoid matching opening tags of content tags
-        const xmlTagRegex = /<(outline|context)(\s[^>]*?)?\s*\/>/gi;
-        const xmlContentTagRegex = /<(outline|context)(\s[^>]*?)>\s*([\s\S]*?)\s*<\/\1>/gi;
+        // Find all XML-like tags in the text (both self-closing and with content).
+        // Self-closing regex requires "/" before ">" to avoid matching opening tags
+        // of content tags. Attribute runs use quote-aware TAG_ATTRS so values
+        // containing '>' (e.g. the "=>" constraint prefix) are not truncated.
+        const xmlTagRegex = new RegExp(`<(outline|context)(\\s${TAG_ATTRS})?\\s*\\/>`, 'gi');
+        const xmlContentTagRegex = new RegExp(`<(outline|context)(\\s${TAG_ATTRS})>\\s*([\\s\\S]*?)\\s*<\\/\\1>`, 'gi');
         
         const selfClosingMatches = Array.from(text.matchAll(xmlTagRegex));
         const contentMatches = Array.from(text.matchAll(xmlContentTagRegex));
@@ -442,7 +457,7 @@ export class XMLStoryParser {
 
         // Remove remaining XML commands from text but keep our markers
         // Preserve context/outline tags exactly at their positions by replacing with markers for chat echo
-        const elementTagRegex = /<(outline|context)(\s[^>]*?)?\s*(?:\/>|>\s*[\s\S]*?<\/\1>)/gi;
+        const elementTagRegex = new RegExp(`<(outline|context)(\\s${TAG_ATTRS})?\\s*(?:\\/>|>\\s*[\\s\\S]*?<\\/\\1>)`, 'gi');
         cleanedText = cleanedText.replace(elementTagRegex, _m => '');
 
 
