@@ -23,7 +23,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "Prompt Adherence",
         description: "The response directly addresses the given prompt and stays on topic throughout. It fulfills the specific request without wandering off into tangential areas.",
-        goal: 9,
+        goal: 8,
         outline: true,
         leaf: true
     },
@@ -31,7 +31,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "Specificity & Concrete Detail",
         description: "The writing uses specific, concrete details and examples rather than vague generalities or abstract summary.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -39,7 +39,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "Natural Human Voice",
         description: "The prose reads like a specific person wrote it, not a model. Sentence length and structure vary naturally, creating rhythm without monotony or a formulaic cadence. Word choices are distinctive and occasionally idiosyncratic rather than generic, and phrasing avoids stock idioms and predictable constructions. Flow is smooth but never mechanical or self-consciously 'writerly'.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -47,7 +47,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "Restraint & Subtlety",
         description: "The writing trusts the reader. It implies emotion and meaning through concrete action and detail rather than naming them, and never inflates ordinary events into something grand, symbolic, or transformative. Tone stays measured — no melodrama, no rhetorical heightening, no telling the reader how to feel.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -55,7 +55,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "No Antithesis Reframing",
         description: "The text avoids artificially elevating the significance of ordinary actions, objects, or perceptions through dramatic recontextualization. This includes explicit patterns like \"It wasn't X. It was Y.\" as well as subtler rhetorical inflation, where minor events are framed as symbolically profound or transformative without narrative justification. Significance should emerge organically rather than through overt authorial framing. (Applies in the text's own language.)",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -63,7 +63,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         kind: 'llm',
         name: "Keep the essence of the draft intact",
         description: "Creativity can only be on the details level. The essence of the draft is the ultimate truth, if that gets violated, other contents created for the same project will get inconsistent.",
-        goal: 9,
+        goal: 8,
         outline: true,
         leaf: true
     },
@@ -87,7 +87,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         weight: 2,
         enabled: true,
         description: "Flags overused AI cliché phrases. Edit the phrase/regex list to customize.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -99,7 +99,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         weight: 2,
         enabled: true,
         description: "Limits em-dash density, a strong AI-ism tell.",
-        goal: 8,
+        goal: 7,
         outline: false,
         leaf: true
     },
@@ -118,7 +118,7 @@ export const DEFAULT_CRITERIA: QualityCriterion[] = [
         weight: 2,
         enabled: true,
         description: "Flags the most egregious overused fantasy/AI names. Case-sensitive; edit the list to customize.",
-        goal: 8,
+        goal: 7,
         outline: true,
         leaf: true
     }
