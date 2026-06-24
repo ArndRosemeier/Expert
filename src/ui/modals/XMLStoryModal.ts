@@ -24,6 +24,7 @@ import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { DocumentNode, ChildScope, ChildScopeMode } from '../../DocumentNode';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
+import { parseSectionTitles } from '../../ContextFormat';
 import { 
     findProjectByNode
 } from '../../state';
@@ -1830,7 +1831,12 @@ export class XMLStoryModal extends SimpleModal {
             node: this.sourceNode,
             projectManager: project,
             showPreview: false,
-            showInheritedByDefault: true
+            showInheritedByDefault: true,
+            // Prospective children come from the LIVE outline being edited here, which
+            // may not be saved to the node yet. This keeps a scope targeting a not-yet
+            // -created child (created deterministically on expansion) from being flagged
+            // as orphaned.
+            prospectiveChildTitles: () => this.getProspectiveChildTitles()
         });
         this.ccEditor.mount(host);
     }
@@ -1903,13 +1909,45 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
+     * Valid direct-child titles for conditional-context scopes in this editor.
+     *
+     * If the node already has generated children, their titles win. Otherwise the
+     * titles are parsed from the LIVE outline being edited in this modal (which may
+     * not be saved to the node yet), because deterministic child creation will turn
+     * those `===Section===` headers into the children on expansion. Falls back to
+     * the node's saved content only when there is no live outline.
+     */
+    private getProspectiveChildTitles(): string[] {
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to read prospective children');
+        // Union of already-generated children and the sections in the LIVE outline
+        // being edited here (which may not be saved to the node yet). A node can be
+        // partially expanded (some sections already children) while the outline still
+        // lists sibling sections that will be created deterministically on expansion.
+        const titles: string[] = [];
+        const seen = new Set<string>();
+        const push = (t: string): void => {
+            if (!seen.has(t)) {
+                seen.add(t);
+                titles.push(t);
+            }
+        };
+        for (const child of this.sourceNode.children) push(child.title);
+        for (const sectionTitle of parseSectionTitles(this.getCurrentOutlineSafe())) push(sectionTitle);
+        // Fall back to the node's saved content only if there is no live outline at all.
+        if (titles.length === 0) {
+            for (const t of this.sourceNode.getDirectChildTitles()) push(t);
+        }
+        return titles;
+    }
+
+    /**
      * System rules for the LLM describing the full conditional-context capabilities:
      * trigger words (content gate), structural child scope (by direct child title),
      * and leaves-only reach. Also lists this node's direct children as valid scope targets.
      */
     private getKeywordContextRulesForAI(): string {
         if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to describe conditional context');
-        const childTitles = this.sourceNode.getDirectChildTitles();
+        const childTitles = this.getProspectiveChildTitles();
         const childList = childTitles.length > 0
             ? childTitles.map(t => `  • ${t}`).join('\n')
             : '  (this node currently has no direct child sections)';

@@ -1460,20 +1460,26 @@ export class DocumentNode {
      * authored at the top before anything below exists.
      */
     public getDirectChildTitles(): string[] {
-        if (this.children.length > 0) {
-            return this.children.map(c => c.title);
+        // Union of already-generated children and the prospective children parsed
+        // from this node's outline (===Section=== headers). Deterministic child
+        // creation fills in any outline section that has no child yet, so a scope
+        // may legitimately target a section that has not been expanded into a child
+        // node even while OTHER siblings already exist as children.
+        const titles: string[] = [];
+        const seen = new Set<string>();
+        for (const child of this.children) {
+            if (!seen.has(child.title)) {
+                seen.add(child.title);
+                titles.push(child.title);
+            }
         }
-        return parseSectionTitles(this.content || '');
-    }
-
-    /**
-     * Given a set of childScope titles, return those that match neither a
-     * current direct child nor a prospective child parsed from the outline.
-     * Used by the editor to flag orphaned scope selections.
-     */
-    public findOrphanScopeTitles(titles: string[]): string[] {
-        const known = new Set(this.getDirectChildTitles());
-        return titles.filter(t => !known.has(t));
+        for (const sectionTitle of parseSectionTitles(this.content || '')) {
+            if (!seen.has(sectionTitle)) {
+                seen.add(sectionTitle);
+                titles.push(sectionTitle);
+            }
+        }
+        return titles;
     }
 
     /**

@@ -9,6 +9,14 @@ export interface ConditionalContextEditorConfig {
     showPreview?: boolean; // show whether the selected item applies to this node + assembled text
     onNavigateToNodeId?: (nodeId: string) => void; // optional callback for inherited-source link behavior
     showInheritedByDefault?: boolean; // if true, inherited items are shown initially
+    /**
+     * Optional provider of prospective direct-child titles, used when the node has
+     * not been expanded yet. Embedders that hold a live, not-yet-saved outline
+     * (e.g. the node chat editor) supply the titles parsed from that outline so a
+     * scope targeting a child that will exist after expansion is not falsely
+     * flagged as orphaned. When omitted, the node's own saved content is parsed.
+     */
+    prospectiveChildTitles?: () => string[];
 }
 
 /**
@@ -38,6 +46,7 @@ export class ConditionalContextEditor {
     private showPreview: boolean;
     private onNavigateToNodeId: ((nodeId: string) => void) | undefined;
     private showInherited: boolean;
+    private prospectiveChildTitles: (() => string[]) | undefined;
 
     private container: HTMLElement | null = null;
     private cleanupHandlers: Array<() => void> = [];
@@ -67,6 +76,7 @@ export class ConditionalContextEditor {
         this.showPreview = config.showPreview ?? true;
         this.onNavigateToNodeId = config.onNavigateToNodeId;
         this.showInherited = config.showInheritedByDefault === true;
+        this.prospectiveChildTitles = config.prospectiveChildTitles;
     }
 
     public mount(container: HTMLElement): void {
@@ -484,7 +494,7 @@ export class ConditionalContextEditor {
         childChecklist.style.display = 'flex';
 
         const selected = new Set(item.childScope?.titles ?? []);
-        const childTitles = this.node.getDirectChildTitles();
+        const childTitles = this.getKnownChildTitles();
         const hasGenerated = this.node.children.length > 0;
 
         if (childTitles.length === 0) {
@@ -510,8 +520,10 @@ export class ConditionalContextEditor {
             }
         }
 
-        // Orphaned selections (a selected title that matches no current/prospective child)
-        const orphans = this.node.findOrphanScopeTitles(item.childScope?.titles ?? []);
+        // Orphaned selections: a selected title that matches neither a current child
+        // nor a prospective child (from generated children or the live/saved outline).
+        const known = new Set(childTitles);
+        const orphans = (item.childScope?.titles ?? []).filter(t => !known.has(t));
         for (const orphan of orphans) {
             const row = createElement('div');
             row.style.cssText = 'display: flex; gap: 0.4rem; align-items: center; color: #b91c1c;';
@@ -629,6 +641,21 @@ export class ConditionalContextEditor {
     }
 
     // ---------------- Helpers ----------------
+
+    /**
+     * The set of direct-child titles a scope can target: the union of generated
+     * children and prospective (not-yet-expanded) children. When an embedder
+     * supplies a live outline provider (e.g. the node chat editor's unsaved
+     * outline) it is used; otherwise the node's own union helper is used. Both
+     * sources already merge generated children with outline sections, so a scope
+     * targeting a section that will exist after expansion is never falsely orphaned.
+     */
+    private getKnownChildTitles(): string[] {
+        if (this.prospectiveChildTitles) {
+            return this.prospectiveChildTitles();
+        }
+        return this.node.getDirectChildTitles();
+    }
 
     private destroyInlineEditors(): void {
         this.editor?.destroy();
