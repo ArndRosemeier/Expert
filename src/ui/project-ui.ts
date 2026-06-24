@@ -974,10 +974,11 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         // Add old root as child of new root
         newRoot.children.push(oldRootNode);
 
-        // Update the project with the new structure
+        // Update the project with the new structure. The project title follows the
+        // new root node's title (the previous project name), so adding a top layer
+        // keeps the project's name intact.
         projectManager!.template = newTemplate;
         projectManager!.rootNode = newRoot;
-        projectManager!.projectTitle = newLevelName;
 
         // Ensure all nodes share the same template reference  
         AssertFlatTemplateCopy(projectManager!);

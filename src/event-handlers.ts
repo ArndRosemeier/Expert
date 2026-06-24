@@ -482,9 +482,9 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             // Create new root node with full version data
             const restoredRootNode = DocumentNode.fromJSON(nodeDataForCreation);
             
-            // Replace the project's root node
+            // Replace the project's root node. The project title follows the root
+            // node's title automatically, so there is nothing else to set here.
             project.rootNode = restoredRootNode;
-            project.projectTitle = importData.title || 'Imported Project';
             
         } else {
             console.log(`🔄 Importing root node with legacy format (no version data)`);
@@ -492,7 +492,6 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             // Legacy import: Set properties individually
             if (importData.title !== undefined) {
                 rootNode.setTitle(importData.title, 'imported');
-                project.projectTitle = importData.title; // Keep project title in sync
             }
 
             if (importData.content !== undefined) {

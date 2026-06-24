@@ -62,10 +62,18 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
 
     private static readonly ACTIVE_PROJECT_STORAGE_KEY = STORAGE_KEYS.ACTIVE_PROJECT;
 
-    projectTitle: string;
     template: ProjectTemplate;
     rootNode!: DocumentNode;
     language: string | null = null; // Project-specific language setting
+
+    /**
+     * The project's name is always its root node's live title. There is no
+     * separate stored copy, so renaming the root node renames the project with
+     * no risk of the two drifting out of sync.
+     */
+    get projectTitle(): string {
+        return this.rootNode.title;
+    }
     private loopOrchestrator: LoopOrchestrator;
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
@@ -110,7 +118,6 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         openRouterClient: OpenRouterClient
     ) {
         super();
-        this.projectTitle = projectTitle;
         this.template = template;
         this.loopOrchestrator = loopOrchestrator;
         this.settingsManager = settingsManager;
@@ -130,7 +137,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // to the hierarchy and defaults missing entries to null).
         const templateLayerLengths = this.template.layerLengths;
         const rootNodeLayerLengths = rootNodeTemplate.map((_, i) => templateLayerLengths[i] ?? null);
-        this.rootNode = new DocumentNode(0, this.projectTitle, null, rootNodeTemplate, '', rootNodeLayerLengths);
+        this.rootNode = new DocumentNode(0, projectTitle, null, rootNodeTemplate, '', rootNodeLayerLengths);
         
         // Root node keeps its UUID as the project identifier - only child nodes get normalized IDs
 

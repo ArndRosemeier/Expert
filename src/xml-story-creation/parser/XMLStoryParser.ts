@@ -341,6 +341,17 @@ export class XMLStoryParser {
             return markerId;
         });
 
+        // Handle node lookup requests (self-closing): <requestnode path="..."/>.
+        // The path may contain '/' or '\' separators, handled downstream.
+        const requestNodeRegex = new RegExp(`<requestnode\\s+(${TAG_ATTRS})\\s*\\/>`, 'gi');
+        textWithMarkers = textWithMarkers.replace(requestNodeRegex, (full, parametersText) => {
+            const params = this.parseCommandParameters(parametersText ?? '');
+            const markerId = `__XML_CMD_${markerIndex++}__`;
+            const path = params['path'] ?? '';
+            commands.push({ type: 'request_node', parameters: { path }, timestamp: new Date(), markerId, rawXml: full });
+            return markerId;
+        });
+
         // Ignore any stray legacy tags if encountered (no-op)
 
         return { commands, textWithMarkers };

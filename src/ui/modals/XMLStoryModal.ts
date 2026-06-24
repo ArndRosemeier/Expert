@@ -25,8 +25,10 @@ import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { DocumentNode, ChildScope, ChildScopeMode } from '../../DocumentNode';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { parseSectionTitles } from '../../ContextFormat';
+import { resolveNodePath } from '../../NodePathResolver';
 import { 
-    findProjectByNode
+    findProjectByNode,
+    getProjects
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
@@ -83,6 +85,10 @@ export class XMLStoryModal extends SimpleModal {
     
 
     private conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
+
+    // Max number of automatic node-lookup follow-up rounds per user message, so a
+    // chain of <requestnode/> commands cannot loop indefinitely.
+    private static readonly MAX_NODE_LOOKUP_ROUNDS = 5;
     // Legacy editing flag removed
     
     // Failed commands collection for user-prompted correction
@@ -1313,14 +1319,15 @@ export class XMLStoryModal extends SimpleModal {
                 const messageElement = document.getElementById('initial-chat-message');
                 if (messageElement) {
                     messageElement.innerHTML = `
-                        Hi! I'm here to help you edit and improve your content.
+                        Hi! I'm here to help you edit and improve your content. Just tell me what you want in plain language and I'll do the work.
                         
-                        I can help you:
-                        • <strong>Enhance outlines</strong> - Make them more detailed and compelling
-                        • <strong>Improve context items</strong> - Add depth and fix inconsistencies
-                        • <strong>Refine content</strong> - Polish language and improve flow
+                        Here's what I can do:
+                        • <strong>Write and rework outlines</strong> - Draft them, restructure them, split them into parts, or make them more detailed and compelling
+                        • <strong>Manage context notes</strong> - Add background, rules, or facts that guide the writing. I can make a note apply everywhere, only to certain parts, to everything except a few parts, or only to the final prose - and tie it to specific characters or keywords
+                        • <strong>Polish the content</strong> - Improve flow, tighten language, and fix inconsistencies
+                        • <strong>Look at other parts of your story</strong> - I can pull up any other chapter, scene, or section (even from another project) to keep everything consistent. Just ask me to check something and I'll fetch it myself
                         
-                        <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+                        <strong>💡 Pro tip:</strong> In the outline editor you can select any sentence or paragraph and use the small edit buttons that appear to make focused tweaks to just that part.
                         
                         What would you like to work on?
                     `;
@@ -1334,8 +1341,6 @@ export class XMLStoryModal extends SimpleModal {
         const message = this.messageInput.value.trim();
         if (!message) return;
 
-
-
         // Clear input and disable sending
         this.messageInput.value = '';
         this.setGenerating(true);
@@ -1347,173 +1352,240 @@ export class XMLStoryModal extends SimpleModal {
             // Clear AI highlights (simulates user interaction)
             this.storySystem.clearHighlights();
 
-            // Create system prompt using PromptExpansionService
-            const prompts = this.settingsManager.getPrompts();
-            const expansionService = createPromptExpansionService(this.settingsManager);
-            
-            const systemPromptContext = {
-                project: {
-                    language: this.settingsManager.getLanguage()
-                }
-            };
-            
-            const systemPrompt = await expansionService.expandPromptAsync(
-                prompts.node_chat_editor, 
-                systemPromptContext
-            );
-
-            // Always include dynamic conditional context as a separate system-level prompt
-                const currentOutline = this.getCurrentOutlineSafe() || 'No outline content yet.';
-                const currentContextItems = this.formatKeywordContextForAI();
-                const humanEdits = this.formatHumanEditsForAI();
-                const userPromptContext = {
-                    custom: {
-                        current_outline: currentOutline,
-                        current_context_items: currentContextItems,
-                        human_edits: humanEdits
-                    }
-                };
-            const dynamicContextPrompt = await expansionService.expandPromptAsync(
-                    prompts.node_chat_editor_user, 
-                    userPromptContext
-                );
-            const contextRules = this.getKeywordContextRulesForAI();
-                
             // Store only raw user message
             this.conversationHistory.push({ role: 'user', content: message });
 
-            // Prepare conversation: system prompts followed by chat history
-            const conversation = [
-                { role: 'system' as const, content: systemPrompt },
-                { role: 'system' as const, content: dynamicContextPrompt },
-                { role: 'system' as const, content: contextRules },
-                ...this.conversationHistory
-            ];
-
-            // Get selected model
-            const modelPurpose = this.modelSelector!.value;
-
-            // Add placeholder AI message for streaming
-            const placeholderMessage = this.addMessageToChat('assistant', '');
-            
-            // Send to AI with real-time streaming
-            let response = '';
-            await this.openRouterClient.streamingChat(modelPurpose, conversation, {
-                onStart: () => {
-                    // no-op start hook for streaming lifecycle compliance
-                },
-                onChunk: (chunk: string) => {
-                    response += chunk;
-                    // Update the message in real-time as chunks arrive
-                    this.updateStreamingMessage(placeholderMessage, response);
-                },
-                onComplete: () => {
-                    // Remove streaming cursor when complete
-                    this.finalizeStreamingMessage(placeholderMessage);
-                },
-                onError: (error: Error) => {
-                    // Remove streaming cursor on error
-                    this.finalizeStreamingMessage(placeholderMessage);
-                    throw error;
+            // Run one AI turn. If the AI requested node lookups, resolve them, feed
+            // the results back, and run another turn (tool-call style), up to a cap.
+            let lookupRounds = 0;
+            let requestedPaths = await this.runChatTurn();
+            while (requestedPaths.length > 0) {
+                if (lookupRounds >= XMLStoryModal.MAX_NODE_LOOKUP_ROUNDS) {
+                    // Cap reached: tell the AI to stop requesting and let it finalize
+                    // in one more turn that cannot itself trigger further lookups.
+                    const limitNote = 'Node lookup limit reached for this turn. Please continue with the information already provided, without further <requestnode/> commands.';
+                    this.addMessageToChat('user', limitNote);
+                    this.conversationHistory.push({ role: 'user', content: limitNote });
+                    await this.runChatTurn();
+                    break;
                 }
-            });
+                lookupRounds++;
+                const injected = this.buildRequestedNodesMessage(requestedPaths);
+                this.addMessageToChat('user', injected.chatNote);
+                this.conversationHistory.push({ role: 'user', content: injected.aiContent });
+                requestedPaths = await this.runChatTurn();
+            }
+        } finally {
+            this.setGenerating(false);
+        }
+    }
 
-            if (response) {
-                // Track context items before AI processing to detect newly added items
-                // (This is only for AI chat responses, not initialization/loading)
-                const contextCountBefore = this.storySystem.service.getElementsForContext()
-                    .filter(el => el.type === 'context').length;
+    /**
+     * Run a single AI turn: build the conversation, stream the response, apply all
+     * system commands (outline/context as before, node lookups recorded), display
+     * the message, and append the assistant response to history.
+     *
+     * @returns the list of paths from any <requestnode/> commands in this turn.
+     */
+    private async runChatTurn(): Promise<string[]> {
+        // Create system prompt using PromptExpansionService
+        const prompts = this.settingsManager.getPrompts();
+        const expansionService = createPromptExpansionService(this.settingsManager);
 
-                // Process AI response through XML system (do not remove commands from text)
-                const parseResult = await this.storySystem.processAIResponse(response);
+        const systemPromptContext = {
+            project: {
+                language: this.settingsManager.getLanguage()
+            }
+        };
 
-                // Handle outline_replace commands and mark executed
-                for (const command of parseResult.systemCommands) {
-                    if (command.type === 'outline_replace' && command.content) {
-                        this.setOutlineContentFromAI(command.content);
-                        // Reconstruct raw XML if parser didn't retain it
-                        const reconstructed = `</outline_replace>${command.content}</outline_replace>`;
-                        (command as any).executedRaw = (command as any).rawXml || reconstructed;
-                    }
-                }
+        const systemPrompt = await expansionService.expandPromptAsync(
+            prompts.node_chat_editor,
+            systemPromptContext
+        );
 
-                // Apply context commands directly to the node (canonical API).
-                // Edits are live; the embedded editor is refreshed afterwards.
-                let contextChanged = false;
-                for (const command of parseResult.systemCommands) {
-                    if (command.type === 'context_add') {
-                        const text = command.parameters?.['text'] ?? '';
-                        if (text.trim().length === 0) continue;
-                        const newId = this.sourceNode!.addConditionalContextItem(text);
-                        // Apply trigger words / structural scope / leaves-only when provided.
-                        this.applyContextCommandFields(newId, command.parameters ?? {}, false);
-                        contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml || '';
-                    } else if (command.type === 'context_edit') {
-                        if (!command.parameters) {
-                            throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
-                        }
-                        const id = command.parameters['id'];
-                        if (!id) {
-                            throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
-                        }
-                        // Only the supplied facets are updated, leaving the rest intact.
-                        this.applyContextCommandFields(id, command.parameters, true);
-                        contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml || '';
-                    } else if (command.type === 'context_remove') {
-                        const id = command.parameters?.['id'];
-                        if (!id) continue;
-                        this.sourceNode!.removeConditionalContextItem(id);
-                        contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml || '';
-                    }
-                }
+        // Always include dynamic conditional context as a separate system-level prompt
+        const currentOutline = this.getCurrentOutlineSafe() || 'No outline content yet.';
+        const currentContextItems = this.formatKeywordContextForAI();
+        const humanEdits = this.formatHumanEditsForAI();
+        const userPromptContext = {
+            custom: {
+                current_outline: currentOutline,
+                current_context_items: currentContextItems,
+                human_edits: humanEdits
+            }
+        };
+        const dynamicContextPrompt = await expansionService.expandPromptAsync(
+            prompts.node_chat_editor_user,
+            userPromptContext
+        );
+        const contextRules = this.getKeywordContextRulesForAI();
 
-                // Persist and refresh the embedded editor to reflect changes
-                if (contextChanged) {
-                    this.persistProject();
-                }
-                this.renderInlineConditionalContext();
+        // Prepare conversation: system prompts followed by chat history. The node
+        // lookup rules are only relevant when a source node is present.
+        const conversation = [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'system' as const, content: dynamicContextPrompt },
+            { role: 'system' as const, content: contextRules },
+            ...(this.sourceNode ? [{ role: 'system' as const, content: this.getNodeLookupRulesForAI() }] : []),
+            ...this.conversationHistory
+        ];
 
-                // Check for failed commands and offer AI correction
-                if (this.failedCommands.length > 0) {
-                    await this.offerAICorrection();
-                }
+        // Get selected model
+        const modelPurpose = this.modelSelector!.value;
 
-                // Display the original text (with commands left in) and apply generic XML formatting
-                const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[]);
-                this.updateStreamingMessageWithHTML(placeholderMessage, formatted);
+        // Add placeholder AI message for streaming
+        const placeholderMessage = this.addMessageToChat('assistant', '');
+
+        // Send to AI with real-time streaming
+        let response = '';
+        await this.openRouterClient.streamingChat(modelPurpose, conversation, {
+            onStart: () => {
+                // no-op start hook for streaming lifecycle compliance
+            },
+            onChunk: (chunk: string) => {
+                response += chunk;
+                // Update the message in real-time as chunks arrive
+                this.updateStreamingMessage(placeholderMessage, response);
+            },
+            onComplete: () => {
+                // Remove streaming cursor when complete
                 this.finalizeStreamingMessage(placeholderMessage);
+            },
+            onError: (error: Error) => {
+                // Remove streaming cursor on error
+                this.finalizeStreamingMessage(placeholderMessage);
+                throw error;
+            }
+        });
 
-                // Add AI response to conversation history
-                this.conversationHistory.push({ role: 'assistant', content: response });
+        const requestedPaths: string[] = [];
 
-                // No more retry state to reset
+        if (response) {
+            // Track context items before AI processing to detect newly added items
+            // (This is only for AI chat responses, not initialization/loading)
+            const contextCountBefore = this.storySystem.service.getElementsForContext()
+                .filter(el => el.type === 'context').length;
 
-                // Update whiteboard
-                this.updateWhiteboard();
-                
-                // No more automatic retries
+            // Process AI response through XML system (do not remove commands from text)
+            const parseResult = await this.storySystem.processAIResponse(response);
 
-                // Check if AI actually added new context items during this chat response
-                const contextCountAfter = this.storySystem.service.getElementsForContext()
-                    .filter(el => el.type === 'context').length;
-                
-                if (contextCountAfter > contextCountBefore) {
-                    this.scrollToNewContextItems();
-                }
-
-                // Show any errors
-                if (parseResult.errors.length > 0) {
-                    // XML parsing errors occurred
+            // Handle outline_replace commands and mark executed
+            for (const command of parseResult.systemCommands) {
+                if (command.type === 'outline_replace' && command.content) {
+                    this.setOutlineContentFromAI(command.content);
+                    // Reconstruct raw XML if parser didn't retain it
+                    const reconstructed = `</outline_replace>${command.content}</outline_replace>`;
+                    (command as any).executedRaw = (command as any).rawXml || reconstructed;
                 }
             }
 
-        } finally {
-            this.setGenerating(false);
-            // No more automatic retries
+            // Apply context commands directly to the node (canonical API).
+            // Edits are live; the embedded editor is refreshed afterwards.
+            let contextChanged = false;
+            for (const command of parseResult.systemCommands) {
+                if (command.type === 'context_add') {
+                    const text = command.parameters?.['text'] ?? '';
+                    if (text.trim().length === 0) continue;
+                    const newId = this.sourceNode!.addConditionalContextItem(text);
+                    // Apply trigger words / structural scope / leaves-only when provided.
+                    this.applyContextCommandFields(newId, command.parameters ?? {}, false);
+                    contextChanged = true;
+                    (command as any).executedRaw = (command as any).rawXml || '';
+                } else if (command.type === 'context_edit') {
+                    if (!command.parameters) {
+                        throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
+                    }
+                    const id = command.parameters['id'];
+                    if (!id) {
+                        throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
+                    }
+                    // Only the supplied facets are updated, leaving the rest intact.
+                    this.applyContextCommandFields(id, command.parameters, true);
+                    contextChanged = true;
+                    (command as any).executedRaw = (command as any).rawXml || '';
+                } else if (command.type === 'context_remove') {
+                    const id = command.parameters?.['id'];
+                    if (!id) continue;
+                    this.sourceNode!.removeConditionalContextItem(id);
+                    contextChanged = true;
+                    (command as any).executedRaw = (command as any).rawXml || '';
+                } else if (command.type === 'request_node') {
+                    const path = command.parameters?.['path'] ?? '';
+                    (command as any).executedRaw = (command as any).rawXml || '';
+                    if (path.trim().length > 0) {
+                        requestedPaths.push(path);
+                    }
+                }
+            }
+
+            // Persist and refresh the embedded editor to reflect changes
+            if (contextChanged) {
+                this.persistProject();
+            }
+            this.renderInlineConditionalContext();
+
+            // Check for failed commands and offer AI correction
+            if (this.failedCommands.length > 0) {
+                await this.offerAICorrection();
+            }
+
+            // Display the original text (with commands left in) and apply generic XML formatting
+            const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[]);
+            this.updateStreamingMessageWithHTML(placeholderMessage, formatted);
+            this.finalizeStreamingMessage(placeholderMessage);
+
+            // Add AI response to conversation history
+            this.conversationHistory.push({ role: 'assistant', content: response });
+
+            // Update whiteboard
+            this.updateWhiteboard();
+
+            // Check if AI actually added new context items during this chat response
+            const contextCountAfter = this.storySystem.service.getElementsForContext()
+                .filter(el => el.type === 'context').length;
+
+            if (contextCountAfter > contextCountBefore) {
+                this.scrollToNewContextItems();
+            }
+
+            // Show any errors
+            if (parseResult.errors.length > 0) {
+                // XML parsing errors occurred
+            }
         }
+
+        return requestedPaths;
+    }
+
+    /**
+     * Resolve a batch of requested node paths into the content that is fed back to
+     * the AI plus a compact human-readable note for the chat. Unresolved paths are
+     * reported as error blocks so the AI can correct itself.
+     */
+    private buildRequestedNodesMessage(paths: string[]): { aiContent: string; chatNote: string } {
+        const blocks: string[] = [];
+        const noteParts: string[] = [];
+
+        for (const path of paths) {
+            if (!this.sourceNode) {
+                blocks.push(`<requested_node path="${path}" error="No current node to resolve paths against"/>`);
+                noteParts.push(`✗ ${path} — no current node`);
+                continue;
+            }
+            const result = resolveNodePath(this.sourceNode, path, getProjects());
+            if ('node' in result) {
+                blocks.push(this.formatRequestedNodeForAI(result.node, path));
+                noteParts.push(`✓ ${path}`);
+            } else {
+                blocks.push(`<requested_node path="${path}" error="${result.error}"/>`);
+                noteParts.push(`✗ ${path} — ${result.error}`);
+            }
+        }
+
+        return {
+            aiContent: `Here are the requested nodes:\n\n${blocks.join('\n\n')}`,
+            chatNote: `📄 Node lookup:\n${noteParts.join('\n')}`
+        };
     }
 
     private addMessageToChat(role: 'user' | 'assistant', content: string): HTMLElement {
@@ -2012,6 +2084,106 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
+     * Build the block fed back to the AI for a successfully resolved node lookup:
+     * the node's current master content plus its node-local conditional context
+     * items. No summaries, no children, no version history.
+     */
+    private formatRequestedNodeForAI(node: DocumentNode, path: string): string {
+        const rawLevelName = (node.template[node.level] ?? `Level ${node.level}`).trim();
+        const levelName = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] ?? rawLevelName;
+
+        const lines: string[] = [];
+        lines.push(`<requested_node path="${path}" title="${node.title}" level="${levelName}">`);
+        lines.push('<content>');
+        lines.push(node.content || '(empty)');
+        lines.push('</content>');
+
+        const items = node.getConditionalContextItems();
+        if (items.length > 0) {
+            lines.push('<context_items>');
+            for (const item of items) {
+                const attrs: string[] = [`id="${item.id}"`];
+                const kws = Array.isArray(item.keywords) ? item.keywords : [];
+                if (kws.length > 0) {
+                    attrs.push(`trigger="${kws.join(', ')}"`);
+                }
+                const scope = item.childScope;
+                if (scope && scope.mode !== 'all') {
+                    attrs.push(`scope="${scope.mode}"`);
+                    if (scope.titles.length > 0) {
+                        attrs.push(`children="${scope.titles.join('; ')}"`);
+                    }
+                }
+                if (item.leavesOnly === true) {
+                    attrs.push('leaves="true"');
+                }
+                lines.push(`<context_item ${attrs.join(' ')}>`);
+                lines.push(item.text || '');
+                lines.push('</context_item>');
+            }
+            lines.push('</context_items>');
+        } else {
+            lines.push('<context_items>(none)</context_items>');
+        }
+
+        lines.push('</requested_node>');
+        return lines.join('\n');
+    }
+
+    /**
+     * System rules describing the <requestnode/> lookup command: how to address
+     * other nodes by path, that '/' and '\' are equivalent, and that the requested
+     * node's content + context items are returned automatically so the model can
+     * continue. Grounds the model with the current node's children and the list of
+     * available project names.
+     */
+    private getNodeLookupRulesForAI(): string {
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to describe node lookups');
+        const childTitles = this.getProspectiveChildTitles();
+        const childList = childTitles.length > 0
+            ? childTitles.map(t => `  • ${t}`).join('\n')
+            : '  (this node currently has no direct child sections)';
+
+        // The canonical project name is the root node's live title (what the user
+        // sees and edits). ProjectManager.projectTitle is a stale creation-time
+        // copy and must not be shown to the model.
+        const project = findProjectByNode(this.sourceNode);
+        const currentProjectName = project ? project.rootNode.title : this.sourceNode.title;
+        const projectNames = getProjects().map(p => `  • ${p.rootNode.title}`).join('\n');
+
+        return [
+            'NODE LOOKUP',
+            '',
+            'You can pull another node into the conversation to read its content. Emit:',
+            '  <requestnode path="..."/>',
+            'The node\'s current text and its context items are returned to you automatically,',
+            'and you may then continue. You can request several nodes; each is fetched in turn.',
+            '',
+            'Path grammar (like a file path):',
+            '- Relative paths resolve against THIS node\'s direct children, e.g. path="Chapter 1"',
+            '  or deeper path="Chapter 1/Scene 2".',
+            '- "/" and "\\" are interchangeable separators; use whichever you like.',
+            '- ".." goes to the parent; "." stays on the current node.',
+            '- A leading separator means an ABSOLUTE path starting from a project by name:',
+            '  path="/Other Project/Act 1/Chapter 2". A bare path="/Other Project" returns that',
+            '  project\'s root node.',
+            '- Title and project-name matching is case-insensitive.',
+            '',
+            `Current node: "${this.sourceNode.title}" (project "${currentProjectName}")`,
+            'Direct children of THIS node (valid first segment for a relative path):',
+            childList,
+            'Available projects (valid first segment for an absolute path):',
+            projectNames,
+            '',
+            'Examples:',
+            '- Read a child:        <requestnode path="Chapter 1"/>',
+            '- Read a grandchild:   <requestnode path="Chapter 1/Scene 2"/>',
+            '- Read a sibling:      <requestnode path="../Chapter 2"/>',
+            '- Read another project:<requestnode path="/Other Project/Act 1"/>'
+        ].join('\n');
+    }
+
+    /**
      * Apply the optional facets of a context add/edit command (trigger words,
      * structural child scope, leaves-only) to a conditional context item. Only the
      * facets present in `params` are changed; on add `includeText` is false because
@@ -2163,6 +2335,11 @@ export class XMLStoryModal extends SimpleModal {
                 const p = (command.parameters as Record<string, unknown>) || {};
                 const id = typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : 'unknown';
                 return `<context id="${id}" remove="true" />`;
+            }
+            case 'request_node': {
+                const p = (command.parameters as Record<string, unknown>) || {};
+                const path = typeof p['path'] === 'string' ? (p['path'] as string) : '';
+                return `<requestnode path="${path}" />`;
             }
             default:
                 return `<${command.type}>${command.content || ''}</${command.type}>`;
@@ -3107,14 +3284,15 @@ export class XMLStoryModal extends SimpleModal {
         const title = this.titleInput?.value || this.sourceNode.title || 'this content';
         
         messageElement.innerHTML = `
-            Hi! I'm here to help you refine and improve your <strong>${templateLevel.toLowerCase()}</strong> "${title}".
+            Hi! I'm here to help you shape your <strong>${templateLevel.toLowerCase()}</strong> "${title}". Just tell me what you want in plain language and I'll do the work.
             
-            I can help you:
-            • <strong>Enhance the outline</strong> - Make it more detailed, compelling, or well-structured
-            • <strong>Improve context items</strong> - Add depth, fix inconsistencies, or expand on details
-            • <strong>Refine content</strong> - Polish language, improve flow, or add missing elements
+            Here's what I can do:
+            • <strong>Write and rework the outline</strong> - Draft it, restructure it, split it into parts, or make it richer and more compelling
+            • <strong>Manage context notes</strong> - Add background, rules, or facts that guide the writing. I can make a note apply everywhere, only to certain parts, to everything except a few parts, or only to the final prose - and tie it to specific characters or keywords so it kicks in just when relevant
+            • <strong>Polish the content</strong> - Improve flow, tighten language, fix inconsistencies, or fill in what's missing
+            • <strong>Look at other parts of your story</strong> - I can pull up any other chapter, scene, or section (even from another project) to keep everything consistent. Just ask me to check something and I'll fetch it myself
             
-            <strong>💡 Pro tip:</strong> In the outline editor, you can select any sentence or paragraph and use the small edit buttons that appear to make focused improvements to just that part!
+            <strong>💡 Pro tip:</strong> In the outline editor you can select any sentence or paragraph and use the small edit buttons that appear to make focused tweaks to just that part.
             
             The current content and context are loaded in the editor on the right. What would you like to work on?
         `;

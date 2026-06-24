@@ -50,7 +50,7 @@ export interface ParsedResponse {
 }
 
 export interface SystemCommand {
-    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command' | 'replace_section' | 'remove_section' | 'context_add' | 'context_edit' | 'context_remove';
+    type: 'refresh' | 'edit' | 'delete' | 'rename' | 'outline_replace' | 'append' | 'replace_command' | 'replace_section' | 'remove_section' | 'context_add' | 'context_edit' | 'context_remove' | 'request_node';
     parameters?: Record<string, string>;
     content?: string; // For commands like outline_replace that have content between tags
     searchText?: string; // For replace_command: what to search for
