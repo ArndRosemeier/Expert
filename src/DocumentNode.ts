@@ -696,11 +696,46 @@ export class DocumentNode {
 
     /**
      * True when the master version came from a generation that did not meet all
-     * quality goals. Clears automatically once the node is regenerated to a
-     * passing result or the master is replaced by manual (unrated) content.
+     * quality goals AND the user has not manually authorized it anyway. Clears
+     * automatically once the node is regenerated to a passing result, the master
+     * is replaced by manual (unrated) content, or the user approves it.
      */
     hasFailedGeneration(): boolean {
-        return this.getFailingRatings().length > 0;
+        return this.getFailingRatings().length > 0 && !this.isQualityApproved();
+    }
+
+    /**
+     * True when the user manually authorized the current master version despite
+     * unmet quality goals. The approval is stored as a tag on the master version
+     * so it is discarded the moment the master is replaced by a regeneration.
+     */
+    isQualityApproved(): boolean {
+        const masterVersion = this.getMasterVersion();
+        return masterVersion !== null && masterVersion.tags.has('qualityApproved');
+    }
+
+    /**
+     * Authorizes the current master version despite unmet quality goals, which
+     * removes the failed-generation flag from the tree for this node.
+     */
+    approveQuality(): void {
+        const masterVersion = this.getMasterVersion();
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: cannot approve quality - no master version exists`);
+        }
+        masterVersion.tags.add('qualityApproved');
+    }
+
+    /**
+     * Revokes a prior quality approval, restoring the failed-generation flag when
+     * the master version still has unmet quality goals.
+     */
+    revokeQualityApproval(): void {
+        const masterVersion = this.getMasterVersion();
+        if (!masterVersion) {
+            throw new Error(`DocumentNode ${this.id}: cannot revoke quality approval - no master version exists`);
+        }
+        masterVersion.tags.delete('qualityApproved');
     }
 
     /**

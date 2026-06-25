@@ -753,7 +753,7 @@ export class NodeInspectorModal extends BaseModal {
         
         if (hasRatings) {
             // No conversion needed - version.ratings already uses unified Rating interface
-            ratingsHtml = this.renderVersionRatings(version.ratings!);
+            ratingsHtml = this.renderVersionRatings(version.ratings!, version);
         }
         
         wrapper.innerHTML = `
@@ -1115,6 +1115,24 @@ export class NodeInspectorModal extends BaseModal {
             });
         }
 
+        // Authorize-anyway toggle: accept (or revoke) a node whose generation did
+        // not meet all quality goals, clearing/restoring the ❗ mark in the tree.
+        const approveBtn = document.getElementById('inspector-approve-quality-btn');
+        if (approveBtn) {
+            approveBtn.addEventListener('click', async () => {
+                if (!this.node) return;
+                if (this.node.isQualityApproved()) {
+                    this.node.revokeQualityApproval();
+                } else {
+                    this.node.approveQuality();
+                }
+                // Persist + refresh the tree (updates the ❗ mark), then rerender
+                // the modal so the button and verdict reflect the new state.
+                await this.persistNodeChanges();
+                this.rerender();
+            });
+        }
+
         // Enhanced mode selection overlay is handled by the editor itself
     }
 
@@ -1178,7 +1196,7 @@ export class NodeInspectorModal extends BaseModal {
         }
     }
 
-    private renderVersionRatings(ratings: Rating[]): string {
+    private renderVersionRatings(ratings: Rating[], version: ContentVersion): string {
         // Group scalar (1-10) criteria first and binary (pass/fail) constraints
         // last, so comparably-scored criteria read together. Stable sort keeps
         // the original order within each group.
@@ -1236,9 +1254,24 @@ export class NodeInspectorModal extends BaseModal {
             ? `<span style="color: #28a745;">PASSED</span>`
             : `<span style="color: #dc3545;">FAILED — ${belowGoal} below goal</span>`;
 
+        // Authorize control: only meaningful on the master version of a node whose
+        // winning generation fell short. Lets the user clear the ❗ tree mark by
+        // accepting the result as-is (or revoke that acceptance later).
+        const isMaster = version.tags.has('master');
+        const isApproved = this.node !== null && this.node.isQualityApproved();
+        let approveButtonHtml = '';
+        if (isMaster && belowGoal > 0) {
+            approveButtonHtml = isApproved
+                ? `<button id="inspector-approve-quality-btn" data-approved="true" title="This node was authorized despite unmet quality goals. Click to revoke and restore the ❗ mark." style="flex-shrink: 0; font-size: 0.75rem; font-weight: 600; color: #fff; background: #28a745; border: none; border-radius: 999px; padding: 0.25rem 0.7rem; cursor: pointer;">✓ Authorized — revoke</button>`
+                : `<button id="inspector-approve-quality-btn" data-approved="false" title="Authorize this node despite unmet quality goals (removes the ❗ mark in the tree)." style="flex-shrink: 0; font-size: 0.75rem; font-weight: 600; color: #fff; background: #6b7280; border: none; border-radius: 999px; padding: 0.25rem 0.7rem; cursor: pointer;">Authorize anyway</button>`;
+        }
+
         return `
             <div style="padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 1rem;">
-                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #374151;">Quality Ratings — ${verdict}</h4>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0 0 0.5rem 0;">
+                    <h4 style="margin: 0; font-size: 0.9rem; color: #374151;">Quality Ratings — ${verdict}</h4>
+                    ${approveButtonHtml}
+                </div>
                 <div style="font-size: 0.85rem;">
                     ${ratingsHtml}
                 </div>
