@@ -1420,14 +1420,18 @@ export class XMLStoryModal extends SimpleModal {
         );
         const contextRules = this.getKeywordContextRulesForAI();
 
-        // Prepare conversation: system prompts followed by chat history. The node
-        // lookup rules are only relevant when a source node is present.
+        // Prepare conversation: static rules first, then the chat history, then the
+        // freshly-rebuilt LIVE NODE STATE as the LAST message. Putting the current
+        // state at the end (instead of before the history) exploits recency so the
+        // model treats it as ground truth and stops reasoning from now-stale lines
+        // in its own earlier turns. The node lookup rules only apply when a source
+        // node is present.
         const conversation = [
             { role: 'system' as const, content: systemPrompt },
-            { role: 'system' as const, content: dynamicContextPrompt },
             { role: 'system' as const, content: contextRules },
             ...(this.sourceNode ? [{ role: 'system' as const, content: this.getNodeLookupRulesForAI() }] : []),
-            ...this.conversationHistory
+            ...this.conversationHistory,
+            { role: 'system' as const, content: dynamicContextPrompt }
         ];
 
         // Get selected model

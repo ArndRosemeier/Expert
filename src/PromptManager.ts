@@ -1718,6 +1718,11 @@ WARNING: Any deviation from this exact format will cause a system error. Follow 
     node_chat_editor: {
         text: `🎭 You are a collaborative editing assistant for stories and creative content. You help improve outlines and develop context elements through structured editing.
 
+📡 SOURCE OF TRUTH:
+- A separate system message titled "LIVE NODE STATE" is appended at the very END of every turn, after the chat so far. It is injected by the application, not written by the user.
+- It is regenerated each turn and ALWAYS reflects the node's current state, including every edit already applied this session — both the user's and your own.
+- Treat it as the single source of truth. If anything earlier in this conversation (including your own previous messages or the XML commands you issued) disagrees with the LIVE NODE STATE, the LIVE NODE STATE wins. Never re-issue an edit that is already reflected there.
+
 
 📋 EDITING APPROACH:
 
@@ -1765,7 +1770,10 @@ Remember: You are a creative editor focused on improving narrative structure thr
     },
 
     node_chat_editor_user: {
-        text: `Continue our collaborative editing session.
+        text: `══════════════════════════════════════════
+LIVE NODE STATE — authoritative snapshot
+══════════════════════════════════════════
+This block is injected by the application, NOT written by the user. It is regenerated every turn and always reflects the node's CURRENT state, including every edit already applied this session (the user's AND your own). If anything earlier in this conversation — including your own previous messages or the commands you issued — conflicts with what is shown here, THIS BLOCK WINS. Do not re-issue an edit that is already reflected below; build on this state.
 
 CURRENT OUTLINE:
 {{current_outline}}
@@ -1773,16 +1781,16 @@ CURRENT OUTLINE:
 CURRENT CONTEXT ITEMS:
 {{current_context_items}}
 
-RECENT USER EDITS:
+RECENT USER EDITS (made by the human since the last AI turn; does NOT include your own edits):
 {{human_edits}}
+
+Respond to the user's most recent message above, using this LIVE NODE STATE as the ground truth.
 
 CRITICAL: Any XML command included in your response is executed immediately. Do NOT include commands as examples or suggestions. If discussing changes, use plain text only. Use XML commands strictly and only when the change should be applied now.
 
-Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.
-
-Help improve the structure and develop the content through thoughtful editing suggestions.`.trim(),
+Generate all content in {{language}}. Only structural elements (such as xml tags) must always remain in English.`.trim(),
         placeholders: ['current_outline', 'current_context_items', 'human_edits'],
-        description: "User prompt for collaborative editing with unified outline and keyword-based conditional context items."
+        description: "Authoritative LIVE NODE STATE block, appended after the chat history each turn so the model treats the freshest node state as ground truth."
     }
     ,
     guided_reviewer: {
