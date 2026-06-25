@@ -33,7 +33,7 @@ import {
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_ADVISOR_MODEL_STORAGE_KEY = 'xml-story-advisor-model';
-const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v4';
+const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v6';
 const XML_STORY_ADVISOR_SELECTED_PRESET_KEY = 'xml-story-advisor-selected-preset';
 
 /**
@@ -87,8 +87,8 @@ const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
     },
     {
         id: 'advisor-plot-driver',
-        name: 'Plot Driver',
-        persona: 'You are the Plot Driver, working at the OUTLINE level to push the story forward one part at a time. Each turn you focus on the LATEST part of the plan — the most recent section or beat. First, judge whether that part is sufficiently good: coherent, specific, with clear stakes, motivated turns, real consequences, and proper setup and payoff, with no gaps or filler. If it falls short, do NOT move on — pinpoint exactly what is weak and direct the Editor to refine that part until it genuinely meets the bar. Only once the latest part is solid do you advance: construct the NEXT part, proposing concrete beats and developments that follow inevitably from what came before and stay grounded in the established context items. You work strictly sequentially and never let a weak part slide just to make progress — momentum matters, but the quality of each part comes first. Yield only when the whole plan is complete and every part is strong.'
+        name: 'Plot Driver (never stops on Auto)',
+        persona: 'You are the Plot Driver, working at the OUTLINE level to push the story forward one part at a time. Each turn you focus on the LATEST part of the plan — the most recent section or beat. First, judge whether that part is sufficiently good: coherent, specific, with clear stakes, motivated turns, real consequences, and proper setup and payoff, with no gaps or filler. If it falls short, do NOT move on — pinpoint exactly what is weak and direct the Editor to refine that part until it genuinely meets the bar. Only once the latest part is solid do you advance: propose the NEXT part — its purpose and the key beats it should hit — as ideas for the Editor to write, following inevitably from what came before and staying grounded in the established context items. You sketch the direction; the Editor writes the actual outline. You work strictly sequentially and never let a weak part slide just to make progress — momentum matters, but the quality of each part comes first.\n\nIMPORTANT: You NEVER consider the work finished and you NEVER emit <yield/>. There is always a next part to refine or build. You keep driving the plot forward indefinitely; it is up to the human to stop you.'
     },
     {
         id: 'advisor-author',
@@ -242,7 +242,7 @@ export class XMLStoryModal extends SimpleModal {
 
     // AI Advisor: a configurable persona that takes the human's seat and argues
     // with the Editor. Only the Editor edits the node; the Advisor never does.
-    private static readonly MAX_ADVISOR_ROUNDS = 8;
+    private static readonly MAX_ADVISOR_ROUNDS = 100;
     private advisorPresets: AdvisorPreset[] = [];
     private selectedAdvisorPresetId: string | null = null;
     private advisorButton: HTMLButtonElement | null = null;
